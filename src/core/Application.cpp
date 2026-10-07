@@ -4257,7 +4257,7 @@ void Application::runBotTest() {
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
-        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, sentrySamples = 0, barrierSamples = 0;
+        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0;
         platform::InputFrame idle;
         const int steps = (int)((secs + 10.0f) / dt);
         for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
@@ -4293,6 +4293,7 @@ void Application::runBotTest() {
             maxAlive = std::max(maxAlive, alive);
             beamSamples += world_.participantBeamsLive() > 0;
             sentrySamples += world_.participantSentriesLive() > 0; barrierSamples += world_.participantBarriersLive() > 0;
+            beaconSamples += world_.participantBeaconsLive() > 0;
             for (const game::MatchOpponent* o : world_.matchOpponents()) {
                 const bool jet = o->spawned() && o->pawn().moveForm() == game::Form::Vehicle && o->pawn().vehicleParams().form == game::VehicleFormType::Jet;
                 jetSamples += jet; jetFlySamples += jet && o->pawn().vehicleState().flying;
@@ -4337,6 +4338,7 @@ void Application::runBotTest() {
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
         if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
+        if (phase >= 1) check(beaconSamples > 0, "bots drop ammo crates (" + std::to_string(beaconSamples) + " steps)");
         if (phase >= 1) check(sentrySamples > 0 && barrierSamples > 0, "bots deploy sentries (" + std::to_string(sentrySamples) + " steps) and barriers (" + std::to_string(barrierSamples) + " steps)");
         if (phase >= 1) check(jetSamples > 0, "jet bots fly (" + std::to_string(jetSamples) + " jet-steps, " + std::to_string(jetFlySamples) + " in Flying)");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");

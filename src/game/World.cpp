@@ -1399,8 +1399,9 @@ int World::addBots(const BotLaunch& launch) {
         addBotBrain(p, perTeam >= 0 ? perTeam : botDifficulty_);
         opponents_.push_back(o.get());
         actors_.push_back(std::move(o));
-        LOG_INFO("bots: %s team %d %s (%s) level %d", id.name.c_str(), mp.team, specialtyName(id.selection.specialty),
-                 resolveChassis(id.selection, match_.faction(p)).c_str(), id.level);
+        LOG_INFO("bots: %s team %d %s (%s) level %d abilities %s/%s", id.name.c_str(), mp.team, specialtyName(id.selection.specialty),
+                 resolveChassis(id.selection, match_.faction(p)).c_str(), id.level,
+                 id.selection.abilities.size() > 0 ? id.selection.abilities[0].c_str() : "-", id.selection.abilities.size() > 1 ? id.selection.abilities[1].c_str() : "-");
     }
     return (int)ids.size();
 }
@@ -1477,7 +1478,7 @@ HudGameState World::hudState() const {
         int ci = mapState_.pickupCandidate(op);
         h.pickupPrompt = ci < 0 ? "" : mapState_.carried()[(size_t)ci].kind == 0 ? "Code Of Power" : "Bomb";
     }
-    h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
+    { const AmmoBeacon& lb = localBeacon(); h.ammoBeacon = lb.alive; h.ammoBeaconPos = lb.pos; h.ammoBeaconLife = lb.life; h.ammoBeaconHealth = lb.health; }
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
     h.kamikazeMines = (int)mines_.size(); h.tempWeaponLeft = pc.tempWeapon_ == 1 ? pc.tempWeaponRemain_ : 0.0f;
@@ -2147,8 +2148,9 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
         float dd = std::max(0.0f, core::length(sentries_[si].pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
         if (dd < radius) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
     }
-    if (beacon_.alive && core::length(beacon_.pos - at) < radius)
-        damageAmmoBeacon(damage * (1.0f - core::length(beacon_.pos - at) / std::max(radius, 1e-3f)), instigator);
+    for (size_t bi = 0; bi < beacons_.size(); ++bi)
+        if (beacons_[bi].alive && core::length(beacons_[bi].pos - at) < radius)
+            damageAmmoBeaconAt(bi, damage * (1.0f - core::length(beacons_[bi].pos - at) / std::max(radius, 1e-3f)), instigator);
     for (size_t bi = 0; bi < barriers_.size(); ++bi) {
         const BarrierState& barrier_ = barriers_[bi];
         if (!barrier_.alive) continue;
@@ -2451,8 +2453,7 @@ void World::tickAbilityEffects(float dt) {
         requestSentry(localPlayer_);                      // ActiveSentry.Kill(); SpawnDelay 0.2 (OnTriggerAnim additive: not played)
     } else if (fx == "SpawnAmmoCrate") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
-        beaconDelay_ = 0.5f;                              // SpawnDelay 0.5 -> SpawnInventory
-        pc.beaconAlive_ = true;
+        requestAmmoBeacon(localPlayer_);                  // SpawnDelay 0.5 -> SpawnInventory
     } else if (fx == "Barrier") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         requestBarrier(localPlayer_);                     // SpawnDelay 0.5 -> SpawnBarrier
@@ -2937,8 +2938,14 @@ void World::damageBarrierAt(size_t idx, float amount, const std::string& type) {
 // reset while in range). Health 100: damage from the owner or the owner's team is ignored. TnAmmoBeacon.PickupAllowed false.
 // Cooldown[0] 60 s once the beacon is gone (ServerCanStartCooldown). Skill gifts / grenades not applied (no skills in MP).
 // FadeOut duration not applied: removal is immediate [PARTIAL].
+void World::requestAmmoBeacon(int owner) {
+    // TnAbilitySpawnAmmoCrate for any participant: SpawnDelay 0.5 -> SpawnInventory; one beacon per owner (cooldown waits for it).
+    AmmoBeacon b; b.owner = owner; b.delay = 0.5f;
+    beacons_.push_back(b);
+    if (Character* pc = participantPawnMutable(owner)) pc->beaconAlive_ = true;
+}
+
 void World::tickAmmoBeacon(float dt) {
-    Character& pc = player_.pawn();
     auto tickBuff = [dt](Character& p) {
         p.beaconDamageBuff_ = std::max(0.0f, p.beaconDamageBuff_ - dt);
         p.seeEnemiesRemain_ = std::max(0.0f, p.seeEnemiesRemain_ - dt);
@@ -2946,58 +2953,80 @@ void World::tickAmmoBeacon(float dt) {
         p.refillOnKillRemain_ = std::max(0.0f, p.refillOnKillRemain_ - dt);
         p.jammedRemain_ = std::max(0.0f, p.jammedRemain_ - dt);
     };
-    tickBuff(pc);
+    tickBuff(player_.pawn());
     for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
-    if (beaconDelay_ >= 0.0f) {
-        beaconDelay_ -= dt;
-        if (beaconDelay_ < 0.0f && !localDead_) {
-            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r{-f.z, 0.0f, f.x};
-            beacon_ = AmmoBeacon{};
-            beacon_.alive = true; beacon_.pos = pc.actorLocation(); beacon_.vel = f * 20.0f + r * 12.0f;
-            beacon_.life = 60.0f; beacon_.health = 100.0f;
-            LOG_INFO("ability SpawnAmmoCrate: beacon dropped");
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (AmmoBeacon& b : beacons_) {
+        const Character* owner = participantPawn(b.owner);
+        if (b.delay >= 0.0f) {
+            b.delay -= dt;
+            if (b.delay < 0.0f && owner) {
+                const core::Vec3 f = core::forwardFromYawPitch(owner->yaw(), 0.0f), r{-f.z, 0.0f, f.x};
+                b.alive = true; b.landed = false; b.pos = owner->actorLocation(); b.vel = f * 20.0f + r * 12.0f;
+                b.life = 60.0f; b.health = 100.0f;
+                LOG_INFO("ability SpawnAmmoCrate (p%d): beacon dropped", b.owner);
+            }
         }
-    }
-    AmmoBeacon& b = beacon_;
-    if (b.alive) {
-        b.life -= dt;
-        if (b.life <= 0.0f || localDead_ || b.health <= 0.0f) b.alive = false;
-    }
-    if (b.alive && !b.landed) {
-        // PHYS_Falling until it lands (stock DroppedPickup physics; walls stop the horizontal travel).
-        b.vel.y -= core::config::kGravity * dt;
-        core::Vec3 next = b.pos + b.vel * dt;
-        float t; core::Vec3 n;
-        if (collision_.valid() && collision_.segmentHit(b.pos, next, t, n)) {
-            next = b.pos + (next - b.pos) * std::max(0.0f, t - 1e-3f);
-            if (n.y > 0.7f) { b.landed = true; b.vel = {0, 0, 0}; } else { b.vel.x = 0.0f; b.vel.z = 0.0f; }
+        if (b.alive) {
+            b.life -= dt;
+            if (b.life <= 0.0f || !owner || b.health <= 0.0f) b.alive = false;   // lifespan / the owner dead / destroyed
         }
-        b.pos = next;
-        if (b.pos.y < killZ_) b.alive = false;
-    }
-    if (b.alive) {
-        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        if (b.alive && !b.landed) {
+            // PHYS_Falling until it lands (stock DroppedPickup physics; walls stop the horizontal travel).
+            b.vel.y -= core::config::kGravity * dt;
+            core::Vec3 next = b.pos + b.vel * dt;
+            float t; core::Vec3 n;
+            if (collision_.valid() && collision_.segmentHit(b.pos, next, t, n)) {
+                next = b.pos + (next - b.pos) * std::max(0.0f, t - 1e-3f);
+                if (n.y > 0.7f) { b.landed = true; b.vel = {0, 0, 0}; } else { b.vel.x = 0.0f; b.vel.z = 0.0f; }
+            }
+            b.pos = next;
+            if (b.pos.y < killZ_) b.alive = false;
+        }
+        if (!b.alive) continue;
+        // Pickup.Tick: the owner and the owner's team within 15 m in sight.
         const core::Vec3 eye = b.pos + core::Vec3{0, 0.5f, 0};
-        auto serve = [&](Character& p) {
-            if (core::length(p.actorLocation() - b.pos) > 15.0f) return;
+        const bool teamGame = matchActive_ && match_.settings().teamGame;
+        for (size_t i = 0; i < match_.players().size(); ++i) {
+            const int p = (int)i;
+            if (p != b.owner && !(teamGame && match_.sameTeam(p, b.owner))) continue;
+            Character* c = participantPawnMutable(p);
+            if (!c || core::length(c->actorLocation() - b.pos) > 15.0f) continue;
             float t;
-            if (line && line->segmentHit(eye, p.actorLocation(), t)) return;   // VisibleCollidingActors
-            Weapon& w = p.weapon();
-            if (w.reserve < w.reserveMax) w.reserve = w.reserveMax;          // FillReserveAmmo
-            p.beaconDamageBuff_ = 1.0f;                                       // AddBuff / ResetBuffTime
-        };
-        if (!localDead_) serve(pc);
-        const int team = matchActive_ && localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 255;
-        if (matchActive_ && match_.settings().teamGame)
-            for (MatchOpponent* o : opponents_) if (o->spawned() && o->team() == team) serve(o->pawn());
+            if (line && line->segmentHit(eye, c->actorLocation(), t)) continue;   // VisibleCollidingActors
+            Weapon& w = c->weapon();
+            if (w.reserve < w.reserveMax) w.reserve = w.reserveMax;              // FillReserveAmmo
+            c->beaconDamageBuff_ = 1.0f;                                          // AddBuff / ResetBuffTime
+        }
     }
-    pc.beaconAlive_ = b.alive || beaconDelay_ >= 0.0f;
+    // Ended beacons stay one step with alive=false (presentation consumers), then go.
+    for (AmmoBeacon& b : beacons_) if (!b.alive && b.delay < 0.0f) ++b.deadTicks;
+    beacons_.erase(std::remove_if(beacons_.begin(), beacons_.end(), [](const AmmoBeacon& b) { return b.deadTicks >= 2; }), beacons_.end());
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (Character* pc = participantPawnMutable((int)i)) {
+            bool any = false;
+            for (const AmmoBeacon& b : beacons_) any |= b.owner == (int)i && (b.alive || b.delay >= 0.0f);
+            pc->beaconAlive_ = any;
+        }
+}
+
+const World::AmmoBeacon& World::localBeacon() const {
+    for (const AmmoBeacon& b : beacons_) if (b.owner == localPlayer_ && b.alive) return b;
+    static const AmmoBeacon none;
+    return none;
 }
 
 void World::damageAmmoBeacon(float amount, int instigator) {
-    if (!beacon_.alive || instigator < 0 || instigator == localPlayer_) return;
-    if (matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
-    beacon_.health -= amount;
+    // Direct damage targets the local player's beacon (tests); radius damage uses damageAmmoBeaconAt per beacon.
+    for (size_t i = 0; i < beacons_.size(); ++i) if (beacons_[i].owner == localPlayer_ && beacons_[i].alive) { damageAmmoBeaconAt(i, amount, instigator); return; }
+}
+
+void World::damageAmmoBeaconAt(size_t idx, float amount, int instigator) {
+    if (idx >= beacons_.size()) return;
+    AmmoBeacon& b = beacons_[idx];
+    if (!b.alive || instigator < 0 || instigator == b.owner) return;                          // the owner's damage is ignored
+    if (matchActive_ && match_.settings().teamGame && match_.sameTeam(instigator, b.owner)) return;   // and its team's
+    b.health -= amount;
 }
 
 // ---- Sentry [CONF TnAbilitySpawnSentry / TnSentryPawnAbility / TnAiSentryController script + authored Default_TURRETDEF /
