@@ -1286,8 +1286,11 @@ Every change below is image-identical to the previous path (verified by determin
   FX_EMPShotgun_p.FX.Trail_EMPShotgun_FX's three Trail_Smoke ribbons (Trail2, Tracer_Smoke_MAT via
   Trail_Smoke_10_MAT_INST): Lifetime 4 s, 20 / s for 0.5 s, StartSize U(15,25) x SizeMultiplyLife, ribbon half-width =
   Size (RE pass 5 s13 add. 2, HIGH), alpha over life ~1 from 20 % to 55 %, colour to 0.1 by 20 % -> dense dark-grey
-  smoke per shot; several Scatter Blasters firing give the "bundle of grey rods". Matches the authored data on every
-  point checked (width, rate, lifetime, alpha, colour, material). Changed only if RE / Rendering demonstrate a material
+  smoke per shot. The per-effect presentation matches the authored data on every point checked (width, rate,
+  lifetime, alpha, colour, material, LODDistances [0, 10000]: 20 / s at LOD0, 4 / s beyond 100 m, applied by camera
+  distance). The excess density WAS real, but on the spawn side: RE 9a776fb (CONFIRMED) - WFC spawns ONE
+  Trail_EMPShotgun_FX per trigger pull (shot index 0, toward the first pellet's impact), the rebuild spawned one per
+  pellet (~13x the smoke); Gameplay fixes the fire-effect path. Changed only if RE / Rendering demonstrate a material
   difference from original WFC (original effect / material data, original footage where available); never made
   cleaner for visibility. Known minor difference (not the smoke density): ParameterDynamic is one value per emitter
   here vs per particle per vertex in WFC (RE: trail fill copies 4 floats per vertex); in this material it only moves
