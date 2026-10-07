@@ -59,6 +59,31 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND MILESTONE E: COMPLETE OFFLINE MULTIPLAYER (2026-10-07, agents/frontend)
+
+- **In-match UI sounds** (9544080): the pre-match loading movie's mute (CINE_MUTE_FOR_BINK) stayed on for the match, so
+  HUD / pause-menu sounds played at gain 0; updateInMatch releases it (verified by Systems).
+- **Bot Settings, extended** (94bf7b1, 2cf1ab1; PC ADAPTATION): Player Limit ORIGINAL (5 V 5) = the original MaxPlayers
+  10 [CONFIRMED], the default, or EXTENDED (32 V 32) (user decision); Autobot / Decepticon Bots independent (FFA: Bots);
+  limits only from Gameplay's MatchSettings (forMode + applyExtendedSlots, maxBotsPerTeam), no literal caps. Launch URL
+  ?BotsAutobot ?BotsDecepticon ?ExtendedPlayers (+ ?BotsFriendly / ?BotsEnemy). Difficulty EASY / MEDIUM / HARD = the
+  campaign's names (no MP AI tiers exist). The menu hint moves down per extra row.
+- **Create a Character unlocks** (f5d82e4, 2cf1ab1): skills / abilities gate on the authored LevelRestriction against the
+  real specialty level (the original script; verified locks at level 0, unlocked at 25). Chassis (user decision, PC
+  ADAPTATION): the 12 named LockedChassis unlock at a level of their own specialty (data/frontend/chassis_xp_unlocks.json);
+  the Car5 / Jet8 lock panel states the level; 'New chassis unlocked' on the level-up; OriginalChassisLocks=1 (hidden)
+  restores the original locks. The 6 unnamed LockedChassis (Car8-10 soldiers, Frenzy / Rumble / Laserbeak) stay hidden:
+  the original data has no MP animation for them (AssetTools) - not invented.
+- **Map-name label**: the blue "frame" is a hollow ring (shape 105, +-10 outer / +-9 inner) scaled 21.70 x 7.35, i.e. a
+  21.7-unit band at panel x 0..21.7 drawn additively above the label; the authored label (x 19) overlaps it by ~2.7 units
+  in the original too (RE: no runtime move, font Distilla Cyrillic Regular, uniform ShowAll). No change; human check.
+- **UI audit** at 1280x720, 1920x1080, 2560x1440, 1680x1050 (16:10) and 2560x1080 (ultrawide), 15 screens each (title,
+  settings / graphics, extras, accounts, party lobby, CaC overview / abilities, challenges, private lobby with bot rows,
+  character select, HUD, XP popup, pause, results): layouts consistent, uniform pillar / letterbox, no clipped or
+  overlapping text after the bot-row hint fix; ultrawide Resolution row showed 800x600 (fixed: the current size is
+  listed). Results XP counts up to the earned value (verified over time).
+- Frame Rate Limit list gains 500. TEST ONLY: WFC_LOBBY_OPTIONS overrides host options for automated mode audits.
+
 ## FRONTEND MILESTONE 09: FPS LIMIT, BOT SETTINGS, PROGRESSION, PLAYTEST DEFECTS (2026-10-06, agents/frontend)
 
 - **Frame Rate Limit (PC ADAPTATION, 938a3d6).** Original timing (AssetTools / RE): Xenon 15-30 fps smoothed

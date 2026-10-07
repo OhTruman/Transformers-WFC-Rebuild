@@ -368,6 +368,14 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND MILESTONE E (2026-10-07, branch `agents/frontend`)
+
+- Head after the docs commit. 9544080 in-match UI sounds; 94bf7b1 / 2cf1ab1 extended Bot Settings (ORIGINAL 5 v 5 default,
+  EXTENDED 32 v 32 from Gameplay's capacity); f5d82e4 / 2cf1ab1 CaC unlocks (levels; chassis via XP table, 6 unnamed
+  bodies hidden: no MP animation); resolution-list fix for ultrawide; UI audit at 5 resolutions. Details in FIDELITY.md.
+- Pending: Gameplay's 32 v 32 head (then launch -> receipt and a 64-participant scoreboard / lobby / results / kill-feed
+  check at 1280x720); the map-name label stays on the human check list.
+
 ## FRONTEND MILESTONE 09 (2026-10-06, branch `agents/frontend`)
 
 - Head 62d5b42. Frame Rate Limit setting (938a3d6), F10 QA panel in dev builds (e566f6c) + live character swap
