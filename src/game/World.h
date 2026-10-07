@@ -521,6 +521,14 @@ private:
     std::map<int, ParticipantWeaponView> partWeapons_;
     struct PendingShotFx { std::string weapon; core::Mat4 muzzle; core::Vec3 to; bool tracer = true; };
     mutable std::vector<PendingShotFx> partShotFx_;   // filled per step, spawned at draw (renderer particle API)
+    // Participants' Repair Ray beams (the player's beam presentation per bot): source / target refreshed each beam tick, alive for
+    // 1.5 fire intervals after the last tick; the looping tracer segment is spawned / moved / stopped at draw.
+    struct ParticipantBeam { core::Vec3 start{0, 0, 0}, end{0, 0, 0}; float time = 0.0f; mutable int fx = -1; };
+    std::map<int, ParticipantBeam> partBeams_;
+public:
+    // Diagnostics: participants with a live Repair Ray beam.
+    int participantBeamsLive() const { int n = 0; for (const auto& kv : partBeams_) n += kv.second.time > 0.0f; return n; }
+private:
     void tickParticipantWeapons(float dt);
     void addBotBrain(int player, int difficulty);
     void tickBots(float dt);

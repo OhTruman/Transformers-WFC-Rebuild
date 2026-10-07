@@ -626,6 +626,15 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
                 if (b.healTarget == localPlayer_ && !localDead_) player_.pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tick);
                 participantShots_.push_back({o.matchPlayer(), w->def ? w->def->id : "RepairRay", eye, targetable(*mate), true, b.healTarget});
                 ++b.heals;
+                // The beam presentation from the weapon's MuzzleFlash socket (eye + aim when no mesh is shown).
+                ParticipantBeam& pb = partBeams_[o.matchPlayer()];
+                pb.start = eye + core::forwardFromYawPitch(b.yaw, b.pitch) * 1.0f;
+                auto vit = partWeapons_.find(o.matchPlayer());
+                core::Mat4 local;
+                if (pc.hasWeapon() && vit != partWeapons_.end() && vit->second.anim.valid() && vit->second.anim.socketLocal("MuzzleFlash", local)) {
+                    const core::Mat4 m = pc.weaponWorld() * local; pb.start = {m.m[12], m.m[13], m.m[14]};
+                }
+                pb.end = targetable(*mate); pb.time = tick * 1.5f;
             }
             return;
         }
