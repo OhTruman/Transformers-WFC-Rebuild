@@ -1188,15 +1188,9 @@ void World::tick(float dt) {
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
     for (MatchOpponent* o : opponents_) {                               // participants: shared movement + animation
         { TickTimer tt(4); o->simulateMovement(dt, collision()); }
-        {   // Animation LOD above 16 participants (PC ADAPTATION; off at the original counts): beyond 40 m from the camera every 2nd
-            // step, beyond 100 m every 4th, with the accumulated time (clip timing exact); transforming pawns always every step.
+        {   // Every participant animates every step (user decision: no animation level of detail at any count).
             TickTimer tt(5);
-            int every = 1;
-            if (match_.players().size() > 16 && o->spawned() && !o->pawn().isTransforming()) {
-                const float d = core::length(o->pawn().position() - player_.pawn().position());   // simulation state, not the camera
-                every = d < 40.0f ? 1 : (d < 100.0f ? 2 : 4);
-            }
-            o->simulateAnimationLod(dt, every);
+            o->simulateAnimation(dt);
         }
     }
     { TickTimer tt(6); tickParticipantWeapons(dt); }
@@ -1961,10 +1955,10 @@ void World::draw(render::IRenderer& r) const {
         r.drawGroundGrid(60.0f, 2.0f, core::Vec3{0.30f, 0.33f, 0.38f});
         for (const auto& b : blocks_) r.drawBox(b.center, b.size, b.color);
     }
-    // Participant culling for extended matches (> 16 participants, PC ADAPTATION; off at the original counts): a pawn outside the
-    // view cone (horizontal half angle 75 deg + its size) is not drawn or skinned this frame. Off-screen shadows are the cost.
+    // No gameplay-side participant culling (user decision: off-screen pawns still cast shadows / affect the image): every pawn is
+    // submitted and the renderer culls per pass (main view, shadow cascades).
     {
-        const bool cull = match_.players().size() > 16;
+        const bool cull = false;
         const core::Vec3 cp = player_.controller().cameraPos();
         const core::Vec3 vd = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
         for (const MatchOpponent* o : opponents_) {
@@ -2004,7 +1998,7 @@ void World::draw(render::IRenderer& r) const {
         const Weapon& hw = player_.pawn().weapon();
         const bool glow = hw.charge() && hw.chargeGlow() > 0.0f;
         if (glow) { const float g = hw.chargeGlow(); const float rgba[4] = {g, g, g, 1.0f}; fxSetDrawParam(r, "Overheat", rgba, 0); }
-        r.drawDynamicMesh(weaponAnim_.pose(), core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+        weaponAnim_.draw(r, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
         if (glow) fxClearDrawParam(r, "Overheat", 0);
     }
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
@@ -2015,7 +2009,7 @@ void World::draw(render::IRenderer& r) const {
         if (!o->spawned() || o->culled() || !o->pawn().hasWeapon()) continue;
         auto it = partWeapons_.find(o->matchPlayer());
         if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
-        r.drawDynamicMesh(it->second.anim.pose(), core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
+        it->second.anim.draw(r, core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
     // Participant shots without a presentation hook: the weapon's authored templates by name [CONF WEPMESH data].
     for (const PendingShotFx& s : partShotFx_) {

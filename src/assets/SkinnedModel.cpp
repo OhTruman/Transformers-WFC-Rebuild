@@ -606,8 +606,9 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
               std::vector<core::Mat4>& global, render::MeshData& out) {
     poseGlobals(model, pose, global);
 
-    // Joint matrices = global(joint) * invBind(joint).
-    std::vector<core::Mat4> jm(model.skinJoints.size());
+    // Joint matrices = global(joint) * invBind(joint) (a reused buffer: no allocation per skin).
+    static thread_local std::vector<core::Mat4> jm;
+    jm.resize(model.skinJoints.size());
     for (size_t j = 0; j < model.skinJoints.size(); ++j) {
         core::Mat4 gm = global[(size_t)model.skinJoints[j]];
         jm[j] = (j < model.invBind.size()) ? gm * model.invBind[j] : gm;
@@ -617,10 +618,21 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     size_t vc = model.vertexCount();
     out.positions.resize(vc * 3);
     out.normals.resize(vc * 3);
-    out.indices = model.indices;
-    out.uv = model.uv;   // UVs are pose-invariant
-    out.subs = model.subs;
-    out.mats = model.mats;                                      // picks up resolved texture handles
+    // Topology / UVs / materials are pose-invariant: copied only when the buffer does not already hold this model's (the per-skin
+    // copy of the index buffer was a large share of the skin cost with many characters).
+    bool sameTopology = out.indices.size() == model.indices.size() && out.uv.size() == model.uv.size() &&
+                        out.subs.size() == model.subs.size() && out.mats.size() == model.mats.size();
+    for (size_t k = 0; sameTopology && k < model.subs.size(); ++k)
+        sameTopology = out.subs[k].indexOffset == model.subs[k].indexOffset && out.subs[k].indexCount == model.subs[k].indexCount &&
+                       out.subs[k].material == model.subs[k].material;
+    if (sameTopology && !model.indices.empty()) {   // a strided sample of the indices and UVs (another model with equal counts)
+        const size_t n = model.indices.size(), step = std::max<size_t>(1, n / 16);
+        for (size_t k = 0; sameTopology && k < n; k += step) sameTopology = out.indices[k] == model.indices[k];
+        const size_t nu = model.uv.size(), su = std::max<size_t>(1, nu / 16);
+        for (size_t k = 0; sameTopology && k < nu; k += su) sameTopology = out.uv[k] == model.uv[k];
+    }
+    if (!sameTopology) { out.indices = model.indices; out.uv = model.uv; out.subs = model.subs; }
+    out.mats = model.mats;                                      // small; picks up resolved texture handles
     // Bind-pose tangents skinned like the normals (no translation, renormalised; w = the bind bitangent sign), so the renderer
     // does not re-derive them from the posed triangles every frame (Rendering: about half the per-character draw cost).
     std::vector<float>* outTan = model.tangents.size() == vc * 4 ? meshTangents(out, 0) : nullptr;
