@@ -1201,9 +1201,18 @@ void World::separatePawns() {
     for (MatchOpponent* o : opponents_) if (o->spawned()) ps.push_back({&o->pawn()});
     const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
     auto tryMove = [&](Character& c, const core::Vec3& d) {
-        const core::Vec3 a = c.position() + core::Vec3{0, 1.0f, 0};
+        // The pushed pawn keeps its whole radius clear of walls (knee and centre height): a push never wedges a pawn into a pocket
+        // narrower than itself (an off-mesh trap the movement probes then cannot leave).
+        const float dl = core::length(d);
+        if (dl < 1e-5f) return true;
+        const core::Vec3 dn = d * (1.0f / dl);
+        const float r = c.cylinderRadius(c.moveForm());
         float t;
-        if (col && col->segmentHit(a, a + d * 1.5f, t)) return false;
+        if (col)
+            for (float h : {0.6f, 2.0f}) {
+                const core::Vec3 a = c.position() + core::Vec3{0, h, 0};
+                if (col->segmentHit(a, a + dn * (dl + r), t)) return false;
+            }
         c.setPosition(c.position() + d);
         return true;
     };
@@ -1600,6 +1609,11 @@ void World::tick(float dt) {
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step
+    if (!commands_.empty()) {   // submitted commands, in order, at the step boundary
+        std::vector<std::function<void(World&)>> cmds; cmds.swap(commands_);
+        for (auto& c : cmds) c(*this);
+    }
+    struct PresentedFill { World& w; ~PresentedFill() { w.fillPresented(); } } presentedFill{*this};   // at the end of the step
     // The local pawn's presentation yaw offset (set per render frame by the controller) is not simulation state: the step's
     // meshMatrix / sockets use the simulated yaw only (the next frame's input pass sets the offset again for drawing).
     player_.pawn().setDrawYawOffset(0.0f);
@@ -2120,6 +2134,42 @@ void World::generateExtraStarts() {
     match_.setGeneratedStarts(extra);
 }
 
+
+void World::fillPresented() {
+    PresentedFrame& p = presented_;
+    p.players = match_.players();
+    const size_t n = p.players.size();
+    p.positions.assign(n, core::Vec3{0, 0, 0});
+    p.present.assign(n, 0);
+    for (size_t i = 0; i < n; ++i)
+        if (const Character* c = participantPawn((int)i)) { p.positions[i] = c->position(); p.present[i] = 1; }
+    p.hud = hudState();
+    p.localPlayer = localPlayer_;
+    const Character& pc = player_.pawn();
+    p.localHealth = pc.health().current; p.localHealthMax = pc.health().max;
+    p.localSegmentTops.clear();
+    for (int i = 0; i < pc.health().segmentCount; ++i) p.localSegmentTops.push_back(pc.health().segmentTop(i));
+    p.localMag = pc.weapon().magSize; p.localReserveMax = pc.weapon().reserveMax;
+    p.localWeaponId = pc.weapon().def ? pc.weapon().def->id : "";
+    p.localChassis = localPlayer_ >= 0 && (size_t)localPlayer_ < n ? p.players[(size_t)localPlayer_].chassis : std::string();
+    p.aim = player_.controller().hudAimState();
+    p.matchState = (int)match_.state();
+    p.modeTag = match_.settings().modeTag;
+    p.teamScore[0] = match_.teamScore(0); p.teamScore[1] = match_.teamScore(1);
+    p.elapsedTime = match_.elapsedTime(); p.remainingTime = match_.remainingTime();
+    // queues (capped so a build without a consumer cannot grow without bound)
+    p.matchEvents.insert(p.matchEvents.end(), matchEvents_.begin(), matchEvents_.end());
+    const auto& ge = match_.gameplayEvents();
+    if (presentedGameplayEventCount_ > ge.size()) presentedGameplayEventCount_ = 0;   // a new match restarted the record
+    p.gameplayEvents.insert(p.gameplayEvents.end(), ge.begin() + (long)presentedGameplayEventCount_, ge.end());
+    presentedGameplayEventCount_ = ge.size();
+    { auto xp = awards_.drainXp(); p.xpAwards.insert(p.xpAwards.end(), xp.begin(), xp.end()); }
+    { auto st = awards_.drainStats(); p.statAwards.insert(p.statAwards.end(), st.begin(), st.end()); }
+    constexpr size_t kCap = 8192;
+    if (p.matchEvents.size() > kCap) p.matchEvents.erase(p.matchEvents.begin(), p.matchEvents.end() - (long)kCap);
+    if (p.gameplayEvents.size() > kCap) p.gameplayEvents.erase(p.gameplayEvents.begin(), p.gameplayEvents.end() - (long)kCap);
+    ++p.steps;
+}
 
 bool World::launchMatch(const MatchLaunch& l) {
     if (canonicalMapName(l.map) != mapName_ || !usingSlice_) {

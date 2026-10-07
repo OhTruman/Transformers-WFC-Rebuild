@@ -109,3 +109,103 @@ latches, as `applyToPawn` does now. The worker never reads `PlayerController` fr
 1. Variant A vs B (latency vs complexity).
 2. Systems: which cue / mixer calls inside the step touch the audio device thread-unsafely?
 3. Frontend: does any UI code read World directly during a frame outside `hudState()` / events?
+
+---
+
+# v2 (2026-10-07) — reviews folded in, decision recorded, API
+
+## Decision (Integration)
+Variant **B** is the default: no added input latency. Variant A may land first behind `WFC_ASYNCSTEP=1` (off by default) as a
+stepping stone. `WFC_ASYNCSTEP=0` = today's synchronous path. The sync-vs-async event-log equality test is required.
+
+## Variant B: the split
+A step today runs: pre (presentation snapshot of prev state) → abilities → match → **local controller `applyToPawn` (local
+movement / weapon / firing)** → bots → participants' movement + animation → participant weapons → ram / separation → FX / audio /
+hazards / projectiles / actors / glue.
+- **Prefix (main thread, synchronous at the boundary):** everything up to and including the local controller step. The local pawn's
+  presented state is captured right after it, so the local player's movement / firing shows with today's latency.
+- **Remainder (worker, while the main thread renders):** bots onward. The next boundary joins first, then runs the next prefix:
+  the operation order is exactly the synchronous one, so results are identical (DETERMINISM, the new ASYNCSTEP test, and
+  Experimental's sim-determinism.ps1 lockstep).
+- The remainder writes live state the local pawn shares (damage, knockback, rams, pickups): the main thread draws the local pawn
+  from its prefix snapshot, never from live state during the remainder.
+- Presentation: the local pawn is shown one step ahead of the participants (k+1 vs the k-1→k blend). Standard practice; the local
+  player is never interpolated against data it does not have yet.
+
+## Review results
+- **Rendering:** list complete, plus:
+  - the renderer calls back into game state: `setVisibilityQuery` → `segmentHit(a, b, t)`, the 3-argument overload, which is
+    **static geometry only** (no moving / dynamic sets). Static triangles are immutable during a match, so concurrent reads from the
+    main thread are safe. Requirement: keep that callback on the static-only overload (never the dynamic sets the step mutates).
+  - per frame, also snapshot: map presentation (mover / Matinee transforms, material params), draw-owner / character colours /
+    per-owner draw params (Defrag, Overheat), reticle, attached / looping FX transforms (beams, trails), projectile FX positions.
+  - decals / impact marks and map FX: events only (no world queries). Loading (`setLoadYield`) is main-thread only: no loads
+    during an async remainder.
+- **Systems:** the audio device (Win32Audio) is thread-safe (device mutex). `SoundCues` / `SoundMixer` / `LevelAudioHost` /
+  `AbilityAudio` / `MatchAudio` are not internally synchronized: they run inside the step (worker) and must not be touched by the
+  main thread while a remainder runs. Fenced main-thread entry points (queued to the join point): `applyProfileVolumes`,
+  `setGroupVolume`, `preloadSelectionAudio`, `preloadWeaponAudio`, `setPlayerVehicleWeaponAudio`; travel (`loadMapAudio` /
+  `unloadMapAudio` / `resetSystemsForMatch`) happens outside matches. The device listener stays main-thread per frame; World's
+  `listenerPos_` is in-step state.
+- **Frontend / Integration glue (Application_Frontend.cpp):** reads move to the snapshot; writes become commands.
+
+## API
+```cpp
+// Filled at the end of each remainder (worker) into the back buffer; swapped at the join. The main thread reads only front.
+struct PresentedFrame {
+    std::vector<PresentedPawn> pawns;              // transforms, form / partner / arm, palettes cur + prev + serial, weapon pose
+    PresentedPawn localPawn;                       // from the prefix (variant B)
+    std::vector<PlayerRow> players;                // name, team, score, kills, deaths, alive, kind, level, specialty, chassis, colours
+    std::vector<std::pair<int, core::Vec3>> positions;   // by match player
+    HudGameState hud; HudFrameBits hudFrame;       // health segment tops, mag / reserve, aim state
+    MatchSnapshot match;                           // state, mode tag, team scores, elapsed / remaining time, GRI objective fields
+    // step-ordered queues (this snapshot's steps only; consumed once on the main thread):
+    std::vector<MatchEvent> matchEvents; std::vector<GameplayEvent> gameplayEvents;
+    std::vector<XpAward> xpAwards; std::vector<StatAward> statAwards;
+    std::vector<FxEvent> fxEvents;                 // map / weapon / shot FX spawn / move / stop, decals
+    MapPresentation map;                           // movers, materials, draw owners / params, reticle, looping FX transforms
+    // DEV / QA (filled only while the panel asks): bot labels, bot list rows
+};
+const PresentedFrame& World::presented() const;   // main thread, between joins
+
+// Commands from the main thread, applied in submission order at the start of the next prefix (deterministic).
+struct SimCommand { enum Kind { SelectCharacter, Qa, LookSettings, AudioVolumes, AudioPreload, TestDamage } kind; /* payload */ };
+void World::submit(SimCommand c);
+```
+- Integration adapts `routeMatchToFrontend` and the QA panel to `presented()` + `submit()`; Systems' fenced calls go through
+  `submit(AudioVolumes / AudioPreload)`.
+- Gameplay: `World::draw` from `presented()`; prefix / remainder split; snapshot fill; the ASYNCSTEP test.
+
+## Order of work
+1. Gameplay: PresentedFrame + World::draw from it, still synchronous (no behaviour change; the snapshot is filled inline). Lands
+   first so Integration / Frontend / Systems can move to `presented()` / `submit()` with nothing async yet.
+2. Integration / Frontend / Systems: adopt `presented()` / `submit()`.
+3. Gameplay: the async remainder behind WFC_ASYNCSTEP (B), tests, then default on after Experimental's fps / latency check.
+
+## Step (1) as landed: `World::presented()` / `submit()` / `consumePresented()` — migration table
+
+Filled at the end of every `World::tick` (synchronous for now). Call `world.consumePresented()` once per frame after reading the
+queues (match / gameplay events); award drains clear their own queues.
+
+| old call (Application_Frontend.cpp / glue) | new |
+|---|---|
+| `world.matchEvents()` (last step only) | `presented().matchEvents` (every step since the last consume, in order) |
+| `world.match().gameplayEvents()` (whole record) | `presented().gameplayEvents` (new since the last consume) |
+| `world.drainXpAwards()` / `drainStatAwards()` | unchanged names (now drain `presented().xpAwards` / `statAwards` + anything pending) |
+| `match.players()[i]` (name / team / score / kills / deaths / alive / kind / level / specialty / chassis / selection) | `presented().players[i]` (a `MatchPlayer` copy) |
+| `match.teamScore(t)`, `match.elapsedTime()`, `match.remainingTime()`, `match.state()`, `match.settings().modeTag` | `presented().teamScore[t]`, `.elapsedTime`, `.remainingTime`, `.matchState`, `.modeTag` |
+| `player().pawn().position()`, `matchOpponents()[k]->position()` | `presented().positions[player]` when `presented().present[player]` |
+| `world.hudState()` | `presented().hud` |
+| `player().pawn().health()` / `segmentTop(i)` | `presented().localHealth`, `.localHealthMax`, `.localSegmentTops[i]` |
+| `player().pawn().weapon()` (magSize / reserveMax / def->id) | `presented().localMag`, `.localReserveMax`, `.localWeaponId` |
+| `player().controller().hudAimState()` | `presented().aim` |
+| `localChassis()` | `presented().localChassis` |
+| `match().selectCharacter(me, cs)` | `world.submit([=](World& w) { w.match().selectCharacter(me, cs); })` |
+| QA actions (`qaRespawn`, `qaKillAllBots`, ...) | `world.submit([](World& w) { w.qaKillAllBots(); })` etc. |
+| `applyLookSettings(world.player().controller(), profile)` | `world.submit([=](World& w) { applyLookSettings(w.player().controller(), profile); })` |
+| Systems: `applyProfileVolumes` / `setGroupVolume` / `preloadSelectionAudio` / `preloadWeaponAudio` / `setPlayerVehicleWeaponAudio` | the same calls inside `submit` |
+| TEST lifecycle `applyMatchDamage(...)` | inside `submit` |
+| QA reads (`botBrains()`, `qaBotLabels()`) | unchanged for now (DEV only; snapshot in step 3) |
+| `match.starts()[idx].pos` | unchanged (static per match) |
+
+Load / unload (`launchMatch`, `loadMapAudio`, ...) stay direct calls: no step runs then.

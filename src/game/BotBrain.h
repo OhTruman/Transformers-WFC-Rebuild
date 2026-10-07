@@ -86,6 +86,10 @@ struct BotBrain {
     bool vehiclePath = false;
     float bestDist = 1e9f, progressTimer = 0.0f; int stuckLevel = 0;
     float offMesh = 0.0f;
+    // Off-mesh rejoin (a pocket / prop top whose path leg runs through a wall): a point on the mesh in a clear straight line.
+    bool hasRejoin = false; core::Vec3 rejoin{0, 0, 0}; float rejoinUntil = 0.0f;
+    core::Vec3 rejoinFrom{0, 0, 0}; float rejoinStall = 0.0f;   // no progress toward the rejoin point (s)
+    core::Vec3 unwedge{0, 0, 0};                                 // this step's slide (applied in the serial pass)
     core::Vec3 stuckPos{0, 0, 0}; float stuckT = 0.0f;   // displacement-based stuck detection
     size_t progressWp = (size_t)-1; float progressBest = 1e9f, progressT = 0.0f;   // waypoint-progress stuck detection
     std::vector<int> avoidCells; float avoidUntil = 0.0f;   // cells where this bot got wedged (A* cost x10 for 30 s)
