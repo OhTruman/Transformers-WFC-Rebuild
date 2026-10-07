@@ -1641,7 +1641,7 @@ void World::fillPresented() {
             if (!t.drawn) continue;
             PresentedFrame::Marker m;
             m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
-            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
+            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player; m.owner = t.player;
             m.base = t.pos;
             if (const Character* c = participantPawn(t.player)) {
                 m.base = c->actorLocation();
@@ -1729,14 +1729,7 @@ void World::fillPresented() {
         // ObjectiveMarkers[16] at the original counts; extended matches list every marker (PC EXTENSION: no tag silently missing).
         if (!match_.settings().extendedSlots && p.markers.size() > 16) p.markers.resize(16);
     }
-    // Removal fade: a marker that disappeared is kept with removing = true for 1 s (removedT counts up).
-    for (PresentedFrame::Marker& old : prevMarkers_) {
-        bool still = false;
-        for (const PresentedFrame::Marker& m : p.markers) if (m.key == old.key) { still = true; break; }
-        if (still) continue;
-        if (!old.removing) { old.removing = true; old.removedT = 0.0f; } else old.removedT += 1.0f / 60.0f;
-        if (old.removedT < 1.0f) p.markers.push_back(old);
-    }
+    // No generic removal fade (RE: removal is explicit by the owner; only Tombstone fades, through its lifeSpan).
     prevMarkers_ = p.markers;
     p.damageTaken.insert(p.damageTaken.end(), pendingDamageTaken_.begin(), pendingDamageTaken_.end()); pendingDamageTaken_.clear();
     p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
