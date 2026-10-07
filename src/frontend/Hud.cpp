@@ -1,4 +1,6 @@
 #include "frontend/Hud.h"
+
+#include <algorithm>
 #include "frontend/Catalog.h"
 #include "frontend/FlowTrace.h"
 #include "frontend/FrontendRuntime.h"
@@ -25,6 +27,15 @@ std::string escape(const std::string& s) {
     return o;
 }
 } // namespace
+
+int HudController::grenadeTypeFor(const std::string& id) {
+    if (id.empty()) return 0;
+    auto has = [&](const char* k) { return id.find(k) != std::string::npos; };
+    if (has("Flash")) return 2;
+    if (has("Mine")) return 3;
+    if (has("Heal")) return 4;
+    return 1;
+}
 
 void HudController::reset() {
     sentValid_ = false;
@@ -146,6 +157,15 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         if (changed(f.hudScrambled, sent_.hudScrambled)) call("NotifyHudScrambledChanged", {*f.hudScrambled});
         if (changed(f.scoringMultiplier, sent_.scoringMultiplier)) call("NotifyScoringMultiplierChanged", {*f.scoringMultiplier});
         if (changed(f.increaseDamage, sent_.increaseDamage)) call("NotifyDamageIncrease", {*f.increaseDamage});
+        if (f.contextualPrompts) {
+            static const std::vector<std::string> kNone;
+            const auto& was = sentValid_ && sent_.contextualPrompts ? *sent_.contextualPrompts : kNone;
+            auto in = [](const std::vector<std::string>& v, const std::string& t) { return std::find(v.begin(), v.end(), t) != v.end(); };
+            for (const auto& t : was) if (!in(*f.contextualPrompts, t)) call("NotifyContextualCommand", {0, 1, t});
+            for (const auto& t : *f.contextualPrompts) if (!in(was, t)) call("NotifyContextualCommand", {0, 0, t});
+        }
+        if (f.cantTransformCount && sentValid_ && sent_.cantTransformCount)
+            for (int i = *sent_.cantTransformCount; i < *f.cantTransformCount; ++i) call("NotifyCantTransform", {});
         if (!sentValid_ || f.spectating != sent_.spectating) {
             call("NotifySpectating", {f.spectating});
             call("GameMessageSpectatorMode", {f.spectating});   // the kill feed moves up 160 px while spectating

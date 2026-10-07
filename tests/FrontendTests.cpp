@@ -137,6 +137,19 @@ static void testHudObservers(const Catalog& c) {
     hud.update(&p, c, true, true);
     check(p.has("_global.NotifyProgressBarChanged(Reviving Bumblebee,0.5)") && p.calls.size() == 1, "hud.progress_revive_name",
           p.calls.empty() ? "" : p.calls[0]);
+    // prompts diffed into add / remove; refused transforms per increment; conversions
+    f.contextualPrompts = std::vector<std::string>{"Pick up"};
+    f.cantTransformCount = 0;
+    hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
+    f.contextualPrompts = std::vector<std::string>{"Swap"};
+    f.cantTransformCount = 2;
+    hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
+    check(p.has("_global.NotifyContextualCommand(0,1,Pick up)") && p.has("_global.NotifyContextualCommand(0,0,Swap)") &&
+          p.count("_global.NotifyCantTransform") == 2, "hud.prompts_and_cant_transform");
+    check(HudController::grenadeTypeFor("") == 0 && HudController::grenadeTypeFor("GrenadeLauncher") == 1 &&
+          HudController::grenadeTypeFor("KamikazeMine") == 3 && HudController::targetTypeFor(-1, 255, 0) == 2 &&
+          HudController::targetTypeFor(3, 0, 0) == 0 && HudController::targetTypeFor(3, 1, 0) == 1 && HudController::hudYaw(0.5) == -0.5,
+          "hud.conversions");
 }
 
 static void testCatalog(const Catalog& c) {
