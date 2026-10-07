@@ -17,6 +17,7 @@
 #include <functional>
 #include <future>
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include "audio/Audio.h"
@@ -251,6 +252,10 @@ private:
     OcclusionQuery occlusion_;
     core::Vec3 listener_{0, 0, 0};
     std::vector<cuedata::CueDef> cues_;
+    // findCue index (was a linear scan with a string compare per play): FNV-1a 64 of the name -> cue indices, ascending (the
+    // first match wins, as the scan did). No allocation on lookup.
+    std::unordered_map<unsigned long long, std::vector<int>> nameIndex_;
+    static unsigned long long nameHash(const char* a, const char* b = "");
     std::vector<std::vector<std::vector<audio::Sound>>> waves_;   // [cue][event][wave]
     std::vector<char> resident_;                                   // [cue] waves decoded (streamed cues: on demand)
     std::vector<char> pinned_;                                     // [cue] prefetched, not yet played
