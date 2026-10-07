@@ -220,7 +220,17 @@ bool FrontendRuntime::init() {
         std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/chassis_xp_unlocks.json");
         std::stringstream ss; ss << f.rdbuf();
         if (f && assets::Json::parse(ss.str(), j))
+        {
             for (const auto& [id, lv] : j["unlocks"].obj) chassisXpUnlocks_[id] = lv.asInt(0);
+            // TEST ONLY: "staged" entries (bodies whose gameplay support has not landed) join the table only with
+            // WFC_STAGED_CHASSIS=1, for CaC preview checks; never offered in a normal build.
+            const char* staged = std::getenv("WFC_STAGED_CHASSIS");
+            if (staged && *staged == '1')
+                for (const auto& [id, lv] : j["staged"].obj) {
+                    chassisXpUnlocks_[id] = lv.asInt(0);
+                    FlowTrace::emit("test.stagedChassis", {{"id", id}, {"level", std::to_string(lv.asInt(0))}});
+                }
+        }
         updateChassisUnlockTexts();
     }
     // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
