@@ -1405,6 +1405,7 @@ void World::tickPrefix(float dt) {
     }
     prefixMark(10);
     if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
+    if (matchActive_) ensureAbilityModels();
     prefixMark(11);
 }
 
@@ -1412,6 +1413,7 @@ void World::tickPrefix(float dt) {
 void World::stepRemainder(float dt) {
     TickTimer tickTotal(14);
     participantShots_.clear();
+    { TickTimer tt(1); tickAbilityActors(dt); }
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
     {   // Participants: movement + animation (every participant animates every step; user decision). Each task touches only its own
         // pawn and reads the static collision, so they run on the worker pool in any order with the same result (deterministic).
@@ -3112,6 +3114,17 @@ void World::applyShockwave(Character& pc, int self) {
         if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
 }
 
+// Every participant's ability actors, at the start of the background part (after the local controller, before the bots): off the main
+// thread (WFC_SCALETEST: ~0.13 ms / step at 64 participants). Their meshes are loaded by the local part (ensureAbilityModels).
+void World::tickAbilityActors(float dt) {
+    { TickTimer tt(15); tickBarrier(dt); }
+    { TickTimer tt(16); tickAmmoBeacon(dt); }
+    { TickTimer tt(17); tickSentry(dt); }
+    { TickTimer tt(18); tickRollerMine(dt); }
+    tickBuffShots(dt);
+    tickKillstreakItems(dt);
+}
+
 void World::tickAbilityEffects(float dt) {
     Character& pc = player_.pawn();
     auto tickBuff = [dt](Character& p) {
@@ -3168,16 +3181,12 @@ void World::tickAbilityEffects(float dt) {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         requestBarrier(localPlayer_);                     // SpawnDelay 0.5 -> SpawnBarrier
     }
-    { TickTimer tt(15); tickBarrier(dt); }
-    { TickTimer tt(16); tickAmmoBeacon(dt); }
-    { TickTimer tt(17); tickSentry(dt); }
-    tickGuidedMissile(dt);
-    { TickTimer tt(18); tickRollerMine(dt); }
+    // (every participant's ability actors - barriers, beacons, sentries, rollers, buff shots, killstreak items - tick in the background
+    // part: tickAbilityActors at its start)
+    tickGuidedMissile(dt);   // the local player's missile (its controls are the local input)
     repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
     if (repairSquibPending_) { repairSquibDraw_ = true; repairSquibPending_ = false; }
     if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
-    tickBuffShots(dt);
-    tickKillstreakItems(dt);
     auto tickTD = [dt](Character& p) { p.transformDisruptRemain_ = std::max(0.0f, p.transformDisruptRemain_ - dt); };
     tickTD(pc);
     for (MatchOpponent* o : opponents_) tickTD(o->pawn());
@@ -3524,11 +3533,10 @@ void World::requestBarrier(int owner) {
     if (Character* pc = participantPawnMutable(owner)) pc->barrierAlive_ = true;
 }
 
-void World::spawnBarrier(BarrierState& slot) {
-    Character* pcp = participantPawnMutable(slot.owner);
-    if (!pcp) return;                                       // IsOwnerDead
-    Character& pc = *pcp;
-    if (!barrierModelTried_) {
+// The barrier / sentry meshes load (textures: GL) on the main thread: the local part calls this every step during a match (a flag
+// check after the first time), so an ability actor spawned by the background part never loads.
+void World::ensureAbilityModels() {
+    if (!barrierModelTried_ && onMainThread()) {
         barrierModelTried_ = true;
         const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";
         if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
@@ -3536,6 +3544,21 @@ void World::spawnBarrier(BarrierState& slot) {
             resolveModelTextures(barrierModel_);
         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
     }
+    if (!sentryModelTried_ && onMainThread()) {
+        sentryModelTried_ = true;
+        const std::string ext = assetRoot() + "/../content/WEP_SentryAbility_p/";
+        if (assets::loadSkinnedGlb(ext + "WEP_SentryDeploy_SKEL.gltf", sentryModel_) && sentryModel_.valid()) {
+            assets::loadAnimationsByName(ext + "WEP_DeployedTurret_ANIM.anim.gltf", sentryModel_);
+            resolveModelTextures(sentryModel_);
+        } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
+    }
+}
+
+void World::spawnBarrier(BarrierState& slot) {
+    Character* pcp = participantPawnMutable(slot.owner);
+    if (!pcp) return;                                       // IsOwnerDead
+    Character& pc = *pcp;
+    ensureAbilityModels();
     BarrierState& b = slot;
     const int owner = b.owner, dyn = b.dyn, dynW = b.dynW;
     b = BarrierState{};
@@ -3768,14 +3791,7 @@ void World::spawnSentry(Sentry& s) {
     Character* pcp = participantPawnMutable(s.owner);
     if (!pcp) return;
     const Character& pc = *pcp;
-    if (!sentryModelTried_) {
-        sentryModelTried_ = true;
-        const std::string ext = assetRoot() + "/../content/WEP_SentryAbility_p/";
-        if (assets::loadSkinnedGlb(ext + "WEP_SentryDeploy_SKEL.gltf", sentryModel_) && sentryModel_.valid()) {
-            assets::loadAnimationsByName(ext + "WEP_DeployedTurret_ANIM.anim.gltf", sentryModel_);
-            resolveModelTextures(sentryModel_);
-        } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
-    }
+    ensureAbilityModels();
     core::Vec3 from = pc.actorLocation(), desired = from + core::Vec3{0, 3.75f, 0};
     float t;
     if (collision_.valid() && collision_.segmentHit(from, desired, t)) desired = from + (desired - from) * std::max(0.0f, t - 0.02f);

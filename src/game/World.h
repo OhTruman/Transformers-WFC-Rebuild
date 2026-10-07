@@ -641,6 +641,8 @@ public:
     double lastRemainderMs_ = 0.0, prefixMsAcc_ = 0.0, beginStepMsAcc_ = 0.0;
     double prefixSecMs_[12] = {}, prefixMark_ = 0.0;   // WFC_ASYNCLOG: the local part by section   // a model needed by the background part: loaded at the join (GL)
     void preloadHeldWeaponsOfPawns();
+    void ensureAbilityModels();      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
+    void tickAbilityActors(float dt);   // every participant's ability actors: the background part
     std::vector<std::function<void(World&)>> commands_;
     size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;
     std::vector<PresentedFrame::DamageTaken> pendingDamageTaken_;
