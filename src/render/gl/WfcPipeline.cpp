@@ -1,4 +1,5 @@
 #include "render/gl/WfcPipeline.h"
+#include <tuple>
 
 #include <emmintrin.h>
 #include "core/Config.h"
@@ -1479,6 +1480,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         id = link(vsUse, f, key);
         DeleteShader(f);
         if (!id) return -1;
+        if (id < commonKeyById_.size()) commonKeyById_[id].valid = false;   // a new (or recycled) program object
         static const bool stats = std::getenv("WFC_RENDERSTATS") != nullptr;
         if (stats && frameNo_ > 0)            // diagnostics: a program compiled after the load (a hitch on that frame)
             LOG_INFO("wfc program built: frame %d %s %.1f ms", frameNo_, key.c_str(),
@@ -2110,17 +2112,45 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     UniformMatrix4fv(P.uViewProj, 1, GL_FALSE, viewProj_.m);
     UniformMatrix4fv(P.uModel, 1, GL_FALSE, model.m);
     Uniform3f(P.uCamPos, camPos_.x, camPos_.y, camPos_.z);
-    Uniform1f(P.uTime, time_);
-    Uniform1i(P.uTwoSided, P.twoSided ? 1 : 0);
-    Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
-    Uniform1f(P.uClip, P.clip);
-    Uniform1i(P.uLit, P.lit ? 1 : 0);
-    Uniform1i(uloc(P, "uBlend"), P.blend);
+    // the uniforms only bindCommon writes: set when their inputs differ from what this program object last received
+    static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
+    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
+    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
+    static const bool noSkip = std::getenv("WFC_NOCOMMONSKIP") != nullptr;   // A/B
+    const float key[34] = {time_, P.twoSided ? 1.0f : 0.0f, P.blend == 1 ? 1.0f : 0.0f, P.clip, P.lit ? 1.0f : 0.0f, (float)P.blend,
+                           dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
+                           maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
+                           P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
+                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, 0, 0, 0};
+    if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
+    CommonKey& ck = commonKeyById_[P.id];
+    const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
+    if (setCommon) { std::memcpy(ck.v, key, sizeof key); ck.valid = true; }
+    if (setCommon) {
+        Uniform1f(P.uTime, time_);
+        Uniform1i(P.uTwoSided, P.twoSided ? 1 : 0);
+        Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
+        Uniform1f(P.uClip, P.clip);
+        Uniform1i(P.uLit, P.lit ? 1 : 0);
+        Uniform1i(uloc(P, "uBlend"), P.blend);
+        Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
+        Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
+        Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
+        Uniform1f(uloc(P, "uDSLS"), dsls);
+        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
+        Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
+        Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+        Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+        Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
+        Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
+        Uniform1i(uloc(P, "uDebug"), dbg);
+        Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
+        Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
+        Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
+        Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
+    }
     Uniform1i(uloc(P, "uVertexLM"), 0);
     Uniform4f(uloc(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
-    Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
-    Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
-    Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
     Uniform1i(uloc(P, "uSkin"), skinMode_);
     if (skinMode_) {
         Uniform1i(uloc(P, "uSkinRow"), skinRow_);
@@ -2129,17 +2159,10 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(uloc(P, "uBoneTex"), 18);
     }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
-        static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
-        Uniform1f(uloc(P, "uDSLS"), dsls);
         Uniform3f(uloc(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
-        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
     }
-    Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
-    Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
-    Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
-    Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
     const std::vector<std::pair<std::string, std::array<float, 4>>>* params = drawParams_;
@@ -2167,17 +2190,9 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (kv.second.second >= 0) Uniform1i(kv.second.second, v ? 1 : 0);
         if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
     }
-    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
-    Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
     if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
-    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
-    Uniform1i(uloc(P, "uDebug"), dbg);
-    Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
-    Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
-    Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
-    Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
     for (const Program::Slot& s : P.slots) {
         ActiveTexture(GL_TEXTURE0 + s.unit);
         glBindTexture(s.cube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D, s.tex);
@@ -2562,6 +2577,43 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     for (GpuMesh& gm : meshes_)
         for (Sub& sb : gm.subs) sb.envReady = false;
     const int draws = counts_.draws;
+    if (std::getenv("WFC_BATCHSTATS")) {   // diagnostics: how far static batching could merge the world's draws
+        int total = 0, trans = 0, movers = 0, vlm = 0, lm = 0, litEnv = 0, unlit = 0, decals = 0, noProg = 0;
+        std::set<std::tuple<int, int, int, int>> bucketTex;                 // program + lightmap page textures
+        std::set<std::string> bucketExact;                                 // + every per-draw constant
+        std::set<int> bucketProg;                                          // program only (lightmap pages in an array)
+        for (size_t mi = 0; mi < meshes_.size(); ++mi) {
+            const GpuMesh& gm = meshes_[mi];
+            const bool worldish = gm.world || (long)mi == bspMesh_ || (long)mi == decalMesh_;
+            if (!worldish) continue;
+            for (const Sub& sb : gm.subs) {
+                ++total;
+                if (sb.prog < 0) { ++noProg; continue; }
+                const Program& Pg = progs_[(size_t)sb.prog];
+                if (gm.decal || (long)mi == decalMesh_) { ++decals; continue; }
+                if (Pg.blend >= 2) { ++trans; continue; }
+                if (!sb.actor.empty()) { ++movers; continue; }
+                if (sb.vlmTex) { ++vlm; }
+                else if (sb.lmTex[0] >= 0) ++lm;
+                else if (Pg.lit && !sb.noLights) ++litEnv;
+                else ++unlit;
+                bucketTex.insert({sb.prog, sb.lmTex[0], sb.lmTex[1], sb.lmTex[2]});
+                bucketProg.insert(sb.prog);
+                char buf[512];
+                std::snprintf(buf, sizeof buf, "%d|%d,%d,%d|%u|%.6g,%.6g,%.6g,%.6g|%.6g,%.6g,%.6g|%d|%s", sb.prog, sb.lmTex[0], sb.lmTex[1],
+                              sb.lmTex[2], sb.vlmTex, sb.lmCoord[0], sb.lmCoord[1], sb.lmCoord[2], sb.lmCoord[3], sb.lmScale[0][0],
+                              sb.lmScale[1][0], sb.lmScale[2][0], sb.noLights ? 1 : 0,
+                              (Pg.lit && sb.lmTex[0] < 0 && !sb.vlmTex) ? (std::to_string((long long)(sb.bmin.x * 10)) + "," +
+                                                                           std::to_string((long long)(sb.bmin.z * 10))).c_str() : "");
+                bucketExact.insert(buf);
+            }
+        }
+        LOG_INFO("wfc batch stats: %d world subs = %d translucent (sorted, kept), %d movers (kept), %d decals (kept), %d no program; "
+                 "mergeable %d (lightmapped %d, vertex-lightmapped %d, lit by a static light env %d, unlit %d); buckets: "
+                 "program only %zu, program + lightmap page %zu, every per-draw constant identical %zu",
+                 total, trans, movers, decals, noProg, lm + vlm + litEnv + unlit, lm, vlm, litEnv, unlit, bucketProg.size(), bucketTex.size(),
+                 bucketExact.size());
+    }
     touchNewTextures();                                // anything the world draw created
     glFinish();
     viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;

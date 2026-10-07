@@ -130,6 +130,7 @@ struct Program {
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
     int instProg = -1;            // instanced character variant (per-instance uniforms from the instance texture)
+
     int instRtCount = 0;          // runtime params laid out in the instance row (sorted by name)
     float clip = 0.3333f;
 };
@@ -383,6 +384,12 @@ private:
 public:
     void flushInstances();
 private:
+    // bindCommon: per GL PROGRAM OBJECT (several Program entries can share one object - identical source, different
+    // clip / blend uniforms), the inputs of the uniforms only bindCommon writes as last set on it; the block is skipped
+    // while they are unchanged (GL keeps uniforms per program object: the skip cannot change a draw). Invalidated when
+    // a program is linked (recycled names start from defaults).
+    struct CommonKey { float v[34]; bool valid = false; };
+    std::vector<CommonKey> commonKeyById_;
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;
