@@ -1138,21 +1138,31 @@ void World::onProjectileSpawned(int key, const std::string& weaponClass, const c
 void World::onProjectileMoved(int key, const core::Vec3& pos) { weaponAudio_.projectileMoved(cues_, key, pos); }
 
 int World::preloadSelectionAudio(const std::vector<std::string>& chassisKeys, const std::vector<std::string>& weaponClasses) {
+    // Only what this call adds is warmed now (the queue grows one selection at a time); an empty call - loadMapAudio's
+    // re-apply after a level load - warms the whole accumulated set for the new level.
+    const bool all = chassisKeys.empty() && weaponClasses.empty();
+    std::vector<std::string> newChassis, newWeapons;
     for (const std::string& c : chassisKeys)
-        if (!c.empty() && std::find(selectionChassis_.begin(), selectionChassis_.end(), c) == selectionChassis_.end()) selectionChassis_.push_back(c);
+        if (!c.empty() && std::find(selectionChassis_.begin(), selectionChassis_.end(), c) == selectionChassis_.end()) {
+            selectionChassis_.push_back(c); newChassis.push_back(c);
+        }
     for (const std::string& w : weaponClasses)
-        if (!w.empty() && std::find(selectionWeapons_.begin(), selectionWeapons_.end(), w) == selectionWeapons_.end()) selectionWeapons_.push_back(w);
+        if (!w.empty() && std::find(selectionWeapons_.begin(), selectionWeapons_.end(), w) == selectionWeapons_.end()) {
+            selectionWeapons_.push_back(w); newWeapons.push_back(w);
+        }
     const std::string& tag = levelAudio_.level();
     if (!audio_ || tag.empty()) return 0;              // not loaded yet: loadMapAudio re-applies
+    const std::vector<std::string>& chassis = all ? selectionChassis_ : newChassis;
+    const std::vector<std::string>& weapons = all ? selectionWeapons_ : newWeapons;
     int n = 0;
-    for (const std::string& c : selectionChassis_)
+    for (const std::string& c : chassis)
         if (const CharacterAudioProfile* p = CharacterAudio::find(c)) n += CharacterAudio::warmCues(cues_, *p, tag);
-    for (const std::string& w : selectionWeapons_) {
+    for (const std::string& w : weapons) {
         n += CharacterAudio::warmWeaponCues(cues_, w, tag);
         n += CharacterAudio::warmHitCues(cues_, CharacterAudio::defaultProfile(), w, tag);
     }
-    LOG_INFO("selection audio: %zu chassis, %zu weapon classes -> %d waves decoding on a worker (level %s)",
-             selectionChassis_.size(), selectionWeapons_.size(), n, tag.c_str());
+    LOG_INFO("selection audio: +%zu chassis, +%zu weapon classes (%zu / %zu in all) -> %d waves decoding on a worker (level %s)",
+             chassis.size(), weapons.size(), selectionChassis_.size(), selectionWeapons_.size(), n, tag.c_str());
     return n;
 }
 
