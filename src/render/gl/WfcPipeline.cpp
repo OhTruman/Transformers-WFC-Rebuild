@@ -675,6 +675,9 @@ void Pipeline::release() {
     instGroups_.clear(); instGroupIndex_.clear();
     if (gInstPipeline == this) gInstPipeline = nullptr;
     touchQueue_.clear();                               // its textures are deleted with the map
+    if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
+    for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+    mdiBuckets_.clear(); mdiMesh_ = -1;
     progTouchQueue_.clear();
     if (!active_ && meshes_.empty() && !fbo_) return;
     auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
@@ -1474,6 +1477,44 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         fs += ld;
         instRt = (int)rts.size();
     }
+    if (mdiBuild_) {   // world MDI variant: per-draw constants from the row texture (row = aDrawRow)
+        static GLuint vsMdi = 0;
+        if (!vsMdi) {
+            std::string vs = kVS;
+            bool ok = vs.find("uniform vec4 uLMCoord;") != std::string::npos && vs.find("void main() {") != std::string::npos;
+            replaceAll(vs, "uniform vec4 uLMCoord;", "vec4 uLMCoord;");
+            replaceAll(vs, "void main() {", "void wfcVSBody() {");
+            vs += "layout(location=11) in float aDrawRow;\nuniform sampler2D uRowTex;\nflat out int vRow;\n"
+                  "void main() {\n    vRow = int(aDrawRow + 0.5);\n    uLMCoord = texelFetch(uRowTex, ivec2(0, vRow), 0);\n"
+                  "    wfcVSBody();\n}\n";
+            vsMdi = ok ? compile(GL_VERTEX_SHADER, vs, "world_mdi.vs") : 0;
+            if (!vsMdi) LOG_WARN("wfc: MDI vertex shader unavailable (world MDI off)");
+        }
+        if (!vsMdi || fs.find("void main()") == std::string::npos) return -1;
+        vsUse = vsMdi;
+        const bool hasLMS = fs.find("uniform vec3 uLMScale[3];") != std::string::npos;
+        const bool hasEnv = fs.find("uniform vec3 uAmb[6];") != std::string::npos;
+        if (hasLMS) replaceAll(fs, "uniform vec3 uLMScale[3];", "vec3 uLMScale[3];");
+        if (hasEnv) {
+            replaceAll(fs, "uniform vec3 uAmb[6];", "vec3 uAmb[6];");
+            replaceAll(fs, "uniform int uNumLights;", "int uNumLights;");
+            replaceAll(fs, "uniform vec4 uLPos[3];", "vec4 uLPos[3];");
+            replaceAll(fs, "uniform vec4 uLDir[3];", "vec4 uLDir[3];");
+            replaceAll(fs, "uniform vec4 uLCol[3];", "vec4 uLCol[3];");
+            replaceAll(fs, "uniform vec4 uLSpot[3];", "vec4 uLSpot[3];");
+        }
+        const bool hasDLAC = fs.find("uniform vec3 uDLAC;") != std::string::npos;
+        if (hasDLAC) replaceAll(fs, "uniform vec3 uDLAC;", "vec3 uDLAC;");
+        replaceAll(fs, "void main()", "void wfcMainBody()");
+        std::string ld = "flat in int vRow;\nuniform sampler2D uRowTex;\n"
+                         "vec4 wfcR(int k) { return texelFetch(uRowTex, ivec2(k, vRow), 0); }\nvoid main() {\n";
+        if (hasLMS) ld += "    for (int i = 0; i < 3; ++i) uLMScale[i] = wfcR(1 + i).xyz;\n";
+        if (hasEnv) ld += "    for (int i = 0; i < 6; ++i) uAmb[i] = wfcR(4 + i).xyz;\n    uNumLights = int(wfcR(10).x + 0.5);\n"
+                          "    for (int i = 0; i < 3; ++i) { uLPos[i] = wfcR(11 + i); uLDir[i] = wfcR(14 + i); uLCol[i] = wfcR(17 + i); uLSpot[i] = wfcR(20 + i); }\n";
+        if (hasDLAC) ld += "    uDLAC = wfcR(10).yzw;\n";
+        ld += "    wfcMainBody();\n}\n";
+        fs += ld;
+    }
     GLuint id = 0;
     auto cached = gProgCache.find(fs);
     if (cached != gProgCache.end()) {
@@ -1534,6 +1575,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uVLM"), 11);
     Uniform1i(U("uShadowMask"), 10);
     if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
+    if (mdiBuild_) Uniform1i(U("uRowTex"), 20);
     UseProgram(0);
     P.instRtCount = instRt;
     progs_.push_back(P);
@@ -1628,6 +1670,15 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             }
             // opt-in: measured at 32 v 32 (Streets, fixed cam) pixel-identical but no frame-time gain - only same-chassis
             // bodies can share a draw (~1.4 instances per draw) and the flush state save / restore eats the saving
+            static const bool mdiOn = [] { const char* e = std::getenv("WFC_MDI"); return !(e && e[0] == '0') && std::getenv("WFC_GL33") == nullptr; }();   // default on; WFC_MDI=0 off
+            if (mdiWanted_ && mdiOn && s.blend <= 1 && progs_[(size_t)r].distProg < 0 && !progs_[(size_t)r].sceneDepth &&
+                !progs_[(size_t)r].sceneColor && MultiDrawElementsIndirect && VertexAttribDivisor) {
+                mdiBuild_ = true;
+                int md = buildProgram(key + "|MDI", s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+                mdiBuild_ = false;
+                if (md >= 0) { progs_[(size_t)md].original = true; progs_[(size_t)md].material = progs_[(size_t)r].material;
+                               progs_[(size_t)r].mdiProg = md; }
+            }
             static const bool noInst = std::getenv("WFC_INSTANCING") == nullptr || std::getenv("WFC_NOINSTANCING") != nullptr;
             if (instWanted_ && !noInst && !lightmapped && s.blend <= 1 && progs_[(size_t)r].distProg < 0 &&
                 !progs_[(size_t)r].sceneDepth && !progs_[(size_t)r].sceneColor && DrawElementsInstanced) {
@@ -2063,7 +2114,9 @@ int Pipeline::upload(const MeshData& m) {
             if (it != slotMaterials_.end()) matName = it->second;
         }
         if (matName.empty()) matName = resolveBySourceName(mat);
+        mdiWanted_ = g.world;                         // world programs get the MDI variant (WFC_MDI)
         d.prog = programFor(matName, mat, lm);
+        mdiWanted_ = false;
         d.matName = matName;
         d.comp = s.component;
         if (d.prog >= 0) ++nProg;
@@ -2268,10 +2321,13 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const long meshIdx = (&g >= meshes_.data() && &g < meshes_.data() + meshes_.size()) ? (long)(&g - meshes_.data()) : -1;
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;   // diagnostics: old order
     const bool canDefer = deferTrans_ && !flushingTrans_ && !immediateTrans && meshIdx >= 0 && !g.decal;
+    const bool mdiMesh = meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty();
+    if (mdiMesh) drawMdi(g);
     for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
         for (size_t si = 0; si < g.subs.size(); ++si) {
             if (onlySub >= 0 && (int)si != onlySub) continue;
             Sub& s = g.subs[si];
+            if (mdiMesh && pass == 0 && s.mdiRow >= 0) continue;   // drawn by drawMdi
             if (s.prog < 0) {
                 ++counts_.noProgram;
                 if (frameNoProg_.size() < 64) frameNoProg_.insert(s.matName.empty() ? std::string("<none>") : s.matName);
@@ -2550,6 +2606,7 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 // the material prewarm, while the loading screen still presents; glFinish lets the GPU-side residency complete there
 // too. Frame state (frame number, map clock, camera, counters) is saved and restored: the next frame is unchanged.
 void Pipeline::warmupWorld(int id, int w, int h) {
+    if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
     const auto t0 = std::chrono::steady_clock::now();
     w = w > 0 ? w : 1280; h = h > 0 ? h : 720;
@@ -3359,6 +3416,132 @@ void Pipeline::flushInstances() {
     if (stencilOn) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
     if (polyOn) glEnable(GL_POLYGON_OFFSET_FILL); else glDisable(GL_POLYGON_OFFSET_FILL);
     inInstFlush_ = false;
+}
+
+void Pipeline::buildMdi(int meshId) {
+    static const bool on = [] { const char* e = std::getenv("WFC_MDI"); return !(e && e[0] == '0') && std::getenv("WFC_GL33") == nullptr; }();   // default on; WFC_MDI=0 off
+    if (!on || mdiMesh_ >= 0 || !MultiDrawElementsIndirect || !VertexAttribDivisor) return;
+    GpuMesh& g = meshes_[(size_t)meshId];
+    if (!g.world) return;
+    std::map<std::tuple<int, int, int, int>, size_t> idx;
+    mdiRows_.clear(); mdiEnvFilled_.clear(); mdiBuckets_.clear();
+    uint32_t row = 0;
+    for (size_t si = 0; si < g.subs.size(); ++si) {
+        Sub& s = g.subs[si];
+        s.mdiRow = -1;
+        if (s.prog < 0) continue;
+        const Program& P = progs_[(size_t)s.prog];
+        if (P.mdiProg < 0 || P.blend >= 2 || !s.actor.empty() || s.vlmTex || s.dynChannel || g.decal) continue;
+        s.mdiRow = (int)row++;
+        mdiRows_.resize((size_t)row * kMdiW * 4, 0.0f);
+        float* rw = &mdiRows_[(size_t)s.mdiRow * kMdiW * 4];
+        if (s.lmTex[0] >= 0) {
+            std::memcpy(rw, s.lmCoord, sizeof s.lmCoord);
+            for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) rw[(1 + i) * 4 + c] = s.lmScale[i][c];
+        } else { rw[0] = 1; rw[1] = 1; rw[2] = 0; rw[3] = 0; }
+        // light environments (lit, non-lightmapped): filled the first time the sub is drawn, as drawSubs does
+        mdiEnvFilled_.push_back(P.lit && s.lmTex[0] < 0 ? 0 : 1);
+        const auto key = std::make_tuple(s.prog, s.lmTex[0], s.lmTex[1], s.lmTex[2]);
+        auto it = idx.find(key);
+        if (it == idx.end()) { it = idx.emplace(key, mdiBuckets_.size()).first; mdiBuckets_.push_back({s.prog, {s.lmTex[0], s.lmTex[1], s.lmTex[2]}, {}}); }
+        mdiBuckets_[it->second].subs.push_back((uint32_t)si);
+    }
+    if (row == 0) return;
+    glGenTextures(1, &mdiRowTex_);
+    glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, kMdiW, (GLsizei)row, 0, GL_RGBA, GL_FLOAT, mdiRows_.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    std::vector<float> ids(row);
+    for (uint32_t k = 0; k < row; ++k) ids[k] = (float)k;
+    GenBuffers(1, &mdiRowVbo_); GenBuffers(1, &mdiCmdBuf_);
+    BindVertexArray(g.vao);
+    BindBuffer(GL_ARRAY_BUFFER, mdiRowVbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(ids.size() * sizeof(float)), ids.data(), GL_STATIC_DRAW);
+    EnableVertexAttribArray(11); VertexAttribPointer(11, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
+    VertexAttribDivisor(11, 1);
+    BindVertexArray(0);
+    mdiMesh_ = meshId;
+    LOG_INFO("wfc: world MDI: %u subs in %zu buckets (program + lightmap page)", row, mdiBuckets_.size());
+}
+
+void Pipeline::drawMdi(GpuMesh& g) {
+    flushInstances();
+    struct Cmd { uint32_t count, instances, first, baseVertex, baseInstance; };
+    static std::vector<Cmd> cmds;
+    static std::vector<std::pair<size_t, size_t>> ranges;     // per bucket: [begin, end) in cmds
+    cmds.clear(); ranges.clear();
+    bool rowsDirty = false;
+    for (const MdiBucket& b : mdiBuckets_) {
+        const size_t begin = cmds.size();
+        for (uint32_t si : b.subs) {
+            Sub& s = g.subs[si];
+            bool out = false;                                  // drawSubs' baked-world frustum cull
+            for (int f = 0; f < 6 && !out; ++f) {
+                const float* pl = frustum_[f];
+                core::Vec3 pv{pl[0] >= 0 ? s.bmax.x : s.bmin.x, pl[1] >= 0 ? s.bmax.y : s.bmin.y, pl[2] >= 0 ? s.bmax.z : s.bmin.z};
+                if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
+            }
+            if (out) { ++counts_.culled; continue; }
+            if (!mdiEnvFilled_[(size_t)s.mdiRow]) {              // the static light environment, first sight
+                if (!s.envReady) {
+                    if (s.noLights) s.env = LightEnv{};
+                    else computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env);
+                    s.envReady = true;
+                }
+                float* rw = &mdiRows_[(size_t)s.mdiRow * kMdiW * 4];
+                for (int i = 0; i < 6; ++i) { rw[(4 + i) * 4] = s.env.cube[i].x; rw[(4 + i) * 4 + 1] = s.env.cube[i].y; rw[(4 + i) * 4 + 2] = s.env.cube[i].z; }
+                rw[10 * 4] = (float)s.env.n; rw[10 * 4 + 1] = s.env.dlac[0]; rw[10 * 4 + 2] = s.env.dlac[1]; rw[10 * 4 + 3] = s.env.dlac[2];
+                std::memcpy(&rw[11 * 4], s.env.pos, sizeof s.env.pos); std::memcpy(&rw[14 * 4], s.env.dir, sizeof s.env.dir);
+                std::memcpy(&rw[17 * 4], s.env.col, sizeof s.env.col); std::memcpy(&rw[20 * 4], s.env.spot, sizeof s.env.spot);
+                mdiEnvFilled_[(size_t)s.mdiRow] = 1;
+                rowsDirty = true;
+            }
+            cmds.push_back({s.count, 1u, s.first, 0u, (uint32_t)s.mdiRow});
+            ++gStats.draws; ++counts_.draws; ++counts_.worldDraws; ++counts_.opaque;
+            if (s.lmTex[0] >= 0) ++counts_.lightmapped;
+            if (s.matKey < 0) {
+                auto mk = matKeys_.emplace(s.matName, (int)matKeys_.size());
+                s.matKey = mk.first->second;
+                if ((size_t)s.matKey >= matSeenFrame_.size()) matSeenFrame_.resize((size_t)s.matKey + 1, -1);
+            }
+            if (matSeenFrame_[(size_t)s.matKey] != frameNo_) { matSeenFrame_[(size_t)s.matKey] = frameNo_; ++frameMatCount_; }
+        }
+        ranges.push_back({begin, cmds.size()});
+    }
+    if (rowsDirty) {
+        glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kMdiW, (GLsizei)(mdiRows_.size() / (kMdiW * 4)), GL_RGBA, GL_FLOAT, mdiRows_.data());
+    }
+    if (cmds.empty()) return;
+    BindBuffer(0x8F3F /*GL_DRAW_INDIRECT_BUFFER*/, mdiCmdBuf_);
+    BufferData(0x8F3F, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), cmds.data(), GL_STREAM_DRAW);
+    BindVertexArray(g.vao);
+    for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
+        const size_t n = ranges[bi].second - ranges[bi].first;
+        if (!n) continue;
+        const MdiBucket& b = mdiBuckets_[bi];
+        const Program& M = progs_[(size_t)progs_[(size_t)b.prog].mdiProg];
+        bindCommon(M, core::Mat4::identity());
+        Uniform1i(uloc(M, "uDecalClip"), 0);
+        for (int i = 0; i < 3; ++i) if (M.uRTSet[i] >= 0) Uniform1i(M.uRTSet[i], 0);   // static: no character colours
+        static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
+        if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+        glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+        if (b.lm[0] >= 0) {
+            Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
+            for (int i = 0; i < 3; ++i) {
+                ActiveTexture(GL_TEXTURE0 + 13 + i);
+                glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)b.lm[i]] ? lmTextures_[(size_t)b.lm[i]] : blackTex_);
+            }
+        }
+        ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
+        ActiveTexture(GL_TEXTURE0);
+        MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
+        depthDirty_ = true;
+    }
+    BindBuffer(0x8F3F, 0);
+    BindVertexArray(g.vao);                                    // drawSubs continues with this VAO
 }
 
 void Pipeline::evictSkin(bool all) {

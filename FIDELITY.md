@@ -5936,6 +5936,23 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
 - Still missing: **normal/specular maps** (roles extracted; need a programmable GL path),
   map/environment emissive (different naming), tone-mapping / bloom / DOF.
 
+## RENDER SUBMISSION (300+ fps work, Milestone E)
+Every change below is image-identical to the previous path (verified by deterministic lockstep image A/B, max diff
+0) except where stated.
+- Exact: GPU skinning (exact skinned bounds, bitwise against the CPU loop), GPU pose blend, redundant-uniform cache,
+  bindCommon per-program-object constant skip, string-work caches, SSE2 bounds (bitwise), instanced characters
+  (opt-in WFC_INSTANCING=1; no gain).
+- **World MDI (default on; WFC_MDI=0 restores the per-draw path).** The world's opaque static subs are drawn per
+  (program, lightmap page) bucket with glMultiDrawElementsIndirect. **Equal-depth seam tie-break follows
+  material-bucket order (UE3 static draw list behaviour: FStaticMeshDrawList is keyed by material / drawing policy,
+  HIGH / not CONFIRMED)** instead of the world file order. Measured (deterministic lockstep A/B, all 10 MP maps,
+  spawn views 0 and 3): differences only on isolated seam pixels where two subs of different buckets meet at
+  exactly equal depth (GL_LEQUAL, the later draw wins) - typically 0.0001-0.02 % of pixels, worst Remnant view 3
+  726 px (0.08 %, max 24 levels) and Debris view 3 328 px (max 114 levels on a handful of bright seam pixels); no
+  visible line / pattern in the crops. Stable frame to frame: bucket order is fixed at load and file order is kept
+  inside a bucket (culling only removes draws), so a tie always resolves the same way. Gain: Streets 10 v 10 frame
+  median 7.03 -> 5.43 ms.
+
 ## CONFIRMED ORIGINAL (authored data)
 - Streets map = three sublevels **BASE** (gameplay: 24 FFA + 60 team starts, 58 blocking
   volumes, pickups, objectives) + **ART** (visual: BSP 2460 tris, 34 StaticMeshActors,
