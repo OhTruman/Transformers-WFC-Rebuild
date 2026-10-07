@@ -54,7 +54,8 @@ struct Rec : IAudio {
     void playAt(Sound, const Vec3&, float, float, float) override {}
     Voice playVoice(Sound snd, const VoiceParams& p) override { v[n] = {p, p.pos, true, p.volume, snd}; return n++; }
     void stopVoice(Voice h) override { if (v.count(h)) v[h].live = false; }
-    void updateVoice(Voice h, float vol, float, const Vec3& pos) override { if (v.count(h)) { v[h].pos = pos; v[h].vol = vol; } }
+    int updates = 0;
+    void updateVoice(Voice h, float vol, float, const Vec3& pos) override { ++updates; if (v.count(h)) { v[h].pos = pos; v[h].vol = vol; } }
     void setListener(const Vec3&, const Vec3&, const Vec3&) override {}
     void update() override {}
     void setEnvironment(const Environment& e, float) override { envs.push_back(e); }
@@ -798,6 +799,71 @@ static void testOcclusionSkip() {
     for (int k = 0; k < 60; ++k) cues.tick(1.0f / 60.0f);
     CHECK(rays >= 4 && rays <= 6, "in range: every OcclusionCheckInterval 0.25 s again (%d rays in 1 s)", rays - 1);
     cues.stop(id, 0.0f);
+    // Dormant instances (M09p): far beyond audible range no per-step device update; back in range the voice is exactly what
+    // per-step updates would give. Two tables, the same loop, a fade-out running meanwhile: one listener always near, the other
+    // far then near.
+    const char* js2 = R"({"T.LP2": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": -3.0, "DistanceMax": 2000.0}, "children": [
+        {"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0, "bLooping": true}, "children": [{"wav": "content/WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav"}]}]}}})";
+    Rec ra, rb; game::SoundCues ca, cb;
+    ca.load(&ra, kRoot + "/../content/"); cb.load(&rb, kRoot + "/../content/");
+    assets::Json cj2; assets::Json::parse(js2, cj2);
+    ca.addCues(cj2, kRoot + "/../content/"); cb.addCues(cj2, kRoot + "/../content/");
+    ca.setListener(Vec3{90, 0, 0}); cb.setListener(Vec3{90, 0, 0});
+    const int ia = ca.play("T.LP2", Vec3{100, 0, 0}, 10.0f), ib = cb.play("T.LP2", Vec3{100, 0, 0}, 10.0f);
+    cb.setListener(Vec3{-200, 0, 0});                                   // b: 300 m away (audible 20 m)
+    for (int k = 0; k < 30; ++k) { ca.tick(1.0f / 60.0f); cb.tick(1.0f / 60.0f); }
+    ca.stop(ia, 2.0f); cb.stop(ib, 2.0f);                               // a 2 s fade-out starts while b is dormant
+    const int upd0 = rb.updates;
+    for (int k = 0; k < 30; ++k) { ca.tick(1.0f / 60.0f); cb.tick(1.0f / 60.0f); }
+    const int dormantUpdates = rb.updates - upd0;
+    cb.setListener(Vec3{90, 0, 0});
+    ca.tick(1.0f / 60.0f); cb.tick(1.0f / 60.0f);
+    float va = -1, vb = -1; Vec3 pa, pb;
+    for (auto& kv : ra.v) if (kv.second.live) { va = kv.second.vol; pa = kv.second.pos; }
+    for (auto& kv : rb.v) if (kv.second.live) { vb = kv.second.vol; pb = kv.second.pos; }
+    CHECK(cb.dormantInstances() == 0 && dormantUpdates == 0 && va > 0.0f && std::fabs(va - vb) < 1e-6f && core::length(pa - pb) < 1e-5f,
+          "dormant 300 m away: %d device updates in 0.5 s; back in range mid-fade: the same gain as the always-near table (%.6f / %.6f)",
+          dormantUpdates, va, vb);
+    ca.stopAll(); cb.stopAll();
+}
+
+// The mixer mixes outside the device lock (M09o): game threads play / update / stop voices and release / reload samples
+// while blocks mix; nothing crashes, the voice bookkeeping stays consistent, a released sample's memory is gone at once.
+static void testMixerConcurrency() {
+    std::printf("[mixer: game threads vs the unlocked mix]\n");
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP: no audio device\n"); delete a; return; }
+    const std::string wav = kRoot + "/../content/WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav";
+    const size_t base = a->residentBytes();
+    std::atomic<bool> stop{false};
+    std::atomic<long> ops{0};
+    auto worker = [&](int seed) {
+        std::vector<Voice> mine;
+        unsigned r = (unsigned)seed * 2654435761u;
+        while (!stop.load()) {
+            r = r * 1664525u + 1013904223u;
+            Sound snd = a->load(wav);
+            VoiceParams vp; vp.loop = (r & 1) != 0; vp.volume = 0.01f; vp.positional = (r & 2) != 0; vp.pos = Vec3{(float)(r % 40), 0, 0};
+            Voice v = a->playVoice(snd, vp);
+            if (v != kInvalidVoice) mine.push_back(v);
+            for (Voice x : mine) a->updateVoice(x, 0.01f, 1.0f + (r % 7) * 0.01f, Vec3{(float)(r % 30), 0, 0});
+            if (mine.size() > 40) { for (Voice x : mine) a->stopVoice(x); mine.clear(); }
+            if ((r % 50) == 0) a->release(snd);                  // the PCM may be in the block being mixed
+            ++ops;
+        }
+        for (Voice x : mine) a->stopVoice(x);
+    };
+    std::thread t1(worker, 1), t2(worker, 2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+    stop = true; t1.join(); t2.join();
+    a->stopAllVoices();
+    const Sound snd = a->load(wav);
+    a->release(snd);
+    const size_t after = a->residentBytes();
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    CHECK(ops > 100 && a->activeVoices() == 0 && after == base,
+          "%ld play / update / stop / release rounds on 2 threads during 1.5 s of mixing: no crash, 0 voices left, PCM back to base", ops.load());
+    delete a;
 }
 
 // ---------------------------------------------------------------- 96-channel priority stealing (Win32 backend)
@@ -2594,6 +2660,7 @@ int main() {
     testFrontend();
     testLifecycle();
     testOcclusionSkip();
+    testMixerConcurrency();
     testChannelStealing();
     testWorldBed();
     testLoopRuntime();

@@ -201,6 +201,7 @@ public:
     int oldestInstance(const char* cue) const;
     size_t liveInstances() const { return live_.size(); }
     int inaudibleSkipped() const { return inaudibleSkipped_; }   // one-shots not started: beyond their audible distance
+    int dormantInstances() const { int n = 0; for (const Instance& in : live_) n += in.dormant ? 1 : 0; return n; }
     size_t pendingEvents() const { return pending_.size(); }
     // Diagnostics: "cue x count" for queued wave events, most first.
     std::string pendingSummary() const;
@@ -215,7 +216,8 @@ private:
         int owner = kWorld; core::Vec3 offset{0, 0, 0}; std::string socket; bool posDirty = false;
         float volume = 1.0f;
         float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
-        bool occlStale = false;          // out of audible range: no line checks (gain 0); snap on the next check in range
+        bool occlStale = false;
+        bool dormant = false;            // well beyond audible range: no per-step gain / curve / envelope / device update          // out of audible range: no line checks (gain 0); snap on the next check in range
         float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
         float lastGain = 1.0f;                                    // gainOf() at the last refresh
         bool waiting = false;     // a streamed cue still decoding on the worker: starts (age 0) when its waves are adopted
@@ -228,7 +230,7 @@ private:
     int findCue(const char* name) const;
     void loadWaves(size_t cue, const std::string& contentRoot);
     void launch(Instance& in, int event);
-    void refresh(Instance& in);
+    void refresh(Instance& in, int resolved = -1);   // resolved: -1 resolve here, else the caller's resolve() result
     bool resolve(Instance& in);
     static float level(const Instance& in);
     float paramFor(const Instance& in) const;

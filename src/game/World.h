@@ -378,7 +378,9 @@ private:
     };
     std::map<int, ParticipantBody> participantBodies_;
     static constexpr float kParticipantBodyCullM = 70.0f;
-    int bodyCueLoadsThisStep_ = 0;                                 // new body cue sets registered this step (max 1)
+    int bodyCueLoadsThisStep_ = 0;
+    std::vector<const char*> partScratch_;                          // participant audio scratch (reused per call)
+    std::vector<const std::string*> partFired_;                                 // new body cue sets registered this step (max 1)
     std::set<int> participantCloakAnim_;                          // participants whose cloak is on
     // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*) for a pawn, if a profile carries those clips.
     // In VERSUS they are correctly silent: the clips (AI_CQC_ROBO_ANIM*) and BL_CHR_CQC cues are cooked only into campaign /

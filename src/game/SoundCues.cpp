@@ -785,11 +785,11 @@ bool SoundCues::resolve(Instance& in) {
 }
 
 // Re-evaluate parameter curves, envelopes, fade and (attached) position for every voice.
-void SoundCues::refresh(Instance& in) {
+void SoundCues::refresh(Instance& in, int resolved) {
     const CueDef& cd = cues_[(size_t)in.cue];
     float x = paramFor(in);
     float fade = in.fade > 0.0f ? core::clampf(in.fadeLeft / in.fade, 0.0f, 1.0f) : 1.0f;
-    const bool moved = resolve(in) || in.posDirty;
+    const bool moved = (resolved < 0 ? resolve(in) : resolved != 0) || in.posDirty;
     const float g = gainOf(in);
     const bool mixerMoving = g != in.lastGain;            // category volume ramp / instance level changed
     in.lastGain = g;
@@ -963,7 +963,20 @@ void SoundCues::tick(float dt) {
                 in.occl += core::clampf(in.occlTarget - in.occl, -dt / kOcclTime, dt / kOcclTime);
             }
         }
-        refresh(in);
+        // Dormant (zero work while inaudible): a positional instance more than 10 % + 2 m beyond its audible distance - its
+        // voices are already culled (virtual) by the device at that distance - skips the per-step gain / curve / envelope
+        // evaluation and the device update; only its position is followed. Fades, envelopes and curves are functions of time
+        // and state, so the refresh on its return (well before the audible boundary) yields exactly what the per-step
+        // updates would have. Counts in dormantInstances().
+        int resolvedHere = -1;
+        if (in.owner != kUI && cd.spatial != Spatial::TwoD && cd.distMaxUU > 0.0f && !in.voices.empty()) {
+            resolvedHere = resolve(in) ? 1 : 0;
+            const core::Vec3 d = in.pos - listener_;
+            const float far = cd.distMaxUU * UU * 1.1f + 2.0f;
+            if (core::dot(d, d) > far * far) { in.dormant = true; ++i; continue; }
+            if (in.dormant) { in.dormant = false; in.posDirty = true; }   // back: one full refresh (position, gains) now
+        }
+        refresh(in, resolvedHere);
         ++i;
     }
     releaseIdleStreams();

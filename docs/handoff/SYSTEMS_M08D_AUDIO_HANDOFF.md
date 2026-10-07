@@ -493,3 +493,22 @@ valid), so the volume calls stay DIRECT on the main thread - in menus too (agree
 The device (Win32Audio) was already locked; each cue table's preset mixer is its own. Preload calls: Integration routes the
 main-thread world_.applyLoadout(...) (-> preloadWeaponAudio / setPlayerVehicleWeaponAudio) and any mid-match
 queueSelectionAudio through submit. Suite 745 / 0 (2 reader threads during 40000 slider writes: in range, last write wins).
+
+## M09o / M09p - no audio stalls on game threads; zero work for dormant sounds (300 fps pass)
+
+- **Mixer outside the device lock (M09o):** the mixer thread held the device mutex for a whole block (0.2-0.6 ms at 32 v 32), so
+  the step's playVoice / updateVoice / isPlaying waited. mixBlock now locks only to snapshot the heard voices (gains, cap,
+  virtual voices) and to write positions / ends back (a voice stopped or restarted meanwhile - gen changed - keeps its new
+  state); the per-sample mix, environment and compressor run unlocked (setEnvironment / setMasterCompressor are queued and
+  applied by the mixer thread). A sample released mid-mix is marked `releasing` (gone for callers, no new voices) and freed
+  after the block. Released PCM is freed OUTSIDE the lock (freeing the final-stretch music's tens of MB under mx_ was an
+  11 ms stall at match end). Same output as the single locked pass.
+- **Dormant instances (M09p):** a positional instance more than 10 % + 2 m beyond its audible distance (its voices are already
+  virtual in the device) gets no per-step gain / curve / envelope evaluation and no device update; only its position is
+  followed. On return it gets one full refresh well before the audible boundary - exactly what per-step updates would give
+  (all of it is a function of time and state). Plus reused scratch buffers in the per-bot audio paths (no allocations).
+- Measured, 32 v 32 Streets TDM, 63 bots, WFC_SEED 7, 2 min, 09c 05db936 before / after (lock waits by non-mixer threads,
+  per ~4.3 s): lock calls 37,835 -> 23,398; waits 6.9 -> 1.0; time waiting 1.90 -> 0.008 ms; worst single wait 11.7 -> 0.03 ms
+  (typical worst per window 0.4-0.65 -> 0.01-0.03 ms). TICKPROF per step: charAudio+cues 0.090 -> 0.065 ms, partAudio 0.049 ->
+  0.041 ms. Suite 747 / 0 (two game threads vs the unlocked mix; dormant: 0 device updates, then the same gain mid-fade as an
+  always-near table), fidelity 194 / 0 / 19.

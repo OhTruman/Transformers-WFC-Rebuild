@@ -1287,7 +1287,7 @@ void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, 
     }
     b.prevTransforming = tf;
     // Robot foley from the pawn's own animation.
-    std::vector<const char*> out;
+    std::vector<const char*>& out = partScratch_; out.clear();       // reused: no per-bot allocation
     b.foley.tick(pc, dt, out);
     for (const char* c : out) cues_.play(c, at({0, 0, 0}), dist);
     // Vehicle component at AUDIO_ROOT (+147.25 UU), as the local pawn.
@@ -1324,11 +1324,11 @@ void World::tickParticipantWeaponAudio(int player, const std::string& cls, unsig
     const float dist = core::length(e.pos - listenerPos_);
     if (newReload) b.weaponSounds.play(WeaponSoundTimeline::Event::Reload);
     else if (newShot) b.weaponSounds.play(WeaponSoundTimeline::Event::Fire);
-    std::vector<const std::string*> fired;
+    std::vector<const std::string*>& fired = partFired_; fired.clear();
     b.weaponSounds.tick(dt, fired);
     for (const std::string* q : fired) if (q && !q->empty()) cues_.play(q->c_str(), e, dist);
     const bool viaAbility = actionClip.rfind("Skill_", 0) == 0 || actionClip == "Nav_Boost_F" || actionClip == "Transform_Whirlwind_ROBO";
-    std::vector<const char*> out;
+    std::vector<const char*>& out = partScratch_; out.clear();
     b.foley.actionLayer(viaAbility ? std::string() : actionClip, actionTime, out);
     e.offset = {0, 0, 0}; e.pos = b.pos;
     for (const char* c : out) cues_.play(c, e, dist);
