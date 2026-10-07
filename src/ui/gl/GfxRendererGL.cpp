@@ -299,6 +299,7 @@ void GfxRendererGL::begin(int width, int height) {
     w_ = width; h_ = height;
     if (!ok_) return;
     saveGlState();
+    ensureShadowTargets(width, height);
     if (width != fbw_ || height != fbh_) {
         if (msFbo_) { glx::DeleteFramebuffers(1, &msFbo_); glx::DeleteRenderbuffers(1, &msColor_); glx::DeleteRenderbuffers(1, &msDepth_); }
         if (resFbo_) { glx::DeleteFramebuffers(1, &resFbo_); glDeleteTextures(1, &resTex_); }
@@ -761,6 +762,31 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 }
 
+void GfxRendererGL::ensureShadowTargets(int nw, int nh) {
+    // Text drop shadow offscreen targets: [0] coverage + stencil, [1] the horizontal blur pass; framebuffer-sized, made
+    // when the window size changes (not while drawing).
+    if (!shBlurProg_ || (nw <= shW_ && nh <= shH_) || nw <= 0 || nh <= 0) return;
+    nw = std::max(nw, shW_); nh = std::max(nh, shH_);
+    if (shFbo_[0]) { glx::DeleteFramebuffers(2, shFbo_); glDeleteTextures(2, shTex_); glx::DeleteRenderbuffers(1, &shStencil_); }
+    glx::GenFramebuffers(2, shFbo_);
+    glGenTextures(2, shTex_);
+    glx::GenRenderbuffers(1, &shStencil_);
+    glx::BindRenderbuffer(GL_RENDERBUFFER, shStencil_);
+    glx::RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, nw, nh);
+    for (int k = 0; k < 2; ++k) {
+        glBindTexture(GL_TEXTURE_2D, shTex_[k]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[k]);
+        glx::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, shTex_[k], 0);
+        if (k == 0) glx::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, shStencil_);
+    }
+    shW_ = nw; shH_ = nh;
+}
+
 void GfxRendererGL::drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m) {
     const Cached& c = cache(it.shape, true);
     gfx::FillStyle white;
@@ -799,32 +825,15 @@ void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& i
     }
     if (x1 <= x0 || y1 <= y0) return;
     x0 = std::floor(x0 - bw * 0.5f - 2); y0 = std::floor(y0 - bh * 0.5f - 2);
+    // Only the on-screen part matters; the box then never exceeds the framebuffer, whose size the offscreen targets are
+    // allocated at in begin() (growing them mid-frame stalled the driver ~100 ms on a scaling text, e.g. kill feed).
+    x0 = std::max(x0, -dx); y0 = std::max(y0, -dy);
     x1 = std::ceil(x1 + bw * 0.5f + 2); y1 = std::ceil(y1 + bh * 0.5f + 2);
-    if (x1 + dx < 0 || y1 + dy < 0 || x0 + dx > w_ || y0 + dy > h_) return;
+    x1 = std::min(x1, (float)w_ - dx); y1 = std::min(y1, (float)h_ - dy);
+    if (x1 <= x0 || y1 <= y0) return;
     const int W = std::min((int)(x1 - x0), 4096), H = std::min((int)(y1 - y0), 4096);
     if (W <= 0 || H <= 0) return;
-    // Offscreen targets (grow-only): [0] coverage + stencil, [1] the horizontal pass.
-    if (W > shW_ || H > shH_) {
-        const int nw = std::max(W, shW_), nh = std::max(H, shH_);
-        if (shFbo_[0]) { glx::DeleteFramebuffers(2, shFbo_); glDeleteTextures(2, shTex_); glx::DeleteRenderbuffers(1, &shStencil_); }
-        glx::GenFramebuffers(2, shFbo_);
-        glGenTextures(2, shTex_);
-        glx::GenRenderbuffers(1, &shStencil_);
-        glx::BindRenderbuffer(GL_RENDERBUFFER, shStencil_);
-        glx::RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, nw, nh);
-        for (int k = 0; k < 2; ++k) {
-            glBindTexture(GL_TEXTURE_2D, shTex_[k]);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[k]);
-            glx::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, shTex_[k], 0);
-            if (k == 0) glx::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, shStencil_);
-        }
-        shW_ = nw; shH_ = nh;
-    }
+    if (W > shW_ || H > shH_) ensureShadowTargets(std::max(W, shW_), std::max(H, shH_));   // (never in practice)
     // 1. Glyph coverage (white) into [0], translated so the box starts at the origin.
     glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[0]);
     glViewport(0, 0, W, H);

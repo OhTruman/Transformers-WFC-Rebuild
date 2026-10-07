@@ -193,13 +193,26 @@ Player::Player() : vm_(std::make_unique<avm1::VM>(this)) {
 
 Player::~Player() = default;
 
+namespace {
+// Parsed movies are immutable after load: one process-wide cache, so reopening a movie (the respawn screen on every
+// death, its ButtonIcons / Fonts_EFIGS imports) parses nothing and the renderer's shape caches stay valid.
+std::map<std::string, std::shared_ptr<MovieDef>>& sharedDefs() {
+    static std::map<std::string, std::shared_ptr<MovieDef>> defs;
+    return defs;
+}
+}
+
 std::shared_ptr<const MovieDef> Player::loadDef(const std::string& path) {
     if (path.empty()) return nullptr;
     auto it = defs_.find(path);
     if (it != defs_.end()) return it->second;
+    auto& shared = sharedDefs();
+    auto sh = shared.find(path);
+    if (sh != shared.end()) { defs_[path] = sh->second; return sh->second; }
     auto d = std::make_shared<MovieDef>();
-    if (!d->load(path)) { defs_[path] = nullptr; return nullptr; }
+    if (!d->load(path)) { defs_[path] = nullptr; shared[path] = nullptr; return nullptr; }
     defs_[path] = d;
+    shared[path] = d;
     return d;
 }
 
