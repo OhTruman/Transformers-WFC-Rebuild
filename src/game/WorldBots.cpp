@@ -117,7 +117,10 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer, pellet_});
 }
 
-void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint) {
+BotBody::BotBody(MatchOpponent& o) : pc(&o.pawn()), player(o.matchPlayer()) {}
+
+void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint) {
+    if (o.matchPlayer() == localPlayer_) { b.fireWish = true; (void)w; (void)aimPoint; return; }   // WFC_PLAYERBOT: Fire through the controller
     Character& pc = o.pawn();
     pc.exposeSelf();
     w.onFired();
@@ -297,7 +300,7 @@ BotGoal World::botObjectiveGoal(BotBrain& b, const Character& pc) {
     return g;
 }
 
-void World::botThink(MatchOpponent& o, BotBrain& b) {
+void World::botThink(BotBody o, BotBrain& b) {
     Character& pc = o.pawn();
     const BotSkill& sk = botSkill(b.difficulty);
     const float now = match_.matchTime();
@@ -478,7 +481,7 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
             if (visible && b.frand() < use * 0.5f) {
                 bool mate = false;
                 for (const MatchOpponent* q : opponents_)
-                    if (q != &o && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 25.0f) mate = true;
+                    if (q->matchPlayer() != o.matchPlayer() && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 25.0f) mate = true;
                 if (mate || hpFrac < 0.5f) botTryAbility(o, b, "Warcry");
             }
             if (visible && d < 15.0f && b.frand() < use) botTryAbility(o, b, "Shockwave");
@@ -491,7 +494,7 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
                 const Weapon& cw = pc.weapon();
                 bool mateNear = false;
                 for (const MatchOpponent* q : opponents_)
-                    if (q != &o && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 15.0f) mateNear = true;
+                    if (q->matchPlayer() != o.matchPlayer() && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 15.0f) mateNear = true;
                 if ((cw.reserveMax > 0 && cw.reserve < cw.reserveMax * 0.6f) || mateNear)
                     if (b.frand() < use * 0.2f) botTryAbility(o, b, "SpawnAmmoCrate");
             }
@@ -518,7 +521,7 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
 // not ability-jammed, past the slot's spam guard and cooldown. Pawn-level abilities only: Dodge, Cloaking, Hover (intent / pawn
 // state) and Whirlwind (the shared melee path). Warcry / Barrier / Shockwave / SpawnSentry / ... run in World's local-player effect
 // code and are not used by bots yet [PARTIAL].
-bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
+bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
     Character& pc = o.pawn();
     if (pc.moveForm() != Form::Robot || pc.isTransforming() || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
     for (Character::AbilitySlot& a : pc.abilities_) {
@@ -556,7 +559,7 @@ void World::botPathFailed(BotBrain& b, bool vehicle) {
 
 // Path upkeep: one time-sliced search at a time across all bots (tickBots steps it); the bot keeps its old corridor meanwhile.
 // Shared state (the search owner / budget / the nav's search buffers): runs sequentially before the parallel steering pass.
-void World::botPathUpkeep(MatchOpponent& o, BotBrain& b, float dt) {
+void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     Character& pc = o.pawn();
     const core::Vec3 pos = pc.position();
     const bool vehicle = pc.moveForm() == Form::Vehicle;
@@ -575,7 +578,7 @@ void World::botPathUpkeep(MatchOpponent& o, BotBrain& b, float dt) {
 }
 
 // Steering: reads the nav mesh / collision / other pawns, writes only this bot's brain and intent - run on the worker pool.
-void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
+void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
     Character& pc = o.pawn();
     const BotSkill& sk = botSkill(b.difficulty);
     const core::Vec3 pos = pc.position();
@@ -782,7 +785,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
 }
 
-void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
+void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     Character& pc = o.pawn();
     const BotSkill& sk = botSkill(b.difficulty);
     const core::Vec3 eye = botEye(pc);
@@ -848,7 +851,7 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
     pc.setAimPitch(b.pitch);
     // Weapon state.
     if (!w) return;
-    if (pc.moveForm() == Form::Vehicle) w->tick(dt);   // the robot weapon ticks in tickBots
+    if (pc.moveForm() == Form::Vehicle && o.matchPlayer() != localPlayer_) w->tick(dt);   // the robot weapon ticks in tickBots (local: the controller)
     const bool usable = pc.moveForm() == Form::Vehicle ? !pc.isTransforming() : (pc.weaponUsable() && !pc.isMeleeing() && pc.carryingHeavy_ == 0);
     if (usable && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
     if (!t || pc.isMeleeing()) return;
@@ -883,6 +886,67 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
     if (--b.burstLeft <= 0) b.burstPause = b.frange(br.minPause, br.maxPause) * sk.pauseScale;
 }
 
+int World::playerBotDifficulty() {
+    static const int d = [] { const char* e = std::getenv("WFC_PLAYERBOT"); return e ? std::max(0, std::min(2, std::atoi(e))) : -1; }();
+    return d;
+}
+
+bool World::playerBotInput(platform::InputFrame& in, float dt) {
+    if (playerBotDifficulty() < 0 || remainderRunning_ || !matchActive_ || localDead_ || localPlayer_ < 0) { playerBot_.wasSpawned = false; return false; }
+    if (match_.state() != Match::State::InProgress || match_.betweenRounds()) return false;
+    ensureBotNav();
+    Character& pc = player_.pawn();
+    BotBrain& b = playerBot_;
+    if (!b.wasSpawned) {   // a fresh spawn: a fresh brain facing the camera
+        const unsigned rng = b.rng ? b.rng + 17U : 0x51ed270bU;
+        b = BotBrain{};
+        b.player = localPlayer_; b.difficulty = playerBotDifficulty(); b.rng = rng;
+        b.wasSpawned = true; b.yaw = player_.controller().camYaw(); b.pitch = player_.controller().camPitch();
+    }
+    b.life += dt;
+    BotBody body(pc, localPlayer_);
+    if ((b.thinkTimer -= dt) <= 0.0f) { b.thinkTimer = 0.25f; botThink(body, b); }
+    // The bots spend the per-step search budget inside the step; the player bot (between steps) may start one when the shared search is
+    // free (it completes in the step, delivered to playerBot_).
+    { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
+    MoveIntent mi;
+    botSteer(body, b, dt, mi);
+    if (core::length(b.unwedge) > 0.0f) b.unwedge = {0, 0, 0};   // the local pawn is not teleported: its own movement resolves wedges
+    b.fireWish = false;
+    botAimAndFire(body, b, dt);   // eases b.yaw / b.pitch with the skill's turn rate and error; a shot becomes fireWish
+    // The camera looks where the brain aims (a vehicle without a target faces its path).
+    const bool vehicle = pc.moveForm() == Form::Vehicle;
+    const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
+    const float camYaw = vehicle && !visible ? mi.faceYaw : b.yaw;
+    player_.controller().setCameraYaw(camYaw);
+    player_.controller().setCameraPitch(vehicle ? 0.0f : b.pitch);
+    // The steering's world direction as movement keys relative to the camera.
+    const core::Vec3 F0 = core::forwardFromYawPitch(mi.faceYaw, 0.0f), R0 = core::normalize(core::cross(F0, core::Vec3{0, 1, 0}));
+    const core::Vec3 dir = F0 * mi.moveForward + R0 * mi.moveRight;
+    const core::Vec3 F = core::forwardFromYawPitch(camYaw, 0.0f), R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
+    const float f = core::dot(dir, F), r = core::dot(dir, R);
+    in.down[(int)platform::Button::Forward] = f > 0.3f;
+    in.down[(int)platform::Button::Back] = f < -0.3f;
+    in.down[(int)platform::Button::Right] = r > 0.3f;
+    in.down[(int)platform::Button::Left] = r < -0.3f;
+    in.down[(int)platform::Button::Fire] = b.fireWish;
+    in.down[(int)platform::Button::FineAim] = vehicle && mi.wantBoost;            // RMB = Boost in vehicle form
+    if (mi.wantJump) in.pressed[(int)platform::Button::Jump] = true;
+    if (mi.wantDash) in.pressed[(int)platform::Button::Dash] = true;
+    // Transform toward the brain's wanted form (2 s cooldown, as the bots).
+    playerBotTransformCd_ -= dt;
+    if (playerBotTransformCd_ <= 0.0f && !pc.isTransforming() && b.wantVehicle != vehicle && mapState_.carriedBy(localPlayer_) < 0) {
+        in.pressed[(int)platform::Button::Transform] = true;
+        playerBotTransformCd_ = 2.0f;
+    }
+    in.mouseDX = 0; in.mouseDY = 0;
+    static const bool pblog = std::getenv("WFC_PLAYERBOTLOG") != nullptr;
+    if (pblog) { static float acc = 0.0f; if ((acc += dt) >= 1.0f) { acc = 0.0f;
+        LOG_INFO("PLAYERBOT goal %s path %zu wp %zu tgt %d vis %d mi %.2f/%.2f f %.2f r %.2f fire %d wantVeh %d pos (%.1f %.1f)", botGoalName(b.goal.kind), b.path.size(), b.wp,
+                 b.target, (int)visible, mi.moveForward, mi.moveRight, f, r, (int)b.fireWish, (int)b.wantVehicle, pc.position().x, pc.position().z); } }
+    return true;
+}
+
 void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
     // MatchOver / PendingMatch / between rounds: bots do not think, move or fire (the original end state stops play: no damage,
@@ -898,11 +962,12 @@ void World::tickBots(float dt) {
     if (botSearchOwner_ >= 0 && botNav_.stepSearch(1500) == 1) {
         std::vector<BotNav::Waypoint> path;
         const bool ok = botNav_.finishSearch(path);
-        for (BotBrain& sb : bots_)
-            if (sb.player == botSearchOwner_) {
-                if (ok) { sb.path.swap(path); sb.wp = 0; sb.bestDist = 1e9f; sb.progressTimer = 0.0f; }
-                else botPathFailed(sb, botSearchVehicle_);
-            }
+        auto deliver = [&](BotBrain& sb) {
+            if (ok) { sb.path.swap(path); sb.wp = 0; sb.bestDist = 1e9f; sb.progressTimer = 0.0f; }
+            else botPathFailed(sb, botSearchVehicle_);
+        };
+        for (BotBrain& sb : bots_) if (sb.player == botSearchOwner_) deliver(sb);
+        if (playerBotDifficulty() >= 0 && botSearchOwner_ == localPlayer_ && playerBot_.player == localPlayer_) deliver(playerBot_);   // WFC_PLAYERBOT
         botSearchOwner_ = -1;
     }
     // Three passes: (1) per bot, sequential: spawn reset, KillZ, decisions, path upkeep; (2) steering for every bot on the worker
