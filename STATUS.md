@@ -3,6 +3,26 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 09c = MILESTONE E PLAYTEST CHECKPOINT (2026-10-07): 32 v 32, full bot abilities, XP unlocks, fidelity fixes — branch `integration/milestone-09c`, playtest exe at a81cb54
+
+Playtest exe: build/release/bin/wfc_rebuild.exe built from a81cb54 (2026-10-07 02:13). Validation (FAST, quiet machine):
+13 Gameplay harnesses green (BOTTEST 37/37, BOTOBJ 12/12, TDM 43/43, CTF 12/12, XP 16/16, PARTICIPANT 22/22, EXTRABODY 38/38,
+SPAWNFILL 10/10, DOUBLEJUMP 3/3, PACING 4/4, DETERMINISM 2/2, WEAPONAUDIT PASS, VEHFRAME 4/4); frontend 83/0; Experimental
+TDM lifecycle audit 17/17 (fa973d3). 4-map bot flow vs 09b (FrameLimit 144): warm pass 4 spike lines vs 09b's 11, loads
+equal (8.3-9.7 s); the FIRST run after a shader change is cold (driver compiles ~520 programs: loads up to ~12 s here,
+24-31 s with a fully cold cache; in-match worst ~40-47 ms) — Rendering 7d34171, time-sliced warm-up opt-in only
+(WFC_PROGWARM=1, measured no in-match gain). 32 v 32 (63 bots, uncapped): median 6.6-7.0 ms, p90 15-16 ms (pre GPU skinning).
+
+User decisions (2026-10-06/07): bot-match XP scaled by bot difficulty (Hard 75 / Medium 50 / Easy 25 %), challenges count in
+full (PC ADAPTATION; WFC_ORIGINAL_XP_RULE=1 = the original no-bot rule); all originally-locked chassis unlock by specialty
+level (data/frontend/chassis_xp_unlocks.json; 12 named + 6 extra bodies with retargeted animation, PC ADAPTATION);
+Extended Bot Settings up to 32 v 32 / FFA 64 (original 5 v 5 default); all bots in by 2 s at round start on generated clear
+spawn points (extended only); extended kill feed max 6 lines; texture upgrades deferred to the graphics phase;
+target 300+ fps in big lobbies with NO bot quality reduction (in progress: GPU skinning, instanced draws, threaded AI).
+
+Process incident: the reused render-data regen script chained a clean build that rebuilt build/release from unvalidated HEAD
+(~23:00 and 00:01); fixed, the playtest exe was rebuilt from the validated a81cb54.
+
 ## INTEGRATION MILESTONE 09b = M09 MILESTONES B + C (2026-10-06): offline bots, Bot Settings, XP / levels / challenges / persistence — branch `integration/milestone-09b`
 
 On 09a (cd0f826). Human-playtest checkpoint for bots (B) and progression (C).
