@@ -203,7 +203,8 @@ queues (match / gameplay events); award drains clear their own queues.
 | `match().selectCharacter(me, cs)` | `world.submit([=](World& w) { w.match().selectCharacter(me, cs); })` |
 | QA actions (`qaRespawn`, `qaKillAllBots`, ...) | `world.submit([](World& w) { w.qaKillAllBots(); })` etc. |
 | `applyLookSettings(world.player().controller(), profile)` | `world.submit([=](World& w) { applyLookSettings(w.player().controller(), profile); })` |
-| Systems: `applyProfileVolumes` / `setGroupVolume` / `preloadSelectionAudio` / `preloadWeaponAudio` / `setPlayerVehicleWeaponAudio` | the same calls inside `submit` |
+| Systems: `applyProfileVolumes` / `setGroupVolume` | DIRECT (device-global, also used in menus; the sound groups are thread-safe, agents/systems e36b5a3) |
+| Systems: `preloadSelectionAudio` / `preloadWeaponAudio` / `setPlayerVehicleWeaponAudio` (mid-match) | inside `submit` (via Integration's `applyLoadout` migration; mid-match `queueSelectionAudio`) |
 | TEST lifecycle `applyMatchDamage(...)` | inside `submit` |
 | QA reads (`botBrains()`, `qaBotLabels()`) | unchanged for now (DEV only; snapshot in step 3) |
 | `match.starts()[idx].pos` | unchanged (static per match) |
