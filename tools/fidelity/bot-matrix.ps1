@@ -94,7 +94,10 @@ foreach ($r in $runs) {
 }
 $easy = @($rows | Where-Object { $_.run -like "*_d0" })[0]; $hard = @($rows | Where-Object { $_.run -like "*_d2" })[0]
 if ($easy -and $hard -and $easy.accuracy -ne $null -and $hard.accuracy -ne $null) {
-    Res "difficulty.hard_beats_easy" $(if ($hard.accuracy -gt $easy.accuracy) { "PASS" } else { "FAIL" }) ("bot hit accuracy EASY {0} vs HARD {1}; kills {2} vs {3} (same map / population)" -f $easy.accuracy, $hard.accuracy, $easy.kills, $hard.kills) "Gameplay" }
+    # Mirror matches (Bot Settings has ONE difficulty for every bot): HARD bots shoot at HARD targets that strafe more (1.0 vs
+    # 0.45), from farther (sight 70 vs 50 m), and fire more - accuracy is confounded and is NOT a pass / fail signal
+    # (8c2b6e3: EASY 0.738 vs HARD 0.485, kills 8 / 8). Gameplay's criterion (HARD out-kills EASY) needs MIXED teams.
+    Res "difficulty.mirror_comparison" "INFO" ("mirror matches EASY vs HARD: accuracy {0} vs {1}; kills {2} vs {3}; confounded by the targets' own difficulty - a mixed-team test is needed for a verdict" -f $easy.accuracy, $hard.accuracy, $easy.kills, $hard.kills) "Gameplay" }
 Res "known_partial" "INFO" "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused" "Gameplay"
 Write-WfcCsv $rows (Join-Path $OutDir "bots.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")

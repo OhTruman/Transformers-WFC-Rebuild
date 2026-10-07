@@ -1,0 +1,639 @@
+﻿{
+    "summary":  {
+                    "pass":  63,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  41,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 2 of 2 (local + 0 friendly + 1 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.combat",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "0 kills in 60 s of play (single enemy bot: contact not guaranteed in the window)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "1 bots logged; median path 532.4 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 1.49 ms with 2 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4282.391 with 2 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_0v1.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 6 of 6 (local + 2 friendly + 3 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "4 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "5 bots logged; median path 646.4 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 2"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 4 vs kills 4"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 1.82 ms with 6 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 4 kills (weapons: unknown 4)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4465.172 with 6 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_2v3.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 16 of 16 (local + 7 friendly + 8 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "13 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "15 bots logged; median path 596.4 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 3; off-mesh samples 9"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 13 vs kills 13"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 3.65 ms with 16 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 13 kills (weapons: unknown 13)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4560.031 with 16 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_7v8.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "3 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 438.1 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 2"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 3 vs kills 3"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.53 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 3 kills (weapons: unknown 3)"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4541.883 with 8 players"
+                    },
+                    {
+                        "id":  "bots.DOM_IAC_Streets_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "6 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 612 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 2"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 6 vs kills 6"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.02 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 6 kills (weapons: unknown 6)"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4564.812 with 8 players"
+                    },
+                    {
+                        "id":  "bots.KOTH_IAC_Streets_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "5 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 694.6 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 4"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 5 vs kills 5"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.44 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 5 kills (weapons: unknown 5)"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4562.34 with 8 players"
+                    },
+                    {
+                        "id":  "bots.CTF_IAC_Streets_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "11 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 575.2 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 1; off-mesh samples 5"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 11 vs kills 11"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.37 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 1, team kills 0 of 11 kills (weapons: unknown 11)"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4577.012 with 8 players"
+                    },
+                    {
+                        "id":  "bots.EXT_IAC_Streets_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "10 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 631.7 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 10 vs kills 10"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.93 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 10 kills (weapons: unknown 10)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4413.316 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Berth_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 570.7 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 1; off-mesh samples 3"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 8 vs kills 8"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.62 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 8 kills (weapons: unknown 8)"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4635.219 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_UND_Gorge_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 16 of 16 (local + 0 friendly + 15 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "63 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "15 bots logged; median path 393.1 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 11"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 63 vs kills 63"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 4.61 ms with 16 players"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 2, team kills 0 of 63 kills (weapons: unknown 63)"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4313.434 with 16 players"
+                    },
+                    {
+                        "id":  "bots.DM_IAC_Streets_0v15.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "10 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 632 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 0; Debris expected weaker (flight-only islands)"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 10 vs kills 10"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 4.09 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 2, team kills 0 of 10 kills (weapons: unknown 8, environment 2)"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4996.621 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_ORB_Debris_3v4.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 642.4 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 8 vs kills 8"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.79 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 8 kills (weapons: unknown 8)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4557.062 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d0.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 555.9 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 2; off-mesh samples 4"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 8 vs kills 8"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 3.27 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 8 kills (weapons: unknown 8)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4562.57 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_d2.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.difficulty.mirror_comparison",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "mirror matches EASY vs HARD: accuracy 0.738 vs 0.485; kills 8 vs 8; confounded by the targets\u0027 own difficulty - a mixed-team test is needed for a verdict"
+                    },
+                    {
+                        "id":  "bots.known_partial",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused"
+                    }
+                ]
+}
