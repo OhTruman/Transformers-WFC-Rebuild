@@ -178,21 +178,27 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             if ($fz -ge 20) { $broken++ } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
         # Rendering's WFC_SLOWFRAME lines: "SLOWFRAME f<n> interval <ms>: render <ms> (world, chars, fx, transl, post), outside <ms>;
         # gpu <ms>|n/a (...); draws <n> (dyn, fx), program binds <n>, buffer upload <KB>, new textures <n>, shader compiles <n>, map FX cpu <ms> (sim <ms>)"
-        $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "buffer upload > 256 KB" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
+        $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "buffer upload spike > 2 MB" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
         $sfN = 0
-        foreach ($sl in @($segL | Where-Object { $_.Contains('SLOWFRAME f') })) {
-            $mm = [regex]::Match($sl, 'interval ([\d.]+)[^:]*: render ([\d.]+)(?: ?ms)? \(([\d., ]+)\),? outside ([\d.]+)(?: ?ms)?; gpu (n/a|[\d.]+)')
-            if (-not $mm.Success) { continue }; $sfN++
-            $rnd = [double]$mm.Groups[2].Value; $parts = @($mm.Groups[3].Value -split ',' | ForEach-Object { [double]$_.Trim() }); $outside = [double]$mm.Groups[4].Value
-            $gpu = if ($mm.Groups[5].Value -eq "n/a") { -1.0 } else { [double]$mm.Groups[5].Value }
-            $sc = [regex]::Match($sl, 'shader compiles (\d+)'); $nt = [regex]::Match($sl, 'new textures (\d+)'); $bu = [regex]::Match($sl, 'buffer upload ([\d.]+)')
-            if ($sc.Success -and [int]$sc.Groups[1].Value -gt 0) { $sfBins["shader compile"]++ }
-            elseif ($nt.Success -and [int]$nt.Groups[1].Value -gt 0) { $sfBins["new textures"]++ }
-            elseif ($bu.Success -and [double]$bu.Groups[1].Value -gt 256) { $sfBins["buffer upload > 256 KB"]++ }
+        # in-play SLOWFRAME lines only (the renderer's frame numbers also count front-end frames)
+        $sfIn = $false; $sfLines = New-Object System.Collections.Generic.List[string]
+        foreach ($sl in $segL) { if ($sl.Contains('to=InGame')) { $sfIn = $true; continue }; if ($sl.Contains('to=GameEnded')) { $sfIn = $false }; if ($sfIn -and $sl.Contains('SLOWFRAME f')) { $sfLines.Add($sl) } }
+        $sfRe = 'interval ([\d.]+) ms: render ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\), outside ([-\d.]+); (?:gpu ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\)|gpu n/a); draws (\d+) \(dyn (\d+), fx (\d+)\), program binds (\d+), buffer upload (\d+) KB, new textures (\d+), shader compiles (\d+), map FX cpu ([\d.]+) \(sim ([\d.]+)\)'
+        $sfSum = @{ interval = 0.0; render = 0.0; world = 0.0; chars = 0.0; fx = 0.0; transl = 0.0; outside = 0.0; gpu = 0.0; gpuN = 0; draws = 0.0; upKB = 0.0 }
+        foreach ($sl in $sfLines) {
+            $mm = [regex]::Match($sl, $sfRe); if (-not $mm.Success) { continue }; $sfN++
+            $g = $mm.Groups; $rnd = [double]$g[2].Value; $parts = @(3..7 | ForEach-Object { [double]$g[$_].Value }); $outside = [double]$g[8].Value
+            $gpu = if ($g[9].Success) { [double]$g[9].Value } else { -1.0 }
+            $sfSum.interval += [double]$g[1].Value; $sfSum.render += $rnd; $sfSum.world += $parts[0]; $sfSum.chars += $parts[1]; $sfSum.fx += $parts[2]; $sfSum.transl += $parts[3]; $sfSum.outside += $outside
+            if ($gpu -ge 0) { $sfSum.gpu += $gpu; $sfSum.gpuN++ }; $sfSum.draws += [double]$g[15].Value; $sfSum.upKB += [double]$g[19].Value
+            if ([int]$g[21].Value -gt 0) { $sfBins["shader compile"]++ }
+            elseif ([int]$g[20].Value -gt 0) { $sfBins["new textures"]++ }
+            elseif ([double]$g[19].Value -gt 2048) { $sfBins["buffer upload spike > 2 MB"]++ }   # steady frames upload ~1.5 MB (Rendering): only the tail is a cause
             elseif ($gpu -gt $rnd) { $sfBins["GPU-bound"]++ }
             elseif ($outside -gt $rnd) { $sfBins["outside render (sim / UI / present)"]++ }
-            else { $names = @("world", "chars", "fx", "transl", "post"); $mi = 0; for ($q = 1; $q -lt [Math]::Min($parts.Count, 5); $q++) { if ($parts[$q] -gt $parts[$mi]) { $mi = $q } }; $sfBins["render: $($names[$mi])"]++ }
+            else { $names = @("world", "chars", "fx", "transl", "post"); $mi = 0; for ($q = 1; $q -lt 5; $q++) { if ($parts[$q] -gt $parts[$mi]) { $mi = $q } }; $sfBins["render: $($names[$mi])"]++ }
         }
+        $sfAvg = if ($sfN) { "avg slow frame {0:N2} ms = render {1:N2} (world {2:N2}, chars {3:N2}, fx {4:N2}, transl {5:N2}) + outside {6:N2}; gpu {7}; draws {8:N0}; buffer upload {9:N0} KB" -f ($sfSum.interval / $sfN), ($sfSum.render / $sfN), ($sfSum.world / $sfN), ($sfSum.chars / $sfN), ($sfSum.fx / $sfN), ($sfSum.transl / $sfN), ($sfSum.outside / $sfN), $(if ($sfSum.gpuN) { "{0:N2} ms" -f ($sfSum.gpu / $sfSum.gpuN) } else { "n/a" }), ($sfSum.draws / $sfN), ($sfSum.upKB / $sfN) } else { "" }
         $asyncLines = @($segL | Where-Object { $_ -match '\] ASYNC(STEP|LOG) ' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
         $joinVals = @($asyncLines | ForEach-Object { $mj = [regex]::Match($_, 'join(?: wait)?[ =:]+([\d.]+)'); if ($mj.Success) { [double]$mj.Groups[1].Value } })
         $bgVals = @($asyncLines | ForEach-Object { $mb = [regex]::Match($_, 'background(?: part)?[ =:]+([\d.]+)'); if ($mb.Success) { [double]$mb.Groups[1].Value } })
@@ -231,7 +237,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # the original 96-channel FMOD rule (Systems): steals / refusals at 64 participants are by design; MORE than 96 heard
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
-        if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}" -f $sfN, $row.slowframe_bins) "Rendering" }
+        if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}" -f $sfN, $row.slowframe_bins, $sfAvg) "Rendering" }
         Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
