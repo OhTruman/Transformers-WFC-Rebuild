@@ -309,6 +309,16 @@ public:
                              const std::vector<std::string>& vehicleWeapons);
     void onParticipantFired(const std::string& weaponClass, const core::Vec3& from);
     void onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer);
+    // [Systems M09d] A non-local participant's (bot's) successful ability trigger: its OnTriggerSound and the notifies of its
+    // Skill_<id> animation (Warcry chest hits / WAR_CRY_STATE_START, Shockwave SHIELD_PUSH, ...), resolved through that
+    // body's own sound sets, at their authored times, attached to the caster [CONF RE pass 5 s12: notify sounds play for any
+    // pawn; OnTriggerSound is replicated]. Buff sounds are not played for non-local pawns (OnlyPlaySoundOnLocalPlayer;
+    // cloak is the exception and needs the bot's cloak state - not wired). `chassisKey` = the caster's chassis (Car2, Truck5).
+    void onParticipantAbility(int player, const std::string& abilityId, const std::string& chassisKey, const core::Vec3& pos);
+    // Releases the delayed participant notifies; call once per simulation step (with the participant shot loop).
+    void tickParticipantAudio(float dt);
+    // Optional: where participant `player`'s pawn is now (sounds follow it); without it they stay at the cast position.
+    std::function<bool(int player, core::Vec3& out)> participantPositionHook;
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
     // its OnTriggerSound at the pawn.
     void onAbilityTriggered(const std::string& abilityId);
@@ -924,6 +934,10 @@ private:
     std::vector<std::string> participantWeaponClasses_;   // [Systems M09b] every other participant's loadout
     std::vector<std::string> selectionChassis_, selectionWeapons_;   // [Systems M09c] warmed at level-audio load
     std::map<std::pair<int, int>, float> participantHitEffect_;   // (victim player, hit-effect entry) -> last play (hitClock_)
+    struct ParticipantNotify { float delay; std::string cue; int player; core::Vec3 pos; };
+    std::vector<ParticipantNotify> participantNotifies_;          // [Systems M09d] delayed Skill_ notifies of bots
+    std::set<std::string> participantProfiles_;                   // bot chassis whose cue set is registered this level
+    static constexpr int kOwnParticipantBase = 1000;              // SoundCues owner id for participant `p` = base + p
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;
     VehicleFormAudio vehicleForm_;

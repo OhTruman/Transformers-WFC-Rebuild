@@ -1,0 +1,34 @@
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 19:45:35.438243600 -0500
++++ b/src/game/World.cpp	2026-10-06 19:45:35.495941600 -0500
+@@ -158,6 +158,11 @@
+         }
+     };
+     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
++    participantPositionHook = [this](int player, core::Vec3& out) {   // [Systems M09d] participant sounds follow the pawn
++        for (MatchOpponent* o : opponents_)
++            if (o->matchPlayer() == player && o->spawned()) { out = o->pawn().actorLocation(); return true; }
++        return false;
++    };
+     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
+         if (w.projectile()) {
+             spawnProjectile(o, d * w.projSpeed, w, localPlayer_);   // Spawn at RealStartLoc (callers pass the muzzle)
+@@ -1538,6 +1543,7 @@
+     }
+     tickAbilityEffects(dt);
+     tickAbilityAudio();                        // [Systems M08i]
++    tickParticipantAudio(dt);                  // [Systems M09d] bots' delayed ability notifies
+     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
+     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
+     if (matchActive_) tickMatch(dt);
+diff -ru --strip-trailing-cr a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+--- a/src/game/WorldBots.cpp	2026-10-06 19:45:35.387570000 -0500
++++ b/src/game/WorldBots.cpp	2026-10-06 19:45:35.503969100 -0500
+@@ -483,6 +483,7 @@
+         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
+         else return false;
+         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
++        onParticipantAbility(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());   // [Systems M09d] trigger + Skill_ notifies
+         return true;
+     }
+     return false;
