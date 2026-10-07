@@ -564,6 +564,16 @@ private:
     unsigned stepCounter_ = 0;
     mutable unsigned skinnedStep_ = ~0u;
     mutable std::vector<core::Mat4> skinGlobals_;
+    // GPU skinning (IRenderer::drawSkinnedMesh, agents/rendering; compile-time detected): per skinned part the bone palette of this
+    // step (global(skinJoints[j]) x invBind[j], from the step's bone globals) and the previous step's for the presentation blend.
+    struct PartPalette {
+        std::vector<core::Mat4> cur, prev;
+        const assets::SkinnedModel* model = nullptr, *prevModel = nullptr;
+        unsigned builtStep = ~0u;
+        uint64_t serial = 0;
+    };
+    mutable PartPalette palBody_, palPartner_, palArm_;
+    void snapshotPalettes();
     // Pose serials for the renderer's drawDynamicMeshPosed (agents/rendering): bumped whenever a buffer's vertices change (each skin;
     // each interpolated present for the blend scratch), so unchanged poses skip the vertex build / upload.
     mutable uint64_t bodySerial_ = 0, partnerSerial_ = 0, armSerial_ = 0, lerpSerial_ = 0;

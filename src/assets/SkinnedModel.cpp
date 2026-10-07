@@ -609,8 +609,9 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
               std::vector<core::Mat4>& global, render::MeshData& out) {
     poseGlobals(model, pose, global);
 
-    // Joint matrices = global(joint) * invBind(joint).
-    std::vector<core::Mat4> jm(model.skinJoints.size());
+    // Joint matrices = global(joint) * invBind(joint) (a reused buffer: no allocation per skin).
+    static thread_local std::vector<core::Mat4> jm;
+    jm.resize(model.skinJoints.size());
     for (size_t j = 0; j < model.skinJoints.size(); ++j) {
         core::Mat4 gm = global[(size_t)model.skinJoints[j]];
         jm[j] = (j < model.invBind.size()) ? gm * model.invBind[j] : gm;
@@ -620,13 +621,19 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     size_t vc = model.vertexCount();
     out.positions.resize(vc * 3);
     out.normals.resize(vc * 3);
-    out.indices = model.indices;
-    // M45: always from THIS model. Keeping them when only the count matched left another model's sub-mesh ranges /
-    // UVs on a reused output (robot <-> vehicle, chassis change: equal section counts): every draw then read past the
-    // index buffer (out-of-bounds GPU vertex fetch; caught by the M43 guard on the player route: Optimus spawn).
-    out.uv = model.uv;
-    out.subs = model.subs;
-    out.mats = model.mats;                                      // picks up resolved texture handles
+    // Topology / UVs / materials are pose-invariant: copied only when the buffer does not already hold this model's (the per-skin
+    // copy of the index buffer was a large share of the skin cost with many characters).
+    bool sameTopology = out.indices.size() == model.indices.size() && out.uv.size() == model.uv.size() &&
+                        out.subs.size() == model.subs.size() && out.mats.size() == model.mats.size();
+    for (size_t k = 0; sameTopology && k < model.subs.size(); ++k)
+        sameTopology = out.subs[k].indexOffset == model.subs[k].indexOffset && out.subs[k].indexCount == model.subs[k].indexCount &&
+                       out.subs[k].material == model.subs[k].material;
+    // [integration 09c] Full comparison (no strided sample): an equal-count different model must never keep stale indices / UVs
+    // (M45: out-of-bounds GPU vertex fetch on AMD). std::equal costs no allocation, unlike the copy it avoids.
+    if (sameTopology) sameTopology = std::equal(model.indices.begin(), model.indices.end(), out.indices.begin()) &&
+                                     std::equal(model.uv.begin(), model.uv.end(), out.uv.begin());
+    if (!sameTopology) { out.indices = model.indices; out.uv = model.uv; out.subs = model.subs; }
+    out.mats = model.mats;                                      // small; picks up resolved texture handles
     // Bind-pose tangents skinned like the normals (no translation, renormalised; w = the bind bitangent sign), so the renderer
     // does not re-derive them from the posed triangles every frame (Rendering: about half the per-character draw cost).
     std::vector<float>* outTan = model.tangents.size() == vc * 4 ? meshTangents(out, 0) : nullptr;

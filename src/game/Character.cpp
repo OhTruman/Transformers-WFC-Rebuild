@@ -1,3 +1,6 @@
+#include "game/GpuSkin.h"
+#include <type_traits>
+#include <unordered_map>
 #include "game/Character.h"
 #include <memory>
 #include <map>
@@ -784,7 +787,16 @@ void Character::updateWeaponSocket() {
     weaponValid_ = true;
 }
 
+void Character::snapshotPalettes() {
+    // The previous step's palette exists only if that step's palette was built (drawn); else the next frames draw without the blend.
+    for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) {
+        if (p->builtStep == stepCounter_) { p->prev = p->cur; p->prevModel = p->model; }
+        else { p->prev.clear(); p->prevModel = nullptr; }
+    }
+}
+
 void Character::beginStep() {
+    snapshotPalettes();
     prevPos_ = pos_; havePrev_ = true;
     // The previous step's vertices exist only if that step's pose was skinned (drawn); otherwise the next frames present the
     // current pose without the vertex blend.
@@ -852,8 +864,27 @@ const render::MeshData& Character::blendedPose(const render::MeshData& cur, cons
 }
 
 void Character::draw(render::IRenderer& r) const {
-    ensureSkinned();
     const assets::SkinnedModel* mdl = currentModel();
+    // GPU skinning first: body / partner / arm palettes from this step's bone globals; any part the renderer declines is CPU-skinned.
+    bool gpuBody = false, gpuPartner = false, gpuArm = false;
+    if (HasSkinnedApi<render::IRenderer>::value && mdl && mdl->valid() && bodySkinModel_) {
+        const core::Mat4 off0 = core::Mat4::translate(renderOffset());
+        auto gpuPart = [&](PartPalette& p, const assets::SkinnedModel& m, const std::vector<core::Mat4>& globals, const core::Mat4& world,
+                           const void* key, uint64_t salt) {
+            if (m.joints.empty() || m.weights.empty()) return false;
+            if (p.builtStep != stepCounter_ || p.model != &m) { buildPalette(m, globals, p.cur); p.model = &m; p.builtStep = stepCounter_; ++p.serial; }
+            const bool blend = renderAlpha_ < 1.0f && p.prevModel == &m && p.prev.size() == p.cur.size();
+            render::MeshData& bind = bindMeshOf(m);
+            bind.mats = m.mats;   // resolved texture handles
+            return drawSkinnedGpu(r, bind, m.joints, m.weights, p.cur, blend ? &p.prev : nullptr, blend ? renderAlpha_ : 1.0f, world, color_, key,
+                                  ((p.serial << 24) ^ prevVersion_ ^ salt), 0);
+        };
+        gpuBody = gpuPart(palBody_, *bodySkinModel_, animScratch_, off0 * meshMatrix(form_), &poseBuf_, 0);
+        if (partnerVisible_ && partnerSkinModel_) gpuPartner = gpuPart(palPartner_, *partnerSkinModel_, partnerScratch_, off0 * meshMatrix(partnerForm()), &partnerBuf_, 0x5a5a000000000000ULL);
+        if (armVisible_ && armModel_) gpuArm = gpuPart(palArm_, *armModel_, armScratch_, off0 * armWorld_, &armBuf_, 0x3c3c000000000000ULL);
+        if (gpuBody && (gpuPartner || !(partnerVisible_ && partnerSkinModel_)) && (gpuArm || !(armVisible_ && armModel_))) return;
+    }
+    ensureSkinned();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
         // Presentation interpolation: the whole pawn (body, transformation partner, arm) shifted by one rigid offset.
         const core::Mat4 off = core::Mat4::translate(renderOffset());
@@ -862,18 +893,18 @@ void Character::draw(render::IRenderer& r) const {
         auto canBlend = [&](const render::MeshData& cur, const std::vector<float>& pp) {
             return renderAlpha_ < 1.0f && !cur.positions.empty() && pp.size() == cur.positions.size();
         };
-        if (!(canBlend(poseBuf_, prevPoseP_) &&
+        if (!gpuBody && !(canBlend(poseBuf_, prevPoseP_) &&
               drawBlended(r, poseBuf_, prevPoseP_, prevPoseN_, renderAlpha_, off * meshMatrix(form_), color_, (bodySerial_ << 24) ^ prevVersion_, 0))) {
             const render::MeshData& b = blendedPose(poseBuf_, prevPoseP_, prevPoseN_, lerpBody_);
             drawPosed(r, b, off * meshMatrix(form_), color_, &b == &poseBuf_ ? bodySerial_ : ++lerpSerial_, 0);
         }
-        if (partnerVisible_ && !partnerBuf_.empty() &&
+        if (!gpuPartner && partnerVisible_ && !partnerBuf_.empty() &&
             !(canBlend(partnerBuf_, prevPartnerP_) &&
               drawBlended(r, partnerBuf_, prevPartnerP_, prevPartnerN_, renderAlpha_, off * meshMatrix(partnerForm()), color_, (partnerSerial_ << 24) ^ prevVersion_ ^ 0x5a5a000000000000ULL, 0))) {
             const render::MeshData& p = blendedPose(partnerBuf_, prevPartnerP_, prevPartnerN_, lerpPartner_);
             drawPosed(r, p, off * meshMatrix(partnerForm()), color_, &p == &partnerBuf_ ? partnerSerial_ : ++lerpSerial_, 0);
         }
-        if (armVisible_ && !armBuf_.empty()) drawPosed(r, armBuf_, off * armWorld_, color_, armSerial_, 0);
+        if (!gpuArm && armVisible_ && !armBuf_.empty()) drawPosed(r, armBuf_, off * armWorld_, color_, armSerial_, 0);
         return;
     }
     // Fallback graybox.

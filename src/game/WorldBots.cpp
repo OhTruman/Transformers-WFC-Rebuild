@@ -857,15 +857,10 @@ void World::tickBots(float dt) {
             o->despawn();
             continue;
         }
-        // AI level of detail (PC ADAPTATION for high bot counts): decisions at 4 Hz within 60 m of the human (or with a visible
-        // target), 2 Hz to 120 m, 1 Hz beyond; steering and aim stay per step, so combat near the player is unchanged.
+        // Decisions at 4 Hz for every bot at every participant count (user decision: bots act as they would at 5 v 5; no AI level of
+        // detail); steering and aim run every step.
         if ((b.thinkTimer -= dt) <= 0.0f) {
-            float interval = 0.25f;
-            if (!localDead_ && b.target < 0) {
-                const float dh = core::length(pc.position() - player_.pawn().position());
-                interval = dh < 60.0f ? 0.25f : (dh < 120.0f ? 0.5f : 1.0f);
-            }
-            b.thinkTimer = interval;
+            b.thinkTimer = 0.25f;
             botThink(*o, b);
         }
         MoveIntent in;

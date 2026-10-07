@@ -38,6 +38,8 @@ public:
     void tick(float dt, std::vector<WeaponNotify>& fired);
 
     const render::MeshData& pose() const;   // skins the current pose on demand (tick only poses the bones)
+    // Draws the posed weapon: GPU skinning (bone palette) when the renderer offers it, else the CPU-skinned pose.
+    void draw(render::IRenderer& r, const core::Mat4& world, const core::Vec3& color) const;
     const char* clipName() const;
 
     // Socket transform in weapon-mesh space (bone global * socket relative transform).
@@ -56,6 +58,9 @@ private:
     std::vector<core::Mat4> globals_;
     mutable render::MeshData pose_;
     mutable bool skinDirty_ = false;
+    mutable std::vector<core::Mat4> palette_;      // GPU path: this pose's bone palette
+    mutable bool paletteDirty_ = true;
+    mutable uint64_t paletteSerial_ = 0;
     mutable std::vector<core::Mat4> skinGlobals_;
     std::vector<Socket> sockets_;
 };

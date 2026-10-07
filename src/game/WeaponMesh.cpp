@@ -1,3 +1,4 @@
+#include "game/GpuSkin.h"
 #include "game/WeaponMesh.h"
 #include "core/Log.h"
 #include "game/WeaponDef.h"
@@ -91,7 +92,7 @@ void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
     if (!valid()) return;
     if (clip_ < 0) {                              // no idle sequence: hold the bind pose
         assets::samplePose(*model_, -1, 0.0f, false, pose0_);
-        assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true;   // vertices skinned when drawn (pose())
+        assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true; paletteDirty_ = true;   // vertices skinned when drawn (pose())
         return;
     }
     const assets::AnimClip& c = model_->clips[(size_t)clip_];
@@ -122,7 +123,7 @@ void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
         assets::blendPose(pose0_, pose1_, blendOut_ / kBlendOutTime, pose0_);
         blendOut_ -= dt;
     }
-    assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true;   // vertices skinned when drawn (pose())
+    assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true; paletteDirty_ = true;   // vertices skinned when drawn (pose())
 }
 
 const render::MeshData& WeaponMesh::pose() const {
@@ -138,6 +139,17 @@ bool WeaponMesh::socketLocal(const std::string& socket, core::Mat4& out) const {
         return true;
     }
     return false;
+}
+
+void WeaponMesh::draw(render::IRenderer& r, const core::Mat4& world, const core::Vec3& color) const {
+    if (!model_) return;
+    if (HasSkinnedApi<render::IRenderer>::value && !model_->joints.empty()) {
+        if (paletteDirty_) { buildPalette(*model_, globals_, palette_); paletteDirty_ = false; ++paletteSerial_; }
+        render::MeshData& bind = bindMeshOf(*model_);
+        bind.mats = model_->mats;
+        if (drawSkinnedGpu(r, bind, model_->joints, model_->weights, palette_, nullptr, 1.0f, world, color, this, paletteSerial_, 0)) return;
+    }
+    r.drawDynamicMesh(pose(), world, color);
 }
 
 } // namespace game
