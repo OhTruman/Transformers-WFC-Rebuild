@@ -3589,6 +3589,27 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Diagnostics: SPAWNPROF splits in applyChassisToLocalPawn / applyLoadout; WFC_BOOTCLASS=<Scout|Scientist|Soldier|Leader> boots a
   class preset.
 
+### Bot abilities, aim rig cache, skinned tangents (25h)
+- Bots trigger their pawn-level abilities through the original TnAbilityManager.TriggerAbility rules (robot form, not
+  reloading / dodging / jammed, spam guard, cooldown, CanStartCooldown):
+  - Scout: Dodge, Cloaking;
+  - Soldier: Hover (TnBuffIncreaseDamageDuringHover applies to any instigator), Whirlwind (shared melee path).
+  - When to use them is a PC ADAPTATION; the effects are the original ones.
+  - Warcry / Barrier / Shockwave / SpawnSentry / ... run in World's local-player effect code: PARTIAL for bots.
+- Character::buildRobotRig is cached per body model: 15 spawning bots baked the aim-offset grid 15 times in one frame
+  (Rendering: a 112 ms round-start CPU frame). Load scheduling only.
+- SkinnedModel reads glTF TANGENT; skinPose skins it like the normals into render::MeshData::tangents when the renderer provides
+  the field (Rendering skips per-frame tangent derivation, about 0.17 ms per visible character).
+
+### Participants' held weapons and shot FX (25i)
+- Every participant draws its active robot weapon at its weapon socket: the player's cached models, with fire / reload event
+  animations from its Weapon serials, preloaded at match load. BOTTEST: 44 / 44 samples show a mesh.
+- Shot FX use the weapon's authored templates:
+  - World::participantShotFxHook (the integration's per-weapon lookup), else the WeaponDef MuzzleFlash / Tracer templates by
+    name through the renderer;
+  - no Ion Blaster fallback (the M08 "generic weapons" rule): a weapon with no template draws nothing and is logged once.
+- PARTIAL: the bots' Repair Ray beam visual; shell / magazine notifies on bot weapons.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.
