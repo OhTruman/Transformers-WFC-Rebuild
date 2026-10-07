@@ -1195,7 +1195,7 @@ void Application::routeMatchToFrontend(float dt) {
         fillParticipant(mp, p);
         v.players.push_back(p);
     }
-    flow.setMatchValues(v);
+    flow.setMatchValues(std::move(v));   // [integration 09c] no roster copy per step (Frontend MatchValues&& overload)
     // HUD movie values (TnHUD data observers), Gameplay authoritative.
     frontend::HudFrame hf;
     hf.valid = h.matchActive;

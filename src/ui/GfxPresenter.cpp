@@ -209,7 +209,12 @@ gfx::MovieClip* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int depth 
 void GfxPresenter::extendedKillFeed(const Args& a) {
     gfx::Player& p = hud_->player();
     gfx::avm1::VM& vm = p.vm();
-    gfx::MovieClip* mgrClip = findFeedManager(vm, p.root());
+    // The manager clip by its last path (the HUD keeps it for the match); the tree search only when that fails.
+    gfx::MovieClip* mgrClip = nullptr;
+    if (!feedManagerPath_.empty())
+        if (gfx::DisplayObject* d = p.resolveTarget(feedManagerPath_, p.root()); d && d->kind == gfx::DisplayObject::Kind::Clip && !d->removed && d->script)
+            mgrClip = static_cast<gfx::MovieClip*>(d);
+    if (!mgrClip) mgrClip = findFeedManager(vm, p.root());
     if (!mgrClip) { hud_->invoke("_global.GameMessage", a); return; }
     gfx::avm1::Object* mgr = mgrClip->script;
     feedManagerPath_ = mgrClip->targetPath();
