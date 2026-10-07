@@ -87,6 +87,21 @@ public:
     virtual void drawDynamicMeshPosed(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color, uint64_t poseSerial) {
         (void)poseSerial; drawDynamicMesh(mesh, model, color);
     }
+    // Presentation interpolation of a skinned pose (32 v 32): draws prev + (cur - prev) * alpha per vertex position and
+    // normalize(prevN + (curN - prevN) * alpha) per normal; tangents are cur's. prevPositions / prevNormals are mesh-local
+    // like cur (prevNormals may be empty: cur's normals). poseSerial must change whenever cur OR prev changes. The GL
+    // renderer uploads both once per serial and blends in the vertex shader (no per-frame vertex build / upload); this
+    // default blends on the CPU.
+    virtual void drawDynamicMeshBlended(const MeshData& cur, const std::vector<float>& prevPositions,
+                                        const std::vector<float>& prevNormals, float alpha, const core::Mat4& model,
+                                        const core::Vec3& color, uint64_t poseSerial) {
+        if (alpha >= 1.0f || prevPositions.size() != cur.positions.size()) { drawDynamicMeshPosed(cur, model, color, poseSerial); return; }
+        MeshData b = cur;
+        for (size_t i = 0; i < b.positions.size(); ++i) b.positions[i] = prevPositions[i] + (cur.positions[i] - prevPositions[i]) * alpha;
+        if (prevNormals.size() == cur.normals.size())
+            for (size_t i = 0; i < b.normals.size(); ++i) b.normals[i] = prevNormals[i] + (cur.normals[i] - prevNormals[i]) * alpha;
+        drawDynamicMesh(b, model, color);
+    }
     // M53: compile the shader programs and upload the textures a transient mesh's materials need, without drawing.
     // Call when a mesh that will be drawn later is loaded (e.g. a character's vehicle form at spawn), so its first
     // visible frame does not pay for them (first R->V transform: 59 ms program + 51 ms textures in one frame).

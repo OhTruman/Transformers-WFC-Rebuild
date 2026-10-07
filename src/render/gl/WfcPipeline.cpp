@@ -53,6 +53,10 @@ layout(location=3) in vec2 aUV0;
 layout(location=4) in vec2 aUV1;
 layout(location=5) in vec4 aColor;   // particle colour (FX draws); constant white otherwise
 layout(location=6) in vec3 aSubUV2;  // M67 sprites: second SubUV cell UV + blend; constant 0 otherwise
+layout(location=7) in vec3 aPrevPos; // drawDynamicMeshBlended: the previous step's pose (uPoseBlend != 0)
+layout(location=8) in vec3 aPrevNrm;
+uniform int uPoseBlend;
+uniform float uPoseAlpha;
 uniform mat4 uViewProj;
 uniform mat4 uModel;
 uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, z DepthBias
@@ -91,10 +95,15 @@ vec4 heightFog(vec3 p) {
 }
 
 void main() {
-    vec4 wp = uModel * vec4(aPos, 1.0);
+    vec3 pos = aPos, nrm = aNrm;
+    if (uPoseBlend != 0) {   // presentation interpolation of a skinned pose: the CPU formula (Character::blendedPose)
+        pos = aPrevPos + (aPos - aPrevPos) * uPoseAlpha;
+        nrm = normalize(aPrevNrm + (aNrm - aPrevNrm) * uPoseAlpha);
+    }
+    vec4 wp = uModel * vec4(pos, 1.0);
     mat3 nm = mat3(uModel);
     vPos = wp.xyz;
-    vNrm = nm * aNrm;
+    vNrm = nm * nrm;
     vTan = vec4(nm * aTan.xyz, aTan.w);
     vUV0 = aUV0;
     vSubUV2 = aSubUV2;
@@ -447,8 +456,16 @@ void main() {
 }
 )";
 
-GLuint compile(GLenum type, const std::string& src, const std::string& tag) {
+GLuint compile(GLenum type, const std::string& src0, const std::string& tag) {
     GLuint s = CreateShader(type);
+    // diagnostics: WFC_SHADERNONCE=<n> makes every shader source unique (a cold driver shader cache for this process,
+    // as on the first run of a new build) without touching the driver's cache on disk
+    static const char* nonce = std::getenv("WFC_SHADERNONCE");
+    std::string src = src0;
+    if (nonce) {
+        const size_t nl = src.find('\n');
+        if (nl != std::string::npos) src.insert(nl + 1, std::string("#define WFC_NONCE_") + nonce + "\n");
+    }
     const char* p = src.c_str();
     ShaderSource(s, 1, &p, nullptr);
     CompileShader(s);
@@ -600,6 +617,7 @@ void Pipeline::clearProgramCache() {
 // ------------------------------------------------------------------------- unloading (level travel)
 void Pipeline::release() {
     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
+    touchQueue_.clear();                               // its textures are deleted with the map
     if (!active_ && meshes_.empty() && !fbo_) return;
     auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
     auto fbo = [](GLuint& f) { if (f) { DeleteFramebuffers(1, &f); f = 0; } };
@@ -1154,6 +1172,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
     }
     texCache_[key] = id;
+    if (id) touchQueue_.push_back({id, false});
     yieldLoad();                                       // after each texture decode / upload
     return id;
 }
@@ -1186,7 +1205,60 @@ GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
     }
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
     texCache_[key] = id;
+    if (id) touchQueue_.push_back({id, true});
     return id;
+}
+
+void Pipeline::touchNewTextures() {
+    if (touchQueue_.empty()) return;
+    static const bool off = std::getenv("WFC_NOTEXTOUCH") != nullptr;   // A/B
+    if (off) { touchQueue_.clear(); return; }
+    if (!touchProg2D_) {
+        const char* vs = "#version 330 core\nvoid main(){ gl_Position = vec4(0.0, 0.0, 0.0, 1.0); }\n";
+        const char* f2 = "#version 330 core\nuniform sampler2D uT; out vec4 o; void main(){ o = textureLod(uT, vec2(0.5), 0.0); }\n";
+        const char* fc = "#version 330 core\nuniform samplerCube uT; out vec4 o; void main(){ o = textureLod(uT, vec3(1.0, 0.0, 0.0), 0.0); }\n";
+        GLuint v = compile(GL_VERTEX_SHADER, vs, "touch.vs");
+        GLuint a = compile(GL_FRAGMENT_SHADER, f2, "touch2d.fs"), c = compile(GL_FRAGMENT_SHADER, fc, "touchcube.fs");
+        if (v && a) touchProg2D_ = link(v, a, "touch2d");
+        v = compile(GL_VERTEX_SHADER, vs, "touch.vs");
+        if (v && c) touchProgCube_ = link(v, c, "touchcube");
+        GenFramebuffers(1, &touchFbo_); glGenTextures(1, &touchTex_);
+        glBindTexture(GL_TEXTURE_2D, touchTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, touchFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, touchTex_, 0);
+        if (!touchProg2D_ || !touchProgCube_) { touchQueue_.clear(); BindFramebuffer(GL_FRAMEBUFFER, 0); return; }
+    }
+    GLint prevFbo = 0, prevProg = 0, vp[4];
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    glGetIntegerv(GL_VIEWPORT, vp);
+    const GLboolean depth = glIsEnabled(GL_DEPTH_TEST), blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
+    BindFramebuffer(GL_FRAMEBUFFER, touchFbo_);
+    glViewport(0, 0, 1, 1);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+    BindVertexArray(postVao_);
+    ActiveTexture(GL_TEXTURE0);
+    for (int pass = 0; pass < 2; ++pass) {
+        UseProgram(pass ? touchProgCube_ : touchProg2D_);
+        Uniform1i(GetUniformLocation(pass ? touchProgCube_ : touchProg2D_, "uT"), 0);
+        for (const auto& t : touchQueue_) {
+            if (t.second != (pass == 1)) continue;
+            glBindTexture(t.second ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D, t.first);
+            glDrawArrays(GL_POINTS, 0, 1);
+            ++touchedTextures_;
+        }
+    }
+    glBindTexture(GL_TEXTURE_2D, 0); glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    BindVertexArray(0);
+    touchQueue_.clear();
+    UseProgram((GLuint)prevProg);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    if (depth) glEnable(GL_DEPTH_TEST);
+    if (blend) glEnable(GL_BLEND);
+    if (cull) glEnable(GL_CULL_FACE);
 }
 
 // ------------------------------------------------------------------------- programs
@@ -1525,7 +1597,7 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
 }
 
 // ------------------------------------------------------------------------- meshes
-void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
+void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v, bool rawNormals) {
     size_t n = m.vertexCount();
     // scratch reused across calls (bot counts: per-draw allocations of the tangent frames were a measurable part of
     // the character vertex build); same values as before
@@ -1558,8 +1630,10 @@ void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
         float* o = &v[i * 14];
         o[0] = m.positions[i * 3]; o[1] = m.positions[i * 3 + 1]; o[2] = m.positions[i * 3 + 2];
         core::Vec3 N = hasN ? core::Vec3{m.normals[i * 3], m.normals[i * 3 + 1], m.normals[i * 3 + 2]} : core::Vec3{0, 1, 0};
+        const core::Vec3 Nraw = N;
         N = core::normalize(N);
-        o[3] = N.x; o[4] = N.y; o[5] = N.z;
+        if (rawNormals) { o[3] = Nraw.x; o[4] = Nraw.y; o[5] = Nraw.z; }   // blended in the VS, then normalized
+        else { o[3] = N.x; o[4] = N.y; o[5] = N.z; }
         if (given) {
             o[6] = m.tangents[i * 4]; o[7] = m.tangents[i * 4 + 1]; o[8] = m.tangents[i * 4 + 2]; o[9] = m.tangents[i * 4 + 3];
             o[10] = uv ? m.uv[i * 2] : 0.0f; o[11] = uv ? m.uv[i * 2 + 1] : 0.0f;
@@ -1845,6 +1919,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(uloc(P, "uVertexLM"), 0);
     Uniform4f(uloc(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
+    Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
+    Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
         Uniform1f(uloc(P, "uDSLS"), dsls);
@@ -2255,6 +2331,9 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = FrameCounts();
     deferTrans_ = false;                           // translucent draws immediately (no queue to flush)
     depthDirty_ = true;
+    touchNewTextures();                                // the load's textures, then the world
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, w, h);
     warmup_ = true;
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     draw(id, core::Mat4::identity());
@@ -2264,6 +2343,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     for (GpuMesh& gm : meshes_)
         for (Sub& sb : gm.subs) sb.envReady = false;
     const int draws = counts_.draws;
+    touchNewTextures();                                // anything the world draw created
     glFinish();
     viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;
     vpW_ = vw; vpH_ = vh;
@@ -2271,8 +2351,9 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms", draws, w, h,
-             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d textures so far)",
+             draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
+             touchedTextures_);
 }
 
 std::string Pipeline::frameRecordText(int frame) const {
@@ -2487,28 +2568,56 @@ void Pipeline::evictPosed(bool all) {
             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
             if (it->second.vbo) DeleteBuffers(1, &it->second.vbo);
             if (it->second.ibo) DeleteBuffers(1, &it->second.ibo);
+            if (it->second.prevVbo) DeleteBuffers(1, &it->second.prevVbo);
             it = posed_.erase(it);
         } else ++it;
     }
 }
 
-void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial) {
+void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial,
+                           const std::vector<float>* prevP, const std::vector<float>* prevN, float alpha) {
     if (m.empty()) return;
+    const bool blend = cacheKey && prevP && alpha < 1.0f && prevP->size() == m.positions.size();
     struct DynTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
         ~DynTimer() { gStats.dynTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.dynCalls; } } dynTimer;
     if (!finiteMat(model)) {
         reportNonFinite("dynamic model matrix", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
         return;
     }
-    core::Vec3 bmn{1e30f, 1e30f, 1e30f}, bmx{-1e30f, -1e30f, -1e30f};   // model-space bounds (one pass with the guard)
-    for (size_t i = 0; i + 2 < m.positions.size(); i += 3) {
-        const float x = m.positions[i], y = m.positions[i + 1], z = m.positions[i + 2];
-        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+    // model-space bounds (one pass with the non-finite guard). A posed buffer whose serial is unchanged reuses the
+    // bounds of its last scan (its vertices did not change: the drawDynamicMeshPosed contract).
+    auto scan = [&](const std::vector<float>& pos, core::Vec3& mn, core::Vec3& mx) {
+        mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
+        for (size_t i = 0; i + 2 < pos.size(); i += 3) {
+            const float x = pos[i], y = pos[i + 1], z = pos[i + 2];
+            if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) return false;
+            mn = {std::min(mn.x, x), std::min(mn.y, y), std::min(mn.z, z)};
+            mx = {std::max(mx.x, x), std::max(mx.y, y), std::max(mx.z, z)};
+        }
+        return true;
+    };
+    PosedBuf* pbp = nullptr;
+    bool same = false;
+    if (cacheKey) {
+        pbp = &posed_[cacheKey];
+        pbp->lastFrame = frameNo_;
+        same = pbp->vao && pbp->serial == serial && pbp->verts == m.vertexCount() && pbp->idx == m.indices.size() && pbp->blended == blend;
+    }
+    core::Vec3 bmn, bmx;
+    if (same) {
+        bmn = pbp->mn; bmx = pbp->mx;
+    } else {
+        core::Vec3 pmn, pmx;
+        if (!scan(m.positions, bmn, bmx) || (blend && !scan(*prevP, pmn, pmx))) {
             reportNonFinite("dynamic vertex position", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
             return;
         }
-        bmn = {std::min(bmn.x, x), std::min(bmn.y, y), std::min(bmn.z, z)};
-        bmx = {std::max(bmx.x, x), std::max(bmx.y, y), std::max(bmx.z, z)};
+        if (pbp) { pbp->mn = bmn; pbp->mx = bmx; if (blend) { pbp->pmn = pmn; pbp->pmx = pmx; } }
+    }
+    if (blend) {   // the blended pose's bounds: per-axis lerp of the two poses' bounds (each blended vertex lies inside)
+        auto lerp = [&](const core::Vec3& a, const core::Vec3& b) { return a + (b - a) * alpha; };
+        const core::Vec3 lo = lerp(pbp->pmn, bmn), hi = lerp(pbp->pmx, bmx);
+        bmn = lo; bmx = hi;
     }
     // Frustum cull (bot counts: off-screen characters were skinned-vertex built + uploaded + drawn every frame). The
     // world-space box of the posed mesh, grown by half its diagonal + 3 m (projected shadows, effects of a character
@@ -2528,15 +2637,13 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     if (offscreen) { ++counts_.culled; ++gStats.dynCulled; }
     GLuint drawVao = dynVao_;
     if (!offscreen && cacheKey) {   // drawDynamicMeshPosed: persistent buffers per MeshData, rebuilt on a new pose serial
-        PosedBuf& pb = posed_[cacheKey];
-        pb.lastFrame = frameNo_;
-        const bool same = pb.vao && pb.serial == serial && pb.verts == m.vertexCount() && pb.idx == m.indices.size();
+        PosedBuf& pb = *pbp;
         const bool fresh = !pb.vao;
         if (fresh) { GenVertexArrays(1, &pb.vao); GenBuffers(1, &pb.vbo); GenBuffers(1, &pb.ibo); }
         if (!same) {
             static std::vector<float> v;
             auto tb0 = std::chrono::steady_clock::now();
-            buildVertices(m, v);
+            buildVertices(m, v, blend);
             auto tb1 = std::chrono::steady_clock::now();
             BindVertexArray(pb.vao);
             BindBuffer(GL_ARRAY_BUFFER, pb.vbo);
@@ -2546,7 +2653,28 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
                 BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STATIC_DRAW);
             }
             setupAttribs();
+            if (blend) {   // prev pose stream: position + raw normal (cur's normal when the previous has none)
+                static std::vector<float> pv;
+                const size_t n = m.vertexCount();
+                const bool hasPN = prevN && prevN->size() == m.positions.size();
+                const bool hasN = m.normals.size() == m.positions.size();
+                pv.resize(n * 6);
+                for (size_t i = 0; i < n; ++i) {
+                    float* o = &pv[i * 6];
+                    o[0] = (*prevP)[i * 3]; o[1] = (*prevP)[i * 3 + 1]; o[2] = (*prevP)[i * 3 + 2];
+                    const std::vector<float>* nsrc = hasPN ? prevN : (hasN ? &m.normals : nullptr);
+                    o[3] = nsrc ? (*nsrc)[i * 3] : 0.0f; o[4] = nsrc ? (*nsrc)[i * 3 + 1] : 1.0f; o[5] = nsrc ? (*nsrc)[i * 3 + 2] : 0.0f;
+                }
+                if (!pb.prevVbo) GenBuffers(1, &pb.prevVbo);
+                BindBuffer(GL_ARRAY_BUFFER, pb.prevVbo);
+                BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(pv.size() * sizeof(float)), pv.data(), GL_STREAM_DRAW);
+                EnableVertexAttribArray(7); VertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+                EnableVertexAttribArray(8); VertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+            } else {
+                DisableVertexAttribArray(7); DisableVertexAttribArray(8);
+            }
             BindVertexArray(0);
+            pb.blended = blend;
             gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
             gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
             pb.serial = serial; pb.verts = m.vertexCount(); pb.idx = m.indices.size();
@@ -2588,13 +2716,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         if (mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; weapon = true; break; }
     }
     if (envForm_ >= 0) envForm_ += 16 * drawOwner_;   // per character instance (owner 0: keys 0 / 1)
-    if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh
-        core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
-        for (size_t i = 0; i < m.vertexCount(); ++i) {
-            core::Vec3 p{m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]};
-            mn = {std::min(mn.x, p.x), std::min(mn.y, p.y), std::min(mn.z, p.z)};
-            mx = {std::max(mx.x, p.x), std::max(mx.y, p.y), std::max(mx.z, p.z)};
-        }
+    if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh (the cull scan's bounds)
+        const core::Vec3 mn = bmn, mx = bmx;
         core::Vec3 c = core::transformPoint(model, (mn + mx) * 0.5f), e = (mx - mn) * 0.5f;
         envBoundsCenter_ = c;
         envBoundsExtent_ = {e.x, e.y, e.z};   // model scale is 1 for characters; yaw-only: axis-aligned extent kept
@@ -2632,6 +2755,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     // the owner's runtime parameters apply to its shadow caster / depth pre-pass too (M74: a dissolving Defrag body
     // must not cast or depth-write its whole silhouette)
     inDynamicDraw_ = true;
+    poseBlend_ = blend ? 1 : 0; poseAlpha_ = blend ? alpha : 1.0f;
     if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         const auto ts0 = std::chrono::steady_clock::now();
@@ -2640,6 +2764,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
+    poseBlend_ = 0; poseAlpha_ = 1.0f;
     inDynamicDraw_ = false;
     dynamicMaskDraw_ = false;
     envSamples_ = nullptr;
@@ -3015,7 +3140,20 @@ void Pipeline::ensureTargets(int w, int h) {
 }
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
+    touchNewTextures();                                // textures created since the last frame (loads, prewarms)
     ++frameNo_;
+    {   // WFC_RENDERSTATS: frame intervals over WFC_HITCH_MS (default 20) are logged by frame number, next to the
+        // "wfc first-use" lines (programs / textures / meshes created that frame) - first-appearance hitch evidence
+        static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
+        static const double thr = std::getenv("WFC_HITCH_MS") ? std::atof(std::getenv("WFC_HITCH_MS")) : 20.0;
+        static std::chrono::steady_clock::time_point last;
+        const auto now = std::chrono::steady_clock::now();
+        if (on && frameNo_ > 3) {
+            const double ms = std::chrono::duration<double, std::milli>(now - last).count();
+            if (ms > thr) LOG_INFO("wfc hitch: frame %d took %.1f ms", frameNo_ - 1, ms);
+        }
+        last = now;
+    }
     counts_ = FrameCounts();
     sceneColorCopied_ = false;
     frameMats_.clear();
