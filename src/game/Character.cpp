@@ -793,7 +793,7 @@ void Character::updateWeaponSocket() {
 void Character::snapshotPalettes() {
     // The previous step's palette exists only if that step's palette was built (drawn); else the next frames draw without the blend.
     for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) {
-        if (p->builtStep == stepCounter_) { p->prev = p->cur; p->prevModel = p->model; }
+        if (p->builtStep == stepCounter_) { p->prev.swap(p->cur); p->prevModel = p->model; p->builtStep = ~0u; }   // cur is rebuilt before its next use
         else { p->prev.clear(); p->prevModel = nullptr; }
     }
 }
@@ -878,7 +878,7 @@ void Character::draw(render::IRenderer& r) const {
             if (p.builtStep != stepCounter_ || p.model != &m) { buildPalette(m, globals, p.cur); p.model = &m; p.builtStep = stepCounter_; ++p.serial; }
             const bool blend = renderAlpha_ < 1.0f && p.prevModel == &m && p.prev.size() == p.cur.size();
             render::MeshData& bind = bindMeshOf(m);
-            bind.mats = m.mats;   // resolved texture handles
+            syncMats(bind.mats, m.mats);   // resolved texture handles
             return drawSkinnedGpu(r, bind, m.joints, m.weights, p.cur, blend ? &p.prev : nullptr, blend ? renderAlpha_ : 1.0f, world, color_, key,
                                   ((p.serial << 24) ^ prevVersion_ ^ salt), 0);
         };

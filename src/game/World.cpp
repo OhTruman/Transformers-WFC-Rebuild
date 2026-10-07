@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
@@ -2673,23 +2674,25 @@ void World::draw(render::IRenderer& r) const {
             o->setCulled(off);
         }
     }
+    // WFC_DRAWPROF: the gameplay side of World::draw (actors incl. pawns: palette / submit; participants' weapons), ms per frame.
+    static const bool drawProf = std::getenv("WFC_DRAWPROF") != nullptr;
+    static double dpActors = 0.0, dpWeapons = 0.0; static long dpN = 0;
+    const double dp0 = drawProf ? profNowMs() : 0.0;
+    // [integration M08] Each participant pawn is its own character instance for TnCharacterApplier (draw owner 100 + match
+    // player). [integration 09a] No customization paint and no energon override: participants carry none, so the chassis
+    // material defaults draw (energon is never team-tinted, RE b0d9b22). The local pawn stays owner 0. [integration 09c] The
+    // owner comes from a per-frame actor -> player map (it was a scan of opponents_ per actor: quadratic at 64).
+    std::unordered_map<const void*, int> partOwner; partOwner.reserve(opponents_.size());
+    for (const MatchOpponent* o : opponents_) partOwner.emplace(static_cast<const void*>(o), o->matchPlayer());
     for (const auto& a : actors_) {
         if (!a->alive()) continue;
-        // [integration M08] Each participant pawn is its own character instance for TnCharacterApplier (draw owner 100 +
-        // match player). [integration 09a] No customization paint and no energon override: participants carry none, so the
-        // chassis material defaults draw (energon is never team-tinted, RE b0d9b22).
-        // The local pawn stays owner 0 (colours from the selection at spawn).
-        int owner = 0;
-        for (const MatchOpponent* o : opponents_)
-            if (o == a.get()) {
-                owner = 100 + o->matchPlayer();
-                render::CharacterColors cc;
-                r.setDrawOwner(owner);
-                r.setCharacterColors(cc);
-            }
+        const auto it = partOwner.find(static_cast<const void*>(a.get()));
+        const int owner = it != partOwner.end() ? 100 + it->second : 0;
+        if (owner) { r.setDrawOwner(owner); r.setCharacterColors(render::CharacterColors{}); }
         a->draw(r);
         if (owner) r.setDrawOwner(0);
     }
+    if (drawProf) dpActors += profNowMs() - dp0;
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
     // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
@@ -2726,11 +2729,16 @@ void World::draw(render::IRenderer& r) const {
     }
 
     // Participants' held weapons (robot form, weapon shown), at their pawn's interpolated weapon socket.
+    const double dpw0 = drawProf ? profNowMs() : 0.0;
     for (const MatchOpponent* o : opponents_) {
         if (!o->spawned() || o->culled() || !o->pawn().hasWeapon()) continue;
         auto it = partWeapons_.find(o->matchPlayer());
         if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
         it->second.anim.draw(r, core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
+    }
+    if (drawProf) {
+        dpWeapons += profNowMs() - dpw0;
+        if (++dpN % 300 == 0) { LOG_INFO("DRAWPROF ms/frame (%zu participants): actors %.2f, participant weapons %.2f", match_.players().size(), dpActors / 300.0, dpWeapons / 300.0); dpActors = dpWeapons = 0.0; }
     }
     // Participant shots without a presentation hook: the weapon's authored templates by name [CONF WEPMESH data].
     for (const PendingShotFx& s : partShotFx_) {

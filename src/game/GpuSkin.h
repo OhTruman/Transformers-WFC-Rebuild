@@ -10,6 +10,13 @@
 
 namespace game {
 
+// Materials carry six strings each; only the resolved texture handles change after load. Copy the vector only when its shape
+// differs, else refresh the handles (no per-draw string allocation).
+inline void syncMats(std::vector<render::Material>& dst, const std::vector<render::Material>& src) {
+    if (dst.size() != src.size()) { dst = src; return; }
+    for (size_t i = 0; i < src.size(); ++i) { dst[i].tex = src[i].tex; dst[i].emissiveTexHandle = src[i].emissiveTexHandle; }
+}
+
 // IRenderer::drawSkinnedMesh (agents/rendering), compile-time detected: the renderer skins on the GPU from a bind mesh kept per model
 // plus this step's bone palette (and the previous step's for the blend, skinned twice and lerped exactly as the CPU path). Returns
 // false when the renderer cannot (no such method, too many joints, WFC_NOGPUSKIN): the CPU skin path draws instead.
