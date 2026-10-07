@@ -155,6 +155,19 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         if (changed(f.activeGrenades, sent_.activeGrenades)) call("NotifyActiveGrenadeCount", {*f.activeGrenades});
         if (changed(f.playerYaw, sent_.playerYaw)) call("NotifyPlayerRotationChanged", {*f.playerYaw});
         if (changed(f.lockOnState, sent_.lockOnState)) call("NotifyLockOnStateChanged", {*f.lockOnState});
+        // Markers: StartMarkerUpdate, one UpdateMarker per marker, FinishMarkerUpdate (removes the ones not updated).
+        // Sent while a marker is up, and once more when it goes (that Finish removes it). Stage units; UU = 1 cm.
+        if (f.lockOnMarker || (sentValid_ && sent_.lockOnMarker)) {
+            double sw = 0, sh = 0;
+            if (!f.lockOnMarker || !sentValid_ || !sent_.lockOnMarker || *f.lockOnMarker != *sent_.lockOnMarker) {
+                call("StartMarkerUpdate", {});
+                if (f.lockOnMarker && p->hudStageSize(sw, sh)) {
+                    const auto& m = *f.lockOnMarker;
+                    call("UpdateMarker", {m.id, m.distance * 100.0, m.x * sw, m.y * sh, m.inFront ? 1.0 : -1.0, "LockOn", m.description});
+                }
+                call("FinishMarkerUpdate", {});
+            }
+        }
         if (changed(f.targetName, sent_.targetName)) call("NotifyTargetNameChanged", {*f.targetName});
         if (changed(f.targetType, sent_.targetType)) call("NotifyTargetTypeChanged", {*f.targetType});
         if (changed(f.targetHealth, sent_.targetHealth)) call("NotifyTargetHealthChanged", {f.targetType.value_or(0), *f.targetHealth});
