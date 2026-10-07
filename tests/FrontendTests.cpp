@@ -6,6 +6,7 @@
 #include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
 #include "frontend/Hud.h"
+#include "frontend/InputPrompts.h"
 #include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
@@ -98,6 +99,42 @@ struct RecordingPresenter : frontend::IMoviePresenter {
     bool has(const std::string& c) const { return std::find(calls.begin(), calls.end(), c) != calls.end(); }
     int count(const std::string& prefix) const { int n = 0; for (const auto& c : calls) n += c.rfind(prefix, 0) == 0; return n; }
 };
+
+static void testInputPrompts(const Catalog& c) {
+    frontend::InputPrompts ip;
+    check(ip.load(c.extractedRoot()), "prompts.load_original_tables");
+    // TranslateCommandsInString: ^COMMAND -> key -> ActionScript; console glyph tokens on the pad, PC key text otherwise
+    check(ip.translate("Hold ^PICKUP for `p", true) == "Hold {x} for `p", "prompts.pad_token", ip.translate("Hold ^PICKUP for `p", true));
+    check(ip.translate("Hold ^PICKUP for `p", false) == "Hold <font color='#FF9333'>E</font> for `p", "prompts.pc_key_text",
+          ip.translate("Hold ^PICKUP for `p", false));
+    check(ip.translate("Press ^USE_KILL_STREAK to activate `k", true) == "Press {dleft} to activate `k", "prompts.killstreak_pad");
+    check(ip.translate("^THROW_GRENADE, ^JUMP.", false) == "<font color='#FF9333'>G</font>, <font color='#FF9333'>SPACE</font>.",
+          "prompts.token_ends_at_punctuation", ip.translate("^THROW_GRENADE, ^JUMP.", false));
+    check(ip.translate("^NOT_A_COMMAND x ^", false) == "^NOT_A_COMMAND x ^", "prompts.unbound_token_stays");
+    bool allBound = true;
+    for (const auto& [cmd, key] : frontend::InputPrompts::pcCommandKeys()) if (ip.pcKeyText(key).empty()) { allBound = false; check(false, "prompts.pc_key_exists", cmd + " -> " + key); }
+    check(allBound, "prompts.every_pc_command_has_original_text");
+    // the shipped strings per device: base = PC key text, _360 = console tokens
+    {
+        Catalog& cc = const_cast<Catalog&>(c);
+        const std::string pc = cc.localizeKey("$UIText.Hud.Reload");
+        cc.setConsoleStrings(true);
+        const std::string console = cc.localizeKey("$UIText.Hud.Reload");
+        cc.setConsoleStrings(false);
+        check(pc == "<font color='#FF9333'>R</font> Reload" && console == "{x} Reload", "prompts.pc_and_console_strings", pc + " | " + console);
+    }
+    // last-used device: pad / keys switch at once, the mouse only after real travel
+    frontend::InputDevice d;
+    check(!d.pad(), "device.pc_default_keyboard");
+    d.update(true, false, 0, 0, 0.016f);
+    check(d.pad(), "device.pad_switches");
+    d.update(false, false, 5, 3, 0.016f); d.update(false, false, 0, 0, 0.3f); d.update(false, false, 6, 0, 0.016f);
+    check(d.pad(), "device.mouse_nudge_keeps_pad");
+    for (int i = 0; i < 6; ++i) d.update(false, false, 10, 0, 0.016f);
+    check(!d.pad(), "device.mouse_travel_switches");
+    d.update(true, false, 0, 0, 0.016f); d.update(false, true, 0, 0, 0.016f);
+    check(!d.pad(), "device.key_switches");
+}
 
 static void testHudObservers(const Catalog& c) {
     using frontend::HudController; using frontend::HudFrame;
@@ -425,6 +462,7 @@ int main() {
     testRecommendedBots();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
+    if (ok) testInputPrompts(c);
     testUIController();
     testSceneCamera();
     if (ok) testFlow();

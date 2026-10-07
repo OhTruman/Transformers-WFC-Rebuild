@@ -92,6 +92,8 @@ bool GfxMovie::open(const GfxLibrary& lib, const frontend::Catalog* catalog, con
         return o != textureOverrides.end() ? o->second : lib.externalTexture(r);
     };
     p.fontLibPath = lib.fontLib();
+    p.glyphLabel = [&lib, object](const std::string& image) { return lib.glyphLabel ? lib.glyphLabel(object, image) : std::string(); };
+    p.promptGen = &lib.promptGen;
     p.fontMap = lib.fontMap();
     if (catalog) p.translator = [catalog](const std::string& k) { return catalog->localizeKey(k); };
     p.vm().externalCall = [this, ec](const std::string& fn, gfx::avm1::Args& a) { return ec ? ec(*this, fn, a) : gfx::avm1::Value(); };

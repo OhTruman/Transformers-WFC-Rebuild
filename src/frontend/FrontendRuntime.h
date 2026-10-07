@@ -19,6 +19,7 @@
 #include "frontend/Characters.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/Hud.h"
+#include "frontend/InputPrompts.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
 #include "platform/Movie.h"
@@ -67,6 +68,8 @@ public:
     virtual void setWorldLabels(const std::vector<WorldLabel>& labels) { (void)labels; }   // DEV TOOL overlay text
     // The HUD movie's visible stage in its own units (Hud_GFX Stage.width / height): marker screen coordinates.
     virtual bool hudStageSize(double& w, double& h) const { (void)w; (void)h; return false; }
+    // Keyboard prompts: pad glyphs (pad = true) or key text in the movies' button glyph slots.
+    virtual void setPadPrompts(bool pad) { (void)pad; }
     // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
     // movie is opened without focus if it is not, and the call is made once it has run its first frame.
     virtual void movieCall(const std::string& movie, const std::string& fn, const std::vector<BridgeValue>& args) {
@@ -88,6 +91,7 @@ public:
     bool finished() const { return !steps_.empty() && pos_ >= steps_.size(); }
     void update(GameFlow& flow, float dt);
     std::function<void(int code, bool down)> keyHook;          // key:<code>
+    std::function<void(const std::string& button, bool down)> padHook;   // pad:<button> (IWindow::injectPad)
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
@@ -113,6 +117,7 @@ private:
     size_t pos_ = 0;
     float waitTimer_ = 0.0f;
     int keyUp_ = -1;
+    std::string padUp_;
 };
 
 class FrontendRuntime {
@@ -176,6 +181,8 @@ public:
     // Sound -> Systems audio, Self / Debug -> movie host. movie = the calling GFx movie object.
     BridgeValue bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args);
     const Catalog& catalog() const { return catalog_; }
+    const InputPrompts& prompts() const { return prompts_; }
+    bool padPrompts() const { return device_.pad(); }
     // The SKU the shipped movies present (HmUtility.Platform, from $version): "WIN" = the PC SKU's authored branches
     // (default; WFC shipped on PC) or "XBOX360" (WFC_PLATFORM=XBOX360, the console presentation of the dump).
     const std::string& platform() const { return platform_; }
@@ -226,6 +233,10 @@ private:
     BridgeValue commitCharacter(const std::vector<std::string>& args);
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
+    InputPrompts prompts_;          // ^COMMAND -> key text (TnInputCommandToBindingMapper)
+    InputDevice device_;            // the last-used device (prompts)
+    int lastMouseX_ = -1, lastMouseY_ = -1;
+    void updateInputDevice(const platform::InputFrame& in, float dt);
     bool scoreboard_ = false;
     uint32_t prevMatchUi_ = 0;
     IFrontendSceneRenderer* sceneRenderer_ = nullptr;

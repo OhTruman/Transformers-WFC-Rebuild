@@ -35,6 +35,10 @@ struct InputFrame {
     int   mouseX = -1, mouseY = -1;
     bool  mouseLeft = false, mouseRight = false;
     float mouseWheel = 0.0f;      // notches this frame (+ = away from the user)
+    // Device activity this frame (the last-used device for button prompts): any pad button / stick / trigger, any bound
+    // key or mouse button.
+    bool  padActive = false;
+    bool  keyActive = false;
     // Text entry (UI input fields): characters typed this frame (WM_CHAR, UTF-32) and raw key presses including
     // auto-repeat (Win32 virtual-key codes), in order.
     std::u32string text;

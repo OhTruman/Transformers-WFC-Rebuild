@@ -36,6 +36,8 @@ public:
     void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     bool hudStageSize(double& w, double& h) const override;
+    void setPadPrompts(bool pad) override;
+    void installGlyphLabels();
     void setWorldLabels(const std::vector<frontend::WorldLabel>& labels) override { worldLabels_ = labels; }
     void movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {
@@ -77,6 +79,7 @@ private:
 
     frontend::FrontendRuntime& rt_;
     GfxLibrary lib_;
+    bool padPrompts_ = false;
     GfxRendererGL gl_;
     bool glReady_ = false;
     struct Open { std::string object; std::unique_ptr<GfxMovie> movie; };

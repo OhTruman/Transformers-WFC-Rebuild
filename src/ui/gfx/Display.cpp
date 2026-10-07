@@ -424,6 +424,7 @@ DisplayObject* Player::instantiate(MovieClip* parent, const std::shared_ptr<cons
         if (e.hasText) {
             std::string txt = translate(e.initialText);
             if (e.html) t->setHtmlText(txt); else t->setPlainText(txt);
+            if (e.initialText.size() > 1 && e.initialText[0] == '$') { t->srcKey = e.initialText; t->srcHtml = e.html; }
         }
         obj = std::move(t);
         break;

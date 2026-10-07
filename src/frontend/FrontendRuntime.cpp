@@ -89,6 +89,7 @@ void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
 void ScriptDriver::update(GameFlow& flow, float dt) {
     if (!synthQueue_.empty()) { synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin()); return; }
     if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
+    if (!padUp_.empty()) { if (padHook) padHook(padUp_, false); padUp_.clear(); return; }
     while (pos_ < steps_.size()) {
         const std::string& st = steps_[pos_];
         if (st.rfind("wait:", 0) == 0) {
@@ -132,6 +133,13 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             FlowTrace::emit("script.key", {{"code", std::to_string(code)}});
             if (keyHook) keyHook(code, true);
             keyUp_ = code;
+            return;
+        }
+        if (st.rfind("pad:", 0) == 0) {   // a pad button (binding name), held for one frame through the XInput layer
+            FlowTrace::emit("script.pad", {{"button", st.substr(4)}});
+            if (padHook) padHook(st.substr(4), true);
+            else LOG_WARN("FRONTEND script: pad: needs the window's injectPad hook");
+            padUp_ = st.substr(4);
             return;
         }
         if (st.rfind("ui:", 0) == 0) {   // a logical UI command (UiBindings action name), pressed for one frame
@@ -198,6 +206,8 @@ bool FrontendRuntime::init() {
     FlowTrace::emit("platform", {{"sku", platform_}});
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
+    if (!prompts_.load(Catalog::defaultExtractedRoot())) LOG_WARN("frontend: TnInputCommandToBindingMapper tables not found");
+    hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });
     GameFlow::Options o;
     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
     if (const char* s = std::getenv("WFC_FLOWSEED")) o.seed = (unsigned)std::strtoul(s, nullptr, 10);
@@ -845,7 +855,7 @@ void FrontendRuntime::progressionXp(const XpEvent& e) {
     const long award = canGainXp_ ? e.xp : 0;
     if (presenter_)
         presenter_->hudCall("_global.PointEvent", {BridgeValue(e.transactionId), BridgeValue((double)award), BridgeValue(e.announcement),
-                                                   BridgeValue(e.description), BridgeValue(e.extra)});
+                                                   BridgeValue(prompts_.translate(e.description, device_.pad())), BridgeValue(e.extra)});
     std::vector<progression::LevelUp> ups;
     if (award > 0) { progression::LevelUp u = progression::addXp(ps, sp, award); if (u.specialty >= 0) ups.push_back(u); }
     FlowTrace::emit("progression.xp", {{"transaction", std::to_string(e.transactionId)}, {"xp", std::to_string(award)},
@@ -1121,9 +1131,26 @@ void FrontendRuntime::updateScene(float dt) {
     }
 }
 
+// The last-used device for button prompts (PC ADAPTATION, hysteresis in InputDevice); a switch re-lays the movies'
+// glyph slots and re-sends the HUD's translated prompts.
+void FrontendRuntime::updateInputDevice(const platform::InputFrame& in, float dt) {
+    float dx = in.mouseDX, dy = in.mouseDY;
+    if (in.mouseX >= 0 && lastMouseX_ >= 0) { dx += (float)(in.mouseX - lastMouseX_); dy += (float)(in.mouseY - lastMouseY_); }
+    lastMouseX_ = in.mouseX; lastMouseY_ = in.mouseY;
+    const bool was = device_.pad();
+    device_.update(in.padActive, in.keyActive || in.mouseLeft || in.mouseRight, dx, dy, dt);
+    if (device_.pad() != was) {
+        FlowTrace::emit("input.device", {{"device", device_.pad() ? "pad" : "keyboard"}});
+        catalog_.setConsoleStrings(device_.pad());   // the shipped _360 strings on the pad, the PC strings otherwise
+        if (presenter_) presenter_->setPadPrompts(device_.pad());
+        hud_.promptsChanged();
+    }
+}
+
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
     script_.applySynthetic(in);
+    updateInputDevice(in, dt);
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
     { core::prof::Scope prof("shims"); runNativeShims(); }
     { core::prof::Scope prof("movie.player"); updateMoviePlayer(dt, in); }
@@ -1144,6 +1171,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
     script_.applySynthetic(in);
+    updateInputDevice(in, dt);
     flow_.tick(dt);
     // [integration M05] The movie player runs in the match too: the loading underlay (TF_LoadingScreen Bink) is
     // released once the loading screen closes. Without this its last frame (black + "LOADING..." spinner) stayed

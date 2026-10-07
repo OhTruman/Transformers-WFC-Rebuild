@@ -26,6 +26,10 @@ public:
     const std::string& fontLib() const { return fontLib_; }
     const std::map<std::string, std::string>& fontMap() const { return fontMap_; }
     const std::string& extractedRoot() const { return extracted_; }
+    // Keyboard prompts (PC ADAPTATION): a Gamepad* glyph's key text for a movie object ("" = draw the glyph), and the
+    // generation every movie's text layout follows (bumped when the input device switches).
+    std::function<std::string(const std::string& object, const std::string& image)> glyphLabel;
+    unsigned promptGen = 0;
 
 private:
     std::map<std::string, std::string> byBase_;      // lower("SharedComponents_GFX") -> path

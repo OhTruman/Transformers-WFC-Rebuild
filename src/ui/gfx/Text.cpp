@@ -240,11 +240,19 @@ std::string TextField::htmlText() const {
 }
 
 void TextField::layout() {
-    if (!layoutDirty) return;
+    const unsigned gen = player->promptGen ? *player->promptGen : 0u;
+    if (!layoutDirty && ((imageSubs.empty() && srcKey.empty()) || promptGen == gen)) return;
+    if (promptGen != gen && !srcKey.empty()) {   // the device switched: the $key's text for the new device
+        const std::string k = srcKey;
+        const bool h = srcHtml;
+        if (h) setHtmlText(player->translate(k)); else setPlainText(player->translate(k));
+        srcKey = k; srcHtml = h;
+    }
     layoutDirty = false;
+    promptGen = gen;
     glyphs.clear();
     const float gutter = 2.0f * 20.0f;
-    struct Item { char16_t c; int fmt; const FontDef* font; int glyph; float adv; float size; int sub = -1; };
+    struct Item { char16_t c; int fmt; const FontDef* font; int glyph; float adv; float size; int sub = -1; bool keyText = false; };
     std::vector<Item> items;
     items.reserve(chars.size());
     float shrink = 1.0f;
@@ -259,6 +267,26 @@ void TextField::layout() {
             for (size_t k = 0; k < imageSubs.size(); ++k) {
                 const std::u16string& key = imageSubs[k].key;
                 if (!key.empty() && chars.compare(i, key.size(), key) == 0) { subHit = (int)k; break; }
+            }
+            // Keyboard prompts (PC ADAPTATION): the glyph's key text instead, in the original PC prompt colour.
+            std::string label = subHit >= 0 && player->glyphLabel ? player->glyphLabel(imageSubs[(size_t)subHit].path) : std::string();
+            if (!label.empty()) {
+                for (unsigned char lc : label) {
+                    Item it{(char16_t)lc, charFormat[i], font, -1, 0, size, -1, true};
+                    if (font) {
+                        auto g = font->codeToGlyph.find((char16_t)lc);
+                        if (g != font->codeToGlyph.end()) {
+                            it.glyph = g->second;
+                            float adv = (size_t)it.glyph < font->advances.size() ? font->advances[(size_t)it.glyph] : font->emSize() * 0.5f;
+                            it.adv = adv * size / font->emSize();
+                        } else if (lc == ' ') {
+                            it.adv = size * 0.25f;
+                        }
+                    }
+                    items.push_back(it);
+                }
+                i += imageSubs[(size_t)subHit].key.size() - 1;
+                continue;
             }
             if (subHit >= 0) {
                 Item im{0xFFFC, charFormat[i], font, -1, imageSubs[(size_t)subHit].w * 20.0f * shrink, size, subHit};
@@ -371,6 +399,7 @@ void TextField::layout() {
                     GlyphRun g;
                     g.font = it.font; g.glyph = it.glyph; g.x = boxMin + x; g.y = bounds.ymin + y; g.size = it.size;
                     g.color = formats[(size_t)it.fmt].color;
+                    if (it.keyText) { g.color.r = 0xFF; g.color.g = 0x93; g.color.b = 0x33; }   // #FF9333 (TransGame_PC.int)
                     out.push_back(g);
                 }
                 x += it.adv;

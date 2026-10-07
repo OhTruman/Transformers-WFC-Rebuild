@@ -43,6 +43,9 @@ public:
     // PC EXTENSION (not in the original): cap presented frames per second (0 = no cap). Waits after the swap only, so
     // fixed-step simulation is unaffected.
     virtual void setFrameLimit(int fps) { (void)fps; }
+    // DEV TOOL (scripted pad coverage): hold / release a pad button by its binding name ("A", "DPadDown", "LStickUp", ...)
+    // as if read from XInput; it is ORed into the pad state, so it reaches the same name -> UiKey bindings as a real pad.
+    virtual void injectPad(const std::string& button, bool down) { (void)button; (void)down; }
     virtual bool vsync() const = 0;
 };
 

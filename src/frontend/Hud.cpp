@@ -180,11 +180,15 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         if (changed(f.increaseDamage, sent_.increaseDamage)) call("NotifyDamageIncrease", {*f.increaseDamage});
         if (f.contextualPrompts) {
             static const std::vector<std::string> kNone;
-            const auto& was = sentValid_ && sent_.contextualPrompts ? *sent_.contextualPrompts : kNone;
+            const auto& was = sentValid_ && sent_.contextualPrompts && !promptsDirty_ ? *sent_.contextualPrompts : kNone;
             auto in = [](const std::vector<std::string>& v, const std::string& t) { return std::find(v.begin(), v.end(), t) != v.end(); };
-            for (const auto& t : was) if (!in(*f.contextualPrompts, t)) call("NotifyContextualCommand", {0, 1, t});
-            for (const auto& t : *f.contextualPrompts) if (!in(was, t)) call("NotifyContextualCommand", {0, 0, t});
+            auto tr = [&](const std::string& t) { return translate_ ? translate_(t) : t; };
+            // A device switch: CommandText '' with Action 1 removes every prompt (Hud_GFX notifyManager), then all again.
+            if (promptsDirty_ && sentValid_ && sent_.contextualPrompts && !sent_.contextualPrompts->empty()) call("NotifyContextualCommand", {0, 1, ""});
+            for (const auto& t : was) if (!in(*f.contextualPrompts, t)) call("NotifyContextualCommand", {0, 1, tr(t)});
+            for (const auto& t : *f.contextualPrompts) if (!in(was, t)) call("NotifyContextualCommand", {0, 0, tr(t)});
         }
+        promptsDirty_ = false;
         if (f.cantTransformCount && sentValid_ && sent_.cantTransformCount)
             for (int i = *sent_.cantTransformCount; i < *f.cantTransformCount; ++i) call("NotifyCantTransform", {});
         if (!sentValid_ || f.spectating != sent_.spectating) {
