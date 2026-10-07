@@ -130,6 +130,7 @@ struct Program {
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
     int instProg = -1;            // instanced character variant (per-instance uniforms from the instance texture)
+    int mdiProg = -1;             // world MDI variant (per-draw constants from the row texture, row via aDrawRow)
 
     int instRtCount = 0;          // runtime params laid out in the instance row (sorted by name)
     float clip = 0.3333f;
@@ -252,6 +253,7 @@ private:
         int prog = -1;
         std::string matName;      // original material path (diagnostics)
         int matKey = -1;          // interned matName (per-frame distinct-material count without hashing the string)
+        int mdiRow = -1;          // world MDI: this sub's row in the per-draw constant texture (-1 = drawn singly)
         std::string comp;         // source component (diagnostics: WFC_SKIPMAT "comp:<substring>")
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
@@ -390,6 +392,22 @@ private:
     // a program is linked (recycled names start from defaults).
     struct CommonKey { float v[34]; bool valid = false; };
     std::vector<CommonKey> commonKeyById_;
+    // World MDI (WFC_MDI=1, opt-in until verified on every map): the world's opaque, static, non-vertex-lightmapped
+    // subs are drawn per (program, lightmap page) bucket with glMultiDrawElementsIndirect. Each sub's per-draw
+    // constants (lightmap coordinate transform / scale, static light environment) live in a row of an RGBA32F
+    // texture; the row index reaches the shaders through a divisor-1 vertex attribute (location 11) and the command's
+    // baseInstance. Per frame only the CPU frustum cull writes the indirect commands. Draw ORDER among those opaque
+    // subs changes (exact except equal-depth ties: verified by image A/B per map).
+    struct MdiBucket { int prog; int lm[3]; std::vector<uint32_t> subs; };
+    std::vector<MdiBucket> mdiBuckets_;
+    long mdiMesh_ = -1;
+    GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
+    std::vector<float> mdiRows_;                           // CPU copy (light environments filled at first sight)
+    std::vector<char> mdiEnvFilled_;
+    bool mdiWanted_ = false, mdiBuild_ = false;
+    static constexpr int kMdiW = 24;
+    void buildMdi(int meshId);
+    void drawMdi(GpuMesh& g);
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;

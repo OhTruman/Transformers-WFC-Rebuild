@@ -137,6 +137,8 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, DebugMessageControl, (GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)) \
     X(GLenum, GetGraphicsResetStatus, (void)) \
     X(void, DrawElementsInstanced, (GLenum, GLsizei, GLenum, const void*, GLsizei)) \
+    X(void, MultiDrawElementsIndirect, (GLenum, GLenum, const void*, GLsizei, GLsizei)) \
+    X(void, VertexAttribDivisor, (GLuint, GLuint)) \
     X(void, GenQueries, (GLsizei, GLuint*)) \
     X(void, DeleteQueries, (GLsizei, const GLuint*)) \
     X(void, BeginQuery, (GLenum, GLuint)) \
