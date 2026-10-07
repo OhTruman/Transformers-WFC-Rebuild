@@ -175,6 +175,7 @@ bool Application::init() {
     if (std::getenv("WFC_VEHFRAMETEST")) { runVehicleFrameTest(); return false; }   // the same drive at 60 / 120 / 240 fps
     if (const char* ss = std::getenv("WFC_STUCKSPOT")) { runStuckSpot(ss); return false; }   // what blocks a robot at a spot
     if (std::getenv("WFC_MARKERSTEST")) { runMarkersTest(); return false; }        // presented().markers per mode (RE 7bb8ec1 rules)
+    if (std::getenv("WFC_ENGAGETEST")) { runEngageTest(); return false; }          // bots engage the local player
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5370,6 +5371,47 @@ void Application::runMarkersTest() {
         if (md == "EXT") check(n("Bomb") == 1 && n("BombPlantPoint") <= 1, "EXT: the bomb + at most the target plant point (" + std::to_string(n("BombPlantPoint")) + ")");
     }
     LOG_INFO("MARKERS SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_ENGAGETEST: bots engage the local player. TDM vs 3 enemy bots; the local pawn is placed 8 m in front of an enemy bot, facing it,
+// and stays put for 10 s: a bot must target the local player and its damage must reach presented().damageTaken / damageTakenCount.
+void Application::runEngageTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("ENGAGE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsEnemy=3?BotDifficulty=2?TimeLimit=600", L);
+    if (!world_.launchMatch(L)) { check(false, "launch"); return; }
+    for (int i = 0; i < 60 * 30 && (world_.match().state() != game::Match::State::InProgress || world_.localPlayerDead()); ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+    const int me = world_.localMatchPlayer();
+    game::MatchOpponent* enemy = nullptr;
+    for (game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), me)) { enemy = o; break; }
+    if (!enemy) { check(false, "an enemy bot spawned"); return; }
+    game::Character& pc = world_.player().pawn();
+    const core::Vec3 ep = enemy->pawn().position();
+    const core::Vec3 f = core::forwardFromYawPitch(enemy->pawn().yaw(), 0.0f);
+    pc.setPosition(ep + f * 8.0f); pc.velocity() = {0, 0, 0}; pc.groundY = pc.position().y;
+    world_.player().controller().setCameraYaw(enemy->pawn().yaw() + 3.14159265f);
+    const int dmg0 = world_.hudState().damageTakenCount;
+    const float hp0 = pc.health().current;
+    int targetedSteps = 0, taken = 0;
+    world_.consumePresented();
+    for (int i = 0; i < 60 * 10 && !world_.localPlayerDead(); ++i) {
+        world_.handleInput(idle, dt); world_.tick(dt);
+        for (const game::BotBrain& b : world_.botBrains()) targetedSteps += b.target == me;
+        taken += (int)world_.presented().damageTaken.size();
+        world_.consumePresented();
+    }
+    LOG_INFO("ENGAGE: bot-steps targeting the local player %d; damage events %d; damageTakenCount +%d; health %.0f -> %.0f%s", targetedSteps, taken,
+             world_.hudState().damageTakenCount - dmg0, hp0, pc.health().current, world_.localPlayerDead() ? " (killed)" : "");
+    check(targetedSteps > 0, "bots target the local player");
+    check(taken > 0 || world_.localPlayerDead(), "their damage reaches presented().damageTaken");
+    if (world_.localPlayerDead()) {   // TnTombstone marker at the death, visible to everyone, LifeSpan 8 s (RE 806f8cd)
+        int tombs = 0; float life = -1.0f;
+        for (const auto& mk : world_.presented().markers) if (mk.type == "TnObjectiveMarkerTypeTombstone") { ++tombs; life = mk.lifeSpan; }
+        check(tombs >= 1 && life > 0.0f && life <= 8.0f, "a tombstone marker for the death (" + std::to_string(tombs) + ", lifeSpan " + std::to_string(life) + ")");
+    }
+    LOG_INFO("ENGAGE SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

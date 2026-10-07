@@ -272,7 +272,14 @@ private:
     float matchTime_ = 0.0f;
     std::string endReason_;
     int winnerPlayer_ = -1;   // per victim: (instigator, damage) in first-hit order
-    struct Tombstone { core::Vec3 pos; int team; };
+    // TnTombstone [CONF RE 806f8cd]: at the victim's location, TeamNum = the victim's team, LifeSpan 8 s (the spawn modifier and the
+    // marker expire with it). Every player death; the rebuild's bots count as players (PC ADAPTATION, as their scoring).
+    struct Tombstone { core::Vec3 pos; int team; float time = 0.0f; unsigned serial = 0; };
+public:
+    static constexpr float kTombstoneLifeSpan = 8.0f;
+    const std::vector<Tombstone>& tombstones() const { return tombstones_; }
+private:
+    unsigned tombstoneSerial_ = 0;
     std::vector<Tombstone> tombstones_;
     unsigned rng_ = 0x1234ABCDu;
     int randomInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (unsigned)n) : 0; }
