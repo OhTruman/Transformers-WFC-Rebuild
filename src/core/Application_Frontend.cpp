@@ -402,7 +402,9 @@ void Application::attachPresenter() {
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
         { core::prof::Scope prof("movie.prewarm"); frontend_->prewarmLoadingUnderlay(); }   // still under the loading screen
-        if (frontend_->flow().level() == frontend::LevelKind::PartyLobby) {
+        // Both lobbies offer Create a Character: the party lobby, and the private game lobby a match returns to (a match
+        // load clears the renderer's parsed-AnimSet cache, so a class pick there re-parsed on a visible frame: 714 ms).
+        if (frontend_->flow().level() == frontend::LevelKind::PartyLobby || frontend_->flow().level() == frontend::LevelKind::GameLobby) {
             core::setLoadYield([this](double dt) {
                 platform::InputFrame in;
                 window_->pump(in);
