@@ -796,11 +796,29 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
 // Bots yield to the local player (the human moves only when the bot cannot), so a crowd never shoves or pins the human.
 void World::separatePawns() {
     if (!matchActive_) return;
-    struct P { Character* c; };
-    std::vector<P> ps;
-    ps.reserve(opponents_.size() + 1);
-    if (!localDead_) ps.push_back({&player_.pawn()});
-    for (MatchOpponent* o : opponents_) if (o->spawned()) ps.push_back({&o->pawn()});
+    // R: a conservative XZ reach about position() (robot cylinder; vehicle mesh box: its offset from the position + circumradius). A pair
+    // farther apart than R_i + R_j cannot interact in either branch below, so it is skipped before the exact tests (same pairs, same
+    // order, same pushes; positions are read as they change). 2 passes x N^2 / 2 pairs at 64 pawns.
+    struct P { Character* c; float r; };
+    static std::vector<P> ps;
+    ps.clear();
+    auto reach = [](Character& c) {
+        float r = c.cylinderRadius(c.moveForm());
+        if (c.moveForm() == Form::Vehicle) {
+            r = std::max(r, c.cylinderRadius(Form::Vehicle));
+            core::Vec3 mn, mx;
+            if (c.vehicleBoundsXZ(mn, mx)) {
+                const core::Mat4 m = c.meshMatrix(Form::Vehicle);
+                const float ox = m.m[12] - c.position().x, oz = m.m[14] - c.position().z;
+                const float cx = std::max(std::fabs(mn.x), std::fabs(mx.x)), cz = std::max(std::fabs(mn.z), std::fabs(mx.z));
+                const float sx = std::sqrt(m.m[0] * m.m[0] + m.m[2] * m.m[2]), sz = std::sqrt(m.m[8] * m.m[8] + m.m[10] * m.m[10]);   // box axes scale
+                r = std::max(r, std::sqrt(ox * ox + oz * oz) + std::sqrt(cx * cx * sx * sx + cz * cz * sz * sz));
+            }
+        }
+        return r + 0.01f;
+    };
+    if (!localDead_) ps.push_back({&player_.pawn(), reach(player_.pawn())});
+    for (MatchOpponent* o : opponents_) if (o->spawned()) ps.push_back({&o->pawn(), reach(o->pawn())});
     const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
     auto tryMove = [&](Character& c, const core::Vec3& d) {
         // The pushed pawn keeps its whole radius clear of walls (knee and centre height): a push never wedges a pawn into a pocket
@@ -823,6 +841,7 @@ void World::separatePawns() {
         for (size_t j = i + 1; j < ps.size(); ++j) {
             Character& A = *ps[i].c; Character& B = *ps[j].c;
             const core::Vec3 pa = A.position(), pb = B.position();
+            { const float dx = pb.x - pa.x, dz = pb.z - pa.z, rr = ps[i].r + ps[j].r; if (dx * dx + dz * dz >= rr * rr) continue; }   // cannot touch
             if (std::fabs(pa.y - pb.y) >= A.cylinderHalfHeight(A.moveForm()) + B.cylinderHalfHeight(B.moveForm())) continue;
             const bool va = A.moveForm() == Form::Vehicle, vb = B.moveForm() == Form::Vehicle;
             const bool humanA = &A == &player_.pawn();   // the local pawn is only ever ps[0]
@@ -1130,12 +1149,12 @@ struct TickProf {
     static bool env() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
     static bool& forced() { static bool f = false; return f; }   // World::setStepProfiling (WFC_SCALETEST)
     static bool on() { return env() || forced(); }
-    double acc[27] = {}; long n = 0;
-    const char* names[27] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+    double acc[29] = {}; long n = 0;
+    const char* names[29] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
                              "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
                              // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
                              // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
-                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues"};
+                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
 }
@@ -1144,10 +1163,10 @@ void World::setStepProfiling(bool on) { TickProf::forced() = on; }
 void World::stepProfileReset() { for (double& a : tickProf().acc) a = 0.0; }
 std::vector<std::pair<std::string, double>> World::stepProfileSums() {
     std::vector<std::pair<std::string, double>> v;
-    for (int i = 0; i < 27; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
+    for (int i = 0; i < 29; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
     return v;
 }
-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 27) tickProf().acc[slot] += ms; }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 29) tickProf().acc[slot] += ms; }
 namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
@@ -1274,7 +1293,7 @@ void World::tickPrefix(float dt) {
     struct PrefixTime { double& acc; double t0 = profNowMs(); ~PrefixTime() { acc += profNowMs() - t0; } } prefixTime{prefixMsAcc_};
     if (TickProf::env() && ++tickProf().n % 300 == 0) {
         std::string line;
-        for (int i = 0; i < 27; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        for (int i = 0; i < 29; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step (this local part + the background part)
@@ -1398,11 +1417,18 @@ void World::stepRemainder(float dt) {
         // pawn and reads the static collision, so they run on the worker pool in any order with the same result (deterministic).
         TickTimer tt(4);
         const CollisionWorld* col = collision();
+        // WFC_TICKPROF slots 4 / 5 while profiling: oppMove = the pool's wall time; oppAnim = animation CPU time summed over the workers.
+        static std::vector<double> animMs;
+        const bool prof = TickProf::on();
+        if (prof) animMs.assign(opponents_.size(), 0.0);
         core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
             MatchOpponent* o = opponents_[(size_t)i];
             o->simulateMovement(dt, col);
+            const double a0 = prof ? profNowMs() : 0.0;
             o->simulateAnimation(dt);
+            if (prof) animMs[(size_t)i] = profNowMs() - a0;
         });
+        if (prof) { double sum = 0.0; for (double m : animMs) sum += m; tickProfAdd(5, sum); }
     }
     { TickTimer tt(6); tickParticipantWeapons(dt); }
     for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
@@ -3736,6 +3762,9 @@ void World::requestSentry(int owner) {
 }
 
 void World::spawnSentry(Sentry& s) {
+    s.poseFinal = false;
+    s.seen.clear();
+    s.sightCounter = 0.2f * core::simRand01();   // staggered sight checks (SightCounter = 0.2 x FRand)
     Character* pcp = participantPawnMutable(s.owner);
     if (!pcp) return;
     const Character& pc = *pcp;
@@ -3759,44 +3788,48 @@ void World::spawnSentry(Sentry& s) {
 
 void World::tickSentry(float dt) {
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-    // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
-    // Candidates sorted by distance, line of sight tested nearest first (same target, fewer traces).
-    auto findTarget = [&](Sentry& s, const core::Vec3& muzzle) -> const Character* {
-        s.target = -1;
-        float best = 300.0f;
-        const Character* tgt = nullptr;
-        if (matchActive_) {
-            // the closest visible enemy: candidates sorted by distance, line of sight tested nearest first (same target, fewer traces)
-            struct Cand { float dist; int p; const Character* c; };
-            static thread_local std::vector<Cand> cands;
-            cands.clear();
-            for (size_t i = 0; i < match_.players().size(); ++i) {
-                const int p = (int)i;
-                if (p == s.owner || (match_.settings().teamGame && match_.sameTeam(p, s.owner))) continue;
-                const Character* c = participantPawn(p);
-                if (!c) continue;
-                core::Vec3 d = c->actorLocation() - muzzle;
-                float dist = core::length(d);
-                if (dist > best || dist < 1e-3f) continue;
-                if (std::fabs(std::atan2(d.y, std::hypot(d.x, d.z))) > 45.0f * 0.0174533f) continue;
-                cands.push_back({dist, p, c});
-            }
-            std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist || (a.dist == b.dist && a.p < b.p); });
-            for (const Cand& cd : cands) {
-                float tt;
-                if (line && line->segmentHit(muzzle, cd.c->actorLocation(), tt)) continue;
-                best = cd.dist; s.target = cd.p; tgt = cd.c;
-                break;
-            }
+    // Targeting [CONF RE 6756336 MP note addendum 12; the sight interval HIGH]: the native sight pass registers the enemies a sentry can
+    // see (periodic, ~0.2 s staggered, one LineOfSightTo per pawn within SightRadius 30000 UU; no per-tick traces); every tick
+    // FindBestTarget takes the CLOSEST valid one of that list (not sticky): alive, in the pitch range (+-45 deg, TnSentryPawnAbility),
+    // PeripheralVision -1 (any yaw), and claimed by fewer than _MaxNumClaimedEnemies 2 sentries. Fire while within MaxAttackRange.
+    auto sightCheck = [&](Sentry& s, const core::Vec3& muzzle) {
+        s.seen.clear();
+        if (!matchActive_) return;
+        for (size_t i = 0; i < match_.players().size(); ++i) {
+            const int p = (int)i;
+            if (p == s.owner || (match_.settings().teamGame && match_.sameTeam(p, s.owner))) continue;
+            const Character* c = participantPawn(p);
+            if (!c) continue;
+            const core::Vec3 d = c->actorLocation() - muzzle;
+            if (core::dot(d, d) > 300.0f * 300.0f) continue;   // SightRadius 30000 UU
+            float tt;
+            if (line && line->segmentHit(muzzle, c->actorLocation(), tt)) continue;
+            s.seen.push_back(p);
         }
-        (void)best;
+    };
+    static std::vector<int> claims;   // sentries targeting each match player this tick
+    claims.assign(match_.players().size(), 0);
+    auto findBestTarget = [&](Sentry& s, const core::Vec3& muzzle) -> const Character* {
+        s.target = -1;
+        const Character* tgt = nullptr;
+        float best = 1e30f;
+        for (int p : s.seen) {
+            const Character* c = participantPawn(p);
+            if (!c || (size_t)p >= claims.size() || claims[(size_t)p] >= 2) continue;
+            const core::Vec3 d = c->actorLocation() - muzzle;
+            const float dist2 = core::dot(d, d);
+            if (dist2 > 300.0f * 300.0f || dist2 < 1e-6f) continue;
+            if (std::fabs(std::atan2(d.y, std::hypot(d.x, d.z))) > 45.0f * 0.0174533f) continue;   // CanOwnerSee: the pitch range
+            if (dist2 < best) { best = dist2; s.target = p; tgt = c; }   // seen is in player order: ties keep the lower index
+        }
+        if (s.target >= 0) ++claims[(size_t)s.target];
         return tgt;
     };
     // (1) serial upkeep (spawn / lifetime / owner); (2) target searches on the worker pool (read-only queries, each writes its own
     // sentry); (3) serial aim / fire in order - a target killed earlier in this pass is searched again serially, which gives exactly
     // the serial result (kills only remove candidates, damage moves nobody).
-    static std::vector<Sentry*> live;
-    live.clear();
+    static std::vector<Sentry*> live, sighting;
+    live.clear(); sighting.clear();
     for (Sentry& s : sentries_) {
         if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
         const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
@@ -3805,15 +3838,19 @@ void World::tickSentry(float dt) {
             s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
             if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
         }
-        if (s.alive) live.push_back(&s);
+        if (s.alive) {
+            live.push_back(&s);
+            s.sightCounter -= dt;
+            if (s.sightCounter <= 0.0f) { while (s.sightCounter <= 0.0f) s.sightCounter += 0.2f; sighting.push_back(&s); }
+        }
     }
-    core::WorkerPool::get().run((int)live.size(), [&](int i) { Sentry& s = *live[(size_t)i]; findTarget(s, s.pos + core::Vec3{0, 2.0f, 0}); });
+    // The sight checks due this step: read-only queries, each writes its own sentry's list (worker pool, deterministic).
+    { TickTimer tts(27); core::WorkerPool::get().run((int)sighting.size(), [&](int i) { Sentry& s = *sighting[(size_t)i]; sightCheck(s, s.pos + core::Vec3{0, 2.0f, 0}); }); }
     for (Sentry* sp : live) {
         Sentry& s = *sp;
         if (!s.alive) continue;
         const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
-        const Character* tgt = s.target >= 0 ? participantPawn(s.target) : nullptr;
-        if (s.target >= 0 && !tgt) tgt = findTarget(s, muzzle);   // killed earlier in this pass: the serial search
+        const Character* tgt = findBestTarget(s, muzzle);   // every tick, in sentry order (claims; kills earlier in the pass drop out)
         float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
         if (tgt) {
             core::Vec3 d = tgt->actorLocation() - muzzle;
@@ -3849,9 +3886,13 @@ void World::tickSentry(float dt) {
                 }
             }
         }
-        if (sentryModel_.valid()) {
+        if (sentryModel_.valid() && !s.poseFinal) {   // samplePose clamps a non-looping clip at its end: constant after (skinned once more)
+            TickTimer ttp(28);
             int clip = sentryModel_.clipByName("WEP_DeployedTurret_Activate");
-            if (clip >= 0) { assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(sentryModel_, clip, s.t, false, lp); assets::skinPose(sentryModel_, lp, g, s.mesh); }
+            if (clip >= 0) {
+                assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(sentryModel_, clip, s.t, false, lp); assets::skinPose(sentryModel_, lp, g, s.mesh);
+                if (s.t >= sentryModel_.clips[(size_t)clip].duration) s.poseFinal = true;
+            }
         }
     }
     // Owners' SpawnSentry cooldown waits for their sentry (pending or alive).

@@ -390,6 +390,9 @@ public:
         int owner = -1;                 // the match player whose ability spawned it (any participant)
         float delay = -1.0f;            // SpawnDelay countdown (>= 0 while pending)
         render::MeshData mesh;          // its posed WEP_DeployedTurret mesh
+        bool poseFinal = false;         // the (non-looping) Activate clip has ended: the pose is constant, skinned once
+        float sightCounter = 0.0f;      // the periodic sight check (SightCounter, ~0.2 s, seeded 0.2 x FRand) [HIGH stock UE3, RE 6756336]
+        std::vector<int> seen;          // pawns the last sight check saw (LineOfSightTo within SightRadius 300 m), by match player
         int deadTicks = 0;              // steps since it died (kept one step with alive=false for presentation consumers)
     };
     std::vector<Sentry> sentries_;      // one per owner
