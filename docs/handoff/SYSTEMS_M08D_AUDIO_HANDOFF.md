@@ -352,3 +352,22 @@ endAbilityActorAudio();
 The existing onRollerMineExploded / onGuidedMissileExploded calls stay (they address the local instance, key 0). When Gameplay
 makes Roller / Missile per owner, loop over them the same way and call onAbilityActorExploded(kind, owner, local, pos).
 Suite 740 / 0 (three owners' sentries at once, per-owner POSTDEPLOY, silent sweep, per-owner destroy).
+
+## M09i - other participants' killstreak announcements
+
+`World::onParticipantKillstreakActivated(id, activatorTeam, sameTeamAsLocal)`: Friendly when OnSameTeam (team game, same team),
+else Enemy (FFA: everyone else); a role without an authored sound falls back to FactionAnnouncementSound[activator team],
+else silent - exactly the authored TnKillstreakActivated* data (most streaks author only Self; Ammo Matrix / Intercooler also
+Friendly; Orbital Recon Friendly + Enemy; Jammer / Orbital Beacon 2.0 by faction). Streak effects add no world sound here
+(their buffs are OnlyPlaySoundOnLocalPlayer; spawned actors go through setAbilityActorAudio). Glue (09c 26f, killstreak
+trigger, after the "triggered (p%d)" log):
+
+```cpp
+if (player == localPlayer_) onLocalKillstreakActivated(id, mp.team);
+else onParticipantKillstreakActivated(id, mp.team, match_.settings().teamGame && localPlayer_ >= 0 && match_.sameTeam(player, localPlayer_));
+```
+
+Checked on 09c 7d42b7b + glue, 16 v 16: friendly Ammo Matrix -> MP_AmmoMatrixOnlineDialog; enemy Ammo Matrix / Intercooler /
+Poke / Energon bonus -> silent (no Enemy sound authored); 0 missing cues.
+Note: since Gameplay 26h (deadTicks) destroyed sentries report alive = false before removal: SENTRY_ACTIVATE_LP fades 0.25 s +
+SENTRY_EXPL (11 / 11 fades on 11ab06f + a report line; SENTRY_EXPL not started when beyond its audible distance).

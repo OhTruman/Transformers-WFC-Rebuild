@@ -3159,7 +3159,8 @@ std::string World::triggerKillstreakFor(int player) {
     }
     LOG_INFO("killstreak %s triggered (p%d)", id.c_str(), player);
     if (player != localPlayer_) for (BotBrain& b : bots_) if (b.player == player) ++b.streaks;
-    if (player == localPlayer_) onLocalKillstreakActivated(id, mp.team);   // [Systems M08n] TnKillstreakActivated* Self announcement (local only; bots' pending Systems)
+    if (player == localPlayer_) onLocalKillstreakActivated(id, mp.team);   // [Systems M08n] TnKillstreakActivated* Self announcement
+    else onParticipantKillstreakActivated(id, mp.team, match_.settings().teamGame && localPlayer_ >= 0 && match_.sameTeam(player, localPlayer_));   // [Systems M09i] Friendly / Enemy
     return id;
 }
 
@@ -4709,6 +4710,11 @@ void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const st
 
 void World::onLocalKillstreakActivated(const std::string& id, int team) {
     levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
+}
+
+void World::onParticipantKillstreakActivated(const std::string& id, int activatorTeam, bool sameTeamAsLocal) {
+    levelAudio_.match().killstreakActivated(id, sameTeamAsLocal ? MatchAudio::StreakRole::Friendly : MatchAudio::StreakRole::Enemy,
+                                            activatorTeam);
 }
 
 void World::beginAbilityActorAudio() { abilityAudio_.markActorsUnseen(); }
