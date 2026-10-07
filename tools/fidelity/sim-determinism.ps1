@@ -32,7 +32,8 @@ function RunOne([string]$tag, [string]$seed, [bool]$serial) {
 }
 function Sig([string]$tag) {
     $lg = Join-Path $OutDir "$tag\wfc.log"; if (-not (Test-Path $lg)) { return $null }
-    return @([IO.File]::ReadLines($lg) | Where-Object { $_ -match '\] (BOTLOG |XP p\d+ txn )' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
+    # leading comma: an EMPTY signature must stay an empty array (a bare @() return becomes $null = "missing")
+    return ,@([IO.File]::ReadLines($lg) | Where-Object { $_ -match '\] (BOTLOG |XP p\d+ txn )' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
 }
 $fails = 0; $total = 0
 foreach ($seed in $Seeds) {
@@ -42,7 +43,8 @@ foreach ($seed in $Seeds) {
     for ($r = 1; $r -le $Repeats; $r++) {
         $b = Sig "s${seed}_thr$r"; $name = "seed$seed.run$r"
         if ($null -eq $ref -or $null -eq $b) { Res $name "UNKNOWN" "a run is missing" "Experimental"; continue }
-        if (-not $ref.Count) { Res $name "UNKNOWN" "no BOTLOG / XP lines (bots did not run?)" "Experimental"; continue }
+        if (-not $ref.Count -and -not $b.Count) { Res $name "UNKNOWN" "no bot activity logged in either run (bots never became active within the frame budget)" "Gameplay"; continue }
+        if (-not $ref.Count -or -not $b.Count) { Res $name "FAIL" ("bot activity differs between identical runs: serial {0} BOTLOG / XP lines vs threaded {1} - the bots did not run (or started at a different time) in one of them; a lockstep seeded run must log the same bot states" -f $ref.Count, $b.Count) "Gameplay"; $total++; $fails++; continue }
         $total++
         $n = [Math]::Min($ref.Count, $b.Count); $first = -1
         for ($i = 0; $i -lt $n; $i++) { if ($ref[$i] -ne $b[$i]) { $first = $i; break } }
