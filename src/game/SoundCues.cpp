@@ -97,8 +97,18 @@ std::vector<CurvePt> jsonCurve(const assets::Json& c) {
 
 } // namespace
 
+unsigned long long SoundCues::nameHash(const char* a, const char* b) {
+    unsigned long long h = 1469598103934665603ull;
+    for (const char* p = a; *p; ++p) { h ^= (unsigned char)*p; h *= 1099511628211ull; }
+    for (const char* p = b; *p; ++p) { h ^= (unsigned char)*p; h *= 1099511628211ull; }
+    return h;
+}
+
 int SoundCues::findCue(const char* name) const {
-    for (size_t i = 0; i < cues_.size(); ++i) if (cues_[i].name == name) return (int)i;
+    {
+        auto it = nameIndex_.find(nameHash(name));
+        if (it != nameIndex_.end()) for (int i : it->second) if (cues_[(size_t)i].name == name) return i;
+    }
     // Full asset names of the cues the compiled table keeps under a short name (tools/systems/gen_cues.py short()):
     // a character / weapon profile names them by package.
     static const struct { const char* pkg; const char* prefix; } kAlias[] = {
@@ -106,8 +116,16 @@ int SoundCues::findCue(const char* name) const {
     for (const auto& a : kAlias) {
         const size_t n = std::strlen(a.pkg);
         if (std::strncmp(name, a.pkg, n) != 0) continue;
-        const std::string s = std::string(a.prefix) + (name + n);
-        for (size_t i = 0; i < cues_.size(); ++i) if (cues_[i].name == s && !cues_[i].mapBank) return (int)i;
+        // prefix + rest, compared without building a string
+        auto it = nameIndex_.find(nameHash(a.prefix, name + n));
+        if (it == nameIndex_.end()) continue;
+        const size_t pl = std::strlen(a.prefix);
+        for (int i : it->second) {
+            const std::string& cn = cues_[(size_t)i].name;
+            if (!cues_[(size_t)i].mapBank && cn.size() == pl + std::strlen(name + n) && cn.compare(0, pl, a.prefix) == 0 &&
+                cn.compare(pl, std::string::npos, name + n) == 0)
+                return i;
+        }
     }
     return -1;
 }
@@ -138,6 +156,8 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
     if (std::find(tables().begin(), tables().end(), this) == tables().end()) tables().push_back(this);
     contentRoot_ = contentRoot;
     cues_.assign(std::begin(kCues), std::end(kCues));
+    nameIndex_.clear();
+    for (size_t c = 0; c < cues_.size(); ++c) nameIndex_[nameHash(cues_[c].name.c_str())].push_back((int)c);
     waves_.clear();
     if (!a) return;
     int ok = 0, total = 0;
@@ -263,6 +283,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             d.events.push_back(e);
         }
         cues_.push_back(d);
+        nameIndex_[nameHash(cues_.back().name.c_str())].push_back((int)cues_.size() - 1);
         bool anyChar = false;
         for (const std::string& ch : dialogChars) anyChar = anyChar || !ch.empty();
         if (anyChar) dialogChars_[cues_.size() - 1] = dialogChars;
@@ -570,6 +591,11 @@ int SoundCues::unloadMapCues() {
                     }
     }
     cues_.resize(first);
+    for (auto it = nameIndex_.begin(); it != nameIndex_.end();) {          // drop the unloaded cues from the name index
+        std::vector<int>& v = it->second;
+        while (!v.empty() && v.back() >= (int)first) v.pop_back();      // ascending: the removed ones are at the end
+        it = v.empty() ? nameIndex_.erase(it) : std::next(it);
+    }
     for (auto it = dialogChars_.begin(); it != dialogChars_.end();) it = it->first >= first ? dialogChars_.erase(it) : std::next(it);
     if (waves_.size() > first) waves_.resize(first);
     if (resident_.size() > first) resident_.resize(first);

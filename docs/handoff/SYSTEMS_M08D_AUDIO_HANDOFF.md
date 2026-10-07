@@ -512,3 +512,16 @@ queueSelectionAudio through submit. Suite 745 / 0 (2 reader threads during 40000
   (typical worst per window 0.4-0.65 -> 0.01-0.03 ms). TICKPROF per step: charAudio+cues 0.090 -> 0.065 ms, partAudio 0.049 ->
   0.041 ms. Suite 747 / 0 (two game threads vs the unlocked mix; dormant: 0 device updates, then the same gain mid-fade as an
   always-near table), fidelity 194 / 0 / 19.
+
+## DEV TOOL WFC_ALLOCPROF + SoundCues name index (300 fps allocation hunt)
+
+`src/core/AllocProf.cpp` replaces global operator new / delete (one static flag check when off). WFC_ALLOCPROF=<N>: counts
+main-thread / other-thread allocations, samples every N-th main-thread allocation's stack (CaptureStackBackTrace into a fixed
+table; never allocates), and every ~10 s appends that window's rate and top stacks (module offsets) to wfc_allocprof.txt.
+`tools/systems/allocprof_sym.py <N>` aggregates by innermost project frame via llvm-addr2line on a RelWithDebInfo build
+(ALLOCPROF_DIR / ALLOCPROF_EXE / LLVM_ADDR2LINE).
+First profile (09c 926bd31, steady state, 60 fps): main thread ~1,600 allocations / frame at 10 v 10, ~3,000 at 32 v 32 -
+nearly all render (WfcPipeline draws, DirectLightEnv queries, sprite batches, canvas text) and World::syncMapPresentation's
+per-factory string keys; no audio site in the top 25 (data sent to Rendering and Integration).
+SoundCues::findCue (every play) was a linear scan with a string compare over all cues; now an FNV-1a hash index -> ascending
+indices (first match wins, as before; alias names hashed as prefix + rest, no temporary string). Suite 747 / 0.
