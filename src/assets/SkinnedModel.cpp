@@ -629,9 +629,8 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     if (sameTopology) sameTopology = std::equal(model.indices.begin(), model.indices.end(), out.indices.begin()) &&
                                      std::equal(model.uv.begin(), model.uv.end(), out.uv.begin());
     if (!sameTopology) { out.indices = model.indices; out.uv = model.uv; out.subs = model.subs; }
-    // picks up resolved texture handles; the material strings are copied only when the shape changes
-    if (out.mats.size() != model.mats.size()) out.mats = model.mats;
-    else for (size_t k = 0; k < model.mats.size(); ++k) { out.mats[k].tex = model.mats[k].tex; out.mats[k].emissiveTexHandle = model.mats[k].emissiveTexHandle; }
+    // the full material set of THIS model (handles and any data filled after load); equal-size assignment reuses capacity
+    out.mats = model.mats;
     // Bind-pose tangents skinned like the normals (no translation, renormalised; w = the bind bitangent sign), so the renderer
     // does not re-derive them from the posed triangles every frame (Rendering: about half the per-character draw cost).
     std::vector<float>* outTan = model.tangents.size() == vc * 4 ? meshTangents(out, 0) : nullptr;
