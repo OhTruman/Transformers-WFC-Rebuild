@@ -65,7 +65,12 @@ void LocalProfile::set(const std::string& field, const std::string& value) {
 
 void LocalProfile::load() {
     std::ifstream f(kFile);
+    if (loadFrom(f)) save();
+}
+
+bool LocalProfile::loadFrom(std::istream& f) {
     std::string line, section;
+    bool factionKeys = false, oldKeys = false;
     while (std::getline(f, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == ';') continue;
@@ -84,11 +89,11 @@ void LocalProfile::load() {
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
             else if (k == "VSync") display.vsync = v == "1";
             else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
-            else if (k == "BotsFriendly") bots.friendly = std::max(0, std::atoi(v.c_str()));
-            else if (k == "BotsEnemy") bots.enemy = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
+            else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 2);
-            else if (k == "BotsAutobot") bots.autobot = std::max(0, std::atoi(v.c_str()));
-            else if (k == "BotsDecepticon") bots.decepticon = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsAutobot") { bots.autobot = std::max(0, std::atoi(v.c_str())); factionKeys = true; }
+            else if (k == "BotsDecepticon") { bots.decepticon = std::max(0, std::atoi(v.c_str())); factionKeys = true; }
             else if (k == "BotsExtended") bots.extended = v == "1";
             else if (k == "OriginalChassisLocks") originalChassisLocks = v == "1";
         } else if (section == "[Progression]") {
@@ -106,6 +111,15 @@ void LocalProfile::load() {
             else if (k.rfind("Stat.", 0) == 0) progression.stats[std::atoi(k.c_str() + 5)] = std::atol(v.c_str());
         } else if (section == "[ProfileData]") values_[k] = v;
     }
+    // Profiles saved before the faction bot counts (09b, 8c2b6e3) hold only BotsFriendly / BotsEnemy: the team-mode
+    // Bot Settings would read 0 / 0. Migrated once, as 09b launched them (no faction is known before the match: the
+    // human on the Autobot side), within the original 5 v 5 limits (the human's side 4 bots, the other 5).
+    if (oldKeys && !factionKeys) {
+        bots.autobot = std::min(bots.friendly, 4);
+        bots.decepticon = std::min(bots.enemy, 5);
+        return true;
+    }
+    return false;
 }
 
 void LocalProfile::save() const {

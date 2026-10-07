@@ -11,6 +11,7 @@
 #pragma once
 #include "frontend/Progression.h"
 #include <functional>
+#include <istream>
 #include <map>
 #include <string>
 #include <vector>
@@ -21,6 +22,8 @@ class LocalProfile {
 public:
     static constexpr const char* kFile = "wfc_profile.ini";
     void load();
+    // Parses a profile; returns true when an older format was migrated (load() then saves it once).
+    bool loadFrom(std::istream& in);
     void save() const;
 
     // <OnlinePlayerData:ProfileData.Field> (original fields; unknown fields are stored but traced).
