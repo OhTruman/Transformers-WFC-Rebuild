@@ -514,6 +514,10 @@ int Match::findPlayerStart(int p) {
     // authored start serves (AssetTools spawn_capacity: 50-120 per map) [PC ADAPTATION].
     if (!s_.teamGame && s_.extendedSlots)
         for (size_t i = 0; i < starts_.size(); ++i) if (safe((int)i)) return (int)i;
+    // Extended team games (32 per side; maps author >= 20 team starts per side): the FFA starts next, never the other team's;
+    // a full pool leaves the participant for the next respawn wave (staggered spawns, no overlaps) [PC ADAPTATION].
+    if (s_.teamGame && s_.extendedSlots)
+        for (size_t i = 0; i < starts_.size(); ++i) if (starts_[i].ffa && safe((int)i)) return (int)i;
     return -1;
 }
 

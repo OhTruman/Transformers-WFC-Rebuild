@@ -1000,7 +1000,23 @@ void World::setRenderAlpha(float a) {
     for (MatchOpponent* o : opponents_) o->pawn().setRenderAlpha(a);
 }
 
+namespace {
+// WFC_TICKPROF (diagnostics): accumulated ms per World::tick phase, logged every 300 steps.
+struct TickProf {
+    static bool on() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
+    double acc[12] = {}; long n = 0;
+    const char* names[12] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest"};
+};
+TickProf& tickProf() { static TickProf p; return p; }
+struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
+}
+
 void World::tick(float dt) {
+    if (TickProf::on() && ++tickProf().n % 300 == 0) {
+        std::string line;
+        for (int i = 0; i < 12; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
+    }
     // Presentation interpolation: remember each pawn's state at the start of the step.
     player_.pawn().beginStep();
     for (MatchOpponent* o : opponents_) o->pawn().beginStep();
@@ -1066,10 +1082,10 @@ void World::tick(float dt) {
         if (player_.controller().consumeGrenadeRequest()) startLocalGrenadeToss();
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
-    tickAbilityEffects(dt);
+    { TickTimer tt(1); tickAbilityEffects(dt); }
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
-    if (matchActive_) tickMatch(dt);
+    if (matchActive_) { TickTimer tt(2); tickMatch(dt); }
     if (matchActive_) {
         awards_.consume(match_);
         static const bool xplog = std::getenv("WFC_XPLOG") != nullptr;   // diagnostics: each award once (left undrained for the caller)
@@ -1086,9 +1102,21 @@ void World::tick(float dt) {
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
     participantShots_.clear();
-    tickBots(dt);                                                       // bot participants: decisions -> intents, weapons
-    for (MatchOpponent* o : opponents_) o->simulate(dt, collision());   // participants: shared movement + animation
-    tickParticipantWeapons(dt);
+    { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
+    for (MatchOpponent* o : opponents_) {                               // participants: shared movement + animation
+        { TickTimer tt(4); o->simulateMovement(dt, collision()); }
+        {   // Animation LOD above 16 participants (PC ADAPTATION; off at the original counts): beyond 40 m from the camera every 2nd
+            // step, beyond 100 m every 4th, with the accumulated time (clip timing exact); transforming pawns always every step.
+            TickTimer tt(5);
+            int every = 1;
+            if (match_.players().size() > 16 && o->spawned() && !o->pawn().isTransforming()) {
+                const float d = core::length(o->pawn().position() - listenerPos_);
+                every = d < 40.0f ? 1 : (d < 100.0f ? 2 : 4);
+            }
+            o->simulateAnimationLod(dt, every);
+        }
+    }
+    { TickTimer tt(6); tickParticipantWeapons(dt); }
     for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
@@ -1149,14 +1177,14 @@ void World::tick(float dt) {
     }
 
     tickHazards(dt);
-    tickProjectiles(dt);
+    { TickTimer tt(9); tickProjectiles(dt); }
     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
         LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
         if (matchActive_) killLocalPlayer(-1, false, "Engine.DmgType_Fell");   // WorldInfo.KillZDamageType [HIGH: stock default]
         else respawnPlayer();
     }
-    for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);
+    { TickTimer tt(10); for (auto& a : actors_) if (a->alive()) a->tick(*this, dt); }
     for (size_t i = 0; i < actors_.size();) {
         if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); }
         else ++i;
@@ -1730,6 +1758,22 @@ void World::draw(render::IRenderer& r) const {
         r.drawGroundGrid(60.0f, 2.0f, core::Vec3{0.30f, 0.33f, 0.38f});
         for (const auto& b : blocks_) r.drawBox(b.center, b.size, b.color);
     }
+    // Participant culling for extended matches (> 16 participants, PC ADAPTATION; off at the original counts): a pawn outside the
+    // view cone (horizontal half angle 75 deg + its size) is not drawn or skinned this frame. Off-screen shadows are the cost.
+    {
+        const bool cull = match_.players().size() > 16;
+        const core::Vec3 cp = player_.controller().cameraPos();
+        const core::Vec3 vd = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
+        for (const MatchOpponent* o : opponents_) {
+            bool off = false;
+            if (cull && o->spawned()) {
+                const core::Vec3 to = o->pawn().actorLocation() - cp;
+                const float d = core::length(to);
+                if (d > 6.0f) off = core::dot(to * (1.0f / d), vd) < std::cos(std::min(3.1f, 1.309f + std::atan(5.0f / d)));
+            }
+            o->setCulled(off);
+        }
+    }
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
     if (!localPlayerDead()) player_.draw(r);
     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
@@ -1765,7 +1809,7 @@ void World::draw(render::IRenderer& r) const {
 
     // Participants' held weapons (robot form, weapon shown), at their pawn's interpolated weapon socket.
     for (const MatchOpponent* o : opponents_) {
-        if (!o->spawned() || !o->pawn().hasWeapon()) continue;
+        if (!o->spawned() || o->culled() || !o->pawn().hasWeapon()) continue;
         auto it = partWeapons_.find(o->matchPlayer());
         if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
         r.drawDynamicMesh(it->second.anim.pose(), core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});

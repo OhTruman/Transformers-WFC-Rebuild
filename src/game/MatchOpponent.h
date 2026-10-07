@@ -38,12 +38,20 @@ public:
     void setIntent(const MoveIntent& in) { intent_ = in; }
     const MoveIntent& intent() const { return intent_; }
     // One fixed step: movement (shared CharacterMovement) + animation. A participant with no intent stands still.
-    void simulate(float dt, const CollisionWorld* col) {
+    void simulate(float dt, const CollisionWorld* col) { simulateMovement(dt, col); simulateAnimation(dt); }
+    void simulateMovement(float dt, const CollisionWorld* col) {
         if (!spawned_) return;
         CharacterMovement::update(pawn_, intent_, dt, col);
         intent_.wantJump = false; intent_.wantDash = false; intent_.dodgeDir = 0;   // edge inputs are consumed
         pos_ = pawn_.position();
-        pawn_.updateAnimation(dt);
+    }
+    void simulateAnimation(float dt) { if (spawned_) pawn_.updateAnimation(dt); }
+    // Animation level of detail (World, extended matches): sample the pose every N steps with the accumulated time.
+    void simulateAnimationLod(float dt, int every) {
+        if (!spawned_) return;
+        animAccum_ += dt;
+        if (++animStep_ % every != 0 && every > 1) return;
+        pawn_.updateAnimation(animAccum_); animAccum_ = 0.0f;
     }
     // Collision cylinder of the current form (robot: ROBODEF radius / height; vehicle: CalculateCylinderBounds).
     bool rayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const { return spawned_ && pawnRayHit(pawn_, o, d, range, t); }
@@ -68,8 +76,11 @@ public:
         t = tt;
         return true;
     }
+    // Off-screen this frame (World::draw, extended matches only): no draw, so no skinning.
+    void setCulled(bool c) const { culled_ = c; }
+    bool culled() const { return culled_; }
     void draw(render::IRenderer& r) const override {
-        if (!spawned_) return;
+        if (!spawned_ || culled_) return;
         if (pawn_.currentModel()) { pawn_.draw(r); return; }   // its own chassis body
         if (!drawn_) return;                                    // no body loaded: diagnostic box only on request
         core::Vec3 col = team_ == 0 ? core::Vec3{0.3f, 0.45f, 1.0f} : core::Vec3{1.0f, 0.3f, 0.25f};
@@ -80,6 +91,8 @@ private:
     int player_, team_;
     bool drawn_;
     bool spawned_ = false;
+    mutable bool culled_ = false;
+    float animAccum_ = 0.0f; unsigned animStep_ = 0;
     Character pawn_;
     MoveIntent intent_;
 };

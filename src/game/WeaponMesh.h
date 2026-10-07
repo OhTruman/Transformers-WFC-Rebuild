@@ -37,7 +37,7 @@ public:
     // Advance; notifies whose time was crossed this step are appended to `fired`.
     void tick(float dt, std::vector<WeaponNotify>& fired);
 
-    const render::MeshData& pose() const { return pose_; }
+    const render::MeshData& pose() const;   // skins the current pose on demand (tick only poses the bones)
     const char* clipName() const;
 
     // Socket transform in weapon-mesh space (bone global * socket relative transform).
@@ -54,7 +54,9 @@ private:
     float blendOut_ = 0.0f;
     assets::LocalPose pose0_, pose1_;
     std::vector<core::Mat4> globals_;
-    render::MeshData pose_;
+    mutable render::MeshData pose_;
+    mutable bool skinDirty_ = false;
+    mutable std::vector<core::Mat4> skinGlobals_;
     std::vector<Socket> sockets_;
 };
 

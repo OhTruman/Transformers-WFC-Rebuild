@@ -91,7 +91,7 @@ void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
     if (!valid()) return;
     if (clip_ < 0) {                              // no idle sequence: hold the bind pose
         assets::samplePose(*model_, -1, 0.0f, false, pose0_);
-        assets::skinPose(*model_, pose0_, globals_, pose_);
+        assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true;   // vertices skinned when drawn (pose())
         return;
     }
     const assets::AnimClip& c = model_->clips[(size_t)clip_];
@@ -122,7 +122,12 @@ void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
         assets::blendPose(pose0_, pose1_, blendOut_ / kBlendOutTime, pose0_);
         blendOut_ -= dt;
     }
-    assets::skinPose(*model_, pose0_, globals_, pose_);
+    assets::poseGlobals(*model_, pose0_, globals_); skinDirty_ = true;   // vertices skinned when drawn (pose())
+}
+
+const render::MeshData& WeaponMesh::pose() const {
+    if (skinDirty_ && model_) { assets::skinPose(*model_, pose0_, skinGlobals_, pose_); skinDirty_ = false; }
+    return pose_;
 }
 
 bool WeaponMesh::socketLocal(const std::string& socket, core::Mat4& out) const {

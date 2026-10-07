@@ -42,15 +42,16 @@ struct MatchSettings {
     // ShouldScoreKill (MP): only TnPlayerController victims score; AI / bot victims never do [CONF RE]. PC ADAPTATION: offline
     // bot matches let bot victims score like players (true) so bots are full participants; false = the original rule.
     bool botVictimsScore = true;
-    // Slots [CONF RE: TnMultiplayerGame MaxPlayers 10 = 5 v 5]: the default fidelity setting. CUSTOM-GAME EXTENSION (Bot Settings
-    // "extended", ?BotsExtended=1): up to 16 bots per team plus the human (33 participants; FFA 32 bots) - applyExtendedSlots().
-    // Frontend reads these for its UI limits; World clamps launched bots to them. Participant storage is dynamic everywhere.
+    // Slots [CONF RE: TnMultiplayerGame MaxPlayers 10 = 5 v 5]: the default fidelity setting. CUSTOM-GAME EXTENSION (USER DECISION, Bot
+    // Settings "extended", ?ExtendedPlayers=1): 32 per side, human included (the human's side up to 31 bots, the other 32), 64 total
+    // (FFA 63 bots + the human) - applyExtendedSlots(). Frontend reads these for its UI limits; World clamps launched bots to them.
+    // Participant storage is dynamic everywhere (no fixed-size participant arrays).
     int maxPlayers = 10;          // all participants
     int maxPerTeam = 5;           // participants per team, human included
     int maxBotsPerTeam = 5;       // bots per team
     bool extendedSlots = false;
-    static constexpr int kExtendedBotsPerTeam = 16;
-    void applyExtendedSlots() { extendedSlots = true; maxBotsPerTeam = kExtendedBotsPerTeam; maxPerTeam = kExtendedBotsPerTeam + 1; maxPlayers = 2 * kExtendedBotsPerTeam + 1; }
+    static constexpr int kExtendedPerTeam = 32, kExtendedPlayers = 64;
+    void applyExtendedSlots() { extendedSlots = true; maxPerTeam = kExtendedPerTeam; maxBotsPerTeam = kExtendedPerTeam; maxPlayers = kExtendedPlayers; }
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
 };
 
