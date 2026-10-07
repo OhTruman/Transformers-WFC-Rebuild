@@ -419,3 +419,51 @@ then the quietest) - FMOD virtual-voice behaviour; `MixStats::overflowVirtualize
 3 min, fa973d3 + Gameplay d652718): voices max 96, mixer 0.20 / 0.56 ms per block, local no-channel 0, 0 missing / leaks.
 Steals / refusals at 32 v 32 are by design: the original 96-channel rule (priority, then the quietest) over 64 participants'
 sounds; the human's own are protected. Suite 741 / 0 (106 audible -> 96 mixed, own kept, the 10 least important virtual).
+
+## Milestone E audio-completeness audit (normal MP play vs the original)
+
+Evidence: CUELOG / MATCHAUDIOLOG runs on 09c (11ab06f, 7d42b7b, fa973d3 + Gameplay d652718), 16 v 16 and 32 v 32 Streets TDM,
+5 v 5 per mode, frontend -> match flow; listener on a fighting bot for the bot-only categories; plus the earlier M08 local
+verification. "bots" = other participants.
+
+| Category | Local player | Bots / others | Status / notes |
+|---|---|---|---|
+| Robot movement (steps, jump, land, pivots, idle foley) | present (M08) | present (M09f) | OK; far bots' coarse anim steps covered (window notifies) |
+| Hover lift / land | present | present (M09e) | OK |
+| Vehicle engine / tread / boost / jump / roll | present, every chassis (M08d) | present (M09f), bot boost changes (Gameplay d652718) | OK |
+| Jet flight / boost / hover boosters | present | present | OK |
+| Truck nitro, tire slip | present | present (M09k) | OK |
+| Tank 180 | present | none - bots never quick-turn | authentic to the current AI (Gameplay) |
+| Transform (both directions, per chassis) | present | present (M09f) | OK |
+| Weapon fire / impacts / projectiles / beams | present | present (M09b) | OK |
+| Reload / weapon-mesh anim sounds | present | present (M09j) | OK |
+| Melee swing / impact | present (M08l) | present (M09j swing, impacts) | OK |
+| Grenades: throw / flight / bounce / explosion | present | flight / explosion present; throw same path as melee (M09j) | throw not observed near the test bot |
+| Abilities: trigger sounds, Skill_ notifies | present (M08i) | present (M09d) | OK, no doubles |
+| Buffs | present (local-only rule) | cloak heard by all (M09e) | OK (OnlyPlaySoundOnLocalPlayer otherwise) |
+| Cloak activate / deactivate anim sounds | - | - | CONFIRMED absent in versus (AssetTools) |
+| Barrier / Sentry / Roller / Guided Missile | present | present per owner (M09h, 26e / 26l glue) | OK; Ammo Crate deploy = trigger sound, pick-up authored silent |
+| Killstreak announcer | Self | Friendly / Enemy / faction (M09i) | OK per authored data |
+| Announcer: intro, kills left, win / tie | present | - | OK (TDM / DM / DOM / KOTH / EXT); CTF intro None CONFIRMED (RE) |
+| Objectives: CTF flag pickup / drop / capture stingers, attacker / defender lines | present | - | OK |
+| Objectives: DOM points, KOTH zones, EXT bomb + objective ticks | present | - | OK |
+| Round timer low ticks, final-stretch / end music | present | - | OK |
+| Kill confirm | present (16 / 16) | - (killer only) | OK |
+| Pickups (health / ammo / overshield) | present | bots don't pick up (Gameplay) | OK for now; the sound is at the receiver if bots ever do |
+| Menus / UI / pause | present | - | OK; in-match UI unmuted (Frontend 9544080, verified) |
+| XP popups / level-up stinger | same path as pause UI (verified audible) | - | OK |
+| Loading (movie mute), level ambience (zones, emitters) | present | - | OK |
+| Results / end music | present | - | OK |
+
+Gaps found and fixed in this audit: in-match UI muted (Frontend), bot body audio (M09f), bot reload / melee swing / grenade
+throw (M09j), bot nitro / slip (M09k), voice cap > 96 (M09l), the empty-announcer log noise (CTF None).
+Not audio: the f603 round-start frame spike is Rendering's first-use world pass (DM_START plays in 0.43 ms, decoded on a worker).
+
+## Milestone E item 3 - first-use audio at 32 v 32 (no preload hitches)
+
+09c fa973d3 + Gameplay d652718 + M09j-l, Streets TDM 63 bots, 3 min, WFC_AUDIOTIME / WFC_PREFETCHLOG (the machine was shared
+with another lane's run: upper bounds). Every chassis / weapon cue set is warmed on a worker at selection (8 chassis, 17 weapon
+classes, 221-633 waves each); body cue sets register one per step (<= ~2 ms, M09g); prefetch adopts 0.08 ms max, never
+waiting. Main-thread audio per cue play: 88 plays above 0.05 ms, max 1.04 ms - all announcer / switchboard dialog lines
+decoded on first play (0.5-0.8 ms each, short dialog, below the worker-defer threshold); everything else < 0.05 ms. No frame
+after the round start correlates with audio (the 4 frames > 33 ms after f700 have sim 5-8 ms: render-side).

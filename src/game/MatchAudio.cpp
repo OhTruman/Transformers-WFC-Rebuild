@@ -70,6 +70,7 @@ bool MatchAudio::play(const std::string& cue) {
 }
 
 bool MatchAudio::announcerEvent(const std::string& event) {
+    if (event.empty()) return false;                 // authored None (e.g. TnGameTypeMessageCTF has no GameTypeDialog): silent
     auto it = events_.find(event);
     if (it == events_.end()) { if (logOn()) LOG_INFO("ANNOUNCER no cue for %s", event.c_str()); return false; }
     return play(it->second);
