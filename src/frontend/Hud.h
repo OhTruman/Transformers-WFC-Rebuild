@@ -58,6 +58,10 @@ struct HudFrame {
     std::optional<bool> hudScrambled;              // HudScrambled
     std::optional<double> scoringMultiplier;       // CompetitiveScoring
     std::optional<int> increaseDamage;             // IncreaseDamage (type)
+    // Diffed into events here: the prompts on screen (a new one -> NotifyContextualCommand(0, 0, text), a gone one ->
+    // (0, 1, text)), and the refused-transform counter (each increment -> NotifyCantTransform).
+    std::optional<std::vector<std::string>> contextualPrompts;
+    std::optional<int> cantTransformCount;
 };
 
 struct HudKill {
@@ -87,6 +91,16 @@ public:
     void cantTransform() { events_.push_back({"NotifyCantTransform", {}}); }
     void transformDisrupted(bool on) { events_.push_back({"TransformDisrupted", {on}}); }
     // OnAttackingTeam (TnGameRules_SingleFlagCTF attaches it): 1 attacking / 2 defending from GRI.AttackingTeam.
+    // Rebuild -> Hud_GFX conversions. Yaw: the rebuild's yaw turns left (counter-clockwise from above), Unreal's and the
+    // HUD's (_rotation degrees, clockwise) turn right, so the HUD yaw is the negated rebuild yaw.
+    static double hudYaw(double rebuildYaw) { return -rebuildYaw; }
+    // mc_grenadeIcon GrenadeType: 1 Frag, 2 Flashbang, 3 KMine, 4 Heal (0 none) [CONFIRMED Hud_GFX sprite 376]; from the
+    // grenade weapon id [PROV name match; versus bags are frag].
+    static int grenadeTypeFor(const std::string& id);
+    // NotifyTargetTypeChanged: 0 friendly (blue crosshair), 1 enemy (red), else white [CONFIRMED Hud_GFX].
+    static int targetTypeFor(int targetPlayer, int targetTeam, int myTeam) {
+        return targetPlayer < 0 || targetTeam < 0 || targetTeam == 255 ? 2 : targetTeam == myTeam ? 0 : 1;
+    }
     static int attackingStatus(int attackingTeamIndex, int myTeam) {
         return attackingTeamIndex < 0 ? 0 : attackingTeamIndex == myTeam ? 1 : 2;
     }

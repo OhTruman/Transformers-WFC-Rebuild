@@ -1203,17 +1203,16 @@ void Application::routeMatchToFrontend(float dt) {
     }
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
-    {   // [integration 09c] Gameplay's TnHudDataObserver values (presented().hud2) -> the Hud_GFX observer callbacks (Frontend
-        // 420aa48 / 104406d). Unset fields send nothing; values are change-driven inside HudController.
+    {   // [integration 09c] TnHudDataObservers (Gameplay's presented().hud2) -> the Hud_GFX callbacks; conversions live in
+        // frontend::HudController (Frontend's mapping 5e80046; target type straight from Gameplay b317989 / RE e5cb5fd).
+        using HC = frontend::HudController;
         const auto& o = pf.hud2;
-        static bool progressShown = false;
-        static std::string progressObs;
         if (!o.progress.labelId.empty()) {
-            progressObs = "TnHudDataObserver" + o.progress.labelId;
-            hf.progressObserver = progressObs; hf.progress = o.progress.value; hf.progressName = o.progress.name;
-            progressShown = true;
-        } else if (progressShown) {                     // the bar ends: one 0, then unset
-            hf.progressObserver = progressObs; hf.progress = 0.0; progressShown = false;
+            hf.progressObserver = "TnHudDataObserver" + o.progress.labelId;
+            hf.progressName = o.progress.name;
+            hf.progress = o.progress.value;
+        } else {
+            hf.progress = 0.0;                   // the bar ends (0 hides it); sent once, then unchanged
         }
         hf.killstreakId = o.killstreakAvailable ? o.killstreakId : std::string();
         for (size_t i = 0; i < o.abilities.size() && i < hf.abilities.size(); ++i) {
@@ -1221,29 +1220,30 @@ void Application::routeMatchToFrontend(float dt) {
             frontend::HudFrame::Ability ha;
             ha.id = a.id.empty() ? std::string("None") : a.id;
             ha.cooldown = a.cooldownLeft;
-            ha.fraction = a.cooldownTime > 0.0f ? 1.0 - a.cooldownLeft / a.cooldownTime : 1.0;
+            ha.fraction = a.cooldownTime > 0.0f ? std::max(0.0f, std::min(1.0f, 1.0f - a.cooldownLeft / a.cooldownTime)) : 1.0f;
             hf.abilities[i] = ha;
         }
-        if (o.grenade.ammo >= 0) { hf.grenadeAmmo = o.grenade.ammo; hf.activeGrenades = o.grenade.activeCount; }
-        hf.lockOnState = o.lockOn.state;
-        hf.targetType = o.target.type;                  // TnHudDataObserverTargetType: 0 Friend / 1 Enemy / 2 None (RE e5cb5fd)
-        hf.targetName = o.target.name;                  // only on a direct crosshair hit of a pawn with a PRI
-        if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
-        hf.weaponJammed = o.weapon.jammed; hf.weaponSpread = o.weapon.spread; hf.weaponMessage = o.weapon.message;
-        // Damage indicators: the HUD rotates the ring by -PlayerYaw and each arrow by its WORLD yaw (Frontend note).
-        const double viewYaw = camera_.yaw;
-        hf.playerYaw = viewYaw;
-        for (const auto& d : pf.damageTaken) frontend_->hud().damageIndicator(viewYaw + d.yaw, d.amount);
-        for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();   // hit marker per hit
-        static std::vector<std::string> lastContextual;
-        if (o.contextual != lastContextual) {
-            for (const std::string& c : o.contextual)
-                if (std::find(lastContextual.begin(), lastContextual.end(), c) == lastContextual.end()) frontend_->hud().contextualCommand(0, c);
-            lastContextual = o.contextual;
+        if (o.grenade.ammo >= 0) {
+            hf.grenadeAmmo = o.grenade.ammo;
+            hf.grenadeType = HC::grenadeTypeFor(o.grenade.type);
+            hf.activeGrenades = o.grenade.activeCount;
         }
-        static int lastCantTransform = 0;
-        if (o.cantTransformCount < lastCantTransform) lastCantTransform = 0;   // a new match
-        for (; lastCantTransform < o.cantTransformCount; ++lastCantTransform) frontend_->hud().cantTransform();
+        hf.lockOnState = o.lockOn.state;
+        hf.targetType = o.target.type;           // 0 Friend / 1 Enemy / 2 None
+        hf.targetName = o.target.name;           // only on a direct crosshair hit of a pawn with a PRI
+        if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
+        hf.weaponJammed = o.weapon.jammed;
+        hf.weaponSpread = o.weapon.spread;
+        hf.weaponMessage = o.weapon.message;
+        hf.contextualPrompts = o.contextual;
+        hf.cantTransformCount = o.cantTransformCount;
+        // scrambled / scoringMultiplier / downedHealth have no source yet: left unset (nothing sent).
+        // Damage direction: the ring turns with the view (-PlayerYaw) and each arrow keeps its world yaw, both in the HUD's
+        // clockwise sense; damageTaken.yaw is relative to the view.
+        hf.playerYaw = HC::hudYaw(camera_.yaw);
+        for (const auto& d : pf.damageTaken)
+            frontend_->hud().damageIndicator(HC::hudYaw(camera_.yaw + d.yaw), std::min(100.0f, d.amount));   // DmgAmount = big-arrow _alpha
+        for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();               // hit marker per hit
     }
     frontend_->hud().setFrame(hf);
     world_.consumePresented();   // once per call: the queues above were read
