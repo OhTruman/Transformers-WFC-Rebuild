@@ -85,7 +85,9 @@ foreach ($mode in $Modes) {
         Res "$tag.scoring" $scSt ("{0} MATCH score lines (last: {1}); {2} kills{3}" -f $scores.Count, $rows[-1].last_score, $kills, $(if ($objective -contains $mode -and -not $scores.Count) { "; objective score changes are not logged by this build - judged by the end reason" } else { "" })) "Gameplay"
         # CTF / EXT may legitimately end on time (round / time cap); elsewhere the shortened score limit is the expected end
         $isScore = $reason -in "score_limit", "Score"; $isTime = $reason -in "time_limit", "Time"
-        $endOk = $isScore -or (@("CTF", "EXT") -contains $mode -and $isTime)
+        # CTF: the original reports "Score" for every end - rounds exhausted (time) or mercy (decompiled
+        # TnGameRules_SingleFlagCTF.CheckEndCondition / CheckMercyRule, Gameplay 2026-10-07); EXT may end on its time cap
+        $endOk = if ($mode -eq "CTF") { $isScore } else { $isScore -or ($mode -eq "EXT" -and $isTime) }
         Res "$tag.end" $(if ($endOk) { "PASS" } elseif ($reason) { "PARTIAL" } else { "FAIL" }) ("MATCH end reason={0} winner={1} t={2}s" -f $(if ($reason) { $reason } else { "(none)" }), $winner, $endT) "Gameplay"
         # Gameplay's audit lines (after a7f5c95): countdown 10 s, wave respawn 5 s (min 3), CTF rounds (5 s between, attackers swap),
         # time-limit end at start + time_limit. Skipped on builds without them.
