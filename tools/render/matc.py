@@ -676,7 +676,8 @@ class MatCompiler:
         spec = [('Distortion', 3, 'vec3(0.0)'),
                 ('DiffuseColor', 3, 'vec3(0.0)'), ('SpecularColor', 3, 'vec3(0.0)'), ('SpecularPower', 1, '15.0'),
                 ('Normal', 3, 'vec3(0.0, 0.0, 1.0)'), ('EmissiveColor', 3, 'vec3(0.0)'),
-                ('Opacity', 1, '1.0'), ('OpacityMask', 1, '1.0'), ('CustomLighting', 3, 'vec3(0.0)')]
+                ('Opacity', 1, '1.0'), ('OpacityMask', 1, '1.0'), ('CustomLighting', 3, 'vec3(0.0)'),
+                ('ScreenAlpha', 1, '1.0')]   # WFC material input (post-process chain MaterialEffects, e.g. the HUD screen effects)
         # Normal first: UE3 computes the material normal before inputs that depend on it.
         order = ['Normal'] + [s[0] for s in spec if s[0] != 'Normal']
         connected = {}

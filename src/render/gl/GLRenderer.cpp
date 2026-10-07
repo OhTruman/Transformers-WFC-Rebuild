@@ -137,6 +137,7 @@ public:
     }
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
+        if (const char* hf = std::getenv("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
             static long seen = 0;
@@ -1095,6 +1096,7 @@ public:
         limiter_.setLimit(hz);
     }
     float frameLimit() const override { return limiter_.limit(); }
+    void setHudScreenEffect(int chain) override { wfc_.setHudScreenEffect(chain); }
     void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
     void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
@@ -1416,6 +1418,14 @@ public:
         glx::gpuMark(glx::kPassWorld);       // first character / dynamic draw: the world before it
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
+        drawMeshArrays(m, model, color);
+    }
+
+    void drawDynamicMeshPosed(const MeshData& m, const core::Mat4& model, const core::Vec3& color, uint64_t serial) override {
+        watchdog::phase("drawDynamicMesh");
+        glx::gpuMark(glx::kPassWorld);
+        if (m.empty()) return;
+        if (wfc_.active()) { wfc_.drawDynamic(m, model, &m, serial); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);
     }
 

@@ -172,7 +172,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     # TransGame.xxx (startup package) cooks the pickup FX and their materials (AssetTools 7a69756
     # streets_pickup_fx.json: package TransGame); map copies win when both exist (largest export).
-    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'])
+    # UI_GFxHud_p: the HUD post-process chain materials (Milestone E: LowHealth / StaticDischarge screen effects)
+    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
     for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)
@@ -218,7 +219,7 @@ def main():
                     missing = [n for n in missing if n not in found]
         if ufb:
             print('materials from other maps packages: %s' % ', '.join(ufb))
-            repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + ufb)
+            repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
     mats = sorted(names - {None}) + extra
     # M74 energy-death (Defrag) instances: the form-mesh package -> instance table goes with the render data
     ed = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'energy_death_materials.json'), encoding='utf-8'))

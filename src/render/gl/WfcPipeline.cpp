@@ -145,7 +145,7 @@ struct MatIn { vec2 uv0; vec2 uv1; vec3 subUV2; vec4 vertexColor; vec3 worldPosU
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
                vec4 dynParam; };
 struct MatOut { vec3 Distortion; vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal;
-                vec3 EmissiveColor; float Opacity; float OpacityMask; vec3 CustomLighting; };
+                vec3 EmissiveColor; float Opacity; float OpacityMask; vec3 CustomLighting; float ScreenAlpha; };
 // window depth -> view-space Z in UE units (UE3 PixelDepth / SceneDepth are view Z)
 float wfcLinearDepth(float d) {
     float z = d * 2.0 - 1.0, n = uNearFar.x, f = uNearFar.y;
@@ -231,6 +231,16 @@ void main() {
     MatOut o; wfcMaterial(m, o);
     if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
     oColor = vec4(0.0);
+}
+)";
+// HUD post-process chain MaterialEffect (UI_GFxHud_p LowHealth / StaticDischarge, RE 6bbf2cb): the material reads
+// the finished frame through SceneTexture; its output replaces the frame weighted by the WFC ScreenAlpha input
+// [HIGH: the exact ScreenAlpha combine is not traced - multiply darkens toward the edges (LowHealth tunnel vision)]
+const char* kFSMainScreenEffect = R"(
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    oColor = vec4(o.EmissiveColor * clamp(o.ScreenAlpha, 0.0, 1.0), 1.0);
 }
 )";
 const char* kFSMainLM = R"(
@@ -590,6 +600,7 @@ void Pipeline::clearProgramCache() {
 
 // ------------------------------------------------------------------------- unloading (level travel)
 void Pipeline::release() {
+    evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
     if (!active_ && meshes_.empty() && !fbo_) return;
     auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
     auto fbo = [](GLuint& f) { if (f) { DeleteFramebuffers(1, &f); f = 0; } };
@@ -626,7 +637,8 @@ void Pipeline::release() {
                       &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1]})
         fbo(*f);
     if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
-    for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_}) vao(*v);
+    for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
+    for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
     for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_})
@@ -1348,6 +1360,12 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 mainOverride_ = nullptr;
                 if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
             }
+            if (!lightmapped && matName.find("ScreenEffect_M") != std::string::npos) {   // HUD chain material
+                mainOverride_ = kFSMainScreenEffect;
+                int sf = buildProgram(key + "|SCREENFX", s.glsl, slots, s.cube, 0, true, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                if (sf >= 0) { progs_[(size_t)sf].original = true; progs_[(size_t)r].screenProg = sf; }
+            }
             if (!lightmapped && s.blend <= 1) {          // caster variant for projected shadows
                 mainOverride_ = kFSMainShadow;
                 int sh = buildProgram(key + "|SHADOW", s.glsl, slots, s.cube, s.blend, s.twoSided, false, s.clip, false, s.rtParams);
@@ -1409,7 +1427,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 
 // ------------------------------------------------------------------------- light environment
 namespace {
-struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0; } gStats;
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0, dynReused = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -2421,7 +2439,67 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
                  std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
 }
 
-void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
+void Pipeline::drawHudScreenEffect() {
+    static const char* kMat[2] = {"UI_GFxHud_p.StaticDischargeScreenEffect_M", "UI_GFxHud_p.LowHealth.LowHealthScreenEffect_M"};
+    if (hudEffect_ < 0 || std::getenv("WFC_NOHUDFX")) return;
+    const int base = programFor(kMat[hudEffect_], nullptr, false);
+    if (base < 0 || progs_[(size_t)base].screenProg < 0) {
+        static bool logged[2] = {false, false};
+        if (!logged[hudEffect_]) { logged[hudEffect_] = true; LOG_WARN("wfc: HUD screen effect %s not in the render data", kMat[hudEffect_]); }
+        return;
+    }
+    const Program& P = progs_[(size_t)progs_[(size_t)base].screenProg];
+    if (!screenFxVao_) {   // full-screen quad in clip space (identity transforms), UV0 = screen UV
+        const float q[4][2] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        std::vector<float> v(4 * 14, 0.0f);
+        for (int k = 0; k < 4; ++k) {
+            float* o = &v[(size_t)k * 14];
+            o[0] = q[k][0]; o[1] = q[k][1]; o[2] = 0.0f;
+            o[3] = 0; o[4] = 0; o[5] = 1;
+            o[6] = 1; o[7] = 0; o[8] = 0; o[9] = 1;
+            o[10] = q[k][0] * 0.5f + 0.5f; o[11] = 0.5f - q[k][1] * 0.5f; o[12] = o[10]; o[13] = o[11];
+        }
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        GenVertexArrays(1, &screenFxVao_); GenBuffers(1, &screenFxVbo_); GenBuffers(1, &screenFxIbo_);
+        BindVertexArray(screenFxVao_);
+        BindBuffer(GL_ARRAY_BUFFER, screenFxVbo_);
+        BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STATIC_DRAW);
+        BindBuffer(GL_ELEMENT_ARRAY_BUFFER, screenFxIbo_);
+        BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof idx, idx, GL_STATIC_DRAW);
+        setupAttribs();
+        BindVertexArray(0);
+    }
+    if (!sceneCopyFbo_) return;
+    // the finished frame (default framebuffer) -> the scene-colour copy the material's SceneTexture reads
+    BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
+    sceneColorCopied_ = true;                         // bindCommon must not re-copy the HDR scene over it
+    const core::Mat4 vp = viewProj_;
+    viewProj_ = core::Mat4::identity();
+    glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+    BindVertexArray(screenFxVao_);
+    bindCommon(P, core::Mat4::identity());
+    ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)0);
+    BindVertexArray(0);
+    viewProj_ = vp;
+    glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
+}
+
+void Pipeline::evictPosed(bool all) {
+    for (auto it = posed_.begin(); it != posed_.end();) {
+        if (all || frameNo_ - it->second.lastFrame > 600) {
+            if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
+            if (it->second.vbo) DeleteBuffers(1, &it->second.vbo);
+            if (it->second.ibo) DeleteBuffers(1, &it->second.ibo);
+            it = posed_.erase(it);
+        } else ++it;
+    }
+}
+
+void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial) {
     if (m.empty()) return;
     struct DynTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
         ~DynTimer() { gStats.dynTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.dynCalls; } } dynTimer;
@@ -2455,7 +2533,36 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         }
     }
     if (offscreen) { ++counts_.culled; ++gStats.dynCulled; }
-    if (!offscreen) {
+    GLuint drawVao = dynVao_;
+    if (!offscreen && cacheKey) {   // drawDynamicMeshPosed: persistent buffers per MeshData, rebuilt on a new pose serial
+        PosedBuf& pb = posed_[cacheKey];
+        pb.lastFrame = frameNo_;
+        const bool same = pb.vao && pb.serial == serial && pb.verts == m.vertexCount() && pb.idx == m.indices.size();
+        const bool fresh = !pb.vao;
+        if (fresh) { GenVertexArrays(1, &pb.vao); GenBuffers(1, &pb.vbo); GenBuffers(1, &pb.ibo); }
+        if (!same) {
+            static std::vector<float> v;
+            auto tb0 = std::chrono::steady_clock::now();
+            buildVertices(m, v);
+            auto tb1 = std::chrono::steady_clock::now();
+            BindVertexArray(pb.vao);
+            BindBuffer(GL_ARRAY_BUFFER, pb.vbo);
+            BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
+            if (fresh || pb.idx != m.indices.size()) {   // indices: once per mesh shape
+                BindBuffer(GL_ELEMENT_ARRAY_BUFFER, pb.ibo);
+                BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STATIC_DRAW);
+            }
+            setupAttribs();
+            BindVertexArray(0);
+            gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
+            gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
+            pb.serial = serial; pb.verts = m.vertexCount(); pb.idx = m.indices.size();
+        } else {
+            ++gStats.dynReused;
+        }
+        drawVao = pb.vao;
+    }
+    if (!offscreen && !cacheKey) {
         static std::vector<float> v;   // reused: a character's interleaved vertices are ~0.5 MB per draw
         auto tb0 = std::chrono::steady_clock::now();
         buildVertices(m, v);
@@ -2508,7 +2615,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     }
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     GpuMesh g;
-    g.vao = dynVao_;
+    g.vao = drawVao;
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
     for (const SubMesh& s : subs) {
@@ -2921,6 +3028,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameMats_.clear();
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
+    if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
     if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
@@ -3029,8 +3137,9 @@ void Pipeline::endFrame() {
         auto now = std::chrono::steady_clock::now();
         acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
         if (++frames == 120) {
-            LOG_INFO("wfc: dynamic meshes: %.1f calls (%.1f culled), total %.2f ms = vertex build %.2f + upload %.2f + "
-                     "shadow %.2f + rest per frame", gStats.dynCalls / 120.0, gStats.dynCulled / 120.0, gStats.dynTotalMs / 120.0,
+            LOG_INFO("wfc: dynamic meshes: %.1f calls (%.1f culled, %.1f unchanged poses reused), total %.2f ms = vertex build "
+                     "%.2f + upload %.2f + shadow %.2f + rest per frame", gStats.dynCalls / 120.0, gStats.dynCulled / 120.0,
+                     gStats.dynReused / 120.0, gStats.dynTotalMs / 120.0,
                      gStats.dynBuildMs / 120.0, gStats.dynUploadMs / 120.0, gStats.dynShadowMs / 120.0);
             LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
                      statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
@@ -3134,6 +3243,7 @@ void Pipeline::endFrame() {
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     UseProgram(0);
+    drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)
     drawCanvasTiles();
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);

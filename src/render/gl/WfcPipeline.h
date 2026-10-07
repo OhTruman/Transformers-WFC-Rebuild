@@ -126,6 +126,7 @@ struct Program {
     std::string material;         // original material path, lower case (material-parameter routing)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
+    int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
     float clip = 0.3333f;
 };
 
@@ -219,7 +220,8 @@ public:
     // Returns a GPU mesh id, or -1 (caller falls back to the legacy path).
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
-    void drawDynamic(const MeshData& m, const core::Mat4& model);
+    // cacheKey / serial (drawDynamicMeshPosed): a persistent vertex buffer per key, rebuilt only when the serial changes
+    void drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey = nullptr, uint64_t serial = 0);
     void prewarmDynamic(const MeshData& m);   // resolve drawDynamic's programs / textures without drawing
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
@@ -310,6 +312,15 @@ private:
     // the probes' ambient cube at a UE point, glTF face order (+X, -X, +Y up, -Y, +Z, -Z); false outside every volume
     bool beastAmbient(const core::Vec3& ueP, core::Vec3 cube[6]) const;
     bool warmup_ = false;
+    int hudEffect_ = -1;                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
+    GLuint screenFxVao_ = 0, screenFxVbo_ = 0, screenFxIbo_ = 0;
+    void drawHudScreenEffect();
+public:
+    void setHudScreenEffect(int chain) { hudEffect_ = chain < 0 ? -1 : (chain > 1 ? 1 : chain); }
+private:
+    struct PosedBuf { GLuint vao = 0, vbo = 0, ibo = 0; uint64_t serial = ~0ull; size_t verts = 0, idx = 0; int lastFrame = 0; };
+    std::map<const void*, PosedBuf> posed_;              // drawDynamicMeshPosed buffers (Milestone E)
+    void evictPosed(bool all);
     double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
     std::map<std::string, int> statFxSpawns_;            // runtime spawns per template (WFC_RENDERSTATS)
     int hiddenGameSkipped_ = 0;
