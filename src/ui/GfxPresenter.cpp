@@ -92,7 +92,64 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
     if (!hud_) return;
     Args a;
     for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud_->player().vm(), b));
+    if (fn == "_global.GameMessage" && extendedMatch_) { extendedKillFeed(a); return; }
     hud_->invoke(fn, a);
+}
+
+namespace {
+// Kill feed lines in extended matches (PC EXTENSION, user decision): one constant to tune.
+constexpr int kExtendedFeedLines = 7;
+gfx::avm1::Object* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int depth = 0) {
+    if (!c || depth > 10) return nullptr;
+    if (c->script && vm.findOwner(c->script, "messageQueue") == c->script && vm.get(c->script, "messageQueue").isObject()) return c->script;
+    for (auto& [d, ch] : c->children)
+        if (ch->kind == gfx::DisplayObject::Kind::Clip && !ch->removed)
+            if (gfx::avm1::Object* r = findFeedManager(vm, static_cast<gfx::MovieClip*>(ch.get()), depth + 1)) return r;
+    return nullptr;
+}
+}
+
+// Hud_GFX mc_gameMessageManager (_global.GameMessage) [CONFIRMED script]: each line fades itself after 5 s; a new line
+// is unshifted onto messageQueue, every line moves to y = i * -22 and lines past index 4 fadeOut() over 1 s - 5 lines
+// plus the fading overflow. In extended matches (user decision, PC EXTENSION) up to kExtendedFeedLines stay, each with
+// the same 5 s fade, and a line pushed past the last is removed at once: before the original function runs, the lines
+// from index 4 on leave its queue (so it starts no overflow fade) and are kept in __wfcHeld, placed below it afterwards.
+void GfxPresenter::extendedKillFeed(const Args& a) {
+    gfx::Player& p = hud_->player();
+    gfx::avm1::VM& vm = p.vm();
+    gfx::avm1::Object* mgr = findFeedManager(vm, p.root());
+    if (!mgr) { hud_->invoke("_global.GameMessage", a); return; }
+    const auto alive = [&](const gfx::avm1::Value& v) { return v.isObject() && !vm.getV(v, "_name").isUndef(); };
+    gfx::avm1::Value q = vm.get(mgr, "messageQueue");
+    std::vector<gfx::avm1::Value> held;
+    const int qn = (int)vm.toNumber(vm.getV(q, "length"));
+    if (qn > 4) {
+        gfx::avm1::Value moved = vm.callMethod(q, "splice", {gfx::avm1::Value(4)});
+        const int mn = (int)vm.toNumber(vm.getV(moved, "length"));
+        for (int i = 0; i < mn; ++i) { gfx::avm1::Value v = vm.getV(moved, std::to_string(i)); if (alive(v)) held.push_back(v); }
+    }
+    gfx::avm1::Value old = vm.get(mgr, "__wfcHeld");
+    if (old.isObject()) {
+        const int on = (int)vm.toNumber(vm.getV(old, "length"));
+        for (int i = 0; i < on; ++i) { gfx::avm1::Value v = vm.getV(old, std::to_string(i)); if (alive(v)) held.push_back(v); }
+    }
+    hud_->invoke("_global.GameMessage", a);
+    // After the call the queue holds the new line and up to 4 older ones (indices 0..4); the held lines follow at 5...
+    std::vector<gfx::avm1::Value> keep;
+    for (size_t k = 0; k < held.size(); ++k) {
+        const int idx = 5 + (int)k;
+        if (idx < kExtendedFeedLines) {
+            gfx::avm1::Object* to = vm.newPlain();
+            vm.set(to, "_y", gfx::avm1::Value((double)(idx * -22)));
+            vm.callMethod(held[k], "interp", {gfx::avm1::Value(0.2), gfx::avm1::Value("easeout"), gfx::avm1::Value(4), gfx::avm1::Value(to)});
+            keep.push_back(held[k]);
+        } else {
+            vm.callMethod(held[k], "removeMovieClip", {});
+        }
+    }
+    vm.set(mgr, "__wfcHeld", gfx::avm1::Value(vm.newArray(keep)));
+    frontend::FlowTrace::emit("hud.killFeedExtended", {{"queue", std::to_string((int)vm.toNumber(vm.getV(vm.get(mgr, "messageQueue"), "length")))},
+                                                    {"held", std::to_string(keep.size())}, {"removed", std::to_string(held.size() - keep.size())}});
 }
 
 void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
@@ -787,6 +844,7 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
 }
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
+    extendedMatch_ = flow.matchValues().players.size() > 10;
     core::prof::Scope prof("ui.update");
     syncMovies(flow);
     syncPopup(flow);
