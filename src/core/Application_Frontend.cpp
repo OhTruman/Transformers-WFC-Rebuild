@@ -1046,8 +1046,13 @@ void Application::routeMatchToFrontend(float dt) {
             frontend::FlowTrace::emit("match.kill", {{"victim", std::to_string(e.player)}, {"killer", std::to_string(e.other)}, {"how", e.text}});
             {   // RUNTIME-EVENTS: kill (score already applied by Gameplay), team / player score, death
                 const core::Vec3 dp = posOf(e.player);
+                // [integration 09c] weapon = the kill record's damage type (Match::killed fills it; the event text is only the
+                // suicide / environment tag), newest record for this victim.
+                std::string kdmg = e.text;
+                for (auto it = match.killHistory().rbegin(); it != match.killHistory().rend(); ++it)
+                    if (it->victim == e.player) { if (!it->damageType.empty()) kdmg = it->damageType; break; }
                 LOG_INFO("MATCH kill killer=%d victim=%d killer_team=%d victim_team=%d weapon=%s", e.other, e.player, teamOf(e.other),
-                         teamOf(e.player), e.text.empty() ? "unknown" : e.text.c_str());
+                         teamOf(e.player), kdmg.empty() ? "unknown" : kdmg.c_str());
                 if (e.other >= 0 && e.other != e.player) {
                     // [integration 09c] reason=kill, and only when the score changed (CTF / objective modes: kills do not score).
                     static int lastTeamScore[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
