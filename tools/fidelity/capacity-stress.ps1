@@ -20,7 +20,7 @@
 #   .\tools\fidelity\capacity-stress.ps1 -Root work\ab\<target> -OutDir <dir> [-Maps 508,507,509] [-Pops p32v32,ffa64] [-Resolutions 1920x1080,2560x1440] [-TimeLimit 60] [-NoSplit] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "507"),
       [string[]]$Pops = @("orig10", "p16v16", "p32v32", "ffa64"), [int]$TimeLimit = 75, [int]$Difficulty = 1,
-      [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit,
+      [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit, [switch]$FixedCam, [hashtable]$CamByMap = @{},
       [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -30,6 +30,11 @@ $H = Get-ExeHooks $exe
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
 $Maps = @($Maps | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 $Resolutions = @($Resolutions | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+# -FixedCam: Rendering's WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every match frame at one view, so runs are comparable
+# (frame cost follows what the camera sees). Defaults: Streets overview from above team 0's spawn into team 1's (Rendering).
+$camDefaults = @{ "508" = "100,-700,-680,-141.6,-12" }
+foreach ($k in $CamByMap.Keys) { $camDefaults["$k"] = $CamByMap[$k] }
+if ($FixedCam -and -not $H.Contains("WFC_FIXEDCAM")) { Write-Warning "build has no WFC_FIXEDCAM - runs use the scripted player's camera" }
 $Pops = @($Pops | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "capacity.$id" $status $null $note $owner }
 if (-not $H.Contains("WFC_LOBBY_OPTIONS")) { Res "hook" "UNKNOWN" "build has no WFC_LOBBY_OPTIONS (Frontend 2cf1ab1): bot counts cannot be set per faction" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
@@ -58,6 +63,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_AMBLOG = "1"; WFC_BOTLOG = "all"; WFC_BOTPERF = "5"
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
+        if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"] }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
     }
     # CPU / GPU split: a separate ONE-match run with WFC_RENDERSTATS (glFinish per frame distorts timing, so never in the timing run)
@@ -75,6 +81,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                      WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_RENDERSTATS = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"
                      WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=600" }
             if ($H.Contains("WFC_CHARSELECT")) { $e2.WFC_CHARSELECT = "1" }
+            if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"] }
             $null = Invoke-WfcExe $exe $ds $e2 "run.log" 700
         }
     }
@@ -149,5 +156,5 @@ foreach ($map in $Maps) {
 }
 Write-WfcCsv $rows (Join-Path $OutDir "capacity.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("res", "map", "pop", "match", "spawned", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
+Write-M07Matrix $rows @("res", "map", "pop", "match", "spawned", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
 "CAPACITY: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
