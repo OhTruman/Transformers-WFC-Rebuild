@@ -599,6 +599,13 @@ Application::MatchExit Application::runMatch() {
         }
         if (const char* fp = std::getenv("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
             world_.player().controller().setCameraPitch((float)std::atof(fp));
+        // WFC_MATCH_SECONDS=N (determinism / lockstep comparisons): exit after N s of match time in progress, so runs end at the same
+        // simulation point however many frames loading took (a frame budget counted from boot truncates runs at different match times).
+        if (const char* ms = std::getenv("WFC_MATCH_SECONDS"))
+            if (world_.matchActive() && world_.match().state() == game::Match::State::InProgress && world_.match().elapsedTime() >= (float)std::atof(ms)) {
+                LOG_INFO("WFC_MATCH_SECONDS: %.1f s of match time reached at frame %ld (step-identical end point)", world_.match().elapsedTime(), frame);
+                break;
+            }
         // Per-frame input (camera orientation, buffered movement intent).
         world_.handleInput(input, (float)realDt);
 
