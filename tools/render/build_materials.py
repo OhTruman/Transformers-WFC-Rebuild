@@ -12,6 +12,7 @@ import json, os, struct, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo, map_packages, CONTENT, COOKED  # noqa: E402
 import matc  # noqa: E402
+import character_materials  # noqa: E402
 import impact_decals  # noqa: E402
 import xbox_texture  # noqa: E402
 
@@ -217,6 +218,25 @@ def main():
                 if found:
                     ufb.append(pk)
                     missing = [n for n in missing if n not in found]
+        # Chassis cooked into no MP map (the six extra bodies, Gameplay 1ca3bf5: Car8 / 9 / 10, Frenzy, Rumble, Laserbeak;
+        # PC ADAPTATION) ship in their own standalone cooked packages (TR_SoldierCarDec_ROBO_p.xxx, ...): the
+        # material's outer package is added as a fallback when it exists (original cooked data).
+        # The six extra bodies (Gameplay 1ca3bf5; PC ADAPTATION) are cooked into no MP map and their own TR_* packages
+        # are seekfree stubs: their materials come from the campaign packages the AssetTools roster lists as the
+        # chassis' cooked copies (original cooked data; the first package that exports a usable copy wins).
+        cooked = {f.lower(): f for f in os.listdir(COOKED)}
+        for n in list(missing):
+            if n not in missing: continue
+            for pk in character_materials.cooked_copies(n):
+                pk = cooked.get(pk.lower())
+                if not pk: continue
+                pr = Repo([pk])
+                found = [m for m in missing if usable(pr, m)]
+                if found:
+                    if pk not in ufb: ufb.append(pk)
+                    missing = [m for m in missing if m not in found]
+                if n in found:
+                    break
         if ufb:
             print('materials from other maps packages: %s' % ', '.join(ufb))
             repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
