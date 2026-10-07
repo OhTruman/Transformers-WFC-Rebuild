@@ -11,7 +11,8 @@
 namespace platform {
 
 struct QaRequest {
-    enum class Kind { None, Launch, Restart, Title, Respawn, NextStart, Noclip, God, Dummy, SwapCharacter } kind = Kind::None;
+    enum class Kind { None, Launch, Restart, Title, Respawn, NextStart, Noclip, God, Dummy, SwapCharacter,
+                      BotOverlay, FreezeBots, KillBots, TeleportAim, ModeChanged } kind = Kind::None;
     int mapId = -1;
     std::string mode, character, weapon;
 };
@@ -28,6 +29,8 @@ public:
     virtual bool visible() const = 0;
     virtual void setStatus(const std::string& text) = 0;
     virtual QaRequest poll() = 0;   // the button pressed since the last poll (Kind::None if none)
+    virtual void setBots(const std::string& text) { (void)text; }   // the per-bot debug list (DEV TOOL)
+    virtual void setMaps(const std::vector<Option>& maps) { (void)maps; }   // refill the map list (filtered by the mode)
 };
 
 // The platform's panel, or nullptr where none exists.

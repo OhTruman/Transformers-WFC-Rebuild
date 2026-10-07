@@ -92,7 +92,7 @@ LevelUp addXp(ProgressionState& s, int specialty, long amount) {
     s.xp[(size_t)specialty] += add;
     s.lastMatchXp[(size_t)specialty] += add;
     const int after = levelForXp(s.xp[(size_t)specialty]);
-    if (after > before) { up.specialty = specialty; up.level = after; }
+    if (after > before) { up.specialty = specialty; up.level = after; up.from = before; }
     return up;
 }
 

@@ -766,7 +766,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         listed = listed || hz == current;
     }
     if (!listed) choice(current, "Custom (" + std::to_string(current) + ")");
-    choice(0, "Unlimited");
+    choice(0, "Uncapped");   // the user's wording (Milestone E settings brief)
     gfx::avm1::Object* item = vm.newPlain();
     vm.set(item, "choiceArray", gfx::avm1::Value(vm.newArray(choices)));
     vm.set(item, "dataStore", gfx::avm1::Value(std::string("<PCSettings:FrameLimit>")));

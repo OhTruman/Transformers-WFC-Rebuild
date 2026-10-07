@@ -268,6 +268,7 @@ private:
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     int hudPostChain_ = -1;
+    std::vector<std::string> unlockedThisGame_;   // TnPlayerController.SkillsUnlockedThisGame ("Specialty.UniqueId")
     std::string prefetched_;
     size_t seenFs_ = 0;
     std::unique_ptr<DataStores> stores_;
