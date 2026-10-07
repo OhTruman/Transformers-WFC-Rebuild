@@ -530,6 +530,22 @@ template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W&
     } else { (void)w; (void)r; }
     return out;
 }
+// The lock-on target projected with the renderer's frame camera (as qaLabels): viewport 0..1 from the top left.
+template <class Rn> std::optional<frontend::HudFrame::LockOnMarker> lockOnMarker(const Rn* r, const core::Vec3& p) {
+    if constexpr (HasRenderCamera<Rn>::value) {
+        if (!r) return std::nullopt;
+        const auto d = r->renderDiagnostics();
+        const float* m = d.viewProj;
+        const float cx = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12], cy = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+        const float cw = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+        frontend::HudFrame::LockOnMarker mk;
+        mk.inFront = cw > 0.1f;
+        const float iw = mk.inFront ? 1.0f / cw : -1.0f / std::max(-cw, 0.1f);
+        mk.x = cx * iw * 0.5f + 0.5f;
+        mk.y = 1.0f - (cy * iw * 0.5f + 0.5f);
+        return mk;
+    } else { (void)r; (void)p; return std::nullopt; }
+}
 template <class W> std::string qaBotTool(W& w, platform::QaRequest::Kind k) {
     using K = platform::QaRequest::Kind;
     if (k == K::TeleportAim) {
@@ -1229,6 +1245,13 @@ void Application::routeMatchToFrontend(float dt) {
             hf.activeGrenades = o.grenade.activeCount;
         }
         hf.lockOnState = o.lockOn.state;
+        // The 'LockOn' GFx marker on the lock target while locking / locked (TnHUD UpdateObjectiveMarker; distance m).
+        if (o.lockOn.state > 0 && o.lockOn.target >= 0)
+            if (auto mk = lockOnMarker(renderer_, o.lockOn.targetPos)) {
+                mk->id = o.lockOn.target;
+                mk->distance = o.lockOn.distance;
+                hf.lockOnMarker = mk;
+            }
         hf.targetType = o.target.type;           // 0 Friend / 1 Enemy / 2 None
         hf.targetName = o.target.name;           // only on a direct crosshair hit of a pawn with a PRI
         if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
