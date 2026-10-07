@@ -2082,7 +2082,7 @@ HudGameState World::hudState() const {
     h.cloaked = pc.cloakRemain_ > 0.0f;
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
-    h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
+    { const BarrierState& lb = barrier(); h.barrier = lb.alive; h.barrierHealth = lb.health; }
     h.repairBeam = repairBeam_.active && repairBeam_.time > 0.0f; h.repairBeamHealing = repairBeam_.healing;
     h.repairBeamStart = repairBeam_.start; h.repairBeamEnd = repairBeam_.end; h.repairBeamTarget = repairBeam_.target;
     h.vehicleShotSerial = vehicleShotSerial_; h.vehicleShotSocket = vehicleShotSocket_; h.vehicleShotMuzzle = vehicleShotMuzzle_;
@@ -2106,7 +2106,7 @@ HudGameState World::hudState() const {
     h.roller = roller_.alive; h.rollerArmed = roller_.alive && roller_.t >= 3.0f; h.rollerPos = roller_.pos;
     h.rollerFuse = roller_.alive ? std::max(0.0f, 10.0f - roller_.t) : 0.0f; h.rollerHealth = roller_.health; h.rollerSlow = pc.rollerSlowRemain_;
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
-    h.sentry = sentry_.alive; h.sentryHealth = sentry_.health; h.sentryPos = sentry_.pos; h.sentryTarget = sentry_.target;
+    { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
@@ -2555,9 +2555,10 @@ void World::draw(render::IRenderer& r) const {
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
-    if (barrier_.alive && !barrierMesh_.positions.empty()) r.drawDynamicMesh(barrierMesh_, barrier_.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
-    if (sentry_.alive && !sentryMesh_.positions.empty())
-        r.drawDynamicMesh(sentryMesh_, core::Mat4::translate(sentry_.pos) * core::Mat4::rotateY(sentry_.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+    for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
+    for (const Sentry& se : sentries_)
+        if (se.alive && !se.mesh.positions.empty())
+            r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());
 
@@ -2930,19 +2931,22 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
         float dd = std::max(0.0f, core::length(roller_.pos - at) - 1.21f);
         if (dd < radius) damageRollerMine(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
     }
-    if (sentry_.alive) {
-        float dd = std::max(0.0f, core::length(sentry_.pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
-        if (dd < radius) damageSentry(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
+    for (size_t si = 0; si < sentries_.size(); ++si) {
+        if (!sentries_[si].alive) continue;
+        float dd = std::max(0.0f, core::length(sentries_[si].pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
+        if (dd < radius) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
     }
     if (beacon_.alive && core::length(beacon_.pos - at) < radius)
         damageAmmoBeacon(damage * (1.0f - core::length(beacon_.pos - at) / std::max(radius, 1e-3f)), instigator);
-    if (barrier_.alive) {
+    for (size_t bi = 0; bi < barriers_.size(); ++bi) {
+        const BarrierState& barrier_ = barriers_[bi];
+        if (!barrier_.alive) continue;
         // Distance to the wall box (clamped point), not its centre.
         core::Vec3 l = core::transformPoint(barrier_.boxInv, at);
         core::Vec3 q{std::max(-barrier_.half.x, std::min(l.x, barrier_.half.x)), std::max(-barrier_.half.y, std::min(l.y, barrier_.half.y)),
                      std::max(-barrier_.half.z, std::min(l.z, barrier_.half.z))};
         float dd = core::length(l - q);
-        if (dd < radius) damageBarrier(damage * (1.0f - dd / std::max(radius, 1e-3f)), type);
+        if (dd < radius) damageBarrierAt(bi, damage * (1.0f - dd / std::max(radius, 1e-3f)), type);
     }
 }
 
@@ -3049,7 +3053,6 @@ void World::tickProjectiles(float dt) {
         if (hit || p.life <= 0.0f || closingExpired) {
             core::Vec3 at = p.pos + d * best;
             if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
-            if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
             if (worldHit) onProjectileHitWall(p.weaponClass, at, false);                         // [Systems M08f] HitWall: BounceSound
             if (hit || closingExpired) onProjectileExploded(p.audioKey, p.weaponClass, at);   // [Systems M08d] Explode
             else onProjectileRemoved(p.audioKey);                                               // LifeSpan end: destroyed
@@ -3219,17 +3222,14 @@ void World::tickAbilityEffects(float dt) {
     } else if (fx == "GuidedMissile") {
         startGuidedMissile();
     } else if (fx == "SpawnSentry") {
-        if (sentry_.alive) sentry_.alive = false;         // ActiveSentry.Kill()
-        sentryDelay_ = 0.2f;                              // SpawnDelay 0.2 (OnTriggerAnim ADD_Grenade_Throw additive: not played)
-        pc.sentryAlive_ = true;
+        requestSentry(localPlayer_);                      // ActiveSentry.Kill(); SpawnDelay 0.2 (OnTriggerAnim additive: not played)
     } else if (fx == "SpawnAmmoCrate") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         beaconDelay_ = 0.5f;                              // SpawnDelay 0.5 -> SpawnInventory
         pc.beaconAlive_ = true;
     } else if (fx == "Barrier") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
-        barrierDelay_ = 0.5f;                             // SpawnDelay 0.5 -> SpawnBarrier
-        pc.barrierAlive_ = true;
+        requestBarrier(localPlayer_);                     // SpawnDelay 0.5 -> SpawnBarrier
     }
     tickBarrier(dt);
     tickAmmoBeacon(dt);
@@ -3274,7 +3274,6 @@ void World::tickAbilityEffects(float dt) {
     }
     tickLocalMelee(dt);
     tickHomingLock(dt);
-    if (localDead_ && barrier_.alive) { barrier_.alive = false; barrierDelay_ = -1.0f; }
     grenadeCooldown_ = std::max(0.0f, grenadeCooldown_ - dt);
     if (grenadeTossDelay_ >= 0.0f) {
         grenadeTossDelay_ -= dt;
@@ -3596,9 +3595,17 @@ std::vector<core::Vec3> boxTris(const core::Vec3& c, const core::Vec3& h) {
 }
 }
 
-void World::spawnBarrier() {
-    Character& pc = player_.pawn();
-    if (localDead_) { pc.barrierAlive_ = false; return; }   // IsOwnerDead
+void World::requestBarrier(int owner) {
+    // TnAbilityBarrier for any participant: SpawnDelay 0.5 -> SpawnBarrier; one barrier per owner (the cooldown waits for it).
+    BarrierState b; b.owner = owner; b.delay = 0.5f;
+    barriers_.push_back(b);
+    if (Character* pc = participantPawnMutable(owner)) pc->barrierAlive_ = true;
+}
+
+void World::spawnBarrier(BarrierState& slot) {
+    Character* pcp = participantPawnMutable(slot.owner);
+    if (!pcp) return;                                       // IsOwnerDead
+    Character& pc = *pcp;
     if (!barrierModelTried_) {
         barrierModelTried_ = true;
         const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";
@@ -3607,8 +3614,10 @@ void World::spawnBarrier() {
             resolveModelTextures(barrierModel_);
         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
     }
-    BarrierState& b = barrier_;
+    BarrierState& b = slot;
+    const int owner = b.owner, dyn = b.dyn, dynW = b.dynW;
     b = BarrierState{};
+    b.owner = owner; b.dyn = dyn; b.dynW = dynW;
     b.alive = true; b.health = 1000.0f; b.yaw = pc.yaw();
     const core::Vec3 fwd = core::forwardFromYawPitch(b.yaw, 0.0f);
     b.pos = pc.actorLocation() + fwd * 10.0f + core::Vec3{0, -2.0f, 0};
@@ -3621,7 +3630,7 @@ void World::spawnBarrier() {
             assets::LocalPose lp; std::vector<core::Mat4> g;
             if (clip >= 0) {
                 assets::samplePose(barrierModel_, clip, barrierModel_.clips[(size_t)clip].duration, false, lp);
-                assets::skinPose(barrierModel_, lp, g, barrierMesh_);
+                assets::skinPose(barrierModel_, lp, g, b.mesh);
             }
             if ((size_t)node < g.size()) bone = core::Vec3{g[(size_t)node].m[12], g[(size_t)node].m[13], g[(size_t)node].m[14]};
         }
@@ -3630,52 +3639,85 @@ void World::spawnBarrier() {
     b.half = core::Vec3{0.835f, 4.1175f, 8.68f};          // (X 167, Z 823.5, Y 1736) / 2 in mesh axes (fwd, up, right)
     b.boxInv = core::Mat4::translate(centre * -1.0f) * core::Mat4::rotateY(-(b.yaw + core::config::kMeshYawOffset)) * core::Mat4::translate(b.pos * -1.0f);
     const std::vector<core::Vec3> tris = boxTris(centre, b.half);
-    if (barrierDyn_ < 0) barrierDyn_ = collision_.addDynamicSet(tris, b.world); else { collision_.setDynamicPose(barrierDyn_, b.world); collision_.setDynamicEnabled(barrierDyn_, true); }
+    if (b.dyn < 0 && !freeBarrierDyn_.empty()) { b.dyn = freeBarrierDyn_.back(); freeBarrierDyn_.pop_back(); collision_.setDynamicPose(b.dyn, b.world); collision_.setDynamicEnabled(b.dyn, true); }
+    if (b.dynW < 0 && !freeBarrierDynW_.empty() && weaponCollision_.valid()) { b.dynW = freeBarrierDynW_.back(); freeBarrierDynW_.pop_back(); weaponCollision_.setDynamicPose(b.dynW, b.world); weaponCollision_.setDynamicEnabled(b.dynW, true); }
+    if (b.dyn < 0) b.dyn = collision_.addDynamicSet(tris, b.world); else { collision_.setDynamicPose(b.dyn, b.world); collision_.setDynamicEnabled(b.dyn, true); }
     if (weaponCollision_.valid()) {
-        if (barrierDynW_ < 0) barrierDynW_ = weaponCollision_.addDynamicSet(tris, b.world);
-        else { weaponCollision_.setDynamicPose(barrierDynW_, b.world); weaponCollision_.setDynamicEnabled(barrierDynW_, true); }
+        if (b.dynW < 0) b.dynW = weaponCollision_.addDynamicSet(tris, b.world);
+        else { weaponCollision_.setDynamicPose(b.dynW, b.world); weaponCollision_.setDynamicEnabled(b.dynW, true); }
     }
     LOG_INFO("ability Barrier: wall at (%.1f %.1f %.1f), 1000 HP", b.pos.x, b.pos.y, b.pos.z);
 }
 
 void World::tickBarrier(float dt) {
-    Character& pc = player_.pawn();
-    if (barrierDelay_ >= 0.0f) { barrierDelay_ -= dt; if (barrierDelay_ < 0.0f) spawnBarrier(); }
-    BarrierState& b = barrier_;
-    if (b.alive) {
-        b.t += dt;
-        if (b.fade < 0.0f) {
-            b.health -= 15.0f * dt;                        // DegenRate
-            if (b.health <= 0.0f) { b.health = 0.0f; b.fade = 3.0f; }   // DestroySound, FadeOutTime
-        } else {
-            b.fade -= dt;
-            if (b.fade <= 0.0f) b.alive = false;
+    for (BarrierState& b : barriers_) {
+        if (b.delay >= 0.0f) { b.delay -= dt; if (b.delay < 0.0f) spawnBarrier(b); }
+        if (b.alive && !participantPawn(b.owner)) b.alive = false;   // destroyed on the owner's death
+        if (b.alive) {
+            b.t += dt;
+            if (b.fade < 0.0f) {
+                b.health -= 15.0f * dt;                        // DegenRate
+                if (b.health <= 0.0f) { b.health = 0.0f; b.fade = 3.0f; }   // DestroySound, FadeOutTime
+            } else {
+                b.fade -= dt;
+                if (b.fade <= 0.0f) b.alive = false;
+            }
+        }
+        if (!b.alive && b.delay < 0.0f) {                      // gone: its collision sets return to the pool
+            if (b.dyn >= 0) { collision_.setDynamicEnabled(b.dyn, false); freeBarrierDyn_.push_back(b.dyn); b.dyn = -1; }
+            if (b.dynW >= 0) { weaponCollision_.setDynamicEnabled(b.dynW, false); freeBarrierDynW_.push_back(b.dynW); b.dynW = -1; }
+        }
+        if (b.alive && barrierModel_.valid()) {
+            int clip = barrierModel_.clipByName("Barrier_Equip");
+            assets::LocalPose lp; std::vector<core::Mat4> g;
+            if (clip >= 0) { assets::samplePose(barrierModel_, clip, b.t, false, lp); assets::skinPose(barrierModel_, lp, g, b.mesh); }
         }
     }
-    if (!b.alive) {
-        if (barrierDyn_ >= 0) collision_.setDynamicEnabled(barrierDyn_, false);
-        if (barrierDynW_ >= 0) weaponCollision_.setDynamicEnabled(barrierDynW_, false);
-    }
-    pc.barrierAlive_ = b.alive || barrierDelay_ >= 0.0f;
-    if (b.alive && barrierModel_.valid()) {
-        int clip = barrierModel_.clipByName("Barrier_Equip");
-        assets::LocalPose lp; std::vector<core::Mat4> g;
-        if (clip >= 0) { assets::samplePose(barrierModel_, clip, b.t, false, lp); assets::skinPose(barrierModel_, lp, g, barrierMesh_); }
-    }
+    barriers_.erase(std::remove_if(barriers_.begin(), barriers_.end(), [](const BarrierState& b) { return !b.alive && b.delay < 0.0f; }), barriers_.end());
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (Character* pc = participantPawnMutable((int)i)) {
+            bool any = false;
+            for (const BarrierState& b : barriers_) any |= b.owner == (int)i;
+            pc->barrierAlive_ = any;
+        }
+}
+
+const World::BarrierState& World::barrier() const {
+    for (const BarrierState& b : barriers_) if (b.owner == localPlayer_ && b.alive) return b;
+    static const BarrierState none;
+    return none;
 }
 
 bool World::barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const {
-    if (!barrier_.alive) return false;
-    const core::Vec3 lo = core::transformPoint(barrier_.boxInv, o);
-    const core::Vec3 ld = core::transformPoint(barrier_.boxInv, o + d) - lo;
-    return rayAabb(lo, ld, range, barrier_.half * -1.0f, barrier_.half, t);
+    bool any = false; float best = range;
+    lastBarrierHit_ = -1;
+    for (size_t i = 0; i < barriers_.size(); ++i) {
+        const BarrierState& b = barriers_[i];
+        if (!b.alive) continue;
+        const core::Vec3 lo = core::transformPoint(b.boxInv, o);
+        const core::Vec3 ld = core::transformPoint(b.boxInv, o + d) - lo;
+        float tt;
+        if (rayAabb(lo, ld, best, b.half * -1.0f, b.half, tt) && tt <= best) { best = tt; any = true; lastBarrierHit_ = (int)i; }
+    }
+    if (any) t = best;
+    return any;
 }
 
 void World::damageBarrier(float amount, const std::string& type) {
-    if (!barrier_.alive || barrier_.fade >= 0.0f) return;
+    int idx = lastBarrierHit_;
+    if (idx < 0 || (size_t)idx >= barriers_.size())
+        for (size_t i = 0; i < barriers_.size(); ++i) if (barriers_[i].owner == localPlayer_ && barriers_[i].alive) idx = (int)i;
+    lastBarrierHit_ = -1;
+    if (idx >= 0) damageBarrierAt((size_t)idx, amount, type);
+}
+
+void World::damageBarrierAt(size_t idx, float amount, const std::string& type) {
+    if (idx >= barriers_.size()) return;
+    BarrierState& b = barriers_[idx];
+    if (!b.alive || b.fade >= 0.0f) return;
     if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) return;   // ignores melee
-    barrier_.health -= amount;
-    if (barrier_.health <= 0.0f) { barrier_.health = 0.0f; barrier_.fade = 3.0f; }
+    b.health -= amount;
+    if (b.health <= 0.0f) { b.health = 0.0f; b.fade = 3.0f; }
 }
 
 // ---- Ammo beacon [CONF TnAbilitySpawnInventory / TnAbilitySpawnAmmoCrate / TnDroppedPickupAmmoBeacon / TnDroppedPickupDefrag
@@ -3759,9 +3801,18 @@ void World::damageAmmoBeacon(float amount, int instigator) {
 // 0.5 at 30000) every 0.12 s with PerShotSpread 0.1; heat +2 per shot to HeatMax 100, OverheatDelay 2 s (heat then
 // reset [PROV: lose-heat rate native]). Kill credit to the owner (_KillOwner). Cooldown 60 s once the sentry is gone.
 // PARTIAL: flashbang dormancy, Rocket / Repair blueprints (skills), turret pitch on the mesh, corpse (LifeSpanAfterDeath 5).
-void World::spawnSentry() {
-    Character& pc = player_.pawn();
-    if (localDead_) return;
+void World::requestSentry(int owner) {
+    // TnAbilitySpawnSentry.ServerTriggerAbility: one sentry per owner (ActiveSentry.Kill()), SpawnDelay 0.2.
+    for (Sentry& s : sentries_) if (s.owner == owner) { s.alive = false; s.delay = -1.0f; }
+    Sentry s; s.owner = owner; s.delay = 0.2f;
+    sentries_.push_back(s);
+    if (Character* pc = participantPawnMutable(owner)) pc->sentryAlive_ = true;
+}
+
+void World::spawnSentry(Sentry& s) {
+    Character* pcp = participantPawnMutable(s.owner);
+    if (!pcp) return;
+    const Character& pc = *pcp;
     if (!sentryModelTried_) {
         sentryModelTried_ = true;
         const std::string ext = assetRoot() + "/../content/WEP_SentryAbility_p/";
@@ -3776,41 +3827,43 @@ void World::spawnSentry() {
     core::Vec3 gn; float gy;
     core::Vec3 p = desired;
     if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y, 0.2f, gy, gn)) p.y = gy; else p = pc.position();
-    sentry_ = Sentry{};
-    sentry_.alive = true; sentry_.pos = p; sentry_.yaw = pc.yaw(); sentry_.health = 135.0f;
-    LOG_INFO("ability SpawnSentry: sentry at (%.1f %.1f %.1f)", p.x, p.y, p.z);
+    s.alive = true; s.pos = p; s.yaw = pc.yaw(); s.health = 135.0f; s.t = 0.0f; s.target = -1;
+    LOG_INFO("ability SpawnSentry (p%d): sentry at (%.1f %.1f %.1f)", s.owner, p.x, p.y, p.z);
 }
 
 void World::tickSentry(float dt) {
-    Character& pc = player_.pawn();
-    if (sentryDelay_ >= 0.0f) { sentryDelay_ -= dt; if (sentryDelay_ < 0.0f) spawnSentry(); }
-    Sentry& s = sentry_;
-    if (s.alive) {
-        s.t += dt;
-        s.health -= 135.0f / 30.0f * dt;                  // Lifetime 30
-        if (s.health <= 0.0f || localDead_) { s.alive = false; s.target = -1; }
-    }
-    if (s.alive) {
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (Sentry& s : sentries_) {
+        if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
+        const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
+        if (s.alive) {
+            s.t += dt;
+            s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
+            if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
+        }
+        if (!s.alive) continue;
         const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
-        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-        // Target: closest visible valid enemy within the pitch constraints.
+        // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
         s.target = -1;
         float best = 300.0f;
-        const MatchOpponent* tgt = nullptr;
+        const Character* tgt = nullptr;
         if (matchActive_)
-            for (MatchOpponent* o : opponents_) {
-                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
-                core::Vec3 d = o->pawn().actorLocation() - muzzle;
+            for (size_t i = 0; i < match_.players().size(); ++i) {
+                const int p = (int)i;
+                if (p == s.owner || (match_.settings().teamGame && match_.sameTeam(p, s.owner))) continue;
+                const Character* c = participantPawn(p);
+                if (!c) continue;
+                core::Vec3 d = c->actorLocation() - muzzle;
                 float dist = core::length(d);
                 if (dist > best || dist < 1e-3f) continue;
                 if (std::fabs(std::atan2(d.y, std::hypot(d.x, d.z))) > 45.0f * 0.0174533f) continue;
                 float tt;
-                if (line && line->segmentHit(muzzle, o->pawn().actorLocation(), tt)) continue;
-                best = dist; s.target = o->matchPlayer(); tgt = o;
+                if (line && line->segmentHit(muzzle, c->actorLocation(), tt)) continue;
+                best = dist; s.target = p; tgt = c;
             }
         float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
         if (tgt) {
-            core::Vec3 d = tgt->pawn().actorLocation() - muzzle;
+            core::Vec3 d = tgt->actorLocation() - muzzle;
             wantYaw = std::atan2(-d.x, -d.z);
             wantPitch = std::atan2(d.y, std::hypot(d.x, d.z));
         }
@@ -3822,7 +3875,7 @@ void World::tickSentry(float dt) {
         if (s.overheat > 0.0f) { s.overheat -= dt; if (s.overheat <= 0.0f) s.heat = 0.0f; }
         if (tgt && s.overheat <= 0.0f && s.fireTimer <= 0.0f) {
             float err = std::fabs(std::remainder(wantYaw - s.yaw, 6.2831853f)) + std::fabs(wantPitch - s.pitch);
-            float dist = core::length(tgt->pawn().actorLocation() - muzzle);
+            float dist = core::length(tgt->actorLocation() - muzzle);
             if (err <= 3.0f * 0.0174533f && dist < 60.0f) {
                 s.fireTimer = 0.12f;
                 ++s.shots;
@@ -3834,44 +3887,75 @@ void World::tickSentry(float dt) {
                 dir = core::normalize(dir + rt * (rf() * 0.1f) + u2 * (rf() * 0.1f));
                 float wall = 300.0f, tw;
                 if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
-                MatchOpponent* hit = nullptr; float hd = wall;
-                for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o; } }
-                onSentryShot(muzzle, !hit && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
-                if (hit && !match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
+                int hit = -1; float hd = wall;
+                for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o->matchPlayer(); } }
+                if (!localDead_ && localPlayer_ != s.owner) { float th; if (MatchOpponent::pawnRayHit(player_.pawn(), muzzle, dir, wall, th) && th < hd) { hd = th; hit = localPlayer_; } }
+                onSentryShot(muzzle, hit < 0 && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
+                if (hit >= 0 && !(match_.settings().teamGame && match_.sameTeam(hit, s.owner)) && hit != s.owner) {
                     float mod = hd <= 80.0f ? 1.0f : 1.0f - 0.5f * std::min(1.0f, (hd - 80.0f) / 220.0f);
-                    applyMatchDamage(hit->matchPlayer(), localPlayer_, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");
+                    applyMatchDamage(hit, s.owner, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");   // kill credit to the owner
                 }
             }
         }
         if (sentryModel_.valid()) {
             int clip = sentryModel_.clipByName("WEP_DeployedTurret_Activate");
-            if (clip >= 0) { assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(sentryModel_, clip, s.t, false, lp); assets::skinPose(sentryModel_, lp, g, sentryMesh_); }
+            if (clip >= 0) { assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(sentryModel_, clip, s.t, false, lp); assets::skinPose(sentryModel_, lp, g, s.mesh); }
         }
     }
-    pc.sentryAlive_ = s.alive || sentryDelay_ >= 0.0f;
+    // Owners' SpawnSentry cooldown waits for their sentry (pending or alive).
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (Character* pc = participantPawnMutable((int)i)) {
+            bool any = false;
+            for (const Sentry& s : sentries_) any |= s.owner == (int)i && (s.alive || s.delay >= 0.0f);
+            pc->sentryAlive_ = any;
+        }
+    sentries_.erase(std::remove_if(sentries_.begin(), sentries_.end(), [](const Sentry& s) { return !s.alive && s.delay < 0.0f; }), sentries_.end());
+}
+
+const World::Sentry& World::sentry() const {
+    for (const Sentry& s : sentries_) if (s.owner == localPlayer_) return s;
+    static const Sentry none;
+    return none;
 }
 
 bool World::sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const {
-    if (!sentry_.alive) return false;
     // CollisionCylinder radius 200 / height 200 UU about the base + 2 m [HIGH: the DSYS mesh physics is the hit volume].
-    const core::Vec3 c = sentry_.pos + core::Vec3{0, 2.0f, 0};
-    float ox = o.x - c.x, oz = o.z - c.z, a = d.x * d.x + d.z * d.z, b = 2.0f * (ox * d.x + oz * d.z), cc = ox * ox + oz * oz - 4.0f;
-    if (a < 1e-8f) return false;
-    float disc = b * b - 4.0f * a * cc;
-    if (disc < 0.0f) return false;
-    float tt = std::max(0.0f, (-b - std::sqrt(disc)) / (2.0f * a));
-    if (tt > range) return false;
-    float y = o.y + d.y * tt;
-    if (y < c.y - 2.0f || y > c.y + 2.0f) return false;
-    t = tt;
-    return true;
+    bool any = false; float best = range;
+    lastSentryHit_ = -1;
+    for (size_t i = 0; i < sentries_.size(); ++i) {
+        const Sentry& s = sentries_[i];
+        if (!s.alive) continue;
+        const core::Vec3 c = s.pos + core::Vec3{0, 2.0f, 0};
+        float ox = o.x - c.x, oz = o.z - c.z, a = d.x * d.x + d.z * d.z, b = 2.0f * (ox * d.x + oz * d.z), cc = ox * ox + oz * oz - 4.0f;
+        if (a < 1e-8f) continue;
+        float disc = b * b - 4.0f * a * cc;
+        if (disc < 0.0f) continue;
+        float tt = std::max(0.0f, (-b - std::sqrt(disc)) / (2.0f * a));
+        if (tt > best) continue;
+        float y = o.y + d.y * tt;
+        if (y < c.y - 2.0f || y > c.y + 2.0f) continue;
+        best = tt; any = true; lastSentryHit_ = (int)i;
+    }
+    if (any) t = best;
+    return any;
 }
 
 void World::damageSentry(float amount, int instigator, const std::string& type) {
-    if (!sentry_.alive || instigator == localPlayer_) return;   // the owner cannot damage it
-    if (instigator >= 0 && matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
-    if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) { sentry_.health = 0.0f; return; }   // melee kills
-    sentry_.health -= amount;
+    // The sentry the last sentryRayHit found; without one, the local player's (tests / radius callers use damageSentryAt).
+    int idx = lastSentryHit_;
+    if (idx < 0 || (size_t)idx >= sentries_.size())
+        for (size_t i = 0; i < sentries_.size(); ++i) if (sentries_[i].owner == localPlayer_ && sentries_[i].alive) idx = (int)i;
+    lastSentryHit_ = -1;
+    if (idx >= 0) damageSentryAt((size_t)idx, amount, instigator, type);
+}
+
+void World::damageSentryAt(size_t idx, float amount, int instigator, const std::string& type) {
+    if (idx >= sentries_.size()) return;
+    Sentry& s = sentries_[idx];
+    if (!s.alive || instigator == s.owner) return;                                                           // the owner cannot damage it
+    if (instigator >= 0 && matchActive_ && match_.settings().teamGame && match_.sameTeam(instigator, s.owner)) return;   // nor its team
+    if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) { s.health = 0.0f; return; }   // melee kills
+    s.health -= amount;
 }
 
 // ---- Guided missile [CONF RE TARGETED_PASS3 §J3; authored GuidedMissile_PROJDATA, CAM_Strategies_p.GuidedMissile_STRATEGY] ----
@@ -4503,8 +4587,13 @@ void World::tickAbilityAudio() {
         } else chargeFizzleAudio_ = -1;
         setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
         setGuidedMissileAudio(missile_.alive, missile_.pos);      // [Systems M08m]
-        setBarrierAudio(barrier_.alive, barrier_.alive && barrier_.fade >= 0.0f, barrier_.pos);
-        setSentryAudio(sentry_.alive, sentry_.target, sentry_.pos);
+        {   // [integration 09c] Gameplay 26e: barriers / sentries are per owner; these Systems loops follow the LOCAL player's
+            // instance (bots' deploy / loop audio needs Systems' per-instance form, requested).
+            const BarrierState* lb = nullptr; for (const BarrierState& bs : barriers_) if (bs.owner == localPlayer_ && bs.alive) lb = &bs;
+            const Sentry* ls = nullptr; for (const Sentry& se : sentries_) if (se.owner == localPlayer_ && se.alive) ls = &se;
+            setBarrierAudio(lb != nullptr, lb && lb->fade >= 0.0f, lb ? lb->pos : core::Vec3{0, 0, 0});
+            setSentryAudio(ls != nullptr, ls ? ls->target : -1, ls ? ls->pos : core::Vec3{0, 0, 0});
+        }
     }
     {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)
         const assets::SkinnedModel* am = p.currentModel();

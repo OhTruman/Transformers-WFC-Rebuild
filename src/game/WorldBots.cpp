@@ -458,6 +458,10 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
                 if (mate || hpFrac < 0.5f) botTryAbility(o, b, "Warcry");
             }
             if (visible && d < 15.0f && b.frand() < use) botTryAbility(o, b, "Shockwave");
+            //  SpawnSentry - an enemy in sight 10-50 m away (the turret's MaxAttackRange is 60 m).
+            if (visible && d > 10.0f && d < 50.0f && b.frand() < use * 0.4f) botTryAbility(o, b, "SpawnSentry");
+            //  Barrier - under fire (or below 70 % health) from an enemy 12-60 m away: the wall goes up between them.
+            if (visible && d > 12.0f && d < 60.0f && (now - b.lastDamageTime < 1.0f || hpFrac < 0.7f) && b.frand() < use * 0.5f) botTryAbility(o, b, "Barrier");
         }
         // Melee rush (PC ADAPTATION): an enemy within 20 m (the melee-assist pick range), now and then by skill or when out of ammo
         // (melee cannot start mid-reload).
@@ -493,6 +497,8 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         else if (a.id == "Hover") { b.pendingHover = true; pc.hoverRequested_ = true; }
         else if (a.id == "Warcry") applyWarcry(pc, o.matchPlayer());
         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
+        else if (a.id == "SpawnSentry") requestSentry(o.matchPlayer());   // TnAbilitySpawnSentry (one per owner, SpawnDelay 0.2)
+        else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(o.matchPlayer()); }   // SpawnDelay 0.5, in front of the pawn
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
         if (participantAbilityHook) participantAbilityHook(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());
