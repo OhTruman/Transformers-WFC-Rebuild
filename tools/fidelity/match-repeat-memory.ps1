@@ -11,14 +11,21 @@
 # 2 x GrowthMb; else PLATEAU. Same test for pcm_unloaded (Systems) and texture count drift (Rendering).
 #
 #   .\tools\fidelity\match-repeat-memory.ps1 -Root work\ab\<target> -OutDir <dir> [-Matches 6] [-Friendly 3] [-Enemy 4] [-Goal 10] [-Control] [-ReportOnly]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Matches = 6, [int]$Friendly = 3, [int]$Enemy = 4,
-      [int]$Goal = 10, [int]$MapId = 508, [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [Alias("Matches")][int]$MatchCount = 6, [int]$Friendly = 3, [int]$Enemy = 4,
+      [int]$Goal = 10, [int]$MapId = 508, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $exe = Join-Path $Root $(if ($Config -eq "Debug") { "build\bin\wfc_rebuild.exe" } else { "build-release\bin\wfc_rebuild.exe" })
 $H = Get-ExeHooks $exe
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
+# -MapCycle 501,502,...: a LONG SESSION over different maps (and -ModeCycle team modes), -Passes times through the list, so
+# every map is revisited: the per-map revisit delta separates growth from map size (Milestone E long-session stability)
+# "-File" passes "501,502" as ONE string: split the lists here
+$MapCycle = @($MapCycle | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { [int]$_.Trim() })
+$ModeCycle = @($ModeCycle | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+$cycle = $MapCycle.Count -gt 0
+if ($cycle) { $MatchCount = $MapCycle.Count * $Passes }
 $res = New-WfcResults; $tagRun = if ($Control) { "nobots" } else { "bots_${Friendly}v$Enemy" }
 function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "memrepeat.$tagRun.$id" $status $null $note $owner }
 $f = if ($Control) { 0 } else { $Friendly }; $e = if ($Control) { 0 } else { $Enemy }
@@ -30,13 +37,16 @@ if (-not $ReportOnly -and -not (Test-Path $lg)) {
     # re-select the map before EVERY match: after a match the lobby comes back on another map (09b 4fbd0b9: Streets -> Seed),
     # which made matches 2..N a different map (2026-10-06 harness defect)
     $one = "call:Online.SetSelectedMapID,$MapId;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=3"
+    function OneMatch([int]$i) { if (-not $cycle) { return $one }
+        $mid = $MapCycle[$i % $MapCycle.Count]; $md = $ModeCycle[$i % $ModeCycle.Count]
+        return "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,$mid;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
     $s = (@("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
             "call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$MapId", "wait:t=1") +
-          @(1..$Matches | ForEach-Object { $one }) + @("quit")) -join ";"
+          @(0..($MatchCount - 1) | ForEach-Object { OneMatch $_ }) + @("quit")) -join ";"
     $env2 = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = $fl; WFC_FLOW_TIMEOUT = "3000";
                WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_LIFECYCLE = "$Goal"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2" }
     if ($H.Contains("WFC_CHARSELECT")) { $env2.WFC_CHARSELECT = "1" }
-    $null = Invoke-WfcExe $exe $OutDir $env2 "run.log" (300 + 240 * $Matches)
+    $null = Invoke-WfcExe $exe $OutDir $env2 "run.log" (300 + 240 * $MatchCount)
 }
 if (-not (Test-Path $fl)) { Res "ran" "UNKNOWN" "no flow trace" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
 $F = Read-FlowLog $fl
@@ -45,7 +55,7 @@ $ld = @(Flow-Ev $F "match.loaded"); $ul = @(Flow-Ev $F "match.unloaded"); $al = 
 # releases log their own unloadMapRenderData lines with 0, which must not be counted)
 $tx = @(); $glLive = @(); $lastTx = $null; $lastGl = $null
 if (Test-Path $lg) { foreach ($l in [IO.File]::ReadLines($lg)) {
-    # [regex]::Match, not -match: the -Matches parameter would be clobbered by the automatic $Matches
+    # [regex]::Match, not -match (the automatic $Matches variable; the parameter is $MatchCount, alias -Matches)
     $m1 = [regex]::Match($l, 'unloadMapRenderData released (\d+) match textures'); $m2 = [regex]::Match($l, 'match\.glCensus live=textures=(\d+)')
     if ($m1.Success) { $lastTx = [int]$m1.Groups[1].Value }
     elseif ($m2.Success) { $lastGl = [int]$m2.Groups[1].Value }
@@ -64,7 +74,7 @@ $glU = @($glLive | Select-Object -Unique)
 # a one-time rise over the first returns (persistent caches) then constant = plateau; still rising over the last three = growth
 $glTail = @($glLive | Select-Object -Last 3 | Select-Object -Unique)
 Res "gl_live_after_unload" $(if (-not $glLive.Count) { "UNKNOWN" } elseif ($glU.Count -eq 1) { "PASS" } elseif ($glLive.Count -ge 4 -and $glTail.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL live textures after each unload: {0} (plateau if constant over the last three)" -f ($glLive -join ", ")) "Rendering"
-Res "matches" $(if ($n -ge $Matches) { "PASS" } elseif ($n -ge 3) { "PARTIAL" } else { "FAIL" }) ("{0} of {1} matches completed and unloaded in one process" -f $n, $Matches) "Frontend"
+Res "matches" $(if ($n -ge $MatchCount) { "PASS" } elseif ($n -ge 3) { "PARTIAL" } else { "FAIL" }) ("{0} of {1} matches completed and unloaded in one process" -f $n, $MatchCount) "Frontend"
 foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "loaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "pcm_unloaded"; o = "Systems"; t = 2 }, @{ c = "pcm_loaded"; o = "Systems"; t = 2 })) {
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
@@ -73,8 +83,22 @@ foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $Gr
 }
 $tu = @($tx | Select-Object -Unique)
 Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } elseif (@($tx | Select-Object -Skip 1 | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
+if ($cycle) {
+    # mode actually played per match (MATCH init), and the per-map revisit delta of privateMB after unload
+    $modesPlayed = @(if (Test-Path $lg) { Select-String $lg -Pattern '\] MATCH init mode=(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } })
+    for ($i = 0; $i -lt $rows.Count; $i++) { $rows[$i] | Add-Member -NotePropertyName mode -NotePropertyValue $(if ($i -lt $modesPlayed.Count) { $modesPlayed[$i] }) -Force }
+    $wantMaps = @($MapCycle | ForEach-Object { $_ }); $deltas = @()
+    foreach ($g in @($rows | Where-Object { $_.map -and $_.unloaded_mb -ne $null } | Group-Object map)) {
+        $v = @($g.Group | ForEach-Object { [double]$_.unloaded_mb }); if ($v.Count -ge 2) { $deltas += [pscustomobject]@{ map = $g.Name; first = [Math]::Round($v[0], 1); last = [Math]::Round($v[-1], 1); delta = [Math]::Round($v[-1] - $v[0], 1) } } }
+    $meanD = if ($deltas.Count) { [Math]::Round(($deltas | Measure-Object delta -Average).Average, 1) } else { $null }
+    $distinctPlayed = @($rows | Where-Object { $_.map } | ForEach-Object { $_.map } | Select-Object -Unique).Count; $distinctWant = @($MapCycle | Select-Object -Unique).Count
+    Res "cycle.maps_played" $(if (@($rows | Where-Object { $_.map }).Count -eq $MatchCount -and $distinctPlayed -eq $distinctWant) { "PASS" } else { "FAIL" }) ("{0} of {1} matches loaded; {4} distinct maps of {5} requested; maps in order: {2}; modes: {3}" -f @($rows | Where-Object { $_.map }).Count, $MatchCount, ((@($rows | ForEach-Object { $_.map -replace '^MP_', '' })) -join ", "), ($modesPlayed -join ", "), $distinctPlayed, $distinctWant) "Frontend"
+    Res "cycle.revisit_growth" $(if ($null -eq $meanD) { "UNKNOWN" } elseif ($meanD -gt 4 * $GrowthMb) { "FAIL" } elseif ($meanD -gt 2 * $GrowthMb) { "PARTIAL" } else { "PASS" }) ("privateMB after unload, same map on its first vs last visit: mean delta {0} MB ({1})" -f $meanD, (($deltas | ForEach-Object { "$($_.map -replace '^MP_', '') $($_.first) -> $($_.last)" }) -join "; ")) "Gameplay/Rendering/Systems"
+    $peak = ($rows | Measure-Object loaded_mb -Maximum).Maximum
+    Res "cycle.peak_loaded_mb" "INFO" ("highest privateMB at match load {0} MB ({1})" -f $peak, (@($rows | Sort-Object loaded_mb -Descending | Select-Object -First 1 | ForEach-Object { $_.map }))[0]) "Experimental"
+}
 Write-WfcCsv $rows (Join-Path $OutDir "matches.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("match", "map", "gl_live_textures", "loaded_mb", "unloaded_mb", "pcm_loaded", "pcm_unloaded", "textures_released") (Join-Path $OutDir "MEMORY.md") "Repeated-match memory ($tagRun)" @("build: ``$sha`` ($Config); Streets TDM (map id $MapId), goal $Goal, $Matches matches in one process; bots $f friendly / $e enemy.")
+Write-M07Matrix $rows @("match", "map", "gl_live_textures", "loaded_mb", "unloaded_mb", "pcm_loaded", "pcm_unloaded", "textures_released") (Join-Path $OutDir "MEMORY.md") "Repeated-match memory ($tagRun)" @("build: ``$sha`` ($Config); Streets TDM (map id $MapId), goal $Goal, $MatchCount matches in one process; bots $f friendly / $e enemy.")
 "MATCH-REPEAT MEMORY ($tagRun): " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
 $rows | Format-Table -AutoSize | Out-String -Width 200
