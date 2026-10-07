@@ -1168,6 +1168,15 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
     UIState st = flow_.ui().state();
     bool hudShown = inMatch && (st == UIState::InGame || st == UIState::Spectating);
+    // TnHudDataObserverOnAttackingTeam: attached by TnGameRules_SingleFlagCTF only (CTF here, Code of Power) - 1 when the
+    // local team is GRI.AttackingTeam, 2 when defending [CONFIRMED script].
+    {
+        const MatchValues& mv = flow_.matchValues();
+        if (inMatch && mv.valid && flow_.currentMatch().modeTag == "CTF")
+            hud_.setAttackingTeamStatus(HudController::attackingStatus(mv.attackingTeamIndex, mv.myTeam));
+        else
+            hud_.setAttackingTeamStatus(std::nullopt);
+    }
     hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
     // ShowScores (Back / Tab): TnHUD.SetShowScores(!bShowScores) toggles InGameStats_GFX with input focus; it is
     // force-closed when the HUD is hidden [RE OVERNIGHT A7 / playtest section 9, CONFIRMED].
