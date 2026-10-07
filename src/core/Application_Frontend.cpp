@@ -993,7 +993,11 @@ template <class W> void forwardAwards(W& w, frontend::FrontendRuntime& rt, int m
 
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
-    const int me = world_.localMatchPlayer();
+    const int me = world_.presented().localPlayer;
+    // [integration 09c] Async-step migration (docs/ASYNC_SIM_STEP.md, step 2): every read below comes from the presented
+    // snapshot, every write goes through submit(); the queues are consumed at the end. Safe per step today and per frame
+    // once the step runs on a worker.
+    const game::World::PresentedFrame& pf = world_.presented();
     forwardAwards(world_, *frontend_, me);
     applyHudScreenEffect(renderer_, frontend_->hudPostProcessChain());
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
@@ -1007,14 +1011,14 @@ void Application::routeMatchToFrontend(float dt) {
         const std::string sp = fc.specialty;
         cs.specialty = sp == "Scientist" ? game::Specialty::Scientist : sp == "Scout" ? game::Specialty::Scout
                      : sp == "Soldier" ? game::Specialty::Soldier : game::Specialty::Leader;
-        const int team = world_.match().players()[(size_t)me].team;
+        const int team = (size_t)me < pf.players.size() ? pf.players[(size_t)me].team : 0;
         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
         cs.customSlot = fc.name;
         fillFullSelection(cs, fc);
-        world_.match().selectCharacter(me, cs);
+        world_.submit([me, cs](game::World& w) { w.match().selectCharacter(me, cs); });
         const bool repick = selectionSentSerial_ != 0;
         selectionSentSerial_ = flow.selectionSerial();
-        const int f = world_.match().faction(me) == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
+        const int f = (size_t)me < pf.faction.size() && pf.faction[(size_t)me] == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
                                                             {"repick", frontend::FlowTrace::boolean(repick)},
                                                             {"faction", f == 1 ? "Decepticon" : "Autobot"},
@@ -1024,22 +1028,20 @@ void Application::routeMatchToFrontend(float dt) {
             LOG_WARN("FRONTEND selection handoff: %s chassis %s has no body; the spawn will not be this character", fc.name.c_str(),
                      fc.chassis[f].c_str());
     }
-    const game::Match& match = world_.match();
+    const game::Match& matchStatic = world_.match();   // static per match only (starts)
     matchClock_ += dt;
-    auto teamOf = [&](int p) { return (p >= 0 && (size_t)p < match.players().size()) ? (match.players()[(size_t)p].team == 255 ? -1 : match.players()[(size_t)p].team) : -1; };
+    auto teamOf = [&](int p) { return (p >= 0 && (size_t)p < pf.players.size()) ? (pf.players[(size_t)p].team == 255 ? -1 : pf.players[(size_t)p].team) : -1; };
     auto posOf = [&](int p) {
-        if (p == me) return world_.player().pawn().position();
-        for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->matchPlayer() == p) return o->position();
-        return core::Vec3{0, 0, 0};
+        return p >= 0 && (size_t)p < pf.positions.size() && (size_t)p < pf.present.size() && pf.present[(size_t)p] ? pf.positions[(size_t)p] : core::Vec3{0, 0, 0};
     };
-    for (const game::MatchEvent& e : world_.matchEvents()) {
+    for (const game::MatchEvent& e : pf.matchEvents) {
         switch (e.type) {
         case game::MatchEvent::Type::MatchStarted:
             // InProgress.BeginState -> SendUIEventToControllers(3). The match controller's UseInGameLobby keeps "Choose
             // Character" up until a character is chosen (Frontend 6fb19f8, CONFIRMED script); the first spawn sends 5.
             flow.onUIEvent((int)frontend::UIEvent::BeginGame);
             // TnGameTypeMessage switch 0: HUD GameAnnouncement with the mode name [RE A5, CONFIRMED].
-            frontend_->hud().announce(frontend_->catalog().modeFriendlyName(match.settings().modeTag));
+            frontend_->hud().announce(frontend_->catalog().modeFriendlyName(pf.modeTag));
             frontend::FlowTrace::emit("match.started", {});
             break;
         case game::MatchEvent::Type::PlayerKilled:
@@ -1049,7 +1051,7 @@ void Application::routeMatchToFrontend(float dt) {
                 // [integration 09c] weapon = the kill record's damage type (Match::killed fills it; the event text is only the
                 // suicide / environment tag), newest record for this victim.
                 std::string kdmg = e.text;
-                for (auto it = match.killHistory().rbegin(); it != match.killHistory().rend(); ++it)
+                for (auto it = pf.kills.rbegin(); it != pf.kills.rend(); ++it)
                     if (it->victim == e.player) { if (!it->damageType.empty()) kdmg = it->damageType; break; }
                 LOG_INFO("MATCH kill killer=%d victim=%d killer_team=%d victim_team=%d weapon=%s", e.other, e.player, teamOf(e.other),
                          teamOf(e.player), kdmg.empty() ? "unknown" : kdmg.c_str());
@@ -1057,11 +1059,11 @@ void Application::routeMatchToFrontend(float dt) {
                     // [integration 09c] reason=kill, and only when the score changed (CTF / objective modes: kills do not score).
                     static int lastTeamScore[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
                     const int kt = teamOf(e.other);
-                    if (kt >= 0 && kt < 8 && match.teamScore(kt) != lastTeamScore[kt]) {
-                        lastTeamScore[kt] = match.teamScore(kt);
+                    if (kt >= 0 && kt < 2 && pf.teamScore[kt] != lastTeamScore[kt]) {
+                        lastTeamScore[kt] = pf.teamScore[kt];
                         LOG_INFO("MATCH score team=%d score=%d reason=kill", kt, lastTeamScore[kt]);
                     }
-                    else if (kt < 0) LOG_INFO("MATCH score team=-1 player=%d score=%d reason=kill", e.other, match.players()[(size_t)e.other].score);
+                    else if (kt < 0) LOG_INFO("MATCH score team=-1 player=%d score=%d reason=kill", e.other, pf.players[(size_t)e.other].score);
                 }
                 LOG_INFO("MATCH death player=%d pos=%.1f,%.1f,%.1f", e.player, dp.x, dp.y, dp.z);
                 deathAt_[e.player] = matchClock_;
@@ -1071,7 +1073,7 @@ void Application::routeMatchToFrontend(float dt) {
                 frontend::HudKill k;
                 auto nameOf = [&](int p) {
                     if (p == me) return frontend_->flow().profile().playerName();   // the local identity
-                    return p >= 0 && (size_t)p < match.players().size() ? match.players()[(size_t)p].name : std::string();
+                    return p >= 0 && (size_t)p < pf.players.size() ? pf.players[(size_t)p].name : std::string();
                 };
                 k.victim = nameOf(e.player); k.killer = nameOf(e.other);
                 k.victimTeam = teamOf(e.player); k.killerTeam = teamOf(e.other);
@@ -1085,9 +1087,9 @@ void Application::routeMatchToFrontend(float dt) {
         case game::MatchEvent::Type::PlayerSpawned:
             frontend::FlowTrace::emit("match.spawn", {{"player", std::to_string(e.player)}, {"start", e.text}});
             {   // RUNTIME-EVENTS: spawn (start = the PlayerStart Gameplay chose), respawn with the delay since death
-                const core::Vec3 sp = (e.value >= 0 && (size_t)e.value < match.starts().size()) ? match.starts()[(size_t)e.value].pos : posOf(e.player);
+                const core::Vec3 sp = (e.value >= 0 && (size_t)e.value < matchStatic.starts().size()) ? matchStatic.starts()[(size_t)e.value].pos : posOf(e.player);
                 LOG_INFO("MATCH spawn player=%d team=%d start=%s pos=%.1f,%.1f,%.1f chassis=%s", e.player, teamOf(e.player), e.text.c_str(),
-                         sp.x, sp.y, sp.z, match.players()[(size_t)e.player].chassis.c_str());
+                         sp.x, sp.y, sp.z, pf.players[(size_t)e.player].chassis.c_str());
                 auto d = deathAt_.find(e.player);
                 if (d != deathAt_.end()) { LOG_INFO("MATCH respawn player=%d start=%s delay_s=%.2f", e.player, e.text.c_str(), matchClock_ - d->second); deathAt_.erase(d); }
             }
@@ -1098,10 +1100,10 @@ void Application::routeMatchToFrontend(float dt) {
                 // CONFIRMED: TnCharacterApplier.ExtractColors = CD.EnergonColor if set, else the robot mesh material default). The
                 // selection carries no energon, so it is left unset (RGB 0): the renderer draws the chassis material's authored
                 // EnergonColor (AssetTools energon_default 0.843 / 0.302 / 0.029 on every MP chassis). Replaces the M08 team tint.
-                const game::MatchPlayer& mp = match.players()[(size_t)me];
+                const game::MatchPlayer& mp = pf.players[(size_t)me];
                 // The faction the body resolved for (TnGame.GetResolvedCharacterFaction: the team; FFA forces 1 = Decepticon) -
                 // not the team, which FFA does not have (a Deathmatch Leader spawns Soundwave and takes the Decepticon paint).
-                const int f = match.faction(me) == 1 ? 1 : 0;
+                const int f = (size_t)me < pf.faction.size() && pf.faction[(size_t)me] == 1 ? 1 : 0;
                 auto lin = [](int c) { float v = c / 255.0f; return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
                 render::CharacterColors cc;
                 const game::CharacterColor* src[2] = {&mp.selection.primary[f], &mp.selection.secondary[f]};
@@ -1113,8 +1115,8 @@ void Application::routeMatchToFrontend(float dt) {
                                                              {"primary", std::to_string(src[0]->r) + "," + std::to_string(src[0]->g) + "," + std::to_string(src[0]->b)},
                                                              {"secondary", std::to_string(src[1]->r) + "," + std::to_string(src[1]->g) + "," + std::to_string(src[1]->b)},
                                                              {"energon", frontend::FlowTrace::num(cc.energon[0]) + "," + frontend::FlowTrace::num(cc.energon[1]) + "," + frontend::FlowTrace::num(cc.energon[2])},
-                                                             {"weapon", world_.player().pawn().weapon().def ? world_.player().pawn().weapon().def->id : ""},
-                                                             {"drawn", world_.localChassis()}});
+                                                             {"weapon", pf.localWeaponId},
+                                                             {"drawn", pf.localChassis}});
             }
             if (e.player == me && localDeadForUi_) {
                 // RestartPlayer leaves spectating -> UI event 5 (RE E7.4).
@@ -1132,7 +1134,7 @@ void Application::routeMatchToFrontend(float dt) {
             {   // RUNTIME-EVENTS: end (Gameplay's EndGame reason / winner; -1 = tie)
                 const char* reason = e.text == "Score" ? "score_limit" : (e.text.find("ime") != std::string::npos ? "time_limit" : "other");
                 const std::string winner = e.value >= 0 ? std::to_string(e.value) : std::string("draw");
-                LOG_INFO("MATCH end reason=%s winner=%s t=%d (gameplay reason %s)", reason, winner.c_str(), match.elapsedTime(), e.text.c_str());
+                LOG_INFO("MATCH end reason=%s winner=%s t=%d (gameplay reason %s)", reason, winner.c_str(), pf.elapsedTime, e.text.c_str());
             }
             flow.onUIEvent((int)frontend::UIEvent::EndGame);   // MatchOver: HUD hidden, EndGameStats (RE F4)
             break;
@@ -1144,8 +1146,8 @@ void Application::routeMatchToFrontend(float dt) {
         }
     }
     // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
-    if (match.state() == game::Match::State::InProgress && match.remainingTime() != lastLoggedRemaining_) {
-        lastLoggedRemaining_ = match.remainingTime();
+    if (pf.matchState == (int)game::Match::State::InProgress && pf.remainingTime != lastLoggedRemaining_) {
+        lastLoggedRemaining_ = pf.remainingTime;
         LOG_INFO("MATCH timer remaining_s=%d", lastLoggedRemaining_);
     }
     // Dead: after MinRespawnDelay 3.0 s the controller enters PlayerSpectating -> UI event 4 (RE E7.3, CONFIRMED).
@@ -1154,7 +1156,7 @@ void Application::routeMatchToFrontend(float dt) {
         if (localDeadTime_ >= 3.0f) { flow.onUIEvent((int)frontend::UIEvent::Spectating); spectatingUi_ = true; }
     }
     // <CurrentGame:*> / <PlayerOwner:*> match values for the in-match movies (Gameplay authoritative).
-    const game::HudGameState h = world_.hudState();
+    const game::HudGameState& h = pf.hud;
     frontend::MatchValues v;
     v.valid = h.matchActive;
     v.pending = h.matchState == (int)game::Match::State::PendingMatch;
@@ -1168,8 +1170,8 @@ void Application::routeMatchToFrontend(float dt) {
     v.timeToRespawn = h.timeToRespawn;
     v.gameOverMessage = h.result;
     fillGriObjective(h, v);
-    for (size_t i = 0; i < match.players().size(); ++i) {
-        const auto& mp = match.players()[i];
+    for (size_t i = 0; i < pf.players.size(); ++i) {
+        const auto& mp = pf.players[i];
         frontend::MatchValues::Player p;
         p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
         p.dead = !mp.alive; p.local = (int)i == me;
@@ -1184,47 +1186,50 @@ void Application::routeMatchToFrontend(float dt) {
     hf.totalSegments = h.segmentCount;
     if (h.activeSegment >= h.segmentCount) { hf.fullSegments = h.segmentCount; hf.currentSegment = 1.0; }
     else {
-        const auto& hp = world_.player().pawn().health();
-        float bottom = h.activeSegment > 0 ? hp.segmentTop(h.activeSegment - 1) : 0.0f, top = hp.segmentTop(h.activeSegment);
+        auto segTop = [&](int i) { return i >= 0 && (size_t)i < pf.localSegmentTops.size() ? pf.localSegmentTops[(size_t)i] : 0.0f; };
+        float bottom = h.activeSegment > 0 ? segTop(h.activeSegment - 1) : 0.0f, top = segTop(h.activeSegment);
         hf.fullSegments = h.activeSegment;
         hf.currentSegment = top > bottom ? std::max(0.0f, std::min(1.0f, (h.health - bottom) / (top - bottom))) : 0.0;
     }
     hf.overshield = h.normalizedOverShield;
-    const auto& wpn = world_.player().pawn().weapon();
-    hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
+    hf.clip = h.clipAmmo; hf.clipCapacity = pf.localMag; hf.reserve = h.reserveAmmo; hf.reserveCapacity = pf.localReserveMax;
     {   // Gameplay's TnHUD observer state: fine aim (EHudAimType) -> NotifyFineAimChanged. The weapon class name goes to
         // NotifyCurrentWeaponChanged and Hud_GFX itself picks the icon / crosshair / reticule / scope (RE 934ecde, CONFIRMED).
         // [integration M08c] Gameplay's accessor is the single source again (aa0dfd1 / bec41cd: "TnWeapon" + the active
         // WeaponDef::id, TnWeaponFlag1Hand / TnWeaponBomb while carrying). No Ion default.
-        const auto& aim = world_.player().controller().hudAimState();
+        const auto& aim = pf.aim;
         hf.weapon = aim.weaponClass ? aim.weaponClass : "";
         hf.aimType = aim.aimType;
     }
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
     frontend_->hud().setFrame(hf);
+    world_.consumePresented();   // once per call: the queues above were read
 }
 
 void Application::driveLifecycleTest(float dt) {
     // TEST ONLY (WFC_LIFECYCLE): every 2.5 s of InProgress, alternately the local player kills the opponent (+1 player
     // and team score) and the opponent kills the local player (death -> spectating -> 5 s wave respawn). Waits while
     // either side is dead. Uses only Gameplay's match API; no rule is reimplemented here.
-    if (lifecycleGoal_ <= 0 || world_.match().state() != game::Match::State::InProgress || world_.matchOpponents().empty()) return;
+    // [integration 09c] Async-step migration: reads from presented(), the damage goes through submit().
+    const game::World::PresentedFrame& pf = world_.presented();
+    if (lifecycleGoal_ <= 0 || pf.matchState != (int)game::Match::State::InProgress || pf.players.size() < 2) return;
     if ((lifecycleT_ += dt) < 2.5f) return;
-    // The target: an opponent on the other team (bots may also be MatchOpponents, teammates included; FFA: any).
-    const int me = world_.localMatchPlayer();
-    const auto& players = world_.match().players();
+    // The target: another participant on the other team (FFA: any), with a live pawn.
+    const int me = pf.localPlayer;
+    const auto& players = pf.players;
+    auto alive = [&](int p) { return p >= 0 && (size_t)p < pf.present.size() && pf.present[(size_t)p]; };
     const int myTeam = me >= 0 && me < (int)players.size() ? players[(size_t)me].team : -1;
-    game::MatchOpponent* opp = nullptr;
-    for (game::MatchOpponent* o : world_.matchOpponents()) {
-        const int t = o->matchPlayer() >= 0 && o->matchPlayer() < (int)players.size() ? players[(size_t)o->matchPlayer()].team : -1;
-        if (myTeam < 0 || myTeam == 255 || t != myTeam) { opp = o; break; }
+    int opp = -1;
+    for (int i = 0; i < (int)players.size(); ++i) {
+        if (i == me) continue;
+        if (myTeam < 0 || myTeam == 255 || players[(size_t)i].team != myTeam) { opp = i; break; }
     }
-    if (!opp || world_.localPlayerDead() || !opp->spawned()) return;
+    if (opp < 0 || !alive(me) || !alive(opp)) return;
     lifecycleT_ = 0.0f;
     const bool killOpponent = (lifecycleStep_++ % 2) == 0;
-    if (killOpponent) world_.applyMatchDamage(opp->matchPlayer(), me, 100000.0f, false);
-    else world_.applyMatchDamage(me, opp->matchPlayer(), 100000.0f, false);
+    const int victim = killOpponent ? opp : me, killer = killOpponent ? me : opp;
+    world_.submit([victim, killer](game::World& w) { w.applyMatchDamage(victim, killer, 100000.0f, false); });
     frontend::FlowTrace::emit("test.lifecycle.damage", {{"victim", killOpponent ? "opponent" : "local"}});
 }
 
