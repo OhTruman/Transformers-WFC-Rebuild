@@ -12,6 +12,8 @@ const char* const kBotNames[] = {
     "Ionstorm", "Jumpstart", "Kickback", "Lugnut", "Manifold", "Nitrous", "Overdrive", "Piston",
     "Quickshift", "Redline", "Sparkplug", "Torque", "Ultravolt", "Valvetrain", "Wingnut", "Xenon",
     "Yawrate", "Zerofault", "Afterburn", "Blacktop", "Crankshaft", "Downforce", "Endgame", "Fulcrum",
+    "Gasket", "Halfshaft", "Idler", "Jackplate", "Keystone", "Lockring", "Magneto", "Nosecone",
+    "Outrider", "Pinion", "Quench", "Ratchetjaw", "Skidplate", "Tailpipe", "Undertow", "Vortexer",
 };
 constexpr int kNameCount = (int)(sizeof(kBotNames) / sizeof(kBotNames[0]));
 
@@ -20,15 +22,15 @@ unsigned mix(unsigned x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x
 
 const char* botDifficultyName(int d) { return d <= 0 ? "EASY" : (d >= 2 ? "HARD" : "MEDIUM"); }
 
-std::vector<BotIdentity> makeBotIdentities(const BotLaunch& b, bool teamGame, int humanTeam, int maxPerTeam, int maxPlayers,
+std::vector<BotIdentity> makeBotIdentities(const BotLaunch& b, bool teamGame, int humanTeam, int maxPerTeam, int maxBotsPerTeam, int maxPlayers,
                                            int humans, const std::vector<std::string>& taken, unsigned seed) {
     std::vector<BotIdentity> out;
     // Capacity: never exceed the per-team / total slots, whatever the URL asked for.
     int friendly = 0, enemy = 0;
     if (teamGame) {
         const int mine = humanTeam == 1 ? 1 : 0;
-        friendly = std::clamp(b.friendly, 0, std::max(0, maxPerTeam - humans));
-        enemy = std::clamp(b.enemy, 0, maxPerTeam);
+        friendly = std::clamp(b.friendly, 0, std::max(0, std::min(maxBotsPerTeam, maxPerTeam - humans)));
+        enemy = std::clamp(b.enemy, 0, std::min(maxBotsPerTeam, maxPerTeam));
         friendly = std::min(friendly, std::max(0, maxPlayers - humans));
         enemy = std::min(enemy, std::max(0, maxPlayers - humans - friendly));
         (void)mine;

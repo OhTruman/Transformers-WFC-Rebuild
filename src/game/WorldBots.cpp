@@ -733,6 +733,12 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
 
 void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
+    // MatchOver / PendingMatch / between rounds: bots do not think, move or fire (the original end state stops play: no damage,
+    // no scoring, pawns idle). Their pawns get an empty intent.
+    if (match_.state() != Match::State::InProgress || match_.betweenRounds()) {
+        for (MatchOpponent* o : opponents_) o->setIntent(MoveIntent{});
+        return;
+    }
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
     botPathBudget_ = 1;   // at most one new search per simulation step

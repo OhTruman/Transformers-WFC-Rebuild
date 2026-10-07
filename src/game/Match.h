@@ -42,11 +42,15 @@ struct MatchSettings {
     // ShouldScoreKill (MP): only TnPlayerController victims score; AI / bot victims never do [CONF RE]. PC ADAPTATION: offline
     // bot matches let bot victims score like players (true) so bots are full participants; false = the original rule.
     bool botVictimsScore = true;
-    // Slots. RE: TnMultiplayerGame MaxPlayers 10 (5v5) and no per-team cap. PC ADAPTATION for offline bot matches (Private Match
-    // Bot Settings: up to 7 friendly + 8 enemy beside the human): 16 total, 8 per team. Frontend reads these for its UI limits;
-    // World clamps launched bots to them.
-    int maxPlayers = 16;
-    int maxPerTeam = 8;
+    // Slots [CONF RE: TnMultiplayerGame MaxPlayers 10 = 5 v 5]: the default fidelity setting. CUSTOM-GAME EXTENSION (Bot Settings
+    // "extended", ?BotsExtended=1): up to 16 bots per team plus the human (33 participants; FFA 32 bots) - applyExtendedSlots().
+    // Frontend reads these for its UI limits; World clamps launched bots to them. Participant storage is dynamic everywhere.
+    int maxPlayers = 10;          // all participants
+    int maxPerTeam = 5;           // participants per team, human included
+    int maxBotsPerTeam = 5;       // bots per team
+    bool extendedSlots = false;
+    static constexpr int kExtendedBotsPerTeam = 16;
+    void applyExtendedSlots() { extendedSlots = true; maxBotsPerTeam = kExtendedBotsPerTeam; maxPerTeam = kExtendedBotsPerTeam + 1; maxPlayers = 2 * kExtendedBotsPerTeam + 1; }
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
 };
 
