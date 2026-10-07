@@ -121,6 +121,9 @@ public:
     // keeps a fixed 60 Hz simulation and presents lerp(previous step, current step, alpha)]. Never read by the simulation.
     // beginStep() at the start of each sim step; setRenderAlpha(FixedStepClock::alpha()) before drawing.
     void beginStep();
+    // The pose changed after this step's palettes were built (async step: the frame between the local part and the background part
+    // draws the previous pose): rebuild them at the next draw. Presentation only.
+    void invalidatePalettes() { for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) if (p->builtStep == stepCounter_) p->builtStep = ~0u; }
     // Skin the current pose's vertices if a step changed it since the last skin (draw calls it; tests that read vertices may too).
     void ensureSkinned() const;
     void setRenderAlpha(float a) { renderAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); }
@@ -513,7 +516,11 @@ public:
     bool weaponRestored() const;
 
     // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
-    void notifyFired() { recoilSpine_.start(); recoilHand_.start(); }
+    void notifyFired() {   // deterministic per pawn and shot (the recoil phase reaches the simulation through hand-bone sockets)
+        const unsigned s = (++recoilShots_ * 2654435761u) ^ (unsigned)(uintptr_t)stepCounter_ * 0x85ebca6bu ^ 0x9e3779b9u;
+        recoilSpine_.start(s | 1u); recoilHand_.start((s * 0xc2b2ae35u) | 1u);
+    }
+    unsigned recoilShots_ = 0;
 
     // Controller aim pitch (radians, camera pitch) driving the upper-body aim offset.
     void setAimPitch(float p) { aimPitch_ = p; }

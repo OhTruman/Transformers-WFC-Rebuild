@@ -210,3 +210,38 @@ queues (match / gameplay events); award drains clear their own queues.
 | `match.starts()[idx].pos` | unchanged (static per match) |
 
 Load / unload (`launchMatch`, `loadMapAudio`, ...) stay direct calls: no step runs then.
+
+## Step (3) as landed (2026-10-07, agents/gameplay): `WFC_ASYNCSTEP=1`, off by default
+
+Simpler than the snapshot plan above: the background part starts **after** `World::draw` and is joined at the start of the next
+frame, so drawing never overlaps the step and needs no snapshot. The step hides behind `endFrame` / present / HUD / audio.
+
+```
+frame:  world.joinStep();                       // finish the background part launched last frame; publish presented()
+        world.handleInput(input, realDt);
+        for each due step: world.tickPrefix(dt)  // local part (async on) - else world.tick(dt)
+        ... camera, world.draw(renderer) ...
+        world.launchStep();                     // background part on the sim thread (or inline when async is off / no match)
+        renderer.endFrame(); HUD / frontend (presented() only); present; audio
+```
+
+- **Local part** (`tickPrefix`, main thread): submitted commands, body / weapon preloads, map state, abilities, regen, match
+  (spawns, deaths, score), awards, the local controller (`applyToPawn`: local movement / firing / hitscan). No added latency.
+- **Background part** (`stepRemainder` + the `presented()` fill): bots, participants' movement / animation / weapons, camera
+  collision, ram / separation, local animation / weapon presentation, FX, audio glue, hazards, projectiles, actors.
+- Order of operations is exactly `tick()`'s: a second `tickPrefix` in one frame (catch-up) finishes the pending background part
+  inline first. `World::tick` = `tickPrefix` + `joinStep`. WFC_ASYNCSTEPTEST: a seeded 32 v 32 TDM, sync vs async (1-4 frames per
+  step, a real draw between the parts), identical event logs and per-step pawn states (60 s).
+- `presented()` is double-buffered: the background part fills a back frame, `joinStep` publishes it (unconsumed queues of the front
+  stay first). Reads of `presented()` / `consumePresented()` / `drain*Awards()` / `submit()` are safe at any time on the main thread.
+- **While `world.stepRunning()` the main thread must not touch simulation state** (World / Match / pawns / controller / audio glue
+  objects). Lifecycle entry points (`load`, `launchMatch`, `startLocalMatch`, `resetForNewLevel`) join first themselves.
+- Hooks fired from the background part (`participantShotFxHook`, `participantAbilityHook`) are queued and replayed in order on the
+  main thread at the join. `weaponFireHook` / `repairBeamHook` (local firing) run in the local part, on the main thread.
+- GL / asset loads stay on the main thread: held weapons of every pawn are preloaded in the local part; a model first needed by the
+  background part is loaded at the join and used from the next step (presentation only).
+- Fixed on the way: the skeletal recoil phase used `std::rand` (per thread in the UCRT, shared with FX); grenades leave the hand
+  bone, so it reached the simulation. Now a per-pawn deterministic seed.
+- Presentation: on the frame that runs a step, participants / FX / projectiles show the previous step (exact, unblended) and the
+  local pawn its new position; the next frame shows the completed step. At 300 fps the boundary frame's error is < 0.2 step.
+- WFC_ASYNCLOG: background-part time and the main-thread join wait (the part not hidden by the frame), every 300 steps.

@@ -52,8 +52,14 @@ struct RecoilControl {
     core::Vec3 locOffset{0, 0, 0};          // UU (forward, right, up)
     bool active = false;
 
-    void start() {
-        auto phase = [](bool rnd) { return rnd ? (float)std::rand() / (float)RAND_MAX * 6.2831853f : 0.0f; };
+    // The random sin offsets come from the caller's seed, not std::rand: the pose feeds the simulation (grenades leave the hand bone),
+    // and std::rand is per thread in the UCRT and shared with presentation FX, so it made the step depend on the thread / frame rate.
+    void start(unsigned seed) {
+        auto phase = [&seed](bool rnd) {
+            if (!rnd) return 0.0f;
+            seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5;   // xorshift32
+            return (float)(seed >> 8) / 16777216.0f * 6.2831853f;
+        };
         toGo = def.duration;
         rotSin = {phase(def.rotRandom[0]), phase(def.rotRandom[1]), phase(def.rotRandom[2])};
         locSin = {phase(def.locRandom[0]), phase(def.locRandom[1]), phase(def.locRandom[2])};

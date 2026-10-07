@@ -1,3 +1,5 @@
+#include <xmmintrin.h>
+#include <thread>
 #include "core/SimRandom.h"
 #include "core/Application.h"
 #include "core/Config.h"
@@ -176,6 +178,7 @@ bool Application::init() {
     if (const char* ss = std::getenv("WFC_STUCKSPOT")) { runStuckSpot(ss); return false; }   // what blocks a robot at a spot
     if (std::getenv("WFC_MARKERSTEST")) { runMarkersTest(); return false; }        // presented().markers per mode (RE 7bb8ec1 rules)
     if (std::getenv("WFC_ENGAGETEST")) { runEngageTest(); return false; }          // bots engage the local player
+    if (std::getenv("WFC_ASYNCSTEPTEST")) { runAsyncStepTest(); return false; }    // async step == sync step (WFC_ASYNCSTEP=1)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -291,6 +294,8 @@ void Application::run() {
         }
         if (const char* fp = std::getenv("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
             world_.player().controller().setCameraPitch((float)std::atof(fp));
+        // Async step (WFC_ASYNCSTEP=1): the background part launched after the last frame's draw finishes first.
+        world_.joinStep();
         // Per-frame input (camera orientation, buffered movement intent).
         world_.handleInput(input, (float)realDt);
 
@@ -299,8 +304,10 @@ void Application::run() {
         auto simT0 = std::chrono::steady_clock::now();
         int steps = clock_.tick(realDt);
         float step = clock_.stepSeconds();
+        static const bool asyncStep = game::World::asyncStepEnabled();
         for (int i = 0; i < steps; ++i) {
-            world_.tick(step);
+            if (asyncStep) world_.tickPrefix(step);   // the local part; the background part runs after the draw
+            else world_.tick(step);
             gameMode_.tick(world_, step);
         }
         if (perfEvery > 0) {
@@ -406,6 +413,7 @@ void Application::run() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        world_.launchStep();   // the step's background part overlaps endFrame / present / HUD (joined at the next frame start)
         renderer_->endFrame();
 
         if (smokeFrames > 0 && frame == smokeFrames)
@@ -421,6 +429,7 @@ void Application::run() {
 
         updateTitleHud(realDt);
     }
+    world_.joinStep();   // no background step outlives the loop
 }
 
 void Application::updateTitleHud(double realDt) {
@@ -428,6 +437,7 @@ void Application::updateTitleHud(double realDt) {
     fpsSmoothed_ = fpsSmoothed_ <= 0.0 ? fps : (fpsSmoothed_ * 0.9 + fps * 0.1);
     titleTimer_ += realDt;
     if (titleTimer_ < 0.25) return;
+    if (world_.stepRunning()) return;   // async step: read the pawn on a frame without a running background part
     titleTimer_ = 0.0;
 
     const auto& pawn = world_.player().pawn();
@@ -5412,6 +5422,104 @@ void Application::runEngageTest() {
         check(tombs >= 1 && life > 0.0f && life <= 8.0f, "a tombstone marker for the death (" + std::to_string(tombs) + ", lifeSpan " + std::to_string(life) + ")");
     }
     LOG_INFO("ENGAGE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_ASYNCSTEPTEST (run with WFC_ASYNCSTEP=1): the async step gives the synchronous step's results. The same seeded 32 v 32 TDM runs
+// (A) with whole synchronous steps and (B) as the live loop does it: per frame join -> local part -> draw -> background part on the
+// sim thread (overlapping endFrame), with 1-4 frames per step and FX randomness. Event logs and the final pawn states must match.
+// Also reports the main-thread share of a step (local part + join wait) vs the whole step.
+void Application::runAsyncStepTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("ASYNCSTEP %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    if (!game::World::asyncStepEnabled()) { check(false, "WFC_ASYNCSTEP=1 is set"); LOG_INFO("ASYNCSTEP SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    const float dt = 1.0f / 60.0f;
+#ifdef _WIN32
+    if (!std::getenv("WFC_SEED")) _putenv_s("WFC_SEED", "7");
+#else
+    if (!std::getenv("WFC_SEED")) setenv("WFC_SEED", "7", 0);
+#endif
+    const float secs = std::getenv("WFC_ASYNCSTEP_SECS") ? (float)std::atof(std::getenv("WFC_ASYNCSTEP_SECS")) : 40.0f;
+    auto nowMs = [] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+    double mainMs = 0.0, stepMs = 0.0;
+    std::vector<std::vector<std::string>> stepStates[2];
+    auto stateOf = [&]() {
+        std::vector<std::string> v; char b[160];
+        { const auto& c = world_.player().pawn(); std::snprintf(b, sizeof b, "L %.5f %.5f %.5f %.4f", c.position().x, c.position().y, c.position().z, c.health().current); v.push_back(b); }
+        for (const game::MatchOpponent* o : world_.matchOpponents()) {
+            const core::Vec3 p = o->pawn().position();
+            std::snprintf(b, sizeof b, "P%d %d %.5f %.5f %.5f %.4f", o->matchPlayer(), (int)o->spawned(), p.x, p.y, p.z, o->pawn().health().current); v.push_back(b);
+        }
+        return v;
+    };
+    auto runOnce = [&](bool async) {
+        auto& states = stepStates[stepStates[0].empty() ? 0 : 1]; states.clear();
+        std::vector<std::string> log;
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsAutobot=31?BotsDecepticon=32?BotDifficulty=2?ExtendedPlayers=1?TimeLimit=600", L);
+        if (!world_.launchMatch(L)) return log;
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        platform::InputFrame idle;
+        const int steps = (int)(secs / dt);
+        for (int i = 0; i < steps; ++i) {
+            const int frames = async ? 1 + (i * 7) % 4 : 1;     // 1-4 frames per step
+            if (!async) { world_.handleInput(idle, dt); const double s0 = nowMs(); world_.tick(dt); stepMs += nowMs() - s0; states.push_back(stateOf()); continue; }
+            for (int f = 0; f < frames; ++f) {
+                const double t0 = nowMs();
+                world_.joinStep();
+                const double tj = nowMs();
+                if (f == 0 && i > 0) states.push_back(stateOf());
+                world_.handleInput(idle, dt / (float)frames);
+                for (int k = 0; k < 3; ++k) (void)std::rand();  // presentation randomness between steps
+                if (f == 0) world_.tickPrefix(dt);
+                const double tp = nowMs();
+                if (renderer_ && window_) {
+                    world_.setRenderAlpha((float)f / (float)frames);
+                    world_.player().controller().updateCamera(camera_);
+                    renderer_->beginFrame(camera_, window_->width(), window_->height());
+                    world_.draw(*renderer_);
+                    world_.launchStep();
+                    renderer_->endFrame();
+                } else world_.launchStep();
+                if (f == 0) { mainMs += (tp - tj); }
+                mainMs += (tj - t0);   // join wait: the background part not hidden by the frame
+            }
+        }
+        world_.joinStep();
+        if (async) states.push_back(stateOf());
+        char buf[200];
+        for (const game::GameplayEvent& e : world_.match().gameplayEvents()) {
+            std::snprintf(buf, sizeof buf, "%d %.4f %d %d %s", (int)e.type, e.time, e.instigator, e.victim, e.damageType.c_str());
+            log.push_back(buf);
+        }
+        // final state of every pawn
+        for (const game::MatchOpponent* o : world_.matchOpponents()) {
+            const core::Vec3 p = o->pawn().position();
+            std::snprintf(buf, sizeof buf, "P%d %d %.4f %.4f %.4f %.3f", o->matchPlayer(), (int)o->spawned(), p.x, p.y, p.z, o->pawn().health().current);
+            log.push_back(buf);
+        }
+        return log;
+    };
+    { unsigned other = 0; std::thread th([&] { other = _mm_getcsr(); }); th.join(); LOG_INFO("ASYNCSTEP MXCSR main 0x%04x, a new thread 0x%04x", _mm_getcsr(), other); }
+    const std::vector<std::string> a = runOnce(false);
+    stepMs /= (secs / dt);
+    const bool control = std::getenv("WFC_ASYNCSTEP_CONTROL") != nullptr;   // both runs synchronous: carry-over between matches, not async
+    const std::vector<std::string> b = runOnce(!control);
+    for (size_t st = 0; st < stepStates[0].size() && st < stepStates[1].size(); ++st)
+        if (!std::equal(stepStates[0][st].begin() + 1, stepStates[0][st].end(), stepStates[1][st].begin() + 1, stepStates[1][st].end())) {
+            const auto& x = stepStates[0][st]; const auto& y = stepStates[1][st];
+            for (size_t k = 1; k < x.size() && k < y.size(); ++k)
+                if (x[k] != y[k]) { LOG_INFO("ASYNCSTEP first state difference at step %zu: A %s | B %s", st, x[k].c_str(), y[k].c_str()); break; }
+            break;
+        }
+    size_t same = 0;
+    while (same < a.size() && same < b.size() && a[same] == b[same]) ++same;
+    LOG_INFO("ASYNCSTEP %zu lines (A sync) vs %zu (B async); first difference at %zu", a.size(), b.size(), same);
+    if (same < a.size() || same < b.size())
+        LOG_INFO("ASYNCSTEP   A: %s | B: %s", same < a.size() ? a[same].c_str() : "-", same < b.size() ? b[same].c_str() : "-");
+    LOG_INFO("ASYNCSTEP whole sync step %.3f ms; async main-thread cost per step (local part + join wait) %.3f ms", stepMs, mainMs / (secs / dt));
+    check(a.size() > 100, "the match produced events (" + std::to_string(a.size()) + ")");
+    check(a == b, "identical event logs and final pawn states (sync vs async)");
+    LOG_INFO("ASYNCSTEP SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

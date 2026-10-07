@@ -11,6 +11,8 @@
 #include "core/Debug.h"
 #include "core/Log.h"
 
+#include <condition_variable>
+#include <mutex>
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -54,12 +56,21 @@ template <class R> auto fxStopEffect(R& r, int h, int) -> decltype(r.stopParticl
 template <class R> void fxStopEffect(R&, int, long) {}
 template <class R> auto fxSpawnPoint(R& r, const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int) -> decltype(r.spawnParticleEffect(t, p, f, u), int()) { return r.spawnParticleEffect(t, p, f, u); }
 template <class R> int fxSpawnPoint(R&, const std::string&, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) { return -1; }
+// Rendering's per-effect parameter (agents/rendering: setParticleEffectParam(handle, name, rgba[4])), compile-time detected. "Team" picks
+// the ParticleModuleSwitchableColorScaleOverLife channel: 0 = A, 1 = B [CONF RE, Rendering 2026-10-07].
+template <class R> auto fxTeamParam(R& r, int h, int team, int) -> decltype(r.setParticleEffectParam(h, std::string(), (const float*)nullptr), void()) {
+    if (h < 0 || team < 0) return;
+    const float v[4] = {(float)team, 0.0f, 0.0f, 0.0f};
+    r.setParticleEffectParam(h, "Team", v);
+}
+template <class R> void fxTeamParam(R&, int, int, long) {}
 
 // WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
 static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }
 static double profNowMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 void World::load(render::IRenderer& renderer) {
+    joinStep();
     Character::clearRigCache();   // rigs point at models of the previous load
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
@@ -908,6 +919,10 @@ bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
 const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
     auto it = weaponModels_.find(d.id);
     if (it != weaponModels_.end()) return it->second.get();
+    if (!onMainThread()) {   // the async background part: GL uploads only on the main thread; loaded at the join, retried next step
+        deferredWeaponLoads_.push_back(&d);
+        return nullptr;
+    }
     auto m = std::make_unique<assets::SkinnedModel>();
     const std::string ext = assetRoot() + "/../";
     bool ok = d.meshGltf && *d.meshGltf && assets::loadSkinnedGlb(ext + d.meshGltf, *m) && m->valid();
@@ -955,6 +970,7 @@ void World::tickParticipantWeapons(float dt) {
         const Weapon& w = o->pawn().weapon();
         const std::string id = w.def ? w.def->id : "IonBlaster";
         if (id != v.id) {
+            if (id != "IonBlaster" && w.def && !onMainThread() && !weaponModels_.count(w.def->id)) { weaponModelFor(*w.def); continue; }   // loaded at the join
             v.id = id;
             if (id == "IonBlaster") v.anim.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
             else if (const assets::SkinnedModel* m = w.def ? weaponModelFor(*w.def) : nullptr) v.anim.setModelGeneric(m, *w.def);
@@ -990,13 +1006,15 @@ void World::tickParticipantWeapons(float dt) {
             muzzle.m[8] = rt.x; muzzle.m[9] = rt.y; muzzle.m[10] = rt.z; muzzle.m[12] = s.from.x; muzzle.m[13] = s.from.y; muzzle.m[14] = s.from.z;
         }
         if (participantShotFxHook) {
-            const double fx0 = tickProfOn() ? profNowMs() : 0.0;
-            participantShotFxHook(s, muzzle);
-            if (tickProfOn()) tickProfAdd(25, profNowMs() - fx0);   // WFC_TICKPROF glue.shotFx
+            presentHook([this, s, muzzle] {
+                const double fx0 = tickProfOn() ? profNowMs() : 0.0;
+                participantShotFxHook(s, muzzle);
+                if (tickProfOn()) tickProfAdd(25, profNowMs() - fx0);   // WFC_TICKPROF glue.shotFx
+            });
         }
         else if (partShotFx_.size() < 256) {
             const WeaponDef* d = findWeaponDef(s.weapon);
-            partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f)});   // projectiles draw their own flight effect
+            partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f), fxTeamOf(s.player)});   // projectiles draw their own flight effect
         }
     }
 }
@@ -1005,6 +1023,9 @@ void World::syncShownWeapon() {
     const Weapon& w = player_.pawn().weapon();
     std::string id = w.def ? w.def->id : "IonBlaster";
     if (id == shownWeapon_) return;
+    if (id != "IonBlaster" && w.def && !onMainThread() && !weaponModels_.count(w.def->id)) {   // loaded at the join; retried next step
+        weaponModelFor(*w.def); seenWeaponChange_ = ~player_.pawn().weaponChangeSerial(); return;
+    }
     struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF syncShownWeapon %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
     shownWeapon_ = id;
     if (id == "IonBlaster") weaponAnim_.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
@@ -1121,24 +1142,131 @@ namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
 
-void World::tick(float dt) {
+// The sim thread for the async step's background part (one job at a time).
+struct World::AsyncStepThread {
+    std::thread t;
+    std::mutex m;
+    std::condition_variable cv;
+    std::function<void()> job;
+    bool has = false, done = true, quit = false;
+    AsyncStepThread() {
+        t = std::thread([this] {
+            for (;;) {
+                std::function<void()> j;
+                { std::unique_lock<std::mutex> lk(m); cv.wait(lk, [&] { return has || quit; }); if (quit) return; j = std::move(job); has = false; }
+                j();
+                { std::lock_guard<std::mutex> lk(m); done = true; }
+                cv.notify_all();
+            }
+        });
+    }
+    void launch(std::function<void()> j) { { std::lock_guard<std::mutex> lk(m); job = std::move(j); has = true; done = false; } cv.notify_all(); }
+    void wait() { std::unique_lock<std::mutex> lk(m); cv.wait(lk, [&] { return done; }); }
+    ~AsyncStepThread() { { std::lock_guard<std::mutex> lk(m); quit = true; } cv.notify_all(); t.join(); }
+};
+
+bool World::asyncStepEnabled() {
+    static const bool on = [] { const char* e = std::getenv("WFC_ASYNCSTEP"); return e && e[0] == '1'; }();
+    return on;
+}
+
+void World::tick(float dt) {   // one whole step, synchronously (tests, tools, WFC_ASYNCSTEP off)
+    tickPrefix(dt);
+    joinStep();
+}
+
+void World::launchStep() {
+    if (!remainderPending_ || remainderRunning_) return;
+    if (!asyncStepEnabled() || !matchActive_) { finishRemainder(); return; }
+    if (!asyncThread_) asyncThread_ = std::make_shared<AsyncStepThread>();
+    remainderRunning_ = true; fillBack_ = true;
+    asyncThread_->launch([this] { finishRemainder(); });
+}
+
+void World::joinStep() {
+    if (remainderRunning_) {
+        const double t0 = profNowMs();
+        asyncThread_->wait();
+        remainderRunning_ = false;
+        static const bool log = std::getenv("WFC_ASYNCLOG") != nullptr;
+        if (log) {
+            static int n = 0; static double acc = 0.0, rem = 0.0;
+            acc += profNowMs() - t0; rem += lastRemainderMs_;
+            if (++n % 300 == 0) {
+                LOG_INFO("ASYNCSTEP local part %.3f ms avg (beginStep %.3f), background part %.3f ms avg, main-thread join wait %.3f ms avg", prefixMsAcc_ / 300.0,
+                         beginStepMsAcc_ / 300.0, rem / 300.0, acc / 300.0);
+                acc = rem = 0.0; prefixMsAcc_ = 0.0; beginStepMsAcc_ = 0.0;
+            }
+        }
+    }
+    if (remainderPending_) finishRemainder();          // not launched (catch-up step, sync mode): inline
+    if (fillBack_) { publishPresented(); fillBack_ = false; }
+    // Main-thread work the background part asked for: model loads (GL uploads), retried by the next step.
+    for (const WeaponDef* d : deferredWeaponLoads_) if (d) weaponModelFor(*d);
+    deferredWeaponLoads_.clear();
+    if (!deferredHooks_.empty()) { std::vector<std::function<void()>> hooks; hooks.swap(deferredHooks_); for (auto& h : hooks) h(); }
+    if (!fxOps_.empty()) { std::vector<FxOp> ops; ops.swap(fxOps_); for (const FxOp& op : ops) runFxOp(op); }
+}
+
+// The background part's presented() goes to presentedBack_: the front's unconsumed queues stay first, the back's follow.
+void World::publishPresented() {
+    PresentedFrame& f = presented_;
+    PresentedFrame& b = presentedBack_;
+    auto front = [](auto& dst, auto& src) { dst.insert(dst.begin(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end())); src.clear(); };
+    front(b.matchEvents, f.matchEvents); front(b.gameplayEvents, f.gameplayEvents); front(b.kills, f.kills);
+    front(b.damageTaken, f.damageTaken); front(b.damageCaused, f.damageCaused); front(b.xpAwards, f.xpAwards); front(b.statAwards, f.statAwards);
+    b.steps += f.steps;
+    std::swap(f, b);
+    b.matchEvents.clear(); b.gameplayEvents.clear(); b.kills.clear(); b.damageTaken.clear(); b.damageCaused.clear();
+    b.xpAwards.clear(); b.statAwards.clear(); b.steps = 0;
+    constexpr long kCap = 8192;
+    if ((long)f.matchEvents.size() > kCap) f.matchEvents.erase(f.matchEvents.begin(), f.matchEvents.end() - kCap);
+    if ((long)f.gameplayEvents.size() > kCap) f.gameplayEvents.erase(f.gameplayEvents.begin(), f.gameplayEvents.end() - kCap);
+    if ((long)f.kills.size() > kCap) f.kills.erase(f.kills.begin(), f.kills.end() - kCap);
+}
+
+void World::finishRemainder() {
+    const double t0 = profNowMs();
+    stepRemainder(pendingDt_);
+    fillPresented(fillBack_ ? presentedBack_ : presented_);
+    // A frame may have drawn (and cached the palettes of) the poses before this part animated them.
+    player_.pawn().invalidatePalettes();
+    for (MatchOpponent* o : opponents_) o->pawn().invalidatePalettes();
+    remainderPending_ = false;
+    lastRemainderMs_ = profNowMs() - t0;
+}
+
+// Weapon models of every held weapon, loaded on the main thread before the background part may switch to one (GL uploads).
+void World::preloadHeldWeaponsOfPawns() {
+    auto pre = [&](const Character& c) { for (const Weapon& w : c.inventory()) if (w.def && w.def->meshGltf && *w.def->meshGltf) weaponModelFor(*w.def); };
+    pre(player_.pawn());
+    for (MatchOpponent* o : opponents_) if (o->spawned()) pre(o->pawn());
+}
+
+void World::tickPrefix(float dt) {
+    joinStep();
+    struct PrefixTime { double& acc; double t0 = profNowMs(); ~PrefixTime() { acc += profNowMs() - t0; } } prefixTime{prefixMsAcc_};
     if (TickProf::on() && ++tickProf().n % 300 == 0) {
         std::string line;
         for (int i = 0; i < 27; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
-    TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step
+    TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step (this local part + the background part)
     if (!commands_.empty()) {   // submitted commands, in order, at the step boundary
         std::vector<std::function<void(World&)>> cmds; cmds.swap(commands_);
         for (auto& c : cmds) c(*this);
     }
-    struct PresentedFill { World& w; ~PresentedFill() { w.fillPresented(); } } presentedFill{*this};   // at the end of the step
+    pendingDt_ = dt; remainderPending_ = true;   // the background part (finishRemainder) completes this step
     // The local pawn's presentation yaw offset (set per render frame by the controller) is not simulation state: the step's
     // meshMatrix / sockets use the simulated yaw only (the next frame's input pass sets the offset again for drawing).
     player_.pawn().setDrawYawOffset(0.0f);
     // Presentation interpolation: remember each pawn's state at the start of the step.
-    player_.pawn().beginStep();
-    for (MatchOpponent* o : opponents_) o->pawn().beginStep();
+    {
+        const double b0 = profNowMs();
+        player_.pawn().beginStep();
+        core::WorkerPool::get().run((int)opponents_.size(), [&](int i) { opponents_[(size_t)i]->pawn().beginStep(); });   // each its own pawn
+        beginStepMsAcc_ += profNowMs() - b0;
+    }
     // WFC_EVENTLOG (diagnostics): each authoritative gameplay event once, with its main context.
     {
         static const bool evlog = std::getenv("WFC_EVENTLOG") != nullptr;
@@ -1220,6 +1348,12 @@ void World::tick(float dt) {
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
+    if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
+}
+
+// The background part of a step (after the local controller): bots, participants, weapons, FX, audio glue, projectiles, actors.
+void World::stepRemainder(float dt) {
+    TickTimer tickTotal(14);
     participantShots_.clear();
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
     {   // Participants: movement + animation (every participant animates every step; user decision). Each task touches only its own
@@ -1324,6 +1458,7 @@ void World::tick(float dt) {
 // Local match host glue (TnMultiplayerGame / TnTeamGame on the authority): the Match decides spawns, deaths and the
 // end; World applies them to the local pawn and the map actors.
 void World::startLocalMatch(const MatchSettings& s) {
+    joinStep();
     if (match_.starts().empty()) {
         std::string root = assetRoot();
         match_.loadSpawnData(mapDir() + "gameplay.json");
@@ -1404,6 +1539,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
 }
 
 void World::resetForNewLevel() {
+    joinStep();
     // A new match is a fresh load of the map in the original (MatchOver -> ReturnToGameLobby -> ServerTravel).
     mapState_.resetForNewMatch();
     if (collision_.valid()) mapState_.tick(0.0f, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
@@ -1503,8 +1639,7 @@ void World::generateExtraStarts() {
 }
 
 
-void World::fillPresented() {
-    PresentedFrame& p = presented_;
+void World::fillPresented(PresentedFrame& p) {
     p.players = match_.players();
     const size_t n = p.players.size();
     p.positions.assign(n, core::Vec3{0, 0, 0});
@@ -1764,6 +1899,7 @@ void World::fillPresented() {
 }
 
 bool World::launchMatch(const MatchLaunch& l) {
+    joinStep();
     if (canonicalMapName(l.map) != mapName_ || !usingSlice_) {
         LOG_WARN("match: map %s is not the loaded map (%s); the world loads one map per session", l.map.c_str(), mapName_.c_str());
         return false;
@@ -2296,7 +2432,7 @@ void World::draw(render::IRenderer& r) const {
             const float pitch = p.grenade ? p.pitch0 + p.spin : 0.0f;
             r.drawMesh(v->body, core::Mat4::translate(p.pos) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset) * core::Mat4::rotateZ(pitch),
                        core::Vec3{1, 1, 1});
-        } else if (p.fxHandle < 0) {
+        } else if (!fxLive(p.fxHandle)) {
             r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
         }
     }
@@ -2335,8 +2471,8 @@ void World::draw(render::IRenderer& r) const {
         const core::Vec3 fwd = core::normalize(core::Vec3{s.muzzle.m[0], s.muzzle.m[1], s.muzzle.m[2]});
         const core::Vec3 up = core::normalize(core::Vec3{s.muzzle.m[4], s.muzzle.m[5], s.muzzle.m[6]});
         const bool muzzle = d && d->muzzleFx && *d->muzzleFx, tracer = s.tracer && d && d->tracerFx && *d->tracerFx;
-        if (muzzle) fxSpawnPoint(r, d->muzzleFx, at, fwd, up, 0);
-        if (tracer) fxSpawnSegment(r, d->tracerFx, at, s.to, 0);
+        if (muzzle) fxTeamParam(r, fxSpawnPoint(r, d->muzzleFx, at, fwd, up, 0), s.team, 0);
+        if (tracer) fxTeamParam(r, fxSpawnSegment(r, d->tracerFx, at, s.to, 0), s.team, 0);
         if (!muzzle && !tracer) {
             static std::set<std::string> warned;
             if (warned.insert(s.weapon).second) LOG_WARN("participant shot FX: no authored muzzle / tracer template for %s (nothing drawn)", s.weapon.c_str());
@@ -4333,12 +4469,47 @@ int World::projectileVisualFor(const char* weaponId) const {
     return -1;
 }
 
+int World::fxTeamOf(int player) const {
+    if (player < 0 || (size_t)player >= match_.players().size()) return -1;
+    return match_.settings().teamGame ? match_.players()[(size_t)player].team : match_.faction(player);
+}
+
+int World::fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion) {
+    if (!renderer_ || !fxApi<render::IRenderer>(0)) return -1;
+    FxOp op; op.kind = 0; op.vid = fxNextVid_++; op.tmpl = tmpl; op.p = p; op.f = f; op.u = u; op.team = team; op.explosion = explosion;
+    if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
+    return op.vid;
+}
+void World::fxStepMove(int vid, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
+    if (!renderer_ || vid < 0) return;
+    FxOp op; op.kind = 1; op.vid = vid; op.p = p; op.f = f; op.u = u;
+    if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
+}
+void World::fxStepStop(int vid) {
+    if (!renderer_ || vid < 0) return;
+    FxOp op; op.kind = 2; op.vid = vid;
+    if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
+}
+void World::runFxOp(const FxOp& op) {
+    if (op.kind == 0) {
+        const int h = fxSpawn(*renderer_, op.tmpl, op.p, op.f, op.u, 0);
+        if (h < 0) return;
+        fxTeamParam(*renderer_, h, op.team, 0);
+        if (op.explosion) ++projectileFxExplosions_;
+        else { fxReal_[op.vid] = h; ++projectileFxSpawned_; }
+        return;
+    }
+    auto it = fxReal_.find(op.vid);
+    if (it == fxReal_.end()) return;
+    if (op.kind == 1) fxMove(*renderer_, it->second, op.p, op.f, op.u, 0);
+    else { fxStop(*renderer_, it->second, 0); fxReal_.erase(it); }
+}
+
 void World::projectileFxStart(Projectile& p) {
     p.fxHandle = -1;
     if (!renderer_ || p.visual < 0 || projVisuals_[(size_t)p.visual].flight.empty()) return;
     core::Vec3 f, u; fxFrame(p.vel, f, u);
-    p.fxHandle = fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].flight, p.pos, f, u, 0);
-    if (p.fxHandle >= 0) ++projectileFxSpawned_;
+    p.fxHandle = fxStepSpawn(projVisuals_[(size_t)p.visual].flight, p.pos, f, u, fxTeamOf(p.instigator), false);
 }
 
 void World::projectileFxMove(const Projectile& p) {
@@ -4347,15 +4518,15 @@ void World::projectileFxMove(const Projectile& p) {
     // A resting grenade keeps its last orientation (zero velocity).
     if (core::dot(p.vel, p.vel) < 1e-8f) return;
     fxFrame(p.vel, f, u);
-    fxMove(*renderer_, p.fxHandle, p.pos, f, u, 0);
+    fxStepMove(p.fxHandle, p.pos, f, u);
 }
 
 void World::projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec3& normal, bool explode) {
     if (!renderer_) return;
-    if (p.fxHandle >= 0) { fxStop(*renderer_, p.fxHandle, 0); p.fxHandle = -1; }   // trails finish their lifetime
+    if (p.fxHandle >= 0) { fxStepStop(p.fxHandle); p.fxHandle = -1; }   // trails finish their lifetime
     if (!explode || p.visual < 0 || projVisuals_[(size_t)p.visual].explosion.empty()) return;
     core::Vec3 f, u; fxFrame(normal, f, u);
-    if (fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].explosion, at, f, u, 0) >= 0) ++projectileFxExplosions_;
+    fxStepSpawn(projVisuals_[(size_t)p.visual].explosion, at, f, u, fxTeamOf(p.instigator), true);
 }
 
 // The materials of a robot.glb without parsing its ~19 MB of clip JSON: read only the JSON chunk, cut out the top-level
