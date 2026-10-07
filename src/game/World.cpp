@@ -1084,7 +1084,7 @@ void World::tick(float dt) {
     }
     { TickTimer tt(1); tickAbilityEffects(dt); }
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
-    for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
+    for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt, o->pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     if (matchActive_) { TickTimer tt(2); tickMatch(dt); }
     if (matchActive_) {
         awards_.consume(match_);
@@ -2282,12 +2282,40 @@ std::string World::triggerLocalKillstreak() {
         deferredKillstreak_ = true;
         return "";
     }
+    if (id == "GuidedMissileStreak") {                     // the local guided missile (camera-steered)
+        mp.acquiredKillstreaks.pop_back();
+        startGuidedMissile();
+        LOG_INFO("killstreak %s triggered", id.c_str());
+        return id;
+    }
+    const std::string fired = triggerKillstreakFor(localPlayer_);
+    if (fired == "RefillAmmoStreak") lockedClip_ = pc.weapon().ammo;   // the owner's TnBuffLockAmmoClip holds this clip
+    return fired;
+}
+
+// The newest acquired killstreak of any participant (TnPlayerController.TriggerKillstreak -> the provider's ability) [CONF effects
+// per Pass 22]. Team / other-team effects reach every participant, the local pawn included. Omega Missile (GuidedMissileStreak) and
+// Thermo Mine Re-Spawner (MinePooperStreak) are local-player code paths: other participants do not use them yet [PARTIAL].
+std::string World::triggerKillstreakFor(int player) {
+    if (!matchActive_ || player < 0 || (size_t)player >= match_.players().size()) return "";
+    MatchPlayer& mp = match_.playerMutable(player);
+    Character* pcp = participantPawnMutable(player);
+    if (!pcp || mp.acquiredKillstreaks.empty()) return "";
+    Character& pc = *pcp;
+    const std::string id = mp.acquiredKillstreaks.back();
+    if (player != localPlayer_ && (id == "GuidedMissileStreak" || id == "MinePooperStreak")) return "";
     mp.acquiredKillstreaks.pop_back();
     const int team = mp.team;
+    const bool teamGame = match_.settings().teamGame;
     auto teamPawns = [&](auto fn) {   // TnTeamHandler.GetTeamMembers: living pawns of the owner's team (FFA: the owner)
-        if (!localDead_) fn(pc);
-        if (match_.settings().teamGame)
-            for (MatchOpponent* o : opponents_) if (o->spawned() && o->team() == team) fn(o->pawn());
+        fn(pc);
+        if (!teamGame) return;
+        for (size_t i = 0; i < match_.players().size(); ++i)
+            if ((int)i != player && match_.players()[i].team == team) if (Character* c = participantPawnMutable((int)i)) fn(*c);
+    };
+    auto otherTeam = [&](auto fn) {   // ABT_OtherTeam: every living participant not on the owner's team (FFA: everyone else)
+        for (size_t i = 0; i < match_.players().size(); ++i)
+            if ((int)i != player && !(teamGame && match_.players()[i].team == team)) if (Character* c = participantPawnMutable((int)i)) fn((int)i, *c);
     };
     if (id == "OverShieldStreak") {
         teamPawns([](Character& p) { p.health().heal(Health::HealType::AddOverShield, 1.0f); });   // HealDamage(TnHealTypeOverShieldPickup)
@@ -2299,13 +2327,11 @@ std::string World::triggerLocalKillstreak() {
             if (Weapon* vw = p.vehicleWeapon()) vw->reserve = vw->reserveMax;
         };
         teamPawns(fill);
-        pc.ammoLockRemain_ = 10.0f; lockedClip_ = pc.weapon().ammo;
+        pc.ammoLockRemain_ = 10.0f;
     } else if (id == "HealthRegenStreak") {
         pc.regenBuffRemain_ = 30.0f;                       // TnBuffHealthRegenKillStreak FloatModifier 2, BuffTime 30
     } else if (id == "FastAbilityCooldownStreak") {
         pc.fastCooldownRemain_ = 30.0f;                    // TnBuffFastAbilityCooldown CooldownMultiplier 5, BuffTime 30
-    } else if (id == "GuidedMissileStreak") {
-        startGuidedMissile();                              // Omega Missile: the same TnGuidedMissile (RequiresRobotForm)
     } else if (id == "PokeStreak") {
         if (const WeaponDef* d = findWeaponDef("Poke")) pc.grantTempWeapon(*d, 1, 20.0f);   // TnAbilityPoke -> TnWeaponPoke
     } else if (id == "SpawnRocketTurretStreak") {
@@ -2316,20 +2342,19 @@ std::string World::triggerLocalKillstreak() {
         teamPawns([](Character& p) { p.seeEnemiesRemain_ = 30.0f; });   // ABT_Team TnBuffSeeEnemyObjectiveMarkers
     } else if (id == "ImprovedOrbitalReconStreak") {
         // ABT_OtherTeam TnBuffHardLocked (BuffTime 10) + each opposing member TakeDamage(1, TnDamageTypeFlashBang).
-        for (MatchOpponent* o : opponents_)
-            if (o->spawned() && !match_.sameTeam(o->matchPlayer(), localPlayer_)) {
-                o->pawn().hardLockedRemain_ = 10.0f; o->pawn().hardLockedByTeam_ = team;
-                applyMatchDamage(o->matchPlayer(), localPlayer_, 1.0f, false, "TransGame.TnDamageTypeFlashBang");
-            }
+        otherTeam([&](int p, Character& c) {
+            c.hardLockedRemain_ = 10.0f; c.hardLockedByTeam_ = team;
+            applyMatchDamage(p, player, 1.0f, false, "TransGame.TnDamageTypeFlashBang");
+        });
     } else if (id == "FriendlyKillHealthBonusStreak") {
         teamPawns([](Character& p) { p.refillOnKillRemain_ = 60.0f; });   // ABT_Team TnBuffRefillHealthOnKill
     } else if (id == "TeamAbilityJammerStreak") {
-        for (MatchOpponent* o : opponents_)                                // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
-            if (o->spawned() && !match_.sameTeam(o->matchPlayer(), localPlayer_)) o->pawn().applyJammed(30.0f);
+        otherTeam([](int, Character& c) { c.applyJammed(30.0f); });   // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
     } else {
         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
     }
-    LOG_INFO("killstreak %s triggered", id.c_str());
+    LOG_INFO("killstreak %s triggered (p%d)", id.c_str(), player);
+    if (player != localPlayer_) for (BotBrain& b : bots_) if (b.player == player) ++b.streaks;
     return id;
 }
 

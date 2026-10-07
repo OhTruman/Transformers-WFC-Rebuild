@@ -812,7 +812,19 @@ void World::tickBots(float dt) {
             b.transformCooldown = 2.0f;
         }
         b.meleeCooldown -= dt; b.grenadeCooldown -= dt;
+        pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);          // killstreak buffs (the local pawn's tick in World::tick)
+        pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
+        pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
         pc.tickAbilities(dt);
+        // Killstreaks (PC ADAPTATION: when): trigger the newest earned reward 1-4 s after earning it, in robot form.
+        if (!match_.players()[(size_t)b.player].acquiredKillstreaks.empty()) {
+            if (b.streakDelay < 0.0f) b.streakDelay = b.frange(1.0f, 4.0f);
+            else if ((b.streakDelay -= dt) <= 0.0f) {
+                b.streakDelay = -1.0f;
+                if (pc.moveForm() == Form::Robot && !pc.isTransforming() && triggerKillstreakFor(b.player).empty())
+                    match_.playerMutable(b.player).acquiredKillstreaks.pop_back();   // a reward bots cannot use yet: dropped
+            }
+        } else b.streakDelay = -1.0f;
         if (pc.shockwaveDelay_ >= 0.0f && (pc.shockwaveDelay_ -= dt) < 0.0f) applyShockwave(pc, b.player);
         tickMeleeFor(pc, b.player, dt);
         if (b.grenadeDelay >= 0.0f && (b.grenadeDelay -= dt) < 0.0f && pc.moveForm() == Form::Robot)

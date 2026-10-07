@@ -4312,9 +4312,9 @@ void Application::runBotTest() {
             }
             suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
         }
-        int vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        int streaks = 0, vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
         for (const game::BotBrain& b : world_.botBrains()) {
-            vehicleShots += b.vehicleShots; abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            streaks += b.streaks; vehicleShots += b.vehicleShots; abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
             movers += travelled[b.player] > 40.0f;
         }
         LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d, repair ticks %d, abilities %d, vehicle-form shots %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades, heals, abilities, vehicleShots);
@@ -4333,6 +4333,7 @@ void Application::runBotTest() {
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+        if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
         if (phase >= 1) check(sentrySamples > 0 && barrierSamples > 0, "bots deploy sentries (" + std::to_string(sentrySamples) + " steps) and barriers (" + std::to_string(barrierSamples) + " steps)");
         if (phase >= 1) check(jetSamples > 0, "jet bots fly in hover form (" + std::to_string(jetSamples) + " jet-steps)");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");

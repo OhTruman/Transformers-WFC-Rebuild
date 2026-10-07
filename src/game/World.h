@@ -349,6 +349,7 @@ public:
     mutable int lastBarrierHit_ = -1;
     std::vector<int> freeBarrierDyn_, freeBarrierDynW_;
     void requestBarrier(int owner);            // TnAbilityBarrier for any participant
+    std::string triggerKillstreakFor(int player);   // the newest acquired killstreak of any participant ("" when none / unsupported)
     void damageBarrierAt(size_t idx, float amount, const std::string& type);
     bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
     int vehicleShotSerial_ = 0, vehicleShotSocket_ = 0;
