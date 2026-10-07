@@ -5,11 +5,13 @@
 #include "frontend/FrontendRuntime.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
+#include "frontend/Hud.h"
 #include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
 #include "core/Config.h"
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include <cstdio>
@@ -73,6 +75,68 @@ static void testUrl() {
     check(u.hasOption("listen") && u.option("listen").empty(), "url.flag");
     check(u.toString() == "UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?listen", "url.roundtrip");
     check(u.intOption("MapId", -1) == -1, "url.intOption_default");
+}
+
+// A presenter that records the HUD calls (name + args as text).
+struct RecordingPresenter : frontend::IMoviePresenter {
+    std::vector<std::string> calls;
+    bool runsMovie(const std::string&) const override { return true; }
+    void update(frontend::GameFlow&, const platform::InputFrame&, float) override {}
+    void draw(const frontend::GameFlow&, int, int) override {}
+    void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override {
+        std::string s = fn + "(";
+        for (size_t i = 0; i < args.size(); ++i) {
+            const auto& a = args[i];
+            if (i) s += ",";
+            if (a.kind == frontend::BridgeValue::Kind::String) s += a.s;
+            else if (a.kind == frontend::BridgeValue::Kind::Bool) s += a.b ? "true" : "false";
+            else { char b[32]; std::snprintf(b, sizeof b, "%g", a.n); s += b; }
+        }
+        calls.push_back(s + ")");
+    }
+    bool has(const std::string& c) const { return std::find(calls.begin(), calls.end(), c) != calls.end(); }
+    int count(const std::string& prefix) const { int n = 0; for (const auto& c : calls) n += c.rfind(prefix, 0) == 0; return n; }
+};
+
+static void testHudObservers(const Catalog& c) {
+    using frontend::HudController; using frontend::HudFrame;
+    HudController hud;
+    RecordingPresenter p;
+    HudFrame f;
+    f.valid = true;
+    hud.setFrame(f);
+    hud.update(&p, c, true, true);
+    check(p.count("_global.NotifyProgressBarChanged") == 0 && p.count("_global.NotifyKillstreakChanged") == 0, "hud.unset_observers_send_nothing");
+    // progress bar: the observer's TransGame.int label, 0..1
+    f.progressObserver = "TnHudDataObserverDominationCapture";
+    f.progress = 0.25;
+    f.attackingTeamStatus = HudController::attackingStatus(1, 1);
+    f.killstreakId = 3;
+    f.abilities[1] = HudFrame::Ability{7, 12.0, 0.4};
+    f.grenadeAmmo = 2; f.grenadeType = 1;
+    hud.setFrame(f);
+    hud.damageIndicator(1.5, 20.0);
+    hud.causedDamage();
+    p.calls.clear();
+    hud.update(&p, c, true, true);
+    check(p.has("_global.NotifyProgressBarChanged(Capturing Node,0.25)"), "hud.progress_bar_label", p.calls.empty() ? "" : p.calls[0]);
+    check(p.has("_global.NotifyOnAttackingTeamChanged(1)") && HudController::attackingStatus(0, 1) == 2 && HudController::attackingStatus(-1, 1) == 0,
+          "hud.attacking_team_status");
+    check(p.has("_global.NotifyKillstreakChanged(3)") && p.has("_global.NotifyAbilityType1Changed(7)") &&
+          p.has("_global.NotifyAbilityType1UpdateCooldown(12,0.4)") && p.has("_global.NotifyGrenadeAmmoChanged(2,1)"), "hud.killstreak_ability_grenade");
+    check(p.has("_global.NotifyDamageIndicatorAdded(1.5,20)") && p.has("_global.CausedDamage()"), "hud.damage_events");
+    // unchanged: nothing re-sent; a change: only that value
+    p.calls.clear();
+    hud.update(&p, c, true, true);
+    check(p.count("_global.Notify") == 0 && p.count("_global.CausedDamage") == 0, "hud.observers_change_driven");
+    f.progress = 0.0;
+    f.progressObserver = "TnHudDataObserverReviveBuddy"; f.progressName = "Bumblebee";
+    f.progress = 0.5;
+    hud.setFrame(f);
+    p.calls.clear();
+    hud.update(&p, c, true, true);
+    check(p.has("_global.NotifyProgressBarChanged(Reviving Bumblebee,0.5)") && p.calls.size() == 1, "hud.progress_revive_name",
+          p.calls.empty() ? "" : p.calls[0]);
 }
 
 static void testCatalog(const Catalog& c) {
@@ -328,6 +392,7 @@ int main() {
     testProfileBotMigration();
     testRecommendedBots();
     if (ok) testCatalog(c);
+    if (ok) testHudObservers(c);
     testUIController();
     testSceneCamera();
     if (ok) testFlow();

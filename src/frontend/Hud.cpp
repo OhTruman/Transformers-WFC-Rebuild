@@ -32,6 +32,7 @@ void HudController::reset() {
     kills_.clear();
     announcements_.clear();
     rewards_.clear();
+    events_.clear();
 }
 
 std::string HudController::killMessage(const Catalog& cat, const HudKill& k, int localTeam) {
@@ -78,7 +79,7 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         wasVisible_ = open && visible;
         sentValid_ = false;
         FlowTrace::emit("hud.open", {{"open", FlowTrace::boolean(open)}});
-        if (!open) { kills_.clear(); announcements_.clear(); rewards_.clear(); return; }
+        if (!open) { kills_.clear(); announcements_.clear(); rewards_.clear(); events_.clear(); return; }
     }
     if (!open) return;
     if ((open && visible) != wasVisible_) {
@@ -87,6 +88,7 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         FlowTrace::emit("hud.visible", {{"visible", FlowTrace::boolean(visible)}});
     }
     auto call = [&](const char* fn, std::vector<BridgeValue> args) { p->hudCall(std::string("_global.") + fn, args); };
+    if (attacking_) frame_.attackingTeamStatus = attacking_;
     const HudFrame& f = frame_;
     if (f.valid) {
         if (!sentValid_) {
@@ -108,6 +110,42 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         if (!sentValid_ || f.reserve != sent_.reserve || f.reserveCapacity != sent_.reserveCapacity)
             call("NotifyWeaponReserveAmmoChanged", {f.reserve, f.reserveCapacity});
         if (!sentValid_ || f.vehicleForm != sent_.vehicleForm) call("NotifyCurrentFormChanged", {f.vehicleForm ? 1 : 0});
+        // The observers that have a source (see HudFrame): on change, or all again for a fresh movie.
+        auto changed = [&](const auto& now, const auto& was) { return now && (!sentValid_ || !was || *now != *was); };
+        if (changed(f.progress, sent_.progress) || (f.progress && f.progressObserver != sent_.progressObserver)) {
+            std::string label;
+            if (f.progressObserver) {
+                label = cat.localize("TransGame", *f.progressObserver, "label");
+                for (size_t at; (at = label.find("`p")) != std::string::npos;) label.replace(at, 2, f.progressName);
+            }
+            call("NotifyProgressBarChanged", {label, *f.progress});
+        }
+        if (changed(f.attackingTeamStatus, sent_.attackingTeamStatus)) call("NotifyOnAttackingTeamChanged", {*f.attackingTeamStatus});
+        if (changed(f.killstreakId, sent_.killstreakId)) call("NotifyKillstreakChanged", {*f.killstreakId});
+        static const char* kAbilityChanged[3] = {"NotifyAbilityType0Changed", "NotifyAbilityType1Changed", "NotifyAbilityType2Changed"};
+        static const char* kAbilityCooldown[3] = {"NotifyAbilityType0UpdateCooldown", "NotifyAbilityType1UpdateCooldown", "NotifyAbilityType2UpdateCooldown"};
+        for (int i = 0; i < 3; ++i) {
+            const auto& a = f.abilities[(size_t)i];
+            const auto& w = sent_.abilities[(size_t)i];
+            if (!a) continue;
+            if (!sentValid_ || !w || a->id != w->id) call(kAbilityChanged[i], {a->id});
+            if (!sentValid_ || !w || a->cooldown != w->cooldown || a->fraction != w->fraction) call(kAbilityCooldown[i], {a->cooldown, a->fraction});
+        }
+        if (changed(f.grenadeAmmo, sent_.grenadeAmmo) || changed(f.grenadeType, sent_.grenadeType))
+            call("NotifyGrenadeAmmoChanged", {f.grenadeAmmo.value_or(0), f.grenadeType.value_or(0)});
+        if (changed(f.activeGrenades, sent_.activeGrenades)) call("NotifyActiveGrenadeCount", {*f.activeGrenades});
+        if (changed(f.playerYaw, sent_.playerYaw)) call("NotifyPlayerRotationChanged", {*f.playerYaw});
+        if (changed(f.lockOnState, sent_.lockOnState)) call("NotifyLockOnStateChanged", {*f.lockOnState});
+        if (changed(f.targetName, sent_.targetName)) call("NotifyTargetNameChanged", {*f.targetName});
+        if (changed(f.targetType, sent_.targetType)) call("NotifyTargetTypeChanged", {*f.targetType});
+        if (changed(f.targetHealth, sent_.targetHealth)) call("NotifyTargetHealthChanged", {f.targetType.value_or(0), *f.targetHealth});
+        if (changed(f.weaponJammed, sent_.weaponJammed)) call("NotifyWeaponJammedChanged", {*f.weaponJammed});
+        if (changed(f.weaponSpread, sent_.weaponSpread)) call("NotifyWeaponSpreadChanged", {*f.weaponSpread});
+        if (changed(f.weaponMessage, sent_.weaponMessage)) call("NotifyWeaponMessageChanged", {*f.weaponMessage});
+        if (changed(f.downedHealth, sent_.downedHealth)) call("NotifyNormalizedDownedHealthChanged", {*f.downedHealth});
+        if (changed(f.hudScrambled, sent_.hudScrambled)) call("NotifyHudScrambledChanged", {*f.hudScrambled});
+        if (changed(f.scoringMultiplier, sent_.scoringMultiplier)) call("NotifyScoringMultiplierChanged", {*f.scoringMultiplier});
+        if (changed(f.increaseDamage, sent_.increaseDamage)) call("NotifyDamageIncrease", {*f.increaseDamage});
         if (!sentValid_ || f.spectating != sent_.spectating) {
             call("NotifySpectating", {f.spectating});
             call("GameMessageSpectatorMode", {f.spectating});   // the kill feed moves up 160 px while spectating
@@ -115,6 +153,8 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         sent_ = f;
         sentValid_ = true;
     }
+    for (const Event& e : events_) call(e.fn, e.args);
+    events_.clear();
     for (const PendingKill& k : kills_) {
         std::string html = killMessage(cat, k.k, k.localTeam);
         call("GameMessage", {html});

@@ -8,7 +8,9 @@
 // filled by the application from World::hudState and the match events). Canvas markers (name tags, objective
 // markers) are not this movie's (Rendering / Gameplay).
 #pragma once
+#include <array>
 #include <deque>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,6 +35,29 @@ struct HudFrame {
     int aimType = 0;                           // NotifyFineAimChanged: 0 standard, 1 fine aim (TnPCS_FineAim)
     bool vehicleForm = false;                  // NotifyCurrentFormChanged
     bool spectating = false;
+    // TnHudDataObservers without a source yet stay empty (nothing is sent); once set, each is sent on change with the
+    // original callback and arguments [CONFIRMED decompiled TransGame + Hud_GFX AS].
+    struct Ability { int id = 0; double cooldown = 0; double fraction = 1; bool operator!=(const Ability& o) const { return id != o.id || cooldown != o.cooldown || fraction != o.fraction; } };
+    std::optional<std::string> progressObserver;   // progress bar observer class (its TransGame.int label), e.g.
+                                                   // "TnHudDataObserverDominationCapture"; with progressName for `p
+    std::string progressName;
+    std::optional<double> progress;                // 0..1 (0 hides the bar)
+    std::optional<int> attackingTeamStatus;        // OnAttackingTeam: 1 attacking, 2 defending, 0 none
+    std::optional<int> killstreakId;               // Killstreak
+    std::array<std::optional<Ability>, 3> abilities;   // AbilityType0..2: id + cooldown remaining s + recharged 0..1
+    std::optional<int> grenadeAmmo, grenadeType, activeGrenades;
+    std::optional<double> playerYaw;               // DamageIndicators: the view yaw in radians
+    std::optional<int> lockOnState;                // LockOnState
+    std::optional<std::string> targetName;         // TargetName
+    std::optional<int> targetType;                 // TargetType
+    std::optional<double> targetHealth;            // NotifyTargetHealthChanged(TargetType, health)
+    std::optional<bool> weaponJammed;
+    std::optional<double> weaponSpread;
+    std::optional<std::string> weaponMessage;
+    std::optional<double> downedHealth;            // NormalizedDownedHealth
+    std::optional<bool> hudScrambled;              // HudScrambled
+    std::optional<double> scoringMultiplier;       // CompetitiveScoring
+    std::optional<int> increaseDamage;             // IncreaseDamage (type)
 };
 
 struct HudKill {
@@ -48,9 +73,23 @@ public:
     static constexpr const char* kMovie = "UI_GFxHud_p.Hud_GFX_1";
     void reset();                              // match start / end: nothing pending, everything re-sent
     void setFrame(const HudFrame& f) { frame_ = f; }
+    // Values the frontend derives itself (kept across setFrame): the OnAttackingTeam status from MatchValues.
+    void setAttackingTeamStatus(std::optional<int> v) { attacking_ = v; }
     void addKill(const HudKill& k, int localTeam) { kills_.push_back({k, localTeam}); }
     void announce(const std::string& text) { announcements_.push_back(text); }   // _global.GameAnnouncement
     void reward(const std::string& text) { rewards_.push_back(text); }           // _global.RewardAnnouncement
+    // Event observers (one call per event, in order).
+    void damageIndicator(double worldYaw, double amount) { events_.push_back({"NotifyDamageIndicatorAdded", {worldYaw, amount}}); }
+    void causedDamage() { events_.push_back({"CausedDamage", {}}); }                      // hit marker
+    void contextualCommand(int action, const std::string& text) { events_.push_back({"NotifyContextualCommand", {0, action, text}}); }
+    void addObjective(const std::string& text) { events_.push_back({"AddObjective", {text}}); }
+    void ammoAdded(int amount, const std::string& weapon) { events_.push_back({"NotifyAmmoAdded", {amount, weapon}}); }
+    void cantTransform() { events_.push_back({"NotifyCantTransform", {}}); }
+    void transformDisrupted(bool on) { events_.push_back({"TransformDisrupted", {on}}); }
+    // OnAttackingTeam (TnGameRules_SingleFlagCTF attaches it): 1 attacking / 2 defending from GRI.AttackingTeam.
+    static int attackingStatus(int attackingTeamIndex, int myTeam) {
+        return attackingTeamIndex < 0 ? 0 : attackingTeamIndex == myTeam ? 1 : 2;
+    }
     // One frame: delivers what changed to the HUD movie (open + visible = shown per A8).
     void update(IMoviePresenter* p, const Catalog& cat, bool open, bool visible);
     // TnDeathMessage.GetColoredString: the authored template with coloured names (TnMessageTextColors).
@@ -58,10 +97,13 @@ public:
 
 private:
     HudFrame frame_, sent_;
+    std::optional<int> attacking_;
     bool sentValid_ = false, wasOpen_ = false, wasVisible_ = false, wasSpectating_ = false;
     struct PendingKill { HudKill k; int localTeam; };
     std::vector<PendingKill> kills_;
     std::vector<std::string> announcements_, rewards_;
+    struct Event { const char* fn; std::vector<BridgeValue> args; };
+    std::vector<Event> events_;
 };
 
 } // namespace frontend
