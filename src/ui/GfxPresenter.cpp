@@ -56,6 +56,13 @@ void GfxPresenter::setHud(bool open, bool visible) {
         hud_.reset(); hudVisible_ = false; return;
     }
     if (!hud_) {
+        {   // Match start: the respawn screen (opened on every death) and its imports enter the movie cache now, not on
+            // the first death's frame.
+            core::prof::Scope prof("gfx.preload");
+            GfxMovie warm;
+            for (const char* m : {"UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "UI_GFxInGameStats_p.InGameStats_GFX_1"})
+                warm.open(lib_, &rt_.catalog(), m, nullptr, nullptr);
+        }
         hud_ = std::make_unique<GfxMovie>();
         bool ok = hud_->open(lib_, &rt_.catalog(), frontend::HudController::kMovie,
                              [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },

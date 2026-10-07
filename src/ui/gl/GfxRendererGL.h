@@ -84,6 +84,7 @@ private:
     int shW_ = 0, shH_ = 0;
     void drawTextShadow(const std::vector<gfx::Player::RenderItem>& items, size_t at, float alpha);
     void drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m);
+    void ensureShadowTargets(int w, int h);
     bool inMask_ = false;
     std::map<std::pair<const gfx::ShapeDef*, bool>, Cached> shapes_;
     struct Tex { unsigned id = 0; int w = 0, h = 0; };
