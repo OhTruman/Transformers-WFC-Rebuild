@@ -78,9 +78,15 @@ Res "matches" $(if ($n -ge $MatchCount) { "PASS" } elseif ($n -ge 3) { "PARTIAL"
 foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "loaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "pcm_unloaded"; o = "Systems"; t = 2 }, @{ c = "pcm_loaded"; o = "Systems"; t = 2 })) {
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
-    $sl = Slope $y; $rise = [Math]::Round($y[-1] - $y[0], 1)
+    # With >= 8 samples the verdict uses the LATER half: an early one-time step (caches warming over the first matches) is not
+    # growth; a leak keeps rising in the later half too (fa973d3 no-bot x12: one step at match 3, then flat)
+    $yv = if ($y.Count -ge 8) { @($y | Select-Object -Skip ([int][Math]::Floor($y.Count / 2))) } else { $y }
+    $sl = Slope $yv; $rise = [Math]::Round($yv[-1] - $yv[0], 1)
+    $scope = if ($yv.Count -lt $y.Count) { "later half, matches {0}..{1}" -f ($y.Count - $yv.Count + 2), ($y.Count + 1) } else { "matches 2..$($y.Count + 1)" }
     # map cycles: the series mixes map sizes, so the slope is INFO (cycle.revisit_growth is the leak verdict there)
-    Res $k.c $(if ($cycle) { "INFO" } elseif ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t))   # parenthesised: "," binds tighter than "*" $k.o
+    $st = if ($cycle) { "INFO" } elseif ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }
+    $note = "matches 2..{0}: {1}; verdict on {2}: slope {3} MB/match, rise {4} MB (WATCH if slope > {5} and rise > {6}; GROWTH if slope > {7} and rise > {8})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $scope, $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t)
+    Res $k.c $st $note $k.o
 }
 $tu = @($tx | Select-Object -Unique)
 # the per-return count varies with the match's content (characters / effects loaded): not a leak signal by itself - the GL

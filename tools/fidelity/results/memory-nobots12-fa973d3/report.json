@@ -1,0 +1,63 @@
+﻿{
+    "summary":  {
+                    "pass":  7,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "memrepeat.nobots.same_map",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "maps loaded: MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets, MP_IAC_Streets (a different map invalidates the curve)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.gl_live_after_unload",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live textures after each unload: 61, 61, 62, 62, 62, 62, 62, 62, 62, 62, 62, 62 (plateau if constant over the last three)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.matches",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "12 of 12 matches completed and unloaded in one process"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.unloaded_mb",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "matches 2..12: 3624.1 -\u003e 3803.5 -\u003e 3827.5 -\u003e 3828 -\u003e 3839.2 -\u003e 3834.2 -\u003e 3846.7 -\u003e 3845.9 -\u003e 3827.8 -\u003e 3824.4 -\u003e 3835.3; verdict on later half, matches 7..12: slope -2.27 MB/match, rise 1.1 MB (WATCH if slope \u003e 5 and rise \u003e 10; GROWTH if slope \u003e 15 and rise \u003e 30)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.loaded_mb",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "matches 2..12: 4185.9 -\u003e 4333.9 -\u003e 4327.5 -\u003e 4333.6 -\u003e 4349.1 -\u003e 4332.7 -\u003e 4347.3 -\u003e 4353.8 -\u003e 4352.6 -\u003e 4338.1 -\u003e 4358.6; verdict on later half, matches 7..12: slope 2.88 MB/match, rise 25.9 MB (WATCH if slope \u003e 5 and rise \u003e 10; GROWTH if slope \u003e 15 and rise \u003e 30)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.pcm_unloaded",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "matches 2..12: 88.1 -\u003e 102.5 -\u003e 101.9 -\u003e 101.9 -\u003e 101.9 -\u003e 102.5 -\u003e 101.9 -\u003e 101.9 -\u003e 102.5 -\u003e 102.5 -\u003e 101.9; verdict on later half, matches 7..12: slope -0.02 MB/match, rise -0.6 MB (WATCH if slope \u003e 0.7 and rise \u003e 1.3; GROWTH if slope \u003e 2 and rise \u003e 4)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.pcm_loaded",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "matches 2..12: 230.8 -\u003e 230.8 -\u003e 245.2 -\u003e 244.6 -\u003e 244.6 -\u003e 244.6 -\u003e 245.2 -\u003e 244.6 -\u003e 244.6 -\u003e 245.2 -\u003e 245.2; verdict on later half, matches 7..12: slope 0.08 MB/match, rise 0.6 MB (WATCH if slope \u003e 0.7 and rise \u003e 1.3; GROWTH if slope \u003e 2 and rise \u003e 4)"
+                    },
+                    {
+                        "id":  "memrepeat.nobots.textures_released",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "match textures released per return (unloadMapRenderData): 99, 99, 97, 99, 99, 99, 97, 99, 99, 97, 97, 99"
+                    }
+                ]
+}
