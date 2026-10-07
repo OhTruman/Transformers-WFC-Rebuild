@@ -510,6 +510,75 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     }
 }
 
+namespace {
+gfx::MovieClip* findClip(gfx::MovieClip* c, const std::string& name, int depth = 0) {
+    if (!c || depth > 8) return nullptr;
+    for (auto& [d, ch] : c->children) {
+        if (ch->kind != gfx::DisplayObject::Kind::Clip || ch->removed) continue;
+        auto* mc = static_cast<gfx::MovieClip*>(ch.get());
+        if (mc->name == name) {   // the PlayerList's inner list: playerList_mc holding the team headers / entries
+            for (auto& [d2, ch2] : mc->children) if (ch2->name.rfind("teamHeader", 0) == 0) return mc;
+        }
+        if (gfx::MovieClip* r = findClip(mc, name, depth + 1)) return r;
+    }
+    return nullptr;
+}
+}
+
+// PC EXTENSION (extended matches): InGameStats_GFX lays the PlayerList out at a fixed step (team header 54, entry 25;
+// PlayerList.swf) for the original 5 per team, with no scrolling (the list takes input only on consoles, for gamer
+// cards). With up to 32 per team the list runs off the screen, so when it is taller than the space above the button
+// hints, Up / Down and the mouse wheel scroll it and the rows outside that space are hidden. At the original counts it
+// fits and nothing changes.
+void GfxPresenter::scrollScoreboard(const platform::InputFrame& in, float dt) {
+    gfx::Player& p = scoreboard_->player();
+    gfx::MovieClip* list = findClip(p.root(), "playerList_mc");
+    if (!list || !list->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    // The list's y as its timeline / script last set it (this function re-applies its offset every frame).
+    const double cur = vm.toNumber(vm.get(list->script, "_y"));
+    gfx::avm1::Value last = vm.get(list->script, "__wfcScrollSet");
+    double base = cur;
+    if (!last.isUndef() && std::fabs(vm.toNumber(last) - cur) < 0.01) base = vm.toNumber(vm.get(list->script, "__wfcScrollY"));
+    vm.set(list->script, "__wfcScrollY", gfx::avm1::Value(base));
+    // Stage space: the list top (unscrolled) and the bottom limit (the button hints, else the stage bottom).
+    const gfx::Matrix pm = list->parent ? list->parent->worldMatrix() : gfx::Matrix{};
+    const float sy = std::fabs(pm.d) > 1e-4f ? pm.d : 1.0f;
+    const gfx::Matrix lm = list->worldMatrix();
+    const float listScale = std::fabs(lm.d) > 1e-4f ? lm.d : 1.0f;
+    const float top = pm.ty / 20.0f + (float)base * sy;   // world matrices are in twips
+    float bottom = 720.0f - 70.0f;
+    if (gfx::DisplayObject* hints = p.resolveTarget("buttonHints_mc", p.root())) bottom = hints->worldMatrix().ty / 20.0f - 12.0f;
+    float content = 0.0f;
+    for (auto& [d, ch] : list->children) {
+        if (ch->removed || !ch->script) continue;
+        const bool header = ch->name.rfind("teamHeader", 0) == 0;
+        if (!header && ch->name.rfind("playerEntry", 0) != 0 && ch->name.rfind("iconicEntry", 0) != 0) continue;
+        const float h = header ? 54.0f : ch->name.rfind("iconicEntry", 0) == 0 ? 104.0f : 25.0f;
+        content = std::max(content, ((float)vm.toNumber(vm.get(ch->script, "_y")) + h) * listScale);
+    }
+    const float room = bottom - top;
+    const float maxScroll = std::max(0.0f, content - room);
+    float step = 0.0f;
+    if (in.uiIsDown(platform::UiKey::Down)) step += 1.0f;
+    if (in.uiIsDown(platform::UiKey::Up)) step -= 1.0f;
+    scoreScroll_ += step * 420.0f * dt - in.mouseWheel * 25.0f * 3.0f * listScale;
+    scoreScroll_ = std::clamp(scoreScroll_, 0.0f, maxScroll);
+    const double y = base - scoreScroll_ / sy;
+    vm.set(list->script, "_y", gfx::avm1::Value(y));
+    vm.set(list->script, "__wfcScrollSet", gfx::avm1::Value(vm.toNumber(vm.get(list->script, "_y"))));
+    // Rows outside [top, bottom] are hidden (no mask clip in the original layout).
+    for (auto& [d, ch] : list->children) {
+        if (ch->removed || !ch->script) continue;
+        const bool header = ch->name.rfind("teamHeader", 0) == 0;
+        if (!header && ch->name.rfind("playerEntry", 0) != 0 && ch->name.rfind("iconicEntry", 0) != 0) continue;
+        const float h = (header ? 54.0f : 25.0f) * listScale;
+        const float wy = ch->worldMatrix().ty / 20.0f;
+        const bool show = maxScroll <= 0.0f || (wy >= top - 1.0f && wy + h <= bottom + 1.0f);
+        if (ch->visible != show) vm.set(ch->script, "_visible", gfx::avm1::Value(show));
+    }
+}
+
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
@@ -751,7 +820,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     if (cursor_) cursor_->advance(dt);
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); }
-    if (scoreboard_) scoreboard_->advance(dt);
+    if (scoreboard_) { scoreboard_->advance(dt); scrollScoreboard(in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;

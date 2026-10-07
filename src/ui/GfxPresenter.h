@@ -105,7 +105,9 @@ private:
     struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; };
     std::vector<PendingCall> pendingCalls_;   // movieCall: delivered after the movie's first frame
     int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
-    std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
+    std::map<const gfx::Player*, int> botRowsBuilt_;
+    float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
+    void scrollScoreboard(const platform::InputFrame& in, float dt);   // GameLobby menu: the BotRows kind its bot rows were built for
     void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
