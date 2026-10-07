@@ -17,6 +17,21 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 09b — CLASSIFICATION (2026-10-06)
+| Item | Mark | Notes |
+|---|---|---|
+| Offline MP bots (participants, AI, Bot Settings UI) | PC ADAPTATION | no MP bots shipped (RE 5914bfa); the AI follows the recovered original data where it exists (range bands, burst pacing, goal priorities), with exact aim + weapon spread as in the original |
+| Bot difficulty EASY / MEDIUM / HARD | PC ADAPTATION | names reused from the campaign (where they were player damage buffs); the original AI has no reaction delay |
+| Bots score / earn kills, assists and awards for humans | PC ADAPTATION | the original only awarded PlayerController-vs-PlayerController (RE 17b4579) |
+| XP values / events / levels / Prime / challenges | CONFIRMED ORIGINAL data (RE tables) | 71 XP events, four specialties x 0-25, 121 challenges |
+| XP in private / offline matches | PC ADAPTATION (policy switch) | original CanGainXp() = !IsPrivateGame(); WFC_ORIGINAL_XP_RULE=1 restores it |
+| Level shown as a number (no rank names / icons) | CONFIRMED ORIGINAL | none exist in the data |
+| Bots in the scoreboard / player list | PC ADAPTATION | the original hid bBot PRIs |
+| 8 players per team | PC ADAPTATION (brief) | original MaxPlayers 10 (5 v 5): user decision pending |
+| Bot shot FX from each weapon's own templates | HIGH CONFIDENCE | the same lookup as the player; nothing substituted |
+
+---
+
 ## INTEGRATION MILESTONE 09a — CLASSIFICATION (2026-10-06)
 | Item | Mark | Notes |
 |---|---|---|

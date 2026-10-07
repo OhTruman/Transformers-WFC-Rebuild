@@ -3,6 +3,55 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 09b = M09 MILESTONES B + C (2026-10-06): offline bots, Bot Settings, XP / levels / challenges / persistence — branch `integration/milestone-09b`
+
+On 09a (cd0f826). Human-playtest checkpoint for bots (B) and progression (C).
+
+| lane | head | merged |
+|---|---|---|
+| agents/gameplay | cf62d04 | **Bots (PC ADAPTATION):** real MatchPlayers (kind Bot): generated names, class spread, presets, displayed level, the same movement / weapon / damage / event code as the player. Nav from AssetTools bot_nav (all versus maps; jet air layer); time-sliced A*; stuck / off-mesh recovery. TDM / DM / KOTH / DOM / CTF / EXT goal layer over shared combat; weapon range bands + burst pacing per the RE AI data; melee / grenades; Scout Dodge / Cloak, Soldier Hover / Whirlwind; Scientist Repair Ray healing; held weapons at the socket + shot FX hook. **Progression:** the authoritative event record → the original XP events / challenge stats (RE tables) via drainXpAwards / drainStatAwards. Aim-rig cache, skinned tangents, bot difficulty EASY / MEDIUM / HARD (PC ADAPTATION; original AI has no difficulty, no reaction delay) |
+| agents/frontend | 2024af0 | Bot Settings rows in Private Match (team: friendly 0-7 / enemy 0-8; FFA: bots 0-15; difficulty; persisted); bots in the player list / scoreboard; **progression model + original presentation** (XP popups, LEVEL UP, challenge notify / menu, results XP; saved at match end; the private-match XP rule is a PC / OFFLINE ADAPTATION switch, WFC_ORIGINAL_XP_RULE=1 restores the original); QA live character swap |
+| agents/systems | dfa1f25 | Bot weapon audio (preloaded at match load; fire / impact per participant shot); selection-audio preload on a worker (M09c) |
+| agents/rendering | 3a01c96 | Off-screen character culling; skinned-tangent path; exact sprite-batch merging (firefight FX −30 %); bot-count profiling |
+| agents/experimental | ddc7229 | tools/fidelity refresh |
+
+**Integration glue:**
+- Systems M09b: participant weapon classes preloaded after addBots; one onParticipantFired per player per step; onParticipantImpact(hitPlayer).
+- Systems M09c preloadSelectionAudio replaces the 09a synchronous preload (queueSelectionAudio for presets / CaC slots / bot rosters).
+- participantShotFxHook → the player's per-weapon WeaponFx lookup (no Ion substitution; no template = nothing drawn, logged).
+- Releasing a grenade carries the M08o audio for every thrower; generalised melee keeps the M08p hit effect.
+- static_asserts for every Frontend-detected cross-lane API.
+- Direct-boot BOT / BOTNAV / BOTOBJ / XP tests.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - harness 342 / 0 / 8; audio 723 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Bot and progression tests:
+  - **BOTTEST 28 / 28** (human + 7, then 7 v 8 HARD: 15 / 15 movers, kills / deaths / respawns, 0 suicides);
+  - **BOTOBJ 12 / 12** (KOTH / DOM / CTF takes + returns / EXT plants + detonations; no idle > 20 s);
+  - BOTNAV 7 / 7; XP 14 / 14; PACING 4 / 4; EVENT 16; CLASSCHANGE 22; QA 8; SWITCH 32.
+- **4-map representative frontend flow with bots** (Bot Settings 3 / 4 MEDIUM; FFA 4; FrameLimit 144):
+  - the requested bots in every match; named bots in the scoreboard / kill feed;
+  - 45 real XP awards (Kill / First Blood / Far and Away / Payback / Glorious), saved at every match end;
+  - all bot weapons drew their own FX;
+  - 0 GPU-long / GL errors / watchdog / leaks / render-guard hits, 0 timeouts.
+- **Frontend end-to-end (3 restarts, fresh profile):** XpScout 0 → 800 → 1625 → 2450, challenge tiers unlocked from real stats, no duplicated transactions.
+- **Experimental 09a pacing:** limiter exact (60 / 144 / 240); the camera changes on every frame with interpolation.
+- Memory at match load 4.7-5.2 GB with 7 bots (see the open items).
+
+**Open / PARTIAL (recorded for the playtest):**
+- jets don't fly; no vehicle-form bot combat;
+- bots don't use Warcry / Barrier / Shockwave / Sentry;
+- bot Repair Ray beam visual (the heal works);
+- bot weapon shell / magazine notifies;
+- Debris flight-only objective islands;
+- per-match memory retention under investigation by Experimental (looks like a high-water mark, not unbounded);
+- 8-per-team capacity is the brief's PC choice vs the original 10 players (5 v 5): a user decision.
+
 ## INTEGRATION MILESTONE 09a = M09 MILESTONE A (2026-10-06): FPS limiter, smooth high-refresh presentation, playtest fixes — branch `integration/milestone-09a`
 
 On 08o (03fde67). The first human-playtest checkpoint of milestone 09 (lanes coordinated autonomously by Integration).
