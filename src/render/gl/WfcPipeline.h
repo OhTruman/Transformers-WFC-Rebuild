@@ -288,6 +288,13 @@ private:
     struct SpriteBatch { std::string mat; core::Vec3 facing; float dyn[4]; std::vector<Sprite> sprites; };
     struct TransItem { float key; std::function<void()> fn; std::shared_ptr<SpriteBatch> sprites; };
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
+    // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
+    // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
+    struct FrameRec { int frame = -1; int sprites = 0, draws = 0; double coverage = 0; std::map<std::string, double> matCov; };
+    FrameRec frameRecs_[4];
+public:
+    std::string frameRecordText(int frame) const;
+private:
     std::vector<TransItem> transQueue_;
     std::function<void()> loadYield_;
     bool inLoadYield_ = false;

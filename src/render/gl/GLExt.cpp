@@ -93,7 +93,8 @@ bool gQActive[3] = {false, false, false};
 int gQi = 0;
 bool gBegun = false;                 // a query was begun this frame (EndQuery only then: else GL_INVALID_OPERATION)
 double gLastGpuMs = 0.0;
-double gLastCpuMs = 0.0;      // the CPU span of the frame gLastGpuMs belongs to
+double gLastCpuMs = 0.0;
+long gGpuReads = 0;            // readbacks so far (a new value of lastGpuFrameMs)      // the CPU span of the frame gLastGpuMs belongs to
 // CPU time between the query's begin and end of the same frame: TIME_ELAPSED is GPU-timeline time between the two
 // markers, so it includes the GPU waiting for commands the CPU had not submitted yet (driver work inside the frame).
 // gpu ~ cpu span => a CPU-side stall inside the frame, not GPU load (no TDR risk); gpu >> cpu => real GPU work.
@@ -114,6 +115,7 @@ void gpuTimerBegin() {
         unsigned long long ns = 0;
         GetQueryObjectui64v(gQ[slot], kResult, &ns);
         gLastGpuMs = (double)ns / 1.0e6;
+        ++gGpuReads;
         gLastCpuMs = gQCpuMs[slot];
         gQActive[slot] = false;
         static int logged = 0;
@@ -140,6 +142,7 @@ void gpuTimerEnd() {
 
 double lastGpuFrameMs() { return gLastGpuMs; }
 double lastGpuFrameCpuMs() { return gLastCpuMs; }
+long gpuFrameReads() { return gGpuReads; }
 
 bool load() {
     bool ok = true;

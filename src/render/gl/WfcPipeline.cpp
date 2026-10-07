@@ -2264,6 +2264,22 @@ void Pipeline::warmupWorld(int id, int w, int h) {
              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
 }
 
+std::string Pipeline::frameRecordText(int frame) const {
+    const FrameRec& fr = frameRecs_[frame & 3];
+    if (fr.frame != frame) return "no record";
+    std::vector<std::pair<double, std::string>> top;
+    for (const auto& kv : fr.matCov) top.push_back({kv.second, kv.first});
+    std::sort(top.rbegin(), top.rend());
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "%d sprites in %d draws covering %.1f screens", fr.sprites, fr.draws, fr.coverage);
+    std::string s = buf;
+    for (size_t i = 0; i < top.size() && i < 4; ++i) {
+        std::snprintf(buf, sizeof buf, "%s %s %.1f", i ? "," : "; top:", top[i].second.substr(top[i].second.rfind('.') + 1).c_str(), top[i].first);
+        s += buf;
+    }
+    return s;
+}
+
 int Pipeline::addRuntimeDecal(MeshData&& mesh, float lifetime) {
     if (!active_ || mesh.empty()) return -1;
     // DecalManager MaxActiveDecals 50, shared by all dynamic decals: when full the OLDEST active one is recycled
@@ -2751,6 +2767,27 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         return true;
     }
     if (spriteProgram(material) < 0) return false;
+    {   // GPU-spike evidence: screen coverage of this batch (sum of projected quad areas, in screens)
+        FrameRec& fr = frameRecs_[frameNo_ & 3];
+        if (fr.frame != frameNo_) fr = FrameRec{}, fr.frame = frameNo_;
+        double cov = 0;
+        for (size_t i = 0; i < n; ++i) {
+            float px[4], py[4]; bool ok = true;
+            for (int k = 0; k < 4 && ok; ++k) {
+                const core::Vec3& p = sp[i].c[k];
+                const float* m = viewProj_.m;
+                const float cx = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12], cy = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+                const float cw = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+                if (cw <= 0.05f) { ok = false; break; }   // at / behind the near plane: count as one screen
+                px[k] = std::min(std::max(cx / cw, -1.0f), 1.0f); py[k] = std::min(std::max(cy / cw, -1.0f), 1.0f);
+            }
+            if (!ok) { cov += 1.0; continue; }
+            const double a = 0.5 * std::fabs((px[0] * py[1] - px[1] * py[0]) + (px[1] * py[2] - px[2] * py[1]) +
+                                             (px[2] * py[3] - px[3] * py[2]) + (px[3] * py[0] - px[0] * py[3]));
+            cov += a / 4.0;                              // NDC square area 4 = one screen
+        }
+        fr.sprites += (int)n; ++fr.draws; fr.coverage += cov; fr.matCov[material] += cov;
+    }
     auto it = spriteProg_.find(material);
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);

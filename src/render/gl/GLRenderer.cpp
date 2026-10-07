@@ -138,6 +138,17 @@ public:
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
+        {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
+            static long seen = 0;
+            const long reads = glx::gpuFrameReads();
+            if (reads != seen) {
+                seen = reads;
+                static int logged = 0;
+                if (glx::lastGpuFrameMs() > 50.0 && wfc_.active() && logged++ < 40)
+                    LOG_WARN("GPU frame spike %.1f ms (cpu %.1f ms) at frame %d: %s", glx::lastGpuFrameMs(),
+                             glx::lastGpuFrameCpuMs(), wfc_.frameNumber() - 2, wfc_.frameRecordText(wfc_.frameNumber() - 2).c_str());
+            }
+        }
         pacingSample(camIn);
         if (const char* dt = std::getenv("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
             static int frames = 0;
