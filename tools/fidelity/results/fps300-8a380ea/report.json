@@ -1,7 +1,7 @@
 ﻿{
     "summary":  {
-                    "pass":  10,
-                    "fail":  6,
+                    "pass":  14,
+                    "fail":  2,
                     "known":  0,
                     "info":  4,
                     "skip":  0,
@@ -19,9 +19,9 @@
                     },
                     {
                         "id":  "capacity.508_p32v32_1920x1080.m1.end",
-                        "status":  "FAIL",
+                        "status":  "PASS",
                         "owner":  "Gameplay",
-                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                        "note":  "MATCH end reason=Time (TimeLimit 75 s)"
                     },
                     {
                         "id":  "capacity.508_p32v32_1920x1080.m1.bots",
@@ -49,9 +49,9 @@
                     },
                     {
                         "id":  "capacity.508_p32v32_1920x1080.m2.end",
-                        "status":  "FAIL",
+                        "status":  "PASS",
                         "owner":  "Gameplay",
-                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                        "note":  "MATCH end reason=Time (TimeLimit 75 s)"
                     },
                     {
                         "id":  "capacity.508_p32v32_1920x1080.m2.bots",
@@ -91,9 +91,9 @@
                     },
                     {
                         "id":  "capacity.508_p32v32_2560x1440.m1.end",
-                        "status":  "FAIL",
+                        "status":  "PASS",
                         "owner":  "Gameplay",
-                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                        "note":  "MATCH end reason=Time (TimeLimit 75 s)"
                     },
                     {
                         "id":  "capacity.508_p32v32_2560x1440.m1.bots",
@@ -121,9 +121,9 @@
                     },
                     {
                         "id":  "capacity.508_p32v32_2560x1440.m2.end",
-                        "status":  "FAIL",
+                        "status":  "PASS",
                         "owner":  "Gameplay",
-                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                        "note":  "MATCH end reason=Time (TimeLimit 75 s)"
                     },
                     {
                         "id":  "capacity.508_p32v32_2560x1440.m2.bots",

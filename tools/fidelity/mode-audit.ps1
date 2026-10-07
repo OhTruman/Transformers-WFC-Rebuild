@@ -70,7 +70,7 @@ foreach ($mode in $Modes) {
         $inGame = [bool](@($L | Where-Object { $_ -match 'FLOW ui.state from=\S+ to=InGame' }).Count)
         $scores = @($L | Where-Object { $_ -match '\] MATCH score ' })
         $endL = @($L | Where-Object { $_ -match '\] MATCH end ' })[0]
-        $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }
+        $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }; if ($endL -and -not $reason) { $reason = "Time" }   # an EMPTY reason is the original's time-limit path (EndGame(none, ""), Gameplay 2026-10-07; printed as Time from their next push)
         $winner = if ($endL) { $wm = [regex]::Match($endL, 'winner(?:_team)?=(\S+)'); $wm.Groups[1].Value } else { "" }   # old winner= / new winner_team=
         $endT = if ($endL) { [regex]::Match($endL, ' t=(\d+)').Groups[1].Value } else { "" }
         $results = [bool](@($L | Where-Object { $_ -match 'to=GameEnded' }).Count) -and [bool](@($L | Where-Object { $_ -match 'EndGameStats_GFX_1 opened=true' }).Count)

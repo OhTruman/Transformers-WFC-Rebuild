@@ -106,7 +106,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         }
         $ftv = @($ft | Select-Object -Skip ([Math]::Min($ft.Count, 180))); $simv = @($sim | Select-Object -Skip ([Math]::Min($sim.Count, 180)))
         $players = @($segL | Where-Object { $_ -match '\] MATCH spawn player=(\d+)' } | ForEach-Object { [regex]::Match($_, 'player=(\d+)').Groups[1].Value } | Select-Object -Unique).Count
-        $endL = @($segL | Where-Object { $_ -match '\] MATCH end ' })[0]; $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }
+        $endL = @($segL | Where-Object { $_ -match '\] MATCH end ' })[0]; $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }; if ($endL -and -not $reason) { $reason = "Time" }   # an EMPTY reason is the original's time-limit path (EndGame(none, ""), Gameplay 2026-10-07; printed as Time from their next push)
         $kills = @($segL | Where-Object { $_ -match '\] MATCH kill ' }).Count
         $broken = 0; $strug = 0
         foreach ($g in @($bl | Group-Object p)) { $gg = @($g.Group); $run = 0; $fz = 0
