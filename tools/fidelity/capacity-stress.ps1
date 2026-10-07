@@ -131,7 +131,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         if ($k -eq 1 -and $pop -ne "orig10") {
             $t300 = if ($row.p90_ms -le 3.333) { "PASS" } elseif ($row.p50_ms -le 3.333) { "PARTIAL" } else { "FAIL" }
             Res "$mt.target_300fps" $t300 ("{0} {1} {2}: p50 {3} / p90 {4} / p99 {5} ms; frames under 3.33 ms {6} %; {7}. MET = p90 <= 3.33 ms, PARTIAL = p50 <= 3.33 ms" -f $resol, $map, $pop, $row.p50_ms, $row.p90_ms, $row.p99_ms, $row.pct_under_3_33, $splitTxt) "Rendering/Gameplay" }
-        Res "$mt.audio" $(if ($dropped -gt 0) { "PARTIAL" } else { "INFO" }) ("voices max {0}, dropped {1}, stolen {2}, mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
+        # the original 96-channel FMOD rule (Systems): steals / refusals at 64 participants are by design; MORE than 96 heard
+        # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
+        Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
 } } }
