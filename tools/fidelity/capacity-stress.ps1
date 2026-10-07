@@ -21,6 +21,9 @@
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "507"),
       [string[]]$Pops = @("orig10", "p16v16", "p32v32", "ffa64"), [int]$TimeLimit = 75, [int]$Difficulty = 1,
       [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit, [switch]$FixedCam, [hashtable]$CamByMap = @{},
+      # -AsyncModes "0,1": every row with WFC_ASYNCSTEP=0 and =1 (Gameplay's async sim step); =1 rows also log WFC_ASYNCLOG
+      # (local part / background part / join wait), reported per row
+      [string[]]$AsyncModes = @(),
       [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -29,6 +32,8 @@ $exe = Join-Path $Root $(if ($Config -eq "Debug") { "build\bin\wfc_rebuild.exe" 
 $H = Get-ExeHooks $exe
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
 $Maps = @($Maps | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+$AsyncModes = @($AsyncModes | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+if (-not $AsyncModes.Count) { $AsyncModes = @("") }
 $Resolutions = @($Resolutions | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 # -FixedCam: Rendering's WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every match frame at one view, so runs are comparable
 # (frame cost follows what the camera sees). Defaults: Streets overview from above team 0's spawn into team 1's (Rendering).
@@ -54,6 +59,7 @@ $recPerSide = @{ "502" = 14; "504" = 12; "510" = 11; "501" = 11; "508" = 10; "50
 $recFfa = @{ "502" = 21; "504" = 18; "510" = 16; "501" = 16; "508" = 15; "507" = 15; "509" = 14; "503" = 14 }
 function Pct($v, $p) { if (-not $v.Count) { return $null }; $s = @($v | Sort-Object); return [Math]::Round($s[[Math]::Min($s.Count - 1, [int][Math]::Floor($p * $s.Count))], 2) }
 $rows = New-Object System.Collections.Generic.List[object]
+foreach ($asyncM in $AsyncModes) {
 foreach ($resol in $Resolutions) { $rw = [int]($resol -split 'x')[0]; $rh = [int]($resol -split 'x')[1]   # NOT $res (the results collection)
 foreach ($map in $Maps) { foreach ($pop in $Pops) {
     $P = $popDef[$pop]
@@ -62,7 +68,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     if ($pop -eq "recffa") { $n = $recFfa["$map"]; if (-not $n) { continue }
         $P = @{ mode = "DM"; want = $n; opts = "ExtendedPlayers=1;BotsEnemy=$($n - 1)" } }
     if (-not $P) { continue }
-    $tag = "{0}_{1}_{2}" -f $map, $pop, $resol; $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
+    $tag = "{0}_{1}_{2}{3}" -f $map, $pop, $resol, $(if ($asyncM -ne "") { "_as$asyncM" } else { "" }); $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
@@ -77,6 +83,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
         if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"] }
+        if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
     }
     # CPU / GPU split: a separate ONE-match run with WFC_RENDERSTATS (glFinish per frame distorts timing, so never in the timing run)
@@ -95,6 +102,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                      WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=600" }
             if ($H.Contains("WFC_CHARSELECT")) { $e2.WFC_CHARSELECT = "1" }
             if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"] }
+            if ($asyncM -ne "") { $e2.WFC_ASYNCSTEP = $asyncM }
             $null = Invoke-WfcExe $exe $ds $e2 "run.log" 700
         }
     }
@@ -149,7 +157,11 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             for ($i = 1; $i -lt $gg.Count; $i++) { $mv = [Math]::Sqrt([Math]::Pow($gg[$i].x - $gg[$i - 1].x, 2) + [Math]::Pow($gg[$i].z - $gg[$i - 1].z, 2))
                 if ($mv -lt 0.1 -and $gg[$i].tgt -lt 0 -and $gg[$i].goal -match '^(Roam|Attack|Retrieve)') { $run++; $fz = [Math]::Max($fz, $run) } else { $run = 0 } }
             if ($fz -ge 20) { $broken++ } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
-        $row = [pscustomobject][ordered]@{ res = $resol; map = $map; pop = $pop; match = $k + 1; spawned = "$players/$($P.want)"; frames = $ftv.Count
+        $asyncLines = @($segL | Where-Object { $_ -match '\] ASYNC(STEP|LOG) ' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
+        $joinVals = @($asyncLines | ForEach-Object { $mj = [regex]::Match($_, 'join(?: wait)?[ =:]+([\d.]+)'); if ($mj.Success) { [double]$mj.Groups[1].Value } })
+        $bgVals = @($asyncLines | ForEach-Object { $mb = [regex]::Match($_, 'background(?: part)?[ =:]+([\d.]+)'); if ($mb.Success) { [double]$mb.Groups[1].Value } })
+        $locVals = @($asyncLines | ForEach-Object { $ml = [regex]::Match($_, 'local(?: part)?[ =:]+([\d.]+)'); if ($ml.Success) { [double]$ml.Groups[1].Value } })
+        $row = [pscustomobject][ordered]@{ async = $asyncM; res = $resol; map = $map; pop = $pop; match = $k + 1; spawned = "$players/$($P.want)"; frames = $ftv.Count
             p50_ms = (Pct $ftv 0.50); p90_ms = (Pct $ftv 0.90); p95_ms = (Pct $ftv 0.95)
             pct_under_3_33 = $(if ($ftv.Count) { [Math]::Round(100.0 * @($ftv | Where-Object { $_ -le 3.333 }).Count / $ftv.Count, 1) })
             sim_step_ms = $phase.sim_step_ms; chars_ms = $phase.chars_ms; fx_ms = $phase.fx_ms; actors_ms = $phase.actors_ms; hud_ms = $phase.hud_ms; sim_top = $simTop3
@@ -159,7 +171,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             loaded_mb = $(if ($k -lt $ld.Count) { [Math]::Round([double]$ld[$k].privateMB) }); unloaded_mb = $(if ($k -lt $ul.Count) { [Math]::Round([double]$ul[$k].privateMB) })
             voices_max = $voices; voices_dropped = $dropped; voices_stolen = $stolen; mix_ms_max = $mixMs
             kills = $kills; broken_bots = $broken; struggling_bots = $strug; nopath_max = ($bl | Measure-Object nopath -Maximum).Maximum; off_mesh = @($bl | Where-Object { $_.cell -lt 0 }).Count
-            end_reason = $reason }
+            end_reason = $reason
+            async_local_ms = $(if ($locVals.Count) { [Math]::Round(($locVals | Measure-Object -Average).Average, 3) }); async_bg_ms = $(if ($bgVals.Count) { [Math]::Round(($bgVals | Measure-Object -Average).Average, 3) })
+            async_join_ms = $(if ($joinVals.Count) { [Math]::Round(($joinVals | Measure-Object -Average).Average, 3) }); async_join_max_ms = $(if ($joinVals.Count) { ($joinVals | Measure-Object -Maximum).Maximum }) }
         $rows.Add($row)
         Res "$mt.spawned" $(if ($players -ge $P.want) { "PASS" } elseif ($players) { "FAIL" } else { "UNKNOWN" }) ("spawned {0} of {1} participants" -f $players, $P.want) "Gameplay"
         Res "$mt.end" $(if ($reason) { "PASS" } else { "FAIL" }) ("MATCH end reason={0} (TimeLimit {1} s)" -f $(if ($reason) { $reason } else { "(none)" }), $TimeLimit) "Gameplay"
@@ -174,10 +188,11 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             Res "$mt.target_300fps" $t300 ("{0} {1} {2}: p50 {3} / p90 {4} / p99 {5} ms; frames under 3.33 ms {6} %; {7}; {8}. MET = p90 <= 3.33 ms, PARTIAL = p50 <= 3.33 ms" -f $resol, $map, $pop, $row.p50_ms, $row.p90_ms, $row.p99_ms, $row.pct_under_3_33, $splitTxt, $phaseTxt) "Rendering/Gameplay" }
         # the original 96-channel FMOD rule (Systems): steals / refusals at 64 participants are by design; MORE than 96 heard
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
+        if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
         Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
-} } }
+} } } }
 # the tax: per map, each population's p50 / p99 vs the original 10 (second match: warm caches)
 foreach ($map in $Maps) {
     foreach ($r in @($rows | Where-Object { $_.map -eq $map -and $_.pop -ne "orig10" -and $_.match -eq 2 })) {
@@ -190,5 +205,5 @@ foreach ($map in $Maps) {
 }
 Write-WfcCsv $rows (Join-Path $OutDir "capacity.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("res", "map", "pop", "match", "spawned", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
+Write-M07Matrix $rows @("async", "res", "map", "pop", "match", "spawned", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "async_join_ms", "async_join_max_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
 "CAPACITY: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
