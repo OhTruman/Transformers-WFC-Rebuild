@@ -139,6 +139,9 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, DrawElementsInstanced, (GLenum, GLsizei, GLenum, const void*, GLsizei)) \
     X(void, MultiDrawElementsIndirect, (GLenum, GLenum, const void*, GLsizei, GLsizei)) \
     X(void, VertexAttribDivisor, (GLuint, GLuint)) \
+    X(void, TexStorage3D, (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei)) \
+    X(void, CopyImageSubData, (GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) \
+    X(void, TextureView, (GLuint, GLenum, GLuint, GLenum, GLuint, GLuint, GLuint, GLuint)) \
     X(void, GenQueries, (GLsizei, GLuint*)) \
     X(void, DeleteQueries, (GLsizei, const GLuint*)) \
     X(void, BeginQuery, (GLenum, GLuint)) \

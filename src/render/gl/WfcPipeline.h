@@ -408,6 +408,11 @@ private:
     std::vector<MdiBucket> mdiBuckets_;
     long mdiMesh_ = -1;
     GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
+    // Lightmap pages of the common size share one GL_TEXTURE_2D_ARRAY (unit 21); each page's 2D texture becomes a
+    // texture view of its layer (same storage, exact texels / mips), so MDI buckets key on the program alone for them.
+    GLuint lmArray_ = 0;
+    std::vector<int> lmLayer_;                 // lmTextures_ index -> array layer, -1 = separate texture
+    void buildLmArray();
     std::vector<float> mdiRows_;                           // CPU copy (light environments filled at first sight)
     std::vector<char> mdiEnvFilled_;
     bool mdiWanted_ = false, mdiBuild_ = false;
