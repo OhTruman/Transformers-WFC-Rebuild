@@ -476,6 +476,8 @@ public:
         bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
         bool tankBoost = false;       // TnHoverTankSimulation boosting (tank form)
         bool flying = false;          // TnPlaneForm state Flying (jet)
+        uint32_t nitroSerial = 0;     // bumps at each nitro start (any pawn; Systems' bot vehicle audio)
+        float slipAngle = 0.0f;       // Driving on the ground: angle between the heading and the ground velocity (rad) [PROV def]
         float rollRemain = 0.0f;      // car barrel roll (JumpTimeRemaining) / jet roll time
         float rollDir = 0.0f;
         float leanP = 0.0f, leanY = 0.0f, leanR = 0.0f;   // TnPlaneSimulation RLerp'd extra rotation (rad)

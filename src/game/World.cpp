@@ -1204,6 +1204,19 @@ void World::tick(float dt) {
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     separatePawns();
+    {   // Driving slip angle per pawn (Systems' tire audio for every vehicle): heading vs ground velocity while Driving on the ground.
+        auto slip = [](Character& c) {
+            auto& vs = c.vehicleState();
+            vs.slipAngle = 0.0f;
+            if (c.moveForm() != Form::Vehicle || !vs.driving || !vs.onTheGround) return;
+            const core::Vec3& v = c.velocity();
+            if (v.x * v.x + v.z * v.z < 1.0f) return;
+            const core::Vec3 f = core::forwardFromYawPitch(c.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+            vs.slipAngle = std::atan2(core::dot(v, r), std::fabs(core::dot(v, f)));
+        };
+        if (!localDead_) slip(player_.pawn());
+        for (MatchOpponent* o : opponents_) if (o->spawned()) slip(o->pawn());
+    }
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
