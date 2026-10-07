@@ -39,6 +39,9 @@ typedef ptrdiff_t GLintptr;
 #define GL_HALF_FLOAT 0x140B
 #define GL_FRAMEBUFFER 0x8D40
 #define GL_READ_FRAMEBUFFER 0x8CA8
+#ifndef GL_RGBA32F
+#define GL_RGBA32F 0x8814
+#endif
 #ifndef GL_FRAMEBUFFER_BINDING
 #define GL_FRAMEBUFFER_BINDING 0x8CA6
 #endif

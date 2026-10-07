@@ -62,6 +62,29 @@ layout(location=7) in vec3 aPrevPos; // drawDynamicMeshBlended: the previous ste
 layout(location=8) in vec3 aPrevNrm;
 uniform int uPoseBlend;
 uniform float uPoseAlpha;
+layout(location=9) in vec4 aJoints;   // GPU skinning: 4 joint indices (exact small integers as float)
+layout(location=10) in vec4 aWeights;
+uniform int uSkin;                    // 0 off, 1 palette, 2 palette blended with the previous step's
+uniform int uSkinRow, uSkinBones;
+uniform float uSkinAlpha;
+uniform sampler2D uBoneTex;           // RGBA32F: row per instance; cur palette at x = 4j, prev at x = 512 + 4j
+mat4 wfcBone(int base, int j) {
+    return mat4(texelFetch(uBoneTex, ivec2(base + j * 4, uSkinRow), 0), texelFetch(uBoneTex, ivec2(base + j * 4 + 1, uSkinRow), 0),
+                texelFetch(uBoneTex, ivec2(base + j * 4 + 2, uSkinRow), 0), texelFetch(uBoneTex, ivec2(base + j * 4 + 3, uSkinRow), 0));
+}
+// assets::skinPose: sum of w * (M p), w * (M n), w * (M t) over the influences with w > 0 and a valid joint
+void wfcSkin(int base, out vec3 p, out vec3 n, out vec3 t) {
+    p = vec3(0.0); n = vec3(0.0); t = vec3(0.0);
+    for (int k = 0; k < 4; ++k) {
+        float w = aWeights[k];
+        int j = int(aJoints[k] + 0.5);
+        if (w <= 0.0 || j >= uSkinBones) continue;
+        mat4 M = wfcBone(base, j);
+        p += (M * vec4(aPos, 1.0)).xyz * w;
+        n += (M * vec4(aNrm, 0.0)).xyz * w;
+        t += (M * vec4(aTan.xyz, 0.0)).xyz * w;
+    }
+}
 uniform mat4 uViewProj;
 uniform mat4 uModel;
 uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, z DepthBias
@@ -101,6 +124,21 @@ vec4 heightFog(vec3 p) {
 
 void main() {
     vec3 pos = aPos, nrm = aNrm;
+    vec4 tanIn = aTan;
+    if (uSkin != 0) {
+        vec3 p, n, t;
+        wfcSkin(0, p, n, t);
+        n = normalize(n);
+        tanIn = vec4(normalize(t), aTan.w);
+        if (uSkin == 2) {   // Character::blendedPose on the two skinned poses (tangents: the current pose's)
+            vec3 pp, pn, pt;
+            wfcSkin(512, pp, pn, pt);
+            pn = normalize(pn);
+            p = pp + (p - pp) * uSkinAlpha;
+            n = normalize(pn + (n - pn) * uSkinAlpha);
+        }
+        pos = p; nrm = n;
+    }
     if (uPoseBlend != 0) {   // presentation interpolation of a skinned pose: the CPU formula (Character::blendedPose)
         pos = aPrevPos + (aPos - aPrevPos) * uPoseAlpha;
         nrm = normalize(aPrevNrm + (aNrm - aPrevNrm) * uPoseAlpha);
@@ -109,7 +147,7 @@ void main() {
     mat3 nm = mat3(uModel);
     vPos = wp.xyz;
     vNrm = nm * nrm;
-    vTan = vec4(nm * aTan.xyz, aTan.w);
+    vTan = vec4(nm * tanIn.xyz, tanIn.w);
     vUV0 = aUV0;
     vSubUV2 = aSubUV2;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
@@ -622,6 +660,7 @@ void Pipeline::clearProgramCache() {
 // ------------------------------------------------------------------------- unloading (level travel)
 void Pipeline::release() {
     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
+    evictSkin(true);
     touchQueue_.clear();                               // its textures are deleted with the map
     progTouchQueue_.clear();
     if (!active_ && meshes_.empty() && !fbo_) return;
@@ -1992,6 +2031,13 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
     Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
     Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
+    Uniform1i(uloc(P, "uSkin"), skinMode_);
+    if (skinMode_) {
+        Uniform1i(uloc(P, "uSkinRow"), skinRow_);
+        Uniform1i(uloc(P, "uSkinBones"), skinBones_);
+        Uniform1f(uloc(P, "uSkinAlpha"), skinAlpha_);
+        Uniform1i(uloc(P, "uBoneTex"), 18);
+    }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
         Uniform1f(uloc(P, "uDSLS"), dsls);
@@ -2633,6 +2679,165 @@ void Pipeline::drawHudScreenEffect() {
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
 }
 
+bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
+                           const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
+                           const core::Mat4& model, const void* key, uint64_t serial) {
+    const size_t n = bind.vertexCount();
+    if (n == 0 || joints.size() != n * 4 || weights.size() != n * 4 || palette.empty() || (int)palette.size() > kMaxBones)
+        return false;
+    // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
+    SkinModel& sm = skinModels_[&bind];
+    sm.lastFrame = frameNo_;
+    if (!sm.vao || sm.verts != n || sm.idx != bind.indices.size()) {
+        if (!sm.vao) { GenVertexArrays(1, &sm.vao); GenBuffers(1, &sm.vbo); GenBuffers(1, &sm.jwVbo); GenBuffers(1, &sm.ibo); }
+        std::vector<float> v;
+        buildVertices(bind, v, true);
+        std::vector<float> jw(n * 8);
+        int maxJ = 0;
+        std::vector<core::Vec3> sum(palette.size() > 0 ? (size_t)kMaxBones : 0, core::Vec3{0, 0, 0});
+        std::vector<int> cnt((size_t)kMaxBones, 0);
+        for (size_t i = 0; i < n; ++i) {
+            for (int k = 0; k < 4; ++k) {
+                jw[i * 8 + k] = (float)joints[i * 4 + k];
+                jw[i * 8 + 4 + k] = weights[i * 4 + k];
+                if (weights[i * 4 + k] > 0.0f && joints[i * 4 + k] < kMaxBones) {
+                    const int j = joints[i * 4 + k];
+                    maxJ = std::max(maxJ, j + 1);
+                    sum[(size_t)j] = sum[(size_t)j] + core::Vec3{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
+                    ++cnt[(size_t)j];
+                }
+            }
+        }
+        sm.joints = maxJ;
+        sm.jc.assign((size_t)maxJ, core::Vec3{0, 0, 0});
+        sm.jr.assign((size_t)maxJ, -1.0f);
+        for (int j = 0; j < maxJ; ++j) if (cnt[(size_t)j]) sm.jc[(size_t)j] = sum[(size_t)j] * (1.0f / (float)cnt[(size_t)j]);
+        for (size_t i = 0; i < n; ++i)
+            for (int k = 0; k < 4; ++k)
+                if (weights[i * 4 + k] > 0.0f && joints[i * 4 + k] < maxJ) {
+                    const int j = joints[i * 4 + k];
+                    const core::Vec3 p{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
+                    sm.jr[(size_t)j] = std::max(sm.jr[(size_t)j], core::length(p - sm.jc[(size_t)j]));
+                }
+        BindVertexArray(sm.vao);
+        BindBuffer(GL_ARRAY_BUFFER, sm.vbo);
+        BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STATIC_DRAW);
+        BindBuffer(GL_ELEMENT_ARRAY_BUFFER, sm.ibo);
+        BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(bind.indices.size() * 4), bind.indices.data(), GL_STATIC_DRAW);
+        setupAttribs();
+        BindBuffer(GL_ARRAY_BUFFER, sm.jwVbo);
+        BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(jw.size() * sizeof(float)), jw.data(), GL_STATIC_DRAW);
+        EnableVertexAttribArray(9);  VertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        EnableVertexAttribArray(10); VertexAttribPointer(10, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
+        BindVertexArray(0);
+        sm.verts = n; sm.idx = bind.indices.size();
+        size_t rigid = 0;
+        for (size_t i = 0; i < n; ++i) {
+            int inf = 0;
+            for (int k = 0; k < 4; ++k) if (weights[i * 4 + k] > 0.0f) ++inf;
+            if (inf <= 1) ++rigid;
+        }
+        LOG_INFO("wfc gpu skin: model %s: %zu verts (%zu single-joint, %.0f%%), %d joints", bind.mats.empty() ? "?" : bind.mats[0].wfcName.c_str(),
+                 n, rigid, 100.0 * (double)rigid / (double)n, sm.joints);
+    }
+    // ---- the instance: its palettes in a texture row (uploaded when the serial changes), bounds from the palette
+    if (!skinTex_) {
+        glGenTextures(1, &skinTex_);
+        glBindTexture(GL_TEXTURE_2D, skinTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1024, kSkinRows, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    SkinInst& si = skinInsts_[key];
+    si.lastFrame = frameNo_;
+    if (si.row < 0) {
+        if (!freeSkinRows_.empty()) { si.row = freeSkinRows_.back(); freeSkinRows_.pop_back(); }
+        else if (skinRowsUsed_ < kSkinRows) si.row = skinRowsUsed_++;
+        else { skinInsts_.erase(key); return false; }
+    }
+    const bool usePrev = prevPalette && alpha < 1.0f && prevPalette->size() == palette.size();
+    // exact bounds (pixel-identical lighting / shadow fit): the skinned positions of assets::skinPose, positions only,
+    // once per serial - the same transformPoint / weight sum, so the box is bitwise the CPU path's
+    static const bool sphereBounds = std::getenv("WFC_SKINSPHEREBOUNDS") != nullptr;   // A/B: conservative per-joint spheres
+    auto exactBounds = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
+        mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
+        for (size_t i = 0; i < n; ++i) {
+            const core::Vec3 p{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
+            core::Vec3 sp{0, 0, 0};
+            for (int k = 0; k < 4; ++k) {
+                const float wt = weights[i * 4 + k];
+                if (wt <= 0) continue;
+                const uint16_t ji = joints[i * 4 + k];
+                if (ji >= pal.size()) continue;
+                sp += core::transformPoint(pal[ji], p) * wt;
+            }
+            mn = {std::min(mn.x, sp.x), std::min(mn.y, sp.y), std::min(mn.z, sp.z)};
+            mx = {std::max(mx.x, sp.x), std::max(mx.y, sp.y), std::max(mx.z, sp.z)};
+        }
+        return std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
+               std::isfinite(mn.z) && std::isfinite(mx.z) && mn.x <= mx.x;
+    };
+    auto boundsOf = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
+        if (!sphereBounds) return exactBounds(pal, mn, mx);
+        mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
+        for (int j = 0; j < sm.joints && j < (int)pal.size(); ++j) {
+            if (sm.jr[(size_t)j] < 0.0f) continue;
+            const core::Mat4& M = pal[(size_t)j];
+            const core::Vec3 c = core::transformPoint(M, sm.jc[(size_t)j]);
+            const float sc = std::max(core::length(core::Vec3{M.m[0], M.m[1], M.m[2]}),
+                             std::max(core::length(core::Vec3{M.m[4], M.m[5], M.m[6]}), core::length(core::Vec3{M.m[8], M.m[9], M.m[10]})));
+            const float rr = sm.jr[(size_t)j] * sc;
+            mn = {std::min(mn.x, c.x - rr), std::min(mn.y, c.y - rr), std::min(mn.z, c.z - rr)};
+            mx = {std::max(mx.x, c.x + rr), std::max(mx.y, c.y + rr), std::max(mx.z, c.z + rr)};
+        }
+        return mn.x <= mx.x && std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
+               std::isfinite(mn.z) && std::isfinite(mx.z);
+    };
+    if (si.serial != serial || si.prev != usePrev) {
+        for (const core::Mat4& M : palette) if (!finiteMat(M)) { reportNonFinite("bone palette", bind.mats.empty() ? std::string("?") : bind.mats[0].wfcName); return true; }
+        if (!boundsOf(palette, si.mn, si.mx)) return true;
+        if (usePrev && !boundsOf(*prevPalette, si.pmn, si.pmx)) return true;
+        static std::vector<float> row;
+        row.assign(1024 * 4, 0.0f);
+        for (size_t j = 0; j < palette.size(); ++j) std::memcpy(&row[j * 16], palette[j].m, 16 * sizeof(float));
+        if (usePrev) for (size_t j = 0; j < prevPalette->size(); ++j) std::memcpy(&row[(512 + j * 4) * 4], (*prevPalette)[j].m, 16 * sizeof(float));
+        glBindTexture(GL_TEXTURE_2D, skinTex_);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, si.row, 1024, 1, GL_RGBA, GL_FLOAT, row.data());
+        si.serial = serial; si.prev = usePrev;
+    }
+    SkinDraw d;
+    d.vao = sm.vao;
+    d.mn = si.mn; d.mx = si.mx;
+    if (usePrev) { d.mn = si.pmn + (si.mn - si.pmn) * alpha; d.mx = si.pmx + (si.mx - si.pmx) * alpha; }
+    ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
+    skinDraw_ = &d;
+    skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
+    drawDynamic(bind, model);
+    skinDraw_ = nullptr;
+    skinMode_ = 0;
+    return true;
+}
+
+void Pipeline::evictSkin(bool all) {
+    for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
+        if (all || frameNo_ - it->second.lastFrame > 600) {
+            if (it->second.row >= 0 && !all) freeSkinRows_.push_back(it->second.row);
+            it = skinInsts_.erase(it);
+        } else ++it;
+    }
+    for (auto it = skinModels_.begin(); it != skinModels_.end();) {
+        if (all || frameNo_ - it->second.lastFrame > 600) {
+            if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
+            for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
+            it = skinModels_.erase(it);
+        } else ++it;
+    }
+    if (all) {
+        freeSkinRows_.clear(); skinRowsUsed_ = 0;
+        if (skinTex_) { glDeleteTextures(1, &skinTex_); skinTex_ = 0; }
+    }
+}
+
 void Pipeline::evictPosed(bool all) {
     for (auto it = posed_.begin(); it != posed_.end();) {
         if (all || frameNo_ - it->second.lastFrame > 600) {
@@ -2648,7 +2853,8 @@ void Pipeline::evictPosed(bool all) {
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial,
                            const std::vector<float>* prevP, const std::vector<float>* prevN, float alpha) {
     if (m.empty()) return;
-    const bool blend = cacheKey && prevP && alpha < 1.0f && prevP->size() == m.positions.size();
+    const SkinDraw* sk = skinDraw_;                     // GPU-skinned: static buffers, bounds from the palette
+    const bool blend = !sk && cacheKey && prevP && alpha < 1.0f && prevP->size() == m.positions.size();
     struct DynTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
         ~DynTimer() { gStats.dynTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.dynCalls; } } dynTimer;
     if (!finiteMat(model)) {
@@ -2675,7 +2881,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         same = pbp->vao && pbp->serial == serial && pbp->verts == m.vertexCount() && pbp->idx == m.indices.size() && pbp->blended == blend;
     }
     core::Vec3 bmn, bmx;
-    if (same) {
+    if (sk) {
+        bmn = sk->mn; bmx = sk->mx;
+    } else if (same) {
         bmn = pbp->mn; bmx = pbp->mx;
     } else {
         core::Vec3 pmn, pmx;
@@ -2706,8 +2914,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         }
     }
     if (offscreen) { ++counts_.culled; ++gStats.dynCulled; }
-    GLuint drawVao = dynVao_;
-    if (!offscreen && cacheKey) {   // drawDynamicMeshPosed: persistent buffers per MeshData, rebuilt on a new pose serial
+    GLuint drawVao = sk ? sk->vao : dynVao_;
+    if (!offscreen && cacheKey && !sk) {   // drawDynamicMeshPosed: persistent buffers per MeshData, rebuilt on a new pose serial
         PosedBuf& pb = *pbp;
         const bool fresh = !pb.vao;
         if (fresh) { GenVertexArrays(1, &pb.vao); GenBuffers(1, &pb.vbo); GenBuffers(1, &pb.ibo); }
@@ -2754,7 +2962,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         }
         drawVao = pb.vao;
     }
-    if (!offscreen && !cacheKey) {
+    if (!offscreen && !cacheKey && !sk) {
         static std::vector<float> v;   // reused: a character's interleaved vertices are ~0.5 MB per draw
         auto tb0 = std::chrono::steady_clock::now();
         buildVertices(m, v);
@@ -3231,6 +3439,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
+    if ((frameNo_ & 255) == 128 && (!skinInsts_.empty() || !skinModels_.empty())) evictSkin(false);
     if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();

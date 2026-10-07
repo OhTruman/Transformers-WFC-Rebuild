@@ -92,6 +92,21 @@ public:
     // like cur (prevNormals may be empty: cur's normals). poseSerial must change whenever cur OR prev changes. The GL
     // renderer uploads both once per serial and blends in the vertex shader (no per-frame vertex build / upload); this
     // default blends on the CPU.
+    // GPU skinning (300+ fps lobbies): `bind` is the model's bind-pose mesh (positions, normals, tangents when the
+    // model has them, UVs, indices, subs, materials; the same object for the model's lifetime), joints / weights its 4
+    // influences per vertex, palette[j] = global(joint j) * invBind(j) (Gameplay's skinPose matrices), prevPalette
+    // the previous step's (presentation interpolation, alpha < 1; may be null). paletteSerial changes whenever either
+    // palette changes; paletteKey identifies the character instance (its palette storage). Same result as skinPose +
+    // drawDynamicMeshBlended: linear blend skinning, normals / tangents renormalised, prev + (cur - prev) * alpha.
+    // Returns false when unsupported (the caller CPU-skins as before); the default renderer does not support it.
+    virtual bool drawSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
+                                 const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette,
+                                 float alpha, const core::Mat4& model, const core::Vec3& color, const void* paletteKey,
+                                 uint64_t paletteSerial) {
+        (void)bind; (void)joints; (void)weights; (void)palette; (void)prevPalette; (void)alpha; (void)model; (void)color;
+        (void)paletteKey; (void)paletteSerial;
+        return false;
+    }
     virtual void drawDynamicMeshBlended(const MeshData& cur, const std::vector<float>& prevPositions,
                                         const std::vector<float>& prevNormals, float alpha, const core::Mat4& model,
                                         const core::Vec3& color, uint64_t poseSerial) {
