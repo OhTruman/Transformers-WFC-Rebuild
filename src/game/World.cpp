@@ -1685,7 +1685,8 @@ void World::tick(float dt) {
         if (!o->spawned()) { onParticipantGone(pl); continue; }
         const Character& bp = o->pawn();
         const int tm = matchActive_ && pl >= 0 && (size_t)pl < match_.players().size() ? match_.players()[(size_t)pl].team : 0;
-        setParticipantBuffAudio(pl, "TnBuffCloak", bp.cloakRemain_ > 0.0f, tm, bp.actorLocation());
+        static const std::string cloakBuff = "TnBuffCloak";
+        setParticipantBuffAudio(pl, cloakBuff, bp.cloakRemain_ > 0.0f, tm, bp.actorLocation());
         setParticipantHoverAudio(pl, bp.hoverState_, bp.actorLocation());
         // [integration 09c] Systems M09f glue: the bot's own body audio (foley / transform notifies / vehicle component), 70 m cull.
         const Character::VehicleState& vst = bp.vehicleState();
@@ -1708,10 +1709,18 @@ void World::tick(float dt) {
         tickParticipantBodyAudio(pl, bp.chassis().id, bp, vsig, true, dt);
         {   // [integration 09c] Systems M09j glue: the bot's weapon-mesh notifies (reload mechanics) + action layer (melee / throw)
             const Weapon& bw = bp.weapon();
-            const std::string wcls = bp.hasWeapon() && bw.def ? "TransContent.TnWeapon" + std::string(bw.def->id) : std::string();
+            static std::unordered_map<const WeaponDef*, std::string> wclsCache;   // no per-bot per-step string building
+            static const std::string noClass;
+            const std::string* wcp = &noClass;
+            if (bp.hasWeapon() && bw.def) {
+                auto wit = wclsCache.find(bw.def);
+                if (wit == wclsCache.end()) wit = wclsCache.emplace(bw.def, "TransContent.TnWeapon" + std::string(bw.def->id)).first;
+                wcp = &wit->second;
+            }
+            const std::string& wcls = *wcp;
             const assets::SkinnedModel* am = bp.currentModel();
             const int ai = bp.actionClipIndex();
-            const std::string aclip = bp.form() == Form::Robot && am && ai >= 0 && (size_t)ai < am->clips.size() ? am->clips[(size_t)ai].name : std::string();
+            const std::string& aclip = bp.form() == Form::Robot && am && ai >= 0 && (size_t)ai < am->clips.size() ? am->clips[(size_t)ai].name : noClass;
             tickParticipantWeaponAudio(pl, wcls, bw.shotSerial, bw.reloadSerial, aclip, bp.actionTime(), dt);
         }
     }
