@@ -494,6 +494,24 @@ const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool g
             m.bx0 = std::min({m.bx0, sg.a.x, sg.b.x}); m.bx1 = std::max({m.bx1, sg.a.x, sg.b.x});
             m.by0 = std::min({m.by0, sg.a.y, sg.b.y}); m.by1 = std::max({m.by1, sg.a.y, sg.b.y});
         }
+        // Direct-draw test: every non-degenerate fan triangle has the same orientation and together they sweep at most
+        // a half turn around the pivot (which lies on the outline): one loop, star-shaped from the pivot, no overlap -
+        // each filled pixel is covered by exactly one triangle (shared edges: GL's tie rule), as the winding count gives.
+        {
+            int sign = 0;
+            bool ok = true;
+            double sweep = 0.0;
+            for (const Seg& sg : segs) {
+                const double ax = sg.a.x - o.x, ay = sg.a.y - o.y, bx = sg.b.x - o.x, by = sg.b.y - o.y;
+                const double cr = ax * by - ay * bx;
+                const double la = std::hypot(ax, ay), lb = std::hypot(bx, by);
+                if (la < 1e-6 || lb < 1e-6 || std::fabs(cr) <= 1e-9 * la * lb) continue;   // degenerate: draws nothing
+                const int sgn = cr > 0 ? 1 : -1;
+                if (sign == 0) sign = sgn; else if (sgn != sign) { ok = false; break; }
+                sweep += std::atan2(std::fabs(cr), ax * bx + ay * by);
+            }
+            m.direct = ok && sign != 0 && sweep <= 3.14159265358979 + 1e-4;
+        }
         c.fills.push_back(std::move(m));
     }
     return shapes_[key] = std::move(c);
@@ -629,7 +647,7 @@ void GfxRendererGL::cover(float x0, float y0, float x1, float y1, const gfx::Mat
 
 // Cached shapes draw from their own buffers: the same vertices, state and draw order as stencilWinding + cover /
 // drawTriangles, without re-uploading the geometry every frame (it was two glBufferData per fill per frame).
-void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask) {
+void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask, bool solid) {
     if (mesh.fan.empty()) return;
     if (!mesh.vbo) {
         std::vector<float> v(mesh.fan);
@@ -642,6 +660,15 @@ void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask) {
         bindArray(mesh.vbo);
     }
     const GLsizei nFan = (GLsizei)(mesh.fan.size() / 2);
+    static const bool noDirect = std::getenv("WFC_GFX_NODIRECT") != nullptr;   // A/B: always stencil + cover
+    if (solid && !mask && mesh.direct && !noDirect) {
+        // Inside the current mask level only, no stencil writes (the cover pass would leave the low nibble at zero).
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+        glStencilMask(0);
+        glDrawArrays(GL_TRIANGLES, 0, nFan);
+        return;
+    }
     stencilState();
     glDrawArrays(GL_TRIANGLES, 0, nFan);
     coverState(mask);
@@ -809,7 +836,7 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, rep ? GL_REPEAT : GL_CLAMP_TO_EDGE);
                 glx::Uniform2f(uTexSize_, (float)tw, (float)th);
             }
-            drawMesh(m, inMask_);
+            drawMesh(m, inMask_, fs.type == gfx::FillStyle::Solid);
         }
         if (!inMask_) {
             for (const Stroke& s : c.strokes) {
