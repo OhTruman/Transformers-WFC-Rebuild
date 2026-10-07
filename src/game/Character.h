@@ -545,6 +545,9 @@ private:
     unsigned stepCounter_ = 0;
     mutable unsigned skinnedStep_ = ~0u;
     mutable std::vector<core::Mat4> skinGlobals_;
+    // Pose serials for the renderer's drawDynamicMeshPosed (agents/rendering): bumped whenever a buffer's vertices change (each skin;
+    // each interpolated present for the blend scratch), so unchanged poses skip the vertex build / upload.
+    mutable uint64_t bodySerial_ = 0, partnerSerial_ = 0, armSerial_ = 0, lerpSerial_ = 0;
     // Presentation interpolation state (beginStep / setRenderAlpha).
     core::Vec3 prevPos_{0, 0, 0};
     bool havePrev_ = false;

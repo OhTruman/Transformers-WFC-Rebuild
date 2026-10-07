@@ -796,9 +796,9 @@ void Character::beginStep() {
 
 void Character::ensureSkinned() const {
     bool any = false;
-    if (bodySkinDirty_ && bodySkinModel_) { assets::skinPose(*bodySkinModel_, finalPose_, skinGlobals_, poseBuf_); bodySkinDirty_ = false; any = true; }
-    if (partnerSkinDirty_ && partnerSkinModel_) { assets::skinPose(*partnerSkinModel_, partnerPose_, skinGlobals_, partnerBuf_); partnerSkinDirty_ = false; any = true; }
-    if (armSkinDirty_ && armModel_) { assets::skinPose(*armModel_, armPose_, skinGlobals_, armBuf_); armSkinDirty_ = false; any = true; }
+    if (bodySkinDirty_ && bodySkinModel_) { assets::skinPose(*bodySkinModel_, finalPose_, skinGlobals_, poseBuf_); bodySkinDirty_ = false; ++bodySerial_; any = true; }
+    if (partnerSkinDirty_ && partnerSkinModel_) { assets::skinPose(*partnerSkinModel_, partnerPose_, skinGlobals_, partnerBuf_); partnerSkinDirty_ = false; ++partnerSerial_; any = true; }
+    if (armSkinDirty_ && armModel_) { assets::skinPose(*armModel_, armPose_, skinGlobals_, armBuf_); armSkinDirty_ = false; ++armSerial_; any = true; }
     if (any) skinnedStep_ = stepCounter_;
 }
 
@@ -808,6 +808,12 @@ core::Vec3 Character::renderOffset() const {
     if (core::dot(d, d) > 25.0f) return {0, 0, 0};   // a spawn / teleport this step: no interpolation across it
     return d * (1.0f - renderAlpha_);
 }
+
+// IRenderer::drawDynamicMeshPosed (agents/rendering), compile-time detected: the same MeshData across frames plus a serial that changes
+// with its vertices lets the renderer keep the vertex buffer; without it, drawDynamicMesh.
+template <class R> static auto drawPosed(R& r, const render::MeshData& m, const core::Mat4& model, const core::Vec3& c, uint64_t serial, int)
+    -> decltype(r.drawDynamicMeshPosed(m, model, c, serial), void()) { r.drawDynamicMeshPosed(m, model, c, serial); }
+template <class R> static void drawPosed(R& r, const render::MeshData& m, const core::Mat4& model, const core::Vec3& c, uint64_t, long) { r.drawDynamicMesh(m, model, c); }
 
 // render::MeshData::tangents (agents/rendering), when present: carried with the pose.
 template <class M> static auto copyTangents(M& dst, const M& src, int) -> decltype(dst.tangents = src.tangents, void()) { dst.tangents = src.tangents; }
@@ -840,10 +846,15 @@ void Character::draw(render::IRenderer& r) const {
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
         // Presentation interpolation: the whole pawn (body, transformation partner, arm) shifted by one rigid offset.
         const core::Mat4 off = core::Mat4::translate(renderOffset());
-        r.drawDynamicMesh(blendedPose(poseBuf_, prevPoseP_, prevPoseN_, lerpBody_), off * meshMatrix(form_), color_);
-        if (partnerVisible_ && !partnerBuf_.empty())
-            r.drawDynamicMesh(blendedPose(partnerBuf_, prevPartnerP_, prevPartnerN_, lerpPartner_), off * meshMatrix(partnerForm()), color_);
-        if (armVisible_ && !armBuf_.empty()) r.drawDynamicMesh(armBuf_, off * armWorld_, color_);
+        {   // the blend scratch changes every interpolated frame; the skinned buffers only when skinned
+            const render::MeshData& b = blendedPose(poseBuf_, prevPoseP_, prevPoseN_, lerpBody_);
+            drawPosed(r, b, off * meshMatrix(form_), color_, &b == &poseBuf_ ? bodySerial_ : ++lerpSerial_, 0);
+        }
+        if (partnerVisible_ && !partnerBuf_.empty()) {
+            const render::MeshData& p = blendedPose(partnerBuf_, prevPartnerP_, prevPartnerN_, lerpPartner_);
+            drawPosed(r, p, off * meshMatrix(partnerForm()), color_, &p == &partnerBuf_ ? partnerSerial_ : ++lerpSerial_, 0);
+        }
+        if (armVisible_ && !armBuf_.empty()) drawPosed(r, armBuf_, off * armWorld_, color_, armSerial_, 0);
         return;
     }
     // Fallback graybox.

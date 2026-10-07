@@ -339,9 +339,17 @@ public:
         float health = 0.0f, fade = -1.0f, t = 0.0f;   // fade: FadeOutTime countdown once health reached 0 (-1 = up)
         core::Mat4 world, boxInv;                      // mesh world matrix; world -> collision-box local
         core::Vec3 half{0, 0, 0};
+        int owner = -1;                                // the participant whose ability spawned it
+        float delay = -1.0f;                           // SpawnDelay countdown (>= 0 while pending)
+        int dyn = -1, dynW = -1;                       // its dynamic collision sets (pawn / weapon worlds), pooled
+        render::MeshData mesh;
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
-    BarrierState barrier_;
+    std::vector<BarrierState> barriers_;     // one per owner
+    mutable int lastBarrierHit_ = -1;
+    std::vector<int> freeBarrierDyn_, freeBarrierDynW_;
+    void requestBarrier(int owner);            // TnAbilityBarrier for any participant
+    void damageBarrierAt(size_t idx, float amount, const std::string& type);
     bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
     int vehicleShotSerial_ = 0, vehicleShotSocket_ = 0;
     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
@@ -354,8 +362,15 @@ public:
         core::Vec3 pos{0, 0, 0};
         float yaw = 0.0f, pitch = 0.0f, health = 0.0f, fireTimer = 0.0f, heat = 0.0f, overheat = 0.0f, t = 0.0f;
         int target = -1, shots = 0;
+        int owner = -1;                 // the match player whose ability spawned it (any participant)
+        float delay = -1.0f;            // SpawnDelay countdown (>= 0 while pending)
+        render::MeshData mesh;          // its posed WEP_DeployedTurret mesh
     };
-    Sentry sentry_;
+    std::vector<Sentry> sentries_;      // one per owner
+    mutable int lastSentryHit_ = -1;
+    void requestSentry(int owner);      // TnAbilitySpawnSentry for any participant
+    void spawnSentry(Sentry& s);
+    void damageSentryAt(size_t idx, float amount, int instigator, const std::string& type);
     // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
     struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
     GuidedMissile missile_;
@@ -369,20 +384,14 @@ public:
     void startGuidedMissile();
     void tickGuidedMissile(float dt);
     void detonateGuidedMissile(const core::Vec3& at);
-    float sentryDelay_ = -1.0f;
     assets::SkinnedModel sentryModel_;
     bool sentryModelTried_ = false;
-    render::MeshData sentryMesh_;
-    void spawnSentry();
     void tickSentry(float dt);
     float beaconDelay_ = -1.0f;
     void tickAmmoBeacon(float dt);
-    float barrierDelay_ = -1.0f;
-    int barrierDyn_ = -1, barrierDynW_ = -1;
     assets::SkinnedModel barrierModel_;
     bool barrierModelTried_ = false;
-    render::MeshData barrierMesh_;
-    void spawnBarrier();
+    void spawnBarrier(BarrierState& b);
     void tickBarrier(float dt);
     core::Vec3 grenadeTarget_{0, 0, 0};
     const Weapon* grenadeBag(const Character& c) const;
@@ -539,6 +548,9 @@ private:
 public:
     // Diagnostics: participants with a live Repair Ray beam.
     int participantBeamsLive() const { int n = 0; for (const auto& kv : partBeams_) n += kv.second.time > 0.0f; return n; }
+    // Diagnostics: live sentries / barriers owned by participants other than the local player.
+    int participantSentriesLive() const { int n = 0; for (const Sentry& s : sentries_) n += s.alive && s.owner != localPlayer_; return n; }
+    int participantBarriersLive() const { int n = 0; for (const BarrierState& b : barriers_) n += b.alive && b.owner != localPlayer_; return n; }
 private:
     void tickParticipantWeapons(float dt);
     void addBotBrain(int player, int difficulty);
@@ -668,11 +680,12 @@ public:
     bool qaGodMode() const { return qaGod_; }
     std::string qaStatus() const;                                            // map / mode / body / form / weapon / position
     // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
-    const BarrierState& barrier() const { return barrier_; }
+    const BarrierState& barrier() const;   // the local player's live barrier (an empty one when none)
     bool ammoBeaconAlive() const { return beacon_.alive; }
     core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
     void damageAmmoBeacon(float amount, int instigator);
-    const Sentry& sentry() const { return sentry_; }
+    const Sentry& sentry() const;   // the local player's sentry (an empty one when none)
+    Character* participantPawnMutable(int player) { return const_cast<Character*>(participantPawn(player)); }
     bool guidedMissileAlive() const { return missile_.alive; }
     const RollerMine& rollerMine() const { return roller_; }
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
