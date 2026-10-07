@@ -165,6 +165,7 @@ bool Application::init() {
     if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
     if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
     if (std::getenv("WFC_EXTRABODYTEST")) { runExtraBodyTest(); return false; }    // Car8-10 / Frenzy / Rumble / Laserbeak
+    if (std::getenv("WFC_DOUBLEJUMPTEST")) { runDoubleJumpTest(); return false; }  // robot double jump (RE addendum 10)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4652,6 +4653,44 @@ void Application::runExtraBodyTest() {
         check(died && !world_.localPlayerDead() && pc.chassis().id == id, tag + ": dies and respawns as itself");
     }
     LOG_INFO("EXTRABODY SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DOUBLEJUMPTEST: TnAcrobaticsManager double jump [CONF RE addendum 10] on the local robot pawn: a single jump peaks at
+// JumpHeight (5.0 m), a second press at the apex adds DoubleJumpHeight (4.5 m, ~9.5 m total), a third press is ignored, and a
+// second press before DoubleJumpMinHeight (10 UU) above take-off is refused.
+void Application::runDoubleJumpTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("DOUBLEJUMP %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    game::Character& pc = world_.player().pawn();
+    auto step = [&](bool jumpPress) {
+        platform::InputFrame in; in.pressed[(int)platform::Button::Jump] = jumpPress; in.down[(int)platform::Button::Jump] = jumpPress;
+        world_.handleInput(in, dt); world_.tick(dt);
+    };
+    auto settle = [&]() { for (int i = 0; i < 120; ++i) step(false); };
+    // mode 0: single jump; 1: jump + press at the apex (+ a third press); 2: jump + an immediate second press (refused)
+    for (int mode = 0; mode < 3; ++mode) {
+        world_.teleportToStart(0); settle();
+        const float y0 = pc.position().y;
+        float peak = y0; bool pressedApex = false;
+        step(true);
+        for (int i = 0; i < 240; ++i) {
+            bool press = false;
+            if (mode == 1 && !pressedApex && pc.velocity().y <= 0.0f) { press = true; pressedApex = true; }
+            else if (mode == 1 && pressedApex && i % 20 == 0) press = true;     // third / later presses: ignored
+            else if (mode == 2 && i == 0) press = true;                           // right after take-off: below 10 UU
+            step(press);
+            peak = std::max(peak, pc.position().y);
+            if (pc.onGround() && i > 10) break;
+        }
+        const float rise = peak - y0;
+        LOG_INFO("DOUBLEJUMP mode %d: rise %.2f m", mode, rise);
+        if (mode == 0) check(std::fabs(rise - pc.robotParams().jumpHeight) < 0.4f, "single jump peaks at JumpHeight (" + std::to_string(rise).substr(0, 4) + " m)");
+        if (mode == 1) check(std::fabs(rise - (pc.robotParams().jumpHeight + pc.robotParams().doubleJumpHeight)) < 0.6f,
+                             "jump + apex press peaks at JumpHeight + DoubleJumpHeight (" + std::to_string(rise).substr(0, 4) + " m), later presses ignored");
+        if (mode == 2) check(rise < pc.robotParams().jumpHeight + 0.4f, "a second press below DoubleJumpMinHeight is refused (" + std::to_string(rise).substr(0, 4) + " m)");
+    }
+    LOG_INFO("DOUBLEJUMP SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

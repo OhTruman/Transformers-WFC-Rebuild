@@ -242,6 +242,9 @@ public:
     float beaconDamageBuff_ = 0.0f;       // TnBuffAmmoBeaconIncreaseDamage remaining (x1.15, BuffTime 1 s, refreshed in range)           // TnAbilityBarrier: SpawnBarrier timer active or the barrier exists (cooldown waits)           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
     int meleeVariant_ = 0;
     int carryingHeavy_ = 0;               // 1 flag, 2 bomb held as the current (WT_Heavy) weapon
+    // TnAcrobaticsManager jump states: 0 none / grounded / walked off a ledge, 1 Jumping or FallingFromJump, 2 DoubleJumping / Falling.
+    int jumpState_ = 0;
+    float jumpBaseY_ = 0.0f;              // height at take-off (DoubleJumpMinHeight is measured from it)
     bool heavyDropRequested_ = false;     // a weapon swap away from the heavy weapon (ChangedWeapon -> TossWeapon)              // AnimSet chooser: Melee_EnergonSword_01 / _03
     bool isMeleeing() const { return meleeState_ != 0; }
     // Knockback [CONF RE TARGETED_PASS3 §I]: Pawn.TakeDamage Momentum /= Mass (blueprint Mass 100). Robot: Pawn.AddVelocity

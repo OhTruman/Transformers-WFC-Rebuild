@@ -2877,7 +2877,9 @@ void World::tickBarrier(float dt) {
             if (clip >= 0) { assets::samplePose(barrierModel_, clip, b.t, false, lp); assets::skinPose(barrierModel_, lp, g, b.mesh); }
         }
     }
-    barriers_.erase(std::remove_if(barriers_.begin(), barriers_.end(), [](const BarrierState& b) { return !b.alive && b.delay < 0.0f; }), barriers_.end());
+    // A barrier that went away stays one step with alive=false for presentation consumers, then goes.
+    for (BarrierState& b : barriers_) if (!b.alive && b.delay < 0.0f) ++b.deadTicks;
+    barriers_.erase(std::remove_if(barriers_.begin(), barriers_.end(), [](const BarrierState& b) { return b.deadTicks >= 2; }), barriers_.end());
     for (size_t i = 0; i < match_.players().size(); ++i)
         if (Character* pc = participantPawnMutable((int)i)) {
             bool any = false;
@@ -3112,7 +3114,9 @@ void World::tickSentry(float dt) {
             for (const Sentry& s : sentries_) any |= s.owner == (int)i && (s.alive || s.delay >= 0.0f);
             pc->sentryAlive_ = any;
         }
-    sentries_.erase(std::remove_if(sentries_.begin(), sentries_.end(), [](const Sentry& s) { return !s.alive && s.delay < 0.0f; }), sentries_.end());
+    // A sentry that died stays one step with alive=false (Systems: SENTRY_EXPL on the reported death), then goes.
+    for (Sentry& s : sentries_) if (!s.alive && s.delay < 0.0f) ++s.deadTicks;
+    sentries_.erase(std::remove_if(sentries_.begin(), sentries_.end(), [](const Sentry& s) { return s.deadTicks >= 2; }), sentries_.end());
 }
 
 const World::Sentry& World::sentry() const {

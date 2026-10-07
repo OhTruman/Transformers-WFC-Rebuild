@@ -342,6 +342,7 @@ public:
         int owner = -1;                                // the participant whose ability spawned it
         float delay = -1.0f;                           // SpawnDelay countdown (>= 0 while pending)
         int dyn = -1, dynW = -1;                       // its dynamic collision sets (pawn / weapon worlds), pooled
+        int deadTicks = 0;                             // steps since it went away (kept one step with alive=false, then removed)
         render::MeshData mesh;
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
@@ -366,6 +367,7 @@ public:
         int owner = -1;                 // the match player whose ability spawned it (any participant)
         float delay = -1.0f;            // SpawnDelay countdown (>= 0 while pending)
         render::MeshData mesh;          // its posed WEP_DeployedTurret mesh
+        int deadTicks = 0;              // steps since it died (kept one step with alive=false for presentation consumers)
     };
     std::vector<Sentry> sentries_;      // one per owner
     mutable int lastSentryHit_ = -1;

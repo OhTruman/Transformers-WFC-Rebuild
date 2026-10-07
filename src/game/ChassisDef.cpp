@@ -213,6 +213,8 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     float eye = rs["BaseEyeHeight"].asFloat(150) * 0.01f;
     const assets::Json& acro = st["acrobatics"]["values"];
     R.jumpHeight = acro["JumpHeight"].asFloat(500) * 0.01f;
+    R.doubleJumpHeight = acro["DoubleJumpHeight"].asFloat(450) * 0.01f;
+    R.doubleJumpMinHeight = acro["DoubleJumpMinHeight"].asFloat(10) * 0.01f;
     R.dodgeSpeed = acro["DodgeSpeed"].asFloat(3000) * 0.01f;
     R.dodgeTime = acro["DodgeTime"].asFloat(0.5f);
     R.hoverJumpHeight = acro["HoverJumpHeight"].asFloat(500) * 0.01f;

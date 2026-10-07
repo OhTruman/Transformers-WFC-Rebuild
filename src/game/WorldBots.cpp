@@ -550,7 +550,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         moveDir = core::normalize(core::Vec3{toT.x, 0, toT.z});   // melee rush: straight at the target
     } else if (b.mission || (!inBand && !tooClose)) {
         // Path following.
-        while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1) { ++b.wp; b.bestDist = 1e9f; }
+        while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1 && b.path[b.wp].action != 3) { ++b.wp; b.bestDist = 1e9f; }
         // Look-ahead: skip a corner when the one after it is directly walkable (one check per step); vehicles carry momentum
         // past close corners and would otherwise turn back for them.
         if (b.wp + 1 < b.path.size() && b.path[b.wp].action == 0 && b.path[b.wp + 1].action == 0 &&
@@ -559,8 +559,10 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
             const BotNav::Waypoint& w = b.path[b.wp];
             core::Vec3 d = w.pos - pos; d.y = 0;
             const float dl = core::length(d);
-            if (w.action == 1) {        // jump link: jump when at its foot, then keep pushing toward the top
+            if (w.action == 1 || w.action == 3) {   // jump link: jump at its foot, keep pushing toward the top
                 if (dl < 6.0f && pc.onGround()) { jump = true; ++b.jumps; }
+                // double jump: the second press near the apex of the first (rising slower than 1 m/s) [TnAiActionNavigatePathSection]
+                if (w.action == 3 && !pc.onGround() && pc.jumpState_ == 1 && pc.velocity().y < 1.0f) jump = true;
                 if (dl < 1.2f || (pos.y > w.pos.y - 0.5f && dl < 3.0f)) { ++b.wp; b.bestDist = 1e9f; }
             }
             if (dl > 1e-3f) moveDir = d * (1.0f / dl);

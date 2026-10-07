@@ -72,10 +72,11 @@ bool BotNav::load(const std::string& path) {
         L.from = l["from_cell"].asInt(-1); L.to = l["to_cell"].asInt(-1);
         if (L.from < 0 || L.to < 0 || (size_t)L.from >= cells_.size() || (size_t)L.to >= cells_.size()) continue;
         const std::string kind = l["kind"].asString();
-        // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight) needs a double jump the rebuild's movement does not have (MP use
-        // unconfirmed): not a usable link [PARTIAL]. Unknown kinds are skipped too (never mistaken for a drop).
-        if (kind != "jump_up" && kind != "drop_down") continue;
-        L.jump = kind == "jump_up";
+        // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight; the MP robot double jump is CONFIRMED, RE addendum 10). Unknown
+        // kinds are skipped (never mistaken for a drop).
+        if (kind != "jump_up" && kind != "drop_down" && kind != "double_jump_up") continue;
+        L.jump = kind == "jump_up" || kind == "double_jump_up";
+        L.doubleJump = kind == "double_jump_up";
         L.robot = L.vehicle = false;
         const assets::Json& fm = l["forms"];
         for (size_t k = 0; k < fm.size(); ++k) { L.robot |= fm[k].asString() == "robot"; L.vehicle |= fm[k].asString() == "vehicle"; }
@@ -317,7 +318,7 @@ bool BotNav::buildPath(int s, int g, const core::Vec3& from, const core::Vec3& e
         if (li >= 0) {
             const Link& l = links_[(size_t)li];
             flush(l.fromPos, c0);
-            out.push_back({l.toPos, l.jump ? 1 : 2, c1});
+            out.push_back({l.toPos, l.doubleJump ? 3 : (l.jump ? 1 : 2), c1});
             apex = l.toPos; portals.push_back({apex, apex}); portalCell.push_back(c1);
             continue;
         }

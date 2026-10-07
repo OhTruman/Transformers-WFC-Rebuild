@@ -30,6 +30,9 @@ struct RobotParams {
     float damageMultiplier = 1.0f;                                                          // ROBODEF DamageMultiplier
     float selfDamageMultiplier = 0.45f;                                                     // ROBODEF SelfDamageMultiplier
     float jumpSpeed() const { return std::sqrt(2.0f * core::config::kGravity * jumpHeight); }   // JumpZ (ApplyTransformer)
+    // TnAcrobaticsManager double jump [CONF RE addendum 10]: SharedAcrobatics DoubleJumpHeight 450 UU, DoubleJumpMinHeight 10 UU.
+    float doubleJumpHeight = 4.5f, doubleJumpMinHeight = 0.10f;
+    float doubleJumpSpeed() const { return std::sqrt(2.0f * core::config::kGravity * doubleJumpHeight); }
 };
 
 // Vehicle form. formType: TnCarFormBlueprint (car), TnTruckFormBlueprint (truck), TnTankFormBlueprint (tank),

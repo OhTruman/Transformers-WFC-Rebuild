@@ -57,6 +57,7 @@ private:
     void runXpTest();
     void runBotObjectiveTest();
     void runExtraBodyTest();
+    void runDoubleJumpTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
