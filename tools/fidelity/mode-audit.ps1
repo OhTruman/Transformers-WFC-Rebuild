@@ -14,7 +14,7 @@
 #
 #   .\tools\fidelity\mode-audit.ps1 -Root work\ab\<target> -OutDir <dir> [-Modes TDM,DM,DOM,KOTH,CTF,EXT] [-MapId 508] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Modes = @("TDM", "DM", "DOM", "KOTH", "CTF", "EXT"),
-      [int]$MapId = 508, [hashtable]$Goals = @{ TDM = 10; DM = 10; DOM = 0; KOTH = 0; CTF = 1; EXT = 1 }, [int]$MatchTimeoutS = 420,
+      [int]$MapId = 508, [hashtable]$Goals = @{ TDM = 10; DM = 10; DOM = 0; KOTH = 0; CTF = 0; EXT = 0 }, [int]$MatchTimeoutS = 420, [switch]$AuthoredGoals,
       [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -25,7 +25,12 @@ $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-P
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "mode.$id" $status $null $note $owner }
 $objective = @("DOM", "KOTH", "CTF", "EXT")
 $rows = New-Object System.Collections.Generic.List[object]
+$Modes = @($Modes | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })   # -File passes "A,B" as one string
 foreach ($mode in $Modes) {
+    # Objective modes need short goals through the lobby host options (PointsToWin / TimeLimit; Gameplay: WFC_LIFECYCLE skews
+    # objective scoring). Until a script hook exists they would run to the authored goal (DOM / KOTH 400): skip unless asked.
+    if ($objective -contains $mode -and -not $AuthoredGoals -and [int]$Goals[$mode] -le 0) {
+        Res "$mode" "SKIP" "objective mode needs short lobby goals (PointsToWin / TimeLimit host options; asked Frontend for a script hook) - run with -AuthoredGoals to play the authored goal" "Experimental"; continue }
     $d = Join-Path $OutDir $mode; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
     $team = $mode -ne "DM"; $f = if ($team) { 3 } else { 0 }; $e = if ($team) { 4 } else { 7 }
