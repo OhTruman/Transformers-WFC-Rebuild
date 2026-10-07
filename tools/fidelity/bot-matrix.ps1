@@ -13,7 +13,7 @@
 # GPU: the default matrix is ~15 min of graphics - send Integration a "long GPU run" note first.
 #
 #   .\tools\fidelity\bot-matrix.ps1 -Root work\ab\<target> -OutDir <dir> [-Matrix default|quick] [-Seconds 60] [-Difficulty 1] [-ReportOnly]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("default", "quick", "difficulty")][string]$Matrix = "default",
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("default", "quick", "difficulty", "legacy")][string]$Matrix = "default",
       [int]$Seconds = 60, [int]$Difficulty = 1, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -33,7 +33,10 @@ if ($Matrix -eq "default") {
     # MIXED difficulty (Gameplay 42d991d ?BotDifficultyAutobot / ?BotDifficultyDecepticon via Frontend WFC_LOBBY_OPTIONS): 4 v 4 bots,
     # HARD on one faction and EASY on the other, then swapped (cancels side bias). Team 0 = Autobot, 1 = Decepticon.
 }
-if ($Matrix -eq "difficulty") { $runs = @() }
+if ($Matrix -in "difficulty", "legacy") { $runs = @() }
+# REGRESSION (Frontend 2d226a0): a profile saved by 8c2b6e3 has only BotsFriendly / BotsEnemy; on load it must migrate to the
+# per-faction keys, so the launch URL carries ?BotsAutobot=3?BotsDecepticon=4 and all 8 participants spawn (it was 0 bots)
+if ($Matrix -in "default", "legacy") { $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; tag = "legacyprofile"; legacy = $true } }
 if ($Matrix -in "default", "difficulty") {
     if ($H.Contains("WFC_LOBBY_OPTIONS")) {
         $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 4; e = 4; tag = "mixA"; hardTeam = 0; lobby = "BotsAutobot=4;BotsDecepticon=4;BotDifficultyAutobot=2;BotDifficultyDecepticon=0" }
@@ -48,7 +51,7 @@ foreach ($r in $runs) {
     $lg = Join-Path $d "wfc.log"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        (Get-BotProfile $r.f $r.e $diff) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        $(if ($r.legacy) { "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$($r.f)`nBotsEnemy=$($r.e)`nBotDifficulty=$diff`n" } else { (Get-BotProfile $r.f $r.e $diff) }) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($r.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
         $s = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
                "call:Online.EditGameMode,$($r.mode)", "call:Online.PlayPrivateGame,$($r.mode)", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$($mapId[$r.map])", "wait:t=1",
@@ -98,6 +101,12 @@ foreach ($r in $runs) {
         median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; loaded_mb = $loadedMb; hard_team = $r.hardTeam
         hard_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -eq $r.hardTeam }).Count })
         easy_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -ne $r.hardTeam -and $_.kt -ge 0 }).Count }); suicides = $suicides; team_kills = $teamKills; abilities = $abil.Count; killstreaks = $streaks; flying_bots = $flyers; knockoff_kills = $fellKills; clean_exit = $clean })
+    if ($r.legacy) {
+        $url = @($lines | Where-Object { $_ -match 'FLOW level.begin level=Match' } | Select-Object -First 1)[0]
+        $mig = $url -match ('BotsAutobot={0}' -f $r.f) -and $url -match ('BotsDecepticon={0}' -f $r.e)
+        $prof = Get-Content (Join-Path $d "wfc_profile.ini") -Raw -ErrorAction SilentlyContinue
+        Res "$tag.migrated" $(if ($mig -and $players.Count -eq $want) { "PASS" } else { "FAIL" }) ("old-format profile (BotsFriendly {0} / BotsEnemy {1} only): launch URL per-faction keys present {2}; spawned {3} of {4}; profile now has BotsAutobot {5}" -f $r.f, $r.e, $mig, $players.Count, $want, [bool]($prof -match 'BotsAutobot=')) "Frontend"
+    }
     Res "$tag.spawned" $(if ($players.Count -eq $want -and $teamOk) { "PASS" } elseif ($players.Count) { "FAIL" } else { "UNKNOWN" }) ("distinct spawned players {0} of {1} (local + {2} friendly + {3} enemy); team split correct {4}" -f $players.Count, $want, $r.f, $r.e, $teamOk) "Gameplay"
     # a single enemy bot can roam a large map for 60 s without meeting the scripted (wall-walking) player: no contact is not a
     # combat defect there (8c2b6e3 0v1: the bot roamed toward a goal 433 m away, never saw the player) -> INFO; >= 2 enemies must fight
