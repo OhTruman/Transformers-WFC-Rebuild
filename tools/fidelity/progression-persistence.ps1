@@ -6,7 +6,8 @@
 # From the flow traces (progression.xp per award with its transaction id, progression.match end with lastMatchXp, levelUp,
 # challenge) and the saved [Progression] section after each run:
 #   awarded       run A awards XP at all (else UNKNOWN: no kills / no award feed in this build)
-#   no_duplicates a transaction id is awarded once per run
+#   no_duplicates an award (transaction id + announcement) is recorded once per run; one transaction (one kill event) legitimately
+#                 carries several awards: Kill + First Blood + Far and Away share an id (09b, 2026-10-06 harness defect)
 #   match_sum     per class: progression.xp awards + progression.challenge tier XP (Prime -> all four classes) == the saved
 #                 LastMatch<class> (Frontend semantics 2026-10-06; xp=0 awards are legitimate when CanGainXp is false)
 #   saved_A       the profile after A holds XP<class> == run A's running total
@@ -78,7 +79,7 @@ else {
             $aw = @(Awards $tag); $me = @(MatchEnd $tag)
             $awarded = @($aw | Where-Object { [long]$_.xp -gt 0 })
             if ($tag -eq "A") { Res "awarded" $(if ($awarded.Count) { "PASS" } else { "UNKNOWN" }) ("run A: {0} XP awards totalling {1} ({2})" -f $awarded.Count, (($awarded | ForEach-Object { [long]$_.xp } | Measure-Object -Sum).Sum), ((@($aw | ForEach-Object { "$($_.transaction):$($_.xp)" }) | Select-Object -First 8) -join " ")) "Frontend/Gameplay" }
-            $dup = @($aw | Group-Object transaction | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+            $dup = @($aw | Group-Object { "$($_.transaction)|$($_.announcement)|$($_.xp)" } | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
             # producer -> consumer hand-off by transaction id (the local player = the player whose ids the consumer saw)
             $wl = Join-Path $OutDir "wfc_$tag.log"
             $prod = if (Test-Path $wl) { @(Select-String $wl -Pattern '\] XP p(\d+) txn (\d+) (\S+) \+(-?\d+)' | ForEach-Object { [pscustomobject]@{ p = $_.Matches[0].Groups[1].Value; txn = $_.Matches[0].Groups[2].Value; ev = $_.Matches[0].Groups[3].Value; xp = [long]$_.Matches[0].Groups[4].Value } }) } else { @() }
@@ -88,9 +89,13 @@ else {
                 $local = @($prod | Where-Object { $cons -contains $_.txn } | ForEach-Object { $_.p } | Select-Object -First 1)[0]
                 $mine = @($prod | Where-Object { $_.p -eq $local } | ForEach-Object { $_.txn } | Select-Object -Unique)
                 $lost = @($mine | Where-Object { $cons -notcontains $_ }); $extra = @($cons | Where-Object { $mine -notcontains $_ })
+                # per transaction, the number of awards produced == the number consumed (none dropped / doubled inside a transaction)
+                $pc = @{}; foreach ($x in @($prod | Where-Object { $_.p -eq $local })) { $pc[$x.txn] = [int]$pc[$x.txn] + 1 }
+                $cc = @{}; foreach ($x in $aw) { $cc["$($x.transaction)"] = [int]$cc["$($x.transaction)"] + 1 }
+                $lost += @($pc.Keys | Where-Object { $cons -contains $_ -and $pc[$_] -ne $cc[$_] } | ForEach-Object { "$_ (produced $($pc[$_]) awards, consumed $($cc[$_]))" })
                 Res "handoff_$tag" $(if ($null -eq $local) { "FAIL" } elseif ($lost.Count -or $extra.Count) { "FAIL" } else { "PASS" }) ("run {0}: local player p{1}; produced {2} / consumed {3}; produced but not consumed {4}; consumed but not produced {5}" -f $tag, $local, $mine.Count, $cons.Count, $(if ($lost.Count) { $lost -join "," } else { "none" }), $(if ($extra.Count) { $extra -join "," } else { "none" })) "Gameplay/Frontend"
             }
-            Res "no_duplicates_$tag" $(if ($dup.Count) { "FAIL" } else { "PASS" }) ("run {0}: transaction ids awarded more than once: {1}" -f $tag, $(if ($dup.Count) { $dup -join "," } else { "none" })) "Frontend"
+            Res "no_duplicates_$tag" $(if ($dup.Count) { "FAIL" } else { "PASS" }) ("run {0}: awards (transaction|announcement|xp) recorded more than once: {1}" -f $tag, $(if ($dup.Count) { $dup -join "," } else { "none" })) "Frontend"
             if ($me.Count) { $prof = if ($tag -eq "A") { $profA } else { $profB }; $rx = RunXp $tag
                 $badM = @($rx.Keys | Where-Object { [long]$prof["LastMatch$_"] -ne $rx[$_] })
                 Res "match_sum_$tag" $(if (-not $rx.Count) { "UNKNOWN" } elseif ($badM.Count) { "FAIL" } else { "PASS" }) ("run {0} per class (awards + challenge XP vs saved LastMatch): {1}; match end level {2}, saved {3}" -f $tag, ((@($rx.Keys | ForEach-Object { "$_ $($rx[$_]) vs $($prof["LastMatch$_"])" })) -join "; "), $me[-1].level, $me[-1].saved) "Frontend" }
