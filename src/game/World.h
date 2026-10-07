@@ -143,6 +143,14 @@ public:
     void setParticipantBuffAudio(int player, const std::string& buffClass, bool active, int team, const core::Vec3& pos);
     void setParticipantHoverAudio(int player, int hoverState, const core::Vec3& pos);
     void onParticipantGone(int player);
+    // [Systems M09f] A participant's body audio, once per step: robot foley (footsteps / jump / land / pivots / idle from its
+    // animation notifies), the transform notifies, and the vehicle component (engine / tread / boost / jump / roll ...) from
+    // `vehicle` (the same VehicleFormSignals the local pawn's audio is driven by; .vehicle false outside vehicle form).
+    // Attached to the pawn. Beyond kParticipantBodyCullM from the listener (beyond every body cue's audible range) nothing
+    // runs and its vehicle loops stop - the 33-participant budget. `alive` false: everything stops silently.
+    void tickParticipantBodyAudio(int player, const std::string& chassisKey, const Character& pawn,
+                                  const VehicleFormSignals& vehicle, bool alive, float dt);
+    int participantBodiesActive() const;          // diagnostics: participants inside the cull radius
     // Optional: where participant `player`'s pawn is now (sounds follow it); without it they stay at the cast position.
     std::function<bool(int player, core::Vec3& out)> participantPositionHook;
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
@@ -317,6 +325,17 @@ private:
     std::vector<ParticipantNotify> participantNotifies_;          // [Systems M09d] delayed Skill_ notifies of bots
     std::set<std::string> participantProfiles_;                   // bot chassis whose cue set is registered this level
     bool localCloakAnim_ = false;                                 // [Systems M09e] cloak on -> Nav_CloakActivate notifies
+    struct ParticipantBody {                                       // [Systems M09f]
+        std::string key;
+        RobotFoley foley;
+        VehicleAudio vehicle;
+        VehicleFormAudio form;
+        bool culled = true, prevTransforming = false, prevGrounded = true;
+        int transformNotify = 0;
+        Form transformTarget = Form::Robot;
+    };
+    std::map<int, ParticipantBody> participantBodies_;
+    static constexpr float kParticipantBodyCullM = 70.0f;
     std::set<int> participantCloakAnim_;                          // participants whose cloak is on
     // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*) for a pawn, if a profile carries those clips.
     // In VERSUS they are correctly silent: the clips (AI_CQC_ROBO_ANIM*) and BL_CHR_CQC cues are cooked only into campaign /
