@@ -48,6 +48,8 @@ $popDef = @{
 # including the human: the human's side gets N - 1 bots, the other side N (human-relative ?BotsFriendly / ?BotsEnemy; the run
 # profile has no faction keys, so these apply).
 $recPerSide = @{ "502" = 14; "504" = 12; "510" = 11; "501" = 11; "508" = 10; "507" = 10; "509" = 9; "503" = 9 }
+# "recffa": the map's recommended FFA TOTAL incl. the human (AssetTools recommended_players.json) -> BotsEnemy = total - 1
+$recFfa = @{ "502" = 21; "504" = 18; "510" = 16; "501" = 16; "508" = 15; "507" = 15; "509" = 14; "503" = 14 }
 function Pct($v, $p) { if (-not $v.Count) { return $null }; $s = @($v | Sort-Object); return [Math]::Round($s[[Math]::Min($s.Count - 1, [int][Math]::Floor($p * $s.Count))], 2) }
 $rows = New-Object System.Collections.Generic.List[object]
 foreach ($resol in $Resolutions) { $rw = [int]($resol -split 'x')[0]; $rh = [int]($resol -split 'x')[1]   # NOT $res (the results collection)
@@ -55,6 +57,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     $P = $popDef[$pop]
     if ($pop -eq "rec") { $n = $recPerSide["$map"]; if (-not $n) { continue }
         $P = @{ mode = "TDM"; want = 2 * $n; opts = "ExtendedPlayers=1;BotsFriendly=$($n - 1);BotsEnemy=$n" } }
+    if ($pop -eq "recffa") { $n = $recFfa["$map"]; if (-not $n) { continue }
+        $P = @{ mode = "DM"; want = $n; opts = "ExtendedPlayers=1;BotsEnemy=$($n - 1)" } }
     if (-not $P) { continue }
     $tag = "{0}_{1}_{2}" -f $map, $pop, $resol; $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
