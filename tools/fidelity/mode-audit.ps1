@@ -71,7 +71,7 @@ foreach ($mode in $Modes) {
         $scores = @($L | Where-Object { $_ -match '\] MATCH score ' })
         $endL = @($L | Where-Object { $_ -match '\] MATCH end ' })[0]
         $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }
-        $winner = if ($endL) { [regex]::Match($endL, 'winner=(\S+)').Groups[1].Value } else { "" }
+        $winner = if ($endL) { $wm = [regex]::Match($endL, 'winner(?:_team)?=(\S+)'); $wm.Groups[1].Value } else { "" }   # old winner= / new winner_team=
         $endT = if ($endL) { [regex]::Match($endL, ' t=(\d+)').Groups[1].Value } else { "" }
         $results = [bool](@($L | Where-Object { $_ -match 'to=GameEnded' }).Count) -and [bool](@($L | Where-Object { $_ -match 'EndGameStats_GFX_1 opened=true' }).Count)
         $saved = [bool](@($L | Where-Object { $_ -match 'progression.match end=1 .*saved=1' }).Count)
@@ -84,8 +84,33 @@ foreach ($mode in $Modes) {
         $scSt = if ($scores.Count) { "PASS" } elseif ($objective -contains $mode) { "INFO" } else { "FAIL" }
         Res "$tag.scoring" $scSt ("{0} MATCH score lines (last: {1}); {2} kills{3}" -f $scores.Count, $rows[-1].last_score, $kills, $(if ($objective -contains $mode -and -not $scores.Count) { "; objective score changes are not logged by this build - judged by the end reason" } else { "" })) "Gameplay"
         # CTF / EXT may legitimately end on time (round / time cap); elsewhere the shortened score limit is the expected end
-        $endOk = ($reason -eq "score_limit") -or (@("CTF", "EXT") -contains $mode -and $reason -eq "time_limit")
+        $isScore = $reason -in "score_limit", "Score"; $isTime = $reason -in "time_limit", "Time"
+        $endOk = $isScore -or (@("CTF", "EXT") -contains $mode -and $isTime)
         Res "$tag.end" $(if ($endOk) { "PASS" } elseif ($reason) { "PARTIAL" } else { "FAIL" }) ("MATCH end reason={0} winner={1} t={2}s" -f $(if ($reason) { $reason } else { "(none)" }), $winner, $endT) "Gameplay"
+        # Gameplay's audit lines (after a7f5c95): countdown 10 s, wave respawn 5 s (min 3), CTF rounds (5 s between, attackers swap),
+        # time-limit end at start + time_limit. Skipped on builds without them.
+        $startL = @($L | Where-Object { $_ -match '\] MATCH start mode=' })[0]
+        if ($startL) {
+            $st = [double][regex]::Match($startL, ' t=([\d.]+)').Groups[1].Value; $tl = [double][regex]::Match($startL, 'time_limit=([\d.]+)').Groups[1].Value
+            Res "$tag.countdown" $(if ([Math]::Abs($st - 10) -le 0.5) { "PASS" } else { "FAIL" }) ("match started at t={0} s after the pending phase (MatchAutoStartCountdown 10 s)" -f $st) "Gameplay"
+            $rw = @($L | Where-Object { $_ -match '\] MATCH respawn .*reason=wave' } | ForEach-Object { [double][regex]::Match($_, 'delay_s=([\d.]+)').Groups[1].Value })
+            if ($rw.Count) { $badRw = @($rw | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.25 })
+                Res "$tag.respawn_wave" $(if ($badRw.Count) { "FAIL" } else { "PASS" }) ("{0} wave respawns; delays off 5.0 s (+-0.25): {1}" -f $rw.Count, $(if ($badRw.Count) { ($badRw | Select-Object -First 8) -join ", " } else { "none" })) "Gameplay" }
+            $endT = if ($endL) { [double][regex]::Match($endL, ' t=([\d.]+)').Groups[1].Value } else { $null }
+            if ($isTime -and $endT -and $tl -gt 0 -and $mode -ne "CTF") {
+                Res "$tag.time_limit" $(if ([Math]::Abs(($endT - $st) - $tl) -le 1.5) { "PASS" } else { "FAIL" }) ("time-limit end: played {0:N1} s of time_limit {1} s" -f ($endT - $st), $tl) "Gameplay" }
+            if ($mode -eq "CTF") {
+                $re = @($L | Where-Object { $_ -match '\] MATCH round end ' }); $rs = @($L | Where-Object { $_ -match '\] MATCH round start ' })
+                $gaps = @(); $swapOk = $true
+                foreach ($e1 in $re) { $n = [int][regex]::Match($e1, ' n=(\d+)').Groups[1].Value; $te = [double][regex]::Match($e1, ' t=([\d.]+)').Groups[1].Value; $na = [regex]::Match($e1, 'next_attacking=(-?\d+)').Groups[1].Value
+                    $s1 = @($rs | Where-Object { [int][regex]::Match($_, ' n=(\d+)').Groups[1].Value -eq $n + 1 })[0]
+                    if ($s1) { $gaps += [Math]::Round([double][regex]::Match($s1, ' t=([\d.]+)').Groups[1].Value - $te, 2); if ([regex]::Match($s1, 'attacking=(-?\d+)').Groups[1].Value -ne $na) { $swapOk = $false } }
+                    $prevAtt = @($rs | Where-Object { [int][regex]::Match($_, ' n=(\d+)').Groups[1].Value -eq $n })[0]
+                    if ($prevAtt -and [regex]::Match($prevAtt, 'attacking=(-?\d+)').Groups[1].Value -eq $na) { $swapOk = $false } }
+                $gapBad = @($gaps | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.5 })
+                Res "$tag.ctf_rounds" $(if (-not $re.Count -and -not $isScore) { "FAIL" } elseif ($gapBad.Count -or -not $swapOk) { "FAIL" } else { "PASS" }) ("{0} round ends, {1} round starts; gaps between rounds {2} s (expect 5.0); attackers swap {3}" -f $re.Count, $rs.Count, ($gaps -join ", "), $swapOk) "Gameplay"
+            }
+        }
         Res "$tag.results" $(if ($results) { "PASS" } else { "FAIL" }) ("GameEnded + EndGameStats movie opened: {0}" -f $results) "Frontend"
         Res "$tag.saved" $(if ($saved) { "PASS" } else { "FAIL" }) ("progression.match end saved=1: {0}" -f $saved) "Frontend"
         Res "$tag.lobby" $(if ($unl -and $lobby) { "PASS" } else { "FAIL" }) ("match.unloaded {0}; back in the game lobby {1}" -f $unl, $lobby) "Frontend"
