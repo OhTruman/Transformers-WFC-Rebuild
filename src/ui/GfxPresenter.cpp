@@ -228,6 +228,7 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
             if (extras_[i].object == sa[0]) { rt_.dataStores().forgetMovie(sa[0]); deferredErase_.push_back(sa[0]); }
         return Value();
     }
+    if (fn.find("PostProcessChain") != std::string::npos) { rt_.bridge(m.object(), fn, sa); return Value(); }   // HUD screen effect state
     if (fn.rfind("Self.", 0) == 0) { frontend::FlowTrace::emit("bridge.unhandled", {{"fn", fn}, {"movie", m.object()}}); return Value(); }
     if (fn == "Online.CheckIsProfileReady") {
         // TnOnlineActionScriptBinding.CheckIsProfileReady [CONFIRMED script]: a ready profile -> OwnerMovie.Invoke(

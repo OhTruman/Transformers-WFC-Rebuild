@@ -318,6 +318,16 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Game.GetLanguageCode") return BridgeValue("INT");
     if (fn == "Game.GetRegionCode") return BridgeValue("NA");
     if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
+    // Hud_GFX: the AS wrapper DeactivatePostProcessChain(x) calls the native 'DeactivePostProcessChain' (sic) and drops x;
+    // Deactivate clears the single active chain, Activate(id) replaces it [CONFIRMED, RE 6bbf2cb].
+    if (fn == "Self.DeactivePostProcessChain" || fn == "Self.DeactivatePostProcessChain" || fn == "Self.ActivatePostProcessChain") {
+        const int chain = fn == "Self.ActivatePostProcessChain" ? std::atoi(arg(0).c_str()) : -1;
+        if (chain != hudPostChain_) {
+            hudPostChain_ = chain;
+            FlowTrace::emit("hud.postProcessChain", {{"chain", chain == 0 ? "StaticDischarge" : chain == 1 ? "LowHealth" : chain < 0 ? "none" : std::to_string(chain)}, {"movie", movie}});
+        }
+        return {};
+    }
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
