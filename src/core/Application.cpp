@@ -166,6 +166,7 @@ bool Application::init() {
     if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
     if (std::getenv("WFC_EXTRABODYTEST")) { runExtraBodyTest(); return false; }    // Car8-10 / Frenzy / Rumble / Laserbeak
     if (std::getenv("WFC_DOUBLEJUMPTEST")) { runDoubleJumpTest(); return false; }  // robot double jump (RE addendum 10)
+    if (std::getenv("WFC_SPAWNFILLTEST")) { runSpawnFillTest(); return false; }    // 32 v 32 / FFA 64 spawns (generated points)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4693,6 +4694,156 @@ void Application::runDoubleJumpTest() {
         if (mode == 2) check(rise < pc.robotParams().jumpHeight + 0.4f, "a second press below DoubleJumpMinHeight is refused (" + std::to_string(rise).substr(0, 4) + " m)");
     }
     LOG_INFO("DOUBLEJUMP SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_SPAWNFILLTEST (user request via Integration): on the loaded map, 32 v 32 TDM and FFA 64 (?ExtendedPlayers=1). From the match
+// start: every pawn's clearance at the moment it spawns (nearest other live pawn, capsules overlap below 4 m horizontally within
+// 4 m of height); at t = 2 s all 64 alive and in play with no two capsules overlapping; 0 deaths in the first 5 s.
+void Application::runSpawnFillTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SPAWNFILL %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    for (int phase = 0; phase < 2; ++phase) {
+        const char* label = phase == 0 ? "32v32 TDM" : "FFA 64";
+        const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 0 ? "TDM?BotsAutobot=31?BotsDecepticon=32" : "DM?BotsEnemy=63") +
+                                "?BotDifficulty=1?ExtendedPlayers=1?TimeLimit=600";
+        game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
+        {   // a mode the map authors no starts for (Escalation co-op maps: one side, 4 starts) is not a versus layout: N/A
+            int a[2] = {0, 0}, ffa = 0;
+            for (const game::Match::Start& s : world_.match().starts()) if (!s.generated) { if (s.ffa) ++ffa; else if (s.team < 2) ++a[s.team]; }
+            if (world_.match().starts().empty()) { a[0] = a[1] = 1; ffa = 10; }   // not loaded yet: decided after launch
+            if (phase == 0 ? (a[0] == 0 || a[1] == 0) : (ffa + a[0] + a[1] < 10)) {
+                LOG_INFO("SPAWNFILL %s %s: N/A (authored starts: team0 %d, team1 %d, FFA %d)", world_.mapName().c_str(), label, a[0], a[1], ffa);
+                continue;
+            }
+        }
+        if (!world_.launchMatch(L)) { check(false, std::string(label) + ": launch"); continue; }
+        {
+            int a[2] = {0, 0}, ffa = 0;
+            for (const game::Match::Start& s : world_.match().starts()) if (!s.generated) { if (s.ffa) ++ffa; else if (s.team < 2) ++a[s.team]; }
+            if (phase == 0 ? (a[0] == 0 || a[1] == 0) : (ffa + a[0] + a[1] < 10)) {
+                LOG_INFO("SPAWNFILL %s %s: N/A (authored starts: team0 %d, team1 %d, FFA %d)", world_.mapName().c_str(), label, a[0], a[1], ffa);
+                continue;
+            }
+        }
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        const int total = (int)world_.match().players().size();
+        std::vector<double> spawnedAt((size_t)total, -1.0);
+        std::vector<float> firstSpawnMatch((size_t)total, -1.0f);   // match time of each participant's first spawn
+        std::vector<float> lastHurtMatch((size_t)total, -100.0f);   // match time a bot last took damage
+        // per-participant trail (every 15 steps): form, speed, goal - printed for unforced falls
+        std::vector<std::string> trail((size_t)total);
+        platform::InputFrame idle;
+        std::vector<bool> was((size_t)total, false);
+        float minSpawn = 1e9f; int spawnsSeen = 0, spawnOverlaps = 0;
+        double started = -1.0, t = 0.0;
+        int aliveAt2 = -1, inPlayAt2 = -1, everAt2 = -1; float minPairAt2 = 1e9f; int overlapsAt2 = -1, deaths5 = -1, kills5 = -1, envDeaths5 = -1, laterFalls5 = 0, knocked5 = 0;
+        std::vector<bool> ever((size_t)total, false);
+        std::vector<float> rad((size_t)total, 2.0f), hh((size_t)total, 2.0f);
+        auto posOf = [&](int p, core::Vec3& out) -> bool {
+            const game::Character* c = nullptr;
+            if (p == me) { if (world_.localPlayerDead()) return false; c = &world_.player().pawn(); }
+            for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->matchPlayer() == p) { if (!o->spawned()) return false; c = &o->pawn(); }
+            if (!c) return false;
+            out = c->position(); rad[(size_t)p] = c->cylinderRadius(c->moveForm()); hh[(size_t)p] = c->cylinderHalfHeight(c->moveForm());
+            return true;
+        };
+        // capsule gap: horizontal distance minus both radii while the cylinders overlap in height (negative = overlap)
+        auto gapOf = [&](int p, int q, const core::Vec3& a, const core::Vec3& b) {
+            if (std::fabs(a.y - b.y) >= hh[(size_t)p] + hh[(size_t)q]) return 1e9f;
+            return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.z - b.z) * (a.z - b.z)) - rad[(size_t)p] - rad[(size_t)q];
+        };
+        for (int i = 0; i < 60 * 70; ++i) {
+            world_.handleInput(idle, dt); world_.tick(dt); t += dt;
+            if (started < 0.0 && world_.match().state() == game::Match::State::InProgress) started = t;
+            if (started < 0.0) continue;
+            const double since = t - started;
+            // spawn moments
+            std::vector<core::Vec3> pos((size_t)total); std::vector<bool> live((size_t)total, false);
+            for (int p = 0; p < total; ++p) live[(size_t)p] = posOf(p, pos[(size_t)p]);
+            if (i % 15 == 0)
+                for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                    if (!o->spawned()) continue;
+                    const game::Character& c = o->pawn();
+                    const game::BotBrain* bb = world_.botBrain(o->matchPlayer());
+                    char buf[160];
+                    std::snprintf(buf, sizeof buf, " [%.2f %s%s v%.0f y%.0f %s%s]", world_.match().matchTime(), c.moveForm() == game::Form::Vehicle ? "VEH" : "ROB",
+                                  c.isTransforming() ? "*" : "", std::sqrt(c.velocity().x * c.velocity().x + c.velocity().z * c.velocity().z), c.position().y,
+                                  bb ? game::botGoalName(bb->goal.kind) : "-", bb && bb->wp < bb->path.size() ? (bb->path[bb->wp].action == 2 ? " DROP" : bb->path[bb->wp].action == 3 ? " DJ" : bb->path[bb->wp].action == 1 ? " JUMP" : "") : "");
+                    std::string& tr = trail[(size_t)o->matchPlayer()];
+                    tr += buf;
+                    if (tr.size() > 900) tr.erase(0, tr.size() - 900);
+                }
+            for (int p = 0; p < total; ++p)
+                if (const game::BotBrain* bb = world_.botBrain(p))
+                    lastHurtMatch[(size_t)p] = std::max(bb->lastDamageTime, world_.match().lastDamagedTime(p));   // last hit taken, any damage type
+            for (int p = 0; p < total; ++p) {
+                if (live[(size_t)p] && !was[(size_t)p]) {
+                    spawnedAt[(size_t)p] = t;
+                    if (firstSpawnMatch[(size_t)p] < 0.0f) firstSpawnMatch[(size_t)p] = world_.match().matchTime();
+                    float m = 1e9f;
+                    for (int q = 0; q < total; ++q) if (q != p && live[(size_t)q]) m = std::min(m, gapOf(p, q, pos[(size_t)p], pos[(size_t)q]));
+                    minSpawn = std::min(minSpawn, m); ++spawnsSeen; spawnOverlaps += m < -0.05f;
+                    if (m < -0.05f) LOG_INFO("SPAWNFILL overlap at spawn: p%d at (%.1f %.1f %.1f) capsule gap %.2f m to another pawn (start %d)", p,
+                                                  pos[(size_t)p].x, pos[(size_t)p].y, pos[(size_t)p].z, m, world_.match().lastSpawnStart(p));
+                }
+                was[(size_t)p] = live[(size_t)p];
+                if (live[(size_t)p]) ever[(size_t)p] = true;
+            }
+            if (aliveAt2 < 0 && since >= 2.0) {
+                aliveAt2 = 0; inPlayAt2 = 0; overlapsAt2 = 0; everAt2 = 0;
+                for (int p = 0; p < total; ++p) everAt2 += ever[(size_t)p];
+                for (int p = 0; p < total; ++p) {
+                    aliveAt2 += world_.match().players()[(size_t)p].alive;
+                    inPlayAt2 += live[(size_t)p] && pos[(size_t)p].y > world_.killZ() + 1.0f;
+                    for (int q = p + 1; q < total; ++q) if (live[(size_t)p] && live[(size_t)q]) {
+                        const float d = gapOf(p, q, pos[(size_t)p], pos[(size_t)q]);
+                        // contact within one step of travel (vehicle speeds ~0.3 m per step) is resolved next step: overlap = deeper than 0.35 m
+                        minPairAt2 = std::min(minPairAt2, d); overlapsAt2 += d < -0.35f;
+                        if (d < -0.35f) LOG_INFO("SPAWNFILL t=2 overlap p%d/p%d gap %.2f m forms %d/%d", p, q, d, (int)(rad[(size_t)p] != 2.0f), (int)(rad[(size_t)q] != 2.0f));
+                    }
+                }
+            }
+            if (since >= 5.0) {
+                // Early deaths by record type: Kill (combat, incl. self-damage kills by weapons), Suicide, EnvironmentDeath.
+                envDeaths5 = 0; laterFalls5 = 0; knocked5 = 0;
+                for (const game::GameplayEvent& e : world_.match().gameplayEvents()) {
+                    if (e.type != game::GameplayEventType::Suicide && e.type != game::GameplayEventType::EnvironmentDeath) continue;
+                    const bool weaponSelf = e.type == game::GameplayEventType::Suicide && !e.weapon.empty();
+                    // a spawn death: no killer, within 2 s of the victim's spawn (later falls are movement / combat, reported apart)
+                    const double alive = firstSpawnMatch[(size_t)e.victim] >= 0.0f ? (double)(e.time - firstSpawnMatch[(size_t)e.victim]) : 0.0;
+                    // knocked off: damaged within 3 s before the fall (explosion momentum) - a combat death, not a spawn death
+                    const bool knocked = e.time - lastHurtMatch[(size_t)e.victim] < 3.0f;
+                    if (!weaponSelf && !knocked) { if (alive < 2.0) ++envDeaths5; else ++laterFalls5; }
+                    if (knocked) ++knocked5;
+                    if (!weaponSelf && !knocked) LOG_INFO("SPAWNFILL   trail p%d:%s", e.victim, trail[(size_t)e.victim].c_str());
+                    const int st = world_.match().lastSpawnStart(e.victim);
+                    const bool gen = st >= 0 && (size_t)st < world_.match().starts().size() && world_.match().starts()[(size_t)st].generated;
+                    const core::Vec3 sp = st >= 0 ? world_.match().starts()[(size_t)st].pos : core::Vec3{0, 0, 0};
+                    LOG_INFO("SPAWNFILL early %s: p%d at (%.1f %.1f %.1f) t %.1f damage %s weapon %s (KillZ %.0f); hurt %.1f s before; alive %.1f s since its first spawn, last spawn at %s start %d (%.1f %.1f %.1f)",
+                             e.type == game::GameplayEventType::Suicide ? "suicide" : "environment death", e.victim, e.victimState.pos.x, e.victimState.pos.y,
+                             e.victimState.pos.z, e.time, e.damageType.c_str(), e.weapon.c_str(), world_.killZ(), e.time - lastHurtMatch[(size_t)e.victim],
+                             firstSpawnMatch[(size_t)e.victim] >= 0.0f ? e.time - firstSpawnMatch[(size_t)e.victim] : -1.0f, gen ? "GENERATED" : "authored", st, sp.x, sp.y, sp.z);
+                }
+                deaths5 = 0; kills5 = 0;
+                for (const game::MatchPlayer& mp : world_.match().players()) { deaths5 += mp.deaths; kills5 += mp.kills; }
+                break;
+            }
+        }
+        LOG_INFO("SPAWNFILL %s %s: %d participants; spawns %d, smallest capsule gap at spawn %.2f m (%d overlaps); t=2 s spawned %d, alive %d (all in play: %d), smallest capsule gap %.2f m (%d overlaps); first 5 s: %d deaths, %d combat kills, %d spawn / environment deaths",
+                 world_.mapName().c_str(), label, total, spawnsSeen, minSpawn, spawnOverlaps, everAt2, aliveAt2, (int)(inPlayAt2 == aliveAt2), minPairAt2, overlapsAt2, deaths5, kills5, deaths5 - kills5);
+        check(total == 64, std::string(label) + ": 64 participants");
+        check(everAt2 == total && inPlayAt2 == aliveAt2, std::string(label) + ": everyone in by t = 2 s (" + std::to_string(everAt2) + "/" + std::to_string(total) +
+              " spawned; " + std::to_string(aliveAt2) + " alive, all in play; the rest already killed in combat)");
+        check(spawnOverlaps == 0, std::string(label) + ": no pawn spawns overlapping another (smallest gap " + std::to_string(minSpawn).substr(0, 4) + " m)");
+        check(overlapsAt2 == 0, std::string(label) + ": no capsules overlap at t = 2 s (smallest gap " + std::to_string(minPairAt2).substr(0, 4) + " m)");
+        check(envDeaths5 == 0, std::string(label) + ": 0 spawn deaths in the first 5 s (" + std::to_string(envDeaths5) + "; combat kills " + std::to_string(kills5) +
+              ", knocked off after damage " + std::to_string(knocked5) + ", unforced falls > 2 s after spawning " + std::to_string(laterFalls5) +
+              ", weapon self-kills " + std::to_string(deaths5 - kills5 - envDeaths5 - laterFalls5 - knocked5) + ")");
+    }
+    LOG_INFO("SPAWNFILL SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

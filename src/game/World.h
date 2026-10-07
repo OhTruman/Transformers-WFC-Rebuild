@@ -360,6 +360,8 @@ public:
                         int owner = -1; float delay = -1.0f; int deadTicks = 0; };
     std::vector<AmmoBeacon> beacons_;           // one per owner (TnAbilitySpawnAmmoCrate for any participant)
     void requestAmmoBeacon(int owner);
+    void generateExtraStarts();
+    void separatePawns();                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
     void damageAmmoBeaconAt(size_t idx, float amount, int instigator);
     const AmmoBeacon& localBeacon() const;
     // TnSentryPawnAbility + TnAiSentryController (the local owner's, Default_TURRETDEF) [CONF RE §J + authored].

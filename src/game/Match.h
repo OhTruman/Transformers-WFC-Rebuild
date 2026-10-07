@@ -121,7 +121,8 @@ class Match {
 public:
     enum class State { None, PendingMatch, InProgress, MatchOver, Returned };
 
-    struct Start { std::string actor, cluster; int team = 255; bool ffa = false; core::Vec3 pos; float yaw = 0.0f; };
+    struct Start { std::string actor, cluster; int team = 255; bool ffa = false; core::Vec3 pos; float yaw = 0.0f;
+                   bool generated = false; };   // generated: extended-match spawn point (World::generateExtraStarts), after the authored ones
     struct Cluster {
         std::string actor; core::Vec3 center; bool initialSpawn = false; int faction = 255;
         std::vector<std::string> activeGameTypes;   // empty = every game type
@@ -177,6 +178,7 @@ public:
     std::vector<KillFeedEntry> killFeed() const;
     const std::vector<KillFeedEntry>& killHistory() const { return killHistory_; }
     float matchTime() const { return matchTime_; }
+    float lastDamagedTime(int p) const { return p >= 0 && (size_t)p < lastDamagedAt_.size() ? lastDamagedAt_[(size_t)p] : -100.0f; }
     const std::string& endReason() const { return endReason_; }
     int winnerPlayer() const { return winnerPlayer_; }
     float matchOverTimeLeft() const { return state_ == State::MatchOver ? std::max(0.0f, s_.matchOverCountdown - stateTime_) : 0.0f; }
@@ -202,7 +204,12 @@ public:
                players_[(size_t)a].team == players_[(size_t)b].team && players_[(size_t)a].team < 2;
     }
     // TnSpawnModifierComponent owners other than player pawns (positions in metres).
-    void setPlayerLocation(int p, const core::Vec3& pos) { if (p >= 0 && (size_t)p < players_.size()) locs_[(size_t)p] = pos; }
+    void setPlayerLocation(int p, const core::Vec3& pos, float radius = 2.0f) {
+        if (p < 0 || (size_t)p >= players_.size()) return;
+        locs_[(size_t)p] = pos;
+        if (radii_.size() < players_.size()) radii_.resize(players_.size(), 2.0f);
+        radii_[(size_t)p] = radius;   // the pawn's current cylinder (vehicle forms are larger): extended spawn clearance
+    }
     core::Vec3 playerLocation(int p) const { return (p >= 0 && (size_t)p < locs_.size()) ? locs_[(size_t)p] : core::Vec3{0, 0, 0}; }
 
     State state() const { return state_; }
@@ -230,6 +237,8 @@ private:
     State state_ = State::None;
     std::vector<MatchPlayer> players_;
     std::vector<core::Vec3> locs_;
+    std::vector<float> radii_;
+    std::vector<float> lastDamagedAt_;   // match time of each player's last recorded damage (any type; diagnostics)   // per player cylinder radius (setPlayerLocation)
     std::function<bool(const std::string&, std::string&)> chassisCheck_;
     int attackingTeam_ = 255, currentRound_ = 0;
     bool betweenRounds_ = false;
@@ -270,6 +279,11 @@ private:
     void endGame(int winnerPlayer, const std::string& reason);
     void restartPlayer(int p);
     int findPlayerStart(int p);
+public:
+    // CUSTOM-GAME EXTENSION: extra spawn points for extended matches (replaces any previous generated set; authored indices unchanged).
+    void setGeneratedStarts(const std::vector<Start>& extra);
+    int authoredStartCount() const { int n = 0; for (const Start& s : starts_) n += !s.generated; return n; }
+private:
     void updateClusters(float dt);
     float scoreCluster(const Cluster& c, int faction) const;
     void secondTimer();

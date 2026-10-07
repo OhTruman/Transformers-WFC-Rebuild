@@ -774,6 +774,50 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
     if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
+// Pawn blocking: UE pawns block each other (CollisionCylinder, bBlockActors) [CONF stock]; the native sweep is not reproduced, so
+// overlapping live pawns are pushed apart after movement, half each along the horizontal line between them, a push that would
+// enter world geometry being given to the other pawn [PROV: post-move cylinder push-out]. Each pawn's cylinder of its current form
+// (cylinderRadius / cylinderHalfHeight, as melee); ram damage / reactions are decided first by gameplayRamContacts. Bots yield to
+// the local player (the human moves only when the bot cannot), so a crowd never shoves or pins the human; no push enters walls.
+void World::separatePawns() {
+    if (!matchActive_) return;
+    struct P { Character* c; };
+    std::vector<P> ps;
+    ps.reserve(opponents_.size() + 1);
+    if (!localDead_) ps.push_back({&player_.pawn()});
+    for (MatchOpponent* o : opponents_) if (o->spawned()) ps.push_back({&o->pawn()});
+    const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
+    auto tryMove = [&](Character& c, const core::Vec3& d) {
+        const core::Vec3 a = c.position() + core::Vec3{0, 1.0f, 0};
+        float t;
+        if (col && col->segmentHit(a, a + d * 1.5f, t)) return false;
+        c.setPosition(c.position() + d);
+        return true;
+    };
+    for (int pass = 0; pass < 2; ++pass)   // a second pass settles pushes into third pawns
+    for (size_t i = 0; i < ps.size(); ++i)
+        for (size_t j = i + 1; j < ps.size(); ++j) {
+            Character& A = *ps[i].c; Character& B = *ps[j].c;
+            const float ra = A.cylinderRadius(A.moveForm()), rb = B.cylinderRadius(B.moveForm());
+            const core::Vec3 pa = A.position(), pb = B.position();
+            if (std::fabs(pa.y - pb.y) >= A.cylinderHalfHeight(A.moveForm()) + B.cylinderHalfHeight(B.moveForm())) continue;
+            float dx = pb.x - pa.x, dz = pb.z - pa.z;
+            float d = std::sqrt(dx * dx + dz * dz);
+            const float need = ra + rb;
+            if (d >= need) continue;
+            core::Vec3 n;
+            if (d < 1e-3f) { const float a = 2.399963f * (float)(i * 31 + j); n = {std::cos(a), 0.0f, std::sin(a)}; }   // coincident: a fixed spread
+            else n = {dx / d, 0.0f, dz / d};
+            const float push = need - d;
+            const core::Vec3 half = n * (push * 0.5f);
+            const bool humanA = &A == &player_.pawn();   // the local pawn is only ever ps[0]
+            if (humanA) { if (!tryMove(B, half * 2.0f)) tryMove(A, half * -2.0f); continue; }
+            const bool okA = tryMove(A, half * -1.0f), okB = tryMove(B, half);
+            if (!okA && okB) tryMove(B, half);
+            else if (okA && !okB) tryMove(A, half * -1.0f);
+        }
+}
+
 // Gameplay: TnTruckForm.AttemptToRam (Driving.OnRigidBodyCollision / RigidBodyTrigger) [CONF native M03 P8].
 // Only while nitro runs (RamState 1). The victim must be a TnPawn of another team with Mass <= MaxRamMass 1000,
 // once per pawn per nitro (notifyRamHit owns that registry and the impact cue). Robot victims enter
@@ -1120,6 +1164,7 @@ void World::tick(float dt) {
     for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
+    separatePawns();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
@@ -1281,6 +1326,98 @@ void World::resetForNewLevel() {
     for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
 }
 
+// CUSTOM-GAME EXTENSION (32 v 32 / FFA 64; PC ADAPTATION): maps author 20-30 team starts per side and 10-50 FFA starts, so an
+// extended match gets extra spawn points, generated once at launch (deterministic, no runtime search). Candidates ring each
+// authored start of the side (FFA: every start) at 4.5 m steps out to 40 m; a point is kept when it stands on walkable ground
+// (normal y >= 0.75, on the bot nav mesh when there is one), has the full pawn capsule clear (radius 2 m, height 4 m), is in line
+// of sight of its seed start (same area, not through a wall), lies above KillZ, is at least 4.5 m from every authored and
+// generated point, and (team games) stays out of the enemy start area: >= 25 m from every enemy start and nearer the own side's.
+// It faces as its seed start. Target: 32 per side (64 FFA) plus a margin of 12 beyond what the authored pool offers.
+void World::generateExtraStarts() {
+    const auto& starts = match_.starts();
+    const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
+    if (!col) { match_.setGeneratedStarts({}); return; }
+    const bool navOk = ensureBotNav();
+    const bool teamGame = match_.settings().teamGame;
+    const float R = core::config::kPawnRadius, H = 2.0f * core::config::kPawnHalfHeight, kSep = 4.5f;
+    std::vector<core::Vec3> taken;
+    for (const Match::Start& s : starts) if (!s.generated) taken.push_back(s.pos);
+    auto clear = [&](const core::Vec3& g) {
+        float t;
+        if (col->segmentHit(g + core::Vec3{0, 0.3f, 0}, g + core::Vec3{0, H + 0.2f, 0}, t)) return false;   // headroom
+        for (float hy : {0.6f, 2.0f, 3.6f})
+            for (int k = 0; k < 8; ++k) {
+                const float a = 0.785398f * (float)k;
+                const core::Vec3 c = g + core::Vec3{0, hy, 0};
+                if (col->segmentHit(c, c + core::Vec3{std::cos(a) * (R + 0.2f), 0, std::sin(a) * (R + 0.2f)}, t)) return false;
+            }
+        return true;
+    };
+    std::vector<Match::Start> extra;
+    auto fill = [&](int team, int want) {
+        std::vector<const Match::Start*> seeds, enemies;
+        for (const Match::Start& s : starts) {
+            if (s.generated) continue;
+            if (!teamGame) seeds.push_back(&s);
+            else if (!s.ffa && s.team == team) seeds.push_back(&s);
+            else if (!s.ffa && s.team != team) enemies.push_back(&s);
+        }
+        int made = 0;
+        for (float r = kSep; r <= 40.0f && made < want; r += kSep)
+            for (const Match::Start* sd : seeds) {
+                if (made >= want) break;
+                const int n = std::max(6, (int)std::round(6.2831853f * r / kSep));
+                for (int k = 0; k < n && made < want; ++k) {
+                    const float a = 6.2831853f * (float)k / (float)n + 0.37f * (float)(&*sd - &starts[0]);
+                    core::Vec3 c = sd->pos + core::Vec3{std::cos(a) * r, 0, std::sin(a) * r};
+                    float gy; core::Vec3 gn;
+                    if (!col->groundHeight(c.x, c.z, sd->pos.y + 2.0f, 2.5f, gy, gn) || gn.y < 0.75f) continue;
+                    c.y = gy;
+                    if (c.y < killZ_ + 5.0f) continue;
+                    bool hazard = hazardAt(c + core::Vec3{0, 1.0f, 0}) >= 0 || hazardAt(c + core::Vec3{0, 3.0f, 0}) >= 0;   // not in a kill / pain volume
+                    for (int q = 0; q < 4 && !hazard; ++q)
+                        hazard = hazardAt(c + core::Vec3{q == 0 ? R : q == 1 ? -R : 0.0f, 1.0f, q == 2 ? R : q == 3 ? -R : 0.0f}) >= 0;
+                    if (hazard) continue;
+                    bool near = false;
+                    for (const core::Vec3& q : taken) if (core::length(q - c) < kSep) { near = true; break; }
+                    if (near) continue;
+                    if (navOk && botNav_.findCell(c, 1.0f, 2.0f) < 0) continue;
+                    if (teamGame) {
+                        float dOwn = 1e9f, dEnemy = 1e9f;
+                        for (const Match::Start* s : seeds) dOwn = std::min(dOwn, core::length(s->pos - c));
+                        for (const Match::Start* s : enemies) dEnemy = std::min(dEnemy, core::length(s->pos - c));
+                        if (dEnemy < 25.0f || dEnemy < dOwn) continue;
+                    }
+                    float t;
+                    if (col->segmentHit(sd->pos + core::Vec3{0, 1.0f, 0}, c + core::Vec3{0, 1.0f, 0}, t)) continue;   // same area as its seed
+                    if (!clear(c)) continue;
+                    Match::Start g;
+                    g.actor = "Generated_" + std::to_string(extra.size()); g.cluster = sd->cluster;
+                    g.team = teamGame ? team : 255; g.ffa = !teamGame; g.pos = c; g.yaw = sd->yaw;
+                    extra.push_back(g); taken.push_back(c); ++made;
+                }
+            }
+        return made;
+    };
+    const int margin = 12;   // spare points: the extended safe check keeps 1 m beyond both cylinders
+    if (teamGame) {
+        for (int t = 0; t < 2; ++t) {
+            int authored = 0;
+            for (const Match::Start& s : starts) authored += !s.generated && (s.ffa || s.team == t);
+            const int want = std::max(0, match_.settings().maxPerTeam + margin - authored);
+            const int made = fill(t, want);
+            LOG_INFO("spawns: team %d: %d authored (team + FFA), %d generated of %d wanted", t, authored, made, want);
+        }
+    } else {
+        const int authored = match_.authoredStartCount();
+        const int want = std::max(0, match_.settings().maxPlayers + margin - authored);
+        const int made = fill(255, want);
+        LOG_INFO("spawns: FFA: %d authored, %d generated of %d wanted", authored, made, want);
+    }
+    match_.setGeneratedStarts(extra);
+}
+
+
 bool World::launchMatch(const MatchLaunch& l) {
     if (canonicalMapName(l.map) != mapName_ || !usingSlice_) {
         LOG_WARN("match: map %s is not the loaded map (%s); the world loads one map per session", l.map.c_str(), mapName_.c_str());
@@ -1298,6 +1435,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
     awards_.setXpScale(1.0f);
     startLocalMatch(l.settings);
+    if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
@@ -1578,10 +1716,10 @@ void World::killLocalPlayer(int killer, bool suicide, const std::string& damageT
 void World::tickMatch(float dt) {
     Character& pc = player_.pawn();
     if (!localDead_) {
-        match_.setPlayerLocation(localPlayer_, pc.position());
+        match_.setPlayerLocation(localPlayer_, pc.position(), pc.cylinderRadius(pc.moveForm()));
         if (pc.health().isDead()) killLocalPlayer(-1, false);   // damage without an instigator
     }
-    for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position());
+    for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position(), o->pawn().cylinderRadius(o->pawn().moveForm()));
     match_.tick(dt);
     // Live objective rules (DOM nodes, KOTH zone) while InProgress: pawns -> captures / scores -> the match rules.
     if (match_.state() == Match::State::InProgress && !match_.betweenRounds()) {
