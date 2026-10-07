@@ -9,3 +9,14 @@
 **Streets: the one placement with AnimSign3** (mesh Dome_Corridor_WindowScreen_STAT, which also carries AnimSign4 / 5 /
 AnimTes). View p00b shows the screen as a bright pale strip with faint detail, not black, and no fallback.
 Whether this is the correct energon-sign look or an overexposed / wrong frame is a HUMAN / Rendering check.
+
+## Follow-up (Rendering's request)
+- remnant_anim_pairs.jpg: p00d and p02d at t and t + 0.53 s. The waveform shapes / glyph lines differ, so **the fbook_ screens
+  ANIMATE** (mean abs frame diff 14 / 7 / 14 for p00d / p01d / p02d).
+- sign_isolation.jpg, Streets p00b, left to right:
+  - normal t, normal t + 0.53 s: a pale strip with faint pink glyphs; small change in the strip region (mean diff 0.31);
+  - WFC_SKIPMAT=AnimSign (signs hidden): a flat pale grey / white bar = the base AnimTes_staticLong;
+  - WFC_SKIPMAT=AnimTes_staticLong (base hidden): the sign glyphs alone read **pinkish-white, not cyan** (Rendering expects
+    AnimTest3 avg RGB 14, 61, 86 -> cyan).
+  => both layers are off: the base is pale, and the sign layer's colour is wrong (Rendering to check the AnimSign3 graph /
+  flipbook source / the 3x energon-noise path).
