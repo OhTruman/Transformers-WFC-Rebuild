@@ -328,8 +328,9 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
             if (regs_[i].movie == movie && regs_[i].markup == m && regs_[i].callback == arg(1)) { regs_.erase(regs_.begin() + (long)i); break; }
         return {};
     }
-    Collection c;
-    bool isColl = collection(m, c);
+    if (fn.rfind("Write", 0) == 0 || fn.rfind("Set", 0) == 0) invalidate();
+    bool isColl = false;
+    const Collection& c = cachedCollection(m, isColl);
     if (fn == "GetCollectionRowCount") {
         if (!isColl) FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});
         return BridgeValue((double)c.rows.size());
@@ -371,7 +372,15 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     return {};
 }
 
+const DataStores::Collection& DataStores::cachedCollection(const std::string& markup, bool& ok) {
+    CachedCollection& e = collCache_[markup];
+    if (e.gen != frameGen_) { e.c = Collection(); e.ok = collection(markup, e.c); e.gen = frameGen_; }
+    ok = e.ok;
+    return e.c;
+}
+
 std::vector<DataStores::Change> DataStores::poll() {
+    ++frameGen_;   // a new frame: collections are rebuilt on their next read
     std::vector<Change> out;
     for (Reg& r : regs_) {
         std::string v = read(r.markup);

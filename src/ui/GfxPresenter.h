@@ -120,6 +120,9 @@ private:
     void checkKillFeed(float dt);   // reveals the entering line after the shift; asserts the 22 px step
     std::string feedManagerPath_;
     float feedRevealIn_ = 0.0f;
+    float feedCheckFor_ = 0.0f;     // the feed's 22 px assertion runs only while lines move (after a new line)
+    bool labelsShown_ = false;      // QA labels container on the HUD (removed once when the list empties)
+    std::vector<std::string> objsScratch_;
     float feedMinGapLogged_ = 1e9f;
     float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
     void scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt);

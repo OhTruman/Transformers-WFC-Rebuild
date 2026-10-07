@@ -162,7 +162,9 @@ struct UiProf {
     void begin() { if (on()) t0 = std::chrono::steady_clock::now(); }
     void end() {
         if (!on()) return;
-        sum += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (ms > 4.0) LOG_INFO("uiprof slow %s %.2f ms", name, ms);   // one frame over budget
+        sum += ms;
         if (++n == 300) { LOG_INFO("uiprof %s avg %.3f ms (300 frames)", name, sum / n); sum = 0; n = 0; }
     }
 };
@@ -244,6 +246,7 @@ void GfxPresenter::extendedKillFeed(const Args& a) {
     {
         gfx::avm1::Value nl = vm.getV(vm.get(mgr, "messageQueue"), "0");
         if (alive(nl)) { vm.setV(nl, "_visible", gfx::avm1::Value(false)); vm.set(mgr, "__wfcPending", nl); feedRevealIn_ = 0.2f; }
+        feedCheckFor_ = 1.5f;
     }
     // After the call the queue holds the new line and up to 4 older ones (indices 0..4); the held lines follow at 5...
     std::vector<gfx::avm1::Value> keep;
@@ -762,6 +765,10 @@ void GfxPresenter::scrollPlayerList(gfx::Player& p, float& scroll, const platfor
 
 void GfxPresenter::checkKillFeed(float dt) {
     if (!hud_ || feedManagerPath_.empty()) return;
+    // Only while something can change: the 0.2 s reveal of a new line, then the shift into the slots (invisible work
+    // otherwise: path resolution and AS property reads every frame).
+    if (feedRevealIn_ <= 0.0f && feedCheckFor_ <= 0.0f) return;
+    feedCheckFor_ -= dt;
     gfx::Player& p = hud_->player();
     gfx::avm1::VM& vm = p.vm();
     gfx::DisplayObject* d = p.resolveTarget(feedManagerPath_, p.root());
@@ -810,11 +817,14 @@ void GfxPresenter::syncWorldLabels() {
     gfx::avm1::VM& vm = p.vm();
     gfx::MovieClip* root = p.root();
     if (!root || !root->script) return;
+    if (worldLabels_.empty() && !labelsShown_) return;   // nothing shown, nothing to remove
     gfx::avm1::Value box = vm.get(root->script, "__qaLabels_mc");
     if (worldLabels_.empty()) {
         if (box.isObject()) vm.callMethod(box, "removeMovieClip", {});
+        labelsShown_ = false;
         return;
     }
+    labelsShown_ = true;
     if (!box.isObject()) box = vm.callMethod(gfx::avm1::Value(root->script), "createEmptyMovieClip", {gfx::avm1::Value("__qaLabels_mc"), gfx::avm1::Value(90000)});
     if (!box.isObject()) return;
     const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
@@ -1102,7 +1112,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     if (scoreboard_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
-    std::vector<std::string> objs;
+    std::vector<std::string>& objs = objsScratch_;
+    objs.clear();
     for (const Open& o : movies_) objs.push_back(o.object);
     // Every movie gets the viewport (Stage.width / height and onResize: the menus size their backgrounds from it).
     for (Open& op : movies_) op.movie->player().setViewport((float)viewW_, (float)viewH_);
