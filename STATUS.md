@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 09c CHECKPOINT 2 (2026-10-07): HUD / markers, 300 fps work, async sim — playtest exe at 8229bb9
+
+Playtest exe: build/release/bin/wfc_rebuild.exe (+ wfc_rebuild.map for crash reports) built from 8229bb9 (2026-10-07 12:50).
+Validation (FAST, quiet machine): 16 harnesses green (BOTTEST 39/39, BOTOBJ 12/12, TDM 43/43, CTF 12/12, XP 16/16, PARTICIPANT
+22/22, EXTRABODY 38/38, SPAWNFILL 10/10, DOUBLEJUMP 3/3, PACING 4/4, DETERMINISM 2/2, WEAPONAUDIT PASS, VEHFRAME 4/4,
+ASYNCSTEP 2/2, MARKERS 5/5, ENGAGE 3/3); frontend 114/0; 4-map bot flow cold + warm: 0 crashes, all launches / ends / lobby
+returns; warm pass 6 spike lines (09b 11). Experimental: six-mode audit 104/104, progression 14/14, legacy profile PASS,
+multi-map + 12-match memory clean, visual sweep 10 maps no regressions.
+Performance (Experimental, Streets 1080p fixed cam, 05db936 MDI): 5 v 5 p50 2.34 ms (427 fps, 92 % < 3.33 ms MET);
+10 v 10 p50 ~2.95 ms (~335 fps, p90 3.8-4.3); 32 v 32 p50 ~6 ms (~165 fps). Async step default-on: join wait <= 0.2 ms at
+32 v 32, no input-latency change (probe). User target: 300 fps for both 10 v 10 and 32 v 32 (invisible work only).
+New since a81cb54: objective / pawn markers (RE 7bb8ec1 / 806f8cd), the full Hud_GFX observer set (progress bar, killstreak,
+abilities, grenades, damage ring, hit marker, target, lock-on, weapon messages), PC keyboard prompts (TransGame_PC strings +
+PC ADAPTATION by last-used device), world multi-draw-indirect (seam ties documented; WFC_MDI=0 reference), async sim step,
+map-aware Extended bot counts, 6-line extended kill feed, scrolling scoreboards, crash report + minidump, map-FX budgets.
+Known open: Scatter Blaster tracer per pellet (13x smoke density; Gameplay fix in flight, RE 9a776fb), 10 v 10 p90 and 32 v 32
+below the 300 fps goal (profiling), two unexplained 32 v 32 segfaults seen once by Rendering (not reproduced; crash report now
+installed).
+
 ## INTEGRATION MILESTONE 09c = MILESTONE E PLAYTEST CHECKPOINT (2026-10-07): 32 v 32, full bot abilities, XP unlocks, fidelity fixes — branch `integration/milestone-09c`, playtest exe at a81cb54
 
 Playtest exe: build/release/bin/wfc_rebuild.exe built from a81cb54 (2026-10-07 02:13). Validation (FAST, quiet machine):
