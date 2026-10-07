@@ -777,6 +777,28 @@ static void testWorldBed() {
     CHECK(pools == 11, "11 pools in audio.json (%d)", pools);
 }
 
+// ---------------------------------------------------------------- occlusion line checks skipped out of range (M09m)
+static void testOcclusionSkip() {
+    std::printf("[occlusion: no line checks beyond the audible distance]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    const char* js = R"({"T.LP": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": 0.0, "DistanceMax": 2000.0}, "children": [
+        {"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0, "bLooping": true}, "children": [{"wav": "content/WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav"}]}]}}})";
+    assets::Json cj; assets::Json::parse(js, cj);
+    cues.addCues(cj, kRoot + "/../content/");
+    int rays = 0;
+    cues.setOcclusion([&](const Vec3&, const Vec3&, int) { ++rays; return true; });   // a wall everywhere
+    cues.setListener(Vec3{0, 0, 0});
+    const int id = cues.play("T.LP", Vec3{100, 0, 0}, 100.0f);                        // 100 m: beyond its 20 m
+    for (int k = 0; k < 60; ++k) cues.tick(1.0f / 60.0f);
+    CHECK(id >= 0 && rays == 0, "loop 100 m away (audible 20 m): no line checks for 1 s (%d)", rays);
+    cues.setListener(Vec3{95, 0, 0});
+    cues.tick(1.0f / 60.0f);
+    CHECK(rays == 1 && cues.occludedInstances() == 1, "listener walks into range: checked at once (%d rays), occluded", rays);
+    for (int k = 0; k < 60; ++k) cues.tick(1.0f / 60.0f);
+    CHECK(rays >= 4 && rays <= 6, "in range: every OcclusionCheckInterval 0.25 s again (%d rays in 1 s)", rays - 1);
+    cues.stop(id, 0.0f);
+}
+
 // ---------------------------------------------------------------- 96-channel priority stealing (Win32 backend)
 static void testChannelStealing() {
     std::printf("[channel stealing]\n");
@@ -2543,6 +2565,7 @@ int main() {
     testMapEventAudio();
     testFrontend();
     testLifecycle();
+    testOcclusionSkip();
     testChannelStealing();
     testWorldBed();
     testLoopRuntime();

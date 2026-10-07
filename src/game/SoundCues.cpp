@@ -696,7 +696,10 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     if (!cd.mixerPreset.empty()) mixer_.enable(cd.mixerPreset);      // SoundNodeRoot.PlayMixerPreset (AC play)
     // A new instance starts with the current occlusion (no fade-in from clear).
     if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
-        in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+        const core::Vec3 d = in.pos - listener_;
+        const float maxM = cd.distMaxUU * UU;
+        if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) in.occlStale = true;   // inaudible loop: no ray yet
+        else in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
         in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
     }
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
@@ -942,12 +945,23 @@ void SoundCues::tick(float dt) {
         // id), then a linear fade over AudioOcclusionTransitionTime.
         const CueDef& cd = cues_[(size_t)in.cue];
         if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
-            in.occlCheck -= dt;
-            if (in.occlCheck <= 0.0f) {
-                in.occlCheck = kOcclCheck;
-                in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+            // Beyond the cue's audible distance the voices are virtual (gain 0): the line check is skipped (the 32 v 32 cost
+            // was mostly these). Back in range it is checked at once and takes its value directly - what the continuous
+            // checks would have reached - so nothing audible changes.
+            const core::Vec3 d = in.pos - listener_;
+            const float maxM = cd.distMaxUU * UU;
+            if (cd.distMaxUU > 0.0f && core::dot(d, d) > maxM * maxM) {
+                in.occlStale = true;
+            } else {
+                in.occlCheck -= dt;
+                if (in.occlStale || in.occlCheck <= 0.0f) {
+                    in.occlCheck = kOcclCheck;
+                    in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+                    if (in.occlStale) in.occl = in.occlTarget;
+                    in.occlStale = false;
+                }
+                in.occl += core::clampf(in.occlTarget - in.occl, -dt / kOcclTime, dt / kOcclTime);
             }
-            in.occl += core::clampf(in.occlTarget - in.occl, -dt / kOcclTime, dt / kOcclTime);
         }
         refresh(in);
         ++i;

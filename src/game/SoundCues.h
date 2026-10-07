@@ -215,6 +215,7 @@ private:
         int owner = kWorld; core::Vec3 offset{0, 0, 0}; std::string socket; bool posDirty = false;
         float volume = 1.0f;
         float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
+        bool occlStale = false;          // out of audible range: no line checks (gain 0); snap on the next check in range
         float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
         float lastGain = 1.0f;                                    // gainOf() at the last refresh
         bool waiting = false;     // a streamed cue still decoding on the worker: starts (age 0) when its waves are adopted
