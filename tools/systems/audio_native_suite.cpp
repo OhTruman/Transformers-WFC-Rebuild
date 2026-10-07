@@ -16,6 +16,7 @@
 #include "game/WeaponAudio.h"
 #include "audio/MovieAudio.h"
 #include <algorithm>
+#include <atomic>
 #include "assets/Json.h"
 #include <chrono>
 #include <functional>
@@ -2118,6 +2119,32 @@ static void testCountdownAndGrenades() {
 }
 
 // Profile volume sliders: SetAudioGroupVolume -> SoundGroupCategoryMappings categories and their whole subtree.
+// Async sim step: the sound groups are read by World's cue table on the worker while the main thread sets sliders and the
+// frontend's table reads them; no crash, no torn values, the last write wins.
+static void testSoundGroupsThreaded() {
+    std::printf("[sound groups: concurrent readers / writers]\n");
+    std::atomic<bool> stop{false};
+    std::atomic<long> reads{0};
+    std::atomic<bool> bad{false};
+    const char* cats[] = {"SFX_DRY_HUD", "SFX_WET_WEAPONS", "MUSIC", "DIALOG", "SFX_WET_VEHICLES", "SFX_DRY_UI", "MASTER"};
+    auto reader = [&] {
+        while (!stop.load()) {
+            for (const char* c : cats) { const float v = game::SoundMixer::groupScale(c); if (!(v >= 0.0f && v <= 1.0f)) bad = true; }
+            ++reads;
+        }
+    };
+    std::thread r1(reader), r2(reader);
+    for (int k = 0; k < 20000; ++k) {
+        game::SoundMixer::setGroupVolume("SFX", (k % 101) / 100.0f);
+        game::SoundMixer::setGroupVolume("MUSIC", ((k * 7) % 101) / 100.0f);
+    }
+    game::SoundMixer::setGroupVolume("SFX", 0.25f);
+    stop = true; r1.join(); r2.join();
+    CHECK(!bad && reads > 0 && std::fabs(game::SoundMixer::groupVolume("SFX") - 0.25f) < 1e-6f,
+          "2 reader threads x %ld reads during 40000 slider writes: values in range, last write wins", reads.load());
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // the rest of the suite: authored levels
+}
+
 static void testSoundGroups() {
     std::printf("[sound groups]\n");
     using M = game::SoundMixer;
@@ -2546,6 +2573,7 @@ static void testParticipantLoops() {
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
+    testSoundGroupsThreaded();
     testAbilityAudio();
     testLevelWarm();
     testChargeAndRoller();
