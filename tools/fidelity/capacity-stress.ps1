@@ -24,6 +24,8 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       # -AsyncModes "0,1": every row with WFC_ASYNCSTEP=0 and =1 (Gameplay's async sim step); =1 rows also log WFC_ASYNCLOG
       # (local part / background part / join wait), reported per row
       [string[]]$AsyncModes = @(),
+      # -PerfLog <md>: append this run's table to the running PERFORMANCE LOG (Integration's scalability brief)
+      [string]$PerfLog = "", [string]$Note = "",
       [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -65,6 +67,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     $P = $popDef[$pop]
     if ($pop -eq "rec") { $n = $recPerSide["$map"]; if (-not $n) { continue }
         $P = @{ mode = "TDM"; want = 2 * $n; opts = "ExtendedPlayers=1;BotsFriendly=$($n - 1);BotsEnemy=$n" } }
+    if ($pop -match '^t(\d+)$') { $n = [int]$Matches[1]; $half = [int]($n / 2)
+        $P = @{ mode = "TDM"; want = $n; opts = "ExtendedPlayers=$(if ($n -gt 10) { 1 } else { 0 });BotsFriendly=$($half - 1);BotsEnemy=$($n - $half)" } }
     if ($pop -eq "recffa") { $n = $recFfa["$map"]; if (-not $n) { continue }
         $P = @{ mode = "DM"; want = $n; opts = "ExtendedPlayers=1;BotsEnemy=$($n - 1)" } }
     if (-not $P) { continue }
@@ -136,19 +140,29 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         if ($k -ge $seg.Count) { Res $mt "FAIL" ("match {0} of 2 never started" -f ($k + 1)) "Gameplay/Frontend"; continue }
         $segL = $seg[$k]   # NOT $L: PowerShell names are case-insensitive ($l is the line variable)
         # in-play frames: after the local InGame state, skipping the first 3 s (~ by time stamps is unavailable; skip 180 frames)
-        $inPlay = $false; $ft = New-Object System.Collections.Generic.List[double]; $sim = New-Object System.Collections.Generic.List[double]
+        $inPlay = $false; $ft = New-Object System.Collections.Generic.List[double]; $sim = New-Object System.Collections.Generic.List[double]; $stp = New-Object System.Collections.Generic.List[double]
         $voices = 0; $dropped = 0; $stolen = 0; $mixMs = 0.0; $ai = @(); $bl = @()
         foreach ($l in $segL) {
             if (-not $inPlay -and $l.Contains('to=InGame')) { $inPlay = $true; continue }
             if ($inPlay -and $l.Contains('to=GameEnded')) { $inPlay = $false }
             if (-not $inPlay) { continue }
-            $m = [regex]::Match($l, 'PERF f\d+ frame=([\d.]+)ms sim=([\d.]+)ms'); if ($m.Success) { $ft.Add([double]$m.Groups[1].Value); $sim.Add([double]$m.Groups[2].Value); continue }
+            $m = [regex]::Match($l, 'PERF f\d+ frame=([\d.]+)ms sim=([\d.]+)ms(?: \(max [\d.]+\) steps/frame ([\d.]+))?'); if ($m.Success) { $ft.Add([double]$m.Groups[1].Value); $sim.Add([double]$m.Groups[2].Value); $stp.Add($(if ($m.Groups[3].Success) { [double]$m.Groups[3].Value } else { -1.0 })); continue }
             $m = [regex]::Match($l, 'AMB .*voices=(\d+) \(max (\d+), dropped (\d+), stolen (\d+).*mix=([\d.]+)ms'); if ($m.Success) { $voices = [Math]::Max($voices, [int]$m.Groups[2].Value); $dropped = [int]$m.Groups[3].Value; $stolen = [int]$m.Groups[4].Value; $mixMs = [Math]::Max($mixMs, [double]$m.Groups[5].Value); continue }
             $m = [regex]::Match($l, 'BOTPERF .*AI ([\d.]+) ms avg ([\d.]+)'); if ($m.Success) { $ai += [pscustomobject]@{ avg = [double]$m.Groups[1].Value; max = [double]$m.Groups[2].Value }; continue }
             $m = [regex]::Match($l, 'BOTLOG \S+ p(\d+) \(([-\d.]+) [-\d.]+ ([-\d.]+)\) cell (-?\d+) \S+ goal (\S+) .* tgt (-?\d+) .* stuck (\d+) .* nopath (\d+)')
             if ($m.Success) { $bl += [pscustomobject]@{ p = [int]$m.Groups[1].Value; x = [double]$m.Groups[2].Value; z = [double]$m.Groups[3].Value; cell = [int]$m.Groups[4].Value; goal = $m.Groups[5].Value; tgt = [int]$m.Groups[6].Value; stuck = [int]$m.Groups[7].Value; nopath = [int]$m.Groups[8].Value } }
         }
-        $ftv = @($ft | Select-Object -Skip ([Math]::Min($ft.Count, 180))); $simv = @($sim | Select-Object -Skip ([Math]::Min($sim.Count, 180)))
+        $skipN = [Math]::Min($ft.Count, 180)
+        $warm = @($ft | Select-Object -First $skipN)   # first 180 in-play frames: one-time warm-up (first uses, uploads)
+        $ftv = @($ft | Select-Object -Skip $skipN); $simv = @($sim | Select-Object -Skip $skipN); $stpv = @($stp | Select-Object -Skip $skipN)
+        # steady vs hitch: frames > 50 ms are hitch EVENTS (reported separately); the steady stats exclude them
+        $hitch = @($ftv | Where-Object { $_ -gt 50 }); $steady = @($ftv | Where-Object { $_ -le 50 })
+        $sorted = @($steady | Sort-Object -Descending)
+        function LowFps($frac) { if (-not $sorted.Count) { return $null }; $n = [Math]::Max(1, [int][Math]::Ceiling($sorted.Count * $frac)); $avgMs = ($sorted | Select-Object -First $n | Measure-Object -Average).Average; return [Math]::Round(1000.0 / $avgMs, 1) }
+        # slow frames (> 3.33 ms): how many contain a sim step (steps/frame >= 1) - the step-in-frame share of the 300 fps misses
+        $slowIdx = @(for ($i = 0; $i -lt $ftv.Count; $i++) { if ($ftv[$i] -gt 3.333) { $i } })
+        $slowWithStep = @($slowIdx | Where-Object { $_ -lt $stpv.Count -and $stpv[$_] -ge 1 }).Count
+        $fastWithStep = @(for ($i = 0; $i -lt $ftv.Count; $i++) { if ($ftv[$i] -le 3.333 -and $i -lt $stpv.Count -and $stpv[$i] -ge 1) { 1 } }).Count
         $players = @($segL | Where-Object { $_ -match '\] MATCH spawn player=(\d+)' } | ForEach-Object { [regex]::Match($_, 'player=(\d+)').Groups[1].Value } | Select-Object -Unique).Count
         $endL = @($segL | Where-Object { $_ -match '\] MATCH end ' })[0]; $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }; if ($endL -and -not $reason) { $reason = "Time" }   # an EMPTY reason is the original's time-limit path (EndGame(none, ""), Gameplay 2026-10-07; printed as Time from their next push)
         $kills = @($segL | Where-Object { $_ -match '\] MATCH kill ' }).Count
@@ -162,6 +176,11 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         $bgVals = @($asyncLines | ForEach-Object { $mb = [regex]::Match($_, 'background(?: part)?[ =:]+([\d.]+)'); if ($mb.Success) { [double]$mb.Groups[1].Value } })
         $locVals = @($asyncLines | ForEach-Object { $ml = [regex]::Match($_, 'local(?: part)?[ =:]+([\d.]+)'); if ($ml.Success) { [double]$ml.Groups[1].Value } })
         $row = [pscustomobject][ordered]@{ async = $asyncM; res = $resol; map = $map; pop = $pop; match = $k + 1; spawned = "$players/$($P.want)"; frames = $ftv.Count
+            commit = $sha.Substring(0, [Math]::Min(7, $sha.Length)); scenario = $P.mode; participants = $P.want; cap = "uncapped"
+            avg_ms = $(if ($steady.Count) { [Math]::Round(($steady | Measure-Object -Average).Average, 2) }); avg_fps = $(if ($steady.Count) { [Math]::Round(1000.0 / ($steady | Measure-Object -Average).Average, 1) })
+            low1_fps = (LowFps 0.01); low01_fps = (LowFps 0.001); worst_steady_ms = $(if ($steady.Count) { [Math]::Round(($steady | Measure-Object -Maximum).Maximum, 2) })
+            hitches = $hitch.Count; hitch_max_ms = $(if ($hitch.Count) { [Math]::Round(($hitch | Measure-Object -Maximum).Maximum, 1) }); warmup_hitches = @($warm | Where-Object { $_ -gt 50 }).Count
+            slow_frames = $slowIdx.Count; slow_with_step_pct = $(if ($slowIdx.Count) { [Math]::Round(100.0 * $slowWithStep / $slowIdx.Count, 1) }); fast_with_step_pct = $(if ($ftv.Count - $slowIdx.Count) { [Math]::Round(100.0 * $fastWithStep / ($ftv.Count - $slowIdx.Count), 1) })
             p50_ms = (Pct $ftv 0.50); p90_ms = (Pct $ftv 0.90); p95_ms = (Pct $ftv 0.95)
             pct_under_3_33 = $(if ($ftv.Count) { [Math]::Round(100.0 * @($ftv | Where-Object { $_ -le 3.333 }).Count / $ftv.Count, 1) })
             sim_step_ms = $phase.sim_step_ms; chars_ms = $phase.chars_ms; fx_ms = $phase.fx_ms; actors_ms = $phase.actors_ms; hud_ms = $phase.hud_ms; sim_top = $simTop3
@@ -203,7 +222,30 @@ foreach ($map in $Maps) {
         Res "tax.$map.$($r.pop).$($r.res)" $st ("vs original 10: frame p50 {0} -> {1} ms (x{2}), p99 {3} -> {4} ms (x{5}); memory at load {6} -> {7} MB; AI avg {8} ms. PASS = p99 under 16.7 ms (60 fps), PARTIAL = under 33.4 ms (30 fps)" -f $base.p50_ms, $r.p50_ms, $t50, $base.p99_ms, $r.p99_ms, $t99, $base.loaded_mb, $r.loaded_mb, $r.ai_avg_ms) "Gameplay/Rendering"
     }
 }
+$curve = @($rows | Where-Object { $_.match -eq 2 -and $_.pop -match '^t\d+$' } | Sort-Object participants)
+if ($curve.Count -ge 3) {
+    foreach ($g in @($curve | Group-Object { "$($_.map) $($_.res) async=$($_.async)" })) {
+        $pts = @($g.Group | Sort-Object participants); $x = @($pts | ForEach-Object { [double]$_.participants }); $y = @($pts | ForEach-Object { [double]$_.p50_ms })
+        $mx = ($x | Measure-Object -Average).Average; $my = ($y | Measure-Object -Average).Average; $num = 0.0; $den = 0.0
+        for ($i = 0; $i -lt $x.Count; $i++) { $num += ($x[$i] - $mx) * ($y[$i] - $my); $den += ($x[$i] - $mx) * ($x[$i] - $mx) }
+        $slope = $num / $den; $icpt = $my - $slope * $mx
+        $res2 = @(for ($i = 0; $i -lt $x.Count; $i++) { [Math]::Round($y[$i] - ($icpt + $slope * $x[$i]), 2) })
+        # superlinear if the last point sits well above the line through the points (residual > 10 % of its value)
+        $shape = if ($res2[-1] -gt 0.1 * $y[-1]) { "SUPERLINEAR (the largest population costs more than the linear trend)" } elseif ($icpt -gt 0.5 * $y[0]) { "LINEAR with a large FIXED overhead" } else { "LINEAR" }
+        Res "curve.$($g.Name -replace ' ', '_')" "INFO" ("p50 frame vs participants: {0}; fit p50 = {1:N2} ms fixed + {2:N4} ms per participant; residuals {3}; {4}" -f (($pts | ForEach-Object { "$($_.participants): $($_.p50_ms)" }) -join ", "), $icpt, $slope, ($res2 -join " / "), $shape) "Rendering/Gameplay"
+    }
+}
 Write-WfcCsv $rows (Join-Path $OutDir "capacity.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("async", "res", "map", "pop", "match", "spawned", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "async_join_ms", "async_join_max_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
+Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", "match", "spawned", "avg_fps", "avg_ms", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "worst_steady_ms", "low1_fps", "low01_fps", "hitches", "warmup_hitches", "slow_with_step_pct", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "async_join_ms", "async_join_max_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
+if ($PerfLog) {
+    $lines = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-Path $PerfLog)) { $lines.Add("# PERFORMANCE LOG (Experimental; user scalability brief, Integration 2026-10-07)"); $lines.Add(""); $lines.Add("Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with bots, second-match (warm) figures. Steady stats exclude hitch events (> 50 ms), which are counted separately; the first 180 in-play frames are warm-up. 1 % / 0.1 % low = fps of the slowest 1 % / 0.1 % of steady frames. Splits come from a separate profiling run (glFinish-serialised: ratios, not absolute).") }
+    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($Note) { " - $Note" })"); $lines.Add("")
+    $lines.Add("| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |")
+    $lines.Add("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    foreach ($r in @($rows | Where-Object { $_.match -eq 2 } | Sort-Object map, res, async, participants)) {
+        $lines.Add(("| {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} % | {14} | {15} | {16} | {17} | {18} | {19} |" -f $r.map, $r.res, $(if ($r.async -ne "") { $r.async } else { "-" }), $r.participants, $r.avg_fps, $r.p50_ms, $r.p90_ms, $r.p95_ms, $r.p99_ms, $r.worst_steady_ms, $r.low1_fps, $r.low01_fps, $r.hitches, $r.pct_under_3_33, $r.cpu_submit_ms, $r.gpu_wait_ms, $r.sim_step_ms, $r.chars_ms, $r.fx_ms, $r.loaded_mb)) }
+    $lines | Add-Content -Encoding UTF8 $PerfLog
+}
 "CAPACITY: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
