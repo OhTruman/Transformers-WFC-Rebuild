@@ -70,7 +70,12 @@ public static class VgDiff {
                 if (ph != null) { byte v = (byte)Math.Min(255, d * 4); ph[i] = 0; ph[i + 1] = (byte)(v / 3); ph[i + 2] = v; }
             }
             if (H != null) { var rh = H.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb); Marshal.Copy(ph, 0, rh.Scan0, ph.Length); H.UnlockBits(rh); H.Save(heat, ImageFormat.Png); H.Dispose(); }
-            return new double[] { sum / ((double)w * h), 100.0 * over / ((double)w * h) };
+            // view sanity: mean luma of A and the share of A's pixels within +-6 of A's median luma ("flat")
+            long[] hist = new long[256]; double lsum = 0;
+            for (int y = 0; y < h; y += 4) for (int x = 0; x < w; x += 4) { int i = y * ra.Stride + x * 3; int l = (pa[i + 2] * 299 + pa[i + 1] * 587 + pa[i] * 114) / 1000; hist[l]++; lsum += l; }
+            long n = 0; foreach (long c in hist) n += c; long acc = 0; int med = 0; for (int k = 0; k < 256; k++) { acc += hist[k]; if (acc * 2 >= n) { med = k; break; } }
+            long near = 0; for (int k = Math.Max(0, med - 6); k <= Math.Min(255, med + 6); k++) near += hist[k];
+            return new double[] { sum / ((double)w * h), 100.0 * over / ((double)w * h), lsum / n, 100.0 * near / n };
         }
     }
 }
@@ -86,7 +91,8 @@ foreach ($set in $Sets) {
         $r = [VgDiff]::Compare((Join-Path $dr $f), (Join-Path $do $f), $Threshold, $heat)
         $flag = $r[1] -gt $FlagPct
         if (-not $flag) { Remove-Item $heat -ErrorAction SilentlyContinue } else { $flagged += $f }
-        $rows.Add([pscustomobject][ordered]@{ set = $set; frame = ($f -replace '\.bmp$', ''); mean_abs_diff = [Math]::Round($r[0], 3); pct_over = [Math]::Round($r[1], 3); flagged = $flag })
+        $rows.Add([pscustomobject][ordered]@{ set = $set; frame = ($f -replace '\.bmp$', ''); mean_abs_diff = [Math]::Round($r[0], 3); pct_over = [Math]::Round($r[1], 3); flagged = $flag
+            ref_luma = [Math]::Round($r[2], 1); ref_flat_pct = [Math]::Round($r[3], 1) })
     }
     if ($flagged.Count) {   # side-by-side sheet of the flagged frames (ref | opt | heat), up to 8
         $tiles = @(); foreach ($f in @($flagged | Select-Object -First 8)) { $n = $f -replace '\.bmp$', ''
@@ -95,6 +101,10 @@ foreach ($set in $Sets) {
     $mx = ($rows | Where-Object { $_.set -eq $set } | Measure-Object pct_over -Maximum).Maximum
     $sheetNote = if ($flagged.Count) { "; see flagged_$set.png (ref | opt | diff)" } else { "" }
     $note = "$($builds[0].sha) vs $($builds[1].sha), $($frames.Count) frames compared ($(if ($matchAligned) { 'match steps' } else { 'boot frames' }) $From..$To every $Stride); flagged (> $FlagPct % pixels differ by > $Threshold): $($flagged.Count) [$(($flagged | ForEach-Object { $_ -replace '\.bmp$', '' }) -join ' ')]; max $mx %$sheetNote"
+    # a comparison of near-black / flat frames proves nothing: void it (mean luma < 30 or > 85 % of pixels within +-6 of the median)
+    $setRows = @($rows | Where-Object { $_.set -eq $set }); $bad = @($setRows | Where-Object { $_.ref_luma -lt 30 -or $_.ref_flat_pct -gt 85 })
+    if ($bad.Count * 2 -gt $setRows.Count) {
+        Res "$set" "UNKNOWN" ("VIEW INVALID - {0} of {1} reference frames are near-black / flat (median luma {2}, flat {3} %): the camera sees nothing to compare (check -Cam with a screenshot); {4}" -f $bad.Count, $setRows.Count, (($setRows | Sort-Object ref_luma)[[int]($setRows.Count / 2)]).ref_luma, (($setRows | Sort-Object ref_flat_pct)[[int]($setRows.Count / 2)]).ref_flat_pct, $note) "Experimental"; continue }
     Res "$set" $(if ($flagged.Count) { "HUMAN" } else { "PASS" }) $note "Rendering"
 }
 Write-WfcCsv $rows (Join-Path $OutDir "visual.csv")

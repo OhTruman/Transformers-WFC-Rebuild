@@ -90,7 +90,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_AMBLOG = "1"; WFC_BOTLOG = "all"; WFC_BOTPERF = "5"
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
-        if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"] }
+        if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"]
+            if ($H.Contains("WFC_SHOTMATCH")) { $e.WFC_SHOTMATCH = "$d,600,600,1" } }   # one capture of the measured view per match
         if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
         foreach ($k in $extraEnvMap.Keys) { $e[$k] = $extraEnvMap[$k] }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
@@ -238,6 +239,14 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
         if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}" -f $sfN, $row.slowframe_bins, $sfAvg) "Rendering" }
+        $viewShot = Join-Path $d "m00600.bmp"
+        if ($k -eq 1 -and (Test-Path $viewShot)) {   # the measured view: near-black / flat = the fixed cam sees a wall, numbers unrepresentative
+            Add-Type -AssemblyName System.Drawing; $vb = New-Object System.Drawing.Bitmap $viewShot; $ls = New-Object System.Collections.Generic.List[double]
+            for ($vy = 0; $vy -lt $vb.Height; $vy += 24) { for ($vx = 0; $vx -lt $vb.Width; $vx += 24) { $c = $vb.GetPixel($vx, $vy); $ls.Add(0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B) } }
+            $vs = New-Object System.Drawing.Bitmap $vb, 480, 270; $vs.Save((Join-Path $d "view.png"), [System.Drawing.Imaging.ImageFormat]::Png); $vs.Dispose(); $vb.Dispose()
+            $lsrt = @($ls | Sort-Object); $med = $lsrt[[int]($lsrt.Count / 2)]; $flat = 100.0 * @($ls | Where-Object { [Math]::Abs($_ - $med) -le 6 }).Count / $ls.Count
+            $lm = ($ls | Measure-Object -Average).Average
+            Res "$mt.view" $(if ($lm -lt 30 -or $flat -gt 85) { "FAIL" } else { "INFO" }) ("measured view (match step 600, $(Split-Path $d -Leaf)\view.png): mean luma {0:N0}, {1:N0} % flat{2}" -f $lm, $flat, $(if ($lm -lt 30 -or $flat -gt 85) { " - NEAR-BLACK / FLAT: the fixed cam sees a wall; frame times are not representative of play" } else { "" })) "Experimental" }
         Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
