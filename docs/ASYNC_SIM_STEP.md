@@ -211,7 +211,11 @@ queues (match / gameplay events); award drains clear their own queues.
 
 Load / unload (`launchMatch`, `loadMapAudio`, ...) stay direct calls: no step runs then.
 
-## Step (3) as landed (2026-10-07, agents/gameplay): `WFC_ASYNCSTEP=1`, off by default
+## Step (3) as landed (2026-10-07, agents/gameplay): on by default since the default-on commit (`WFC_ASYNCSTEP=0` or `WFC_SIMTHREADS=0` = synchronous)
+
+Validation before default-on: WFC_ASYNCSTEPTEST (sync == async), DETERMINISM, BOTTEST and mode suites with async (Integration 09c);
+Systems audio cue counts / leaks PASS; Experimental 05db936 Streets: join wait avg 0.004-0.037 ms, max 0.2 ms at 32 v 32 uncapped,
+p90 4.29 -> 3.84 ms (10 v 10), 9.22 -> 7.69 ms (32 v 32); WFC_LATENCYPROBE: the local action shows in the input frame in both modes.
 
 Simpler than the snapshot plan above: the background part starts **after** `World::draw` and is joined at the start of the next
 frame, so drawing never overlaps the step and needs no snapshot. The step hides behind `endFrame` / present / HUD / audio.

@@ -592,7 +592,7 @@ public:
         unsigned steps = 0;                             // steps since the last consumePresented()
     };
     const PresentedFrame& presented() const { return presented_; }
-    // Async step (docs/ASYNC_SIM_STEP.md step 3, variant B; WFC_ASYNCSTEP=1). A step = the local part (tickPrefix: commands, map,
+    // Async step (docs/ASYNC_SIM_STEP.md step 3, variant B; on by default, WFC_ASYNCSTEP=0 / WFC_SIMTHREADS=0 = synchronous). A step = the local part (tickPrefix: commands, map,
     // abilities, match, the local controller) on the main thread, then the background part (bots, participants, weapons, FX, audio
     // glue, projectiles, actors, presented() fill). The main loop draws between the two and launches the background part after
     // World::draw; the next frame joins it first. The order of operations is exactly tick()'s, so the simulation is identical.

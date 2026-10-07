@@ -1165,8 +1165,16 @@ struct World::AsyncStepThread {
     ~AsyncStepThread() { { std::lock_guard<std::mutex> lk(m); quit = true; } cv.notify_all(); t.join(); }
 };
 
+// Default on (Experimental 05db936: the background part hides fully up to 32 v 32 uncapped; p90 lower; Systems audio PASS).
+// WFC_ASYNCSTEP=0 is the escape hatch (the synchronous step); WFC_SIMTHREADS=0 (fully serial debugging) also forces it.
 bool World::asyncStepEnabled() {
-    static const bool on = [] { const char* e = std::getenv("WFC_ASYNCSTEP"); return e && e[0] == '1'; }();
+    static const bool on = [] {
+        const char* e = std::getenv("WFC_ASYNCSTEP");
+        if (e && e[0] == '0') return false;
+        const char* t = std::getenv("WFC_SIMTHREADS");
+        if (t && std::atoi(t) == 0) return false;
+        return true;
+    }();
     return on;
 }
 
