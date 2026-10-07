@@ -35,6 +35,7 @@ public:
     void setHud(bool open, bool visible) override;
     void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+    void setWorldLabels(const std::vector<frontend::WorldLabel>& labels) override { worldLabels_ = labels; }
     void movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {
         if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
@@ -108,7 +109,9 @@ private:
     std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
     float endScoreScroll_ = 0.0f;   // the same for the end-of-match View Scores list (EndGameStats_GFX)
-    bool extendedMatch_ = false;   // more than the original 10 participants (kill feed PC EXTENSION)
+    bool extendedMatch_ = false;
+    std::vector<frontend::WorldLabel> worldLabels_;   // DEV TOOL: QA bot overlay labels (window pixels)
+    void syncWorldLabels();   // more than the original 10 participants (kill feed PC EXTENSION)
     void extendedKillFeed(const std::vector<gfx::avm1::Value>& a);
     void checkKillFeed(float dt);   // reveals the entering line after the shift; asserts the 22 px step
     std::string feedManagerPath_;
