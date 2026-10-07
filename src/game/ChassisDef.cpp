@@ -161,6 +161,10 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     d.defaultSpecialty = c["class (chassis DefaultSpecialty)"].asString();
     d.mpCharacter = c["mp_status"].asString().rfind("MP character", 0) == 0;
     d.lockedChassis = c["locks"]["LockedChassis"].asBool();
+    {
+        const assets::Json& fl = c["flyer_state_map (PC ADAPTATION)"];
+        d.flyerNoTransform = fl.isObject() && fl["family"].asString().find("never transforms") != std::string::npos;
+    }
     d.lockedCharacter = c["locks"]["LockedCharacter"].asBool();
     d.robotGlb = c["robot"]["glb"].asString();
     d.vehicleGlb = c["vehicle"]["glb"].asString();
@@ -330,6 +334,11 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     stringList(ip["WeaponTypes"], d.iconicWeapons);
     stringList(ip["VehicleWeapons"], d.iconicVehicleWeapons);
     stringList(ip["Abilities"], d.iconicAbilities);
+    // Bodies without an authored MP preset (the extra bodies: Frenzy / Rumble / Laserbeak have none, USER DECISION, PC ADAPTATION):
+    // their DefaultSpecialty's class preset fills every empty list, so they never fall back to a definition-less default weapon.
+    if (d.iconicWeapons.empty()) d.iconicWeapons = classPresetList(d.iconicSpecialty, "weapons");
+    if (d.iconicVehicleWeapons.empty()) d.iconicVehicleWeapons = classPresetList(d.iconicSpecialty, "vehicle_weapons");
+    if (d.iconicAbilities.empty()) d.iconicAbilities = classPresetList(d.iconicSpecialty, "abilities");
     stringList(w["allowed_on_foot_by_provider (TnDataProvider_Weapon FactionRestriction + ChassisRestriction; WeaponType != 3)"], d.allowedOnFoot);
     d.classDefaultSecondary = w["class_default_secondary"].asString();
     if (!d.weaponPrimary.valid) { d.loadError = "robot WeaponSocket_Primary missing for " + id; return false; }

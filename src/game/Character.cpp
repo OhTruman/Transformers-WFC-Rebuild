@@ -23,7 +23,7 @@ float approach(float cur, float target, float dt, float blendTime) {
 
 // Kick off ROBOT<->VEHICLE transformation using the paired transform clips.
 void Character::beginTransform() {
-    if (trans_ != Transition::None) return;
+    if (trans_ != Transition::None || chassis().flyerNoTransform) return;   // a non-transforming flyer ignores the request
     const assets::SkinnedModel* mdl = currentModel();
     std::string cat = (form_ == Form::Robot) ? "transform_to_vehicle" : "vehicle_transform_to_robot";
     int c = mdl ? mdl->firstClipOfCategory(cat) : -1;

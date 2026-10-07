@@ -164,6 +164,7 @@ bool Application::init() {
     if (std::getenv("WFC_BOTNAVTEST")) { runBotNavTest(); return false; }           // bot nav data + path corridor validity
     if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
     if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
+    if (std::getenv("WFC_EXTRABODYTEST")) { runExtraBodyTest(); return false; }    // Car8-10 / Frenzy / Rumble / Laserbeak
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4583,6 +4584,69 @@ void Application::runBotObjectiveTest() {
         world_.qaSetGodMode(false);
     }
     LOG_INFO("BOTOBJ SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_EXTRABODYTEST: the six extra bodies (USER DECISION; retargeted robot sets by AssetTools, PC ADAPTATION): Car8 / Car9 / Car10
+// (car soldiers), Minion1 Frenzy / Minion2 Rumble (small Scouts), Minion3 Laserbeak (flyer, never transforms). Per body: spawn as that
+// chassis, move, transform (Laserbeak: the request is ignored), fire, hit volume, death and respawn as the same body.
+void Application::runExtraBodyTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("EXTRABODY %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs, const platform::InputFrame& in) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(in); };
+    platform::InputFrame idle;
+    game::Character& pc = world_.player().pawn();
+    for (const char* id : {"Car8", "Car9", "Car10", "Minion1", "Minion2", "Minion3"}) {
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=600", L);
+        world_.launchMatch(L);
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 1; cs.chassisId = id;
+        world_.match().selectCharacter(me, cs);
+        run(11.0f, idle);
+        const std::string tag = std::string(id) + " (" + pc.chassis().iconic + ")";
+        const bool spawned = !world_.localPlayerDead() && pc.chassis().id == id;
+        check(spawned, tag + ": spawns as itself (team " + std::to_string(world_.match().players()[(size_t)me].team) + ")");
+        if (!spawned) continue;
+        const bool flyer = pc.chassis().flyerNoTransform;
+        // Move
+        const core::Vec3 p0 = pc.position();
+        platform::InputFrame fwd; fwd.down[(int)platform::Button::Forward] = true;
+        run(2.0f, fwd);
+        const float moved = core::length(pc.position() - p0);
+        check(moved > 2.0f, tag + ": moves (" + std::to_string(moved).substr(0, 5) + " m in 2 s, " + game::formName(pc.moveForm()) + ")");
+        // Transform
+        platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        const game::Form before = pc.form();
+        step(tf); run(3.0f, idle);
+        if (flyer) check(pc.form() == game::Form::Vehicle && before == game::Form::Vehicle && !pc.isTransforming(), tag + ": flyer stays in hover form (transform ignored)");
+        else {
+            check(pc.form() != before, tag + ": transforms (" + game::formName(before) + " -> " + game::formName(pc.form()) + ")");
+            step(tf); run(3.0f, idle);
+            check(pc.form() == game::Form::Robot, tag + ": transforms back to robot");
+        }
+        // Fire (robot weapon; the flyer fires its vehicle weapon)
+        const game::Weapon* w = (pc.moveForm() == game::Form::Vehicle && pc.vehicleWeapon()) ? pc.vehicleWeapon() : &pc.weapon();
+        const unsigned s0 = w->shotSerial;
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 60; ++i) { fire.pressed[(int)platform::Button::Fire] = (i % 10 == 0); step(fire); }
+        const game::Weapon* w2 = (pc.moveForm() == game::Form::Vehicle && pc.vehicleWeapon()) ? pc.vehicleWeapon() : &pc.weapon();
+        check(w2->shotSerial > s0, tag + ": fires (" + std::string(w2->def ? w2->def->id : "-") + ", " + std::to_string(w2->shotSerial - s0) + " shots)");
+        // Hit volume
+        const game::Form f = pc.moveForm();
+        LOG_INFO("EXTRABODY %s: hit cylinder (%s) radius %.2f m, half-height %.2f m; health %.0f", tag.c_str(), game::formName(f),
+                 pc.cylinderRadius(f), pc.cylinderHalfHeight(f), pc.health().max);
+        if (std::string(id) == "Minion1" || std::string(id) == "Minion2") check(pc.cylinderRadius(game::Form::Robot) <= 1.05f, tag + ": small robot hit cylinder (authored 100 / 120 UU)");
+        if (flyer) check(pc.cylinderHalfHeight(game::Form::Vehicle) < 1.0f, tag + ": bird-sized hit cylinder");
+        // Death and respawn as the same body
+        world_.applyMatchDamage(me, -1, 99999.0f, false, "Engine.DmgType_Fell");
+        run(0.2f, idle);
+        const bool died = world_.localPlayerDead();
+        run(7.0f, idle);
+        check(died && !world_.localPlayerDead() && pc.chassis().id == id, tag + ": dies and respawns as itself");
+    }
+    LOG_INFO("EXTRABODY SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

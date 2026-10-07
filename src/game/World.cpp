@@ -1971,7 +1971,10 @@ bool World::applyChassisToPawn(Character& pc, const std::string& id) {
     const ChassisAssets* a = chassisAssets(id);
     if (!a || !a->ok) return false;
     pc.setChassis(&a->def);
-    pc.setFormModels(&a->robot, &a->vehicle);
+    // A non-transforming flyer (Laserbeak) draws and animates its single body (robot.glb: hover / boost / land clips) in both forms;
+    // its hit cylinder follows that body's bounds (CalculateCylinderBounds), not the full-size roster default.
+    if (a->def.flyerNoTransform) pc.setFormModels(&a->robot, &a->robot);
+    else pc.setFormModels(&a->robot, &a->vehicle);
     pc.setArmModel(a->hasArm ? &a->arm : nullptr);
     const SocketDef& wp = a->def.weaponPrimary;
     pc.setWeaponSocket(a->robot.nodeByName(wp.bone), wp.local);

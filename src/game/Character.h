@@ -46,6 +46,7 @@ public:
         activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
         speedMult_ = 1.0f; fineAiming_ = false;
         form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
+        if (chassis().flyerNoTransform) setForm(Form::Vehicle);   // a non-transforming flyer lives in its hover form
     }
     Form form() const { return form_; }      // displayed form (mesh handoff happens mid-fold)
     // Movement form: TnPawn.Transforming.BeginTransformation sets _CurrentForm = TargetForm and the
