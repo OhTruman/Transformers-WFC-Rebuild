@@ -224,6 +224,10 @@ public:
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
     // cacheKey / serial (drawDynamicMeshPosed): a persistent vertex buffer per key, rebuilt only when the serial changes
+    // GPU skinning (IRenderer::drawSkinnedMesh): false when unsupported (too many joints) - the caller CPU-skins
+    bool drawSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
+                     const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
+                     const core::Mat4& model, const void* key, uint64_t serial);
     // prevP / prevN (drawDynamicMeshBlended): the previous step's pose, blended in the vertex shader by alpha
     void drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey = nullptr, uint64_t serial = 0,
                      const std::vector<float>* prevP = nullptr, const std::vector<float>* prevN = nullptr, float alpha = 1.0f);
@@ -326,6 +330,27 @@ private:
     GLuint touchProg2D_ = 0, touchProgCube_ = 0, touchFbo_ = 0, touchTex_ = 0;
     int touchedTextures_ = 0;
     void touchNewTextures();
+    // GPU skinning: static bind-pose buffers per model, palettes in rows of an RGBA32F texture per character instance
+    static constexpr int kMaxBones = 128;                 // per palette (largest MP skeleton: 89 joints)
+    struct SkinModel {
+        GLuint vao = 0, vbo = 0, jwVbo = 0, ibo = 0;
+        size_t verts = 0, idx = 0;
+        int joints = 0;                                   // highest influencing joint + 1
+        std::vector<core::Vec3> jc; std::vector<float> jr;   // per joint: bind-space centre / radius of its vertices
+        int lastFrame = 0;
+    };
+    struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0; };
+    std::map<const void*, SkinModel> skinModels_;
+    std::map<const void*, SkinInst> skinInsts_;
+    std::vector<int> freeSkinRows_;
+    int skinRowsUsed_ = 0;
+    GLuint skinTex_ = 0;
+    static constexpr int kSkinRows = 512;
+    struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
+    const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
+    int skinMode_ = 0, skinRow_ = 0, skinBones_ = 0;      // VS: 0 off, 1 skin, 2 skin + blend with the prev palette
+    float skinAlpha_ = 1.0f;
+    void evictSkin(bool all);
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)

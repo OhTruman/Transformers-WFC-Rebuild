@@ -1429,6 +1429,19 @@ public:
         drawMeshArrays(m, model, color);
     }
 
+    bool drawSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
+                         const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
+                         const core::Mat4& model, const core::Vec3& color, const void* key, uint64_t serial) override {
+        static const bool off = std::getenv("WFC_NOGPUSKIN") != nullptr;   // A/B: the caller CPU-skins
+        if (off || !wfc_.active() || bind.empty()) return false;
+        (void)color;
+        watchdog::phase("drawDynamicMesh");
+        glx::gpuMark(glx::kPassWorld);
+        const bool ok = wfc_.drawSkinned(bind, joints, weights, palette, prevPalette, alpha, model, key, serial);
+        glLoadMatrixf(view_.m);
+        return ok;
+    }
+
     void drawDynamicMeshBlended(const MeshData& m, const std::vector<float>& prevP, const std::vector<float>& prevN, float alpha,
                                 const core::Mat4& model, const core::Vec3& color, uint64_t serial) override {
         if (!wfc_.active() || alpha >= 1.0f || prevP.size() != m.positions.size()) {
