@@ -32,7 +32,9 @@ $Maps = @($Maps | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() 
 $Resolutions = @($Resolutions | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 # -FixedCam: Rendering's WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every match frame at one view, so runs are comparable
 # (frame cost follows what the camera sees). Defaults: Streets overview from above team 0's spawn into team 1's (Rendering).
-$camDefaults = @{ "508" = "100,-700,-680,-141.6,-12" }
+# Debris / Molten: derived the same way (16 m above team 0's spawn, 20 m behind it, yaw = atan2(-dx, -dz) toward team 1's spawn;
+# the method reproduces Rendering's Streets view within 3 deg). Spawns: Debris from MATCH spawn logs, Molten from spawnpoints.json.
+$camDefaults = @{ "508" = "100,-700,-680,-141.6,-12"; "507" = "247.1,148.8,-63.4,91.4,-12"; "509" = "-25.2,18.4,-100.6,-103.5,-12" }
 foreach ($k in $CamByMap.Keys) { $camDefaults["$k"] = $CamByMap[$k] }
 if ($FixedCam -and -not $H.Contains("WFC_FIXEDCAM")) { Write-Warning "build has no WFC_FIXEDCAM - runs use the scripted player's camera" }
 $Pops = @($Pops | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
