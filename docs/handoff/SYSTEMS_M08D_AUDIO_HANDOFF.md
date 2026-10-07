@@ -231,3 +231,25 @@ presets, CaC slots, bot rosters): the chassis keys of `resolveChassis(selection,
 `"TransContent.TnWeapon" + id` of its robot and vehicle weapons. Call it once.
 Measured (real device): spawn-frame loads cold 30-60 ms per selection -> 1.3-4.6 ms warmed; the warm call is 8 ms at load
 (behind the loading screen); PCM back to base after unload.
+
+## M09d / M09e: bot (participant) ability audio
+
+- Trigger: Gameplay's `participantAbilityHook(player, abilityId, chassisId, pos)` (agents/gameplay e018b18) ->
+  `World::onParticipantAbility`. It plays the OnTriggerSound + that ability's animation notifies (Skill_<id>;
+  Dodge -> Nav_Boost_F; Whirlwind -> Transform_Whirlwind_ROBO) through the caster's body sound set, attached via
+  `participantPositionHook`. `tickParticipantAudio(dt)` runs once per step.
+- Per tick over opponents_ (M09e):
+  - spawned: `setParticipantBuffAudio(player, "TnBuffCloak", pawn.cloakRemain_ > 0, team, pawn.actorLocation())` and
+    `setParticipantHoverAudio(player, pawn.hoverState_, pawn.actorLocation())`;
+  - otherwise: `onParticipantGone(player)`.
+  - All three are idempotent and change-driven. A death stops the loops silently; match end / unload goes through stopAll.
+- Fields read: MatchOpponent::spawned() / matchPlayer() / pawn(); Character::cloakRemain_, hoverState_, actorLocation();
+  Match::players()[p].team.
+- **PARTIAL:** Cloaking's activate / deactivate animation notifies (Nav_CloakActivate / Nav_CloakDeactivate:
+  CQC_TRANSFORM_CLOAK_ACTIVATE / DEACTIVATE, RE pass 5 s12 addendum) are not in the exported character clips. Only the cloak
+  buff loop / off sound plays (for the local pawn and for bots).
+- Verified (09c 49115b2 + glue, 7v8 TDM):
+  - bots' cloak START_LP x16 (Autobot 8 / Decepticon 8) and OFF x13;
+  - hover LIFT x5 / LAND x3;
+  - Warcry / Shockwave notifies;
+  - 0 missing cues, 0 leaks.

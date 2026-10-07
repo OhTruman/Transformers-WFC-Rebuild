@@ -135,6 +135,14 @@ public:
     void onParticipantAbility(int player, const std::string& abilityId, const std::string& chassisKey, const core::Vec3& pos);
     // Releases the delayed participant notifies; call once per simulation step (with the participant shot loop).
     void tickParticipantAudio(float dt);
+    // [Systems M09e] Per tick, for each live participant (idempotent: sounds start / stop on a change only):
+    //   setParticipantBuffAudio(player, "TnBuffCloak", pawn.cloakRemain_ > 0, team, pos) - the cloak loop (Autobot / Decepticon
+    //   cue by the participant's team) is heard by everyone; other buff classes are local-player only (silent here);
+    //   setParticipantHoverAudio(player, pawn.hoverState_, pos) - the hover lift loop + land (0 none, 1 JumpingToHover,
+    //   2 Hovering). onParticipantGone(player) when it dies / despawns: its loops stop with no Unapply / land sound.
+    void setParticipantBuffAudio(int player, const std::string& buffClass, bool active, int team, const core::Vec3& pos);
+    void setParticipantHoverAudio(int player, int hoverState, const core::Vec3& pos);
+    void onParticipantGone(int player);
     // Optional: where participant `player`'s pawn is now (sounds follow it); without it they stay at the cast position.
     std::function<bool(int player, core::Vec3& out)> participantPositionHook;
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):

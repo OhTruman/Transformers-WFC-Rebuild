@@ -42,8 +42,8 @@ bool AbilityAudio::setBuff(SoundCues& cues, const std::string& buffClass, const 
 }
 
 void AbilityAudio::pawnDied(SoundCues& cues, int key) {
-    if (key == 0 && hoverLoop_ >= 0) { cues.stop(hoverLoop_, 0.0f); hoverLoop_ = -1; }   // the local pawn's hover: no land
-    if (key == 0) hoverState_ = 0;
+    auto h = hover_.find(key);                                        // the pawn's hover: stops, no land
+    if (h != hover_.end()) { if (h->second.loop >= 0) cues.stop(h->second.loop, 0.0f); hover_.erase(h); }
     for (Live& l : live_)
         if (l.key == key) {
             if (l.inst >= 0) cues.stop(l.inst, 0.0f);
@@ -68,17 +68,18 @@ int AbilityAudio::abilitiesJammed(SoundCues& cues, const SoundCues::Emitter& paw
     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
 }
 
-void AbilityAudio::hoverState(SoundCues& cues, int state, const SoundCues::Emitter& pawn, float dist) {
-    if (state == hoverState_) return;
-    const int prev = hoverState_;
-    hoverState_ = state;
+void AbilityAudio::hoverState(SoundCues& cues, int key, int state, const SoundCues::Emitter& pawn, float dist) {
+    Hover& hv = hover_[key];
+    if (state == hv.state) return;
+    const int prev = hv.state;
+    hv.state = state;
     if (state == 1 && prev == 0) {                                     // JumpingToHover.BeginState
         const std::string& q = CharacterAudio::classSound("TnAcrobaticsManager", "_HoverLoopSound");
-        if (!q.empty() && (hoverLoop_ < 0 || !cues.playing(hoverLoop_))) hoverLoop_ = cues.play(q.c_str(), pawn, dist);
+        if (!q.empty() && (hv.loop < 0 || !cues.playing(hv.loop))) hv.loop = cues.play(q.c_str(), pawn, dist);
         return;
     }
     if (state == 2) return;                                              // into Hovering: the loop carries on
-    if (hoverLoop_ >= 0) { cues.stop(hoverLoop_, 0.5f); hoverLoop_ = -1; }   // EndState: FadeOut(0.5)
+    if (hv.loop >= 0) { cues.stop(hv.loop, 0.5f); hv.loop = -1; }   // EndState: FadeOut(0.5)
     if (prev == 2) {                                                     // Hovering ended: the cooldown (land) one-shot
         const std::string& q = CharacterAudio::classSound("TnAcrobaticsManager", "_HoverCooldownSound");
         if (!q.empty()) cues.play(q.c_str(), pawn, dist);
@@ -264,8 +265,8 @@ void AbilityAudio::stopAll(SoundCues& cues) {
     rollerLoop_ = -1; rollerAlive_ = false;
     for (Live& l : live_) if (l.inst >= 0) cues.stop(l.inst, 0.0f);
     live_.clear();
-    if (hoverLoop_ >= 0) cues.stop(hoverLoop_, 0.0f);
-    hoverLoop_ = -1; hoverState_ = 0;
+    for (auto& h : hover_) if (h.second.loop >= 0) cues.stop(h.second.loop, 0.0f);
+    hover_.clear();
 }
 
 int AbilityAudio::liveLoops(const SoundCues& cues) const {

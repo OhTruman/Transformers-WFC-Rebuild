@@ -1200,6 +1200,31 @@ void World::onParticipantAbility(int player, const std::string& id, const std::s
     }
 }
 
+void World::setParticipantBuffAudio(int player, const std::string& buffClass, bool active, int team, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    AbilityAudio::Owner o;
+    o.key = kOwnParticipantBase + player; o.local = false; o.team = team == 1 ? 1 : 0;   // no team: Autobot (faction 0)
+    o.at.pos = pos;
+    if (participantPositionHook) o.at.owner = kOwnParticipantBase + player;
+    o.listenerDist = core::length(pos - listenerPos_);
+    abilityAudio_.setBuff(cues_, buffClass, o, active);
+}
+
+void World::setParticipantHoverAudio(int player, int hoverState, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    SoundCues::Emitter e;
+    e.pos = pos;
+    if (participantPositionHook) e.owner = kOwnParticipantBase + player;
+    abilityAudio_.hoverState(cues_, kOwnParticipantBase + player, hoverState, e, core::length(pos - listenerPos_));
+}
+
+void World::onParticipantGone(int player) {
+    abilityAudio_.pawnDied(cues_, kOwnParticipantBase + player);
+    for (size_t i = 0; i < participantNotifies_.size();)            // its pending ability notifies too
+        if (participantNotifies_[i].player == player) { participantNotifies_[i] = participantNotifies_.back(); participantNotifies_.pop_back(); }
+        else ++i;
+}
+
 void World::tickParticipantAudio(float dt) {
     for (size_t i = 0; i < participantNotifies_.size();) {
         ParticipantNotify& n = participantNotifies_[i];
