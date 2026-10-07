@@ -54,7 +54,8 @@ if(WIN32)
     target_compile_definitions(wfc_rebuild PRIVATE UNICODE _UNICODE)
     # Static-link the C++/unwind/pthread runtimes so the exe is self-contained
     # (no llvm-mingw DLLs required beside it).
-    target_link_options(wfc_rebuild PRIVATE -static)
+    # The linker map lands beside the exe: the crash report names its frames from it (RenderWatchdog.cpp).
+    target_link_options(wfc_rebuild PRIVATE -static "-Wl,-Map=${CMAKE_BINARY_DIR}/bin/wfc_rebuild.map")
     target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus user32 xinput winmm mfplat mfreadwrite mfuuid ole32)
 endif()
 

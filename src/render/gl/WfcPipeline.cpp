@@ -3983,6 +3983,26 @@ void Pipeline::prewarmPlacedFx() {
 }
 
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
+    // AMD stability (Milestone E): never upload non-finite sprite corners or an unbounded batch
+    {
+        constexpr size_t kMaxSprites = 262144;
+        bool bad = n > kMaxSprites;
+        for (size_t i = 0; i < n && !bad; ++i)
+            for (int k = 0; k < 4 && !bad; ++k) bad = !std::isfinite(sp[i].c[k].x) || !std::isfinite(sp[i].c[k].y) || !std::isfinite(sp[i].c[k].z);
+        if (bad) {
+            static std::set<std::string> warned;
+            if (warned.insert(material ? material : "?").second)
+                LOG_WARN("render guard: sprite batch %s: %zu sprites (non-finite corners dropped, capped at %zu)", material ? material : "?", n, kMaxSprites);
+            std::vector<Sprite> ok;
+            ok.reserve(std::min(n, kMaxSprites));
+            for (size_t i = 0; i < n && ok.size() < kMaxSprites; ++i) {
+                bool fin = true;
+                for (int k = 0; k < 4; ++k) fin = fin && std::isfinite(sp[i].c[k].x) && std::isfinite(sp[i].c[k].y) && std::isfinite(sp[i].c[k].z);
+                if (fin) ok.push_back(sp[i]);
+            }
+            return ok.empty() ? false : drawSprites(material, ok.data(), ok.size(), facing);
+        }
+    }
     if (!material || !sp || n == 0) return false;
     for (size_t i = 0; i < n; ++i)
         for (const core::Vec3& c : sp[i].c)
