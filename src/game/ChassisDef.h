@@ -65,6 +65,8 @@ struct VehicleParams {
     float rollDuration = 0.0f;                                     // car: barrel roll (RollDuration 0.7); truck 0
     std::vector<WheelDef> wheels;                                  // empty = the truck wheel set (CharacterMovement)
     float damageMultiplier = 1.0f;                                 // VEHDEF DamageMultiplier
+    // VEHDEF AI boost rule (BoostStart / StopDistance UU -> m, BoostStart / StopAngle = cosines) [CONF authored].
+    float aiBoostStartM = 50.0f, aiBoostStopM = 30.0f, aiBoostStartCos = 0.98f, aiBoostStopCos = 0.707f;
     float selfDamageMultiplier = 0.45f;                            // VEHDEF SelfDamageMultiplier
     // Rigid-body hull around the mesh root (m). Truck: VH_Optimus_PHYSSYS convex box [CONF AssetTools PHYSICS_STREETS];
     // every MP chassis: its VH_*_PHYSSYS convex hull (VehicleHullTable.inc) [CONF authored]; mesh bounds only as a fallback.

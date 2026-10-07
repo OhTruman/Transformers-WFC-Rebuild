@@ -338,6 +338,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         } else if (vs.nitroCooldown <= 0.0f && vs.nitroRemain <= 0.0f) {
             vs.nitroRemain = cfg::kNitroDuration;      // TnTruckForm.Driving.UpdateNitro -> StartNitro
             vs.nitroCooldown = cfg::kNitroCooldown;
+            ++vs.nitroSerial;
         }
     }
 

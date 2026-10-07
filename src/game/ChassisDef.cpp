@@ -245,6 +245,10 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     const assets::Json& vsc = st["vehicle_scalars (VEHDEF)"];
     V.damageMultiplier = vsc["DamageMultiplier"].asFloat(1.0f);
     V.selfDamageMultiplier = vsc["SelfDamageMultiplier"].asFloat(0.45f);
+    V.aiBoostStartM = vsc["BoostStartDistance"].asFloat(5000) * 0.01f;
+    V.aiBoostStopM = vsc["BoostStopDistance"].asFloat(3000) * 0.01f;
+    V.aiBoostStartCos = vsc["BoostStartAngle"].asFloat(0.98f);
+    V.aiBoostStopCos = vsc["BoostStopAngle"].asFloat(0.707f);
     float chassisOffset = vsc["ChassisOffset"].asFloat(0.0f);   // unset = 0 (no class default authored)
     const assets::Json& vp = st["vehicle_physics"];
     const assets::Json& hov = vp.has("HoverBlueprint") ? vp["HoverBlueprint"]["values"]

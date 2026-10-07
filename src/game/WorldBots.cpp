@@ -681,6 +681,29 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
             in.wantBoost = !(collision() && collision()->segmentHit(pc.actorLocation(), tgt, th));
         }
     }
+    // Cars / trucks / tanks: boost by the authored AI rule (VEHDEF BoostStart / StopDistance and BoostStart / StopAngle) over the
+    // straight corridor ahead; trucks fire nitro on a long aligned stretch (a car's special move while Driving is the barrel roll).
+    if (vehicle && !jetForm && !visible && b.wp < b.path.size()) {
+        const VehicleParams& VP = pc.vehicleParams();
+        core::Vec3 d0 = b.path[b.wp].pos - pos; d0.y = 0.0f;
+        float run = core::length(d0);
+        if (run > 1e-3f) {
+            const core::Vec3 dir0 = d0 * (1.0f / run);
+            for (size_t k = b.wp + 1; k < b.path.size() && b.path[k].action == 0; ++k) {   // extend over straight-on corners
+                core::Vec3 dk = b.path[k].pos - b.path[k - 1].pos; dk.y = 0.0f;
+                const float lk = core::length(dk);
+                if (lk < 1e-3f) continue;
+                if (core::dot(dk * (1.0f / lk), dir0) < 0.98f) break;
+                run += lk;
+            }
+            const float cosA = core::dot(dir0, core::forwardFromYawPitch(pc.yaw(), 0.0f));
+            const bool boosting = pc.vehicleState().driving || pc.vehicleState().tankBoost;
+            in.wantBoost = boosting ? (run >= VP.aiBoostStopM && cosA >= VP.aiBoostStopCos) : (run >= VP.aiBoostStartM && cosA >= VP.aiBoostStartCos);
+            static const int noBoostDiag = std::getenv("WFC_BOTBOOSTDIAG") ? std::atoi(std::getenv("WFC_BOTBOOSTDIAG")) : 0;   // diagnostic A/B: 1 no nitro, 2 no boost
+            if (noBoostDiag == 2) in.wantBoost = false;
+            if (noBoostDiag == 0 && VP.hasDriving() && VP.rollDuration <= 0.0f && pc.vehicleState().driving && run > 2.0f * VP.aiBoostStartM && cosA > 0.995f) in.wantDash = true;   // nitro needs room to slow (PC ADAPTATION)
+        }
+    }
     in.wantJump = jump && !vehicle;
     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
     if (b.pendingHover) { in.hoverRequest = true; b.pendingHover = false; }
