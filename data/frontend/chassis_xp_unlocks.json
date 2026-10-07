@@ -1,6 +1,6 @@
 {
   "provenance": "PC ADAPTATION (user decision, Milestone E): the originally locked chassis (LockedChassis; Car5 / Jet8 via the campaigns, others with no known unlock path) unlock at a level of their own specialty. [PCSettings] OriginalChassisLocks=1 restores the original locks.",
-  "stagedNote": "Car8, Car9, Car10 (Machine Gunner; Car10 on both factions), Minion1-3 (Frenzy / Rumble / Laserbeak): user decision to add them on AssetTools' retargeted MP animations; offered only once Gameplay's chassis params land. Until then TEST ONLY via WFC_STAGED_CHASSIS=1 (CaC preview checks).",
+  "extraBodies": "PC ADAPTATION (user decision): Car8 / Car9 / Car10 (Machine Gunner, AICharacterNames.SoldierMG; Car10 neutral, on both factions), Minion1-3 (Frenzy / Rumble / Laserbeak, FriendlyIconicName), DefaultSpecialty Scout, on AssetTools' retargeted MP animations and Gameplay's chassis params (agents/gameplay 1ca3bf5, WFC_EXTRABODYTEST 38/38; Laserbeak a flyer that never transforms).",
   "unlocks": {
     "Car6": 15,
     "Car5": 20,
@@ -13,9 +13,7 @@
     "Jet7": 20,
     "Jet8": 25,
     "Tank4": 15,
-    "Tank5": 15
-  },
-  "staged": {
+    "Tank5": 15,
     "Car8": 10,
     "Car9": 15,
     "Car10": 20,

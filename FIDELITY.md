@@ -197,8 +197,10 @@ provenance stays in its section.
   real specialty level (the original script; verified locks at level 0, unlocked at 25). Chassis (user decision, PC
   ADAPTATION): the 12 named LockedChassis unlock at a level of their own specialty (data/frontend/chassis_xp_unlocks.json);
   the Car5 / Jet8 lock panel states the level; 'New chassis unlocked' on the level-up; OriginalChassisLocks=1 (hidden)
-  restores the original locks. The 6 unnamed LockedChassis (Car8-10 soldiers, Frenzy / Rumble / Laserbeak) stay hidden:
-  the original data has no MP animation for them (AssetTools) - not invented.
+  restores the original locks. The 6 unnamed LockedChassis (user decision) unlock at Scout (their DefaultSpecialty) Car8 10 /
+  Car9 15 / Car10 20 / Frenzy, Rumble, Laserbeak 25: names Machine Gunner (AICharacterNames.SoldierMG; their ObjectPath
+  is SoldierCarMG*) and the minions' FriendlyIconicName; the neutral Car10 is listed on both factions. The original data
+  has no MP animation for them: AssetTools retargeted the shared MP sets, Gameplay supplied chassis params (1ca3bf5).
 - **Map-name label**: the blue "frame" is a hollow ring (shape 105, +-10 outer / +-9 inner) scaled 21.70 x 7.35, i.e. a
   21.7-unit band at panel x 0..21.7 drawn additively above the label; the authored label (x 19) overlaps it by ~2.7 units
   in the original too (RE: no runtime move, font Distilla Cyrillic Regular, uniform ShowAll). No change; human check.
