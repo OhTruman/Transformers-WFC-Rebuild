@@ -254,7 +254,8 @@ public:
     avm1::Object* scriptObject(DisplayObject* d);
     DisplayObject* resolveTarget(const std::string& path, DisplayObject* base);   // "/a/b", "_root.a", "a.b", "../x"
     // Events.
-    void dispatchClipEvent(MovieClip* mc, const char* method, uint32_t clipEventFlag);
+    void dispatchClipEvent(MovieClip* mc, const std::string& method, uint32_t clipEventFlag);
+    size_t lastClipCount_ = 64;   // reserve hint for the per-frame clip list
     void queueAction(std::function<void()> fn) { actionQueue_.push_back(std::move(fn)); }
     void drainActions();
 
