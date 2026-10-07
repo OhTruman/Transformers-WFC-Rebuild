@@ -116,6 +116,9 @@ struct ChassisDef {
     std::string classDefaultSecondary;
     bool mpCharacter = true;                  // referenced by TnAssetReferencesMultiplayer
     bool lockedChassis = false, lockedCharacter = false;
+    // Flyer that never transforms (Laserbeak; AssetTools flyer_state_map, PC ADAPTATION approved by Integration / the user): always in
+    // its jet-hover form, robot.glb carries the hover / boost clips, transform requests are ignored.
+    bool flyerNoTransform = false;
     std::string loadError;                    // non-empty: this chassis cannot be spawned
 };
 

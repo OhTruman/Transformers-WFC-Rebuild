@@ -101,6 +101,7 @@ private:
     void runBotNavTest();
     void runXpTest();
     void runBotObjectiveTest();
+    void runExtraBodyTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
