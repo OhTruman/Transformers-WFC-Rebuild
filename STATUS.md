@@ -376,6 +376,9 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - Since: a4f44ed kill / death hitches; 078c7ce HUD screen effects; 34b2f50 six extra bodies unlock; 444e68d team pick +
   scoreboard scroll; d957c1d kill feed 6 lines (user); 1c725a9 View Scores scroll. 32 v 32 launch -> receipt verified
   (64 participants); the 64-participant UI check at 1280x720 is complete. Remaining: the map-name label (human check).
+- Then: d19b628 CaC NEW badges; 2d226a0 09b bot-settings migration; c33d086 / 033327e QA panel bot tools; ec130d0 /
+  87ac881 map-aware Extended bot counts; db3e706 / 79ee4f1 HUD performance (-39% draw). Open: per-mode objective
+  presentation (after Experimental's six-mode audit); the map-name label (human check).
 
 ## FRONTEND MILESTONE 09 (2026-10-06, branch `agents/frontend`)
 
