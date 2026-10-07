@@ -4585,15 +4585,24 @@ void World::tickAbilityAudio() {
             if (chargeFizzleAudio_ >= 0 && (long long)w.chargeFizzle != chargeFizzleAudio_) onChargeFizzle(wc);
             chargeFizzleAudio_ = (long long)w.chargeFizzle;
         } else chargeFizzleAudio_ = -1;
-        setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
-        setGuidedMissileAudio(missile_.alive, missile_.pos);      // [Systems M08m]
-        {   // [integration 09c] Gameplay 26e: barriers / sentries are per owner; these Systems loops follow the LOCAL player's
-            // instance (bots' deploy / loop audio needs Systems' per-instance form, requested).
-            const BarrierState* lb = nullptr; for (const BarrierState& bs : barriers_) if (bs.owner == localPlayer_ && bs.alive) lb = &bs;
-            const Sentry* ls = nullptr; for (const Sentry& se : sentries_) if (se.owner == localPlayer_ && se.alive) ls = &se;
-            setBarrierAudio(lb != nullptr, lb && lb->fade >= 0.0f, lb ? lb->pos : core::Vec3{0, 0, 0});
-            setSentryAudio(ls != nullptr, ls ? ls->target : -1, ls ? ls->pos : core::Vec3{0, 0, 0});
-        }
+        // [integration 09c] Systems M09h glue: per-instance ability-actor audio for any owner (Gameplay 26e per-owner barriers /
+        // sentries; the local roller mine / guided missile). An instance not reported this tick stops silently.
+        beginAbilityActorAudio();
+        for (const BarrierState& b : barriers_)
+            if (b.owner >= 0) {
+                AbilityActorState st; st.alive = b.alive && b.delay < 0.0f; st.fading = st.alive && b.fade >= 0.0f; st.pos = b.pos;
+                setAbilityActorAudio(AbilityActor::Barrier, b.owner, b.owner == localPlayer_, st);
+            }
+        for (const Sentry& se : sentries_)
+            if (se.owner >= 0) {
+                AbilityActorState st; st.alive = se.alive && se.delay < 0.0f; st.target = se.target; st.pos = se.pos;
+                setAbilityActorAudio(AbilityActor::Sentry, se.owner, se.owner == localPlayer_, st);
+            }
+        { AbilityActorState st; st.alive = roller_.alive; st.age = roller_.t; st.pos = roller_.pos;
+          setAbilityActorAudio(AbilityActor::RollerMine, localPlayer_, true, st); }
+        { AbilityActorState st; st.alive = missile_.alive; st.pos = missile_.pos;
+          setAbilityActorAudio(AbilityActor::GuidedMissile, localPlayer_, true, st); }
+        endAbilityActorAudio();
     }
     {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)
         const assets::SkinnedModel* am = p.currentModel();
@@ -4669,6 +4678,30 @@ void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const st
 void World::onLocalKillstreakActivated(const std::string& id, int team) {
     levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
 }
+
+void World::beginAbilityActorAudio() { abilityAudio_.markActorsUnseen(); }
+
+void World::setAbilityActorAudio(AbilityActor kind, int owner, bool local, const AbilityActorState& s) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    const int key = local ? 0 : kOwnParticipantBase + owner;
+    const float d = core::length(s.pos - listenerPos_);
+    switch (kind) {
+    case AbilityActor::RollerMine: abilityAudio_.rollerMine(cues_, key, s.alive, s.age, s.pos, d); break;
+    case AbilityActor::GuidedMissile: abilityAudio_.guidedMissile(cues_, key, s.alive, s.pos, d); break;
+    case AbilityActor::Barrier: abilityAudio_.barrier(cues_, key, s.alive, s.fading, s.pos, d); break;
+    case AbilityActor::Sentry: abilityAudio_.sentry(cues_, key, s.alive, s.target, s.pos, d); break;
+    }
+}
+
+void World::onAbilityActorExploded(AbilityActor kind, int owner, bool local, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    const int key = local ? 0 : kOwnParticipantBase + owner;
+    const float d = core::length(pos - listenerPos_);
+    if (kind == AbilityActor::RollerMine) abilityAudio_.rollerMineExploded(cues_, key, pos, d);
+    else if (kind == AbilityActor::GuidedMissile) abilityAudio_.guidedMissileExploded(cues_, key, pos, d);
+}
+
+void World::endAbilityActorAudio() { abilityAudio_.sweepUnseenActors(cues_); }
 
 void World::onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit) {
     abilityAudio_.sentryShot(cues_, muzzle, core::length(muzzle - listenerPos_), worldHit, hit, core::length(hit - listenerPos_));

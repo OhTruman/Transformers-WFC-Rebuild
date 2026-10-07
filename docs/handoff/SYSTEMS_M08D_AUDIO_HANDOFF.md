@@ -309,3 +309,46 @@ Glue update (Gameplay agents/gameplay 4b33f0b): in the M09f bot-loop glue replac
 `if (const MoveIntent* mi = participantIntent(pl)) vsig.stickForward = mi->moveForward;` (exact, no longer PC ADAPTATION).
 Far bots' animation advancing every 2nd / 4th step is fine: RobotFoley detects notifies between the previous and the current
 animation time.
+
+## M09h - per-instance ability actor audio (any owner: Barrier, Sentry, Roller Mine, Guided Missile)
+
+AbilityAudio keeps one state per (actor kind, owner) instead of one local instance. World API (heard by everyone; world
+actors, not OnlyPlaySoundOnLocalPlayer):
+
+```cpp
+beginAbilityActorAudio();
+setAbilityActorAudio(AbilityActor kind, int ownerPlayer, bool ownerIsLocal, AbilityActorState{alive, fading, age, target, pos});
+onAbilityActorExploded(AbilityActor::RollerMine / GuidedMissile, ownerPlayer, ownerIsLocal, pos);
+endAbilityActorAudio();   // an instance not reported this tick stops silently (despawned)
+```
+
+Same sounds per instance as before (barrier BARRIER_LP / RETRACT at health 0; sentry SENTRY_ACTIVATE_LP, POSTDEPLOY per new
+enemy, fade + SENTRY_EXPL when destroyed; roller loop / arm 3 s / buildup 8.5 s / explosion; missile SHOOT_TRAIL /
+EXPL_IMPT_WORLD). Report a destroyed actor once with alive = false before it leaves the list. The actors' lifetime is
+Gameplay's state (onParticipantGone does not touch them). Ammo Crate needs nothing per instance (AMMO_DEPLOY is its
+OnTriggerSound, PICK_UP is authored silent). The local-only setters still work (key 0); do not drive one actor through both.
+
+Glue for 09c with Gameplay 26e (1842e20) - replaces the four local calls in the [Systems M08k] block (the interim adapter):
+
+```cpp
+beginAbilityActorAudio();
+for (const BarrierState& b : barriers_)
+    if (b.owner >= 0) {
+        AbilityActorState s; s.alive = b.alive && b.delay < 0.0f; s.fading = s.alive && b.fade >= 0.0f; s.pos = b.pos;
+        setAbilityActorAudio(AbilityActor::Barrier, b.owner, b.owner == localPlayer_, s);
+    }
+for (const Sentry& se : sentries_)
+    if (se.owner >= 0) {
+        AbilityActorState s; s.alive = se.alive && se.delay < 0.0f; s.target = se.target; s.pos = se.pos;
+        setAbilityActorAudio(AbilityActor::Sentry, se.owner, se.owner == localPlayer_, s);
+    }
+{ AbilityActorState s; s.alive = roller_.alive; s.age = roller_.t; s.pos = roller_.pos;
+  setAbilityActorAudio(AbilityActor::RollerMine, localPlayer_, true, s); }
+{ AbilityActorState s; s.alive = missile_.alive; s.pos = missile_.pos;
+  setAbilityActorAudio(AbilityActor::GuidedMissile, localPlayer_, true, s); }
+endAbilityActorAudio();
+```
+
+The existing onRollerMineExploded / onGuidedMissileExploded calls stay (they address the local instance, key 0). When Gameplay
+makes Roller / Missile per owner, loop over them the same way and call onAbilityActorExploded(kind, owner, local, pos).
+Suite 740 / 0 (three owners' sentries at once, per-owner POSTDEPLOY, silent sweep, per-owner destroy).

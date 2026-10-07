@@ -365,6 +365,27 @@ public:
     void setBarrierAudio(bool alive, bool fading, const core::Vec3& pos);
     void setSentryAudio(bool alive, int target, const core::Vec3& pos);
     void onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit);
+    // [Systems M09h] Every deployed ability actor of ANY owner (the local player or a participant), per tick - one live
+    // instance per (kind, owner). Replaces the local-only setters above (do not drive the same local actor through both).
+    //   beginAbilityActorAudio();
+    //   for each instance: setAbilityActorAudio(kind, ownerPlayer, ownerIsLocal, state)
+    //   (roller / missile detonation: onAbilityActorExploded(kind, ownerPlayer, ownerIsLocal, pos))
+    //   endAbilityActorAudio();  - an instance not reported this tick stops silently (despawned)
+    // A destroyed / expired actor should be reported once with alive = false (sentry: loop fade + DestroyedSound) before it
+    // leaves the list. The actors outlive their owner's death unless Gameplay ends them (state-driven; onParticipantGone does
+    // not touch them). Ammo Crate has no per-instance sound (AMMO_DEPLOY is its OnTriggerSound; PICK_UP is authored silent).
+    enum class AbilityActor { RollerMine, GuidedMissile, Barrier, Sentry };
+    struct AbilityActorState {
+        bool alive = true;
+        bool fading = false;           // barrier: health 0, fading out (DestroySound)
+        float age = 0.0f;              // roller mine: seconds since spawn (ArmSound 3 s, buildup 8.5 s)
+        int target = -1;               // sentry: current enemy target id, -1 none (ActivateSound on a new enemy)
+        core::Vec3 pos{0, 0, 0};
+    };
+    void beginAbilityActorAudio();
+    void setAbilityActorAudio(AbilityActor kind, int ownerPlayer, bool ownerIsLocal, const AbilityActorState& s);
+    void onAbilityActorExploded(AbilityActor kind, int ownerPlayer, bool ownerIsLocal, const core::Vec3& pos);
+    void endAbilityActorAudio();
     // The local player activated kill streak `id` (TnDataProvider_Killstreak UniqueId): its Self announcement
     // (team: the activator's, 0 Autobots / 1 Decepticons, for the FactionAnnouncementSound fallback).
     void onLocalKillstreakActivated(const std::string& id, int team);

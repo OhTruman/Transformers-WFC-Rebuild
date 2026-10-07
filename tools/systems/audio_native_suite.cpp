@@ -2383,6 +2383,35 @@ static void testAbilityActors() {
     aa.stopAll(cues); settle(0.1f);
     CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 0 && active("BL_TRANS_POWER.BARRIER_LP") == 0 &&
           active("BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL") == 0, "stopAll: sentry / barrier / missile loops stop");
+    // [M09h] Per owner: the local player's (key 0) and two bots' (1001, 1002) sentries / barriers are independent; an
+    // instance no longer reported is swept silently; the others keep playing.
+    const Vec3 q{8, 0, 0};
+    auto frame = [&](bool bot2) {
+        aa.markActorsUnseen();
+        aa.sentry(cues, 0, true, -1, p, 5.0f); aa.sentry(cues, 1001, true, -1, q, 8.0f);
+        aa.barrier(cues, 1001, true, false, q, 8.0f);
+        if (bot2) aa.sentry(cues, 1002, true, -1, q, 8.0f);
+        return aa.sweepUnseenActors(cues);
+    };
+    settle(12.0f);                                          // earlier one-shots (SENTRY_EXPL is long) finish
+    frame(true);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 3 && active("BL_TRANS_POWER.BARRIER_LP") == 1 && aa.liveActors() == 4,
+          "three owners' sentries loop at once, a bot's barrier too (%d sentries, %d actors)",
+          active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP"), aa.liveActors());
+    const int post0 = active("BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY");
+    aa.sentry(cues, 1001, true, 7, q, 8.0f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY") == post0 + 1, "one bot's sentry acquires an enemy: POSTDEPLOY for it only (%d -> %d)",
+          post0, active("BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY"));
+    const int expl0 = active("BL_TRANS_POWER.SENTRY_EXPL");
+    const int swept = frame(false); settle(0.1f);
+    CHECK(swept == 1 && active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 2 && active("BL_TRANS_POWER.SENTRY_EXPL") == expl0,
+          "bot 2's sentry no longer reported: its loop stops silently, the others play on (swept %d)", swept);
+    aa.markActorsUnseen(); aa.sentry(cues, 1001, false, -1, q, 8.0f); aa.sentry(cues, 0, true, -1, p, 5.0f);
+    aa.barrier(cues, 1001, true, false, q, 8.0f); aa.sweepUnseenActors(cues); settle(0.4f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 1 && active("BL_TRANS_POWER.SENTRY_EXPL") == expl0 + 1,
+          "bot 1's sentry destroyed: its SENTRY_EXPL; the local sentry plays on (LP %d, EXPL %d -> %d)",
+          active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP"), expl0, active("BL_TRANS_POWER.SENTRY_EXPL"));
+    aa.stopAll(cues);
 }
 
 // Death sounds and grenade toss (M08o; RE pass 5 s12 addenda 12 / 13).
