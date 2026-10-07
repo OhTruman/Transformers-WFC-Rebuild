@@ -233,6 +233,23 @@ bool FrontendRuntime::init() {
         }
         updateChassisUnlockTexts();
     }
+    {   // Map-aware Extended bot counts (user decision, PC ADAPTATION): AssetTools manifests/maps/recommended_players.json
+        // {"maps": {"<MapId>": {"perSide", "ffa", "modes": {"<ModeTag>": {"perSide"?, "ffa"?}}}}}.
+        assets::Json j;
+        std::ifstream f(Catalog::defaultManifestRoot() + "/maps/recommended_players.json");
+        std::stringstream ss; ss << f.rdbuf();
+        std::map<int, GameFlow::RecommendedPlayers> rec;
+        if (f && assets::Json::parse(ss.str(), j))
+            for (const auto& [id, m] : j["maps"].obj) {
+                GameFlow::RecommendedPlayers r;
+                r.perSide = m["perSide"].asInt(0);
+                r.ffa = m["ffa"].asInt(0);
+                for (const auto& [mode, o] : m["modes"].obj) r.modes[mode] = {o["perSide"].asInt(0), o["ffa"].asInt(0)};
+                if (r.perSide > 0) rec[std::atoi(id.c_str())] = r;
+            }
+        FlowTrace::emit("lobby.recommendedPlayers", {{"maps", std::to_string(rec.size())}, {"provenance", "PC ADAPTATION"}});
+        flow_.setRecommendedPlayers(std::move(rec));
+    }
     // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
     scene_.cameraIdForSlot = [this](int slot) {
         if (slot < 0 || slot > 1 || previewChassis_[slot].empty()) return -1;

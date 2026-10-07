@@ -43,6 +43,28 @@ static void testProfileBotMigration() {
     check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
 }
 
+static void testRecommendedBots() {
+    using GF = frontend::GameFlow;
+    // Team mode, human on the Autobot side (unpicked): 10 per side -> Autobot 9 bots, Decepticon 10.
+    GF::BotCounts t = GF::recommendedBots(10, 15, true, 0, 31, 32, 63);
+    check(t.autobot == 9 && t.decepticon == 10, "bots.recommended_team", std::to_string(t.autobot) + "/" + std::to_string(t.decepticon));
+    // Human on the Decepticon side.
+    GF::BotCounts d = GF::recommendedBots(10, 15, true, 1, 32, 31, 63);
+    check(d.autobot == 10 && d.decepticon == 9, "bots.recommended_team_decepticon");
+    // FFA: total includes the human.
+    GF::BotCounts f = GF::recommendedBots(10, 15, false, 0, 31, 32, 63);
+    check(f.enemy == 14, "bots.recommended_ffa", std::to_string(f.enemy));
+    // Capacity caps win (never above Gameplay's limits).
+    GF::BotCounts c = GF::recommendedBots(40, 80, true, 0, 31, 32, 63);
+    GF::BotCounts cf = GF::recommendedBots(40, 80, false, 0, 31, 32, 63);
+    check(c.autobot == 31 && c.decepticon == 32 && cf.enemy == 63, "bots.recommended_caps");
+    // The "edited since the last map change" flag round-trips through the profile.
+    std::istringstream in("[PCSettings]\nBotsAutobot=5\nBotsDecepticon=6\nBotsExtended=1\nBotsEdited=1\n");
+    frontend::LocalProfile p;
+    p.loadFrom(in);
+    check(p.bots.extended && p.bots.editedSinceMap && p.bots.autobot == 5, "bots.edited_flag_persists");
+}
+
 static void testUrl() {
     Url u = Url::parse("UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?listen");
     check(u.map() == "UI_Lobby_m", "url.map");
@@ -304,6 +326,7 @@ int main() {
     check(ok, "catalog.load");
     testUrl();
     testProfileBotMigration();
+    testRecommendedBots();
     if (ok) testCatalog(c);
     testUIController();
     testSceneCamera();
