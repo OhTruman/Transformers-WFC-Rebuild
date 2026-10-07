@@ -9,6 +9,7 @@
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
 #include <array>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <set>
@@ -365,11 +366,17 @@ private:
     void buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights);
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
-    int hudEffect_ = -1;                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
+    int hudEffect_ = -1;
+    std::map<int, std::chrono::steady_clock::time_point> ownerRendered_;   // draw owner -> last rendered (not culled)                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
     GLuint screenFxVao_ = 0, screenFxVbo_ = 0, screenFxIbo_ = 0;
     void drawHudScreenEffect();
 public:
     void setHudScreenEffect(int chain) { hudEffect_ = chain < 0 ? -1 : (chain > 1 ? 1 : chain); }
+    float drawOwnerRenderAge(int owner) const {
+        auto it = ownerRendered_.find(owner);
+        if (it == ownerRendered_.end()) return -1.0f;
+        return std::chrono::duration<float>(std::chrono::steady_clock::now() - it->second).count();
+    }
 private:
     struct PosedBuf {
         GLuint vao = 0, vbo = 0, ibo = 0, prevVbo = 0;

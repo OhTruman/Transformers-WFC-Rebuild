@@ -1127,6 +1127,7 @@ public:
     }
     float frameLimit() const override { return limiter_.limit(); }
     void setHudScreenEffect(int chain) override { wfc_.setHudScreenEffect(chain); }
+    float drawOwnerRenderAge(int owner) const override { return wfc_.drawOwnerRenderAge(owner); }
     void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
     void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
