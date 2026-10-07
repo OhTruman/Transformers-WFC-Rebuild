@@ -75,12 +75,16 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     bool inv = invertY_[0];
     if (vehicleForm) inv = vform == VehicleFormType::Jet ? invertPlane_ : vform == VehicleFormType::Tank ? invertTank_ : invertCar_;
     const float invY = inv ? -1.0f : 1.0f;
+    if ((float)camYawD_ != camYaw_) camYawD_ = camYaw_;       // set elsewhere (spawn yaw, quick turn, driving follow)
+    if ((float)camPitchD_ != camPitch_) camPitchD_ = camPitch_;
     if (!driving) {
-        camYaw_ -= in.mouseDX * cfg::kMouseSens * look;
-        if (in.padConnected) camYaw_ -= in.padRX * 0.04f * look;
+        camYawD_ -= (double)(in.mouseDX * cfg::kMouseSens * look);
+        if (in.padConnected) camYawD_ -= (double)(in.padRX * 0.04f * look);
+        camYaw_ = (float)camYawD_;
     }
-    camPitch_ -= in.mouseDY * cfg::kMouseSens * look * invY;
-    if (in.padConnected) camPitch_ += in.padRY * 0.03f * look * invY;
+    camPitchD_ -= (double)(in.mouseDY * cfg::kMouseSens * look * invY);
+    if (in.padConnected) camPitchD_ += (double)(in.padRY * 0.03f * look * invY);
+    camPitch_ = (float)camPitchD_;
     // PitchRange of the active strategy: OverTheShoulder -75..75, HoverTruck -20..30, Truck -25..25.
     float pMin = cfg::kPitchMin, pMax = cfg::kPitchMax;
     if (vehicleForm) {
@@ -101,20 +105,19 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // PC translation [PROV]: the mouse X axis is the camera-yaw axis, i.e. the right stick X, so it supplies
     // aTurn: mouse rate / kDriveMouseFullRate = stick deflection (a short 0.05 s average turns per-frame
     // mouse deltas into a rate). A/D stay left-stick X (strafe in hover, RollControl in boost).
-    float mouseRate = dt > 0.0f ? in.mouseDX / dt : 0.0f;
-    float mouseStick = core::clampf(mouseRate / cfg::kDriveMouseFullRate, -1.0f, 1.0f);
-    steerSmoothed_ += (mouseStick - steerSmoothed_) * (1.0f - std::exp(-dt / 0.05f));
+    // The mouse rate is formed per simulation step from the deltas accumulated over its render frames (applyToPawn), so the
+    // smoothing does not depend on the frame rate; the pad stick is a position, used as is.
+    accMouseDX_ += in.mouseDX; accMouseDY_ += in.mouseDY;
+    padSteer_ = std::fabs(steerIn) >= 1e-4f; padSteerIn_ = steerIn;
     if (std::fabs(steerIn) < 1e-4f) steerIn = steerSmoothed_;
-    if (const char* s = std::getenv("WFC_STEERSTICK")) steerIn = (float)std::atof(s);   // test: right-stick X after deadzone
+    if (const char* s = std::getenv("WFC_STEERSTICK")) { steerIn = (float)std::atof(s); padSteer_ = true; padSteerIn_ = steerIn; }   // test: right-stick X
     intent_.steer = driving ? steerIn : 0.0f;
     // Jet flight lean inputs: GetNormalizedTurn / GetNormalizedLookUp (PlayerInPlaneForm.SetLocalInputs) [CONF]; the PC
     // mouse supplies them through the same rate translation as boost steering [PROV].
     {
-        float mouseRateY = dt > 0.0f ? -in.mouseDY / dt : 0.0f;
-        float stickY = core::clampf(mouseRateY / cfg::kDriveMouseFullRate, -1.0f, 1.0f);
-        lookUpSmoothed_ += (stickY - lookUpSmoothed_) * (1.0f - std::exp(-dt / 0.05f));
-        float lookIn = lookUpSmoothed_;
-        if (in.padConnected && std::fabs(in.padRY) > 0.25f) lookIn = core::clampf(in.padRY, -1.0f, 1.0f);
+        float lookIn = lookUpSmoothed_;   // the mouse look-up rate smoothing runs per step (applyToPawn)
+        padLook_ = in.padConnected && std::fabs(in.padRY) > 0.25f;
+        if (padLook_) { lookIn = core::clampf(in.padRY, -1.0f, 1.0f); padLookIn_ = lookIn; }
         intent_.turnIn = jet ? steerIn : 0.0f;
         intent_.lookUpIn = jet ? lookIn : 0.0f;
     }
@@ -659,6 +662,47 @@ void PlayerController::applyToPawn(World& world, float dt) {
     colRay_ = world.weaponCollision();
     tickFineAim();
     MoveIntent step = intent_;
+    {   // Simulation facing / view pitch at the fixed step (see simYawS_): robot = the camera (unsmoothed), hover / tank / jet = the
+        // orbit smoother advanced per step toward the step-time camera, driving = the physics heading (no presentation offset)
+        // with the pitch chase per step. Frame-rate independent; the drawn camera keeps its per-frame smoothing.
+        const bool veh = pawn_->moveForm() == Form::Vehicle;
+        const bool jetForm = veh && pawn_->vehicleParams().form == VehicleFormType::Jet;
+        const bool drv = veh && !jetForm && pawn_->vehicleState().driving;
+        const int mode = !veh ? 0 : (drv ? 2 : 1);
+        if (mode != simMode_) { simMode_ = mode; simYaw_ = mode == 2 ? pawn_->yaw() : camYaw_; simPitch_ = camPitch_; simYawS_.reset(); simPitchS_.reset(); }
+        if (mode == 0) { step.faceYaw = camYaw_; step.viewPitch = camPitch_; }
+        else if (mode == 1) {
+            const float ty = simYaw_ + std::remainder(camYaw_ - simYaw_, 6.2831853f);
+            simYaw_ = simYawS_.smooth(simYaw_, ty, core::config::kHoverCamRotSmooth, dt);
+            simPitch_ = simPitchS_.smooth(simPitch_, camPitch_, core::config::kHoverCamRotSmooth, dt);
+            step.faceYaw = simYaw_; step.viewPitch = simPitch_;
+        } else {
+            const auto& vs = pawn_->vehicleState();
+            const core::Vec3& v = pawn_->velocity();
+            const float hs = std::sqrt(v.x * v.x + v.z * v.z);
+            const float velPitch = std::atan2(v.y, std::max(hs, 1e-3f));
+            const float blend = std::min(1.0f, std::sqrt(hs * hs + v.y * v.y) / core::config::kTruckDriveSpeed);
+            const float target = vs.pitch + (velPitch - vs.pitch) * blend + camPitch_;
+            simPitch_ = core::clampf(simPitch_ + (target - simPitch_) * std::min(1.0f, core::config::kDriveCamMatchRate * dt),
+                                     vs.pitch + pawn_->chassis().camDrive.pitchMin, vs.pitch + pawn_->chassis().camDrive.pitchMax);
+            simYaw_ = pawn_->yaw();
+            step.faceYaw = simYaw_; step.viewPitch = simPitch_;
+        }
+    }
+    {   // Mouse -> stick translation per step (accumulated deltas over this step's render frames; 0.05 s rate average) [PROV].
+        const float rate = dt > 0.0f ? accMouseDX_ / dt : 0.0f, rateY = dt > 0.0f ? -accMouseDY_ / dt : 0.0f;
+        accMouseDX_ = 0.0f; accMouseDY_ = 0.0f;
+        const float k = 1.0f - std::exp(-dt / 0.05f);
+        steerSmoothed_ += (core::clampf(rate / core::config::kDriveMouseFullRate, -1.0f, 1.0f) - steerSmoothed_) * k;
+        lookUpSmoothed_ += (core::clampf(rateY / core::config::kDriveMouseFullRate, -1.0f, 1.0f) - lookUpSmoothed_) * k;
+        const bool veh = pawn_->moveForm() == Form::Vehicle;
+        const bool jetForm = veh && pawn_->vehicleParams().form == VehicleFormType::Jet;
+        const bool drv = veh && !jetForm && pawn_->vehicleState().driving;
+        const float steerIn = padSteer_ ? padSteerIn_ : steerSmoothed_;
+        step.steer = drv ? steerIn : 0.0f;
+        step.turnIn = jetForm ? steerIn : 0.0f;
+        step.lookUpIn = jetForm ? (padLook_ ? padLookIn_ : lookUpSmoothed_) : 0.0f;
+    }
     step.wantJump = wantJumpLatched_;
     step.wantDash = wantDashLatched_;
     wantDashLatched_ = false;   // consumed by this step

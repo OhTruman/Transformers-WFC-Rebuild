@@ -169,6 +169,17 @@ private:
     bool fineAiming_ = false;
     float fovCur_ = core::config::kCamFovXDeg;   // smoothed horizontal FOV (TnFovCameraBehavior)
     C2Smoother fovS_, offXS_, offYS_, offZS_, yawS_, pitchS_, distS_;
+    // Simulation copy of the orbit smoothing, advanced once per fixed step (the camera's runs per render frame for presentation):
+    // the vehicle faces / aims by it, so the same inputs give the same motion at any frame rate.
+    C2Smoother simYawS_, simPitchS_;
+    float simYaw_ = 0.0f, simPitch_ = 0.0f;
+    int simMode_ = -1;
+    // Mouse deltas accumulated over the render frames of a step; the steering / look-up rate smoothing runs once per step on them.
+    float accMouseDX_ = 0.0f, accMouseDY_ = 0.0f;
+    // Look accumulators in double: per-frame mouse deltas summed in float round differently by frame partition, which vehicle
+    // contact physics amplifies; resynced whenever camYaw_ / camPitch_ are set elsewhere.
+    double camYawD_ = 0.0, camPitchD_ = 0.0;
+    bool padSteer_ = false, padLook_ = false; float padSteerIn_ = 0.0f, padLookIn_ = 0.0f;
     core::Vec3 offset_{core::config::kShoulderX, core::config::kShoulderY, core::config::kShoulderZMid};
     // Strategy blend (HmCameraStrategy.TransitionTime of the new strategy).
     int strategy_ = 0;
