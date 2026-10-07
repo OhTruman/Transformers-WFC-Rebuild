@@ -12,8 +12,13 @@
 # start their match at different frames: runs are compared on their common PREFIX (the shorter log must equal the start of
 # the longer), with -MinLines of overlap required; with Gameplay's WFC_MATCH_SECONDS every run ends a fixed match time
 # after InProgress instead (2026-10-07: the "0 vs 124 lines" runs were prefix-identical - a harness artefact).
+# NOTE: the reference run sets WFC_SIMTHREADS=0, which ALSO turns the async step off (Gameplay): "serial" = sync + serial.
+# -ExtraEnv "WFC_ASYNCSTEP=0" makes the compared runs threads-on / async-off, isolating threading from the async step.
+# WFC_SIMHASH (Gameplay; per-step hash of every pawn + bot steering state): when the build has it every run logs it, the hash
+# streams are compared too (stronger than the once-a-second BOTLOG), and a failure names the FIRST DIFFERING STEP - rerun that
+# seed with -HashDetail <step> (WFC_SIMHASH=<step>-<step>) for the per-pawn / per-field dump Gameplay asks for.
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Frames = 7200, [int]$MatchSeconds = 50, [int]$MinLines = 40, [string[]]$Seeds = @("123"), [int]$Repeats = 2,
-      [int]$Bots = 8, [string]$Map = "MP_IAC_Streets", [string]$ExtraEnv = "", [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
+      [int]$Bots = 8, [string]$Map = "MP_IAC_Streets", [string]$ExtraEnv = "", [ValidateSet("Release", "Debug")][string]$Config = "Release", [int]$HashDetail = -1, [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -32,6 +37,7 @@ function RunOne([string]$tag, [string]$seed, [bool]$serial) {
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$seed"; WFC_SMOKE_FRAMES = "$Frames"; WFC_LOGEVERY = "0"
             WFC_BOTLOG = "all"; WFC_XPLOG = "1"; WFC_NOMOUSE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150" }
     if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "1000000" }
+    if ($H.Contains("WFC_SIMHASH")) { $e.WFC_SIMHASH = $(if ($HashDetail -ge 0) { "$HashDetail-$HashDetail" } else { "0" }) }
     if ($serial) { $e.WFC_SIMTHREADS = "0" } else { foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] } }
     $null = Invoke-WfcExe $exe $d $e "run.log" 1800
 }
@@ -39,6 +45,15 @@ function Sig([string]$tag) {
     $lg = Join-Path $OutDir "$tag\wfc.log"; if (-not (Test-Path $lg)) { return $null }
     # leading comma: an EMPTY signature must stay an empty array (a bare @() return becomes $null = "missing")
     return ,@([IO.File]::ReadLines($lg) | Where-Object { $_ -match '\] (BOTLOG |XP p\d+ txn )' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
+}
+function Hashes([string]$tag) {
+    $lg = Join-Path $OutDir "$tag\wfc.log"; if (-not (Test-Path $lg)) { return ,@() }
+    return ,@([IO.File]::ReadLines($lg) | Where-Object { $_ -match 'SIMHASH' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
+}
+function HashDiff($a, $b) {   # first differing per-step hash line over the common prefix, or $null
+    $n = [Math]::Min($a.Count, $b.Count)
+    for ($i = 0; $i -lt $n; $i++) { if ($a[$i] -ne $b[$i]) { return "first differing SIMHASH line $i of $($a.Count) / $($b.Count):`n  serial:   $($a[$i])`n  threaded: $($b[$i])" } }
+    return $null
 }
 $fails = 0; $total = 0
 foreach ($seed in $Seeds) {
@@ -55,10 +70,14 @@ foreach ($seed in $Seeds) {
         for ($i = 0; $i -lt $n; $i++) { if ($ref[$i] -ne $b[$i]) { $first = $i; break } }
         if ($first -lt 0) {   # identical over the common prefix: same sim, different match start frame / end
             if ($n -lt $MinLines) { $total--; Res $name "UNKNOWN" ("identical over the common prefix but only {0} lines overlap (serial {1}, threaded {2}): not enough match time in one run (load frames ate the frame budget)" -f $n, $ref.Count, $b.Count) "Experimental"; continue }
-            Res $name "PASS" ("threaded run {0} == serial over {1} common state / event lines (serial {2}, threaded {3})" -f $r, $n, $ref.Count, $b.Count) "Gameplay"; continue }
+            $ha = Hashes "s${seed}_serial"; $hb = Hashes "s${seed}_thr$r"; $hd = if ($ha.Count -and $hb.Count) { HashDiff $ha $hb } else { $null }
+            if ($hd) { $fails++; Res $name "FAIL" ("seed {0} run {1}: BOTLOG equal over {2} lines but the per-step sim hash differs - {3}" -f $seed, $r, $n, $hd) "Gameplay"; continue }
+            Res $name "PASS" ("threaded run {0} == serial over {1} common state / event lines (serial {2}, threaded {3}){4}" -f $r, $n, $ref.Count, $b.Count, $(if ($ha.Count -and $hb.Count) { "; per-step sim hash equal over $([Math]::Min($ha.Count, $hb.Count)) steps" } else { "" })) "Gameplay"; continue }
         $fails++
         Res $name "FAIL" ("seed {0} run {1} ({2}) diverges from serial at line {3} of {4} / {5}:`n  serial:   {6}`n  threaded: {7}`n  log: {8}" -f $seed, $r, $(if ($ExtraEnv) { $ExtraEnv } else { "threads" }), $first, $ref.Count, $b.Count,
             $(if ($first -lt $ref.Count) { $ref[$first] } else { "(end)" }), $(if ($first -lt $b.Count) { $b[$first] } else { "(end)" }), (Join-Path $OutDir "s${seed}_thr$r\wfc.log")) "Gameplay"
+        $ha = Hashes "s${seed}_serial"; $hb = Hashes "s${seed}_thr$r"
+        if ($ha.Count -and $hb.Count) { $hd = HashDiff $ha $hb; Res "$name.simhash" "INFO" $(if ($hd) { "$hd - rerun with -Seeds $seed -HashDetail <that step> for the per-pawn dump" } else { "per-step sim hash equal over $([Math]::Min($ha.Count, $hb.Count)) steps although BOTLOG differs" }) "Gameplay" }
     }
 }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")

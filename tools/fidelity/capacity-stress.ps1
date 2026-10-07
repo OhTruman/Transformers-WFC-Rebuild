@@ -21,6 +21,10 @@
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "507"),
       [string[]]$Pops = @("orig10", "p16v16", "p32v32", "ffa64"), [int]$TimeLimit = 75, [int]$Difficulty = 1,
       [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit, [switch]$FixedCam, [hashtable]$CamByMap = @{}, [ValidateSet("overview", "legacy")][string]$CamSet = "overview",
+      # -PlayerBot <0..2>: REAL-PLAY row (Integration 2026-10-07) - the local player is driven by the bot brain through its input
+      # (Gameplay's WFC_PLAYERBOT) with the normal follow camera / HUD; use WITHOUT -FixedCam. Builds without the hook fall back to
+      # scripted input (walk / strafe / jump / turn / fire) and the row says "scripted (approximation)".
+      [int]$PlayerBot = -1,
       # -AsyncModes "0,1": every row with WFC_ASYNCSTEP=0 and =1 (Gameplay's async sim step); =1 rows also log WFC_ASYNCLOG
       # (local part / background part / join wait), reported per row
       [string[]]$AsyncModes = @(),
@@ -95,6 +99,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_AMBLOG = "1"; WFC_BOTLOG = "all"; WFC_BOTPERF = "5"
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
+        if ($PlayerBot -ge 0) {
+            if ($H.Contains("WFC_PLAYERBOT")) { foreach ($k in "WFC_AUTOWALK", "WFC_AUTOSTRAFE", "WFC_AUTOJUMP_EVERY") { $e.Remove($k) }; $e.WFC_PLAYERBOT = "$PlayerBot"; $e.WFC_PLAYERBOTLOG = "1" }
+            else { $e.WFC_AUTOTURN = "0.6"; $e.WFC_AUTOFIRE = "1" } }
         if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"]
             if ($H.Contains("WFC_SHOTMATCH")) { $e.WFC_SHOTMATCH = "$d,600,600,1" } }   # one capture of the measured view per match
         if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
@@ -252,6 +259,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             $lsrt = @($ls | Sort-Object); $med = $lsrt[[int]($lsrt.Count / 2)]; $flat = 100.0 * @($ls | Where-Object { [Math]::Abs($_ - $med) -le 6 }).Count / $ls.Count
             $lm = ($ls | Measure-Object -Average).Average
             Res "$mt.view" $(if ($lm -lt 30 -or $flat -gt 85) { "FAIL" } else { "INFO" }) ("measured view (match step 600, $(Split-Path $d -Leaf)\view.png): mean luma {0:N0}, {1:N0} % flat{2}" -f $lm, $flat, $(if ($lm -lt 30 -or $flat -gt 85) { " - NEAR-BLACK / FLAT: the fixed cam sees a wall; frame times are not representative of play" } else { "" })) "Experimental" }
+        if ($PlayerBot -ge 0 -and $H.Contains("WFC_PLAYERBOT")) {   # the pilot must actually play: log lines + shots
+            $pb = @($segL | Where-Object { $_ -match 'PLAYERBOT' }); $pbShots = @($pb | ForEach-Object { $mm = [regex]::Match($_, 'shots (\d+)'); if ($mm.Success) { [int]$mm.Groups[1].Value } }) | Measure-Object -Maximum
+            Res "$mt.pilot" $(if (-not $pb.Count) { "UNKNOWN" } elseif ($pbShots.Count -and $pbShots.Maximum -eq 0) { "FAIL" } else { "INFO" }) ("player bot: {0} PLAYERBOT log lines, max shots {1}{2}" -f $pb.Count, $(if ($pbShots.Count) { $pbShots.Maximum } else { "n/a (no 'shots' field)" }), $(if ($pb.Count) { "; last: " + ($pb[-1] -replace '^\[[^\]]*\]\s*', '').Substring(0, [Math]::Min(160, ($pb[-1] -replace '^\[[^\]]*\]\s*', '').Length)) } else { " - the pilot never logged (hook not wired into the loop?)" })) "Gameplay" }
         Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
@@ -285,7 +295,7 @@ Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", 
 if ($PerfLog) {
     $lines = New-Object System.Collections.Generic.List[string]
     if (-not (Test-Path $PerfLog)) { $lines.Add("# PERFORMANCE LOG (Experimental; user scalability brief, Integration 2026-10-07)"); $lines.Add(""); $lines.Add("Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with bots, second-match (warm) figures. Steady stats exclude hitch events (> 50 ms), which are counted separately; the first 180 in-play frames are warm-up. 1 % / 0.1 % low = fps of the slowest 1 % / 0.1 % of steady frames. Splits come from a separate profiling run (glFinish-serialised: ratios, not absolute).") }
-    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($FixedCam) { " - cam $CamSet" })$(if ($Note) { " - $Note" })"); $lines.Add("")
+    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($FixedCam) { " - cam $CamSet" })$(if ($PlayerBot -ge 0) { " - real play: " + $(if ($H.Contains("WFC_PLAYERBOT")) { "PLAYERBOT $PlayerBot, follow cam" } else { "scripted input (approximation), follow cam" }) })$(if ($Note) { " - $Note" })"); $lines.Add("")
     $lines.Add("| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |")
     $lines.Add("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     foreach ($r in @($rows | Where-Object { $_.match -eq 2 } | Sort-Object map, res, async, participants)) {
