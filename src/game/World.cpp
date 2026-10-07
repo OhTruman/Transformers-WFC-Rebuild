@@ -1453,6 +1453,30 @@ void World::onLocalKillstreakActivated(const std::string& id, int team) {
     levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
 }
 
+void World::beginAbilityActorAudio() { abilityAudio_.markActorsUnseen(); }
+
+void World::setAbilityActorAudio(AbilityActor kind, int owner, bool local, const AbilityActorState& s) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    const int key = local ? 0 : kOwnParticipantBase + owner;
+    const float d = core::length(s.pos - listenerPos_);
+    switch (kind) {
+    case AbilityActor::RollerMine: abilityAudio_.rollerMine(cues_, key, s.alive, s.age, s.pos, d); break;
+    case AbilityActor::GuidedMissile: abilityAudio_.guidedMissile(cues_, key, s.alive, s.pos, d); break;
+    case AbilityActor::Barrier: abilityAudio_.barrier(cues_, key, s.alive, s.fading, s.pos, d); break;
+    case AbilityActor::Sentry: abilityAudio_.sentry(cues_, key, s.alive, s.target, s.pos, d); break;
+    }
+}
+
+void World::onAbilityActorExploded(AbilityActor kind, int owner, bool local, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    const int key = local ? 0 : kOwnParticipantBase + owner;
+    const float d = core::length(pos - listenerPos_);
+    if (kind == AbilityActor::RollerMine) abilityAudio_.rollerMineExploded(cues_, key, pos, d);
+    else if (kind == AbilityActor::GuidedMissile) abilityAudio_.guidedMissileExploded(cues_, key, pos, d);
+}
+
+void World::endAbilityActorAudio() { abilityAudio_.sweepUnseenActors(cues_); }
+
 void World::onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit) {
     abilityAudio_.sentryShot(cues_, muzzle, core::length(muzzle - listenerPos_), worldHit, hit, core::length(hit - listenerPos_));
 }

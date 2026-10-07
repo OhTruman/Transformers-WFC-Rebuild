@@ -60,24 +60,37 @@ public:
     // (loops with the actor); ArmTime 3.0 s -> ArmSound; fuse <= 1.5 s left (t 8.5 of the 10 s fuse) -> _BuildupSound once;
     // destroyed -> loop stops + _ExplosionSound at the mine. Removed otherwise (owner death: FadingOut, kill-Z): loop stops,
     // nothing else. Every tick with Gameplay's state; `exploded` on the destruction tick.
-    void rollerMine(SoundCues& cues, bool alive, float t, const core::Vec3& pos, float listenerDist);
-    void rollerMineExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist);
+    void rollerMine(SoundCues& cues, bool alive, float t, const core::Vec3& pos, float listenerDist) { rollerMine(cues, 0, alive, t, pos, listenerDist); }
+    void rollerMineExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist) { rollerMineExploded(cues, 0, pos, listenerDist); }
+    // [Systems M09h] Per instance: `key` = the owning pawn's key (0 = the local player; a participant's key from World). The
+    // spawned actors' sounds are heard by everyone (world actors, not OnlyPlaySoundOnLocalPlayer) [CONF RE s12 addenda].
+    void rollerMine(SoundCues& cues, int key, bool alive, float t, const core::Vec3& pos, float listenerDist);
+    void rollerMineExploded(SoundCues& cues, int key, const core::Vec3& pos, float listenerDist);
 
     // TnGuidedMissile (ability / killstreak): its projectile mesh's FlightSound from launch, following the missile; on
     // detonation the flight FadeOut(0.25) and ExplosionSound at the missile (HmProjectile, as the weapon projectiles).
-    void guidedMissile(SoundCues& cues, bool alive, const core::Vec3& pos, float listenerDist);
-    void guidedMissileExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist);
+    void guidedMissile(SoundCues& cues, bool alive, const core::Vec3& pos, float listenerDist) { guidedMissile(cues, 0, alive, pos, listenerDist); }
+    void guidedMissileExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist) { guidedMissileExploded(cues, 0, pos, listenerDist); }
+    void guidedMissile(SoundCues& cues, int key, bool alive, const core::Vec3& pos, float listenerDist);
+    void guidedMissileExploded(SoundCues& cues, int key, const core::Vec3& pos, float listenerDist);
 
     // TnBarrierSpawnable [RE pass 5 s12 addendum 3, CONF]: ActiveLoopSound from spawn, at the barrier, until the actor goes;
     // DestroySound when its health reaches 0 (damage or the DegenRate lifetime) = Gameplay's fade start; a silent removal
     // otherwise (re-cast ForceFadeout, owner death). Every tick: alive, fading (health 0, fading out), position.
-    void barrier(SoundCues& cues, bool alive, bool fading, const core::Vec3& pos, float listenerDist);
+    void barrier(SoundCues& cues, bool alive, bool fading, const core::Vec3& pos, float listenerDist) { barrier(cues, 0, alive, fading, pos, listenerDist); }
+    void barrier(SoundCues& cues, int key, bool alive, bool fading, const core::Vec3& pos, float listenerDist);
     // TnSentryPawnAbility [RE s12 addenda 3 / 4, CONF]: IdleSound loop from deploy, at the sentry; ActivateSound on every
     // EnemyAcquired (the target changing to an enemy); each shot its gun's WP_Fire (TnWeaponDefaultSentryAbility), a world
     // hit its DefaultImpactSound; destroyed (damage or the 30 s lifetime): the loop fades 0.25 s + Sentry_DSYS's
     // SENTRY_EXPL one-shot; the owner's death too (TnSentryPawn.Kill -> full-health damage trigger -> Destroyed) [CONF RE
     // pass 5 s12 addendum 5]. Every tick: alive, target (-1 none), position.
-    void sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float listenerDist);
+    void sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float listenerDist) { sentry(cues, 0, alive, target, pos, listenerDist); }
+    void sentry(SoundCues& cues, int key, bool alive, int target, const core::Vec3& pos, float listenerDist);
+    // Per-instance housekeeping: an instance no longer reported (despawned without a final alive=false) stops silently.
+    // markActorsUnseen() before the frame's reports, sweepUnseenActors() after them.
+    void markActorsUnseen();
+    int sweepUnseenActors(SoundCues& cues);
+    int liveActors() const { return (int)actors_.size(); }
     void sentryShot(SoundCues& cues, const core::Vec3& muzzle, float muzzleDist, bool worldHit, const core::Vec3& hit, float hitDist);
 
     // TnPlayerPawn.Tick [RE pass 5 s12 addendum 11, CONF]: the overshield health reaching 0 while the overshield is up
@@ -117,10 +130,10 @@ private:
     std::vector<Live> live_;
     struct Hover { int state = 0, loop = -1; };
     std::map<int, Hover> hover_;                     // per pawn key
-    bool rollerAlive_ = false; float rollerT_ = 0.0f; int rollerLoop_ = -1;
-    bool missileAlive_ = false; int missileLoop_ = -1;
-    bool barrierAlive_ = false, barrierFading_ = false; int barrierLoop_ = -1;
-    bool sentryAlive_ = false; int sentryTarget_ = -1, sentryLoop_ = -1;
+    enum ActorKind { kRoller, kMissile, kBarrier, kSentry };
+    struct Actor { bool alive = false, fading = false, seen = true; float t = 0.0f; int target = -1, loop = -1; };
+    std::map<std::pair<int, int>, Actor> actors_;     // (kind, owner key)
+    Actor& actor(int kind, int key) { Actor& a = actors_[{kind, key}]; a.seen = true; return a; }
     float overshield_ = 0.0f;
     std::map<std::pair<int, int>, float> lastHit_;     // (victim, hit-effect entry) -> clock of the last HitSound
     struct Mine { int loop = -1; bool tracking = false; };
