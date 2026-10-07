@@ -467,3 +467,17 @@ classes, 221-633 waves each); body cue sets register one per step (<= ~2 ms, M09
 waiting. Main-thread audio per cue play: 88 plays above 0.05 ms, max 1.04 ms - all announcer / switchboard dialog lines
 decoded on first play (0.5-0.8 ms each, short dialog, below the worker-defer threshold); everything else < 0.05 ms. No frame
 after the round start correlates with audio (the 4 frames > 33 ms after f700 have sim 5-8 ms: render-side).
+
+## M09m - audio step cost at 32 v 32 + a participant occlusion fix
+
+Sub-profile (09c 28aec2e, 63 bots, steady state, ms per 60 Hz step): SoundCues update 0.07-0.14 (of it occlusion line checks
+0.04-0.085), per-bot buff / hover 0.013 + body 0.018 + weapon 0.007, level audio 0.007, local character audio 0.003 - about
+0.12-0.2 ms per step in all. Changes, nothing audible altered:
+- Occlusion line checks are skipped for instances beyond their cue's audible distance (gain 0, virtual). Back in range an
+  instance is checked at once and takes its value directly (what continuous checks would have reached). A new out-of-range
+  loop starts without a check.
+- Bug: the occlusion source for a sound attached to a PARTICIPANT was the local pawn's body; it is now that participant's
+  body (participantPositionHook, actorLocation).
+Suite 744 / 0 (no checks while out of range, an immediate check on entry, the 0.25 s interval again in range).
+Note for Integration: participantPositionHook searches opponents_ linearly per call (the resolver calls it per attached
+instance per step); indexing it by player would make it O(1).

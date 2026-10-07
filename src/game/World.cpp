@@ -445,8 +445,13 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
         if (!collision_.valid()) return false;
         ++occlusionRays_;
         const Character& pc = player_.pawn();
-        core::Vec3 src = owner >= 0 ? pc.position() + pc.meshOffset() + core::Vec3{0, 1.5f, 0}
-                                    : to + core::Vec3{0, 0.5f, 0};
+        core::Vec3 src = to + core::Vec3{0, 0.5f, 0};
+        if (owner >= kOwnParticipantBase) {             // [Systems M09m] a participant's sound: from ITS body, not the local pawn's
+            core::Vec3 bp;
+            if (participantPositionHook && participantPositionHook(owner - kOwnParticipantBase, bp)) src = bp;   // actorLocation: body centre
+        } else if (owner >= 0) {
+            src = pc.position() + pc.meshOffset() + core::Vec3{0, 1.5f, 0};
+        }
         core::Vec3 d = src - from;
         float len = core::length(d);
         if (len < 1.0f) return false;
