@@ -40,7 +40,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=0`nBotsEnemy=0`nBotDifficulty=$Difficulty`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        (Get-BotProfile 0 0 $Difficulty) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($P.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
         $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
         $one = "call:Online.SetSelectedMapID,$map;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=4;wait:level=GameLobby;wait:ui=InLobby;wait:t=3"

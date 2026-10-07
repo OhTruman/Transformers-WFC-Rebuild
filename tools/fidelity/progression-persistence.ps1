@@ -60,7 +60,7 @@ function RunOnce([string]$tag, [string]$scr = $script) {
 }
 if (-not $ReportOnly) { if (Test-Path $ini) { Remove-Item $ini -Force }; Remove-Item (Join-Path $OutDir "flow_*.jsonl"), (Join-Path $OutDir "profile_after_*.ini") -ErrorAction SilentlyContinue }   # FRESH profile
 # -Bots N: Private Match Bot Settings as a player sets them ([PCSettings], N split friendly / enemy); progression stays fresh
-if (-not $ReportOnly -and $Bots -gt 0) { $bf = [int][Math]::Floor(($Bots - 1) / 2); "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$bf`nBotsEnemy=$($Bots - $bf)`nBotDifficulty=1`n" | Set-Content -Encoding ASCII $ini }
+if (-not $ReportOnly -and $Bots -gt 0) { $bf = [int][Math]::Floor(($Bots - 1) / 2); (Get-BotProfile $bf ($Bots - $bf) 1) | Set-Content -Encoding ASCII $ini }
 $okA = RunOnce "A"; $profA = ReadProg (Join-Path $OutDir "profile_after_A.ini")
 $okB = $okA -and (RunOnce "B"); $profB = ReadProg (Join-Path $OutDir "profile_after_B.ini")
 $hasNu = $okB -and "$($profB['NewlyUnlocked'])".Trim()

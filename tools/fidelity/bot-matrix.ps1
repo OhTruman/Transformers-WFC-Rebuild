@@ -48,7 +48,7 @@ foreach ($r in $runs) {
     $lg = Join-Path $d "wfc.log"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$($r.f)`nBotsEnemy=$($r.e)`nBotDifficulty=$diff`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        (Get-BotProfile $r.f $r.e $diff) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($r.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
         $s = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
                "call:Online.EditGameMode,$($r.mode)", "call:Online.PlayPrivateGame,$($r.mode)", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$($mapId[$r.map])", "wait:t=1",
@@ -87,7 +87,9 @@ foreach ($r in $runs) {
     $frameMs = if ($perf.Count) { [Math]::Round(($perf | Measure-Object -Average).Average, 2) } else { $null }
     $want = $r.f + $r.e + 1
     $local = @($players | Sort-Object p | Select-Object -First 1)[0]
-    $teamOk = if ($r.mode -eq "DM" -or -not $local -or $r.lobby) { $true } else { $fr = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq $local.team }).Count; $en = @($players | Where-Object { $_.team -ne $local.team }).Count; ($fr -eq $r.f -and $en -eq $r.e) }
+    $teamOk = if ($r.mode -eq "DM" -or -not $local -or $r.lobby) { $true } else { $fr = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq $local.team }).Count; $en = @($players | Where-Object { $_.team -ne $local.team }).Count
+        $a0 = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq 0 }).Count; $d1 = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq 1 }).Count
+        ($fr -eq $r.f -and $en -eq $r.e) -or ($a0 -eq $r.f -and $d1 -eq $r.e) }   # human-relative (old keys) or per-faction (09c)
     $stuckBots = @($nav | Where-Object { $_.stuckFrac -gt 0.25 -or $_.dist -lt 10 }); $noPathMax = ($nav | Measure-Object nopath -Maximum).Maximum
     $broken = @($nav | Where-Object { $_.frozenS -ge 20 })   # Gameplay's "broken" criterion: no displacement >= 20 s, no target, moving goal
     $offMesh = ($nav | Measure-Object offMesh -Sum).Sum

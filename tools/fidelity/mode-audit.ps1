@@ -39,7 +39,7 @@ foreach ($mode in $Modes) {
     $team = $mode -ne "DM"; $f = if ($team) { 3 } else { 0 }; $e = if ($team) { 4 } else { 7 }
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$mode.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$f`nBotsEnemy=$e`nBotDifficulty=1`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        (Get-BotProfile $f $e 1) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($team) { "GTS_TeamGame" } else { "GTS_FreeForAllGame" }
         $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
         $one = "call:Online.SetSelectedMapID,$MapId;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=4;wait:level=GameLobby;wait:ui=InLobby;wait:t=3"

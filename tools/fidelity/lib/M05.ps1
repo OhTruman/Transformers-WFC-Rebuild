@@ -133,3 +133,10 @@ function Convert-QuitRouting([string]$Script, [bool]$QuitBox) {
     $s = $s.Replace("ui:Back;wait:t=1;wait:level=FrontEnd", "ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd")
     return $s
 }
+
+# Private Match Bot Settings for a run's profile. Writes BOTH key sets: BotsFriendly / BotsEnemy (8c2b6e3 and older; FFA uses
+# BotsEnemy) and the per-faction BotsAutobot / BotsDecepticon that team modes read from 09c (Frontend; the old keys are ignored
+# there - 2026-10-07 harness defect: zero bots). Convention: Autobot = $Friendly count, Decepticon = $Enemy count.
+function Get-BotProfile([int]$Friendly, [int]$Enemy, [int]$Difficulty = 1, [switch]$Extended) {
+    return "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$Friendly`nBotsEnemy=$Enemy`nBotsAutobot=$Friendly`nBotsDecepticon=$Enemy`nBotDifficulty=$Difficulty`nBotsExtended=$(if ($Extended) { 1 } else { 0 })`n"
+}

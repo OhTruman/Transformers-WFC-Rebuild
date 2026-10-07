@@ -32,7 +32,7 @@ $f = if ($Control) { 0 } else { $Friendly }; $e = if ($Control) { 0 } else { $En
 $lg = Join-Path $OutDir "wfc.log"; $fl = Join-Path $OutDir "flow.jsonl"
 if (-not $ReportOnly -and -not (Test-Path $lg)) {
     if (-not (Wait-WfcGpu)) { Res "gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
-    "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$f`nBotsEnemy=$e`nBotDifficulty=1`n" | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
+    (Get-BotProfile $f $e 1) | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
     $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
     # re-select the map before EVERY match: after a match the lobby comes back on another map (09b 4fbd0b9: Streets -> Seed),
     # which made matches 2..N a different map (2026-10-06 harness defect)
