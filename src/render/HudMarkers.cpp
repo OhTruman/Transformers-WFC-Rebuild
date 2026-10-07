@@ -135,7 +135,8 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         float& hold = focusHold_[mk.key];
         if (focusNow) hold = ty.focusHysteresis;
         const bool focused = focusNow || hold > 0.0f;
-        std::vector<std::pair<std::string, std::array<float, 4>>> params = mk.params;
+        static thread_local std::vector<std::pair<std::string, std::array<float, 4>>> params;   // reused per marker
+        params.assign(mk.params.begin(), mk.params.end());
         float pulse = -1.0f;
         if (mk.pulseT >= 0.0f) {
             const float ph = (2.5f - std::fmod(mk.pulseT, 2.5f)) / 2.5f;
@@ -147,7 +148,8 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         if (onScreen) {
             float size = (focused ? st.focusedSize : st.unfocusedSize) * (float)W;
             if (size > 0.0f) {
-                IRenderer::MaterialTile t;
+                static thread_local IRenderer::MaterialTile t;   // reused (string / params capacity kept)
+                t = IRenderer::MaterialTile{std::move(t.material), 0, 0, 0, 0, 0, 0, 1, 1, 0, std::move(t.params)};
                 t.material = st.mat; t.w = t.h = size; t.x = sx - size * 0.5f; t.y = sy - size * 0.5f;
                 params.push_back({st.focusParam, {focused ? 1.0f : 0.0f, 0, 0, 0}});
                 params.push_back({st.onScreenParam, {1, 0, 0, 0}});
@@ -179,7 +181,8 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         if (onScreen && !focusNow && focused && !st.labelUnfocused && ty.focusHysteresis > 0.0f)
             labelAlpha = std::max(0.0f, hold / ty.focusHysteresis);   // fades over the hold
         if (pulse >= 0.0f) labelAlpha *= pulse;
-        std::string label = mk.label;
+        static thread_local std::string label;              // reused per marker
+        label = mk.label;
         if (label.empty() && !mk.action.empty()) {
             auto lb = ty.labels.find(mk.action);
             if (lb != ty.labels.end()) label = lb->second;

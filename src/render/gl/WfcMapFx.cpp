@@ -431,13 +431,24 @@ void Pipeline::setMapEffectActive(const std::string& what, bool active) { setMap
 // TnPickupFactory.SetPickupHidden: CustomPickupEffect.SetHidden(true) + DeactivateSystem(); highlight
 // DeactivateSystem() (its live particles finish). SetPickupVisible: the reverse (decompiled script, Systems 8dcb861).
 void Pipeline::setMapEffectState(const std::string& key, bool active, bool hidden) {
-    std::string w = key, role;
-    std::transform(w.begin(), w.end(), w.begin(), ::tolower);
-    size_t bar = w.find('|');
-    if (bar != std::string::npos) { role = w.substr(bar + 1); w = w.substr(0, bar); }
-    std::string shortName = w.substr(w.rfind('.') == std::string::npos ? 0 : w.rfind('.') + 1);   // full path or name
+    // the key's parse (lower-case owner, role, short name) is memoized: Gameplay calls this per pickup per frame
+    auto pk = effKeyCache_.find(key);
+    if (pk == effKeyCache_.end()) {
+        EffKey e;
+        std::string w = key;
+        std::transform(w.begin(), w.end(), w.begin(), ::tolower);
+        size_t bar = w.find('|');
+        if (bar != std::string::npos) { e.role = w.substr(bar + 1); w = w.substr(0, bar); }
+        e.shortName = w.substr(w.rfind('.') == std::string::npos ? 0 : w.rfind('.') + 1);   // full path or name
+        e.w = w;
+        pk = effKeyCache_.emplace(key, std::move(e)).first;
+    }
+    const std::string& w = pk->second.w;
+    const std::string& role = pk->second.role;
+    const std::string& shortName = pk->second.shortName;
     if (role.empty() || role == "custom") {          // SetPickupHidden / SetPickupVisible also toggle the pickup mesh
-        if (hidden) pickupMeshHidden_.insert(shortName); else pickupMeshHidden_.erase(shortName);
+        if (hidden) { if (!pickupMeshHidden_.count(shortName)) pickupMeshHidden_.insert(shortName); }
+        else pickupMeshHidden_.erase(shortName);
     }
     for (FxInstance& in : fxInstances_) {
         if (in.owner != w && in.owner != shortName && in.component != w) continue;

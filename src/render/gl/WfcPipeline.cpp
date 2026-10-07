@@ -2314,7 +2314,87 @@ void Pipeline::flushTranslucency() {
         }
     };
     auto batchOf = [&](size_t i) -> SpriteBatch* { return q[i].kind == 1 ? &spritePool_[(size_t)q[i].idx] : nullptr; };
+    // Frame sprite stream (300+ fps lobbies: one BufferData set + per-batch setup per sprite draw was ~19 % of the main
+    // thread in 64-player firefights). Every sprite group (the merge rule below, unchanged) is appended in draw order
+    // to one vertex stream, uploaded once, and drawn as its index range: the same vertices, primitives, order and
+    // state as the per-batch upload. WFC_NOSPRITESTREAM=1 = per-batch uploads (A/B).
+    static const bool noStream = std::getenv("WFC_NOSPRITESTREAM") != nullptr;
+    struct Group { size_t i, j; int prog; size_t quad0, quads; };
+    static std::vector<Group> groups;
+    groups.clear();
+    if (!noStream) {
+        spriteFrameV_.clear(); spriteFrameCol_.clear(); spriteFrameSub_.clear();
+        for (size_t i = 0; i < q.size(); ++i) {
+            if (!batchOf(i)) continue;
+            size_t j = i + 1;
+            if (!noMerge) while (j < q.size() && batchOf(j) && same(*batchOf(j), *batchOf(i))) ++j;
+            SpriteBatch& b = *batchOf(i);
+            const int prog = spriteProgram(b.mat);
+            Group gr{i, j, prog, spriteFrameV_.size() / 56, 0};
+            if (prog >= 0)
+                for (size_t k = i; k < j; ++k) {
+                    SpriteBatch& bk = *batchOf(k);
+                    spriteCoverage(b.mat.c_str(), bk.sprites.data(), bk.sprites.size());
+                    spriteAppend(bk.sprites.data(), bk.sprites.size(), b.facing, spriteFrameV_, spriteFrameCol_, spriteFrameSub_);
+                    gr.quads += bk.sprites.size();
+                }
+            if (prog >= 0 && j > i + 1) frameRecs_[frameNo_ & 3].draws -= (int)(j - i - 1);   // one draw per group
+            groups.push_back(gr);
+            i = j - 1;
+        }
+        const size_t quads = spriteFrameV_.size() / 56;
+        if (quads > 0) {
+            if (!spriteFrameVao_) {
+                GenVertexArrays(1, &spriteFrameVao_);
+                GenBuffers(1, &spriteFrameVbo_); GenBuffers(1, &spriteFrameCbo_); GenBuffers(1, &spriteFrameSbo_); GenBuffers(1, &spriteFrameIbo_);
+            }
+            BindVertexArray(spriteFrameVao_);
+            BindBuffer(GL_ARRAY_BUFFER, spriteFrameVbo_);
+            BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(spriteFrameV_.size() * sizeof(float)), spriteFrameV_.data(), GL_STREAM_DRAW);
+            setupAttribs();
+            BindBuffer(GL_ARRAY_BUFFER, spriteFrameCbo_);
+            BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(spriteFrameCol_.size() * sizeof(float)), spriteFrameCol_.data(), GL_STREAM_DRAW);
+            EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
+            BindBuffer(GL_ARRAY_BUFFER, spriteFrameSbo_);
+            BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(spriteFrameSub_.size() * sizeof(float)), spriteFrameSub_.data(), GL_STREAM_DRAW);
+            EnableVertexAttribArray(6); VertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+            BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteFrameIbo_);
+            if (quads > spriteFrameIboQuads_) {               // quad index pattern, grown on demand (static contents)
+                size_t cap = std::max<size_t>(quads, spriteFrameIboQuads_ * 2);
+                std::vector<uint32_t> idx(cap * 6);
+                for (size_t qd = 0; qd < cap; ++qd) {
+                    const uint32_t b4 = (uint32_t)(qd * 4);
+                    const uint32_t qq[6] = {b4, b4 + 1, b4 + 2, b4, b4 + 2, b4 + 3};
+                    std::copy(qq, qq + 6, &idx[qd * 6]);
+                }
+                BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STATIC_DRAW);
+                spriteFrameIboQuads_ = cap;
+            }
+            BindVertexArray(0);
+        }
+    }
+    size_t gi = 0;
     for (size_t i = 0; i < q.size(); ++i) {
+        if (!noStream && batchOf(i)) {                     // a sprite group from the frame stream
+            const Group& gr = groups[gi++];
+            if (gr.prog >= 0 && gr.quads > 0) {
+                SpriteBatch& b = *batchOf(i);
+                std::copy(b.dyn, b.dyn + 4, dynParam_);
+                GpuMesh& g = spriteFrameMesh_;
+                g.vao = spriteFrameVao_;
+                if (g.subs.empty()) g.subs.emplace_back();
+                Sub& d = g.subs[0];
+                d.first = (uint32_t)(gr.quad0 * 6); d.count = (uint32_t)(gr.quads * 6); d.prog = gr.prog;
+                d.matName = b.mat;                                 // diagnostics (WFC_SKIPMAT)
+                frameFx_ = true;
+                drawSubs(g, core::Mat4::identity(), true);
+                frameFx_ = false;
+                std::fill(dynParam_, dynParam_ + 4, 1.0f);
+            }
+            ++statSpriteBatches_; statSpriteMerged_ += (int)(gr.j - gr.i - 1);
+            i = gr.j - 1;
+            continue;
+        }
         if (!batchOf(i) || noMerge) { runItem(q[i]); continue; }
         size_t j = i + 1;
         while (j < q.size() && batchOf(j) && same(*batchOf(j), *batchOf(i))) ++j;
@@ -3162,6 +3242,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         BindVertexArray(0);
         sm.verts = n; sm.idx = bind.indices.size();
         buildSkinBoundsSets(sm, bind, joints, weights);
+        ++statSkinRebuilds_;
     }
     // ---- the instance: its palettes in a texture row (uploaded when the serial changes), bounds from the palette
     if (!skinTex_) {
@@ -3693,7 +3774,9 @@ void Pipeline::evictSkin(bool all) {
         } else ++it;
     }
     for (auto it = skinModels_.begin(); it != skinModels_.end();) {
-        if (all || frameNo_ - it->second.lastFrame > 600) {
+        // models (static buffers + bounds sets per bind mesh) are kept ~60 s at 300 fps: a body that is dead for its
+        // respawn delay must not be rebuilt (vertex build + upload + per-joint hulls) when it spawns again
+        if (all || frameNo_ - it->second.lastFrame > 18000) {
             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
             for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
             it = skinModels_.erase(it);
@@ -4146,6 +4229,51 @@ void Pipeline::prewarmPlacedFx() {
              fxMeshes_.size() - meshes, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
 }
 
+void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) {
+    // GPU-spike evidence: screen coverage of this batch (sum of projected quad areas, in screens)
+        FrameRec& fr = frameRecs_[frameNo_ & 3];
+        if (fr.frame != frameNo_) fr = FrameRec{}, fr.frame = frameNo_;
+        double cov = 0;
+        for (size_t i = 0; i < n; ++i) {
+            float px[4], py[4]; bool ok = true;
+            for (int k = 0; k < 4 && ok; ++k) {
+                const core::Vec3& p = sp[i].c[k];
+                const float* m = viewProj_.m;
+                const float cx = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12], cy = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+                const float cw = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+                if (cw <= 0.05f) { ok = false; break; }   // at / behind the near plane: count as one screen
+                px[k] = std::min(std::max(cx / cw, -1.0f), 1.0f); py[k] = std::min(std::max(cy / cw, -1.0f), 1.0f);
+            }
+            if (!ok) { cov += 1.0; continue; }
+            const double a = 0.5 * std::fabs((px[0] * py[1] - px[1] * py[0]) + (px[1] * py[2] - px[2] * py[1]) +
+                                             (px[2] * py[3] - px[3] * py[2]) + (px[3] * py[0] - px[0] * py[3]));
+            cov += a / 4.0;                              // NDC square area 4 = one screen
+        }
+        fr.sprites += (int)n; ++fr.draws; fr.coverage += cov; fr.matCov[material] += cov;
+}
+
+// Appends n sprites' vertices (the drawSprites layout: 14 floats per vertex, colour, second SubUV + blend).
+void Pipeline::spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, std::vector<float>& v,
+                            std::vector<float>& col, std::vector<float>& sub) {
+    const size_t v0 = v.size(), c0 = col.size(), s0 = sub.size();
+    v.resize(v0 + n * 4 * 14); col.resize(c0 + n * 4 * 4); sub.resize(s0 + n * 4 * 3);
+    core::Vec3 N = core::normalize(facing);
+    for (size_t i = 0; i < n; ++i) {
+        const Sprite& s = sp[i];
+        core::Vec3 T = core::normalize(s.c[1] - s.c[0]);   // +U across the quad
+        for (int k = 0; k < 4; ++k) {
+            float* o = &v[v0 + (i * 4 + (size_t)k) * 14];
+            o[0] = s.c[k].x; o[1] = s.c[k].y; o[2] = s.c[k].z;
+            o[3] = N.x; o[4] = N.y; o[5] = N.z;
+            o[6] = T.x; o[7] = T.y; o[8] = T.z; o[9] = 1.0f;
+            o[10] = s.uv[k][0]; o[11] = s.uv[k][1]; o[12] = 0; o[13] = 0;
+            std::copy(s.color, s.color + 4, &col[c0 + (i * 4 + (size_t)k) * 4]);
+            float* u = &sub[s0 + (i * 4 + (size_t)k) * 3];
+            u[0] = s.uv2[k][0]; u[1] = s.uv2[k][1]; u[2] = s.blend;
+        }
+    }
+}
+
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     // AMD stability (Milestone E): never upload non-finite sprite corners or an unbounded batch
     {
@@ -4189,27 +4317,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         return true;
     }
     if (spriteProgram(material) < 0) return false;
-    {   // GPU-spike evidence: screen coverage of this batch (sum of projected quad areas, in screens)
-        FrameRec& fr = frameRecs_[frameNo_ & 3];
-        if (fr.frame != frameNo_) fr = FrameRec{}, fr.frame = frameNo_;
-        double cov = 0;
-        for (size_t i = 0; i < n; ++i) {
-            float px[4], py[4]; bool ok = true;
-            for (int k = 0; k < 4 && ok; ++k) {
-                const core::Vec3& p = sp[i].c[k];
-                const float* m = viewProj_.m;
-                const float cx = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12], cy = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
-                const float cw = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
-                if (cw <= 0.05f) { ok = false; break; }   // at / behind the near plane: count as one screen
-                px[k] = std::min(std::max(cx / cw, -1.0f), 1.0f); py[k] = std::min(std::max(cy / cw, -1.0f), 1.0f);
-            }
-            if (!ok) { cov += 1.0; continue; }
-            const double a = 0.5 * std::fabs((px[0] * py[1] - px[1] * py[0]) + (px[1] * py[2] - px[2] * py[1]) +
-                                             (px[2] * py[3] - px[3] * py[2]) + (px[3] * py[0] - px[0] * py[3]));
-            cov += a / 4.0;                              // NDC square area 4 = one screen
-        }
-        fr.sprites += (int)n; ++fr.draws; fr.coverage += cov; fr.matCov[material] += cov;
-    }
+    spriteCoverage(material, sp, n);
     auto it = spriteProg_.find(material);
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);
@@ -4364,6 +4472,11 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
+    if (frameNo_ % 600 == 0 && statSkinRebuilds_) {   // skinned-model builds (expected: first sight / respawns only)
+        LOG_INFO("wfc gpu skin: %d model builds in the last 600 frames (%zu models, %zu instances live)", statSkinRebuilds_,
+                 skinModels_.size(), skinInsts_.size());
+        statSkinRebuilds_ = 0;
+    }
     if ((frameNo_ & 255) == 64)
         for (auto it = dynSubs_.begin(); it != dynSubs_.end();)
             it = frameNo_ - it->second.lastFrame > 600 ? dynSubs_.erase(it) : std::next(it);
@@ -4408,9 +4521,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 // Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,
 // after the post pass, in submission order. Material params arrive per tile (runtime uniforms).
 void Pipeline::drawCanvasTiles() {
-    if (uiTiles_.empty()) return;
-    std::vector<IRenderer::MaterialTile> tiles;
-    tiles.swap(uiTiles_);
+    if (uiTileCount_ == 0) return;
+    const size_t nTiles = uiTileCount_;
+    uiTileCount_ = 0;
+    const std::vector<IRenderer::MaterialTile>& tiles = uiTiles_;
     const core::Mat4 saveVP = viewProj_;
     const bool saveFog = fogOn_;
     float W = (float)std::max(vpW_, 1), Hh = (float)std::max(vpH_, 1);
@@ -4422,7 +4536,8 @@ void Pipeline::drawCanvasTiles() {
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glViewport(0, 0, (GLsizei)W, (GLsizei)Hh);
-    for (const IRenderer::MaterialTile& t : tiles) {
+    for (size_t ti = 0; ti < nTiles; ++ti) {
+        const IRenderer::MaterialTile& t = tiles[ti];
         float cx = t.x + t.w * 0.5f, cy = t.y + t.h * 0.5f, c = std::cos(t.rotation), sn = std::sin(t.rotation);
         Sprite s;
         const float cr[4][2] = {{-0.5f, 0.5f}, {0.5f, 0.5f}, {0.5f, -0.5f}, {-0.5f, -0.5f}};   // CCW after the y-down ortho
