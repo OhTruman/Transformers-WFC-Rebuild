@@ -98,13 +98,13 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
 
 namespace {
 // Kill feed lines in extended matches (PC EXTENSION, user decision): one constant to tune.
-constexpr int kExtendedFeedLines = 7;
-gfx::avm1::Object* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int depth = 0) {
+constexpr int kExtendedFeedLines = 6;
+gfx::MovieClip* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int depth = 0) {
     if (!c || depth > 10) return nullptr;
-    if (c->script && vm.findOwner(c->script, "messageQueue") == c->script && vm.get(c->script, "messageQueue").isObject()) return c->script;
+    if (c->script && vm.findOwner(c->script, "messageQueue") == c->script && vm.get(c->script, "messageQueue").isObject()) return c;
     for (auto& [d, ch] : c->children)
         if (ch->kind == gfx::DisplayObject::Kind::Clip && !ch->removed)
-            if (gfx::avm1::Object* r = findFeedManager(vm, static_cast<gfx::MovieClip*>(ch.get()), depth + 1)) return r;
+            if (gfx::MovieClip* r = findFeedManager(vm, static_cast<gfx::MovieClip*>(ch.get()), depth + 1)) return r;
     return nullptr;
 }
 }
@@ -117,8 +117,10 @@ gfx::avm1::Object* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int dep
 void GfxPresenter::extendedKillFeed(const Args& a) {
     gfx::Player& p = hud_->player();
     gfx::avm1::VM& vm = p.vm();
-    gfx::avm1::Object* mgr = findFeedManager(vm, p.root());
-    if (!mgr) { hud_->invoke("_global.GameMessage", a); return; }
+    gfx::MovieClip* mgrClip = findFeedManager(vm, p.root());
+    if (!mgrClip) { hud_->invoke("_global.GameMessage", a); return; }
+    gfx::avm1::Object* mgr = mgrClip->script;
+    feedManagerPath_ = mgrClip->targetPath();
     const auto alive = [&](const gfx::avm1::Value& v) { return v.isObject() && !vm.getV(v, "_name").isUndef(); };
     gfx::avm1::Value q = vm.get(mgr, "messageQueue");
     std::vector<gfx::avm1::Value> held;
@@ -133,7 +135,26 @@ void GfxPresenter::extendedKillFeed(const Args& a) {
         const int on = (int)vm.toNumber(vm.getV(old, "length"));
         for (int i = 0; i < on; ++i) { gfx::avm1::Value v = vm.getV(old, std::to_string(i)); if (alive(v)) held.push_back(v); }
     }
+    // Every line onto its slot before the shift (a shift still running when the next kill arrives would start the
+    // lines from uneven positions), and the line that entered last becomes visible.
+    const auto snap = [&](const gfx::avm1::Value& line, int slot) {
+        gfx::avm1::Object* to = vm.newPlain();
+        vm.set(to, "_y", gfx::avm1::Value((double)(slot * -22)));
+        vm.callMethod(line, "interp", {gfx::avm1::Value(0.001), gfx::avm1::Value("easeout"), gfx::avm1::Value(4), gfx::avm1::Value(to)});
+        vm.setV(line, "_y", gfx::avm1::Value((double)(slot * -22)));
+        vm.setV(line, "_visible", gfx::avm1::Value(true));
+    };
+    {
+        const int qn2 = (int)vm.toNumber(vm.getV(q, "length"));
+        for (int i = 0; i < qn2; ++i) { gfx::avm1::Value v = vm.getV(q, std::to_string(i)); if (alive(v)) snap(v, i); }
+        for (size_t k = 0; k < held.size(); ++k) snap(held[k], 4 + (int)k);
+    }
     hud_->invoke("_global.GameMessage", a);
+    // The new line enters at slot 0 while the others move up over 0.2 s: it stays hidden until they have left its slot.
+    {
+        gfx::avm1::Value nl = vm.getV(vm.get(mgr, "messageQueue"), "0");
+        if (alive(nl)) { vm.setV(nl, "_visible", gfx::avm1::Value(false)); vm.set(mgr, "__wfcPending", nl); feedRevealIn_ = 0.2f; }
+    }
     // After the call the queue holds the new line and up to 4 older ones (indices 0..4); the held lines follow at 5...
     std::vector<gfx::avm1::Value> keep;
     for (size_t k = 0; k < held.size(); ++k) {
@@ -149,7 +170,8 @@ void GfxPresenter::extendedKillFeed(const Args& a) {
     }
     vm.set(mgr, "__wfcHeld", gfx::avm1::Value(vm.newArray(keep)));
     frontend::FlowTrace::emit("hud.killFeedExtended", {{"queue", std::to_string((int)vm.toNumber(vm.getV(vm.get(mgr, "messageQueue"), "length")))},
-                                                    {"held", std::to_string(keep.size())}, {"removed", std::to_string(held.size() - keep.size())}});
+                                                    {"held", std::to_string(keep.size())}, {"removed", std::to_string(held.size() - keep.size())},
+                                                    {"minGapSoFar", feedMinGapSeen_ > 1e8f ? std::string("-") : std::to_string(feedMinGapSeen_)}});
 }
 
 void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
@@ -636,6 +658,48 @@ void GfxPresenter::scrollScoreboard(const platform::InputFrame& in, float dt) {
     }
 }
 
+void GfxPresenter::checkKillFeed(float dt) {
+    if (!hud_ || feedManagerPath_.empty()) return;
+    gfx::Player& p = hud_->player();
+    gfx::avm1::VM& vm = p.vm();
+    gfx::DisplayObject* d = p.resolveTarget(feedManagerPath_, p.root());
+    if (!d || !d->script) return;
+    gfx::avm1::Object* mgr = d->script;
+    const auto alive = [&](const gfx::avm1::Value& v) { return v.isObject() && !vm.getV(v, "_name").isUndef(); };
+    if (feedRevealIn_ > 0.0f && (feedRevealIn_ -= dt) <= 0.0f) {
+        gfx::avm1::Value nl = vm.get(mgr, "__wfcPending");
+        if (alive(nl)) vm.setV(nl, "_visible", gfx::avm1::Value(true));
+    }
+    // Assertion: visible feed lines keep the 22 px step (logged once per new minimum).
+    std::vector<double> ys;
+    for (const char* list : {"messageQueue", "__wfcHeld"}) {
+        gfx::avm1::Value arr = vm.get(mgr, list);
+        if (!arr.isObject()) continue;
+        const int n = (int)vm.toNumber(vm.getV(arr, "length"));
+        for (int i = 0; i < n; ++i) {
+            gfx::avm1::Value v = vm.getV(arr, std::to_string(i));
+            if (alive(v) && vm.toBool(vm.getV(v, "_visible")) && vm.toNumber(vm.getV(v, "_alpha")) > 1.0) ys.push_back(vm.toNumber(vm.getV(v, "_y")));
+        }
+    }
+    std::sort(ys.begin(), ys.end());
+    static const bool feedTrace = std::getenv("WFC_FEEDTRACE") != nullptr;   // TEST ONLY: frames while lines are between slots
+    if (feedTrace) {
+        static size_t lastCount = 0;
+        if (ys.size() != lastCount) { lastCount = ys.size(); frontend::FlowTrace::emit("test.killFeedVisible", {{"lines", std::to_string(ys.size())}}); }
+        bool moving = false;
+        for (double y : ys) moving = moving || std::fabs(y / 22.0 - std::round(y / 22.0)) > 0.02;
+        if (moving) { std::string l; for (double y : ys) l += std::to_string((int)std::lround(y)) + " "; frontend::FlowTrace::emit("test.killFeedShift", {{"y", l}}); }
+    }
+    for (size_t i = 1; i < ys.size(); ++i) {
+        const float gap = (float)(ys[i] - ys[i - 1]);
+        feedMinGapSeen_ = std::min(feedMinGapSeen_, gap);
+        if (gap < 21.5f && gap < feedMinGapLogged_) {
+            feedMinGapLogged_ = gap;
+            frontend::FlowTrace::emit("hud.killFeedOverlap", {{"gap", std::to_string(gap)}, {"lines", std::to_string(ys.size())}});
+        }
+    }
+}
+
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
@@ -877,7 +941,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                 if (op.object == c.movie) op.movie->invoke(c.path, {Value((double)sx), Value((double)sy)});
     }
     if (cursor_) cursor_->advance(dt);
-    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); }
+    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); }
     if (scoreboard_) { scoreboard_->advance(dt); scrollScoreboard(in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.

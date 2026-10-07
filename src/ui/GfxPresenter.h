@@ -109,6 +109,11 @@ private:
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
     bool extendedMatch_ = false;   // more than the original 10 participants (kill feed PC EXTENSION)
     void extendedKillFeed(const std::vector<gfx::avm1::Value>& a);
+    void checkKillFeed(float dt);   // reveals the entering line after the shift; asserts the 22 px step
+    std::string feedManagerPath_;
+    float feedRevealIn_ = 0.0f;
+    float feedMinGapLogged_ = 1e9f;
+    float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
     void scrollScoreboard(const platform::InputFrame& in, float dt);
     void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
