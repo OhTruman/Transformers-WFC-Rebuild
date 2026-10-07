@@ -1602,7 +1602,8 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 
 // ------------------------------------------------------------------------- light environment
 namespace {
-struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0, dynReused = 0; } gStats;
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0, dynReused = 0;
+                     double skinMs = 0, skinBoundsMs = 0; int skinCalls = 0, skinUploads = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -2679,12 +2680,86 @@ void Pipeline::drawHudScreenEffect() {
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
 }
 
+// Exact skinned bounds, cheaply: a rigid vertex (one influence, weight exactly 1) skins to M p, so under any palette
+// the box over a joint's rigid vertices is set by vertices on the convex hull of that set. Kept: every rigid vertex not
+// strictly inside (by a margin far above rounding) the hull of the set's extreme points along 26 fixed directions
+// (a subset of the true hull, so dropping its interior is safe), and every other vertex. The box over the kept
+// vertices with skinPose's own expression is bitwise the box over all of them.
+void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const std::vector<uint16_t>& joints,
+                                   const std::vector<float>& weights) {
+    const size_t n = bind.vertexCount();
+    std::vector<std::vector<uint32_t>> rigid((size_t)sm.joints);
+    sm.blended.clear();
+    for (size_t i = 0; i < n; ++i) {
+        int inf = 0, j = -1; float w = 0.0f;
+        for (int k = 0; k < 4; ++k) if (weights[i * 4 + k] > 0.0f) { ++inf; j = joints[i * 4 + k]; w = weights[i * 4 + k]; }
+        if (inf == 1 && w == 1.0f && j >= 0 && j < sm.joints) rigid[(size_t)j].push_back((uint32_t)i);
+        else if (inf > 0) sm.blended.push_back((uint32_t)i);
+    }
+    static const core::Vec3 kDirs[26] = {
+        {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1},
+        {1, 1, 0}, {1, -1, 0}, {-1, 1, 0}, {-1, -1, 0}, {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1},
+        {0, 1, 1}, {0, 1, -1}, {0, -1, 1}, {0, -1, -1},
+        {1, 1, 1}, {1, 1, -1}, {1, -1, 1}, {1, -1, -1}, {-1, 1, 1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}};
+    auto P = [&](uint32_t i) { return core::Vec3{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]}; };
+    sm.hullPts.assign((size_t)sm.joints, {});
+    sm.boundsPts = sm.blended.size();
+    for (int j = 0; j < sm.joints; ++j) {
+        const std::vector<uint32_t>& R = rigid[(size_t)j];
+        std::vector<core::Vec3>& out = sm.hullPts[(size_t)j];
+        if (R.size() < 48) { for (uint32_t i : R) out.push_back(P(i)); sm.boundsPts += out.size(); continue; }
+        std::vector<core::Vec3> E;
+        core::Vec3 lo = P(R[0]), hi = P(R[0]);
+        for (const core::Vec3& d : kDirs) {
+            uint32_t best = R[0]; float bv = -1e30f;
+            for (uint32_t i : R) { const float v = core::dot(P(i), d); if (v > bv) { bv = v; best = i; } }
+            const core::Vec3 p = P(best);
+            bool dup = false;
+            for (const core::Vec3& e : E) dup |= (e.x == p.x && e.y == p.y && e.z == p.z);
+            if (!dup) E.push_back(p);
+        }
+        for (uint32_t i : R) { const core::Vec3 p = P(i); lo = {std::min(lo.x, p.x), std::min(lo.y, p.y), std::min(lo.z, p.z)};
+                               hi = {std::max(hi.x, p.x), std::max(hi.y, p.y), std::max(hi.z, p.z)}; }
+        const float ext = std::max(core::length(hi - lo), 1e-6f);
+        const float eps = ext * 1e-4f;                  // interior margin (bind units); rounding is ~1e-7 of the extent
+        std::vector<std::pair<core::Vec3, float>> planes;   // outward unit normal, offset
+        const size_t m = E.size();
+        for (size_t a = 0; a < m; ++a)
+            for (size_t b = a + 1; b < m; ++b)
+                for (size_t c = b + 1; c < m; ++c) {
+                    core::Vec3 nn = core::cross(E[b] - E[a], E[c] - E[a]);
+                    const float len = core::length(nn);
+                    if (len < 1e-12f) continue;
+                    nn = nn * (1.0f / len);
+                    const float d = core::dot(nn, E[a]);
+                    bool pos = false, neg = false;
+                    for (size_t q = 0; q < m && !(pos && neg); ++q) {
+                        const float s = core::dot(nn, E[q]) - d;
+                        if (s > eps) pos = true; else if (s < -eps) neg = true;
+                    }
+                    if (pos && neg) continue;
+                    if (pos) { nn = nn * -1.0f; planes.push_back({nn, -d}); } else planes.push_back({nn, d});
+                }
+        for (uint32_t i : R) {
+            const core::Vec3 p = P(i);
+            bool inside = !planes.empty();
+            for (size_t k = 0; k < planes.size() && inside; ++k) inside = core::dot(planes[k].first, p) - planes[k].second < -eps;
+            if (!inside) out.push_back(p);
+        }
+        sm.boundsPts += out.size();
+    }
+    LOG_INFO("wfc gpu skin: model %s: %zu verts, %d joints; exact bounds over %zu (%zu blended + rigid hull candidates)",
+             bind.mats.empty() ? "?" : bind.mats[0].wfcName.c_str(), n, sm.joints, sm.boundsPts, sm.blended.size());
+}
+
 bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
                            const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
                            const core::Mat4& model, const void* key, uint64_t serial) {
     const size_t n = bind.vertexCount();
     if (n == 0 || joints.size() != n * 4 || weights.size() != n * 4 || palette.empty() || (int)palette.size() > kMaxBones)
         return false;
+    struct SkinTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+        ~SkinTimer() { gStats.skinMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinCalls; } } skinTimer;
     // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
     SkinModel& sm = skinModels_[&bind];
     sm.lastFrame = frameNo_;
@@ -2731,14 +2806,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         EnableVertexAttribArray(10); VertexAttribPointer(10, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
         BindVertexArray(0);
         sm.verts = n; sm.idx = bind.indices.size();
-        size_t rigid = 0;
-        for (size_t i = 0; i < n; ++i) {
-            int inf = 0;
-            for (int k = 0; k < 4; ++k) if (weights[i * 4 + k] > 0.0f) ++inf;
-            if (inf <= 1) ++rigid;
-        }
-        LOG_INFO("wfc gpu skin: model %s: %zu verts (%zu single-joint, %.0f%%), %d joints", bind.mats.empty() ? "?" : bind.mats[0].wfcName.c_str(),
-                 n, rigid, 100.0 * (double)rigid / (double)n, sm.joints);
+        buildSkinBoundsSets(sm, bind, joints, weights);
     }
     // ---- the instance: its palettes in a texture row (uploaded when the serial changes), bounds from the palette
     if (!skinTex_) {
@@ -2759,7 +2827,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     // exact bounds (pixel-identical lighting / shadow fit): the skinned positions of assets::skinPose, positions only,
     // once per serial - the same transformPoint / weight sum, so the box is bitwise the CPU path's
     static const bool sphereBounds = std::getenv("WFC_SKINSPHEREBOUNDS") != nullptr;   // A/B: conservative per-joint spheres
-    auto exactBounds = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
+    auto fullBounds = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
         mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
         for (size_t i = 0; i < n; ++i) {
             const core::Vec3 p{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
@@ -2777,8 +2845,44 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         return std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
                std::isfinite(mn.z) && std::isfinite(mx.z) && mn.x <= mx.x;
     };
+    auto exactBounds = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
+        mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
+        auto grow = [&](const core::Vec3& sp) {
+            mn = {std::min(mn.x, sp.x), std::min(mn.y, sp.y), std::min(mn.z, sp.z)};
+            mx = {std::max(mx.x, sp.x), std::max(mx.y, sp.y), std::max(mx.z, sp.z)};
+        };
+        for (int j = 0; j < sm.joints && j < (int)pal.size(); ++j)
+            for (const core::Vec3& p : sm.hullPts[(size_t)j]) grow(core::Vec3{0, 0, 0} + core::transformPoint(pal[(size_t)j], p) * 1.0f);
+        for (uint32_t i : sm.blended) {
+            const core::Vec3 p{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
+            core::Vec3 sp{0, 0, 0};
+            for (int k = 0; k < 4; ++k) {
+                const float wt = weights[i * 4 + k];
+                if (wt <= 0) continue;
+                const uint16_t ji = joints[i * 4 + k];
+                if (ji >= pal.size()) continue;
+                sp += core::transformPoint(pal[ji], p) * wt;
+            }
+            grow(sp);
+        }
+        const bool ok = std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
+                        std::isfinite(mn.z) && std::isfinite(mx.z) && mn.x <= mx.x;
+        static const bool check = std::getenv("WFC_SKINBOUNDSCHECK") != nullptr;   // A/B: bitwise against the full loop
+        if (check && ok) {
+            core::Vec3 fm, fx;
+            fullBounds(pal, fm, fx);
+            static int bad = 0, good = 0;
+            const bool same = fm.x == mn.x && fm.y == mn.y && fm.z == mn.z && fx.x == mx.x && fx.y == mx.y && fx.z == mx.z;
+            (same ? good : bad)++;
+            if (!same && bad <= 5) LOG_WARN("wfc gpu skin: reduced bounds differ from the full loop (%g %g %g / %g %g %g vs %g %g %g / %g %g %g)",
+                                            mn.x, mn.y, mn.z, mx.x, mx.y, mx.z, fm.x, fm.y, fm.z, fx.x, fx.y, fx.z);
+            if (((good + bad) & 1023) == 0) LOG_INFO("wfc gpu skin: bounds check %d identical, %d different", good, bad);
+        }
+        return ok;
+    };
     auto boundsOf = [&](const std::vector<core::Mat4>& pal, core::Vec3& mn, core::Vec3& mx) {
-        if (!sphereBounds) return exactBounds(pal, mn, mx);
+        static const bool fullLoop = std::getenv("WFC_SKINFULLBOUNDS") != nullptr;   // A/B: every vertex
+        if (!sphereBounds) return fullLoop ? fullBounds(pal, mn, mx) : exactBounds(pal, mn, mx);
         mn = {1e30f, 1e30f, 1e30f}; mx = {-1e30f, -1e30f, -1e30f};
         for (int j = 0; j < sm.joints && j < (int)pal.size(); ++j) {
             if (sm.jr[(size_t)j] < 0.0f) continue;
@@ -2794,6 +2898,8 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
                std::isfinite(mn.z) && std::isfinite(mx.z);
     };
     if (si.serial != serial || si.prev != usePrev) {
+        const auto tb = std::chrono::steady_clock::now();
+        struct BTimer { std::chrono::steady_clock::time_point t; ~BTimer() { gStats.skinBoundsMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinUploads; } } bt{tb};
         for (const core::Mat4& M : palette) if (!finiteMat(M)) { reportNonFinite("bone palette", bind.mats.empty() ? std::string("?") : bind.mats[0].wfcName); return true; }
         if (!boundsOf(palette, si.mn, si.mx)) return true;
         if (usePrev && !boundsOf(*prevPalette, si.pmn, si.pmx)) return true;
@@ -3552,6 +3658,10 @@ void Pipeline::endFrame() {
                      "%.2f + upload %.2f + shadow %.2f + rest per frame", gStats.dynCalls / 120.0, gStats.dynCulled / 120.0,
                      gStats.dynReused / 120.0, gStats.dynTotalMs / 120.0,
                      gStats.dynBuildMs / 120.0, gStats.dynUploadMs / 120.0, gStats.dynShadowMs / 120.0);
+            if (gStats.skinCalls)
+                LOG_INFO("wfc: GPU-skinned draws: %.1f calls, %.2f ms per frame (incl. the dynamic draw), palette uploads %.1f "
+                         "(exact bounds + upload %.2f ms)", gStats.skinCalls / 120.0, gStats.skinMs / 120.0,
+                         gStats.skinUploads / 120.0, gStats.skinBoundsMs / 120.0);
             LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
                      statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
                      statVisCalls_ / 120.0);

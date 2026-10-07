@@ -212,6 +212,15 @@ public:
         Camera camOv = cam0;
         if (const char* rc = std::getenv("WFC_RENDERCAM"))
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+        // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
+        // own cameras), so performance runs see the same scene regardless of where the local player goes
+        if (matchMap_) {
+            static const char* fc = std::getenv("WFC_FIXEDCAM");
+            float y = 0, pt = 0;
+            if (fc && std::sscanf(fc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &y, &pt) == 5) {
+                camOv.yaw = core::radians(y); camOv.pitch = core::radians(pt);
+            }
+        }
         // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
         // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
         // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
@@ -613,6 +622,7 @@ public:
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
     std::map<std::string, assets::AnimFile> animFileCache_;   // M69 parsed AnimSets by path (preview bodies)
     bool loadingFrontendScene_ = false;
+    bool matchMap_ = false;                  // a match map's render data is loaded (not a menu scene)
     bool uploadingFrontendWorld_ = false;
     const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
         auto cached = animFileCache_.find(path);
@@ -688,6 +698,13 @@ public:
             }
         }
         b->clip = b->model.clipByName(resolved);
+        // PC ADAPTATION: bodies never selectable in the original (Frenzy / Rumble: no Cust_Idle chooser group, no
+        // Cust_Idle clip) preview in their own idle (NAV_Idle, AssetTools) instead of the reference pose
+        if (b->clip < 0 && resolved == "Cust_Idle" && b->model.clipByName("NAV_Idle") >= 0) {
+            LOG_INFO("preview body %s: no Cust_Idle; NAV_Idle (PC ADAPTATION: never selectable in the original)", gl.c_str());
+            resolved = "NAV_Idle";
+            b->clip = b->model.clipByName(resolved);
+        }
         const auto tAnim = Clock::now();
         if (wfc_.active()) {                 // M54: its materials compile now (load), not on its first drawn frame
             MeshData md; md.subs = b->model.subs; md.mats = b->model.mats;
@@ -715,6 +732,15 @@ public:
         if (h < 0 || (size_t)h >= previewBodies_.size() || !previewBodies_[(size_t)h]) return false;
         PreviewBody& b = *previewBodies_[(size_t)h];
         assets::evaluatePose(b.model, b.clip, t, b.scratch, out, true);
+        // PC ADAPTATION (preview only): a body taller than the customization cameras were framed for (the tallest
+        // originally selectable chassis, 4.1 m; the Machine Gunners Car8-10 are 5.3 m and were never selectable) is
+        // scaled uniformly about its origin to that height, so the class camera frames it. Matches are unaffected.
+        const float height = b.model.boundsMax.y - b.model.boundsMin.y;
+        constexpr float kDesignHeight = 4.1f;
+        if (height > kDesignHeight + 0.05f) {
+            const float k = kDesignHeight / height;
+            for (float& v : out.positions) v *= k;
+        }
         return !out.empty();
     }
     bool loadContentMesh(const std::string& gl, MeshData& out) override {
@@ -731,6 +757,7 @@ public:
     void setLoadYield(std::function<void()> y) override { wfc_.setLoadYield(std::move(y)); }
 
     void unloadMapRenderData() override {
+        matchMap_ = false;
         renderDataRequested_ = false;
         sceneSampled_ = false;
         wfc_.release();
@@ -983,6 +1010,7 @@ public:
         renderDataRequested_ = true;
         sceneSampled_ = false;
         bool ok = wfc_.load(mapName);
+        matchMap_ = ok && !loadingFrontendScene_;
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         if (ok && !loadingFrontendScene_) {
             animFileCache_.clear();          // M69: menu-only data, not held during a match
