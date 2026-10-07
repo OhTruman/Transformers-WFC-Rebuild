@@ -102,6 +102,7 @@ void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& 
     w.onFired();
     pc.notifyFired();
     ++b.shots;
+    if (pc.moveForm() == Form::Vehicle) ++b.vehicleShots;
     const core::Vec3 eye = botEye(pc);
     const core::Vec3 d = core::normalize(aimPoint - eye);
     if (w.projectile()) {
@@ -373,6 +374,16 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     const bool vehicleRoom = cell >= 0 && botNav_.cells()[(size_t)cell].vehicle && now >= b.noVehicleUntil;
     const bool travel = !visible && (b.goal.kind != BotGoalKind::Attack ? goalDist > 45.0f : goalDist > 60.0f);
     b.wantVehicle = canVehicle && travel && (pc.moveForm() == Form::Vehicle ? now >= b.noVehicleUntil : vehicleRoom);
+    // Vehicle-form combat (PC ADAPTATION): a bot already in vehicle form keeps fighting with its vehicle weapon while the enemy is
+    // beyond 12 m; Soldier tanks sometimes deploy for a mid-range fight (20-60 m) on vehicle-capable ground.
+    if (visible && canVehicle && pc.vehicleWeapon()) {
+        const Character* tp = participantPawn(b.target);
+        const float d = tp ? core::length(tp->position() - pc.position()) : 0.0f;
+        if (pc.moveForm() == Form::Vehicle && d > 12.0f) b.vehicleFightUntil = now + 2.0f;
+        else if (pc.moveForm() == Form::Robot && vehicleRoom && pc.vehicleParams().form == VehicleFormType::Tank && d > 20.0f && d < 60.0f &&
+                 now >= b.vehicleFightUntil && b.frand() < 0.04f) b.vehicleFightUntil = now + 8.0f;
+    }
+    if (now < b.vehicleFightUntil && canVehicle) b.wantVehicle = true;
     if (mapState_.carriedBy(b.player) >= 0) b.wantVehicle = false;   // the flag / bomb is held as the (WT_Heavy) weapon: robot form only
     // Weapon choice: the inventory weapon whose DesiredFiringRange band is nearest the target's band (switch held 0.5 s, as the
     // AI weapon picker's close / far switch delay); an empty weapon with no reserve is swapped out.
@@ -521,7 +532,8 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
     float tdist = 0.0f; core::Vec3 toT{0, 0, 0};
     if (visible) if (const Character* t = participantPawn(b.target)) { toT = targetable(*t) - botEye(pc); tdist = core::length(toT); }
-    const AiWeaponData& ad = aiWeaponData(pc.weapon().def ? pc.weapon().def->id : "", pc.weapon().magSize);
+    const Weapon& sw = (vehicle && pc.vehicleWeapon()) ? *pc.vehicleWeapon() : pc.weapon();   // the weapon in use sets the spacing band
+    const AiWeaponData& ad = aiWeaponData(sw.def ? sw.def->id : "", sw.magSize);
     const bool inBand = visible && tdist <= aiRangeMaxM(ad.desired) && tdist >= aiRangeMinM(ad.desired) * 0.7f;
     const bool tooClose = visible && tdist < aiRangeMinM(ad.desired) * 0.7f;
     const bool rushing = visible && !b.mission && match_.matchTime() < b.rushUntil && tdist > 1e-3f;
@@ -586,7 +598,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         if (botNav_.valid() && !botNav_.directWalkable(pos, pos + moveDir * 3.0f, ag)) moveDir = {0, 0, 0};
     }
     // Strafe in combat (robot form), checking the side is walkable.
-    if (visible && !vehicle) {
+    if (visible) {   // hover vehicles strafe like robots (TnHoverCarSimulation strafe input)
         b.strafeTimer -= dt;
         if (b.strafeTimer <= 0.0f) { b.strafeTimer = b.frange(0.7f, 1.8f); if (b.frand() < 0.6f) b.strafeDir = -b.strafeDir; }
         const core::Vec3 side = core::normalize(core::Vec3{-toT.z, 0, toT.x}) * b.strafeDir;
@@ -734,11 +746,11 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
-            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities;
+            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots;
             b = BotBrain{};
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
-            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab;
+            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs;
             b.wasSpawned = true; b.yaw = pc.yaw();
         }
         b.life += dt;

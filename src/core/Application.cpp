@@ -4296,12 +4296,12 @@ void Application::runBotTest() {
             }
             suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
         }
-        int abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        int vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
         for (const game::BotBrain& b : world_.botBrains()) {
-            abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            vehicleShots += b.vehicleShots; abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
             movers += travelled[b.player] > 40.0f;
         }
-        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d, repair ticks %d, abilities %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades, heals, abilities);
+        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d, repair ticks %d, abilities %d, vehicle-form shots %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades, heals, abilities, vehicleShots);
         LOG_INFO("BOTTEST phase %d: shots %d, bot kills %d (of the human %d), bot deaths %d, suicides %d, env deaths %d, spawns %d", phase + 1, shots,
                  botKills, botKillsOfHuman, botDeaths, suicides, envDeaths, spawns);
         LOG_INFO("BOTTEST phase %d: movers %d / %d, repaths %d, stuck events %d, jumps %d, transforms %d, weapon switches %d, reloads %d, longest idle %.1f s (player %d)",
@@ -4317,6 +4317,7 @@ void Application::runBotTest() {
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase == 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+        if (phase == 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase == 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
         if (phase == 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
         check(world_.botMsAverage() < 0.5 && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.5 ms, max < 6 ms)");
