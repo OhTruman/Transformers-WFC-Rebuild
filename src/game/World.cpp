@@ -468,7 +468,7 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
-        lastHitEffect_.clear(); participantHitEffect_.clear();
+        lastHitEffect_.clear(); participantHitEffect_.clear(); participantProfiles_.clear(); participantNotifies_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
         if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
@@ -558,6 +558,12 @@ void World::resetSystemsForMatch() {
 // Ion Blaster mesh or one of its sockets; while it is holstered (transform), the pawn carrying it
 // [MED: chest height]. A pawn bone missing on the displayed skeleton falls back to the mesh origin.
 bool World::resolveCueOwner(int owner, const std::string& socket, const core::Vec3& offset, core::Vec3& out) const {
+    if (owner >= kOwnParticipantBase) {                  // [Systems M09d] a participant's pawn (the hook the glue provides)
+        core::Vec3 p;
+        if (!participantPositionHook || !participantPositionHook(owner - kOwnParticipantBase, p)) return false;
+        out = p + offset;
+        return true;
+    }
     const Character& pc = player_.pawn();
     if (owner == kOwnPawn) {
         core::Mat4 bm;
@@ -1164,6 +1170,44 @@ int World::preloadSelectionAudio(const std::vector<std::string>& chassisKeys, co
     LOG_INFO("selection audio: +%zu chassis, +%zu weapon classes (%zu / %zu in all) -> %d waves decoding on a worker (level %s)",
              chassis.size(), weapons.size(), selectionChassis_.size(), selectionWeapons_.size(), n, tag.c_str());
     return n;
+}
+
+void World::onParticipantAbility(int player, const std::string& id, const std::string& chassisKey, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    const CharacterAudioProfile* prof = CharacterAudio::find(chassisKey);
+    const CharacterAudioProfile& p = prof ? *prof : CharacterAudio::defaultProfile();
+    // The body's cue set (its footstep / foley events resolve through it), registered once per chassis per level; the
+    // match-load selection warm decoded its waves, so this is cache hits.
+    if (participantProfiles_.insert(p.key).second) CharacterAudio::loadCues(cues_, p);
+    SoundCues::Emitter e;
+    e.pos = pos;
+    if (participantPositionHook) e.owner = kOwnParticipantBase + player;   // attached: resolveCueOwner asks the hook
+    const float dist = core::length(pos - listenerPos_);
+    const std::string& trig = CharacterAudio::abilityTriggerSound(AbilityAudio::abilityClass(id));
+    if (!trig.empty()) cues_.play(trig.c_str(), e, dist);
+    // The Skill_ clip's notifies (the bots play no ability animation; the local pawn's equivalent is onAbilityAnimFallback).
+    if (const CharacterAudioProfile::Clip* c = p.clip("Skill_" + id)) {
+        for (const CharacterAudioProfile::Notify& n : c->notifies) {
+            const std::string& cue = p.notifyCue(n);
+            if (cue.empty()) continue;
+            if (n.t <= 0.0f) cues_.play(cue.c_str(), e, dist);
+            else participantNotifies_.push_back({n.t, cue, player, pos});
+        }
+    }
+}
+
+void World::tickParticipantAudio(float dt) {
+    for (size_t i = 0; i < participantNotifies_.size();) {
+        ParticipantNotify& n = participantNotifies_[i];
+        n.delay -= dt;
+        if (n.delay > 0.0f) { ++i; continue; }
+        SoundCues::Emitter e;
+        e.pos = n.pos;
+        if (participantPositionHook) { core::Vec3 now; if (participantPositionHook(n.player, now)) e.pos = now; e.owner = kOwnParticipantBase + n.player; }
+        cues_.play(n.cue.c_str(), e, core::length(e.pos - listenerPos_));
+        participantNotifies_[i] = participantNotifies_.back();
+        participantNotifies_.pop_back();
+    }
 }
 
 void World::preloadParticipantWeaponAudio(const std::vector<std::string>& classes) {
