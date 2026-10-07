@@ -1186,7 +1186,11 @@ void World::onParticipantAbility(int player, const std::string& id, const std::s
     const std::string& trig = CharacterAudio::abilityTriggerSound(AbilityAudio::abilityClass(id));
     if (!trig.empty()) cues_.play(trig.c_str(), e, dist);
     // The Skill_ clip's notifies (the bots play no ability animation; the local pawn's equivalent is onAbilityAnimFallback).
-    if (const CharacterAudioProfile::Clip* c = p.clip("Skill_" + id)) {
+    // The ability's animation: Dodge -> Nav_Boost_* (all variants author the same FS_DEFAULT_JUMP_CHARGED), Whirlwind ->
+    // Transform_Whirlwind_ROBO, otherwise Skill_<id> [RE pass 5 s12 addendum table]. (Cloaking's Nav_CloakActivate is not in
+    // the exported clips; Hover's audio is the acrobatics loop, a state, not a trigger.)
+    const std::string clipName = id == "Dodge" ? "Nav_Boost_F" : id == "Whirlwind" ? "Transform_Whirlwind_ROBO" : "Skill_" + id;
+    if (const CharacterAudioProfile::Clip* c = p.clip(clipName)) {
         for (const CharacterAudioProfile::Notify& n : c->notifies) {
             const std::string& cue = p.notifyCue(n);
             if (cue.empty()) continue;
