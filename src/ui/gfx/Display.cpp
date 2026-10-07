@@ -645,6 +645,7 @@ void Player::queueFrameActions(MovieClip* mc) {
 void Player::runInitActions(MovieClip* mc, int frame) { (void)mc; (void)frame; }
 
 void Player::drainActions() {
+    core::prof::Scope prof("gfx.actions");
     int guard = 0;
     while (!actionQueue_.empty() && guard++ < 100000) {
         auto fn = std::move(actionQueue_.front());
@@ -1256,6 +1257,7 @@ void Player::advanceClip(MovieClip* mc) {
 
 void Player::advance(float dt) {
     if (!root_) return;
+    core::prof::Scope prof("+gfx.advance");
     timeMs_ += dt * 1000.0;
     // enterFrame handlers, then the timelines' new frames.
     std::vector<MovieClip*> clips;
@@ -1263,17 +1265,18 @@ void Player::advance(float dt) {
     collectEnterFrame(root_, clips);
     lastClipCount_ = clips.size();
     static const std::string kOnEnterFrame = "onEnterFrame";   // looked up on every clip every frame: no temporary
-    for (MovieClip* mc : clips) {
-        if (mc->removed) continue;
-        dispatchClipEvent(mc, kOnEnterFrame, EvEnterFrame);
-        drainActions();
+    {
+        core::prof::Scope p1("+gfx.enterFrame");
+        for (MovieClip* mc : clips) {
+            if (mc->removed) continue;
+            dispatchClipEvent(mc, kOnEnterFrame, EvEnterFrame);
+            drainActions();
+        }
     }
-    advanceClip(root_);
-    drainActions();
-    syncVariableText(root_);
-    tickIntervals();
-    processLoads();
-    drainActions();
+    { core::prof::Scope p2("+gfx.timeline"); advanceClip(root_); drainActions(); }
+    { core::prof::Scope p3("gfx.varText"); syncVariableText(root_); }
+    { core::prof::Scope p4("+gfx.intervals"); tickIntervals(); }
+    { core::prof::Scope p5("+gfx.loads"); processLoads(); drainActions(); }
     // Garbage collection: every few seconds (roots: display objects, listeners, intervals, queued work).
     // Per movie: a counter shared by all players (a function static) made the same movie take every 300th tick while
     // the open-movie count divided 300, so the others collected only when that count changed (heaps of ~200k objects).
@@ -1296,6 +1299,7 @@ void Player::advance(float dt) {
                 for (auto& [dd, ch] : static_cast<MovieClip*>(d)->children) keep(ch.get());
         };
         for (auto& g : graveyard) keep(g.get());
+        core::prof::Scope p6("gfx.gc");
         vm_->collect(roots);
     }
 }
@@ -1338,6 +1342,7 @@ DisplayObject* Player::resolveTarget(const std::string& pathIn, DisplayObject* b
 // ---- rendering traversal ----
 
 void Player::buildRenderList(const Matrix& base, std::vector<RenderItem>& out) {
+    core::prof::Scope prof("gfx.renderList");
     renderBase_ = base;
     if (root_) renderObject(root_, base, CXForm{}, out);
 }

@@ -1,6 +1,7 @@
 // AVM1 <-> display list: MovieClip / TextField prototypes, display properties, Color, flash.geom.Transform.
 #include "ui/gfx/Avm1.h"
 #include "ui/gfx/Display.h"
+#include "core/FrameProfile.h"
 #include "core/Log.h"
 #include <cstdlib>
 
@@ -230,6 +231,7 @@ bool displaySetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, const
         return false;
     }
     if (d->kind == gfx::DisplayObject::Kind::Text) {
+        core::prof::Scope prof("gfx.textSet");
         auto* tf = static_cast<gfx::TextField*>(d);
         gfx::Player* p = vm.player();
         if (k == "text") {
@@ -293,6 +295,7 @@ void VM::installDisplayBuiltins() {
     Object* P = movieClipProto;
 
     method(vm, P, "attachMovie", [](VM& vm, const Value& self, Args& a) -> Value {
+        core::prof::Scope prof("gfx.attach");
         gfx::MovieClip* mc = clipOf(self);
         if (!mc) return Value::undef();
         Object* init = arg(a, 3).isObject() ? a[3].o : nullptr;

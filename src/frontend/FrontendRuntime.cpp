@@ -1169,8 +1169,20 @@ void FrontendRuntime::updateInputDevice(const platform::InputFrame& in, float dt
     }
 }
 
+// WFC_NOMOUSE (deterministic / scripted runs): the real cursor reaches no menu either - hover selects an item (the
+// original PC behaviour), so a cursor resting over the title menu moved focus before scripted keys. Script pointers
+// (mouse: / click: / clickclip:) are applied afterwards and still work.
+static void hideRealPointer(platform::InputFrame& in) {
+    static const bool noMouse = std::getenv("WFC_NOMOUSE") != nullptr;
+    if (!noMouse) return;
+    in.mouseX = in.mouseY = -1;
+    in.mouseLeft = in.mouseRight = false;
+    in.mouseWheel = 0.0f;
+}
+
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
+    hideRealPointer(in);
     script_.applySynthetic(in);
     updateInputDevice(in, dt);
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
@@ -1192,6 +1204,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
+    hideRealPointer(in);
     script_.applySynthetic(in);
     updateInputDevice(in, dt);
     flow_.tick(dt);

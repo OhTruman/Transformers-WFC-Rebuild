@@ -1,4 +1,5 @@
 #include "frontend/DataStores.h"
+#include "core/FrameProfile.h"
 #include "frontend/Catalog.h"
 #include "frontend/FlowTrace.h"
 #include "frontend/GameFlow.h"
@@ -122,6 +123,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
 }
 
 bool DataStores::collection(const std::string& markup, Collection& c) {
+    core::prof::Scope prof("ds.collection");
     if (markup == "<TnMenuItems:Maps>") {
         // TnDataProvider_MapInfo providers in section order; disabled = !HasRequiredAssets [RE 3.2].
         c.columns = {"MapId", "MapFilename", "FriendlyName", "ImagePath", "CompatibleGameTypes", "Faction", "PresenceId"};
@@ -291,6 +293,7 @@ void DataStores::forgetMovie(const std::string& movie) {
 std::string DataStores::playerName() const { return flow_.profile().playerName(); }   // LocalProfile identity
 
 BridgeValue DataStores::call(const std::string& fn, const std::vector<std::string>& args, const std::string& movie) {
+    core::prof::Scope prof("ds.call");
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
     const std::string m = arg(0);
     if (fn == "ReadValue" || fn == "GetFieldValue") {
