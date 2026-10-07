@@ -316,6 +316,11 @@ private:
     struct ParticipantNotify { float delay; std::string cue; int player; core::Vec3 pos; };
     std::vector<ParticipantNotify> participantNotifies_;          // [Systems M09d] delayed Skill_ notifies of bots
     std::set<std::string> participantProfiles_;                   // bot chassis whose cue set is registered this level
+    bool localCloakAnim_ = false;                                 // [Systems M09e] cloak on -> Nav_CloakActivate notifies
+    std::set<int> participantCloakAnim_;                          // participants whose cloak is on
+    // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*, RE pass 5 s12 addendum) for a pawn; silent
+    // while those clips are missing from the character export (PARTIAL).
+    void playCloakAnimNotifies(bool on, const CharacterAudioProfile& p, const SoundCues::Emitter& at, float dist);
     static constexpr int kOwnParticipantBase = 1000;              // SoundCues owner id for participant `p` = base + p
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;
