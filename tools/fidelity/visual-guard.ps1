@@ -9,6 +9,11 @@
 # Every -Stride-th frame in [-From, -To] is compared: mean abs diff (0-255) and the share of pixels differing by > -Threshold.
 # A frame is FLAGGED when more than -FlagPct % of pixels differ; flagged frames get a diff heatmap and a side-by-side.
 # HUMAN verdict: a person judges whether flagged differences are visible quality changes; unflagged sequences PASS.
+# ALIGNMENT: when BOTH builds have Gameplay's WFC_SHOTMATCH, frames are captured by STEPS SINCE THE MATCH WENT InProgress
+# (m<step>.bmp; -From / -To / -Stride are match steps) and the run ends at a fixed match time (WFC_MATCH_SECONDS), so the same
+# file is the same simulation moment on both builds whatever the load took. Otherwise WFC_SHOTEVERY counts frames FROM BOOT:
+# the load-frame count varies per run, so only a static scene compares cleanly (use -Sets fixed -Bots 0 and a -From well past
+# the load, e.g. 7000); characters / the moving cam are then offset and flagged frames are not evidence of a change.
 # Note: the simulation must be deterministic across the two builds (sim-determinism.ps1); if a gameplay change alters
 # the simulation, characters will diverge and the moving set flags everything - then compare the fixed set's static parts.
 #
@@ -25,18 +30,23 @@ $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcR
 $url = "MP_IAC_Streets?GameModeTag=TDM?BotsAutobot={0}?BotsDecepticon={0}?BotDifficulty=1?ExtendedPlayers=1" -f $Bots
 function Sha($root) { $f = Join-Path $root "M05_TARGET.txt"; if (Test-Path $f) { (((Get-Content $f) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '').Substring(0, 7) } else { Split-Path $root -Leaf } }
 $builds = @(@{ role = "ref"; root = (Resolve-Path $Ref).Path }, @{ role = "opt"; root = (Resolve-Path $Opt).Path })
-foreach ($b in $builds) { $b.sha = Sha $b.root }
+foreach ($b in $builds) { $b.sha = Sha $b.root; $b.hooks = Get-ExeHooks (Join-Path $b.root "build-release\bin\wfc_rebuild.exe") }
+$matchAligned = @($builds | Where-Object { $_.hooks.Contains("WFC_SHOTMATCH") }).Count -eq 2
+$shotGlob = if ($matchAligned) { "m*.bmp" } else { "f*.bmp" }
+Res "alignment" "INFO" $(if ($matchAligned) { "WFC_SHOTMATCH on both builds: frames are match steps $From..$To since InProgress (aligned)" } else { "WFC_SHOTEVERY (frames from boot, NOT aligned across runs): only static content (fixed cam, 0 bots) compares; moving / character differences are offset artefacts" }) "Experimental"
 foreach ($set in $Sets) { foreach ($b in $builds) {
     $d = Join-Path $OutDir "$set\$($b.role)"; New-Item -ItemType Directory -Force $d | Out-Null
     if ($ReportOnly -or (Test-Path (Join-Path $d "done.txt"))) { continue }
     if (-not (Wait-WfcGpu)) { Res "$set.$($b.role).gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$Seed"; WFC_SMOKE_FRAMES = "$($To + 5)"; WFC_LOGEVERY = "0"; WFC_NOMOUSE = "1"
-            WFC_SHOTEVERY = "$d,$From,$To"; WFC_VISUALCHECK = "1" }
+            WFC_VISUALCHECK = "1" }
+    if ($matchAligned) { $e.WFC_SHOTMATCH = "$d,$From,$To,$Stride"; $e.WFC_MATCH_SECONDS = "$([Math]::Ceiling($To / 60.0) + 1)"; $e.WFC_SMOKE_FRAMES = "1000000" }
+    else { $e.WFC_SHOTEVERY = "$d,$From,$To" }
     if ($set -eq "fixed") { $e.WFC_FIXEDCAM = $Cam } else { $e.WFC_AUTOWALK = "1"; $e.WFC_AUTOSTRAFE = "1"; $e.WFC_AUTOTURN = "0.6" }
     $exe = Join-Path $b.root "build-release\bin\wfc_rebuild.exe"
     $null = Invoke-WfcExe $exe $d $e "run.log" 1200
     # keep every -Stride-th frame (every frame is written; 1080p BMPs are ~6 MB)
-    Get-ChildItem $d -Filter "f*.bmp" | Where-Object { ([int]($_.BaseName.Substring(1)) - $From) % $Stride -ne 0 } | Remove-Item
+    if (-not $matchAligned) { Get-ChildItem $d -Filter "f*.bmp" | Where-Object { ([int]($_.BaseName.Substring(1)) - $From) % $Stride -ne 0 } | Remove-Item }
     "done" | Set-Content (Join-Path $d "done.txt")
 } }
 # compare
@@ -68,7 +78,7 @@ public static class VgDiff {
 $rows = New-Object System.Collections.Generic.List[object]
 foreach ($set in $Sets) {
     $dr = Join-Path $OutDir "$set\ref"; $do = Join-Path $OutDir "$set\opt"
-    $frames = @(Get-ChildItem $dr -Filter "f*.bmp" -ErrorAction SilentlyContinue | ForEach-Object { $_.Name } | Where-Object { Test-Path (Join-Path $do $_) } | Sort-Object)
+    $frames = @(Get-ChildItem $dr -Filter $shotGlob -ErrorAction SilentlyContinue | ForEach-Object { $_.Name } | Where-Object { Test-Path (Join-Path $do $_) } | Sort-Object)
     if (-not $frames.Count) { Res "$set" "UNKNOWN" "no frame pairs captured" "Experimental"; continue }
     $flagged = @()
     foreach ($f in $frames) {
@@ -84,7 +94,7 @@ foreach ($set in $Sets) {
         New-WfcSheet $tiles (Join-Path $OutDir "flagged_$set.png") 3 480 270 }
     $mx = ($rows | Where-Object { $_.set -eq $set } | Measure-Object pct_over -Maximum).Maximum
     $sheetNote = if ($flagged.Count) { "; see flagged_$set.png (ref | opt | diff)" } else { "" }
-    $note = "$($builds[0].sha) vs $($builds[1].sha), $($frames.Count) frames compared ($From..$To every $Stride); flagged (> $FlagPct % pixels differ by > $Threshold): $($flagged.Count) [$(($flagged | ForEach-Object { $_ -replace '\.bmp$', '' }) -join ' ')]; max $mx %$sheetNote"
+    $note = "$($builds[0].sha) vs $($builds[1].sha), $($frames.Count) frames compared ($(if ($matchAligned) { 'match steps' } else { 'boot frames' }) $From..$To every $Stride); flagged (> $FlagPct % pixels differ by > $Threshold): $($flagged.Count) [$(($flagged | ForEach-Object { $_ -replace '\.bmp$', '' }) -join ' ')]; max $mx %$sheetNote"
     Res "$set" $(if ($flagged.Count) { "HUMAN" } else { "PASS" }) $note "Rendering"
 }
 Write-WfcCsv $rows (Join-Path $OutDir "visual.csv")
