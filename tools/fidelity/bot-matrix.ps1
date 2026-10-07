@@ -13,7 +13,7 @@
 # GPU: the default matrix is ~15 min of graphics - send Integration a "long GPU run" note first.
 #
 #   .\tools\fidelity\bot-matrix.ps1 -Root work\ab\<target> -OutDir <dir> [-Matrix default|quick] [-Seconds 60] [-Difficulty 1] [-ReportOnly]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("default", "quick")][string]$Matrix = "default",
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("default", "quick", "difficulty")][string]$Matrix = "default",
       [int]$Seconds = 60, [int]$Difficulty = 1, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -29,13 +29,22 @@ if ($Matrix -eq "default") {
     $runs += @("MP_IAC_Berth", "MP_UND_Gorge" | ForEach-Object { @{ mode = "TDM"; map = $_; f = 3; e = 4 } })
     $runs += @{ mode = "DM"; map = "MP_IAC_Streets"; f = 0; e = 15 }                                   # FFA, full 16 players
     $runs += @{ mode = "TDM"; map = "MP_ORB_Debris"; f = 3; e = 4; weaker = $true }                    # flight-only islands unreachable until the jet air layer
-    $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 0 }, @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 2 }   # EASY vs HARD
+    $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 0 }, @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 2 }   # EASY vs HARD (mirror, INFO)
+    # MIXED difficulty (Gameplay 42d991d ?BotDifficultyAutobot / ?BotDifficultyDecepticon via Frontend WFC_LOBBY_OPTIONS): 4 v 4 bots,
+    # HARD on one faction and EASY on the other, then swapped (cancels side bias). Team 0 = Autobot, 1 = Decepticon.
+}
+if ($Matrix -eq "difficulty") { $runs = @() }
+if ($Matrix -in "default", "difficulty") {
+    if ($H.Contains("WFC_LOBBY_OPTIONS")) {
+        $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 4; e = 4; tag = "mixA"; hardTeam = 0; lobby = "BotsAutobot=4;BotsDecepticon=4;BotDifficultyAutobot=2;BotDifficultyDecepticon=0" }
+        $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 4; e = 4; tag = "mixB"; hardTeam = 1; lobby = "BotsAutobot=4;BotsDecepticon=4;BotDifficultyAutobot=0;BotDifficultyDecepticon=2" }
+    }
 }
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
 $rows = New-Object System.Collections.Generic.List[object]
 foreach ($r in $runs) {
     $diff = if ($null -ne $r.diff) { [int]$r.diff } else { $Difficulty }
-    $tag = "{0}_{1}_{2}v{3}{4}" -f $r.mode, ($r.map -replace '^MP_', ''), $r.f, $r.e, $(if ($null -ne $r.diff) { "_d$diff" } else { "" }); $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
+    $tag = "{0}_{1}_{2}v{3}{4}" -f $r.mode, ($r.map -replace '^MP_', ''), $r.f, $r.e, $(if ($null -ne $r.diff) { "_d$diff" } elseif ($r.tag) { "_$($r.tag)" } else { "" }); $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
@@ -47,6 +56,7 @@ foreach ($r in $runs) {
         $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "400";
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_BOTLOG = "all"; WFC_PERFLOG = "60"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
+        if ($r.lobby) { $e.WFC_LOBBY_OPTIONS = $r.lobby }
         $null = Invoke-WfcExe $exe $d $e "run.log" ($Seconds + 240)
     }
     if (-not (Test-Path $lg)) { continue }
@@ -72,13 +82,15 @@ foreach ($r in $runs) {
     $frameMs = if ($perf.Count) { [Math]::Round(($perf | Measure-Object -Average).Average, 2) } else { $null }
     $want = $r.f + $r.e + 1
     $local = @($players | Sort-Object p | Select-Object -First 1)[0]
-    $teamOk = if ($r.mode -eq "DM" -or -not $local) { $true } else { $fr = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq $local.team }).Count; $en = @($players | Where-Object { $_.team -ne $local.team }).Count; ($fr -eq $r.f -and $en -eq $r.e) }
+    $teamOk = if ($r.mode -eq "DM" -or -not $local -or $r.lobby) { $true } else { $fr = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq $local.team }).Count; $en = @($players | Where-Object { $_.team -ne $local.team }).Count; ($fr -eq $r.f -and $en -eq $r.e) }
     $stuckBots = @($nav | Where-Object { $_.stuckFrac -gt 0.25 -or $_.dist -lt 10 }); $noPathMax = ($nav | Measure-Object nopath -Maximum).Maximum
     $broken = @($nav | Where-Object { $_.frozenS -ge 20 })   # Gameplay's "broken" criterion: no displacement >= 20 s, no target, moving goal
     $offMesh = ($nav | Measure-Object offMesh -Sum).Sum
     $shotsT = ($nav | Measure-Object shots -Sum).Sum; $hitsT = ($nav | Measure-Object hits -Sum).Sum; $acc = if ($shotsT) { [Math]::Round($hitsT / $shotsT, 3) } else { $null }
     $rows.Add([pscustomobject][ordered]@{ run = $tag; spawned = "$($players.Count)/$want"; teams = $teamOk; kills = $kills; kill_feed = $feed; bots_logged = $nav.Count
-        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; loaded_mb = $loadedMb; suicides = $suicides; team_kills = $teamKills; clean_exit = $clean })
+        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; loaded_mb = $loadedMb; hard_team = $r.hardTeam
+        hard_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -eq $r.hardTeam }).Count })
+        easy_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -ne $r.hardTeam -and $_.kt -ge 0 }).Count }); suicides = $suicides; team_kills = $teamKills; clean_exit = $clean })
     Res "$tag.spawned" $(if ($players.Count -eq $want -and $teamOk) { "PASS" } elseif ($players.Count) { "FAIL" } else { "UNKNOWN" }) ("distinct spawned players {0} of {1} (local + {2} friendly + {3} enemy); team split correct {4}" -f $players.Count, $want, $r.f, $r.e, $teamOk) "Gameplay"
     # a single enemy bot can roam a large map for 60 s without meeting the scripted (wall-walking) player: no contact is not a
     # combat defect there (8c2b6e3 0v1: the bot roamed toward a goal 433 m away, never saw the player) -> INFO; >= 2 enemies must fight
@@ -98,6 +110,11 @@ if ($easy -and $hard -and $easy.accuracy -ne $null -and $hard.accuracy -ne $null
     # 0.45), from farther (sight 70 vs 50 m), and fire more - accuracy is confounded and is NOT a pass / fail signal
     # (8c2b6e3: EASY 0.738 vs HARD 0.485, kills 8 / 8). Gameplay's criterion (HARD out-kills EASY) needs MIXED teams.
     Res "difficulty.mirror_comparison" "INFO" ("mirror matches EASY vs HARD: accuracy {0} vs {1}; kills {2} vs {3}; confounded by the targets' own difficulty - a mixed-team test is needed for a verdict" -f $easy.accuracy, $hard.accuracy, $easy.kills, $hard.kills) "Gameplay" }
+$mix = @($rows | Where-Object { $_.run -like "*_mix*" -and $null -ne $_.hard_bot_kills })
+if ($mix.Count -eq 2) {
+    $hk = ($mix | Measure-Object hard_bot_kills -Sum).Sum; $ek = ($mix | Measure-Object easy_bot_kills -Sum).Sum
+    Res "difficulty.hard_outkills_easy" $(if ($hk + $ek -lt 6) { "UNKNOWN" } elseif ($hk -gt $ek) { "PASS" } else { "FAIL" }) ("mixed teams, both sides swapped: bot-on-bot kills by HARD {0} vs EASY {1} (A: {2}/{3}, B: {4}/{5}; the scripted player's kills / deaths excluded)" -f $hk, $ek, $mix[0].hard_bot_kills, $mix[0].easy_bot_kills, $mix[1].hard_bot_kills, $mix[1].easy_bot_kills) "Gameplay"
+} elseif (-not $H.Contains("WFC_LOBBY_OPTIONS")) { Res "difficulty.hard_outkills_easy" "SKIP" "build has no WFC_LOBBY_OPTIONS (Frontend 2cf1ab1) for the per-faction difficulty test" "Experimental" }
 Res "known_partial" "INFO" "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused" "Gameplay"
 Write-WfcCsv $rows (Join-Path $OutDir "bots.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
