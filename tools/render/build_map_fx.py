@@ -372,6 +372,10 @@ def library(mapname):
         work += [(p.object_path(i + 1), pkn) for i, e in enumerate(p.exports) if p.class_name(e) == 'ParticleSystem']
     # the class FX packages are seekfree stubs on Xenon: pstream resolves the template to the package that holds it
     work += [(t, None) for ts in class_templates().values() for t in sorted(ts)]
+    # Milestone E: ability / killstreak templates (Sentry turret muzzle / impact, Ammo Crate, Guided Missile trail ...)
+    # cooked outside the level packages (AssetTools ability_assets.json via ability_assets.py)
+    import ability_render_assets as ability_assets   # (AssetTools scripts/wfc has its own ability_assets module)
+    work += [(t, None) for t in ability_assets.particles()]
     # diagnostics / test data: WFC_FXLIB_EXTRA="tpl;tpl" adds named templates (e.g. effects no shipped data references yet)
     work += [(t, None) for t in (os.environ.get('WFC_FXLIB_EXTRA') or '').split(';') if t.strip()]
     repos = {}
