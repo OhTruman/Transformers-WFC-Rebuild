@@ -167,6 +167,8 @@ def system_runtime(name, s):
                         mod['partial'].append(prop)
                 if m['module'] in ('PMI_LocationEmitter', 'PMI_LocationEmitterDirect') and L.get('location_emitter'):
                     mod['location_emitter'] = L['location_emitter']
+                if m.get('props'):   # non-curve properties of decoded WFC / UE3 modules (AssetTools: Collision, Switchable...)
+                    mod['props'] = m['props']
                 lod['modules'].append(mod)
             lod['flag_analysis'] = flag_analysis(lod)
             # RE MILESTONE04 pickup/objective presentation §2 (HIGH): flagA == membership in the executed module

@@ -621,6 +621,7 @@ public:
         int selection = 0;                // 0 Random, 1 Sequential, 2 particle 0
         bool inheritVelocity = false, inheritRotation = false;
         float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
+        bool killOnHit = false;           // PMI_Collision: MaxCollisions 0 + EPCC_Kill (AssetTools authored.db)
     };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {

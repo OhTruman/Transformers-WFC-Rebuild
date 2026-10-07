@@ -2582,6 +2582,9 @@ void Pipeline::warmupWorld(int id, int w, int h) {
         std::set<std::tuple<int, int, int, int>> bucketTex;                 // program + lightmap page textures
         std::set<std::string> bucketExact;                                 // + every per-draw constant
         std::set<int> bucketProg;                                          // program only (lightmap pages in an array)
+        int runsTex = 0, runsProg = 0;                                     // consecutive same-bucket runs (draw order kept)
+        std::tuple<int, int, int, int> lastTex{-2, -2, -2, -2}; int lastProg = -2; GLint depthFunc = 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
         for (size_t mi = 0; mi < meshes_.size(); ++mi) {
             const GpuMesh& gm = meshes_[mi];
             const bool worldish = gm.world || (long)mi == bspMesh_ || (long)mi == decalMesh_;
@@ -2599,6 +2602,9 @@ void Pipeline::warmupWorld(int id, int w, int h) {
                 else ++unlit;
                 bucketTex.insert({sb.prog, sb.lmTex[0], sb.lmTex[1], sb.lmTex[2]});
                 bucketProg.insert(sb.prog);
+                const std::tuple<int, int, int, int> tk{sb.prog, sb.lmTex[0], sb.lmTex[1], sb.lmTex[2]};
+                if (tk != lastTex) { ++runsTex; lastTex = tk; }
+                if (sb.prog != lastProg) { ++runsProg; lastProg = sb.prog; }
                 char buf[512];
                 std::snprintf(buf, sizeof buf, "%d|%d,%d,%d|%u|%.6g,%.6g,%.6g,%.6g|%.6g,%.6g,%.6g|%d|%s", sb.prog, sb.lmTex[0], sb.lmTex[1],
                               sb.lmTex[2], sb.vlmTex, sb.lmCoord[0], sb.lmCoord[1], sb.lmCoord[2], sb.lmCoord[3], sb.lmScale[0][0],
@@ -2613,6 +2619,8 @@ void Pipeline::warmupWorld(int id, int w, int h) {
                  "program only %zu, program + lightmap page %zu, every per-draw constant identical %zu",
                  total, trans, movers, decals, noProg, lm + vlm + litEnv + unlit, lm, vlm, litEnv, unlit, bucketProg.size(), bucketTex.size(),
                  bucketExact.size());
+        LOG_INFO("wfc batch stats: in draw order, consecutive runs: same program %d, same program + lightmap page %d (depth func 0x%x)",
+                 runsProg, runsTex, (unsigned)depthFunc);
     }
     touchNewTextures();                                // anything the world draw created
     glFinish();
