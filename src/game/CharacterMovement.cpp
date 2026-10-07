@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 
@@ -769,10 +770,22 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     if (!dodging && !hovering) v.y -= core::config::kGravity * dt;
     v.y = std::max(v.y, -c.robotParams().terminalVel);
 
-    // Jumping stays a robot-form, non-transforming action [PROV during a fold].
-    if (in.wantJump && c.onGround() && !c.isTransforming() && !hovering && t.jumpSpeed > 0.0f) {
-        v.y = c.robotParams().jumpSpeed();   // JumpZ = sqrt(2 g JumpHeight) of this chassis' acrobatics
-        c.setOnGround(false);
+    // Jumping stays a robot-form, non-transforming action [PROV during a fold]; RobotForm.Jump is skipped while melee-attacking.
+    // TnAcrobaticsManager [CONF RE addendum 10]: the first jump records the take-off height; a second press while Jumping /
+    // FallingFromJump (not after walking off a ledge), more than DoubleJumpMinHeight above take-off and not holding a
+    // DisallowDoubleJump weapon (GatlingGun, HeavyRepairRay, HeavyRocketTurret) SETS vel.Z = sqrt(2 g DoubleJumpHeight), XY kept;
+    // once per airtime.
+    if (c.onGround()) c.jumpState_ = 0;
+    if (in.wantJump && !c.isTransforming() && !hovering && !c.isMeleeing()) {
+        if (c.onGround() && t.jumpSpeed > 0.0f) {
+            v.y = c.robotParams().jumpSpeed();   // JumpZ = sqrt(2 g JumpHeight) of this chassis' acrobatics
+            c.setOnGround(false);
+            c.jumpState_ = 1; c.jumpBaseY_ = c.position().y;
+        } else if (!c.onGround() && c.jumpState_ == 1 && c.position().y - c.jumpBaseY_ > c.robotParams().doubleJumpMinHeight) {
+            const char* wid = c.weapon().def ? c.weapon().def->id : "";
+            const bool disallow = !std::strcmp(wid, "GatlingGun") || !std::strcmp(wid, "HeavyRepairRay") || !std::strcmp(wid, "HeavyRocketTurret");
+            if (!disallow) { v.y = c.robotParams().doubleJumpSpeed(); c.jumpState_ = 2; }
+        }
     }
 
     core::Vec3 oldPos = c.position();

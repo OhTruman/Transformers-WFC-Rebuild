@@ -14,7 +14,7 @@ namespace game {
 class BotNav {
 public:
     struct Portal { int to; core::Vec3 a, b; float width; core::Vec3 n; };   // shared edge segment toward cell `to`; n = outward edge normal
-    struct Link { int from, to; bool jump; bool robot, vehicle; core::Vec3 fromPos, toPos; };
+    struct Link { int from, to; bool jump; bool robot, vehicle; core::Vec3 fromPos, toPos; bool doubleJump = false; };
     struct Cell {
         std::vector<core::Vec3> poly;                                   // convex polygon (glTF metres, Y up)
         core::Vec3 centroid, bmin, bmax;
@@ -24,7 +24,8 @@ public:
         std::vector<int> links;                                          // indices into links_ starting here
     };
     struct Anchor { std::string actor, kind; core::Vec3 pos; int cell = -1; int approachCell = -1; };   // approach: two-way reachable cell
-    // One step of a path: move to `pos`; `action` 1 = jump (up link) before / while going to pos, 2 = drop (walk off the edge).
+    // One step of a path: move to `pos`; `action` 1 = jump (up link) before / while going to pos, 2 = drop (walk off the edge),
+    // 3 = double jump (jump at the foot, second press near the apex).
     struct Waypoint { core::Vec3 pos; int action = 0; int cell = -1; };
     struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr; };   // avoid: cells costed x10 (a bot's blocked spots)
 

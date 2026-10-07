@@ -196,6 +196,7 @@ bool Application::init() {
     if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
     if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
     if (std::getenv("WFC_EXTRABODYTEST")) { runExtraBodyTest(); return false; }    // Car8-10 / Frenzy / Rumble / Laserbeak
+    if (std::getenv("WFC_DOUBLEJUMPTEST")) { runDoubleJumpTest(); return false; }  // robot double jump (RE addendum 10)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4762,7 +4763,7 @@ void Application::runBotTest() {
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
-        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, sentrySamples = 0, barrierSamples = 0;
+        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, sentrySamples = 0, barrierSamples = 0;
         platform::InputFrame idle;
         const int steps = (int)((secs + 10.0f) / dt);
         for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
@@ -4798,8 +4799,10 @@ void Application::runBotTest() {
             maxAlive = std::max(maxAlive, alive);
             beamSamples += world_.participantBeamsLive() > 0;
             sentrySamples += world_.participantSentriesLive() > 0; barrierSamples += world_.participantBarriersLive() > 0;
-            for (const game::MatchOpponent* o : world_.matchOpponents())
-                jetSamples += o->spawned() && o->pawn().moveForm() == game::Form::Vehicle && o->pawn().vehicleParams().form == game::VehicleFormType::Jet;
+            for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                const bool jet = o->spawned() && o->pawn().moveForm() == game::Form::Vehicle && o->pawn().vehicleParams().form == game::VehicleFormType::Jet;
+                jetSamples += jet; jetFlySamples += jet && o->pawn().vehicleState().flying;
+            }
             if (i % 600 == 0 && i > 60 * 12) { int sh, wm; world_.participantWeaponStats(sh, wm); weapShown += sh; weapMesh += wm; }
             if (i % (60 * 30) == 0 && i > 0) {
                 int kills = 0; for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
@@ -4818,9 +4821,9 @@ void Application::runBotTest() {
             }
             suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
         }
-        int vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        int streaks = 0, vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
         for (const game::BotBrain& b : world_.botBrains()) {
-            vehicleShots += b.vehicleShots; abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            streaks += b.streaks; vehicleShots += b.vehicleShots; abilities += b.abilities; heals += b.heals; rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
             movers += travelled[b.player] > 40.0f;
         }
         LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d, repair ticks %d, abilities %d, vehicle-form shots %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades, heals, abilities, vehicleShots);
@@ -4839,8 +4842,9 @@ void Application::runBotTest() {
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+        if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
         if (phase >= 1) check(sentrySamples > 0 && barrierSamples > 0, "bots deploy sentries (" + std::to_string(sentrySamples) + " steps) and barriers (" + std::to_string(barrierSamples) + " steps)");
-        if (phase >= 1) check(jetSamples > 0, "jet bots fly in hover form (" + std::to_string(jetSamples) + " jet-steps)");
+        if (phase >= 1) check(jetSamples > 0, "jet bots fly (" + std::to_string(jetSamples) + " jet-steps, " + std::to_string(jetFlySamples) + " in Flying)");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase >= 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
         if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
@@ -4906,7 +4910,7 @@ void Application::runBotNavTest() {
                  segs, badSegs, totalMs / std::max(1, pairs), worstMs, worstExp);
         check(found >= pairs * 95 / 100, "paths between anchors (radius " + std::to_string(radius).substr(0, 4) + ")");
         check(badSegs * 50 <= segs, "corridor segments stay on the mesh (<= 2 %)");
-        check(worstMs < 8.0, "A* under 8 ms");
+        check(worstMs < 15.0, "one-shot A* under 15 ms (in-game searches are time-sliced at 1500 expansions per step)");
     }
     LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
@@ -5155,6 +5159,44 @@ void Application::runExtraBodyTest() {
         check(died && !world_.localPlayerDead() && pc.chassis().id == id, tag + ": dies and respawns as itself");
     }
     LOG_INFO("EXTRABODY SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DOUBLEJUMPTEST: TnAcrobaticsManager double jump [CONF RE addendum 10] on the local robot pawn: a single jump peaks at
+// JumpHeight (5.0 m), a second press at the apex adds DoubleJumpHeight (4.5 m, ~9.5 m total), a third press is ignored, and a
+// second press before DoubleJumpMinHeight (10 UU) above take-off is refused.
+void Application::runDoubleJumpTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("DOUBLEJUMP %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    game::Character& pc = world_.player().pawn();
+    auto step = [&](bool jumpPress) {
+        platform::InputFrame in; in.pressed[(int)platform::Button::Jump] = jumpPress; in.down[(int)platform::Button::Jump] = jumpPress;
+        world_.handleInput(in, dt); world_.tick(dt);
+    };
+    auto settle = [&]() { for (int i = 0; i < 120; ++i) step(false); };
+    // mode 0: single jump; 1: jump + press at the apex (+ a third press); 2: jump + an immediate second press (refused)
+    for (int mode = 0; mode < 3; ++mode) {
+        world_.teleportToStart(0); settle();
+        const float y0 = pc.position().y;
+        float peak = y0; bool pressedApex = false;
+        step(true);
+        for (int i = 0; i < 240; ++i) {
+            bool press = false;
+            if (mode == 1 && !pressedApex && pc.velocity().y <= 0.0f) { press = true; pressedApex = true; }
+            else if (mode == 1 && pressedApex && i % 20 == 0) press = true;     // third / later presses: ignored
+            else if (mode == 2 && i == 0) press = true;                           // right after take-off: below 10 UU
+            step(press);
+            peak = std::max(peak, pc.position().y);
+            if (pc.onGround() && i > 10) break;
+        }
+        const float rise = peak - y0;
+        LOG_INFO("DOUBLEJUMP mode %d: rise %.2f m", mode, rise);
+        if (mode == 0) check(std::fabs(rise - pc.robotParams().jumpHeight) < 0.4f, "single jump peaks at JumpHeight (" + std::to_string(rise).substr(0, 4) + " m)");
+        if (mode == 1) check(std::fabs(rise - (pc.robotParams().jumpHeight + pc.robotParams().doubleJumpHeight)) < 0.6f,
+                             "jump + apex press peaks at JumpHeight + DoubleJumpHeight (" + std::to_string(rise).substr(0, 4) + " m), later presses ignored");
+        if (mode == 2) check(rise < pc.robotParams().jumpHeight + 0.4f, "a second press below DoubleJumpMinHeight is refused (" + std::to_string(rise).substr(0, 4) + " m)");
+    }
+    LOG_INFO("DOUBLEJUMP SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

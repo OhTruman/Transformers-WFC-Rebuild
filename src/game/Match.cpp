@@ -212,7 +212,18 @@ void Match::startMatch() {
     recordEvent(GameplayEventType::MatchStart);
     if (s_.rounds > 0) emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
     // SpawnHelper: RespawnHelper.InitialSpawn -> Wave TimeToAllowInstantInitialSpawns -1: always immediate.
-    for (size_t i = 0; i < players_.size(); ++i) restartPlayer((int)i);
+    spawnAllInitial();
+}
+
+// The initial spawn of everyone (match start, CTF round start). Above 16 participants (CUSTOM-GAME EXTENSION; PC ADAPTATION) bots are
+// released one per simulation step (63 bots over ~1 s) instead of all in one frame; the local human and the original counts spawn at once.
+void Match::spawnAllInitial() {
+    const bool stagger = players_.size() > 16;
+    int k = 0;
+    for (size_t i = 0; i < players_.size(); ++i) {
+        if (stagger && players_[i].kind == ParticipantKind::Bot) { players_[i].alive = false; players_[i].timeToRespawn = (float)(++k) / 60.0f; continue; }
+        restartPlayer((int)i);
+    }
 }
 
 void Match::killed(int killer, int victim, bool suicide, const std::string& damageType, const KillContext* ctx) {
@@ -605,7 +616,8 @@ void Match::restartRound() {
     roundTimeLeft_ = (float)s_.timeLimit;
     remainingTime_ = s_.timeLimit;
     // TnGame.RestartRound: SoftReset - every player respawns (no death counted).
-    for (size_t i = 0; i < players_.size(); ++i) { players_[i].alive = false; restartPlayer((int)i); }
+    for (MatchPlayer& p : players_) p.alive = false;
+    spawnAllInitial();
     emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
 }
 

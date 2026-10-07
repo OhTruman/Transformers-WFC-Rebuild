@@ -572,6 +572,7 @@ public:
         int owner = -1;                                // the participant whose ability spawned it
         float delay = -1.0f;                           // SpawnDelay countdown (>= 0 while pending)
         int dyn = -1, dynW = -1;                       // its dynamic collision sets (pawn / weapon worlds), pooled
+        int deadTicks = 0;                             // steps since it went away (kept one step with alive=false, then removed)
         render::MeshData mesh;
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
@@ -579,6 +580,7 @@ public:
     mutable int lastBarrierHit_ = -1;
     std::vector<int> freeBarrierDyn_, freeBarrierDynW_;
     void requestBarrier(int owner);            // TnAbilityBarrier for any participant
+    std::string triggerKillstreakFor(int player);   // the newest acquired killstreak of any participant ("" when none / unsupported)
     void damageBarrierAt(size_t idx, float amount, const std::string& type);
     bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
     int vehicleShotSerial_ = 0, vehicleShotSocket_ = 0;
@@ -603,6 +605,7 @@ public:
         int owner = -1;                 // the match player whose ability spawned it (any participant)
         float delay = -1.0f;            // SpawnDelay countdown (>= 0 while pending)
         render::MeshData mesh;          // its posed WEP_DeployedTurret mesh
+        int deadTicks = 0;              // steps since it died (kept one step with alive=false for presentation consumers)
     };
     std::vector<Sentry> sentries_;      // one per owner
     mutable int lastSentryHit_ = -1;

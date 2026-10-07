@@ -113,6 +113,7 @@ void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& 
         participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {
         for (int k = 0; k < std::max(1, w.shots); ++k) fireHitscanAs(o.matchPlayer(), pc, w, eye, d);
+        b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }
 
@@ -550,7 +551,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         moveDir = core::normalize(core::Vec3{toT.x, 0, toT.z});   // melee rush: straight at the target
     } else if (b.mission || (!inBand && !tooClose)) {
         // Path following.
-        while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1) { ++b.wp; b.bestDist = 1e9f; }
+        while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1 && b.path[b.wp].action != 3) { ++b.wp; b.bestDist = 1e9f; }
         // Look-ahead: skip a corner when the one after it is directly walkable (one check per step); vehicles carry momentum
         // past close corners and would otherwise turn back for them.
         if (b.wp + 1 < b.path.size() && b.path[b.wp].action == 0 && b.path[b.wp + 1].action == 0 &&
@@ -559,8 +560,10 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
             const BotNav::Waypoint& w = b.path[b.wp];
             core::Vec3 d = w.pos - pos; d.y = 0;
             const float dl = core::length(d);
-            if (w.action == 1) {        // jump link: jump when at its foot, then keep pushing toward the top
+            if (w.action == 1 || w.action == 3) {   // jump link: jump at its foot, keep pushing toward the top
                 if (dl < 6.0f && pc.onGround()) { jump = true; ++b.jumps; }
+                // double jump: the second press near the apex of the first (rising slower than 1 m/s) [TnAiActionNavigatePathSection]
+                if (w.action == 3 && !pc.onGround() && pc.jumpState_ == 1 && pc.velocity().y < 1.0f) jump = true;
                 if (dl < 1.2f || (pos.y > w.pos.y - 0.5f && dl < 3.0f)) { ++b.wp; b.bestDist = 1e9f; }
             }
             if (dl > 1e-3f) moveDir = d * (1.0f / dl);
@@ -629,6 +632,13 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         const core::Vec3 tgt = (b.wp < b.path.size() ? b.path[b.wp].pos : b.goal.pos) + core::Vec3{0, 2.5f, 0};
         const core::Vec3 d = tgt - pc.actorLocation();
         in.viewPitch = core::clampf(pitchOf(d), -0.7f, 0.7f);
+        // Flying (TnPlaneSimulation boost; PC ADAPTATION: when): a long clear stretch (> 35 m to the next corner, clear line to the
+        // point above it); back to hover within 20 m to turn the corner.
+        const float dl = core::length(d);
+        if (dl > (pc.vehicleState().flying ? 20.0f : 35.0f)) {
+            float th;
+            in.wantBoost = !(collision() && collision()->segmentHit(pc.actorLocation(), tgt, th));
+        }
     }
     in.wantJump = jump && !vehicle;
     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
@@ -812,7 +822,19 @@ void World::tickBots(float dt) {
             b.transformCooldown = 2.0f;
         }
         b.meleeCooldown -= dt; b.grenadeCooldown -= dt;
+        pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);          // killstreak buffs (the local pawn's tick in World::tick)
+        pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
+        pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
         pc.tickAbilities(dt);
+        // Killstreaks (PC ADAPTATION: when): trigger the newest earned reward 1-4 s after earning it, in robot form.
+        if (!match_.players()[(size_t)b.player].acquiredKillstreaks.empty()) {
+            if (b.streakDelay < 0.0f) b.streakDelay = b.frange(1.0f, 4.0f);
+            else if ((b.streakDelay -= dt) <= 0.0f) {
+                b.streakDelay = -1.0f;
+                if (pc.moveForm() == Form::Robot && !pc.isTransforming() && triggerKillstreakFor(b.player).empty())
+                    match_.playerMutable(b.player).acquiredKillstreaks.pop_back();   // a reward bots cannot use yet: dropped
+            }
+        } else b.streakDelay = -1.0f;
         if (pc.shockwaveDelay_ >= 0.0f && (pc.shockwaveDelay_ -= dt) < 0.0f) applyShockwave(pc, b.player);
         tickMeleeFor(pc, b.player, dt);
         if (b.grenadeDelay >= 0.0f && (b.grenadeDelay -= dt) < 0.0f && pc.moveForm() == Form::Robot)
