@@ -20,7 +20,7 @@
 #   .\tools\fidelity\capacity-stress.ps1 -Root work\ab\<target> -OutDir <dir> [-Maps 508,507,509] [-Pops p32v32,ffa64] [-Resolutions 1920x1080,2560x1440] [-TimeLimit 60] [-NoSplit] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "507"),
       [string[]]$Pops = @("orig10", "p16v16", "p32v32", "ffa64"), [int]$TimeLimit = 75, [int]$Difficulty = 1,
-      [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit, [switch]$FixedCam, [hashtable]$CamByMap = @{},
+      [string[]]$Resolutions = @("1280x720"), [switch]$NoSplit, [switch]$FixedCam, [hashtable]$CamByMap = @{}, [ValidateSet("overview", "legacy")][string]$CamSet = "overview",
       # -AsyncModes "0,1": every row with WFC_ASYNCSTEP=0 and =1 (Gameplay's async sim step); =1 rows also log WFC_ASYNCLOG
       # (local part / background part / join wait), reported per row
       [string[]]$AsyncModes = @(),
@@ -45,7 +45,12 @@ $Resolutions = @($Resolutions | ForEach-Object { "$_" -split ',' } | Where-Objec
 # (frame cost follows what the camera sees). Defaults: Streets overview from above team 0's spawn into team 1's (Rendering).
 # Debris / Molten: derived the same way (16 m above team 0's spawn, 20 m behind it, yaw = atan2(-dx, -dz) toward team 1's spawn;
 # the method reproduces Rendering's Streets view within 3 deg). Spawns: Debris from MATCH spawn logs, Molten from spawnpoints.json.
-$camDefaults = @{ "508" = "100,-700,-680,-141.6,-12"; "507" = "247.1,148.8,-63.4,91.4,-12"; "509" = "-25.2,18.4,-100.6,-103.5,-12" }
+# Fixed cams. "legacy" = the cams of the earlier PERFORMANCE_LOG rows (2026-10-07: the Streets one sits ~7 UU above ground at the
+# edge of the map and sees a near-black wall - kept only for continuity). "overview" = verified by cam-sweep.ps1 (a lit view across
+# the arena centre, checked by eye on the contact sheet); maps without a verified overview fall back to legacy and say so.
+$camLegacy = @{ "508" = "100,-700,-680,-141.6,-12"; "507" = "247.1,148.8,-63.4,91.4,-12"; "509" = "-25.2,18.4,-100.6,-103.5,-12" }
+$camOverview = @{ "508" = "44.3,-606.9,-475.7,-90.0,-31.3" }
+$camDefaults = @{}; foreach ($k in $camLegacy.Keys) { $camDefaults[$k] = $(if ($CamSet -eq "overview" -and $camOverview.ContainsKey($k)) { $camOverview[$k] } else { $camLegacy[$k] }) }
 foreach ($k in $CamByMap.Keys) { $camDefaults["$k"] = $CamByMap[$k] }
 if ($FixedCam -and -not $H.Contains("WFC_FIXEDCAM")) { Write-Warning "build has no WFC_FIXEDCAM - runs use the scripted player's camera" }
 $Pops = @($Pops | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
@@ -280,7 +285,7 @@ Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", 
 if ($PerfLog) {
     $lines = New-Object System.Collections.Generic.List[string]
     if (-not (Test-Path $PerfLog)) { $lines.Add("# PERFORMANCE LOG (Experimental; user scalability brief, Integration 2026-10-07)"); $lines.Add(""); $lines.Add("Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with bots, second-match (warm) figures. Steady stats exclude hitch events (> 50 ms), which are counted separately; the first 180 in-play frames are warm-up. 1 % / 0.1 % low = fps of the slowest 1 % / 0.1 % of steady frames. Splits come from a separate profiling run (glFinish-serialised: ratios, not absolute).") }
-    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($Note) { " - $Note" })"); $lines.Add("")
+    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($FixedCam) { " - cam $CamSet" })$(if ($Note) { " - $Note" })"); $lines.Add("")
     $lines.Add("| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |")
     $lines.Add("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     foreach ($r in @($rows | Where-Object { $_.match -eq 2 } | Sort-Object map, res, async, participants)) {
