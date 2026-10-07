@@ -131,6 +131,25 @@ struct UiProf {
     }
 };
 UiProf g_uiUpdate{"update"}, g_uiDraw{"draw"};
+// ... and the whole frame (draw to draw, every screen): average ms / fps, the worst frame and the 1 % low fps, per UI
+// state, so menus and matches are measured the same way.
+struct UiFrameProf {
+    std::chrono::steady_clock::time_point last{};
+    std::vector<double> ms;
+    void tick(const char* state) {
+        if (!UiProf::on()) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (last.time_since_epoch().count() != 0) ms.push_back(std::chrono::duration<double, std::milli>(now - last).count());
+        last = now;
+        if (ms.size() < 300) return;
+        double sum = 0; for (double v : ms) sum += v;
+        std::vector<double> s = ms; std::sort(s.begin(), s.end());
+        const double p99 = s[s.size() * 99 / 100], worst = s.back(), avg = sum / (double)s.size();
+        LOG_INFO("uiprof frame %s avg %.3f ms (%.0f fps) 1%%low %.0f fps worst %.2f ms", state, avg, 1000.0 / avg, 1000.0 / p99, worst);
+        ms.clear();
+    }
+};
+UiFrameProf g_uiFrame;
 struct UiProfScope { UiProf& p; explicit UiProfScope(UiProf& q) : p(q) { p.begin(); } ~UiProfScope() { p.end(); } };
 // Kill feed lines in extended matches (PC EXTENSION, user decision): one constant to tune.
 constexpr int kExtendedFeedLines = 6;
@@ -1110,7 +1129,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     core::prof::Scope prof("ui.draw");
     UiProfScope uiProf(g_uiDraw);
-    (void)flow;
+    g_uiFrame.tick(frontend::uiStateName(flow.ui().state()));
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;
     gfx::Player::hostViewportW = (float)w;   // a noScale movie opened later lays out for this viewport
