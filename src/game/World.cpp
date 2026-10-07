@@ -430,6 +430,7 @@ void World::respawnPlayer() {
 // TnGameRules_SingleFlagCTF / ScoreBombingRun, which the slice does not run, and are not instanced.
 void World::loadPickupFactories(const std::string& path) {
     pickupFactories_.clear();
+    pickupFxKeys_.clear(); objectiveFxKeys_.clear();   // [integration 09c] a new map: rebuild syncMapPresentation's keys
     std::string text;
     assets::Json root;
     if (!readTextFile(path, text) || !assets::Json::parse(text, root)) { LOG_WARN("pickups: cannot read %s", path.c_str()); return; }
@@ -3151,18 +3152,37 @@ void World::syncMapPresentation(render::IRenderer& r) const {
     if (pushedRulesMode_ != (int)mapState_.mode()) { r.setActiveGameRules(mapState_.gameRules()); pushedRulesMode_ = (int)mapState_.mode(); }
     r.setMapClock(mapState_.clock());
     for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
-    for (const PickupFactory* f : pickupFactories_) {
-        std::string a = f->name();
-        size_t dot = a.rfind('.');
-        if (dot != std::string::npos) a = a.substr(dot + 1);
-        r.setMapEffectState(a + "|custom", f->customEffectActive(), !f->meshVisible());
-        r.setMapEffectState(a + "|highlight", f->beamActive(), false);
+    // [integration 09c] The effect keys are built once per factory (rebuilt only when the factory set changes): building
+    // "<actor>|custom" / "|highlight" per factory per frame was ~12 % of main-thread allocations at 10 v 10 (Systems' ALLOCPROF).
+    if (pickupFxKeys_.size() != pickupFactories_.size()
+        || (!pickupFactories_.empty() && (pickupFxKeys_.front().src != pickupFactories_.front() || pickupFxKeys_.back().src != pickupFactories_.back()))) {
+        pickupFxKeys_.clear();
+        for (const PickupFactory* f : pickupFactories_) {
+            std::string a = f->name();
+            size_t dot = a.rfind('.');
+            if (dot != std::string::npos) a = a.substr(dot + 1);
+            pickupFxKeys_.push_back({f, a + "|custom", a + "|highlight"});
+        }
+    }
+    for (size_t i = 0; i < pickupFactories_.size(); ++i) {
+        const PickupFactory* f = pickupFactories_[i];
+        if (pickupFxKeys_[i].src != f) { pickupFxKeys_.clear(); return syncMapPresentation(r); }   // the set changed in the middle
+        r.setMapEffectState(pickupFxKeys_[i].custom, f->customEffectActive(), !f->meshVisible());
+        r.setMapEffectState(pickupFxKeys_[i].highlight, f->beamActive(), false);
     }
     // Flag / bomb factories: Pickup state (beam on, ShouldDisplayHighlightFx inherited from TnWeaponPickupFactory)
     // in their mode; Disabled (hidden, no collision) otherwise [CONF RE MILESTONE04 pickup/objective presentation].
-    for (const ObjectiveObject& o : mapState_.objectives())
-        if (o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb")
-            r.setMapEffectState(o.actor + "|highlight", o.visible, !o.visible);
+    const auto& objs = mapState_.objectives();
+    if (objectiveFxKeys_.size() != objs.size() || (!objs.empty() && objectiveFxKeys_.front().src != &objs.front())) {
+        objectiveFxKeys_.clear();
+        for (const ObjectiveObject& o : objs) {
+            const bool flagOrBomb = o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb";
+            objectiveFxKeys_.push_back({&o, std::string(), flagOrBomb ? o.actor + "|highlight" : std::string()});
+        }
+    }
+    for (size_t i = 0; i < objs.size(); ++i)
+        if (!objectiveFxKeys_[i].highlight.empty())
+            r.setMapEffectState(objectiveFxKeys_[i].highlight, objs[i].visible, !objs[i].visible);
     // [integration] Destructible presentation: Rendering draws the intact / Chunk02 stump mesh from the
     // HmDestructionState Gameplay simulates (0 intact, 1 destroyed, 2 settled). WFC_DESTRUCTSTATE (Rendering's
     // diagnostic) forces the state instead.
