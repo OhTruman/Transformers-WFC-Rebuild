@@ -344,6 +344,10 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         auto c = mod.dists.find("ColorScaleOverLife" + sfx), a = mod.dists.find("AlphaScaleOverLife" + sfx);
                         if (c != mod.dists.end()) nd["ColorScaleOverLife"] = c->second;
                         if (a != mod.dists.end()) nd["AlphaScaleOverLife"] = a->second;
+                        // the other channel, selected per instance by the shooter's team (RE: team 0 -> A, team 1 -> B)
+                        auto cb = mod.dists.find("ColorScaleOverLifeB"), ab = mod.dists.find("AlphaScaleOverLifeB");
+                        if (sfx == "A" && cb != mod.dists.end()) nd["ColorScaleOverLife#B"] = cb->second;
+                        if (sfx == "A" && ab != mod.dists.end()) nd["AlphaScaleOverLife#B"] = ab->second;
                         mod.dists = nd;
                         mod.name = "PMI_ColorScaleOverLife";
                     }
@@ -603,7 +607,11 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
                     } else if (m.name == "PMI_ColorScaleOverLife") {
                         float cs[3], as[1];
-                        auto ic = m.dists.find("ColorScaleOverLife"), ia = m.dists.find("AlphaScaleOverLife");
+                        const bool teamB = in.colorParams.count("Team") && in.colorParams.at("Team")[0] >= 0.5f &&
+                                           m.dists.count("ColorScaleOverLife#B");
+                        auto ic = m.dists.find(teamB ? "ColorScaleOverLife#B" : "ColorScaleOverLife");
+                        auto ia = m.dists.find(teamB ? "AlphaScaleOverLife#B" : "AlphaScaleOverLife");
+                        if (ia == m.dists.end()) ia = m.dists.find("AlphaScaleOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(q.relTime, in.rng, cs); for (int c = 0; c < 3; ++c) q.color[c] *= cs[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, as); q.color[3] *= as[0]; }
                     }
@@ -910,7 +918,11 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.size[c] *= s3[c];
                     } else if (m.name == "PMI_ColorScaleOverLife") {
                         float cs[3], as[1];
-                        auto ic = m.dists.find("ColorScaleOverLife"), ia = m.dists.find("AlphaScaleOverLife");
+                        const bool teamB = in.colorParams.count("Team") && in.colorParams.at("Team")[0] >= 0.5f &&
+                                           m.dists.count("ColorScaleOverLife#B");
+                        auto ic = m.dists.find(teamB ? "ColorScaleOverLife#B" : "ColorScaleOverLife");
+                        auto ia = m.dists.find(teamB ? "AlphaScaleOverLife#B" : "AlphaScaleOverLife");
+                        if (ia == m.dists.end()) ia = m.dists.find("AlphaScaleOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(0.0f, in.rng, cs); for (int c = 0; c < 3; ++c) q.color[c] *= cs[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, as); q.color[3] *= as[0]; }
                     }
