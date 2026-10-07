@@ -410,6 +410,7 @@ void Match::addPersonalScore(int player, int amount) {
 }
 
 void Match::recordDamage(int victim, int instigator, float amount) {
+    if (victim >= 0) { if (lastDamagedAt_.size() <= (size_t)victim) lastDamagedAt_.resize((size_t)victim + 1, -100.0f); lastDamagedAt_[(size_t)victim] = matchTime_; }
     if (victim < 0 || (size_t)victim >= players_.size() || amount <= 0.0f) return;
     auto& h = damageHistory_[(size_t)victim];
     for (auto& e : h) if (e.first == instigator) { e.second += amount; return; }
@@ -485,23 +486,37 @@ void Match::restartPlayer(int p) {
     }
     P.spawnError.clear();
     int st = findPlayerStart(p);
+    // Extended matches: no free point this step -> retry shortly instead of a placeless spawn (generated points normally cover it).
+    if (st < 0 && s_.extendedSlots) { P.alive = false; P.timeToRespawn = 0.25f; return; }
     spawnAt_[(size_t)p] = st;
     P.alive = true;
     P.timeToRespawn = -1.0f;
     damageHistory_[(size_t)p].clear();
-    if (st >= 0) locs_[(size_t)p] = starts_[(size_t)st].pos;
+    if (st >= 0) { locs_[(size_t)p] = starts_[(size_t)st].pos; if ((size_t)p < radii_.size()) radii_[(size_t)p] = 2.0f; }
     P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
 }
 
+void Match::setGeneratedStarts(const std::vector<Start>& extra) {
+    starts_.erase(std::remove_if(starts_.begin(), starts_.end(), [](const Start& s) { return s.generated; }), starts_.end());
+    spawnAt_.assign(spawnAt_.size(), -1);
+    for (Start s : extra) { s.generated = true; starts_.push_back(s); }
+}
+
 int Match::findPlayerStart(int p) {
     const MatchPlayer& P = players_[(size_t)p];
-    // LocationValidator.IsSafeSpawnLocation is native [PARTIAL]: approximated as no other live player within 4 m.
+    // LocationValidator.IsSafeSpawnLocation is native [PARTIAL]: approximated as no other live player within 4 m. Extended matches
+    // test the pawn capsule instead (both cylinders + 1 m horizontally while the 4 m tall cylinders overlap in height) [PC ADAPTATION].
     auto safe = [&](int si) {
+        const core::Vec3& sp = starts_[(size_t)si].pos;
         for (size_t i = 0; i < players_.size(); ++i)
             if ((int)i != p && players_[i].alive) {
-                core::Vec3 d = locs_[i] - starts_[(size_t)si].pos;
-                if (core::length(d) < 4.0f) return false;
+                core::Vec3 d = locs_[i] - sp;
+                if (s_.extendedSlots) {
+                    const float r = i < radii_.size() ? radii_[i] : 2.0f;   // the other pawn's current cylinder
+                    // 1 m margin: neighbours keep moving during the spawn step (vehicles ~0.3 m per step)
+                    if (std::fabs(d.y) < 4.5f && std::sqrt(d.x * d.x + d.z * d.z) < 2.0f + r + 1.0f) return false;
+                } else if (core::length(d) < 4.0f) return false;
             }
         return true;
     };
@@ -518,17 +533,21 @@ int Match::findPlayerStart(int p) {
     // for the FFA game) [HIGH; the FFA spawn choice is not traced: first safe FFA start, PROV].
     for (size_t i = 0; i < starts_.size(); ++i) {
         const Start& s = starts_[i];
+        if (s.generated) continue;
         bool ok = s_.teamGame ? (!s.ffa && s.team == P.team) : s.ffa;
         if (ok && safe((int)i)) return (int)i;
     }
     // CUSTOM-GAME EXTENSION (33 participants): FFA maps author 10-27 FFA starts (MaxPlayers 10), so once they are all occupied any
     // authored start serves (AssetTools spawn_capacity: 50-120 per map) [PC ADAPTATION].
     if (!s_.teamGame && s_.extendedSlots)
-        for (size_t i = 0; i < starts_.size(); ++i) if (safe((int)i)) return (int)i;
+        for (size_t i = 0; i < starts_.size(); ++i) if (!starts_[i].generated && safe((int)i)) return (int)i;
     // Extended team games (32 per side; maps author >= 20 team starts per side): the FFA starts next, never the other team's;
-    // a full pool leaves the participant for the next respawn wave (staggered spawns, no overlaps) [PC ADAPTATION].
     if (s_.teamGame && s_.extendedSlots)
-        for (size_t i = 0; i < starts_.size(); ++i) if (starts_[i].ffa && safe((int)i)) return (int)i;
+        for (size_t i = 0; i < starts_.size(); ++i) if (!starts_[i].generated && starts_[i].ffa && safe((int)i)) return (int)i;
+    // Then the generated spawn points (own team's near its start area; FFA: any), each kept 4 m (two pawn radii) clear of live pawns.
+    if (s_.extendedSlots)
+        for (size_t i = 0; i < starts_.size(); ++i)
+            if (starts_[i].generated && (!s_.teamGame || starts_[i].team == P.team) && safe((int)i)) return (int)i;
     return -1;
 }
 

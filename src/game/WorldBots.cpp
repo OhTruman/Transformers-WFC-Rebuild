@@ -461,6 +461,15 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
             if (visible && d < 15.0f && b.frand() < use) botTryAbility(o, b, "Shockwave");
             //  SpawnSentry - an enemy in sight 10-50 m away (the turret's MaxAttackRange is 60 m).
             if (visible && d > 10.0f && d < 50.0f && b.frand() < use * 0.4f) botTryAbility(o, b, "SpawnSentry");
+            //  SpawnAmmoCrate - own reserve below 60 %, or a teammate within 15 m (the crate serves the team in range).
+            {
+                const Weapon& cw = pc.weapon();
+                bool mateNear = false;
+                for (const MatchOpponent* q : opponents_)
+                    if (q != &o && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 15.0f) mateNear = true;
+                if ((cw.reserveMax > 0 && cw.reserve < cw.reserveMax * 0.6f) || mateNear)
+                    if (b.frand() < use * 0.2f) botTryAbility(o, b, "SpawnAmmoCrate");
+            }
             //  Barrier - under fire (or below 70 % health) from an enemy 12-60 m away: the wall goes up between them.
             if (visible && d > 12.0f && d < 60.0f && (now - b.lastDamageTime < 1.0f || hpFrac < 0.7f) && b.frand() < use * 0.5f) botTryAbility(o, b, "Barrier");
         }
@@ -500,6 +509,7 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
         else if (a.id == "SpawnSentry") requestSentry(o.matchPlayer());   // TnAbilitySpawnSentry (one per owner, SpawnDelay 0.2)
         else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(o.matchPlayer()); }   // SpawnDelay 0.5, in front of the pawn
+        else if (a.id == "SpawnAmmoCrate") { pc.playAction("Skill_Barrier", false); requestAmmoBeacon(o.matchPlayer()); }   // OnTriggerAnim Skill_Barrier
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
         if (participantAbilityHook) participantAbilityHook(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());
@@ -850,12 +860,13 @@ void World::tickBots(float dt) {
         static const char* botlog = std::getenv("WFC_BOTLOG");   // diagnostics: each bot (or =<player>) once a second
         if (botlog && (botlog[0] < '0' || botlog[0] > '9' || std::atoi(botlog) == b.player) && ((int)(b.life * 60.0f + 0.5f)) % 60 == 0) {
             const core::Vec3 p = pc.position();
-            LOG_INFO("BOTLOG %s p%d (%.1f %.1f %.1f) cell %d %s%s goal %s d%.0f wp %zu/%zu tgt %d vis %d stuck %d in %.2f/%.2f jump %d hp %.0f ammo %d/%d shots %d hits %d nopath %d wpn %s heal %d/%d touch %.1f (%.1f %.1f %.1f)",
+            LOG_INFO("BOTLOG %s p%d (%.1f %.1f %.1f) cell %d %s%s goal %s d%.0f wp %zu/%zu tgt %d vis %d stuck %d in %.2f/%.2f jump %d hp %.0f ammo %d/%d shots %d hits %d nopath %d wpn %s heal %d/%d touch %.1f (%.1f %.1f %.1f) fly %d abil %d streaks %d",
                      match_.players()[(size_t)b.player].name.c_str(), b.player, p.x, p.y, p.z, botNav_.findCell(p), pc.moveForm() == Form::Vehicle ? "VEH" : "ROB",
                      pc.isTransforming() ? "*" : "", botGoalName(b.goal.kind), hdist(b.goal.pos, p), b.wp, b.path.size(), b.target,
                      (int)(b.target >= 0 && b.seen[b.target].visible), b.stuckLevel, in.moveForward, in.moveRight, (int)in.wantJump, pc.health().current,
                      pc.weapon().ammo, pc.weapon().reserve, b.shots, b.hits, b.noPaths, pc.weapon().def ? pc.weapon().def->id : "-", b.healTarget, b.heals,
-                     b.goal.hasTouch ? core::length(b.goal.touch - p) : -1.0f, b.goal.touch.x, b.goal.touch.y, b.goal.touch.z);
+                     b.goal.hasTouch ? core::length(b.goal.touch - p) : -1.0f, b.goal.touch.x, b.goal.touch.y, b.goal.touch.z,
+                     (int)(pc.moveForm() == Form::Vehicle && pc.vehicleState().flying), b.abilities, b.streaks);
         }
     }
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

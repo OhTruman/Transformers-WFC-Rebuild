@@ -601,8 +601,14 @@ public:
     bool spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& muzzleOut);
     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
-    struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
-    AmmoBeacon beacon_;
+    struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f;
+                        int owner = -1; float delay = -1.0f; int deadTicks = 0; };
+    std::vector<AmmoBeacon> beacons_;           // one per owner (TnAbilitySpawnAmmoCrate for any participant)
+    void requestAmmoBeacon(int owner);
+    void generateExtraStarts();
+    void separatePawns();                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
+    void damageAmmoBeaconAt(size_t idx, float amount, int instigator);
+    const AmmoBeacon& localBeacon() const;
     // TnSentryPawnAbility + TnAiSentryController (the local owner's, Default_TURRETDEF) [CONF RE §J + authored].
     struct Sentry {
         bool alive = false;
@@ -635,7 +641,6 @@ public:
     assets::SkinnedModel sentryModel_;
     bool sentryModelTried_ = false;
     void tickSentry(float dt);
-    float beaconDelay_ = -1.0f;
     void tickAmmoBeacon(float dt);
     assets::SkinnedModel barrierModel_;
     bool barrierModelTried_ = false;
@@ -804,6 +809,7 @@ public:
     // Diagnostics: live sentries / barriers owned by participants other than the local player.
     int participantSentriesLive() const { int n = 0; for (const Sentry& s : sentries_) n += s.alive && s.owner != localPlayer_; return n; }
     int participantBarriersLive() const { int n = 0; for (const BarrierState& b : barriers_) n += b.alive && b.owner != localPlayer_; return n; }
+    int participantBeaconsLive() const { int n = 0; for (const AmmoBeacon& b : beacons_) n += b.alive && b.owner != localPlayer_; return n; }
 private:
     void tickParticipantWeapons(float dt);
     void addBotBrain(int player, int difficulty);
@@ -933,8 +939,9 @@ public:
     std::string qaStatus() const;                                            // map / mode / body / form / weapon / position
     // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
     const BarrierState& barrier() const;   // the local player's live barrier (an empty one when none)
-    bool ammoBeaconAlive() const { return beacon_.alive; }
-    core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
+    bool ammoBeaconAlive() const { return localBeacon().alive; }
+    core::Vec3 ammoBeaconPos() const { return localBeacon().pos; }
+    const std::vector<AmmoBeacon>& ammoBeacons() const { return beacons_; }   // every participant's (Rendering draws each)
     void damageAmmoBeacon(float amount, int instigator);
     const Sentry& sentry() const;   // the local player's sentry (an empty one when none)
     Character* participantPawnMutable(int player) { return const_cast<Character*>(participantPawn(player)); }
