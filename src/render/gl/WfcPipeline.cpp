@@ -1663,7 +1663,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             }
             // opt-in: measured at 32 v 32 (Streets, fixed cam) pixel-identical but no frame-time gain - only same-chassis
             // bodies can share a draw (~1.4 instances per draw) and the flush state save / restore eats the saving
-            static const bool mdiOn = std::getenv("WFC_MDI") != nullptr && std::getenv("WFC_GL33") == nullptr;
+            static const bool mdiOn = [] { const char* e = std::getenv("WFC_MDI"); return !(e && e[0] == '0') && std::getenv("WFC_GL33") == nullptr; }();   // default on; WFC_MDI=0 off
             if (mdiWanted_ && mdiOn && s.blend <= 1 && progs_[(size_t)r].distProg < 0 && !progs_[(size_t)r].sceneDepth &&
                 !progs_[(size_t)r].sceneColor && MultiDrawElementsIndirect && VertexAttribDivisor) {
                 mdiBuild_ = true;
@@ -3412,7 +3412,7 @@ void Pipeline::flushInstances() {
 }
 
 void Pipeline::buildMdi(int meshId) {
-    static const bool on = std::getenv("WFC_MDI") != nullptr && std::getenv("WFC_GL33") == nullptr;
+    static const bool on = [] { const char* e = std::getenv("WFC_MDI"); return !(e && e[0] == '0') && std::getenv("WFC_GL33") == nullptr; }();   // default on; WFC_MDI=0 off
     if (!on || mdiMesh_ >= 0 || !MultiDrawElementsIndirect || !VertexAttribDivisor) return;
     GpuMesh& g = meshes_[(size_t)meshId];
     if (!g.world) return;
