@@ -61,7 +61,11 @@ std::vector<BotIdentity> makeBotIdentities(const BotLaunch& b, bool teamGame, in
         c.specialty = (Specialty)order[(size_t)(idx % 4)];
         c.chassisByFaction[0] = defaultChassis(c.specialty, 0);
         c.chassisByFaction[1] = defaultChassis(c.specialty, 1);
-        c.weapons = classPresetWeapons(specialtyName(c.specialty));   // the class's legal MP preset
+        // The class's legal MP preset: every list of the PCD (the chassis' iconic lists would otherwise fill the gaps).
+        c.weapons = classPresetList(specialtyName(c.specialty), "weapons");
+        c.vehicleWeapons = classPresetList(specialtyName(c.specialty), "vehicle_weapons");
+        c.melee = classPresetList(specialtyName(c.specialty), "melee");
+        c.abilities = classPresetList(specialtyName(c.specialty), "abilities");
         c.customSlot = specialtyName(c.specialty);
         // Displayed level: sum of four specialty levels (0-25 each) -> 1..100; harder bots read as more experienced.
         const int lo = difficulty <= 0 ? 4 : (difficulty == 1 ? 16 : 36), span = difficulty <= 0 ? 20 : (difficulty == 1 ? 34 : 50);
