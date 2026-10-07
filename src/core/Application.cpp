@@ -5997,7 +5997,7 @@ void Application::runAsyncStepTest() {
     auto runOnce = [&](bool async) {
         auto& states = stepStates[stepStates[0].empty() ? 0 : 1]; states.clear();
         std::vector<std::string> log;
-        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsAutobot=31?BotsDecepticon=32?BotDifficulty=2?ExtendedPlayers=1?TimeLimit=600", L);
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=" + std::string(std::getenv("WFC_ASYNCSTEP_MODE") ? std::getenv("WFC_ASYNCSTEP_MODE") : "TDM") + "?BotsAutobot=31?BotsDecepticon=32?BotDifficulty=2?ExtendedPlayers=1?TimeLimit=900", L);
         if (!world_.launchMatch(L)) return log;
         game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
         world_.match().selectCharacter(world_.localMatchPlayer(), cs);
