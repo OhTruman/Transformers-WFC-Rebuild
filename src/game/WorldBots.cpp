@@ -613,6 +613,46 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
                 if (dl < 1.2f || (pos.y > w.pos.y - 0.5f && dl < 3.0f)) { ++b.wp; b.bestDist = 1e9f; }
             }
             if (dl > 1e-3f) moveDir = d * (1.0f / dl);
+            // Off the mesh with the first leg blocked by geometry (a pocket beside the mesh, a prop top against a wall): the nav
+            // snapped the search start to a cell behind the wall. Walk to the nearest point on the mesh reachable in a clear straight
+            // line first (16 directions, 2-12 m, drops allowed), then repath from there.
+            if (!vehicle && b.wp == 0 && botNav_.findCell(pos, 0.0f) < 0 && collision()) {
+                const core::Vec3 c0 = pos + core::Vec3{0, 1.0f, 0};
+                float th;
+                const bool legBlocked = collision()->segmentHit(c0, core::Vec3{w.pos.x, c0.y, w.pos.z}, th);
+                if (legBlocked && (!b.hasRejoin || match_.matchTime() > b.rejoinUntil)) {
+                    b.hasRejoin = false;
+                    for (float r : {2.0f, 4.0f, 6.0f, 8.0f, 12.0f}) {
+                        float bestScore = 1e9f;
+                        for (int k = 0; k < 16; ++k) {
+                            const float a = 6.2831853f * (float)k / 16.0f;
+                            const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
+                            if (collision()->segmentHit(c0, q + core::Vec3{0, 1.0f, 0}, th)) continue;   // a clear straight line
+                            const int cell = botNav_.findCell(q, 1.5f, 8.0f);
+                            if (cell < 0) continue;
+                            const float score = hdist(q, w.pos);   // prefer the side toward the corridor
+                            if (score < bestScore) { bestScore = score; b.rejoin = botNav_.cells()[(size_t)cell].centroid; b.hasRejoin = true; }
+                        }
+                        if (b.hasRejoin) break;
+                    }
+                    b.rejoinUntil = match_.matchTime() + 4.0f;
+                }
+                if (b.hasRejoin) {
+                    core::Vec3 rd = b.rejoin - pos; rd.y = 0.0f;
+                    const float rl = core::length(rd);
+                    if (rl > 0.8f) {
+                        moveDir = rd * (1.0f / rl);
+                        // Wedged (the collision probes refuse every move: a pocket narrower than the pawn): after 2 s without
+                        // progress, slide toward the rejoin point along a clear centre line (never through a wall) [PC ADAPTATION:
+                        // recovery from a rebuild-only trap].
+                        if (hdist(pos, b.rejoinFrom) > 0.5f) { b.rejoinFrom = pos; b.rejoinStall = 0.0f; }
+                        else if ((b.rejoinStall += dt) > 2.0f) {
+                            const float step = std::min(rl, 3.0f * dt);
+                            if (!collision()->segmentHit(c0, c0 + moveDir * (step + 0.3f), th)) b.unwedge = moveDir * step;
+                        }
+                    } else { b.hasRejoin = false; b.wantRepath = true; }
+                }
+            } else if (b.hasRejoin) { b.hasRejoin = false; b.wantRepath = true; }   // back on the mesh: a fresh corridor
             // Stuck: moving less than 0.75 m in 1.5 s, or no 0.5 m of progress toward the current corner in 3 s (jittering against a
             // prop the nav does not know) -> jump, then repath, then avoid that spot and pick a new goal (and leave vehicle form).
             bool noProgress = false;
@@ -915,6 +955,7 @@ void World::tickBots(float dt) {
         Character& pc = o->pawn();
         MoveIntent& in = pb.in;
         if (!o->spawned()) continue;   // killed earlier in this pass
+        if (core::length(b.unwedge) > 0.0f) { pc.setPosition(pc.position() + b.unwedge); b.unwedge = {0, 0, 0}; }   // wedge recovery
         // Transform toward the wanted form (cooldown 2 s; robot spot check for vehicle -> robot as the player's).
         b.transformCooldown -= dt;
         const bool isVeh = pc.moveForm() == Form::Vehicle;

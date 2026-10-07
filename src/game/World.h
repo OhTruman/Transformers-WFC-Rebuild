@@ -483,8 +483,46 @@ public:
     // Progression feed (Frontend contract): XP events (grouped by transactionId per kill) and challenge stat increments for every
     // participant, produced from the event record. Frontend applies the local player's to the profile (CanGainXp rule, current
     // specialty). Drained by the caller.
-    std::vector<XpAward> drainXpAwards() { return awards_.drainXp(); }
-    std::vector<StatAward> drainStatAwards() { return awards_.drainStats(); }
+    // (legacy drains: now read the presented queues, which every step fills; see presented())
+    std::vector<XpAward> drainXpAwards() { std::vector<XpAward> v; v.swap(presented_.xpAwards); auto r = awards_.drainXp(); v.insert(v.end(), r.begin(), r.end()); return v; }
+    std::vector<StatAward> drainStatAwards() { std::vector<StatAward> v; v.swap(presented_.statAwards); auto r = awards_.drainStats(); v.insert(v.end(), r.begin(), r.end()); return v; }
+
+    // ---- Presented state / commands (docs/ASYNC_SIM_STEP.md, step 1: filled synchronously at the end of every step) ----
+    // Everything the main thread reads during a frame (HUD, frontend, glue) comes from presented(); writes go through submit().
+    // Queues hold every step since the last consumePresented(), in step order (two steps in one frame no longer lose the first
+    // step's events). When the step runs asynchronously (step 3) the main thread reads only this, between joins.
+    struct PresentedFrame {
+        std::vector<MatchPlayer> players;               // match().players() after the last step (scoreboard / results / lobby rows)
+        std::vector<core::Vec3> positions;              // by match player: the pawn position (valid when present[i])
+        std::vector<uint8_t> present;                   // 1 = the player has a live pawn
+        HudGameState hud;                               // hudState() after the last step
+        int localPlayer = -1;
+        float localHealth = 0.0f, localHealthMax = 0.0f;
+        std::vector<float> localSegmentTops;            // health segment tops (HudFrame)
+        int localMag = 0, localReserveMax = 0;          // the local weapon's magSize / reserveMax
+        std::string localWeaponId;                      // the local weapon's def id ("" none)
+        std::string localChassis;
+        HudAimState aim;                                // player().controller().hudAimState()
+        int matchState = 0;                             // Match::State
+        std::string modeTag;
+        int teamScore[2] = {0, 0};
+        int elapsedTime = 0, remainingTime = 0;
+        // step-ordered queues since the last consumePresented()
+        std::vector<MatchEvent> matchEvents;
+        std::vector<GameplayEvent> gameplayEvents;
+        std::vector<XpAward> xpAwards;
+        std::vector<StatAward> statAwards;
+        unsigned steps = 0;                             // steps since the last consumePresented()
+    };
+    const PresentedFrame& presented() const { return presented_; }
+    void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.steps = 0; }   // once per frame
+    // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
+    // look settings, audio volumes / preloads, test damage). Deterministic: the same commands land at the same step boundary.
+    void submit(std::function<void(World&)> command) { commands_.push_back(std::move(command)); }
+    PresentedFrame presented_;
+    std::vector<std::function<void(World&)>> commands_;
+    size_t presentedGameplayEventCount_ = 0;
+    void fillPresented();
     const AwardProducer& awards() const { return awards_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
     HudGameState hudState() const;

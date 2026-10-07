@@ -181,3 +181,31 @@ void World::submit(SimCommand c);
    first so Integration / Frontend / Systems can move to `presented()` / `submit()` with nothing async yet.
 2. Integration / Frontend / Systems: adopt `presented()` / `submit()`.
 3. Gameplay: the async remainder behind WFC_ASYNCSTEP (B), tests, then default on after Experimental's fps / latency check.
+
+## Step (1) as landed: `World::presented()` / `submit()` / `consumePresented()` — migration table
+
+Filled at the end of every `World::tick` (synchronous for now). Call `world.consumePresented()` once per frame after reading the
+queues (match / gameplay events); award drains clear their own queues.
+
+| old call (Application_Frontend.cpp / glue) | new |
+|---|---|
+| `world.matchEvents()` (last step only) | `presented().matchEvents` (every step since the last consume, in order) |
+| `world.match().gameplayEvents()` (whole record) | `presented().gameplayEvents` (new since the last consume) |
+| `world.drainXpAwards()` / `drainStatAwards()` | unchanged names (now drain `presented().xpAwards` / `statAwards` + anything pending) |
+| `match.players()[i]` (name / team / score / kills / deaths / alive / kind / level / specialty / chassis / selection) | `presented().players[i]` (a `MatchPlayer` copy) |
+| `match.teamScore(t)`, `match.elapsedTime()`, `match.remainingTime()`, `match.state()`, `match.settings().modeTag` | `presented().teamScore[t]`, `.elapsedTime`, `.remainingTime`, `.matchState`, `.modeTag` |
+| `player().pawn().position()`, `matchOpponents()[k]->position()` | `presented().positions[player]` when `presented().present[player]` |
+| `world.hudState()` | `presented().hud` |
+| `player().pawn().health()` / `segmentTop(i)` | `presented().localHealth`, `.localHealthMax`, `.localSegmentTops[i]` |
+| `player().pawn().weapon()` (magSize / reserveMax / def->id) | `presented().localMag`, `.localReserveMax`, `.localWeaponId` |
+| `player().controller().hudAimState()` | `presented().aim` |
+| `localChassis()` | `presented().localChassis` |
+| `match().selectCharacter(me, cs)` | `world.submit([=](World& w) { w.match().selectCharacter(me, cs); })` |
+| QA actions (`qaRespawn`, `qaKillAllBots`, ...) | `world.submit([](World& w) { w.qaKillAllBots(); })` etc. |
+| `applyLookSettings(world.player().controller(), profile)` | `world.submit([=](World& w) { applyLookSettings(w.player().controller(), profile); })` |
+| Systems: `applyProfileVolumes` / `setGroupVolume` / `preloadSelectionAudio` / `preloadWeaponAudio` / `setPlayerVehicleWeaponAudio` | the same calls inside `submit` |
+| TEST lifecycle `applyMatchDamage(...)` | inside `submit` |
+| QA reads (`botBrains()`, `qaBotLabels()`) | unchanged for now (DEV only; snapshot in step 3) |
+| `match.starts()[idx].pos` | unchanged (static per match) |
+
+Load / unload (`launchMatch`, `loadMapAudio`, ...) stay direct calls: no step runs then.

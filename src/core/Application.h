@@ -64,6 +64,7 @@ private:
     void runWeaponAudit();
     void runVehicleAudit();
     void runVehicleFrameTest();
+    void runStuckSpot(const char* spec);
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

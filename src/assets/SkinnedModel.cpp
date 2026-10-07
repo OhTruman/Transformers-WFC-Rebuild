@@ -400,9 +400,9 @@ void segment(const AnimSampler& s, float t, int& k0, int& k1, float& u) {
     if (n == 0) { k0 = k1 = 0; u = 0; return; }
     if (t <= s.times.front()) { k0 = k1 = 0; u = 0; return; }
     if (t >= s.times.back()) { k0 = k1 = (int)n - 1; u = 0; return; }
-    int k = 0;
-    while (k + 1 < (int)n && s.times[k + 1] < t) ++k;
-    k0 = k; k1 = k + 1;
+    // the first key time >= t (front < t < back here): binary search, the same index the linear scan found
+    k1 = (int)(std::lower_bound(s.times.begin(), s.times.end(), t) - s.times.begin());
+    k0 = k1 - 1;
     float dt = s.times[k1] - s.times[k0];
     u = dt > 1e-8f ? (t - s.times[k0]) / dt : 0.0f;
 }

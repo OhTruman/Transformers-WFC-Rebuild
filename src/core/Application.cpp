@@ -173,6 +173,7 @@ bool Application::init() {
     if (std::getenv("WFC_WEAPONAUDIT")) { runWeaponAudit(); return false; }        // WeaponDef vs AssetTools tuning_tables.json
     if (std::getenv("WFC_VEHICLEAUDIT")) { runVehicleAudit(); return false; }      // VehicleParams vs tuning_tables.json
     if (std::getenv("WFC_VEHFRAMETEST")) { runVehicleFrameTest(); return false; }   // the same drive at 60 / 120 / 240 fps
+    if (const char* ss = std::getenv("WFC_STUCKSPOT")) { runStuckSpot(ss); return false; }   // what blocks a robot at a spot
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5270,6 +5271,63 @@ void Application::runVehicleFrameTest() {
               std::string(ch) + ": the same drive at 60 / 120 / 240 fps (max deviation " + std::to_string(std::max(dev2, dev4)).substr(0, 6) + " m)");
     }
     LOG_INFO("VEHFRAME SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_STUCKSPOT=x,y,z (diagnostics): what blocks a robot at a reported stuck spot. Teleports the local pawn there, walks 1 s in 8
+// directions (resetting between), logs the displacement, and casts rays at the robot probe heights (knee 0.55 m reach 0.7, centre,
+// head 3.6 m; 3 m long) reporting the hit distance / normal per direction; plus the nav cell and the ground height.
+void Application::runStuckSpot(const char* spec) {
+    core::Vec3 at{0, 0, 0};
+    if (std::sscanf(spec, "%f,%f,%f", &at.x, &at.y, &at.z) != 3) { LOG_INFO("STUCKSPOT bad spec %s", spec); return; }
+    const float dt = 1.0f / 60.0f;
+    game::Character& pc = world_.player().pawn();
+    const game::CollisionWorld* col = world_.collision();
+    world_.ensureBotNav();
+    float gy; core::Vec3 gn;
+    const bool ground = col && col->groundHeight(at.x, at.z, at.y + 1.0f, 3.0f, gy, gn);
+    LOG_INFO("STUCKSPOT at (%.1f %.1f %.1f): nav cell %d (within 0 m), %d (4 m); ground %s %.2f normal (%.2f %.2f %.2f)", at.x, at.y, at.z,
+             world_.botNav().findCell(at, 0.0f), world_.botNav().findCell(at), ground ? "yes" : "no", ground ? gy : 0.0f, gn.x, gn.y, gn.z);
+    for (int k = 0; k < 8; ++k) {
+        const float yaw = 6.2831853f * (float)k / 8.0f;
+        const core::Vec3 d = core::forwardFromYawPitch(yaw, 0.0f);
+        // rays at the probe heights
+        std::string rays;
+        for (float h : {0.55f, core::config::kPawnHalfHeight, 3.6f}) {
+            float t; core::Vec3 n;
+            const core::Vec3 o = at + core::Vec3{0, h, 0};
+            char b[96];
+            if (col && col->segmentHit(o, o + d * 3.0f, t, n)) std::snprintf(b, sizeof b, " h%.2f hit %.2f m n(%.2f %.2f %.2f)", h, 3.0f * t, n.x, n.y, n.z);
+            else std::snprintf(b, sizeof b, " h%.2f clear", h);
+            rays += b;
+        }
+        // walk 1 s
+        pc.setPosition(at); pc.velocity() = {0, 0, 0}; pc.groundY = at.y;
+        world_.player().controller().setCameraYaw(yaw);
+        for (int i = 0; i < 60; ++i) {
+            platform::InputFrame in; in.down[(int)platform::Button::Forward] = true;
+            world_.handleInput(in, dt); world_.tick(dt);
+        }
+        const core::Vec3 e = pc.position() - at;
+        LOG_INFO("STUCKSPOT dir %d (yaw %.0f deg): moved %.2f m horizontally, dy %.2f;%s", k, yaw * 57.2958f, std::sqrt(e.x * e.x + e.z * e.z), e.y, rays.c_str());
+    }
+    // WFC_STUCKSPOT_BOT=1: a bot placed in the spot must leave it (more than 10 m in 20 s) - the off-mesh rejoin.
+    if (std::getenv("WFC_STUCKSPOT_BOT")) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=1?TimeLimit=600", L);
+        if (!world_.launchMatch(L)) { LOG_INFO("STUCKSPOT bot: launch failed"); return; }
+        platform::InputFrame idle;
+        auto spawnedBot = [&]() -> game::MatchOpponent* { for (game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned()) return o; return nullptr; };
+        for (int i = 0; i < 60 * 30 && !spawnedBot(); ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        game::MatchOpponent* o = spawnedBot();
+        if (!o) { LOG_INFO("STUCKSPOT bot: no bot spawned"); return; }
+        o->setPosition(at);
+        float maxAway = 0.0f;
+        for (int i = 0; i < 60 * 20 && o->spawned(); ++i) {
+            world_.handleInput(idle, dt); world_.tick(dt);
+            const core::Vec3 e = o->pawn().position() - at;
+            maxAway = std::max(maxAway, std::sqrt(e.x * e.x + e.z * e.z));
+        }
+        LOG_INFO("STUCKSPOT bot p%d: max %.1f m from the spot in 20 s -> %s", o->matchPlayer(), maxAway, maxAway > 10.0f ? "ESCAPED" : "STILL STUCK");
+    }
 }
 
 } // namespace core
