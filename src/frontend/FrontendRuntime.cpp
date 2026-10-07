@@ -1012,6 +1012,17 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
+    // The movie mute (CINE_MUTE_FOR_BINK on this runtime's mixer) follows the same rule as updateAudio: a Kismet movie or
+    // a loading screen is up. In the match neither is, so the pre-match loading movie's mute is released here; it used to
+    // stay on, and every HUD / pause-menu UI sound in the match played at gain 0 (Systems audit, 09b).
+    {
+        const bool movie = !flow_.kismetMovie().empty() || flow_.loading().active;
+        if (movie != moviePlaying_) {
+            moviePlaying_ = movie;
+            if (audio_) audio_->setMoviePlaying(movie);
+            FlowTrace::emit("audio.moviePlaying", {{"playing", FlowTrace::boolean(movie)}, {"where", "match"}});
+        }
+    }
     updateProgression();
     // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
     bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
