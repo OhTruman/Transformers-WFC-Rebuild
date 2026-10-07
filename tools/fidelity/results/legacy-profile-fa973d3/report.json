@@ -1,0 +1,81 @@
+﻿{
+    "summary":  {
+                    "pass":  6,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  5,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.migrated",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "old-format profile (BotsFriendly 3 / BotsEnemy 4 only): launch URL per-faction keys present True; spawned 8 of 8; profile now has BotsAutobot True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 8 of 8 (local + 3 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "10 kills in 60 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 bots logged; median path 578.3 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 2; off-mesh samples 3"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 10 vs kills 10"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 2.84 ms with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 10 kills (weapons: unknown 10)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.features",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "bot abilities used 1 (SpawnSentry 1); killstreaks triggered 0; bots seen flying (jets) 2; knock-off kills credited to the last hitter (DmgType_Fell) 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4568.336 with 8 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_3v4_legacyprofile.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.known_partial",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused"
+                    }
+                ]
+}

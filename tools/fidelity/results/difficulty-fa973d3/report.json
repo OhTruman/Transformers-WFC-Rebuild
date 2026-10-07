@@ -1,0 +1,135 @@
+﻿{
+    "summary":  {
+                    "pass":  11,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  9,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 9 of 9 (local + 4 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "26 kills in 120 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 bots logged; median path 1101.4 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 0; off-mesh samples 5"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 26 vs kills 26"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 3.33 ms with 9 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 26 kills (weapons: unknown 26)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.features",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "bot abilities used 7 (Barrier 2, Warcry 2, SpawnSentry 1, Shockwave 1, RollerSphere 1); killstreaks triggered 3; bots seen flying (jets) 2; knock-off kills credited to the last hitter (DmgType_Fell) 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4566.293 with 9 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixA.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "distinct spawned players 9 of 9 (local + 4 friendly + 4 enemy); team split correct True"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.combat",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "21 kills in 120 s of play"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.navigation",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 bots logged; median path 1027.9 m; BROKEN (no displacement \u003e= 20 s, no target, Roam / Attack / Retrieve goal): none; struggling (stuck \u003e= 2 on \u003e 25 % of samples) or idle (\u003c 10 m): none; max no-path 1; off-mesh samples 3"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.kill_feed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "kill-feed lines 21 vs kills 21"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.frame_time",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "mean frame 3.24 ms with 9 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.suicides",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "suicides / environment deaths 0, team kills 0 of 21 kills (weapons: unknown 21)"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.features",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "bot abilities used 10 (SpawnSentry 4, SpawnAmmoCrate 2, Barrier 2, Shockwave 1, Warcry 1); killstreaks triggered 3; bots seen flying (jets) 2; knock-off kills credited to the last hitter (DmgType_Fell) 0"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.memory",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "privateMB at match loaded: 4570.734 with 9 players"
+                    },
+                    {
+                        "id":  "bots.TDM_IAC_Streets_4v4_mixB.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "bots.difficulty.hard_outkills_easy",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "mixed teams, both sides swapped: bot-on-bot kills by HARD 33 vs EASY 14 (A: 18/8, B: 15/6; the scripted player\u0027s kills / deaths excluded)"
+                    },
+                    {
+                        "id":  "bots.known_partial",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused"
+                    }
+                ]
+}
