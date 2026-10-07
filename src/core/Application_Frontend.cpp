@@ -1049,8 +1049,14 @@ void Application::routeMatchToFrontend(float dt) {
                 LOG_INFO("MATCH kill killer=%d victim=%d killer_team=%d victim_team=%d weapon=%s", e.other, e.player, teamOf(e.other),
                          teamOf(e.player), e.text.empty() ? "unknown" : e.text.c_str());
                 if (e.other >= 0 && e.other != e.player) {
-                    if (teamOf(e.other) >= 0) LOG_INFO("MATCH score team=%d score=%d", teamOf(e.other), match.teamScore(teamOf(e.other)));
-                    else LOG_INFO("MATCH score team=-1 player=%d score=%d", e.other, match.players()[(size_t)e.other].score);
+                    // [integration 09c] reason=kill, and only when the score changed (CTF / objective modes: kills do not score).
+                    static int lastTeamScore[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+                    const int kt = teamOf(e.other);
+                    if (kt >= 0 && kt < 8 && match.teamScore(kt) != lastTeamScore[kt]) {
+                        lastTeamScore[kt] = match.teamScore(kt);
+                        LOG_INFO("MATCH score team=%d score=%d reason=kill", kt, lastTeamScore[kt]);
+                    }
+                    else if (kt < 0) LOG_INFO("MATCH score team=-1 player=%d score=%d reason=kill", e.other, match.players()[(size_t)e.other].score);
                 }
                 LOG_INFO("MATCH death player=%d pos=%.1f,%.1f,%.1f", e.player, dp.x, dp.y, dp.z);
                 deathAt_[e.player] = matchClock_;
