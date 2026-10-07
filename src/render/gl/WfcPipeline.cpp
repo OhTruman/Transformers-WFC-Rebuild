@@ -2320,7 +2320,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const bool mdiMesh = meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty();
     if (mdiMesh) drawMdi(g);
     for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
-        for (size_t si = 0; si < g.subs.size(); ++si) {
+        // one sub (a queued translucent draw): index it directly - scanning every sub of the world mesh per queued
+        // item was ~10 % of the main thread at 10 v 10
+        const size_t siBegin = onlySub >= 0 ? (size_t)onlySub : 0;
+        const size_t siEnd = onlySub >= 0 ? std::min((size_t)onlySub + 1, g.subs.size()) : g.subs.size();
+        for (size_t si = siBegin; si < siEnd; ++si) {
             if (onlySub >= 0 && (int)si != onlySub) continue;
             Sub& s = g.subs[si];
             if (mdiMesh && pass == 0 && s.mdiRow >= 0) continue;   // drawn by drawMdi
