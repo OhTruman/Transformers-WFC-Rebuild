@@ -254,7 +254,7 @@ void Application::run() {
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
         // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
         // holds Fire (or Forward) from this frame's input sample until the first frame whose draw shows the effect (a new shot serial /
-        // the pawn moved > 1 cm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
+        // the pawn moved > 1 mm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
         static const char* latProbe = std::getenv("WFC_LATENCYPROBE");
         static const bool latFire = latProbe && latProbe[0] == 'f';
         struct LatProbe { int phase = 0, idle = 0; long pressFrame = 0; double tIn = 0.0; unsigned base = 0; core::Vec3 basePos{0, 0, 0}; bool seen = false;
@@ -432,7 +432,7 @@ void Application::run() {
             } else if (lat.phase == 2 && !lat.seen) {
                 const bool fired = lp.weapon().shotSerial != lat.base;
                 const core::Vec3 d = lp.position() - lat.basePos;
-                if (latFire ? fired : core::dot(d, d) > 1e-4f) lat.seen = true;
+                if (latFire ? fired : core::dot(d, d) > 1e-6f) lat.seen = true;   // > 1 mm (1 cm missed slow first steps from rest)
                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
             }
         }
