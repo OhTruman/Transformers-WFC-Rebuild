@@ -226,6 +226,20 @@ provenance stays in its section.
 - **Extra bodies** (e0f48d0, cb82af5, 34b2f50): Car8 / Car9 / Car10 / Frenzy / Rumble / Laserbeak unlock at Scout levels
   10 / 15 / 20 / 25 / 25 / 25 (user decision; AssetTools retargeted animation, Gameplay 1ca3bf5 params, Rendering
   aa5ded7 materials). 64-participant UI check at 1280x720: lobby, HUD, kill feed, scoreboard, results, View Scores - nothing cut off.
+- **CaC "NEW" badges** (d19b628; CONFIRMED script): level-ups record the skills / abilities they unlock
+  (CheckForLevelUp -> SkillsUnlockedThisGame), saved at match end ([Progression] NewlyUnlocked), served by
+  GetNewlyUnlockedSkills / Abilities, removed by MarkSkillAsOld when highlighted, cleared by Prime. Experimental 14 / 14.
+- **09b profile migration** (2d226a0): BotsFriendly / BotsEnemy only -> BotsAutobot / BotsDecepticon (4 / 5 limits), saved.
+- **Map-aware Extended bot counts** (ec130d0, 87ac881; PC ADAPTATION, user decision): AssetTools recommended_players.json
+  sets the counts on a lobby map / mode change unless edited since the last change (BotsEdited); the lobby's own
+  initial pick is not a change; "RECOMMENDED: n V n" hint; up to 32 v 32 always.
+- **F10 QA panel** (c33d086, 033327e; DEV TOOL): per-bot list, overlay labels (projected qaBotLabels), freeze / kill-all
+  bots, teleport to aim, mode-filtered map list. Proof: panel closed vs open (WFC_SEED, Gameplay sim RNG) -> identical
+  match events (25 / 25, positions included).
+- **Escalation maps** stay SV-only (CompatibleGameTypes; test). Frame Rate Limit "Uncapped" (the user's wording).
+- **HUD performance** (db3e706, 79ee4f1): cached shapes in static VBOs, cached uniform locations, tracked buffer binding,
+  fewer clip-advance allocations. 32 v 32 lockstep A/B: ui.draw 0.393 -> 0.239 ms, HUD pixel-identical (WFC_UIPROF).
+- **33-chassis CaC sheet**: all textured (Rendering NAV_Idle fallback + 4.1 m preview fit for the Machine Gunners).
 
 ## FRONTEND MILESTONE 09: FPS LIMIT, BOT SETTINGS, PROGRESSION, PLAYTEST DEFECTS (2026-10-06, agents/frontend)
 
