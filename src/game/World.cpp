@@ -158,6 +158,17 @@ void World::load(render::IRenderer& renderer) {
         }
     };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
+    // [integration 09c] Gameplay's bot-ability hook (called once at each successful bot trigger, WorldBots botTryAbility) ->
+    // Systems M09d onParticipantAbility (OnTriggerSound + the ability clip's notifies, attached to the caster). Bound here
+    // instead of editing botTryAbility, so exactly one sound path exists.
+    participantAbilityHook = [this](int player, const std::string& abilityId, const std::string& chassisId, const core::Vec3& at) {
+        onParticipantAbility(player, abilityId, chassisId, at);
+    };
+    participantPositionHook = [this](int player, core::Vec3& out) {   // [Systems M09d] participant sounds follow the pawn
+        for (MatchOpponent* o : opponents_)
+            if (o->matchPlayer() == player && o->spawned()) { out = o->pawn().actorLocation(); return true; }
+        return false;
+    };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
             spawnProjectile(o, d * w.projSpeed, w, localPlayer_);   // Spawn at RealStartLoc (callers pass the muzzle)
@@ -1538,6 +1549,7 @@ void World::tick(float dt) {
     }
     tickAbilityEffects(dt);
     tickAbilityAudio();                        // [Systems M08i]
+    tickParticipantAudio(dt);                  // [Systems M09d] bots' delayed ability notifies
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
