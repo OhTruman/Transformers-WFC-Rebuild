@@ -452,9 +452,9 @@ public:
     const BotNav& botNav() const { return botNav_; }
     // The MoveIntent a participant pawn simulated this step (bots: the AI's throttle / strafe / boost / steer, same meaning as the local
     // controller's input), or null. For presentation consumers (Systems engine / boost audio).
-    const MoveIntent* participantIntent(int player) const {
-        for (const MatchOpponent* o : opponents_) if (o->matchPlayer() == player && o->spawned()) return &o->intent();
-        return nullptr;
+    const MoveIntent* participantIntent(int player) const {   // O(1) via the player -> opponent index
+        const MatchOpponent* o = opponentByPlayer(player);
+        return o && o->spawned() ? &o->intent() : nullptr;
     }
     bool ensureBotNav();
     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).

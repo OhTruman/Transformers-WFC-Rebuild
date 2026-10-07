@@ -933,6 +933,9 @@ void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     }
 }
 
+bool tickProfOn();
+void tickProfAdd(int slot, double ms);   // WFC_TICKPROF (defined below)
+
 void World::tickParticipantWeapons(float dt) {
     // Held weapon views follow each participant's active robot weapon (model swap on a switch, fire / reload event anims).
     static std::vector<ParticipantWeaponView*> ticking;
@@ -977,7 +980,11 @@ void World::tickParticipantWeapons(float dt) {
             muzzle.m[0] = f.x; muzzle.m[1] = f.y; muzzle.m[2] = f.z; muzzle.m[4] = up.x; muzzle.m[5] = up.y; muzzle.m[6] = up.z;
             muzzle.m[8] = rt.x; muzzle.m[9] = rt.y; muzzle.m[10] = rt.z; muzzle.m[12] = s.from.x; muzzle.m[13] = s.from.y; muzzle.m[14] = s.from.z;
         }
-        if (participantShotFxHook) participantShotFxHook(s, muzzle);
+        if (participantShotFxHook) {
+            const double fx0 = tickProfOn() ? profNowMs() : 0.0;
+            participantShotFxHook(s, muzzle);
+            if (tickProfOn()) tickProfAdd(25, profNowMs() - fx0);   // WFC_TICKPROF glue.shotFx
+        }
         else if (partShotFx_.size() < 256) {
             const WeaponDef* d = findWeaponDef(s.weapon);
             partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f)});   // projectiles draw their own flight effect
@@ -1090,14 +1097,17 @@ namespace {
 // WFC_TICKPROF (diagnostics): accumulated ms per World::tick phase, logged every 300 steps.
 struct TickProf {
     static bool on() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
-    double acc[22] = {}; long n = 0;
-    const char* names[22] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
-                             "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim"};
+    double acc[27] = {}; long n = 0;
+    const char* names[27] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+                             "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
+                             // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
+                             // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
+                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
 }
 bool tickProfOn() { return TickProf::on(); }
-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 22) tickProf().acc[slot] += ms; }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 27) tickProf().acc[slot] += ms; }
 namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
@@ -1105,7 +1115,7 @@ struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf:
 void World::tick(float dt) {
     if (TickProf::on() && ++tickProf().n % 300 == 0) {
         std::string line;
-        for (int i = 0; i < 22; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        for (int i = 0; i < 27; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step
