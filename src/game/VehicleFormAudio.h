@@ -36,6 +36,7 @@ struct VehicleFormSignals {
     bool dashing = false;          // hover dash active (car / truck DoDash)
     bool rolling = false;          // car Driving roll / jet roll active
     bool nitroStarted = false;     // truck StartNitro this step
+    long long nitroSerial = -1;    // or: the pawn's nitro-start serial (participants; the edge is derived), -1 = not sent
     bool ascendHeld = false, descendHeld = false;   // jet Hover Up / Down
     bool special180 = false;       // tank 180 started this step (Gameplay: not modelled yet)
     float wheelSlip = -1.0f;       // Driving SlipAngle if known (< 0: unknown -> 0)

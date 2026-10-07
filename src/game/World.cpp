@@ -1255,9 +1255,11 @@ void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, 
         if (!b.culled) { b.vehicle.stopAll(cues_); b.form = VehicleFormAudio{}; b.foley = RobotFoley{}; b.foley.setProfile(&p); }
         b.culled = true;
         b.prevTransforming = pc.isTransforming();
+        if (vs.nitroSerial >= 0) b.seenNitro = vs.nitroSerial;     // no stale nitro when it comes back into range
         return;
     }
     b.culled = false;
+    b.pos = bodyPos;
     auto at = [&](const core::Vec3& up) {
         SoundCues::Emitter e;
         e.pos = bodyPos + up;
@@ -1286,9 +1288,45 @@ void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, 
     // Vehicle component at AUDIO_ROOT (+147.25 UU), as the local pawn.
     VehicleFormSignals s = vs;
     s.tookOff = s.tookOff || (s.vehicle && b.prevGrounded && !s.onGround && s.velocity.y > 2.0f);   // UpdateJumping take-off edge
+    if (vs.nitroSerial >= 0) {                                     // [Systems M09k] StartNitro from the pawn's serial
+        s.nitroStarted = s.nitroStarted || (b.seenNitro >= 0 && vs.nitroSerial != b.seenNitro);
+        b.seenNitro = vs.nitroSerial;
+    }
     b.prevGrounded = s.onGround;
     const VehicleAudio::Input in = b.form.translate(s, nullptr);
     b.vehicle.tick(dt, in, cues_, [&] { return at({0, 1.4725f, 0}); });
+}
+
+void World::tickParticipantWeaponAudio(int player, const std::string& cls, unsigned shotSerial, unsigned reloadSerial,
+                                       const std::string& actionClip, float actionTime, float dt) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    auto it = participantBodies_.find(player);
+    if (it == participantBodies_.end()) return;
+    ParticipantBody& b = it->second;
+    if (cls != b.weaponClass) {                                    // weapon switch / spawn: no replay of old serials
+        b.weaponClass = cls;
+        ensureWeaponAudio(cls);
+        b.weaponSounds.set(cls.empty() ? nullptr : CharacterAudio::weaponAnimSounds(cls));
+        b.weaponSeen = false;
+    }
+    const bool newShot = b.weaponSeen && shotSerial != b.seenShot;
+    const bool newReload = b.weaponSeen && reloadSerial != b.seenReload;
+    b.seenShot = shotSerial; b.seenReload = reloadSerial; b.weaponSeen = true;
+    if (b.culled) { b.weaponSounds.play(WeaponSoundTimeline::Event::Idle); return; }   // out of range: silent, no backlog
+    SoundCues::Emitter e;
+    e.pos = b.pos + core::Vec3{0, 1.2f, 0};                       // the weapon at chest height (no per-bot weapon socket)
+    if (participantPositionHook) { e.owner = kOwnParticipantBase + player; e.offset = {0, 1.2f, 0}; }
+    const float dist = core::length(e.pos - listenerPos_);
+    if (newReload) b.weaponSounds.play(WeaponSoundTimeline::Event::Reload);
+    else if (newShot) b.weaponSounds.play(WeaponSoundTimeline::Event::Fire);
+    std::vector<const std::string*> fired;
+    b.weaponSounds.tick(dt, fired);
+    for (const std::string* q : fired) if (q && !q->empty()) cues_.play(q->c_str(), e, dist);
+    const bool viaAbility = actionClip.rfind("Skill_", 0) == 0 || actionClip == "Nav_Boost_F" || actionClip == "Transform_Whirlwind_ROBO";
+    std::vector<const char*> out;
+    b.foley.actionLayer(viaAbility ? std::string() : actionClip, actionTime, out);
+    e.offset = {0, 0, 0}; e.pos = b.pos;
+    for (const char* c : out) cues_.play(c, e, dist);
 }
 
 int World::participantBodiesActive() const {
