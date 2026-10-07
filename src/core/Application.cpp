@@ -5023,8 +5023,15 @@ void Application::runWeaponAudit() {
         cmp("shots", (float)d.shots, "gameplay.NumShotsToFire");
         cmp("interval", d.interval, "gameplay.FireIntervalModifier.IntervalRange.Min");
         cmp("rangeM", d.rangeM, "gameplay.WeaponRange", 0.01f);
-        cmp("falloffNearM", d.falloffNearM, "gameplay.RangeDamageModifiers[0].Range", 0.01f);
-        cmp("falloffFarMul", d.falloffFarMul, "gameplay.RangeDamageModifiers[1].Modifier");
+        // every RangeDamageModifiers point (GetRangeDamageModifier steps)
+        for (int k = 0; k < 4; ++k) {
+            const std::string rk = "gameplay.RangeDamageModifiers[" + std::to_string(k) + "].Range", mk = "gameplay.RangeDamageModifiers[" + std::to_string(k) + "].Modifier";
+            if (!v.has(rk)) { if (k < d.rangeModCount) { ++bad; LOG_INFO("WEAPONAUDIT %s.rangeMod[%d] extra point in the rebuild", id.c_str(), k); } continue; }
+            if (k >= d.rangeModCount) { ++bad; LOG_INFO("WEAPONAUDIT %s.rangeMod[%d] authored point missing in the rebuild", id.c_str(), k); continue; }
+            const std::string fr = "rangeModM[" + std::to_string(k) + "]", fm = "rangeModMul[" + std::to_string(k) + "]";
+            cmp(fr.c_str(), d.rangeModM[k], rk.c_str(), 0.01f);
+            cmp(fm.c_str(), d.rangeModMul[k], mk.c_str());
+        }
         cmp("spreadMin", d.spreadMin, "gameplay.PerShotSpreadModifier.Modifier.Min");
         cmp("spreadMax", d.spreadMax, "gameplay.PerShotSpreadModifier.Modifier.Max");
         cmp("spreadPerShot", d.spreadPerShot, "gameplay.PerShotSpreadModifier.ModifierChangePerShot");

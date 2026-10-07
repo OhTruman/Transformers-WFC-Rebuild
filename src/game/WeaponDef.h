@@ -35,6 +35,8 @@ struct WeaponDef {
     // Grenade bag (TnWeaponDataGrenadeBag + TnProjectileDataGrenadeLauncher) [CONF authored].
     float tossStrength, lowPitchMin, lowPitchMax, lowPitchSpeed, fuseMin, fuseMax, bounce, gravityScale; bool explodeOnPawn;
     float speedScaleMinPitch, speedScaleMaxPitch, minPitch, maxPitch;
+    // TnWeaponData.RangeDamageModifiers (every authored point; TnWeapon.GetRangeDamageModifier steps) [CONF script].
+    int rangeModCount; float rangeModM[4]; float rangeModMul[4];
 };
 
 // By provider UniqueId or class id (case-sensitive); null when unknown.
