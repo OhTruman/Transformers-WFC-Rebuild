@@ -505,10 +505,60 @@ int GameFlow::botMax(const std::string& field) const {
     return 0;
 }
 
+bool GameFlow::recommendedFor(int mapId, const std::string& mode, int& perSide, int& ffa) const {
+    auto it = recommended_.find(mapId);
+    if (it == recommended_.end() || it->second.perSide <= 0) return false;
+    perSide = it->second.perSide;
+    ffa = it->second.ffa > 0 ? it->second.ffa : perSide * 2;
+    auto m = it->second.modes.find(mode);
+    if (m != it->second.modes.end()) {
+        if (m->second.first > 0) perSide = m->second.first;
+        if (m->second.second > 0) ffa = m->second.second;
+    }
+    return true;
+}
+
+GameFlow::BotCounts GameFlow::recommendedBots(int perSide, int ffa, bool teams, int humanFaction, int maxAutobot, int maxDecepticon, int maxEnemy) {
+    BotCounts c;
+    if (teams) {
+        c.autobot = std::clamp(perSide - (humanFaction == 0 ? 1 : 0), 0, std::max(0, maxAutobot));
+        c.decepticon = std::clamp(perSide - (humanFaction == 1 ? 1 : 0), 0, std::max(0, maxDecepticon));
+    } else {
+        c.enemy = std::clamp(ffa - 1, 0, std::max(0, maxEnemy));
+    }
+    return c;
+}
+
+std::string GameFlow::botRecommendationText() const {
+    int perSide = 0, ffa = 0;
+    if (!profile_.bots.extended || !recommendedFor(lobby_.mapId, lobby_.gameModeTag, perSide, ffa)) return std::string();
+    return botRows() == BotRows::FreeForAll ? "RECOMMENDED: " + std::to_string(ffa) + " PLAYERS"
+                                            : "RECOMMENDED: " + std::to_string(perSide) + " V " + std::to_string(perSide);
+}
+
+void GameFlow::applyRecommendedBots(const char* why) {
+    // PC ADAPTATION (user decision): with the Extended player limit, a lobby map / mode change sets the counts to the map's
+    // recommendation (the human counted on their side) unless the player edited them since the last map change.
+    LocalProfile::Bots& b = profile_.bots;
+    const BotRows rows = botRows();
+    int perSide = 0, ffa = 0;
+    if (!b.extended || lobby_.playlistId >= 0 || rows == BotRows::None || !recommendedFor(lobby_.mapId, lobby_.gameModeTag, perSide, ffa)) return;
+    const BotCounts c = recommendedBots(perSide, ffa, rows == BotRows::Teams, humanFaction(), botMax("autobot"), botMax("decepticon"), botMax("enemy"));
+    if (rows == BotRows::Teams) { b.autobot = c.autobot; b.decepticon = c.decepticon; } else b.enemy = c.enemy;
+    profile_.save();
+    FlowTrace::emit("lobby.botsRecommended", {{"why", why}, {"mapId", std::to_string(lobby_.mapId)}, {"mode", lobby_.gameModeTag},
+                                              {"perSide", std::to_string(perSide)}, {"ffa", std::to_string(ffa)},
+                                              {"autobot", std::to_string(b.autobot)}, {"decepticon", std::to_string(b.decepticon)},
+                                              {"enemy", std::to_string(b.enemy)}, {"provenance", "PC ADAPTATION"}});
+}
+
 void GameFlow::setBotSetting(const std::string& field, int value) {
     LocalProfile::Bots& b = profile_.bots;
-    if (field == "extended") b.extended = value != 0;
-    else {
+    if (field == "extended") {
+        b.extended = value != 0;
+        if (b.extended && !b.editedSinceMap) applyRecommendedBots("extended");
+    } else {
+        if (field != "difficulty") b.editedSinceMap = true;
         int& v = field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy : b.difficulty;
         v = std::clamp(value, 0, std::max(0, botMax(field)));
     }
@@ -766,6 +816,12 @@ void GameFlow::setMapId(int id) {
     lobby_.mapId = id;
     // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
     lobby_.prestreamMap = mi ? mi->mapFilename : "";
+    // Map-aware Extended counts: a map change applies the recommendation, unless the counts were edited since the
+    // last change (they are kept once; the flag is consumed).
+    if (level_ == LevelKind::GameLobby) {
+        if (profile_.bots.editedSinceMap) { profile_.bots.editedSinceMap = false; profile_.save(); }
+        else applyRecommendedBots("map");
+    }
     FlowTrace::emit("gamelobby.map", {{"mapId", std::to_string(id)}, {"map", mi ? mi->mapFilename : "?"},
                                       {"name", mi ? mi->friendlyName : "?"},
                                       {"hasRequiredAssets", FlowTrace::boolean(mi && mi->hasRequiredAssets)}});

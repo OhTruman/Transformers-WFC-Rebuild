@@ -226,6 +226,16 @@ public:
     }
     int botMax(const std::string& field) const;   // "autobot" / "decepticon" / "enemy" / "difficulty" / "extended"
     void setBotSetting(const std::string& field, int value);   // clamped; saved
+    // Map-aware Extended bot counts (user decision, PC ADAPTATION): AssetTools' recommended players per versus map
+    // (per side incl. the human; FFA total; optional per mode).
+    struct RecommendedPlayers { int perSide = 0, ffa = 0; std::map<std::string, std::pair<int, int>> modes; };
+    void setRecommendedPlayers(std::map<int, RecommendedPlayers> byMapId) { recommended_ = std::move(byMapId); }
+    bool recommendedFor(int mapId, const std::string& mode, int& perSide, int& ffa) const;
+    std::string botRecommendationText() const;   // "RECOMMENDED: 8 V 8" / "RECOMMENDED: 12 PLAYERS" / ""
+    struct BotCounts { int autobot = 0, decepticon = 0, enemy = 0; };
+    // The counts a recommendation gives: the human's side one bot fewer; FFA total minus the human; within the caps.
+    static BotCounts recommendedBots(int perSide, int ffa, bool teams, int humanFaction, int maxAutobot, int maxDecepticon, int maxEnemy);
+    void applyRecommendedBots(const char* why);
     LocalProfile& profile() { return profile_; }
     const LocalProfile& profile() const { return profile_; }
     std::string stateSummary() const;
@@ -278,6 +288,7 @@ private:
     const Catalog* cat_ = nullptr;
     Options opt_;
     std::mt19937 rng_;
+    std::map<int, RecommendedPlayers> recommended_;
     double clock_ = 0.0;
 
     LevelKind level_ = LevelKind::None;

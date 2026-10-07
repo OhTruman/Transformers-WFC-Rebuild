@@ -890,6 +890,17 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
             frontend::FlowTrace::emit("lobby.botRows", {{"refresh", "limits"}, {"extended", frontend::FlowTrace::boolean(b.extended)},
                                                         {"humanFaction", std::to_string(flow.humanFaction())}});
         }
+        // Counts the flow changed itself (map-aware Extended counts on a map change): the rows follow the profile.
+        for (const char* n : {"botAutobot_mc", "botDecepticon_mc", "botEnemy_mc"}) {
+            gfx::avm1::Value r = vm.get(menu, n);
+            if (!r.isObject()) continue;
+            const std::string field = std::string(n) == "botAutobot_mc" ? "autobot" : std::string(n) == "botDecepticon_mc" ? "decepticon" : "enemy";
+            const int maxV = flow.botMax(field), want = std::clamp(botValue(b, field), 0, maxV);
+            if ((int)vm.toNumber(vm.get(r.o, "currentSelectionIndex")) == want) continue;
+            vm.callMethod(r, "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, field, maxV, teams)))});
+            vm.set(r.o, "currentSelectionIndex", gfx::avm1::Value((double)want));
+            frontend::FlowTrace::emit("lobby.botRows", {{"refresh", field}, {"value", std::to_string(want)}});
+        }
         return;
     }
     for (const char* n : kNames) {   // a mode-kind change: the old rows go
@@ -947,9 +958,13 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
                 return gfx::avm1::Value();
             }, "selectionUpdated", 0)));
         vm.set(o, "onOver", gfx::avm1::Value(vm.newFunction(
-            [menu, hint](gfx::avm1::VM& v, const gfx::avm1::Value&, gfx::avm1::Args&) -> gfx::avm1::Value {
+            [menu, hint, field, &flow](gfx::avm1::VM& v, const gfx::avm1::Value&, gfx::avm1::Args&) -> gfx::avm1::Value {
                 gfx::avm1::Value w = v.get(menu, "HintWidget");
-                if (w.isObject()) v.set(w.o, "HintText", gfx::avm1::Value(hint));
+                // the count rows / Player Limit add the selected map's recommendation (map-aware Extended counts)
+                std::string text = hint;
+                const std::string rec = field == "difficulty" ? std::string() : flow.botRecommendationText();
+                if (!rec.empty()) text = rec + ". " + hint;
+                if (w.isObject()) v.set(w.o, "HintText", gfx::avm1::Value(text));
                 return gfx::avm1::Value();
             }, "onOver", 0)));
     }
