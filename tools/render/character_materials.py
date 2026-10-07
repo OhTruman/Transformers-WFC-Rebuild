@@ -41,7 +41,12 @@ def cooked_copies(material):
     for c in d['characters']:
         dirs = [x.split('/')[-1].lower() for x in c.get('extracted_package_dirs') or []]
         if pkg in dirs:
-            copies = [p + '.xxx' for p in (c.get('cooked_copies') or {}).get('packages') or []]
+            # the packages holding the full robot / vehicle mesh exports (AssetTools asset_cooked_copies) first,
+            # then the definition copies (cooked_copies)
+            assets = next((v for k, v in c.items() if k.startswith('asset_cooked_copies')), None) or {}
+            copies = []
+            for p in (assets.get('robot') or []) + (assets.get('vehicle') or []) +                     ((c.get('cooked_copies') or {}).get('packages') or []):
+                if p + '.xxx' not in copies: copies.append(p + '.xxx')
             # then those maps' persistent levels (Laserbeak's VH_ material is cooked into A2_KON_BASE_m, not the
             # roster's A2_KON_Soundwave_Design_m, which only carries its definitions)
             bases = []
