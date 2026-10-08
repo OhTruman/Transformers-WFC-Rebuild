@@ -569,6 +569,7 @@ private:
     void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2
     void pawnOcclusionQueries();       // after the opaque pass: this frame's queries
     void ensurePawnOcclusionProgram(); // its program / box geometry (prewarmed at load)
+    void logMemStats(const char* when);   // WFC_MEMSTATS
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps

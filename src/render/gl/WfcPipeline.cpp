@@ -21,7 +21,11 @@ using namespace glx;
 namespace render {
 namespace wfc {
 Pipeline* gInstPipeline = nullptr;
-unsigned long gShaderCompiles = 0, gTexCreates = 0;   // pending instanced character draws: flushed before any draw / blit
+unsigned long gShaderCompiles = 0, gTexCreates = 0;
+// WFC_MEMSTATS: bytes handed to GL since the map load (RGBA8 + mips for textures: what the driver allocates and, on
+// some drivers, mirrors in system memory), by class
+unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 0;
+unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -727,6 +731,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
@@ -1222,6 +1227,11 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     GLuint id = 0;
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
         ++gTexCreates;
+        {
+            const unsigned long long b = (unsigned long long)img.w * (unsigned long long)img.h * 4ull * 4ull / 3ull;
+            if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += b; ++gMemLightmaps; }
+            else { gMemTextureBytes += b; ++gMemTextures; }
+        }
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -1958,6 +1968,8 @@ int Pipeline::upload(const MeshData& m) {
     GpuMesh g;
     std::vector<float> v;
     buildVertices(m, v);
+    gMemMeshBytes += (unsigned long long)v.size() * sizeof(float) + (unsigned long long)m.indices.size() * 4ull;
+    ++gMemMeshes;
     GenVertexArrays(1, &g.vao);
     BindVertexArray(g.vao);
     GenBuffers(1, &g.vbo); BindBuffer(GL_ARRAY_BUFFER, g.vbo);
@@ -2711,6 +2723,15 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 // prewarms the body (prewarmDynamicMesh). The world is drawn once, unculled and hidden, right after its upload and
 // the material prewarm, while the loading screen still presents; glFinish lets the GPU-side residency complete there
 // too. Frame state (frame number, map clock, camera, counters) is saved and restored: the next frame is unchanged.
+void Pipeline::logMemStats(const char* when) {
+    static const bool on = std::getenv("WFC_MEMSTATS") != nullptr;
+    if (!on) return;
+    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (RGBA8 + mips), static meshes %lu = %.0f MB; "
+             "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
+             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemMeshes,
+             gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
+}
+
 void Pipeline::warmupWorld(int id, int w, int h) {
     if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
@@ -2806,6 +2827,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
+    logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
              touchedPrograms_, touchedTextures_);
@@ -4670,6 +4692,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
+    if (frameNo_ % 3600 == 0) logMemStats("in frame");
     if (frameNo_ % 600 == 0 && statSkinRebuilds_) {   // skinned-model builds (expected: first sight / respawns only)
         LOG_INFO("wfc gpu skin: %d model builds in the last 600 frames (%zu models, %zu instances live)", statSkinRebuilds_,
                  skinModels_.size(), skinInsts_.size());
