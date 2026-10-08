@@ -1,0 +1,411 @@
+﻿{
+    "summary":  {
+                    "pass":  36,
+                    "fail":  2,
+                    "known":  0,
+                    "info":  26,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  2
+                },
+    "results":  [
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 10 of 10 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m1.bots",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "broken 1, struggling 0, max no-path 1, off-mesh samples 56"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 1.72 / p95 2.22 / p99 2.66 / max 54.45 ms over 33424 frames; \u003e 33 ms: 2, \u003e 50 ms: 1; sim p50 0 / p99 0.1 ms; AI avg 0.165 / max 2.8 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 95 (cap 96), dropped 0, stolen 1 (priority culling by design), mix max 0.456 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 10 of 10 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 1, off-mesh samples 4"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 1.63 / p95 2.19 / p99 2.64 / max 27.62 ms over 34657 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.1 ms; AI avg 0.102 / max 2.91 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.target_300fps",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t10: p50 1.63 / p90 2.02 / p99 2.64 ms; frames under 3.33 ms 99.7 %; split (RENDERSTATS run, glFinish-serialised): frame 2.82 ms = scene submit (CPU) 1.02 ms + gpu wait 1.38 ms over 118 samples; phases (split run): world/scene submit (CPU) 1.02; characters (dynamic meshes) 0.13; sim (per frame share) 0.03; map FX 0.35; actors draw 0.15; HUD (ui.draw) -; GPU wait 1.38; sim step 0.31 ms (top: oppAnim(cpu) 0.14, oppMove 0.08, bots 0.05); BIGGEST: GPU wait 1.38 ms. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.view",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "measured view (match step 600, 508_t10_1920x1080\\view.png): mean luma 53, 37 % flat"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 95 (cap 96), dropped 0, stolen 1 (priority culling by design), mix max 0.45 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t10_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 20 of 20 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 6, off-mesh samples 9"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.03 / p95 3.12 / p99 3.79 / max 49.72 ms over 27852 frames; \u003e 33 ms: 3, \u003e 50 ms: 0; sim p50 0 / p99 0.11 ms; AI avg 0.212 / max 25.44 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 0, stolen 6 (priority culling by design), mix max 0.48 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 20 of 20 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 2, off-mesh samples 10"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.11 / p95 3.03 / p99 3.47 / max 27.38 ms over 27235 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.11 ms; AI avg 0.213 / max 6.27 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.target_300fps",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t20: p50 2.11 / p90 2.81 / p99 3.47 ms; frames under 3.33 ms 98.3 %; split (RENDERSTATS run, glFinish-serialised): frame 3.02 ms = scene submit (CPU) 1.28 ms + gpu wait 1.26 ms over 110 samples; phases (split run): world/scene submit (CPU) 1.28; characters (dynamic meshes) 0.24; sim (per frame share) 0.06; map FX 0.4; actors draw 0.29; HUD (ui.draw) -; GPU wait 1.26; sim step 0.45 ms (top: oppAnim(cpu) 0.27, oppMove 0.11, bots 0.11); BIGGEST: world/scene submit (CPU) 1.28 ms. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.view",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "measured view (match step 600, 508_t20_1920x1080\\view.png): mean luma 53, 37 % flat"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 4, stolen 57 (priority culling by design), mix max 0.492 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t20_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 32 of 32 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 6, off-mesh samples 17"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.49 / p95 3.85 / p99 4.52 / max 52.24 ms over 22927 frames; \u003e 33 ms: 1, \u003e 50 ms: 1; sim p50 0 / p99 0.13 ms; AI avg 0.326 / max 2.97 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 12, stolen 175 (priority culling by design), mix max 0.496 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 32 of 32 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 6, off-mesh samples 15"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.6 / p95 4.42 / p99 5.24 / max 27.05 ms over 21850 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.15 ms; AI avg 0.318 / max 1.41 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.target_300fps",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t32: p50 2.6 / p90 3.93 / p99 5.24 ms; frames under 3.33 ms 78.2 %; split (RENDERSTATS run, glFinish-serialised): frame 3.53 ms = scene submit (CPU) 1.96 ms + gpu wait 1.03 ms over 94 samples; phases (split run): world/scene submit (CPU) 1.96; characters (dynamic meshes) 0.34; sim (per frame share) 0.09; map FX 0.84; actors draw 0.47; HUD (ui.draw) -; GPU wait 1.03; sim step 0.6 ms (top: oppAnim(cpu) 0.45, oppMove 0.15, bots 0.15); BIGGEST: world/scene submit (CPU) 1.96 ms. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.view",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "measured view (match step 600, 508_t32_1920x1080\\view.png): mean luma 53, 36 % flat"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 143, stolen 821 (priority culling by design), mix max 0.522 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t32_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 48 of 48 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 2, off-mesh samples 15"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 3.57 / p95 5.17 / p99 6.08 / max 53.99 ms over 16503 frames; \u003e 33 ms: 1, \u003e 50 ms: 1; sim p50 0 / p99 0.44 ms; AI avg 0.47 / max 7.03 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 147, stolen 895 (priority culling by design), mix max 0.511 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 48 of 48 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 4, off-mesh samples 13"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 3.32 / p95 5.62 / p99 6.67 / max 29.63 ms over 17171 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.45 ms; AI avg 0.478 / max 24.76 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.target_300fps",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t48: p50 3.32 / p90 5.07 / p99 6.67 ms; frames under 3.33 ms 50.6 %; split (RENDERSTATS run, glFinish-serialised): frame 4.29 ms = scene submit (CPU) 2.67 ms + gpu wait 0.99 ms over 77 samples; phases (split run): world/scene submit (CPU) 2.67; characters (dynamic meshes) 0.57; sim (per frame share) 0.18; map FX 1.1; actors draw 0.77; HUD (ui.draw) -; GPU wait 0.99; sim step 0.89 ms (top: oppAnim(cpu) 0.76, bots 0.25, oppMove 0.23); BIGGEST: world/scene submit (CPU) 2.67 ms. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.view",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "measured view (match step 600, 508_t48_1920x1080\\view.png): mean luma 53, 36 % flat"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 392, stolen 1815 (priority culling by design), mix max 0.494 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t48_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 7, off-mesh samples 30"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 4.75 / p95 6.69 / p99 7.62 / max 52.95 ms over 12596 frames; \u003e 33 ms: 1, \u003e 50 ms: 1; sim p50 0 / p99 0.93 ms; AI avg 0.608 / max 24.14 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 0, stolen 23 (priority culling by design), mix max 0.482 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 3, off-mesh samples 20"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 4.56 / p95 6.21 / p99 6.91 / max 28.17 ms over 13291 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.98 ms; AI avg 0.597 / max 24.67 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.target_300fps",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t64: p50 4.56 / p90 5.91 / p99 6.91 ms; frames under 3.33 ms 15.8 %; split (RENDERSTATS run, glFinish-serialised): frame 6.07 ms = scene submit (CPU) 3.89 ms + gpu wait 1.37 ms over 55 samples; phases (split run): world/scene submit (CPU) 3.89; characters (dynamic meshes) 1.02; sim (per frame share) 0.29; map FX 1.46; actors draw 1.32; HUD (ui.draw) -; GPU wait 1.37; sim step 1.07 ms (top: oppAnim(cpu) 1.02, bots 0.30, oppMove 0.28); BIGGEST: world/scene submit (CPU) 3.89 ms. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.view",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "measured view (match step 600, 508_t64_1920x1080\\view.png): mean luma 53, 37 % flat"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 1677, stolen 4075 (priority culling by design), mix max 0.544 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.curve.508_1920x1080_async=",
+                        "status":  "INFO",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "p50 frame vs participants: 10: 1.63, 20: 2.11, 32: 2.6, 48: 3.32, 64: 4.56; fit p50 = 1.02 ms fixed + 0.0525 ms per participant; residuals 0.09 / 0.04 / -0.1 / -0.22 / 0.18; LINEAR with a large FIXED overhead"
+                    }
+                ]
+}
