@@ -610,8 +610,26 @@ public:
         std::vector<DamageTaken> damageTaken;
         std::vector<DamageCaused> damageCaused;
         unsigned steps = 0;                             // steps since the last consumePresented()
+        bool extendedLobby = false;                     // World::extendedLobby() at this step
     };
     const PresentedFrame& presented() const { return presented_; }
+    // An extended lobby (the PC extension: more than 10 participants, or launched with ExtendedPlayers): the original's visible FX
+    // thinning (EmitterPool cap, EffectIsRelevant for non-local impacts / casings) applies only here (user decision 2026-10-08).
+    bool extendedLobby() const { return matchActive_ && (match_.settings().extendedSlots || match_.players().size() > 10); }
+    // The weapon mesh archetype's impact / fire effect rules [CONF authored, RE 19c8fbf]: TnWeaponMesh MaxImpactEffectDistance 2500 UU
+    // (impact squib + decal + sound of a non-local shooter), MaxFireEffectDistance 1000 UU (shell casings); squibs per second capped by
+    // ImpactSquibPercentage, live squibs by ImpactSquibMaxCount (a per-weapon-mesh EmitterPool bucket). LODDistanceFactor 1.0; behind
+    // the camera only within 1600 UU. By rebuild weapon id.
+    struct ImpactFxRule { float maxImpactDistUU = 2500.0f, maxFireDistUU = 1000.0f, squibPercentage = 1.0f; int squibMaxCount = 10; };
+    static ImpactFxRule impactFxRule(const std::string& weaponId) {
+        ImpactFxRule r;
+        if (weaponId == "AssaultRifle" || weaponId == "HeavyMG" || weaponId == "IonBlaster" || weaponId == "AssaultRifleVehicle" ||
+            weaponId == "TurretIonBase" || weaponId == "TurretIonGun" || weaponId == "LightSentry") { r.squibPercentage = 0.6f; r.squibMaxCount = 5; }
+        else if (weaponId == "PlaneMachineGun" || weaponId == "AssaultRiflePlane") { r.squibPercentage = 0.6f; r.squibMaxCount = 6; }
+        else if (weaponId == "EmpShotgun") r.squibMaxCount = 13;
+        else if (weaponId == "RepairSentry") r.squibMaxCount = 5;
+        return r;
+    }
     // Async step (docs/ASYNC_SIM_STEP.md step 3, variant B; on by default, WFC_ASYNCSTEP=0 / WFC_SIMTHREADS=0 = synchronous). A step = the local part (tickPrefix: commands, map,
     // abilities, match, the local controller) on the main thread, then the background part (bots, participants, weapons, FX, audio
     // glue, projectiles, actors, presented() fill). The main loop draws between the two and launches the background part after

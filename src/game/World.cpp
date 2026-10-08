@@ -64,6 +64,14 @@ template <class R> auto fxTeamParam(R& r, int h, int team, int) -> decltype(r.se
     r.setParticleEffectParam(h, "Team", v);
 }
 template <class R> void fxTeamParam(R&, int, int, long) {}
+// EmitterPool membership (Rendering's opt-in MaxActiveEffects cap) [CONF script, RE 4cce28f MILESTONE_E_PAWN_RENDER_COST_RULES §7]:
+// pooled = single tracers, projectile / grenade / roller explosions, vehicle one-shots, pawn hit effects (impact squibs: a per-weapon
+// bucket); owned = muzzle flashes (the weapon mesh's PSComponent), looping tracers, shell casings, projectile flight FX, abilities.
+template <class R> auto fxPooled(R& r, int h, int) -> decltype(r.setParticleEffectParam(h, std::string(), (const float*)nullptr), int()) {
+    if (h >= 0) { const float v[4] = {1.0f, 0.0f, 0.0f, 0.0f}; r.setParticleEffectParam(h, "Pooled", v); }
+    return h;
+}
+template <class R> int fxPooled(R&, int h, long) { return h; }
 
 // WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
 static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }
@@ -1227,10 +1235,16 @@ void World::joinStep() {
         static const bool log = std::getenv("WFC_ASYNCLOG") != nullptr;
         if (log) {
             static int n = 0; static double acc = 0.0, rem = 0.0;
-            acc += profNowMs() - t0; rem += lastRemainderMs_;
+            static std::vector<double> waits, rems;   // the window's samples: tails (firefight bursts), not only averages
+            const double w = profNowMs() - t0;
+            acc += w; rem += lastRemainderMs_; waits.push_back(w); rems.push_back(lastRemainderMs_);
             if (++n % 300 == 0) {
-                LOG_INFO("ASYNCSTEP local part %.3f ms avg (beginStep %.3f), background part %.3f ms avg, main-thread join wait %.3f ms avg", prefixMsAcc_ / 300.0,
-                         beginStepMsAcc_ / 300.0, rem / 300.0, acc / 300.0);
+                auto tail = [](std::vector<double>& v, double& p99, double& mx) {
+                    std::sort(v.begin(), v.end()); mx = v.empty() ? 0.0 : v.back(); p99 = v.empty() ? 0.0 : v[(size_t)((v.size() - 1) * 0.99)]; v.clear();
+                };
+                double wp99, wmax, rp99, rmax; tail(waits, wp99, wmax); tail(rems, rp99, rmax);
+                LOG_INFO("ASYNCSTEP local part %.3f ms avg (beginStep %.3f), background part %.3f ms avg (p99 %.3f, max %.3f), main-thread join wait %.3f ms avg (p99 %.3f, max %.3f)",
+                         prefixMsAcc_ / 300.0, beginStepMsAcc_ / 300.0, rem / 300.0, rp99, rmax, acc / 300.0, wp99, wmax);
                 static const char* secNames[12] = {"commands", "beginStep", "bodyPreload", "mapState", "listener", "localBuffs", "abilities", "regen",
                                                    "match", "awards", "localController", "weaponPreload"};
                 std::string sec;
@@ -1772,6 +1786,7 @@ void World::fillPresented(PresentedFrame& p) {
     p.modeTag = match_.settings().modeTag;
     p.teamScore[0] = match_.teamScore(0); p.teamScore[1] = match_.teamScore(1);
     p.elapsedTime = match_.elapsedTime(); p.remainingTime = match_.remainingTime();
+    p.extendedLobby = extendedLobby();
     // queues (capped so a build without a consumer cannot grow without bound)
     p.matchEvents.insert(p.matchEvents.end(), matchEvents_.begin(), matchEvents_.end());
     const auto& ge = match_.gameplayEvents();
@@ -2581,8 +2596,8 @@ void World::draw(render::IRenderer& r) const {
         const core::Vec3 fwd = core::normalize(core::Vec3{s.muzzle.m[0], s.muzzle.m[1], s.muzzle.m[2]});
         const core::Vec3 up = core::normalize(core::Vec3{s.muzzle.m[4], s.muzzle.m[5], s.muzzle.m[6]});
         const bool muzzle = d && d->muzzleFx && *d->muzzleFx, tracer = s.tracer && d && d->tracerFx && *d->tracerFx;
-        if (muzzle) fxTeamParam(r, fxSpawnPoint(r, d->muzzleFx, at, fwd, up, 0), s.team, 0);
-        if (tracer) fxTeamParam(r, fxSpawnSegment(r, d->tracerFx, at, s.to, 0), s.team, 0);
+        if (muzzle) fxTeamParam(r, fxSpawnPoint(r, d->muzzleFx, at, fwd, up, 0), s.team, 0);   // owned (not pooled)
+        if (tracer) fxTeamParam(r, fxPooled(r, fxSpawnSegment(r, d->tracerFx, at, s.to, 0), 0), s.team, 0);
         if (!muzzle && !tracer) {
             static std::set<std::string> warned;
             if (warned.insert(s.weapon).second) LOG_WARN("participant shot FX: no authored muzzle / tracer template for %s (nothing drawn)", s.weapon.c_str());
@@ -4633,6 +4648,7 @@ void World::runFxOp(const FxOp& op) {
     if (op.kind == 0) {
         const int h = fxSpawn(*renderer_, op.tmpl, op.p, op.f, op.u, 0);
         if (h < 0) return;
+        if (op.explosion) fxPooled(*renderer_, h, 0);   // HmProjectile ExplosionPSC via EmitterPool (flight FX: owned)
         fxTeamParam(*renderer_, h, op.team, 0);
         if (op.explosion) ++projectileFxExplosions_;
         else { fxReal_[op.vid] = h; ++projectileFxSpawned_; }
