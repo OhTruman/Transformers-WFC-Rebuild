@@ -4162,6 +4162,19 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         if (occluded) ++statOccCulled_;
     }
     if (skinPrepSkipped_) { envSamples_ = nullptr; envForm_ = -1; return; }   // light env ticked, box recorded
+    if (weapon && !warmup_ && drawVao != dynVao_) {    // the owner's shadow child (persistent buffers only: drawn into
+                                                       // its shadow depth next frame)
+        WeaponShadowRec& wr = weaponShadow_[drawOwner_];
+        wr.g = &ds.g; wr.model = model; wr.frame = frameNo_;
+        wr.skinMode = skinMode_; wr.skinRow = skinRow_; wr.skinBones = skinBones_; wr.skinAlpha = skinAlpha_;
+        wr.mn = {1e30f, 1e30f, 1e30f}; wr.mx = {-1e30f, -1e30f, -1e30f};
+        for (int k = 0; k < 8; ++k) {
+            const core::Vec3 q{(k & 1) ? bmx.x : bmn.x, (k & 2) ? bmx.y : bmn.y, (k & 4) ? bmx.z : bmn.z};
+            const core::Vec3 w = core::transformPoint(model, q);
+            wr.mn = {std::min(wr.mn.x, w.x), std::min(wr.mn.y, w.y), std::min(wr.mn.z, w.z)};
+            wr.mx = {std::max(wr.mx.x, w.x), std::max(wr.mx.y, w.y), std::max(wr.mx.z, w.z)};
+        }
+    }
     // Mesh.LastRenderTime: set only for owners actually rendered (after frustum AND occlusion culling, RE 8ec2c46 /
     // stock UE3, HIGH): the TransformerHealthBar marker (now - LastRenderTime < 0.25 s, CONFIRMED script) hides behind
     // walls as in WFC. WFC_OCCMARKERREFRESH=1 = refresh for occlusion-culled owners too (previous behaviour)
@@ -4640,9 +4653,12 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
                  skinModels_.size(), skinInsts_.size());
         statSkinRebuilds_ = 0;
     }
-    if ((frameNo_ & 255) == 64)
+    if ((frameNo_ & 255) == 64) {
         for (auto it = dynSubs_.begin(); it != dynSubs_.end();)
             it = frameNo_ - it->second.lastFrame > 600 ? dynSubs_.erase(it) : std::next(it);
+        for (auto it = weaponShadow_.begin(); it != weaponShadow_.end();)   // (its GpuMesh lives in dynSubs_)
+            it = frameNo_ - it->second.frame > 2 ? weaponShadow_.erase(it) : std::next(it);
+    }
     if ((frameNo_ & 255) == 128 && (!skinInsts_.empty() || !skinModels_.empty())) evictSkin(false);
     if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();

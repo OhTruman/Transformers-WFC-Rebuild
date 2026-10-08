@@ -437,6 +437,20 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
     const float kUU = 0.01f;                      // metres per UE unit
     core::Vec3 B = envBoundsCenter_;
     float R = std::max(core::length(envBoundsExtent_), 0.05f);
+    // the held weapon (shadow child): its last draw joins the subject - bounds and depth (RE 5122915)
+    static const bool noWeaponShadow = std::getenv("WFC_NOWEAPONSHADOW") != nullptr;
+    const WeaponShadowRec* wsr = nullptr;
+    if (!noWeaponShadow) {
+        auto wi = weaponShadow_.find(drawOwner_);
+        if (wi != weaponShadow_.end() && wi->second.g && wi->second.frame >= frameNo_ - 1 && dynSubs_.size()) wsr = &wi->second;
+    }
+    if (wsr) {                                    // the subject sphere grown to contain the weapon box
+        const core::Vec3 bmn = B - envBoundsExtent_, bmx = B + envBoundsExtent_;
+        const core::Vec3 umn{std::min(bmn.x, wsr->mn.x), std::min(bmn.y, wsr->mn.y), std::min(bmn.z, wsr->mn.z)};
+        const core::Vec3 umx{std::max(bmx.x, wsr->mx.x), std::max(bmx.y, wsr->mx.y), std::max(bmx.z, wsr->mx.z)};
+        B = (umn + umx) * 0.5f;
+        R = std::max(core::length((umx - umn) * 0.5f), 0.05f);
+    }
     core::Vec3 axis = core::normalize(p.dir);
     float D = 2.0f * R + 300.0f * kUU;
     core::Vec3 O = p.type == 1 ? B - axis * D : p.pos;              // GetShadowOrigin 0x82DBF678
@@ -501,6 +515,22 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
         if (S.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
         Uniform4f(GetUniformLocation(S.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    if (wsr && wsr->g->vao) {                     // the weapon into the same depth, with its own skinning state
+        const int sm0 = skinMode_, sr0 = skinRow_, sb0 = skinBones_; const float sa0 = skinAlpha_;
+        skinMode_ = wsr->skinMode; skinRow_ = wsr->skinRow; skinBones_ = wsr->skinBones; skinAlpha_ = wsr->skinAlpha;
+        BindVertexArray(wsr->g->vao);
+        for (const Sub& s : wsr->g->subs) {
+            if (s.prog < 0 || progs_[(size_t)s.prog].shadowProg < 0) continue;
+            const Program& WS = progs_[(size_t)progs_[(size_t)s.prog].shadowProg];
+            bindCommon(WS, wsr->model);
+            Uniform4f(GetUniformLocation(WS.id, "uShadowDepth"), 1.0f, rq.invMaxSubjectDepth, rq.depthBias, 0.0f);
+            Uniform4f(GetUniformLocation(WS.id, "uShadowZ"), rq.zRow[0], rq.zRow[1], rq.zRow[2], rq.zRow[3]);
+            if (WS.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+            glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            Uniform4f(GetUniformLocation(WS.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+        }
+        skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;
     }
     BindVertexArray(0);
     viewProj_ = savedVP;
