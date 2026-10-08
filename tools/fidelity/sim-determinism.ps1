@@ -16,9 +16,11 @@
 # -ExtraEnv "WFC_ASYNCSTEP=0" makes the compared runs threads-on / async-off, isolating threading from the async step.
 # WFC_SIMHASH (Gameplay; per-step hash of every pawn + bot steering state): when the build has it every run logs it, the hash
 # streams are compared too (stronger than the once-a-second BOTLOG), and a failure names the FIRST DIFFERING STEP - rerun that
-# seed with -HashDetail <step> (WFC_SIMHASH=<step>-<step>) for the per-pawn / per-field dump Gameplay asks for.
+# seed with -HashDetail "<step-2>-<step>" (WFC_SIMHASH range) for the per-pawn / per-field dump Gameplay asks for.
+# -SerialRepeats N adds N more SERIAL runs per seed compared with the first serial run: a serial-vs-serial difference means the
+# nondeterminism is run-dependent (address-ordered containers, uninitialised data), not thread scheduling (Gameplay 2026-10-07).
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Frames = 7200, [int]$MatchSeconds = 50, [int]$MinLines = 40, [string[]]$Seeds = @("123"), [int]$Repeats = 2,
-      [int]$Bots = 8, [string]$Map = "MP_IAC_Streets", [string]$ExtraEnv = "", [ValidateSet("Release", "Debug")][string]$Config = "Release", [int]$HashDetail = -1, [switch]$ReportOnly)
+      [int]$Bots = 8, [string]$Map = "MP_IAC_Streets", [string]$ExtraEnv = "", [ValidateSet("Release", "Debug")][string]$Config = "Release", [string]$HashDetail = "", [int]$SerialRepeats = 0, [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -37,7 +39,7 @@ function RunOne([string]$tag, [string]$seed, [bool]$serial) {
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$seed"; WFC_SMOKE_FRAMES = "$Frames"; WFC_LOGEVERY = "0"
             WFC_BOTLOG = "all"; WFC_XPLOG = "1"; WFC_NOMOUSE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150" }
     if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "1000000" }
-    if ($H.Contains("WFC_SIMHASH")) { $e.WFC_SIMHASH = $(if ($HashDetail -ge 0) { "$HashDetail-$HashDetail" } else { "0" }) }
+    if ($H.Contains("WFC_SIMHASH")) { $e.WFC_SIMHASH = $(if ($HashDetail) { $HashDetail } else { "0" }) }
     if ($serial) { $e.WFC_SIMTHREADS = "0" } else { foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] } }
     $null = Invoke-WfcExe $exe $d $e "run.log" 1800
 }
@@ -56,9 +58,24 @@ function HashDiff($a, $b) {   # first differing per-step hash line over the comm
     return $null
 }
 $fails = 0; $total = 0
+function CompareSerial($seed) {   # serial vs serial: no threads involved, so any difference is run-dependent state
+    $ref = Sig "s${seed}_serial"
+    for ($r = 1; $r -le $SerialRepeats; $r++) {
+        $b = Sig "s${seed}_ser$r"; $name = "seed$seed.serial$r"
+        if ($null -eq $ref -or $null -eq $b -or -not $ref.Count -or -not $b.Count) { Res $name "UNKNOWN" "a serial run is missing or has no bot activity" "Experimental"; continue }
+        $script:total++; $n = [Math]::Min($ref.Count, $b.Count); $first = -1
+        for ($i = 0; $i -lt $n; $i++) { if ($ref[$i] -ne $b[$i]) { $first = $i; break } }
+        $hd = $null; $ha = Hashes "s${seed}_serial"; $hb = Hashes "s${seed}_ser$r"; if ($ha.Count -and $hb.Count) { $hd = HashDiff $ha $hb }
+        if ($first -lt 0 -and -not $hd) { Res $name "PASS" ("serial run {0} == serial over {1} lines" -f $r, $n) "Gameplay"; continue }
+        $script:fails++
+        Res $name "FAIL" ("SERIAL vs SERIAL differ (run-dependent, not threading): {0}{1}" -f $(if ($first -ge 0) { "BOTLOG line $first`n  a: $($ref[$first])`n  b: $($b[$first])" } else { "BOTLOG equal" }), $(if ($hd) { "; $hd" } else { "" })) "Gameplay"
+    }
+}
 foreach ($seed in $Seeds) {
     RunOne "s${seed}_serial" $seed $true
     for ($r = 1; $r -le $Repeats; $r++) { RunOne "s${seed}_thr$r" $seed $false }
+    for ($r = 1; $r -le $SerialRepeats; $r++) { RunOne "s${seed}_ser$r" $seed $true }
+    CompareSerial $seed
     $ref = Sig "s${seed}_serial"
     for ($r = 1; $r -le $Repeats; $r++) {
         $b = Sig "s${seed}_thr$r"; $name = "seed$seed.run$r"
