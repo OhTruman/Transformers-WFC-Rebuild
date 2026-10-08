@@ -1,0 +1,105 @@
+﻿{
+    "summary":  {
+                    "pass":  7,
+                    "fail":  3,
+                    "known":  0,
+                    "info":  5,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 90, off-mesh samples 58"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 3.25 / p95 7.74 / p99 9.39 / max 25.92 ms over 15620 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.6 ms; AI avg 0.486 / max 3.6 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.pilot",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "player bot: 59 PLAYERBOT log lines, max shots 0; last: PLAYERBOT goal Roam path 0 wp 0 tgt -1 vis 0 mi 1.00/-0.02 f 1.00 r -0.02 fire 0 wantVeh 0 pos (311.0 -456.2) shots 0 kills 0"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 1308, stolen 2931 (priority culling by design), mix max 0.521 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.bots",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "broken 2, struggling 0, max no-path 4, off-mesh samples 20"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 3.65 / p95 7.42 / p99 8.95 / max 25.62 ms over 14847 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.64 ms; AI avg 0.46 / max 2.8 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.target_300fps",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 t64: p50 3.65 / p90 6.62 / p99 8.95 ms; frames under 3.33 ms 43.5 %; split: not measured; phases (split run): world/scene submit (CPU) -; characters (dynamic meshes) -; sim (per frame share) -; map FX -; actors draw -; HUD (ui.draw) -; GPU wait -; sim step  ms (top: ); BIGGEST: -. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.resolution",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "rendered 1920x1080 as requested"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.pilot",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "player bot: 55 PLAYERBOT log lines, max shots 3; last: PLAYERBOT goal Attack path 0 wp 0 tgt -1 vis 0 mi 0.00/0.00 f 0.00 r 0.00 fire 0 wantVeh 1 pos (30.2 -519.8) shots 0 kills 0"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 2632, stolen 5466 (priority culling by design), mix max 0.549 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    }
+                ]
+}

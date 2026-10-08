@@ -1,0 +1,33 @@
+﻿{
+    "summary":  {
+                    "pass":  3,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "determinism.seed123.serial1",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "serial run 1 == serial over 3424 lines"
+                    },
+                    {
+                        "id":  "determinism.seed123.run1",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "threaded run 1 == serial over 3424 common state / event lines (serial 3424, threaded 3424); per-step sim hash equal over 4201 steps"
+                    },
+                    {
+                        "id":  "determinism.seed123.run2",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "threaded run 2 == serial over 3424 common state / event lines (serial 3424, threaded 3424); per-step sim hash equal over 4201 steps"
+                    }
+                ]
+}
