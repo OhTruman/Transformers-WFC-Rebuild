@@ -50,6 +50,7 @@ public:
     float frameRate() const;
     // Runs whole movie frames at the authored frame rate.
     void advance(float dt);
+    void resetClock() { accum_ = 0.0f; }   // resuming a stopped movie: no catch-up frames for the stopped time
     void key(int flashKeyCode, bool down);
     // A typed character for the focused input field (Selection focus); false when no input field has focus.
     bool textInput(char32_t c);

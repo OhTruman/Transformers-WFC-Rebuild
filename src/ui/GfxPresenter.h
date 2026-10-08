@@ -96,7 +96,8 @@ private:
     std::unique_ptr<GfxMovie> cursor_;
     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
     bool hudVisible_ = false;
-    std::unique_ptr<GfxMovie> scoreboard_;
+    std::unique_ptr<GfxMovie> scoreboard_;   // InGameStats_GFX: one instance per HUD (TnHUD.ScoreboardMovie)
+    bool scoreboardShown_ = false;            // started (advanced, drawn, focused); false = Close(KeepLoaded)
     // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->
     // CalibrationImage_GFX): drawn above their opener; with CaptureFocus they take the keys.
     struct Extra { std::string object; std::unique_ptr<GfxMovie> movie; bool focus = false; };
