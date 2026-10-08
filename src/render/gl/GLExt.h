@@ -196,4 +196,20 @@ double cpuPassMark(int k);
 unsigned long long programBinds();
 unsigned long long bufferUploadBytes();
 
+// Redundant texture-bind elimination (300+ fps lobbies: bindCommon re-binds every material slot + the shadow-mask
+// unit per draw). glBindTexture / glDeleteTextures in every file that includes this header go through a per-unit
+// cache of the 2D / cube / 2D-array bindings, and ActiveTexture is wrapped at load: a bind of the texture a unit
+// already holds is skipped (cannot change any image). The cache is invalidated at load, at the renderer's frame
+// boundaries (other GL users draw between frames) and after glPopAttrib; deleting a texture resets the units that
+// held it to 0 (GL semantics). WFC_NOTEXCACHE=1 = A/B (every bind issued).
+void cachedBindTexture(GLenum target, GLuint texture);
+void cachedDeleteTextures(GLsizei n, const GLuint* textures);
+void textureCacheInvalidate();
+void textureCacheStats(unsigned long long& issued, unsigned long long& skipped);
+
 } // namespace glx
+
+#ifndef WFC_NO_TEXCACHE_MACROS
+#define glBindTexture glx::cachedBindTexture
+#define glDeleteTextures glx::cachedDeleteTextures
+#endif

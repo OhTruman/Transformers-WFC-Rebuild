@@ -1,3 +1,4 @@
+#define WFC_NO_TEXCACHE_MACROS   // this file implements the cache over the real entry points
 #include "render/gl/GLExt.h"
 #include "core/Log.h"
 
@@ -241,10 +242,27 @@ PFN_BufferData realBufferData = nullptr;
 PFN_BufferSubData realBufferSubData = nullptr;
 void APIENTRY cBufferData(GLenum t, GLsizeiptr n, const void* d, GLenum u) { if (d && n > 0) gBufBytes += (unsigned long long)n; realBufferData(t, n, d, u); }
 void APIENTRY cBufferSubData(GLenum t, GLintptr o, GLsizeiptr n, const void* d) { if (n > 0) gBufBytes += (unsigned long long)n; realBufferSubData(t, o, n, d); }
+// ---- texture-bind cache ----
+constexpr int kTexUnits = 32;
+GLuint gTexBound[kTexUnits][3] = {};
+bool gTexKnown[kTexUnits][3] = {};
+int gActiveUnit = -1;                                 // -1 = unknown
+unsigned long long gTexIssued = 0, gTexSkipped = 0;
+PFN_ActiveTexture realActiveTexture = nullptr;
+int texSlot(GLenum t) { return t == GL_TEXTURE_2D ? 0 : t == 0x8513 /*CUBE_MAP*/ ? 1 : t == 0x8C1A /*2D_ARRAY*/ ? 2 : -1; }
+bool texCacheOff() { static const bool off = std::getenv("WFC_NOTEXCACHE") != nullptr; return off; }
+void APIENTRY cActiveTexture(GLenum unit) {
+    const int u = (int)unit - (int)GL_TEXTURE0;
+    if (!texCacheOff() && u == gActiveUnit && u >= 0) return;
+    gActiveUnit = (u >= 0 && u < kTexUnits) ? u : -1;
+    realActiveTexture(unit);
+}
+
 void installUploadCounters() {                      // two adds per call; always on
     if (BufferData == cBufferData) return;
     realBufferData = BufferData; BufferData = cBufferData;
     realBufferSubData = BufferSubData; BufferSubData = cBufferSubData;
+    if (ActiveTexture != cActiveTexture) { realActiveTexture = ActiveTexture; ActiveTexture = cActiveTexture; }
 }
 void APIENTRY cLinkProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); realLinkProgram(p); }
 void APIENTRY cDeleteProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
@@ -282,6 +300,28 @@ void installUniformCache() {
 
 void uniformCacheForgetCurrent() { gUCurKnown = false; }
 unsigned long long programBinds() { return gProgBinds; }
+void cachedBindTexture(GLenum target, GLuint texture) {
+    const int s = texSlot(target);
+    if (s >= 0 && gActiveUnit >= 0 && !texCacheOff() && gTexKnown[gActiveUnit][s] && gTexBound[gActiveUnit][s] == texture) {
+        ++gTexSkipped;
+        return;
+    }
+    ::glBindTexture(target, texture);
+    ++gTexIssued;
+    if (s >= 0 && gActiveUnit >= 0) { gTexBound[gActiveUnit][s] = texture; gTexKnown[gActiveUnit][s] = true; }
+}
+void cachedDeleteTextures(GLsizei n, const GLuint* textures) {
+    ::glDeleteTextures(n, textures);
+    for (GLsizei i = 0; i < n; ++i)
+        for (int u = 0; u < kTexUnits; ++u)
+            for (int s = 0; s < 3; ++s)
+                if (gTexKnown[u][s] && gTexBound[u][s] == textures[i]) gTexBound[u][s] = 0;   // reverts to 0
+}
+void textureCacheInvalidate() {
+    for (auto& row : gTexKnown) for (bool& k : row) k = false;
+    gActiveUnit = -1;
+}
+void textureCacheStats(unsigned long long& issued, unsigned long long& skipped) { issued = gTexIssued; skipped = gTexSkipped; }
 unsigned long long bufferUploadBytes() { return gBufBytes; }
 bool uniformCacheActive() { return UseProgram == cUseProgram; }
 int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words) {
@@ -308,6 +348,7 @@ bool load() {
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
     if (ok) { installUniformCache(); installUploadCounters(); }
+    textureCacheInvalidate();
     return ok;
 }
 

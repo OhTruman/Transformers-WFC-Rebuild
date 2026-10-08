@@ -231,6 +231,7 @@ public:
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
         glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
+        glx::textureCacheInvalidate();               // ... and textures
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
@@ -343,7 +344,7 @@ public:
     }
 
     void endFrame() override {
-        struct ForgetOnExit { ~ForgetOnExit() { glx::uniformCacheForgetCurrent(); } } forgetOnExit;   // GFx / frontend draw next
+        struct ForgetOnExit { ~ForgetOnExit() { glx::uniformCacheForgetCurrent(); glx::textureCacheInvalidate(); } } forgetOnExit;   // GFx / frontend draw next
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         glx::gpuMark(glx::kPassWorld);       // no dynamic draw this frame: the world ends here
         glx::gpuMark(glx::kPassCaller);
@@ -1015,6 +1016,7 @@ public:
         glEnd();
         glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
         glPopAttrib();
+        glx::textureCacheInvalidate();               // GL_ALL_ATTRIB_BITS restored the texture bindings
     }
 
     std::string glObjectCensus() const override {
