@@ -70,6 +70,7 @@ private:
     void runAsyncStepTest();
     void runScaleTest();
     void runRayBench();
+    void runBarrierWalkTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

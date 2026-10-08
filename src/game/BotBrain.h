@@ -91,7 +91,8 @@ struct BotBrain {
     bool hasRejoin = false;
     core::Vec3 rejoin{0, 0, 0}; float rejoinUntil = 0.0f;
     bool fireWish = false;
-    unsigned lastShotSerial = 0;    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
+    unsigned lastShotSerial = 0;
+    int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
     core::Vec3 watchPos{0, 0, 0}; float watchT = 0.0f; bool watchLogged = false;   // WFC_STUCKWATCH          // WFC_PLAYERBOT: the brain would fire this step (the local player fires through the controller)
     core::Vec3 rejoinFrom{0, 0, 0}; float rejoinStall = 0.0f;   // no progress toward the rejoin point (s)
     core::Vec3 unwedge{0, 0, 0};                                 // this step's slide (applied in the serial pass)

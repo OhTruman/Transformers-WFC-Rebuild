@@ -586,7 +586,8 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     if (ionFx && pellet_ == 0) fx_.spawnTracer(muzzle, hitPoint);
     if (dist < range - 0.01f)
         fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
-    if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
+    static const bool muzzleLog = std::getenv("WFC_MUZZLELOG") != nullptr;
+    if (muzzleLog && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm) aimYaw=%.3f legYaw=%.3f",
                  wm.m[12], wm.m[13], wm.m[14], muzzle.x, muzzle.y, muzzle.z,
@@ -727,7 +728,8 @@ void World::tickVehicleBoost(float dt) {
     }
     boostActive_ = boost;
 
-    if (std::getenv("WFC_BOOSTLOG")) {
+    static const bool boostLog = std::getenv("WFC_BOOSTLOG") != nullptr;
+    if (boostLog) {
         static int n = 0;
         if (n % 6 == 5 && pc.form() == Form::Vehicle)
             LOG_INFO("NITRO active=%d remaining=%.2f cooldown=%.2f speedScale=%.1f steeringScale=%.1f",
@@ -1110,7 +1112,8 @@ void World::tickWeaponPresentation(float dt) {
 }
 
 void World::handleWeaponNotify(const WeaponNotify& n) {
-    if (std::getenv("WFC_NOTIFYLOG"))
+    static const bool notifyLog = std::getenv("WFC_NOTIFYLOG") != nullptr;
+    if (notifyLog)
         LOG_INFO("NOTIFY %s %s @%.3f %s", n.kind == WeaponNotify::Kind::Sound ? "sound" : "fx",
                  n.what.c_str(), n.time, n.socket.c_str());
     if (n.kind == WeaponNotify::Kind::Effect) {
@@ -1290,7 +1293,8 @@ void World::finishRemainder() {
     stepRemainder(pendingDt_);
     // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with
     // WFC_SIMHASH=<step>, that step's per-pawn values too. Compare a serial (WFC_SIMTHREADS=0) and a threaded run of the same seed.
-    if (const char* sh = std::getenv("WFC_SIMHASH")) {
+    static const char* simHashEnv = std::getenv("WFC_SIMHASH");
+    if (const char* sh = simHashEnv) {
         static long step = 0; ++step;
         uint64_t h = 1469598103934665603ULL;
         auto mix = [&](const void* p, size_t n) { const unsigned char* c = (const unsigned char*)p; for (size_t i = 0; i < n; ++i) { h ^= c[i]; h *= 1099511628211ULL; } };
@@ -1461,6 +1465,8 @@ void World::tickPrefix(float dt) {
     }
     prefixMark(9);
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
+        const std::vector<int> walkOut = barrierIgnoreFor(localPlayer_);   // a barrier that spawned around the player: walk out
+        CollisionWorld::IgnoreDynamicScope walk(walkOut.empty() ? nullptr : &walkOut);
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
     prefixMark(10);
@@ -1483,8 +1489,14 @@ void World::stepRemainder(float dt) {
         static std::vector<double> animMs;
         const bool prof = TickProf::on();
         if (prof) animMs.assign(opponents_.size(), 0.0);
+        static std::vector<std::vector<int>> walkOut;   // per participant: barrier sets it walks out of (built serially, read by its task)
+        walkOut.assign(opponents_.size(), {});
+        bool anyWalkOut = false;
+        for (const BarrierState& br : barriers_) anyWalkOut |= br.alive && !br.passThrough.empty();
+        if (anyWalkOut) for (size_t i = 0; i < opponents_.size(); ++i) walkOut[i] = barrierIgnoreFor(opponents_[i]->matchPlayer());
         core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
             MatchOpponent* o = opponents_[(size_t)i];
+            CollisionWorld::IgnoreDynamicScope walk(walkOut[(size_t)i].empty() ? nullptr : &walkOut[(size_t)i]);
             o->simulateMovement(dt, col);
             const double a0 = prof ? profNowMs() : 0.0;
             o->simulateAnimation(dt);
@@ -1510,12 +1522,14 @@ void World::stepRemainder(float dt) {
         if (!localDead_) slip(player_.pawn());
         for (MatchOpponent* o : opponents_) if (o->spawned()) slip(o->pawn());
     }
-    if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
+    static const char* aimPitchEnv = std::getenv("WFC_AIMPITCH");
+    if (const char* ap = aimPitchEnv)     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
     tickWeaponPresentation(dt);
     tickVehicleBoost(dt);
-    if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
+    static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
+    if (animLog) {                       // layering diagnostics
         static int n = 0;
         if (++n % 6 == 0) {
             const Character& pc = player_.pawn();
@@ -2698,7 +2712,8 @@ void World::draw(render::IRenderer& r) const {
     }
 
     // Debug beacon: unmissable 20 m magenta pillar at the player + a green foot marker.
-    if (std::getenv("WFC_DEBUGCAM")) {
+    static const bool debugCam = std::getenv("WFC_DEBUGCAM") != nullptr;
+    if (debugCam) {
         core::Vec3 pp = player_.pawn().position();
         r.drawBox(pp + core::Vec3{0, 10, 0}, core::Vec3{0.6f, 20.0f, 0.6f}, core::Vec3{1.0f, 0.1f, 0.9f});
         r.drawBox(pp + core::Vec3{0, 0.1f, 0}, core::Vec3{2.0f, 0.2f, 2.0f}, core::Vec3{0.1f, 1.0f, 0.2f});
@@ -3620,6 +3635,20 @@ std::vector<core::Vec3> boxTris(const core::Vec3& c, const core::Vec3& h) {
 }
 }
 
+// The pawn's collision cylinder against the barrier's collision box (in box space; a small margin so "left" means clear of it).
+bool World::barrierOverlaps(const BarrierState& br, const Character& c) const {
+    const float r = c.cylinderRadius(c.moveForm()) + 0.05f, hh = c.cylinderHalfHeight(c.moveForm());
+    const core::Vec3 q = core::transformPoint(br.boxInv, c.actorLocation());
+    return std::fabs(q.x) < br.half.x + r && std::fabs(q.z) < br.half.z + r && std::fabs(q.y) < br.half.y + hh;
+}
+
+std::vector<int> World::barrierIgnoreFor(int player) const {
+    std::vector<int> v;
+    for (const BarrierState& br : barriers_)
+        if (br.alive && br.dyn >= 0 && std::find(br.passThrough.begin(), br.passThrough.end(), player) != br.passThrough.end()) v.push_back(br.dyn);
+    return v;
+}
+
 void World::requestBarrier(int owner) {
     // TnAbilityBarrier for any participant: SpawnDelay 0.5 -> SpawnBarrier; one barrier per owner (the cooldown waits for it).
     BarrierState b; b.owner = owner; b.delay = 0.5f;
@@ -3685,13 +3714,26 @@ void World::spawnBarrier(BarrierState& slot) {
         if (b.dynW < 0) b.dynW = weaponCollision_.addDynamicSet(tris, b.world);
         else { weaponCollision_.setDynamicPose(b.dynW, b.world); weaponCollision_.setDynamicEnabled(b.dynW, true); }
     }
-    LOG_INFO("ability Barrier: wall at (%.1f %.1f %.1f), 1000 HP", b.pos.x, b.pos.y, b.pos.z);
+    // Pawns standing where it appears walk out: its collision is ignored for them until they have fully left (user decision
+    // 2026-10-08; the original has no push-out and no placement test [CONF RE], whether UE3 let them walk out is UNKNOWN).
+    b.passThrough.clear();
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (const Character* c = participantPawn((int)i)) if (barrierOverlaps(b, *c)) b.passThrough.push_back((int)i);
+    static const bool bwLog = std::getenv("WFC_BARRIERWALKTEST") != nullptr;
+    if (bwLog) for (size_t i = 0; i < match_.players().size(); ++i) if (const Character* c = participantPawn((int)i)) {
+        const core::Vec3 q = core::transformPoint(b.boxInv, c->actorLocation());
+        if (core::length(c->actorLocation() - b.pos) < 15.0f) LOG_INFO("BARRIERWALK p%d box-space (%.2f %.2f %.2f) half (%.2f %.2f %.2f) r %.2f hh %.2f at (%.1f %.1f %.1f)", (int)i, q.x, q.y, q.z, b.half.x, b.half.y, b.half.z, c->cylinderRadius(c->moveForm()), c->cylinderHalfHeight(c->moveForm()), c->actorLocation().x, c->actorLocation().y, c->actorLocation().z);
+    }
+    LOG_INFO("ability Barrier: wall at (%.1f %.1f %.1f), 1000 HP%s", b.pos.x, b.pos.y, b.pos.z, b.passThrough.empty() ? "" : " (pawns inside walk out)");
 }
 
 void World::tickBarrier(float dt) {
     for (BarrierState& b : barriers_) {
         if (b.delay >= 0.0f) { b.delay -= dt; if (b.delay < 0.0f) spawnBarrier(b); }
         if (b.alive && !participantPawn(b.owner)) b.alive = false;   // destroyed on the owner's death
+        if (b.alive && !b.passThrough.empty())                // a pawn that has fully left (or died) is blocked normally again
+            b.passThrough.erase(std::remove_if(b.passThrough.begin(), b.passThrough.end(), [&](int p) {
+                const Character* c = participantPawn(p); return !c || !barrierOverlaps(b, *c); }), b.passThrough.end());
         if (b.alive) {
             b.t += dt;
             if (b.fade < 0.0f) {

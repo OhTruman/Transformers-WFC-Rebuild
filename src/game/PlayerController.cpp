@@ -110,7 +110,8 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     accMouseDX_ += in.mouseDX; accMouseDY_ += in.mouseDY;
     padSteer_ = std::fabs(steerIn) >= 1e-4f; padSteerIn_ = steerIn;
     if (std::fabs(steerIn) < 1e-4f) steerIn = steerSmoothed_;
-    if (const char* s = std::getenv("WFC_STEERSTICK")) { steerIn = (float)std::atof(s); padSteer_ = true; padSteerIn_ = steerIn; }   // test: right-stick X
+    static const char* steerStickEnv = std::getenv("WFC_STEERSTICK");
+    if (const char* s = steerStickEnv) { steerIn = (float)std::atof(s); padSteer_ = true; padSteerIn_ = steerIn; }   // test: right-stick X
     intent_.steer = driving ? steerIn : 0.0f;
     // Jet flight lean inputs: GetNormalizedTurn / GetNormalizedLookUp (PlayerInPlaneForm.SetLocalInputs) [CONF]; the PC
     // mouse supplies them through the same rate translation as boost steering [PROV].

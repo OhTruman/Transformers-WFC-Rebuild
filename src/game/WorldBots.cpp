@@ -321,6 +321,7 @@ void World::botThink(BotBody o, BotBrain& b) {
     }
     std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& c) { return a.d < c.d; });
     int checks = 0;
+    b.dbgCands = (int)cands.size(); b.dbgFov = 0; b.dbgLos = 0; b.dbgVis = 0;
     for (auto& kv : b.seen) kv.second.visible = false;
     for (const Cand& c : cands) {
         const bool current = c.p == b.target;
@@ -330,10 +331,12 @@ void World::botThink(BotBody o, BotBrain& b) {
         const bool inFov = cosAng >= std::cos(sk.fovDeg * 0.5f * 0.0174533f) || c.d < 6.0f ||
                            (b.lastAttacker == c.p && now - b.lastDamageTime < 1.5f);   // hit from behind: turn to the attacker
         if (!inFov && !current) continue;
+        ++b.dbgFov;
         // TnBuffCloak: cloaked enemies are only noticed close up (PC ADAPTATION of the player-only cloak).
         if (c.c->cloakRemain_ > 0.0f && c.d > 8.0f) continue;
-        ++checks;
+        ++checks; ++b.dbgLos;
         if (!botLineOfSight(eye, targetable(*c.c))) continue;
+        ++b.dbgVis;
         BotBrain::Seen& s = b.seen[c.p];
         s.pos = c.c->position(); s.time = now; s.visible = true;
     }
@@ -752,6 +755,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
         const float rr = pc.cylinderRadius(pc.moveForm()) + 0.3f;
         for (const BarrierState& br : barriers_) {
             if (!br.alive || hdist(br.pos, pos) > 15.0f) continue;
+            if (std::find(br.passThrough.begin(), br.passThrough.end(), b.player) != br.passThrough.end()) continue;   // walking out of it
             bool blocked = false;
             for (float s : {1.0f, 2.0f, 3.0f}) {
                 const core::Vec3 q = core::transformPoint(br.boxInv, pos + md * s + core::Vec3{0, 1.0f, 0});
@@ -987,7 +991,9 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
         const Weapon* lw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
         LOG_INFO("PLAYERBOT goal %s path %zu wp %zu tgt %d vis %d mi %.2f/%.2f f %.2f r %.2f fire %d wantVeh %d pos (%.1f %.1f) shots %u kills %d", botGoalName(b.goal.kind), b.path.size(), b.wp,
                  b.target, (int)visible, mi.moveForward, mi.moveRight, f, r, (int)b.fireWish, (int)b.wantVehicle, pc.position().x, pc.position().z,
-                 lw ? lw->shotSerial : 0u, match_.players()[(size_t)localPlayer_].kills); } }
+                 lw ? lw->shotSerial : 0u, match_.players()[(size_t)localPlayer_].kills);
+        LOG_INFO("PLAYERBOT perception: %d enemies in sight range, %d in FOV, %d LOS checks, %d visible; yaw %.2f team %d sight %.0f m fov %.0f", b.dbgCands, b.dbgFov,
+                 b.dbgLos, b.dbgVis, b.yaw, match_.players()[(size_t)localPlayer_].team, botSkill(b.difficulty).sightM, botSkill(b.difficulty).fovDeg); } }
     return true;
 }
 
@@ -1136,8 +1142,14 @@ void World::tickBots(float dt) {
                     const bool hs = collision() && collision()->segmentHit(o0, o0 + d, th);
                     float td; core::Vec3 nd;
                     const bool hd = collision() && collision()->segmentHit(o0, o0 + d, td, nd);   // incl. moving sets (barriers, movers)
-                    LOG_INFO("STUCKWATCH   dir %d: static %s, with dynamic %s", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear",
-                             hd ? (std::to_string(td * 4.0f) + " m").c_str() : "clear");
+                    float tset; const int set = collision() ? collision()->dynamicSetHit(o0, o0 + d, tset) : -1;
+                    std::string who = "-";
+                    if (set >= 0) {
+                        who = "set " + std::to_string(set);
+                        for (const BarrierState& br : barriers_) if (br.dyn == set) who += " (barrier of p" + std::to_string(br.owner) + (br.alive ? "" : ", dead") + ")";
+                    }
+                    LOG_INFO("STUCKWATCH   dir %d: static %s, with dynamic %s [%s]", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear",
+                             hd ? (std::to_string(td * 4.0f) + " m").c_str() : "clear", who.c_str());
                 }
                 for (const BarrierState& br : barriers_)
                     if ((br.alive || br.delay >= 0.0f) && hdist(br.pos, p) < 15.0f)

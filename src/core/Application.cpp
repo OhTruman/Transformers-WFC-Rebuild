@@ -180,7 +180,8 @@ bool Application::init() {
     if (std::getenv("WFC_ENGAGETEST")) { runEngageTest(); return false; }          // bots engage the local player
     if (std::getenv("WFC_ASYNCSTEPTEST")) { runAsyncStepTest(); return false; }    // async step == sync step (WFC_ASYNCSTEP=1)
     if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }
-    if (std::getenv("WFC_RAYBENCH")) { runRayBench(); return false; }            // per-phase step cost vs participant count
+    if (std::getenv("WFC_RAYBENCH")) { runRayBench(); return false; }
+    if (std::getenv("WFC_BARRIERWALKTEST")) { runBarrierWalkTest(); return false; }            // per-phase step cost vs participant count
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5669,6 +5670,43 @@ void Application::runRayBench() {
     LOG_INFO("RAYBENCH %zu segments, %d hit: reference %.3f us / query, segmentHit %.3f us, segmentAnyHit %.3f us; mismatches %d (t exact), any-hit %d",
              segs.size(), hits, (t1 - t0) * 1000.0 / segs.size(), (t2 - t1) * 1000.0 / segs.size(), (t3 - t2) * 1000.0 / segs.size(), mismatch, anyMismatch);
     LOG_INFO("RAYBENCH %s", mismatch == 0 && anyMismatch == 0 ? "PASS" : "FAIL");
+}
+
+// WFC_BARRIERWALKTEST: a barrier deployed on top of a pawn lets it walk out (user decision 2026-10-08), then blocks it normally. TDM vs
+// one enemy bot; the bot stands at the barrier's spawn point (10 m ahead of the local player), the local player deploys a barrier.
+void Application::runBarrierWalkTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BARRIERWALK %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsEnemy=1?BotDifficulty=1?TimeLimit=600", L);
+    if (!world_.launchMatch(L)) { check(false, "launch"); return; }
+    for (int i = 0; i < 60 * 30 && (world_.match().state() != game::Match::State::InProgress || world_.localPlayerDead()); ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+    game::MatchOpponent* bot = nullptr;
+    for (int i = 0; i < 60 * 10 && !bot; ++i) { for (game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned()) bot = o; if (!bot) { world_.handleInput(idle, dt); world_.tick(dt); } }
+    if (!bot) { check(false, "bot spawned"); LOG_INFO("BARRIERWALK SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    game::Character& pc = world_.player().pawn();
+    const core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+    const core::Vec3 spot = pc.actorLocation() + fwd * 10.0f;
+    world_.requestBarrier(world_.localMatchPlayer());
+    const core::Vec3 hold{spot.x, pc.position().y, spot.z};   // on the player's level (the spot is 10 m ahead on flat ground)
+    for (int i = 0; i < 40; ++i) { bot->setPosition(hold); world_.handleInput(idle, dt); world_.tick(dt); }   // SpawnDelay 0.5 s; the bot stays on the spot
+    const game::World::BarrierState* br = nullptr;
+    for (const auto& b : world_.barriers()) if (b.owner == world_.localMatchPlayer() && b.alive) br = &b;
+    check(br != nullptr, "the barrier spawned");
+    if (!br) { LOG_INFO("BARRIERWALK SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    const int bp = bot->matchPlayer();
+    const bool inside0 = std::find(br->passThrough.begin(), br->passThrough.end(), bp) != br->passThrough.end();
+    check(inside0, "the bot standing where it appeared is recorded as walking out");
+    bool left = false; int t = 0;
+    for (; t < 60 * 15 && !left; ++t) {
+        world_.handleInput(idle, dt); world_.tick(dt);
+        br = nullptr; for (const auto& b : world_.barriers()) if (b.owner == world_.localMatchPlayer() && b.alive) br = &b;
+        if (!br || !bot->spawned()) break;
+        left = std::find(br->passThrough.begin(), br->passThrough.end(), bp) == br->passThrough.end();
+    }
+    check(left, "the bot walked out (" + std::to_string(t / 60.0f) + " s)");
+    LOG_INFO("BARRIERWALK SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

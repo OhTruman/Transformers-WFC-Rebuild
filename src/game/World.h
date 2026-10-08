@@ -369,11 +369,15 @@ public:
         int owner = -1;                                // the participant whose ability spawned it
         float delay = -1.0f;                           // SpawnDelay countdown (>= 0 while pending)
         int dyn = -1, dynW = -1;                       // its dynamic collision sets (pawn / weapon worlds), pooled
+        std::vector<int> passThrough;                  // pawns (match players) inside its box when it spawned: they walk out (user decision)
         int deadTicks = 0;                             // steps since it went away (kept one step with alive=false, then removed)
         render::MeshData mesh;
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
     std::vector<BarrierState> barriers_;     // one per owner
+public:
+    const std::vector<BarrierState>& barriers() const { return barriers_; }
+public:
     mutable int lastBarrierHit_ = -1;
     std::vector<int> freeBarrierDyn_, freeBarrierDynW_;
     void requestBarrier(int owner);            // TnAbilityBarrier for any participant
@@ -679,7 +683,9 @@ public:
     void preloadHeldWeaponsOfPawns();
     std::vector<const WeaponDef*> preloadedDefs_;   // weapon defs whose model is cached (sorted; a pointer search, not the string map)
     void ensureAbilityModels();
-    void clearMatchActors();   // a new match starts with no projectiles / ability actors / weapon views of the previous one      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
+    void clearMatchActors();   // a new match starts with no projectiles / ability actors / weapon views of the previous one
+    bool barrierOverlaps(const BarrierState& br, const Character& c) const;
+    std::vector<int> barrierIgnoreFor(int player) const;   // the pawn-world collision sets of barriers this pawn is walking out of      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
     BotBrain playerBot_;             // WFC_PLAYERBOT's brain for the local player
     // Bots waiting for the shared incremental path search, first come first served (the slot went to the first bot in list order:
     // with 60+ bots repathing, late-listed bots starved for 20 s+ - WFC_STUCKWATCH, idle vehicles with an empty path).
