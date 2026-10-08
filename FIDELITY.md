@@ -1290,8 +1290,19 @@ Every change below is image-identical to the previous path (verified by determin
   occlusion-culled primitives leave that set (HIGH, stock UE3). Consumers: the light environment's "not rendered > 0.1
   s -> 10x distance threshold" (previously never active here - it measured time since the last tick) and the
   TransformerHealthBar marker (EnemyMarkerHysterisis 0.25 s, CONFIRMED script; versus tags do not use it).
-  Pawn occlusion queries themselves are faithful (HIGH) but opt-in: no measured gain while culled bodies still prepare
-  bounds / palette / shadow. Occlusion buffering depth in WFC: UNKNOWN (ours: results of frames -2 and -3).
+  Pawn occlusion queries (stock UE3, HIGH) are default on with a prep skip: the query box covers the body and its
+  composite-shadow volume (projection reach of the shadow pass), and an owner hidden in two consecutive results skips
+  exact bounds, palette upload, shadow and draw; its light environment still ticks from its last exact bounds moved
+  with the model. Seeded lockstep match captures vs WFC_NOPAWNOCCLUSION=1: no missing / popping body; where the
+  reference reproduces itself exactly, differences are <= 4 levels on <= 193 px (light-env state of bodies revealed
+  after being hidden). Occlusion buffering depth in WFC: UNKNOWN (ours: results of frames -2 and -3).
+- **Held weapons share the owning pawn's light environment (2026-10-07):** RE 5122915 CONFIRMED script
+  (HmWeaponMesh.Attach: SetLightEnvironment(BaseMesh.LightEnvironment), own environment disabled, SetShadowParent(pawn
+  mesh)). Our form test read the raw wfcName, which Gameplay's weapon meshes leave empty, so every held weapon was lit
+  by a world cell / cache environment (a full computeEnv with visibility rays per weapon per frame: ~8 % of the main
+  thread at 64 players). Classification now uses the resolved material name. Match captures: only distant bots'
+  weapons change (they take their owner's lighting). WFC_ENVRAWNAMES=1 = previous. [follow-up: the weapon as the
+  pawn's shadow child - our character shadow depth pass draws the body only]
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode

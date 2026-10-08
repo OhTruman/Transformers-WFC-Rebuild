@@ -3353,6 +3353,19 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         return mn.x <= mx.x && std::isfinite(mn.x) && std::isfinite(mx.x) && std::isfinite(mn.y) && std::isfinite(mx.y) &&
                std::isfinite(mn.z) && std::isfinite(mx.z);
     };
+    const bool skipPrep = pawnOccPrepOn() && si.serial != 0 && si.mx.x >= si.mn.x && pawnOcc_.count(drawOwner_) &&
+                          pawnOcc_[drawOwner_].occluded;
+    if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
+        SkinDraw d0;
+        d0.vao = sm.vao; d0.mn = si.mn; d0.mx = si.mx;   // the last exact bounds (pose of the last prepared frame)
+        skinDraw_ = &d0;
+        skinPrepSkipped_ = true;
+        ++statOccPrepSkipped_;
+        drawDynamic(bind, model);
+        skinPrepSkipped_ = false;
+        skinDraw_ = nullptr;
+        return true;
+    }
     if (si.serial != serial || si.prev != usePrev) {
         const auto tb = std::chrono::steady_clock::now();
         struct BTimer { std::chrono::steady_clock::time_point t; ~BTimer() { gStats.skinBoundsMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinUploads; } } bt{tb};
@@ -3793,11 +3806,16 @@ void Pipeline::evictPosed(bool all) {
     }
 }
 
+bool Pipeline::pawnOccPrepOn() {
+    static const bool on = std::getenv("WFC_NOPAWNOCCPREP") == nullptr;   // WFC_NOPAWNOCCPREP=1: culling skips draws only
+    return on && pawnOcclusionOn();
+}
+
 bool Pipeline::pawnOcclusionOn() {
-    // opt-in: measured no gain at 64 players (lockstep A/B, verified Streets cam: p50 5.20 vs 5.15 ms with ~35 part
-    // draws / frame skipped) - an occluded body's cost is its bounds / palette / shadow / light env, which still run
+    // default on with the prep skip (pawnOccPrepOn): seeded lockstep 64-player A/B, verified Streets cam, p50 5.31 ->
+    // 4.74 ms (draw-only culling alone measured no gain). WFC_NOPAWNOCCLUSION=1 (or WFC_PAWNOCCLUSION=0) = reference.
     static const bool on = [] { const char* e = std::getenv("WFC_PAWNOCCLUSION");
-                                return e && e[0] == '1' && std::getenv("WFC_NOPAWNOCCLUSION") == nullptr; }();
+                                return std::getenv("WFC_NOPAWNOCCLUSION") == nullptr && !(e && e[0] == '0'); }();
     return on && BeginQuery && EndQuery && GenQueries && GetQueryObjectiv;
 }
 
@@ -3887,8 +3905,9 @@ void Pipeline::pawnOcclusionQueries() {
     if (saveCull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
     if (saveBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     if ((frameNo_ % 600) == 0 && statOccTested_)
-        LOG_INFO("wfc pawn occlusion: %d tested, %d part draws skipped in the last 600 frames", statOccTested_, statOccCulled_);
-    if ((frameNo_ % 600) == 0) statOccTested_ = statOccCulled_ = 0;
+        LOG_INFO("wfc pawn occlusion: %d tested, %d part draws skipped, %d skinned preps skipped in the last 600 frames",
+                 statOccTested_, statOccCulled_, statOccPrepSkipped_);
+    if ((frameNo_ % 600) == 0) statOccTested_ = statOccCulled_ = statOccPrepSkipped_ = 0;
 }
 
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial,
@@ -4049,9 +4068,14 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
             ds.g = GpuMesh{};
             ds.envKind = -1; ds.weapon = false;
             for (const Material& mt : m.mats) {
-                if (mt.wfcName.find("_VEH_p.") != std::string::npos) { ds.envKind = 1; break; }
-                if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { ds.envKind = 0; break; }
-                if (mt.wfcName.rfind("WEP_", 0) == 0) { ds.envKind = 0; ds.weapon = true; break; }
+                // the resolved name: Gameplay's weapon (and some body) meshes carry only source names - with the raw
+                // wfcName those were never classified, so weapons were lit by a world cell / cache environment
+                // (computeEnv per weapon per frame at 64 players) instead of their owner's, as intended below
+                static const bool rawNames = std::getenv("WFC_ENVRAWNAMES") != nullptr;   // A/B: the previous test
+                const std::string nm = mt.wfcName.empty() && !rawNames ? resolveBySourceName(&mt) : mt.wfcName;
+                if (nm.find("_VEH_p.") != std::string::npos) { ds.envKind = 1; break; }
+                if (nm.find("_ROBO_p.") != std::string::npos) { ds.envKind = 0; break; }
+                if (nm.rfind("WEP_", 0) == 0) { ds.envKind = 0; ds.weapon = true; break; }
             }
             std::vector<SubMesh> subs = m.subs;
             if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
@@ -4106,9 +4130,31 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
             po.mn = {std::min(po.mn.x, w.x), std::min(po.mn.y, w.y), std::min(po.mn.z, w.z)};
             po.mx = {std::max(po.mx.x, w.x), std::max(po.mx.y, w.y), std::max(po.mx.z, w.z)};
         }
+        if (pawnOccPrepOn() && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
+            ShadowProjector scratch;
+            if (const ShadowProjector* sp = projectorFor(envForm_, scratch); sp && sp->on && sp->type >= 1 && sp->type <= 3) {
+                const core::Vec3 B = envBoundsCenter_;
+                const float R = std::max(core::length(envBoundsExtent_), 0.05f);
+                core::Vec3 farC; float farR;
+                if (sp->type == 1) {                    // directional: receivers up to D past the subject, cone radius 2R
+                    const float D = 2.0f * R + 3.0f;
+                    farC = B + core::normalize(sp->dir) * D; farR = 2.0f * R;
+                } else {                                // point / spot: up to the light radius from the light
+                    core::Vec3 v = B - sp->pos; const float dist = std::max(core::length(v), 1e-3f);
+                    farC = sp->pos + v * (sp->radius / dist); farR = R * sp->radius / dist;
+                }
+                auto addSphere = [&](const core::Vec3& c, float rr) {
+                    po.mn = {std::min(po.mn.x, c.x - rr), std::min(po.mn.y, c.y - rr), std::min(po.mn.z, c.z - rr)};
+                    po.mx = {std::max(po.mx.x, c.x + rr), std::max(po.mx.y, c.y + rr), std::max(po.mx.z, c.z + rr)};
+                };
+                addSphere(B, R);
+                addSphere(farC, farR);
+            }
+        }
         occluded = po.occluded;
         if (occluded) ++statOccCulled_;
     }
+    if (skinPrepSkipped_) { envSamples_ = nullptr; envForm_ = -1; return; }   // light env ticked, box recorded
     // Mesh.LastRenderTime: set only for owners actually rendered (after frustum AND occlusion culling, RE 8ec2c46 /
     // stock UE3, HIGH): the TransformerHealthBar marker (now - LastRenderTime < 0.25 s, CONFIRMED script) hides behind
     // walls as in WFC. WFC_OCCMARKERREFRESH=1 = refresh for occlusion-culled owners too (previous behaviour)
