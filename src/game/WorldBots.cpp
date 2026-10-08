@@ -890,6 +890,9 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     if (!w->canFire()) return;
     // Fire along the eased aim (the error is in where the bot looks, not in a second random draw; spread applies on top).
     botFire(o, b, *w, eye + aimDir * std::max(1.0f, dist));
+    // WFC_PLAYERBOT: the local wish fires through the controller on a later step; the weapon stays ready meanwhile, so counting calls
+    // would spend the whole burst in a few frames. Count a shot only when the weapon's shot serial actually advanced.
+    if (o.matchPlayer() == localPlayer_) { if (w->shotSerial == b.lastShotSerial) return; b.lastShotSerial = w->shotSerial; }
     if (--b.burstLeft <= 0) b.burstPause = b.frange(br.minPause, br.maxPause) * sk.pauseScale;
 }
 
@@ -955,8 +958,10 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     in.mouseDX = 0; in.mouseDY = 0;
     static const bool pblog = std::getenv("WFC_PLAYERBOTLOG") != nullptr;
     if (pblog) { static float acc = 0.0f; if ((acc += dt) >= 1.0f) { acc = 0.0f;
-        LOG_INFO("PLAYERBOT goal %s path %zu wp %zu tgt %d vis %d mi %.2f/%.2f f %.2f r %.2f fire %d wantVeh %d pos (%.1f %.1f)", botGoalName(b.goal.kind), b.path.size(), b.wp,
-                 b.target, (int)visible, mi.moveForward, mi.moveRight, f, r, (int)b.fireWish, (int)b.wantVehicle, pc.position().x, pc.position().z); } }
+        const Weapon* lw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+        LOG_INFO("PLAYERBOT goal %s path %zu wp %zu tgt %d vis %d mi %.2f/%.2f f %.2f r %.2f fire %d wantVeh %d pos (%.1f %.1f) shots %u kills %d", botGoalName(b.goal.kind), b.path.size(), b.wp,
+                 b.target, (int)visible, mi.moveForward, mi.moveRight, f, r, (int)b.fireWish, (int)b.wantVehicle, pc.position().x, pc.position().z,
+                 lw ? lw->shotSerial : 0u, match_.players()[(size_t)localPlayer_].kills); } }
     return true;
 }
 
