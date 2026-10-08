@@ -1,0 +1,17 @@
+wfc_rebuild crash: exception 0xc0000005 at 00007FF722258E00 (read 0xffffffffffffffff)
+thread 11556; render phase 'frame limiter', frame 69396; map loaded
+  #00 004a8e00 gfx::avm1::(anonymous namespace)::ScopeVars::set(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, gfx::avm1::Value const&) +0x40
+  #01 004acfcf gfx::avm1::(anonymous namespace)::nativeUpdateInterpObjects(gfx::avm1::VM&, gfx::avm1::Object*, gfx::avm1::Value const&) +0x25f
+  #02 004acc2c std::__1::__function::__func<gfx::avm1::nativeLibraryOverride(gfx::avm1::VM&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, gfx::avm1::Value&)::$_0, gfx::avm1::Value (gfx::avm1::VM&, gfx::avm1::Value const&, std::__1::vector<gfx::avm1::Value, std::__1::allocator<gfx::avm1::Value>>&)>::operator()[abi:nqe230102](gfx::avm1::VM&, gfx::avm1::Value const&, std::__1::vector<gfx::avm1::Value, std::__1::allocator<gfx::avm1::Value>>&) +0x10c
+  #03 004760ef gfx::avm1::VM::call(gfx::avm1::Value const&, gfx::avm1::Value const&, std::__1::vector<gfx::avm1::Value, std::__1::allocator<gfx::avm1::Value>>&, gfx::avm1::Object*) +0x14f
+  #04 004c1648 gfx::Player::dispatchClipEvent(gfx::MovieClip*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, unsigned int) +0x138
+  #05 004c795d gfx::Player::advance(float) +0x1bd
+  #06 00414a5a ui::GfxMovie::advance(float) +0x7a
+  #07 0042bbea ui::GfxPresenter::update(frontend::GameFlow&, platform::InputFrame const&, float) +0x31a
+  #08 0019c01b frontend::FrontendRuntime::updateInMatch(platform::InputFrame const&, float) +0x15b
+  #09 0012421b core::Application::runMatch() +0x13fb
+  #10 00145344 core::Application::runFrontend() +0x424
+  #11 0008d652 main +0x42
+  #12 0008d2ab __tmainCRTStartup +0xdb
+  #13 KERNEL32.DLL+0x17344
+  #14 ntdll.dll+0x526b1

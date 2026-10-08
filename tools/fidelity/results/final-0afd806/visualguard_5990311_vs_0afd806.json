@@ -1,0 +1,33 @@
+﻿{
+    "summary":  {
+                    "pass":  1,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  1,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "visual.alignment",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "WFC_SHOTMATCH on both builds: frames are match steps 300..900 since InProgress (aligned)"
+                    },
+                    {
+                        "id":  "visual.fixed",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "5990311 vs 0afd806, 21 frames compared (match steps 300..900 every 30); flagged (\u003e 0.5 % pixels differ by \u003e 24): 0 []; max 0 %"
+                    },
+                    {
+                        "id":  "visual.moving",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "VIEW INVALID - 16 of 21 reference frames are near-black / flat (median luma 21.4, flat 55.6 %): the camera sees nothing to compare (check -Cam with a screenshot); 5990311 vs 0afd806, 21 frames compared (match steps 300..900 every 30); flagged (\u003e 0.5 % pixels differ by \u003e 24): 3 [m00780 m00840 m00870]; max 3.612 %; see flagged_moving.png (ref | opt | diff)"
+                    }
+                ]
+}
