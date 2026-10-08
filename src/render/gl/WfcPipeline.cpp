@@ -4480,13 +4480,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
             return ok.empty() ? false : drawSprites(material, ok.data(), ok.size(), facing);
         }
     }
-    if (!material || !sp || n == 0) return false;
-    for (size_t i = 0; i < n; ++i)
-        for (const core::Vec3& c : sp[i].c)
-            if (!std::isfinite(c.x) || !std::isfinite(c.y) || !std::isfinite(c.z)) {
-                reportNonFinite("sprite corner", material);
-                return false;
-            }
+    if (!material || !sp || n == 0) return false;   // (corners are finite here: the guard above checked every one)
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
         if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
@@ -4495,7 +4489,9 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         c = c * (1.0f / (float)n);
         if (spriteUsed_ == spritePool_.size()) spritePool_.emplace_back();
         SpriteBatch& batch = spritePool_[spriteUsed_];
-        batch.mat = material; batch.facing = facing; batch.sprites.assign(sp, sp + n);
+        batch.mat = material; batch.facing = facing;
+        if (spriteSwapSrc_ && spriteSwapSrc_->data() == sp && spriteSwapSrc_->size() == n) batch.sprites.swap(*spriteSwapSrc_);
+        else batch.sprites.assign(sp, sp + n);           // (the FX replay hands its vector over instead of a copy)
         std::copy(dynParam_, dynParam_ + 4, batch.dyn);
         transQueue_.push_back({viewDepth(c), 1, (int)spriteUsed_});
         ++spriteUsed_;
