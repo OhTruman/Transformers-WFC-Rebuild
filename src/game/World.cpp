@@ -2151,6 +2151,7 @@ void World::removeBots() {
     match_.truncatePlayers(first);
     bots_.clear();
     botSearchOwner_ = -1;
+    botSearchQueue_.clear();
     for (auto& kv : partBeams_) kv.second.time = 0.0f;   // stopped at the next draw
 }
 

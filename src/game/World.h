@@ -2,6 +2,7 @@
 #pragma once
 #include <array>
 #include <functional>
+#include <deque>
 #include <memory>
 #include "platform/Input.h"
 #include <thread>
@@ -680,6 +681,9 @@ public:
     void ensureAbilityModels();
     void clearMatchActors();   // a new match starts with no projectiles / ability actors / weapon views of the previous one      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
     BotBrain playerBot_;             // WFC_PLAYERBOT's brain for the local player
+    // Bots waiting for the shared incremental path search, first come first served (the slot went to the first bot in list order:
+    // with 60+ bots repathing, late-listed bots starved for 20 s+ - WFC_STUCKWATCH, idle vehicles with an empty path).
+    std::deque<int> botSearchQueue_;
     float playerBotTransformCd_ = 0.0f;
     float playerBotFireHold_ = 0.0f;   // s Fire stays held after the brain's last shot wish (bursts; auto weapons need it held)
     bool playerBotFireDown_ = false;

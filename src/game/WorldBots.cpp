@@ -574,7 +574,10 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
-    if ((b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid() && botSearchOwner_ < 0 && botPathBudget_ > 0) {
+    const bool wants = (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
+    if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
+    if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
+        botSearchQueue_.pop_front();
         --botPathBudget_;
         b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
         if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
@@ -999,6 +1002,12 @@ void World::tickBots(float dt) {
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
     botPathBudget_ = 1;   // at most one new search per simulation step
+    // Waiting entries whose bot is gone (dead / despawned / removed) leave the queue, so its front is always someone who can take it.
+    botSearchQueue_.erase(std::remove_if(botSearchQueue_.begin(), botSearchQueue_.end(), [&](int p) {
+        if (p == localPlayer_) return !(playerBotDifficulty() >= 0 && !localDead_);
+        const MatchOpponent* q = (size_t)p < oppByPlayer_.size() ? oppByPlayer_[(size_t)p] : nullptr;
+        return !q || !q->spawned();
+    }), botSearchQueue_.end());
     // The active search runs at most 1500 cell expansions per step (~1 ms); a long route completes over a few steps.
     if (botSearchOwner_ >= 0 && botNav_.stepSearch(1500) == 1) {
         std::vector<BotNav::Waypoint> path;
@@ -1114,6 +1123,9 @@ void World::tickBots(float dt) {
                          pc.moveForm() == Form::Vehicle ? "VEH" : "ROB", pc.isTransforming() ? "*" : "", (int)b.wantVehicle, (int)pc.vehicleState().driving,
                          v.x, v.y, v.z, (int)pc.onGround(), in.moveForward, in.moveRight, pc.yaw(), in.faceYaw, botGoalName(b.goal.kind), b.wp, b.path.size(),
                          b.stuckLevel, (int)b.hasRejoin, b.target);
+                LOG_INFO("STUCKWATCH   search: wantRepath %d repathTimer %.2f owner %d (vehicle %d) noPaths %d noVehicleUntil %.1f (now %.1f) goal (%.1f %.1f %.1f) d %.1f hasGoal %d vehiclePath %d",
+                         (int)b.wantRepath, b.repathTimer, botSearchOwner_, (int)botSearchVehicle_, b.noPaths, b.noVehicleUntil, match_.matchTime(),
+                         b.goal.pos.x, b.goal.pos.y, b.goal.pos.z, hdist(b.goal.pos, p), (int)b.hasGoal, (int)b.vehiclePath);
                 if (b.wp < b.path.size()) LOG_INFO("STUCKWATCH   next waypoint (%.2f %.2f %.2f) action %d cell %d", b.path[b.wp].pos.x, b.path[b.wp].pos.y, b.path[b.wp].pos.z, b.path[b.wp].action, b.path[b.wp].cell);
                 for (size_t q = 0; q < match_.players().size(); ++q)
                     if ((int)q != b.player) if (const Character* c = participantPawn((int)q)) if (hdist(c->position(), p) < 8.0f)
