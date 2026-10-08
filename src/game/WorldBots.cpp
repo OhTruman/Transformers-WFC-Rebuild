@@ -740,6 +740,29 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             else moveDir = md - push;   // the other side
         }
     }
+    // Barriers: a deployed barrier is a wall the nav mesh does not know (authored DegenRate: up to ~50 s). When the move would run into a
+    // live barrier's box within 3 m, slide along its long side toward the nearer end, slightly away from it, so the bot walks around
+    // instead of pushing and jumping in place (WFC_STUCKWATCH: a robot pinned 20 s against a teammate's barrier in the pit)
+    // [PC ADAPTATION: versus bots]. Barriers change only in the serial passes: safe to read here.
+    if (core::length(moveDir) > 1e-3f && !vehicle) {
+        const core::Vec3 md = core::normalize(core::Vec3{moveDir.x, 0.0f, moveDir.z});
+        const float rr = pc.cylinderRadius(pc.moveForm()) + 0.3f;
+        for (const BarrierState& br : barriers_) {
+            if (!br.alive || hdist(br.pos, pos) > 15.0f) continue;
+            bool blocked = false;
+            for (float s : {1.0f, 2.0f, 3.0f}) {
+                const core::Vec3 q = core::transformPoint(br.boxInv, pos + md * s + core::Vec3{0, 1.0f, 0});
+                if (std::fabs(q.x) <= br.half.x + rr && std::fabs(q.z) <= br.half.z + rr && std::fabs(q.y) <= br.half.y + 1.0f) { blocked = true; break; }
+            }
+            if (!blocked) continue;
+            const core::Mat4 rot = core::Mat4::rotateY(br.yaw + core::config::kMeshYawOffset);
+            const core::Vec3 along = core::transformDir(rot, core::Vec3{0, 0, 1}), across = core::transformDir(rot, core::Vec3{1, 0, 0});
+            const core::Vec3 lp = core::transformPoint(br.boxInv, pos);
+            const core::Vec3 slide = along * (lp.z >= 0.0f ? 1.0f : -1.0f) + across * (lp.x >= 0.0f ? 0.3f : -0.3f);
+            moveDir = core::normalize(core::Vec3{slide.x, 0.0f, slide.z});
+            break;
+        }
+    }
     // Express the world-space move in the facing frame (MoveIntent is relative to faceYaw).
     in.faceYaw = vehicle && !visible && core::length(moveDir) > 1e-3f ? yawOf(moveDir) : b.yaw;
     const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f);
