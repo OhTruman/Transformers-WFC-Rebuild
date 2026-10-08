@@ -435,6 +435,46 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
     return Value::undef();
 }
 
+// ---- Data-store reads (PlayerList: one call per cell, ~1000 per rebuild) ----
+// HmInterfaceDataStores.prototype.ReadCollectionValue / ReadCollectionBoolValue(Markup, ColumnTag, RowNum):
+//   return flash.external.ExternalInterface.call("DataStores.ReadCollection[Bool]Value", Markup, ColumnTag, RowNum)
+constexpr uint64_t kReadCollectionValueHash = 0xa7f8f93f5bd5f6d9ull;
+constexpr uint64_t kReadCollectionBoolValueHash = 0x9368d67978bf4855ull;
+Value nativeReadCollection(VM& vm, Object* orig, const Value& self, Args& a, const char* call) {
+    auto arg = [&](size_t i) { return i < a.size() ? a[i] : Value::undef(); };
+    ScopeVars sv{vm, orig, self};
+    Value ei = getMember(vm, getMember(vm, sv.get("flash"), "external"), "ExternalInterface");
+    return vm.callMethod(ei, "call", {Value(call), arg(0), arg(1), arg(2)});
+}
+
+// AssignDataStoreRead(DataObject, DSMarkup, Column "Name:Type", Row) - PlayerList's per-cell read.
+constexpr uint64_t kAssignDataStoreReadHash = 0xfbbabacac57d575cull;
+Value nativeAssignDataStoreRead(VM& vm, Object* orig, const Value& self, Args& a) {
+    auto arg = [&](size_t i) { return i < a.size() ? a[i] : Value::undef(); };
+    ScopeVars sv{vm, orig, self};
+    const Value r3 = arg(0), r5 = arg(1), r6 = arg(2), r4 = arg(3);
+    if (vm.toBool(getMember(vm, r3, "IsConnecting"))) return Value::undef();
+    const Value r2 = vm.callMethod(r6, "split", {Value(":")});
+    const Value r1 = getMember(vm, r2, Value(0.0));
+    {
+        const bool eq = vm.looseEquals(r1, Value("CurrentCharacterString"));
+        Value c(eq);
+        if (eq) c = sv.get("ShouldCycleSpecialtyLevels");
+        if (vm.toBool(c)) return Value::undef();
+    }
+    const Value r0 = getMember(vm, r2, Value(1.0));
+    auto ds = [&]() { return getMember(vm, sv.get("HmExternalInterface"), "DataStores"); };
+    if (vm.strictEquals(r0, Value("Number"))) {
+        Value raw = vm.callMethod(ds(), "ReadCollectionValue", {r5, r1, r4});
+        setMember(vm, r3, r1, sv.callFunction("parseInt", {raw}));
+    } else if (vm.strictEquals(r0, Value("Boolean"))) {
+        setMember(vm, r3, r1, vm.callMethod(ds(), "ReadCollectionBoolValue", {r5, r1, r4}));
+    } else {
+        setMember(vm, r3, r1, vm.callMethod(ds(), "ReadCollectionValue", {r5, r1, r4}));
+    }
+    return Value::undef();
+}
+
 }  // namespace
 
 // Called when a script function is assigned to _global.<name>: the native port when the body is the known version.
@@ -442,7 +482,8 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
     static const bool off = std::getenv("WFC_NONATIVEINTERP") != nullptr;
     static const bool logHash = std::getenv("WFC_AVMHASH") != nullptr;   // DEV TOOL: log candidates' hashes
     if (off || !v.isObject() || !v.o->script) return false;
-    if (name != "findInterpValue" && name != "updateInterpObjects" && name != "addInterp") return false;
+    if (name != "findInterpValue" && name != "updateInterpObjects" && name != "addInterp" && name != "AssignDataStoreRead" &&
+        name != "ReadCollectionValue" && name != "ReadCollectionBoolValue") return false;
     const uint64_t h = canonicalFunctionHash(*v.o->script, v.o->pool.get());
     if (logHash) LOG_INFO("avmhash %s %016llx", name.c_str(), (unsigned long long)h);
     if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash) {
@@ -460,6 +501,23 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
         }, name, 0));
         return true;
     }
+    auto bindDs = [&](Value (*fnp)(VM&, Object*, const Value&, Args&)) {
+        // the script stays reachable from the native closure (and is kept alive by the binding object below)
+        Object* orig = v.o;
+        Object* f = vm.newFunction([orig, fnp](VM& m, const Value& self, Args& args) {
+            static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
+            if (verify) return m.call(Value(orig), self, args);
+            return fnp(m, orig, self, args);
+        }, name, (int)orig->script->params.size());
+        f->setRaw("__wfcScript", Value(orig), DontEnum);   // GC root for the original (its scope chain is used)
+        v = Value(f);
+        return true;
+    };
+    if (name == "AssignDataStoreRead" && h == kAssignDataStoreReadHash) return bindDs(nativeAssignDataStoreRead);
+    if (name == "ReadCollectionValue" && h == kReadCollectionValueHash)
+        return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionValue"); });
+    if (name == "ReadCollectionBoolValue" && h == kReadCollectionBoolValueHash)
+        return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionBoolValue"); });
     if (name == "addInterp" && kAddInterpHash && h == kAddInterpHash) {
         vm.global->setRaw("__wfcScript_" + name, v, DontEnum);
         Object* orig = v.o;
