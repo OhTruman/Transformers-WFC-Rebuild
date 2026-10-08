@@ -2723,6 +2723,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     matchMode_ = mode;
     mapState_.setMode(mode);
     resetForNewLevel();
+    clearMatchActors();   // the previous match's projectiles and ability actors go with it (a fresh level in the original)
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
     awards_.setXpScale(1.0f);
     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
@@ -2807,6 +2808,30 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
     }
     return true;
+}
+
+// A new match is a fresh level in the original (MatchOver -> ReturnToGameLobby -> ServerTravel): nothing the previous match spawned
+// survives. Without this, projectiles in flight, sentries, barriers (with their collision), rollers, beacons and buff shots carried
+// into the next match under owner indices that now name other players (WFC_ASYNCSTEPTEST: a carried actor hit P30 at step 676).
+void World::clearMatchActors() {
+    for (Projectile& p : projectiles_) if (p.fxHandle >= 0) { fxStepStop(p.fxHandle); p.fxHandle = -1; }
+    projectiles_.clear();
+    for (BarrierState& b : barriers_) {
+        if (b.dyn >= 0) { collision_.setDynamicEnabled(b.dyn, false); freeBarrierDyn_.push_back(b.dyn); b.dyn = -1; }
+        if (b.dynW >= 0 && weaponCollision_.valid()) { weaponCollision_.setDynamicEnabled(b.dynW, false); freeBarrierDynW_.push_back(b.dynW); b.dynW = -1; }
+    }
+    barriers_.clear();
+    sentries_.clear();
+    rollers_.clear();
+    beacons_.clear();
+    buffShots_.clear();
+    missile_ = GuidedMissile{}; missileDelay_ = -1.0f;
+    partWeapons_.clear();
+    participantShots_.clear();
+    partShotFx_.clear();
+    pendingDamageTaken_.clear();
+    pendingDamageCaused_.clear();
+    for (auto& kv : partBeams_) kv.second.time = 0.0f;   // stopped at the next draw
 }
 
 void World::removeBots() {
