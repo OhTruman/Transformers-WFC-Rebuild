@@ -1027,6 +1027,8 @@ private:
     bool botLineOfSight(const core::Vec3& from, const core::Vec3& to) const;
     void fireHitscanAs(int instigator, const Character& shooter, const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);
     mutable int pushedRulesMode_ = -1;
+    mutable int pushedPoolCap_ = -1;     // [integration 09c] last setEmitterPoolCap pushed
+    bool fxSpawnPooled_ = false;         // [integration 09c] the next generic spawnAt is an EmitterPool spawn (impact squib)
     // [integration 09c] syncMapPresentation's per-frame keys, built once per factory / objective set (no string building per frame).
     struct MapFxKeys { const void* src = nullptr; std::string custom, highlight; };
     mutable std::vector<MapFxKeys> pickupFxKeys_, objectiveFxKeys_;

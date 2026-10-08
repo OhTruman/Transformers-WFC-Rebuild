@@ -169,7 +169,26 @@ void World::load(render::IRenderer& renderer) {
         if (firstPellet && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle);
         if (!projectile) {
             if (firstPellet) fx_.spawnTracer(wfx->tracer, from, shot.to);
-            if (shot.impact) fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
+            // [integration 09c] Pawn.EffectIsRelevant for a non-local shooter's impact (RE 4cce28f / Gameplay): the shooter's mesh
+            // rendered within the last 1 s (renderer LastRenderTime, owner 100 + player) and the impact within MaxImpactEffectDistance
+            // 2500 UU x LODDistanceFactor 1.0 of the camera, or within 1600 UU when behind it (RE 19c8fbf). User decision 2026-10-08:
+            // applied only in extended lobbies (> 10 participants);
+            // original-size matches keep every impact. WFC_IMPACTRELEVANCE=0 / 1 forces it off / on.
+            bool relevant = true;
+            static const char* irEnv = std::getenv("WFC_IMPACTRELEVANCE");
+            const bool gate = irEnv ? std::atoi(irEnv) != 0 : match_.players().size() > 10;
+            if (shot.impact && gate && shot.player != localPlayer_ && renderer_) {
+                const float age = renderer_->drawOwnerRenderAge(100 + shot.player);
+                const core::Vec3 cam = player_.controller().cameraPos();
+                const core::Vec3 toImpact = shot.to - cam;
+                const bool behind = core::dot(toImpact, core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch())) < 0.0f;
+                relevant = age >= 0.0f && age <= 1.0f && core::length(toImpact) <= (behind ? 16.0f : 25.0f);   // 1600 / 2500 UU
+            }
+            if (shot.impact && relevant) {
+                fxSpawnPooled_ = true;   // impact squibs: pooled
+                fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
+                fxSpawnPooled_ = false;
+            }
         }
     };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
@@ -254,9 +273,19 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     fx_.load(renderer, root + "/../content/");
     // [integration M08b] Weapon templates WeaponFx does not reconstruct go to Rendering's particle runtime (M32: cooked
     // ParticleSystems of the map packages; released at unloadMapRenderData). The renderer outlives this World.
+    // [integration 09c] EmitterPool (RE 4cce28f §7): tracers and impact squibs are pooled (EmitterPool.SpawnEmitter), muzzle flashes
+    // are owned; the renderer's MaxActiveEffects 50 cap acts only when enabled (extended lobbies, user decision 2026-10-08).
     fx_.setGenericRuntime({
-        [&renderer](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.spawnParticleEffect(t, p, f, u); },
-        [&renderer](const std::string& t, const core::Vec3& a, const core::Vec3& b) { return renderer.spawnParticleEffectSegment(t, a, b); },
+        [this, &renderer](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
+            const int h = renderer.spawnParticleEffect(t, p, f, u);
+            if (h >= 0 && fxSpawnPooled_) renderer.setParticleEffectPooled(h);
+            return h;
+        },
+        [&renderer](const std::string& t, const core::Vec3& a, const core::Vec3& b) {
+            const int h = renderer.spawnParticleEffectSegment(t, a, b);
+            if (h >= 0) renderer.setParticleEffectPooled(h);   // tracers: pooled
+            return h;
+        },
         [&renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.setParticleEffectTransform(h, p, f, u); }});
     core::loadYield("World: effects");
     fx_.loadMeshes(renderer, root + "/../content/");
@@ -3199,6 +3228,10 @@ std::string World::collisionActorsAt(const core::Vec3& p, float pad, int maxName
 void World::syncMapPresentation(render::IRenderer& r) const {
     if (pushedRulesMode_ != (int)mapState_.mode()) { r.setActiveGameRules(mapState_.gameRules()); pushedRulesMode_ = (int)mapState_.mode(); }
     r.setMapClock(mapState_.clock());
+    {   // [integration 09c] EmitterPool MaxActiveEffects 50 (original) only in extended lobbies (user decision 2026-10-08)
+        const int ext = matchActive_ && match_.players().size() > 10 ? 1 : 0;
+        if (ext != pushedPoolCap_) { r.setEmitterPoolCap(ext != 0); pushedPoolCap_ = ext; }
+    }
     for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
     // [integration 09c] The effect keys are built once per factory (rebuilt only when the factory set changes): building
     // "<actor>|custom" / "|highlight" per factory per frame was ~12 % of main-thread allocations at 10 v 10 (Systems' ALLOCPROF).
