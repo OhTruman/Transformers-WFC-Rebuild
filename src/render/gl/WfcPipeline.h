@@ -416,6 +416,7 @@ private:
     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
     int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
+    static void renderSizeOverride(int& w, int& h);
     int skinMode_ = 0, skinRow_ = 0, skinBones_ = 0;      // VS: 0 off, 1 skin, 2 skin + blend with the prev palette
     float skinAlpha_ = 1.0f;
     void evictSkin(bool all);

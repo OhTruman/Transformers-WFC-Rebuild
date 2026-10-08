@@ -2732,7 +2732,15 @@ void Pipeline::logMemStats(const char* when) {
              gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
 }
 
+// WFC_RENDERSIZE=<w>x<h>: the internal 3D render size (measurement), else unchanged
+void Pipeline::renderSizeOverride(int& w, int& h) {
+    static int rw = 0, rh = 0;
+    static const bool rs = [] { const char* e = std::getenv("WFC_RENDERSIZE"); return e && std::sscanf(e, "%dx%d", &rw, &rh) == 2 && rw > 0 && rh > 0; }();
+    if (rs) { w = rw; h = rh; }
+}
+
 void Pipeline::warmupWorld(int id, int w, int h) {
+    renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
     if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
     const auto t0 = std::chrono::steady_clock::now();
@@ -4713,11 +4721,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
     winW_ = w; winH_ = h;
-    {
-        static int rw = 0, rh = 0;
-        static const bool rs = [] { const char* e = std::getenv("WFC_RENDERSIZE"); return e && std::sscanf(e, "%dx%d", &rw, &rh) == 2 && rw > 0 && rh > 0; }();
-        if (rs) { w = rw; h = rh; }
-    }
+    renderSizeOverride(w, h);
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
