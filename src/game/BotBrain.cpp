@@ -5,7 +5,7 @@
 
 namespace game {
 
-const AiWeaponData& aiWeaponData(const char* weaponId, int clip) {
+AiWeaponData aiWeaponData(const char* weaponId, int clip) {
     // *_AI_WEPDATA BurstRanges {Burst Min / Max shots, PauseDuration Min / Max s} and DesiredFiringRange [CONF RE data].
     struct Row { const char* id; AiWeaponData d; };
     static const Row rows[] = {
@@ -25,9 +25,8 @@ const AiWeaponData& aiWeaponData(const char* weaponId, int clip) {
     };
     for (const Row& r : rows) if (weaponId && std::strcmp(weaponId, r.id) == 0) return r.d;
     // No AI weapon data (IonBlaster, Shotgun, PlasmaCannon, RepairRay, ...): PROVISIONAL bursts of about a clip.
-    static AiWeaponData prov[4];
-    static int slot = 0;
-    AiWeaponData& d = prov[slot++ & 3];
+    // (built per call: a static 4-slot ring shared by the steering workers raced - two bots' provisional rows overwrote each other)
+    AiWeaponData d;
     const int c = std::max(1, clip);
     const bool shotgun = weaponId && std::strcmp(weaponId, "Shotgun") == 0;
     d.shortR = {std::max(1, c / 2), std::max(1, c), 0.4f, 0.9f};

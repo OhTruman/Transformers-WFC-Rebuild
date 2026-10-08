@@ -41,7 +41,8 @@ struct AiWeaponData {
     AiRange desired = AiRange::Medium;
     bool authored = false;
 };
-const AiWeaponData& aiWeaponData(const char* weaponId, int clip);
+// By value: called from the parallel steering pass (a shared scratch ring raced between workers - the Debug determinism flake).
+AiWeaponData aiWeaponData(const char* weaponId, int clip);
 
 // Difficulty dimensions (PC ADAPTATION; the original MP had none). 0 EASY, 1 MEDIUM, 2 HARD.
 struct BotSkill {
