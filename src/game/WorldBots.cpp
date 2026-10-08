@@ -1094,8 +1094,16 @@ void World::tickBots(float dt) {
                     const float a = 6.2831853f * (float)k / 8.0f; float th;
                     const core::Vec3 o0 = p + core::Vec3{0, 0.6f, 0}, d = core::Vec3{std::cos(a), 0.0f, std::sin(a)} * 4.0f;
                     const bool hs = collision() && collision()->segmentHit(o0, o0 + d, th);
-                    LOG_INFO("STUCKWATCH   dir %d: static %s", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear");
+                    float td; core::Vec3 nd;
+                    const bool hd = collision() && collision()->segmentHit(o0, o0 + d, td, nd);   // incl. moving sets (barriers, movers)
+                    LOG_INFO("STUCKWATCH   dir %d: static %s, with dynamic %s", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear",
+                             hd ? (std::to_string(td * 4.0f) + " m").c_str() : "clear");
                 }
+                for (const BarrierState& br : barriers_)
+                    if ((br.alive || br.delay >= 0.0f) && hdist(br.pos, p) < 15.0f)
+                        LOG_INFO("STUCKWATCH   barrier of p%d at %.1f m (alive %d, t %.1f s, half %.1f %.1f %.1f)", br.owner, hdist(br.pos, p), (int)br.alive, br.t, br.half.x, br.half.y, br.half.z);
+                for (const Sentry& se : sentries_)
+                    if (se.alive && hdist(se.pos, p) < 15.0f) LOG_INFO("STUCKWATCH   sentry of p%d at %.1f m", se.owner, hdist(se.pos, p));
             }
         }
         const double ta0 = tickProfOn() ? profMsBots() : 0.0;
