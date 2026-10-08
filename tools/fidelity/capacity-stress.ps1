@@ -162,7 +162,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         $voices = 0; $dropped = 0; $stolen = 0; $mixMs = 0.0; $ai = @(); $bl = @()
         foreach ($l in $segL) {
             if (-not $inPlay -and $l.Contains('to=InGame')) { $inPlay = $true; continue }
-            if ($inPlay -and $l.Contains('to=GameEnded')) { $inPlay = $false }
+            if ($inPlay -and ($l.Contains('to=GameEnded') -or $l.Contains('] MATCH end '))) { $inPlay = $false }   # InProgress only: the UI enters InGame after the countdown (MATCH start); stop at MATCH end, before the results screen
             if (-not $inPlay) { continue }
             $m = [regex]::Match($l, 'PERF f\d+ frame=([\d.]+)ms sim=([\d.]+)ms(?: \(max [\d.]+\) steps/frame ([\d.]+))?'); if ($m.Success) { $ft.Add([double]$m.Groups[1].Value); $sim.Add([double]$m.Groups[2].Value); $stp.Add($(if ($m.Groups[3].Success) { [double]$m.Groups[3].Value } else { -1.0 })); continue }
             $m = [regex]::Match($l, 'AMB .*voices=(\d+) \(max (\d+), dropped (\d+), stolen (\d+).*mix=([\d.]+)ms'); if ($m.Success) { $voices = [Math]::Max($voices, [int]$m.Groups[2].Value); $dropped = [int]$m.Groups[3].Value; $stolen = [int]$m.Groups[4].Value; $mixMs = [Math]::Max($mixMs, [double]$m.Groups[5].Value); continue }
