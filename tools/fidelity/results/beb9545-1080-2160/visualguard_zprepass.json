@@ -1,0 +1,27 @@
+﻿{
+    "summary":  {
+                    "pass":  1,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "visual.alignment",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "WFC_SHOTMATCH on both builds: frames are match steps 300..900 since InProgress (aligned)"
+                    },
+                    {
+                        "id":  "visual.fixed",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "beb9545 vs beb9545 [WFC_NOZPREPASS=1], 21 frames compared (match steps 300..900 every 30); flagged (\u003e 0.5 % pixels differ by \u003e 24): 0 []; max 0 %"
+                    }
+                ]
+}
