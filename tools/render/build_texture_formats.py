@@ -10,6 +10,10 @@ references are alpha = true (the safe choice: the renderer keeps their alpha). L
 alpha = false, keyed "verticalslice/maps/<map>/lightmaps/<name>.png" as in the export. A PNG that several exported
 objects map onto is left out (the renderer then loads the PNG as before), and so is every texture whose DDS top level
 does not decode to exactly its PNG (verified here for all of them: the renderer's top level must stay identical).
+AssetTools row flags: png_is_other_object (the PNG path belongs to another object) -> left out; png null (lightmap
+pages with no PNG anywhere) -> keyed by the DDS path, unverifiable, included; alpha_all_zero (the cooked data has
+alpha 0 everywhere, the PNG was saved opaque) -> verified on RGB, "opaque": true (the renderer keeps today's opaque
+alpha; whether the original sampled them opaque is an open RE question).
 
 usage: build_texture_formats.py <render data root> <AssetTools root> [<ExtractedAssets root>]
 """
@@ -74,12 +78,14 @@ def decode_top(fmt, data, w, h):
     return a[:, :, [2, 1, 0, 3]]
 
 
-def verify(png_rel, dds_rel, fmt):
+def verify(png_rel, dds_rel, fmt, rgb_only=False):
     try:
         f = open(os.path.join(dds_root, dds_rel), 'rb').read()
         h, w = struct.unpack('<II', f[12:20])
         mine = decode_top(fmt, f[128:], w, h)
         png = np.asarray(Image.open(os.path.join(ea_root, png_rel)).convert('RGBA'))
+        if rgb_only:
+            return png.shape == mine.shape and np.array_equal(png[..., :3], mine[..., :3])
         return png.shape == mine.shape and np.array_equal(png, mine)
     except Exception:
         return False
@@ -124,7 +130,12 @@ for mf in glob.glob(os.path.join(render_root, '*', 'materials_glsl.json')):
 rows = [json.loads(l) for l in open(idx, encoding='utf-8') if l.strip()]
 by_png = collections.defaultdict(list)
 for r in rows:
-    if r.get('status') == 'ok' and r.get('png') and r.get('dds'):
+    if r.get('status') != 'ok' or not r.get('dds') or r.get('png_is_other_object'):
+        continue
+    if not r.get('png'):                                   # no PNG anywhere (some lightmap pages): key by the DDS path
+        r = dict(r, png=None, key=r['dds'][:-4] + '.png')
+        by_png[r['key'].lower()].append(r)
+    else:
         by_png[r['png'].lower()].append(r)
 out, shared, mismatch = {}, 0, []
 for png, rs in by_png.items():
@@ -132,12 +143,17 @@ for png, rs in by_png.items():
         shared += 1
         continue
     r = rs[0]
-    if not verify(r['png'], r['dds'], r['format'].replace('PF_', '')):
+    opaque = bool(r.get('alpha_all_zero'))
+    if r['png'] is not None and not verify(r['png'], r['dds'], r['format'].replace('PF_', ''), rgb_only=opaque):
         mismatch.append(r['png'])
         continue
     lm = '/lightmaps/' in png
     out[png] = {'dds': r['dds'], 'fmt': r['format'].replace('PF_', ''),
                 'alpha': False if lm else (alpha[png] if png in seen else True)}
+    if opaque:
+        out[png]['opaque'] = True
+    if r['png'] is None:
+        out[png]['no_png'] = True
 dst = os.path.join(render_root, 'texture_formats.json')
 json.dump({'generated_by': 'tools/render/build_texture_formats.py', 'source_index': 'AssetTools/manifests/extracted/textures_dds.jsonl',
            'textures': out}, open(dst, 'w', encoding='utf-8'), indent=0, sort_keys=True)
