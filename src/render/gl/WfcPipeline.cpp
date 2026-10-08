@@ -4405,7 +4405,11 @@ void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) 
         FrameRec& fr = frameRecs_[frameNo_ & 3];
         if (fr.frame != frameNo_) fr = FrameRec{}, fr.frame = frameNo_;
         double cov = 0;
-        for (size_t i = 0; i < n; ++i) {
+        // at most 32 sprites per batch are projected and the sum scaled to n (an estimate for the spike report only)
+        const size_t stride = std::max<size_t>(1, n / 32);
+        size_t sampled = 0;
+        for (size_t i = 0; i < n; i += stride) {
+            ++sampled;
             float px[4], py[4]; bool ok = true;
             for (int k = 0; k < 4 && ok; ++k) {
                 const core::Vec3& p = sp[i].c[k];
@@ -4420,14 +4424,17 @@ void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) 
                                              (px[2] * py[3] - px[3] * py[2]) + (px[3] * py[0] - px[0] * py[3]));
             cov += a / 4.0;                              // NDC square area 4 = one screen
         }
+        if (sampled) cov *= (double)n / (double)sampled;
         fr.sprites += (int)n; ++fr.draws; fr.coverage += cov; fr.matCov[material] += cov;
 }
 
 // Appends n sprites' vertices (the drawSprites layout: 14 floats per vertex, colour, second SubUV + blend).
-void Pipeline::spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, std::vector<float>& v,
-                            std::vector<float>& col, std::vector<float>& sub) {
-    const size_t v0 = v.size(), c0 = col.size(), s0 = sub.size();
-    v.resize(v0 + n * 4 * 14); col.resize(c0 + n * 4 * 4); sub.resize(s0 + n * 4 * 3);
+void Pipeline::spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, RawFloats& vb, RawFloats& cb,
+                            RawFloats& sb) {
+    float* v = vb.grow(n * 4 * 14);                   // no zero fill: every float below is written
+    float* col = cb.grow(n * 4 * 4);
+    float* sub = sb.grow(n * 4 * 3);
+    const size_t v0 = 0, c0 = 0, s0 = 0;
     core::Vec3 N = core::normalize(facing);
     for (size_t i = 0; i < n; ++i) {
         const Sprite& s = sp[i];

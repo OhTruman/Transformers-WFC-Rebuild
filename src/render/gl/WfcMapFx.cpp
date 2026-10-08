@@ -24,6 +24,11 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -1314,6 +1319,54 @@ float Pipeline::pickupYaw(const std::string& ownerLower) const {
 }
 
 // ---- drawing (after the frame's opaque + character draws, before post) ----
+// A small render-side worker pool (independent of Gameplay's simulation pool, which the async step uses concurrently):
+// run(n, f) calls f(i) for i in [0, n) on the workers and the caller and returns when all are done. WFC_RENDERTHREADS=<n>
+// (default min(4, hardware threads - 4)).
+namespace {
+class RenderPool {
+public:
+    static RenderPool& get() { static RenderPool p; return p; }
+    void run(int n, const std::function<void(int)>& f) {
+        if (threads_.empty() || n <= 1) { for (int i = 0; i < n; ++i) f(i); return; }
+        { std::lock_guard<std::mutex> lk(m_); job_ = &f; count_ = n; next_.store(0); pending_.store((int)threads_.size()); ++gen_; }
+        cv_.notify_all();
+        work();
+        std::unique_lock<std::mutex> lk(m_);
+        done_.wait(lk, [&] { return pending_.load() == 0; });
+        job_ = nullptr;
+    }
+    ~RenderPool() {
+        { std::lock_guard<std::mutex> lk(m_); quit_ = true; ++gen_; }
+        cv_.notify_all();
+        for (std::thread& t : threads_) t.join();
+    }
+private:
+    RenderPool() {
+        int n = std::min(4, std::max(0, (int)std::thread::hardware_concurrency() - 4));
+        if (const char* e = std::getenv("WFC_RENDERTHREADS")) n = std::max(0, std::min(8, std::atoi(e)));
+        for (int i = 0; i < n; ++i) threads_.emplace_back([this] { loop(); });
+    }
+    void work() { for (int i = next_.fetch_add(1); i < count_; i = next_.fetch_add(1)) (*job_)(i); }
+    void loop() {
+        unsigned seen = 0;
+        for (;;) {
+            { std::unique_lock<std::mutex> lk(m_); cv_.wait(lk, [&] { return gen_ != seen; }); seen = gen_; if (quit_) return; }
+            work();
+            if (pending_.fetch_sub(1) == 1) { std::lock_guard<std::mutex> lk(m_); done_.notify_one(); }
+        }
+    }
+    std::vector<std::thread> threads_;
+    std::mutex m_;
+    std::condition_variable cv_, done_;
+    const std::function<void(int)>* job_ = nullptr;
+    int count_ = 0;
+    std::atomic<int> next_{0}, pending_{0};
+    unsigned gen_ = 0;
+    bool quit_ = false;
+};
+void renderPoolRun(int n, const std::function<void(int)>& f) { RenderPool::get().run(n, f); }
+}  // namespace
+
 void Pipeline::drawMapPresentation() {
     if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
     if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
@@ -1370,9 +1423,43 @@ void Pipeline::drawMapPresentation() {
     core::Vec3 camU{camView_.m[1], camView_.m[5], camView_.m[9]};
     core::Vec3 camF{-camView_.m[2], -camView_.m[6], -camView_.m[10]};
     int sprites = 0, meshes = 0;
+    // Particle generation (300+ fps lobbies: ~0.8 ms CPU at 64 players in firefights) runs per instance into an ordered
+    // command list - on the render worker pool - and the main thread replays the lists in instance order, issuing the
+    // same drawSprites / drawFx calls in the same order as the serial loop (identical queue, identical output).
+    // Mesh emitters' meshes are resolved first on the main thread (fxMeshFor may load / upload). OPT-IN (WFC_FXPAR=1):
+    // no measured gain at 64 players on 5e69ea3 (seeded A/B p50 3.92 vs 3.95 ms); WFC_FXTEST forces serial.
     for (FxInstance& in : fxInstances_) {
-        const FxSystem& sys = fxSystems_[in.system];
         if (in.hidden) continue;
+        auto si = fxSystems_.find(in.system);
+        if (si == fxSystems_.end()) continue;
+        for (size_t e = 0; e < si->second.emitters.size(); ++e) {
+            const FxEmitterRT& rt0 = in.emitters[e];
+            if (rt0.parts.empty()) continue;
+            const FxLod& L0 = si->second.emitters[e].lods[(size_t)rt0.lod];
+            if (!L0.meshGltf.empty()) fxMeshFor(L0);
+        }
+    }
+    struct FxCmd { int kind = 0; const char* material = nullptr; core::Vec3 facing; bool hasDyn = false; float dyn[4] = {1, 1, 1, 1};
+                   std::vector<Sprite> sp; int meshId = -1; core::Mat4 M; float col[4] = {1, 1, 1, 1}; };
+    struct FxOut { std::vector<FxCmd> cmds; size_t used = 0; int sprites = 0, meshes = 0; };
+    static std::vector<FxOut> fxOut;
+    auto buildInstance = [&](FxInstance& in, FxOut& out) {
+        auto sysIt = fxSystems_.find(in.system);
+        if (sysIt == fxSystems_.end() || in.hidden) return;
+        const FxSystem& sys = sysIt->second;
+        int& sprites = out.sprites;
+        int& meshes = out.meshes;
+        auto nextCmd = [&]() -> FxCmd& { if (out.used == out.cmds.size()) out.cmds.emplace_back(); return out.cmds[out.used++]; };
+        auto emitSprites = [&](const char* material, std::vector<Sprite>& sp, const core::Vec3& facing, const FxEmitterRT& rt) {
+            FxCmd& c = nextCmd();
+            c.kind = 0; c.material = material; c.facing = facing; c.hasDyn = rt.hasDyn;
+            if (rt.hasDyn) std::copy(rt.dynParam, rt.dynParam + 4, c.dyn);
+            c.sp.swap(sp);
+        };
+        auto emitMesh = [&](int meshId, const core::Mat4& M, const float col[4]) {
+            FxCmd& c = nextCmd();
+            c.kind = 1; c.meshId = meshId; c.M = M; std::copy(col, col + 4, c.col);
+        };
         for (size_t e = 0; e < sys.emitters.size(); ++e) {
             FxEmitterRT& rt = in.emitters[e];
             if (rt.parts.empty()) continue;
@@ -1758,16 +1845,14 @@ void Pipeline::drawMapPresentation() {
                                  L.material.c_str());
                 }
                 if (!sp.empty()) {
-                    if (rt.hasDyn) { std::copy(rt.dynParam, rt.dynParam + 4, dynParam_); }
-                    if (!drawSprites(L.material.c_str(), sp.data(), sp.size(), camF * -1.0f) && ribbonLog)
-                        LOG_INFO("FXTEST ribbon %s: drawSprites refused material %s", in.system.c_str(), L.material.c_str());
-                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
                     sprites += (int)sp.size();
+                    emitSprites(L.material.c_str(), sp, camF * -1.0f, rt);
                 }
                 continue;
             }
             if (!L.meshGltf.empty()) {                       // mesh emitter (TypeDataMesh)
-                int meshId = fxMeshFor(L);
+                auto mit = fxMeshes_.find(L.meshGltf);       // resolved by the main-thread prepass
+                const int meshId = mit == fxMeshes_.end() ? -1 : mit->second;
                 if (meshId < 0) continue;
                 for (const FxParticle& q : rt.parts) {
                     float rows[3][3];   // payload rotation (degrees): Roll = X, Pitch = Y, Yaw = Z
@@ -1784,7 +1869,7 @@ void Pipeline::drawMapPresentation() {
                     float wp[3]; worldPos(q.pos, wp);
                     core::Mat4 M = ueRowsToGltf(Rm, wp);
                     float col[4] = {q.color[0], q.color[1], q.color[2], q.color[3]};
-                    drawFx(meshId, M, col);
+                    emitMesh(meshId, M, col);
                     ++meshes;
                 }
             } else {                                          // sprites
@@ -1793,8 +1878,8 @@ void Pipeline::drawMapPresentation() {
                 // a particle whose quad (any orientation: inside the sphere of radius |(w, h)| / 2 about its centre;
                 // octagon / best-fit polygons stay inside the quad) is wholly outside the view frustum draws nothing:
                 // it is not generated (300+ fps lobbies: every particle of every system built sprites every frame).
-                // The simulation is untouched. Opt-in until its A/B: WFC_FXCULL=1.
-                static const bool noFxCull = !(std::getenv("WFC_FXCULL") && std::getenv("WFC_FXCULL")[0] == '1');
+                // The simulation is untouched. Default on (seeded 64-player A/B: p95 -0.2 ms); WFC_FXCULL=0 = off.
+                static const bool noFxCull = std::getenv("WFC_FXCULL") && std::getenv("WFC_FXCULL")[0] == '0';
                 float fplane[6][4];
                 for (int f = 0; f < 6; ++f) {
                     const float* pl = frustum_[f];
@@ -1940,10 +2025,31 @@ void Pipeline::drawMapPresentation() {
                         sp.push_back(t);
                     }
                 }
-                if (rt.hasDyn) { std::copy(rt.dynParam, rt.dynParam + 4, dynParam_); }
-                drawSprites(L.material.c_str(), sp.data(), sp.size(), camF * -1.0f);
-                std::fill(dynParam_, dynParam_ + 4, 1.0f);
                 sprites += (int)sp.size();
+                if (!sp.empty()) emitSprites(L.material.c_str(), sp, camF * -1.0f, rt);
+            }
+        }
+    };
+    {
+        const size_t n = fxInstances_.size();
+        if (fxOut.size() < n) fxOut.resize(n);
+        for (size_t i = 0; i < n; ++i) { fxOut[i].used = 0; fxOut[i].sprites = fxOut[i].meshes = 0; }
+        static const bool serial = !(std::getenv("WFC_FXPAR") && std::getenv("WFC_FXPAR")[0] == '1') ||
+                                   std::getenv("WFC_FXTEST") != nullptr;
+        if (serial || n < 8) { for (size_t i = 0; i < n; ++i) buildInstance(fxInstances_[i], fxOut[i]); }
+        else renderPoolRun((int)n, [&](int i) { buildInstance(fxInstances_[(size_t)i], fxOut[(size_t)i]); });
+        for (size_t i = 0; i < n; ++i) {                 // replay in instance order: the serial loop's call sequence
+            FxOut& o = fxOut[i];
+            sprites += o.sprites; meshes += o.meshes;
+            for (size_t k = 0; k < o.used; ++k) {
+                FxCmd& c = o.cmds[k];
+                if (c.kind == 0) {
+                    if (c.hasDyn) std::copy(c.dyn, c.dyn + 4, dynParam_);
+                    drawSprites(c.material, c.sp.data(), c.sp.size(), c.facing);
+                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
+                } else {
+                    drawFx(c.meshId, c.M, c.col);
+                }
             }
         }
     }
