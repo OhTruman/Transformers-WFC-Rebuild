@@ -1,3 +1,13 @@
+# RETRACTED (2026-10-07 23:35) - not a clean same-window comparison
+
+An orphaned copy of the Experimental window script ran a duplicate 5990311 curve into the same folder during this window. Two
+queue instances passing the strict GPU gate at the same moment launched concurrently: 23eb534 t10 / t20 / t32 (22:25-22:44)
+overlapped the orphan's 64-participant 5990311 rerun (until 22:40:48), and capacity_5990311_overview_baseline.csv is the
+orphan's rewrite. The deltas below (especially at 64) are NOT valid; 23eb534 absolutes can only have been slowed (likely
+conservative) but are unverified. A clean re-run replaces this.
+
+---
+
 # 23eb534 vs 5990311 - verified overview cam, same PERF window (2026-10-07 21:47-22:57)
 
 Streets, verified overview cam `44.3,-606.9,-475.7,-90,-31.3` (`measured_view_t64.png`, captured by the harness at match

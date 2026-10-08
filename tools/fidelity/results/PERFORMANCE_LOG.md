@@ -61,3 +61,5 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | 508 | 1920x1080 | - | 32 | 366.5 | 2.6 | 3.93 | 4.42 | 5.24 | 27.05 | 166.6 | 109.2 | 0 | 78.2 % | 1.96 | 1.03 | 0.6 | 0.34 | 0.84 | 5110 |
 | 508 | 1920x1080 | - | 48 | 288 | 3.32 | 5.07 | 5.62 | 6.67 | 29.63 | 134.1 | 90.6 | 0 | 50.6 % | 2.67 | 0.99 | 0.89 | 0.57 | 1.1 | 5084 |
 | 508 | 1920x1080 | - | 64 | 222.9 | 4.56 | 5.91 | 6.21 | 6.91 | 28.17 | 127.7 | 82.7 | 0 | 15.8 % | 3.89 | 1.37 | 1.07 | 1.02 | 1.46 | 5098 |
+
+> **RETRACTED (23:35):** the two 2026-10-07 22:25 / 22:40 5990311 sections and the 22:57 23eb534 section above were measured with an orphaned duplicate queue running concurrently (see results/scaling-23eb534/README.md). Do not use them; a clean re-run follows.
