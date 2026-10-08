@@ -61,13 +61,14 @@ namespace {
 
 // A string literal's property atom, interned once per literal address: re-hashing the same names on every lookup was the
 // largest single cost of the PlayerList ports (sampling profile of the Tab-open frame). Only for literals (static storage).
+// Direct-mapped by address (a hash map's pointer hashing showed up in the profile); a collision only re-interns.
 uint32_t litAtom(const char* s) {
-    static std::unordered_map<const char*, uint32_t> cache;
-    auto it = cache.find(s);
-    if (it != cache.end()) return it->second;
-    const uint32_t a = atomIntern(s);
-    cache.emplace(s, a);
-    return a;
+    static const char* keys[1024] = {};
+    static uint32_t atoms[1024] = {};
+    const size_t i = ((uintptr_t)s >> 3) & 1023;
+    if (keys[i] == s) return atoms[i];
+    keys[i] = s;
+    return atoms[i] = atomIntern(s);
 }
 // vm.callMethod with a literal method name (its atom from litAtom).
 template <size_t N>

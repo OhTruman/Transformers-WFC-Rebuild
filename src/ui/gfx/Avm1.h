@@ -72,6 +72,7 @@ struct ScriptCode {
     uint16_t flags = 0;                     // DefineFunction2 preload/suppress flags
     std::vector<std::pair<uint8_t, std::string>> params;   // (register or 0, name)
     std::string name;
+    mutable int8_t activationFree = -1;     // VM::call: -1 unknown, 1 = the activation object can never be observed
 };
 
 // Property names as atoms: every name stored as a property is interned once (process-wide, main thread); property
@@ -99,7 +100,7 @@ public:
     // Lookup by atom: slotAtoms[i] is props[i]'s atom. Small objects (most: rows, cells, tween entries, transforms) are
     // scanned linearly; the hash index is built only past kLinearProps (a hash node per property was the main allocation
     // cost of building the PlayerList). props alone keeps the order (enumeration).
-    static constexpr size_t kLinearProps = 16;
+    static constexpr size_t kLinearProps = 8;
     std::vector<uint32_t> slotAtoms;
     std::unordered_map<uint32_t, uint32_t> index;   // atom -> props slot (only when props.size() > kLinearProps)
     bool marked = false;
