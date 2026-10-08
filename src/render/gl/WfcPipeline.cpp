@@ -22,7 +22,12 @@ using namespace glx;
 namespace render {
 namespace wfc {
 Pipeline* gInstPipeline = nullptr;
-unsigned long gShaderCompiles = 0, gTexCreates = 0;   // pending instanced character draws: flushed before any draw / blit
+unsigned long gShaderCompiles = 0, gTexCreates = 0;
+// WFC_MEMSTATS: bytes handed to GL since the map load (RGBA8 + mips for textures: what the driver allocates and, on
+// some drivers, mirrors in system memory), by class
+unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 0;
+unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;
+unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -728,6 +733,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
@@ -1209,8 +1215,29 @@ static std::vector<uint16_t> pwlToLinear16(const ImageData& img) {
     return out;
 }
 
+// The PWL degamma output is always k / 1023 (Xenos' 10-bit linear), so an opaque texture (alpha all 255) stores it
+// exactly in RGB10_A2 at half of RGBA16's memory. Opt-in (WFC_RGB10=1) until the original mip chains (AssetTools DDS)
+// are loaded: with generated mips, the 10-bit mip levels differ by up to 2/255 from today's 16-bit ones.
+static bool uploadPwlRgb10(GLenum target, const ImageData& img) {
+    static const bool off = std::getenv("WFC_RGB10") == nullptr;
+    if (off) return false;
+    for (size_t i = 3; i < img.rgba.size(); i += 4) if (img.rgba[i] != 255) return false;
+    static uint32_t lut[256];
+    static bool init = false;
+    if (!init) {
+        for (int i = 0; i < 256; ++i) lut[i] = (uint32_t)std::lround(pwlGammaToLinear(i / 255.0f) * 1023.0f);
+        init = true;
+    }
+    std::vector<uint32_t> px(img.rgba.size() / 4);
+    for (size_t i = 0, k = 0; k < px.size(); ++k, i += 4)
+        px[k] = lut[img.rgba[i]] | (lut[img.rgba[i + 1]] << 10) | (lut[img.rgba[i + 2]] << 20) | (3u << 30);
+    glTexImage2D(target, 0, GL_RGB10_A2, img.w, img.h, 0, GL_RGBA, 0x8368 /*GL_UNSIGNED_INT_2_10_10_10_REV*/, px.data());
+    return true;
+}
+
 static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
     static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // A/B: GL sRGB curve
+    if (srgb && !srgbCurve && uploadPwlRgb10(target, img)) return;
     if (srgb && !srgbCurve) {
         std::vector<uint16_t> lin = pwlToLinear16(img);
         glTexImage2D(target, 0, GL_RGBA16, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_SHORT, lin.data());
@@ -1229,6 +1256,16 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     GLuint id = 0;
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
         ++gTexCreates;
+        {
+            static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // uploadTex: PWL sRGB -> RGBA16
+            static const bool noRgb10 = std::getenv("WFC_RGB10") == nullptr;             // (opaque: RGB10_A2)
+            bool opaque = !noRgb10;
+            for (size_t i = 3; opaque && i < img.rgba.size(); i += 4) opaque = img.rgba[i] == 255;
+            const unsigned long long bpp = srgb && !srgbCurve && !opaque ? 8ull : 4ull;
+            const unsigned long long b = (unsigned long long)img.w * (unsigned long long)img.h * bpp * 4ull / 3ull;
+            if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += b; ++gMemLightmaps; }
+            else { gMemTextureBytes += b; ++gMemTextures; if (srgb && !srgbCurve) gMemSrgbTexBytes += b; }
+        }
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -1488,10 +1525,15 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             bool ok = vs.find("uniform vec4 uLMCoord;") != std::string::npos && vs.find("void main() {") != std::string::npos;
             replaceAll(vs, "uniform vec4 uLMCoord;", "vec4 uLMCoord;");
             replaceAll(vs, "void main() {", "void wfcVSBody() {");
+            {   // the world depth prepass links this VS too: identical depth (declared before any use)
+                const size_t nl = vs.find('\n');
+                vs.insert(nl == std::string::npos ? 0 : nl + 1, "invariant gl_Position;\n");
+            }
             vs += "layout(location=11) in float aDrawRow;\nuniform sampler2D uRowTex;\nflat out int vRow;\n"
                   "void main() {\n    vRow = int(aDrawRow + 0.5);\n    uLMCoord = texelFetch(uRowTex, ivec2(0, vRow), 0);\n"
                   "    wfcVSBody();\n}\n";
             vsMdi = ok ? compile(GL_VERTEX_SHADER, vs, "world_mdi.vs") : 0;
+            vsMdiShared_ = vsMdi;
             if (!vsMdi) LOG_WARN("wfc: MDI vertex shader unavailable (world MDI off)");
         }
         if (!vsMdi || fs.find("void main()") == std::string::npos) return -1;
@@ -1965,6 +2007,8 @@ int Pipeline::upload(const MeshData& m) {
     GpuMesh g;
     std::vector<float> v;
     buildVertices(m, v);
+    gMemMeshBytes += (unsigned long long)v.size() * sizeof(float) + (unsigned long long)m.indices.size() * 4ull;
+    ++gMemMeshes;
     GenVertexArrays(1, &g.vao);
     BindVertexArray(g.vao);
     GenBuffers(1, &g.vbo); BindBuffer(GL_ARRAY_BUFFER, g.vbo);
@@ -2718,7 +2762,24 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 // prewarms the body (prewarmDynamicMesh). The world is drawn once, unculled and hidden, right after its upload and
 // the material prewarm, while the loading screen still presents; glFinish lets the GPU-side residency complete there
 // too. Frame state (frame number, map clock, camera, counters) is saved and restored: the next frame is unchanged.
+void Pipeline::logMemStats(const char* when) {
+    static const bool on = std::getenv("WFC_MEMSTATS") != nullptr;
+    if (!on) return;
+    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB), static meshes %lu = %.0f MB; "
+             "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
+             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemMeshes,
+             gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
+}
+
+// WFC_RENDERSIZE=<w>x<h>: the internal 3D render size (measurement), else unchanged
+void Pipeline::renderSizeOverride(int& w, int& h) {
+    static int rw = 0, rh = 0;
+    static const bool rs = [] { const char* e = std::getenv("WFC_RENDERSIZE"); return e && std::sscanf(e, "%dx%d", &rw, &rh) == 2 && rw > 0 && rh > 0; }();
+    if (rs) { w = rw; h = rh; }
+}
+
 void Pipeline::warmupWorld(int id, int w, int h) {
+    renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
     if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
     const auto t0 = std::chrono::steady_clock::now();
@@ -2813,6 +2874,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
+    logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
              touchedPrograms_, touchedTextures_);
@@ -3733,6 +3795,46 @@ void Pipeline::drawMdi(GpuMesh& g) {
     }
     size_t qn = 0;
     if (profFrame) QueryCounter(bq[qn++], 0x8E28);
+    // World depth prepass (4K: the world's pixel shading dominates the GPU frame). The opaque buckets' depth first,
+    // with the same (invariant) vertex shader and an empty fragment shader; the shading pass then runs each material
+    // only for its visible pixels. LEQUAL either way, so the result is identical (ties: the last draw wins as before).
+    // Masked buckets (clip in the material) are not prepassed. WFC_NOZPREPASS=1 off.
+    static const bool zPre = std::getenv("WFC_NOZPREPASS") == nullptr;
+    bool prepassed = false;
+    if (zPre && vsMdiShared_ && !warmup_) {
+        if (!zPreProg_) {
+            const char* fs = "#version 330 compatibility\nvoid main() {}\n";
+            GLuint f = compile(GL_FRAGMENT_SHADER, fs, "world_zprepass.fs");
+            if (f) zPreProg_ = link(vsMdiShared_, f, "world_zprepass");
+        }
+        if (zPreProg_) {
+            UseProgram(zPreProg_);
+            glx::uniformCacheForgetCurrent();
+            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uViewProj"), 1, GL_FALSE, viewProj_.m);
+            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uModel"), 1, GL_FALSE, core::Mat4::identity().m);
+            Uniform1i(GetUniformLocation(zPreProg_, "uSkin"), 0);
+            Uniform1i(GetUniformLocation(zPreProg_, "uPoseBlend"), 0);
+            Uniform1i(GetUniformLocation(zPreProg_, "uVertexLM"), 0);
+            Uniform4f(GetUniformLocation(zPreProg_, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+            Uniform1i(GetUniformLocation(zPreProg_, "uRowTex"), 20);
+            ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
+            ActiveTexture(GL_TEXTURE0);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+            glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+            static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
+            for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
+                const size_t n = ranges[bi].second - ranges[bi].first;
+                const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
+                if (!n || M.blend != 0) continue;
+                if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+                MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
+            }
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glx::uniformCacheForgetCurrent();
+            prepassed = true;
+            depthDirty_ = true;
+        }
+    }
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
         if (!n) continue;
@@ -3744,7 +3846,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         for (int i = 0; i < 3; ++i) if (M.uRTSet[i] >= 0) Uniform1i(M.uRTSet[i], 0);   // static: no character colours
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
         if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
-        glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND); glDepthMask(prepassed && M.blend == 0 ? GL_FALSE : GL_TRUE);   // (depth already written)
         Uniform1i(uloc(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
         if (b.lm[0] >= 0) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
@@ -3760,6 +3862,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         depthDirty_ = true;
         if (profFrame) QueryCounter(bq[qn++], 0x8E28);
     }
+    glDepthMask(GL_TRUE);
     if (profFrame && qn > 1) {
         std::vector<unsigned long long> t(qn);
         for (size_t k = 0; k < qn; ++k) GetQueryObjectui64v(bq[k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
@@ -4677,6 +4780,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
+    if (frameNo_ % 3600 == 0) logMemStats("in frame");
     if (frameNo_ % 600 == 0 && statSkinRebuilds_) {   // skinned-model builds (expected: first sight / respawns only)
         LOG_INFO("wfc gpu skin: %d model builds in the last 600 frames (%zu models, %zu instances live)", statSkinRebuilds_,
                  skinModels_.size(), skinInsts_.size());
@@ -4694,6 +4798,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
     time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
+    // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
+    winW_ = w; winH_ = h;
+    renderSizeOverride(w, h);
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -4735,7 +4843,7 @@ void Pipeline::drawCanvasTiles() {
     const std::vector<IRenderer::MaterialTile>& tiles = uiTiles_;
     const core::Mat4 saveVP = viewProj_;
     const bool saveFog = fogOn_;
-    float W = (float)std::max(vpW_, 1), Hh = (float)std::max(vpH_, 1);
+    float W = (float)std::max(winW_ > 0 ? winW_ : vpW_, 1), Hh = (float)std::max(winH_ > 0 ? winH_ : vpH_, 1);   // window pixels
     core::Mat4 ortho = core::Mat4::identity();         // pixels -> NDC, y down
     ortho.m[0] = 2.0f / W; ortho.m[5] = -2.0f / Hh; ortho.m[10] = -1.0f; ortho.m[12] = -1.0f; ortho.m[13] = 1.0f;
     viewProj_ = ortho;
@@ -4892,7 +5000,7 @@ void Pipeline::endFrame() {
         }
     }
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, vpW_, vpH_);
+    glViewport(0, 0, winW_ > 0 ? winW_ : vpW_, winH_ > 0 ? winH_ : vpH_);   // the window (WFC_RENDERSIZE: scaled)
     UseProgram(postProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);

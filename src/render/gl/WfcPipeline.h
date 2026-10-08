@@ -415,6 +415,8 @@ private:
     static constexpr int kSkinRows = 512;
     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
+    int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
+    static void renderSizeOverride(int& w, int& h);
     int skinMode_ = 0, skinRow_ = 0, skinBones_ = 0;      // VS: 0 off, 1 skin, 2 skin + blend with the prev palette
     float skinAlpha_ = 1.0f;
     void evictSkin(bool all);
@@ -451,6 +453,8 @@ private:
     std::vector<MdiBucket> mdiBuckets_;
     long mdiMesh_ = -1;
     GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
+    GLuint zPreProg_ = 0;                              // world depth prepass (MDI VS + empty FS)
+    static inline GLuint vsMdiShared_ = 0;             // the MDI vertex shader (shared by every MDI program)
     // Lightmap pages of the common size share one GL_TEXTURE_2D_ARRAY (unit 21); each page's 2D texture becomes a
     // texture view of its layer (same storage, exact texels / mips), so MDI buckets key on the program alone for them.
     GLuint lmArray_ = 0;
@@ -569,6 +573,7 @@ private:
     void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2
     void pawnOcclusionQueries();       // after the opaque pass: this frame's queries
     void ensurePawnOcclusionProgram(); // its program / box geometry (prewarmed at load)
+    void logMemStats(const char* when);   // WFC_MEMSTATS
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
