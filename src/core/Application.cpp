@@ -1,4 +1,5 @@
 #include <chrono>
+#include "platform/CpuPreference.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <psapi.h>
@@ -47,6 +48,9 @@ namespace core {
 
 bool Application::init() {
     LOG_INFO("WFC Rebuild starting (clean-room skeleton)");
+    // [integration 09c] Systems 846dc11 (PC ADAPTATION, 300 fps): prefer the largest-L3 cores (X3D V-cache CCD) process-wide, before
+    // any worker / sim / audio thread starts; symmetric-L3 CPUs untouched. WFC_CPUSETS=off | auto | ccd0 | ccd1.
+    LOG_INFO("%s", platform::applyCachePreference().c_str());
     if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
     if (std::getenv("WFC_CHASSISTEST")) {
         game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault);
