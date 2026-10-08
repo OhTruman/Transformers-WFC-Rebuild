@@ -31,14 +31,16 @@ $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcR
 if (-not $H.Contains("WFC_SIMTHREADS")) { Res "hook" "UNKNOWN" "build has no WFC_SIMTHREADS (threaded sim not in this build)" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
 $Seeds = @($Seeds | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 $extra = @{}; foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $extra[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
-$url = "{0}?GameModeTag=TDM?BotsAutobot={1}?BotsDecepticon={1}?BotDifficulty=1?ExtendedPlayers=1" -f $Map, $Bots
+# PointsToWin / TimeLimit unreachable: the match must still be InProgress when WFC_MATCH_SECONDS fires (2026-10-08: 32 v 32 hit the
+# 40-point goal at 51 s of play, the hook never fired and the run went on for 465 k steps)
+$url = "{0}?GameModeTag=TDM?BotsAutobot={1}?BotsDecepticon={1}?BotDifficulty=1?ExtendedPlayers=1?PointsToWin=9999?TimeLimit=3600" -f $Map, $Bots
 function RunOne([string]$tag, [string]$seed, [bool]$serial) {
     $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     if ($ReportOnly -or (Test-Path (Join-Path $d "wfc.log"))) { return }
     if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; return }
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$seed"; WFC_SMOKE_FRAMES = "$Frames"; WFC_LOGEVERY = "0"
             WFC_BOTLOG = "all"; WFC_XPLOG = "1"; WFC_NOMOUSE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150" }
-    if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "1000000" }
+    if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "$($MatchSeconds * 60 + 15000)" }   # backstop: match + load allowance
     if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$seed" }   # GameFlow RNG is clock-seeded otherwise (Frontend 2026-10-07)
     if ($H.Contains("WFC_SIMHASH")) { $e.WFC_SIMHASH = $(if ($HashDetail) { $HashDetail } else { "0" }) }
     if ($serial) { $e.WFC_SIMTHREADS = "0" } else { foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] } }
