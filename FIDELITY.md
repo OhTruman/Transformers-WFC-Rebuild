@@ -1283,6 +1283,15 @@ Every change below is image-identical to the previous path (verified by determin
   WFC_NOLMARRAY=1, 10 maps x 2 views: 0-190 px per view, mostly < 30 levels, max 193 on 2 px of Complex view 3;
   crops visually identical) - the accepted seam class of the batching decision below. Gain: Streets 10 v 10 1080p
   p50 2.5 -> 2.1 ms. WFC_NOLMARRAY=1 = previous per-page buckets.
+- **LastRenderTime / light-environment throttle (2026-10-07):** an owner's render time advances only when it is
+  actually drawn - not for frustum-culled (or, with WFC_PAWNOCCLUSION=1, occlusion-culled) owners. RE b7fb4ea:
+  CONFIRMED native write site 0x82ECE818 (from 0x82ED3F60, the last step of the scene render) sets
+  Component.LastRenderTime and Owner.LastRenderTime (+0xA4) for primitives in the view's drawn-visibility bitmap only;
+  occlusion-culled primitives leave that set (HIGH, stock UE3). Consumers: the light environment's "not rendered > 0.1
+  s -> 10x distance threshold" (previously never active here - it measured time since the last tick) and the
+  TransformerHealthBar marker (EnemyMarkerHysterisis 0.25 s, CONFIRMED script; versus tags do not use it).
+  Pawn occlusion queries themselves are faithful (HIGH) but opt-in: no measured gain while culled bodies still prepare
+  bounds / palette / shadow. Occlusion buffering depth in WFC: UNKNOWN (ours: results of frames -2 and -3).
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
