@@ -1322,6 +1322,7 @@ void Pipeline::loadStep(const char* where) {
 #ifdef WFC_HAS_CORE_LOADYIELD
     core::loadYield(where);
     glx::uniformCacheForgetCurrent();                  // the loading frame may have bound other programs
+    glx::textureCacheInvalidate();
 #else
     (void)where;
 #endif
