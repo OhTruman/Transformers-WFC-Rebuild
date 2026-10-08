@@ -591,7 +591,7 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     subj.distSq = core::dot(dv, dv);
     if (!subj.castShadow || !subj.castDynamicShadow || subj.hasShadowParent) return;   // interaction not PROJECTED
     uint32_t rel = shadowViewRelevance(subj);
-    if (const char* ov = std::getenv("WFC_SUBJECTRELEVANCE")) rel = (uint32_t)std::strtoul(ov, nullptr, 16);   // gate tests
+    if (const char* ov = WFC_ENV("WFC_SUBJECTRELEVANCE")) rel = (uint32_t)std::strtoul(ov, nullptr, 16);   // gate tests
     if ((rel & 7u) == 0) { ++statShadowGated_; return; }               // neither relevant nor visible
     ShadowRequest rq;
     if (!renderShadowDepth(g, model, p, rq)) return;

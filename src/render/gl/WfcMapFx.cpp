@@ -509,7 +509,7 @@ void Pipeline::tickMapFx(float dt) {
     }
     statLiveParticles_ = 0;
     for (const FxInstance& fi : fxInstances_) for (const FxEmitterRT& e : fi.emitters) statLiveParticles_ += e.parts.size();
-    if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
+    if (dt <= 0.0f || WFC_ENV("WFC_NOMAPFX")) return;
     // M67 SubUV (RE pass 5 s16, update runner case 0x1F, CONFIRMED): every tick for every live particle (and at spawn as
     // the first update). Cells row-major; the second cell is the next one, wrapping. Linear / Linear_Blend: f =
     // SubImageIndex(RelativeTime), cell floor(f) clamped, interp frac(f) (Linear: 0). Random / Random_Blend: a new pick
@@ -1386,7 +1386,7 @@ void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
 
 void Pipeline::drawMapPresentation() {
     if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
-    if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
+    if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
     // WFC_MAPFXPROF=1 (diagnostics): average CPU ms per frame of this function's sections, logged every 600 frames
     static const bool secProf = std::getenv("WFC_MAPFXPROF") != nullptr;
@@ -1540,7 +1540,7 @@ void Pipeline::drawMapPresentation() {
                     if (gl > 1e-6f) fixedSide = g * (-1.0f / gl);
                 }
                 const bool fixedAxis = core::length(fixedSide) > 0.0f;
-                if (fixedAxis && std::getenv("WFC_FXTEST")) {
+                if (fixedAxis && WFC_ENV("WFC_FXTEST")) {
                     static std::set<std::string> logged;
                     if (logged.insert(in.system + "/" + sys.emitters[e].name).second)
                         LOG_INFO("FXTEST billboard %s/%s axis %d side (%.3f %.3f %.3f) component R%d (%.3f %.3f %.3f) scales %.1f/%.1f",
@@ -1997,7 +1997,7 @@ void Pipeline::drawMapPresentation() {
                         for (int k = 0; k < 4; ++k) { s.uv2[k][0] = u1 + uv[k][0] * eu2; s.uv2[k][1] = v1 + uv[k][1] * ev2; }
                         for (auto& t : uv) { t[0] = u0 + t[0] * eu; t[1] = v0 + t[1] * ev; }
                         s.blend = q.subInterp;
-                        if (std::getenv("WFC_FXTEST") && L.subMethod == 2) {
+                        if (WFC_ENV("WFC_FXTEST") && L.subMethod == 2) {
                             static int nb = 0;
                             if (nb++ < 3) LOG_INFO("FXTEST subuv %s/%s cell %d -> %d blend %.3f (%dx%d)", in.system.c_str(),
                                                    sys.emitters[e].name.c_str(), q.subImage, q.subImage2, q.subInterp, L.subH, L.subV);

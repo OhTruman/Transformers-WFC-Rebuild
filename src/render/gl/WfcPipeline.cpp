@@ -2292,7 +2292,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (op != ownerParams_.end() && !op->second.empty()) params = &op->second;
         static std::vector<std::pair<std::string, std::array<float, 4>>> diag = [] {
             std::vector<std::pair<std::string, std::array<float, 4>>> d;   // diagnostics: WFC_DRAWPARAM=name,value
-            if (const char* e = std::getenv("WFC_DRAWPARAM")) {
+            if (const char* e = WFC_ENV("WFC_DRAWPARAM")) {
                 std::string t = e; size_t c = t.find(',');
                 if (c != std::string::npos) { float v = (float)std::atof(t.c_str() + c + 1); d.push_back({t.substr(0, c), {v, v, v, 1}}); }
             }
@@ -2461,7 +2461,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     LightEnv dynEnv;
     bool dynEnvReady = false;
     static const long reportAt = std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES")
-                                     ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : -1;
+                                     ? std::atol(WFC_ENV("WFC_SMOKE_FRAMES")) : -1;
     const bool reportFrame = reportAt > 0 && frameNo_ == (int)reportAt;
     // small dynamic object (world-space bounding radius < 0.5 m): shares a per-cell environment
     bool smallDynamic = false;
@@ -2605,7 +2605,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                     dynEnvReady = true;
                 }
                 if (dynamicObject && !dynEnvReady && envForm_ >= 0 && dle_.count(envForm_) &&
-                    dle_[envForm_].initialized && !std::getenv("WFC_OLDCHARENV")) {
+                    dle_[envForm_].initialized && !WFC_ENV("WFC_OLDCHARENV")) {
                     dynEnv = dle_[envForm_].env;
                     dynEnvReady = true;
                 }
@@ -2699,7 +2699,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 fd.fx |= frameFx_;
             }
             if (!trans) depthDirty_ = true;
-            if (P.distProg >= 0 && distFbo_ && !std::getenv("WFC_NODISTORTION")) {
+            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION")) {
                 const Program& D = progs_[(size_t)P.distProg];
                 BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
                 if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }
@@ -2737,7 +2737,7 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
-    if (g.drawsBsp && decalMesh_ >= 0 && decalMesh_ != id && !std::getenv("WFC_NODECALS")) {
+    if (g.drawsBsp && decalMesh_ >= 0 && decalMesh_ != id && !WFC_ENV("WFC_NODECALS")) {
         // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
         glEnable(GL_POLYGON_OFFSET_FILL);
         glPolygonOffset(-1.0f, -4.0f);
@@ -3062,7 +3062,7 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
 
 void Pipeline::drawHudScreenEffect() {
     static const char* kMat[2] = {"UI_GFxHud_p.StaticDischargeScreenEffect_M", "UI_GFxHud_p.LowHealth.LowHealthScreenEffect_M"};
-    if (hudEffect_ < 0 || std::getenv("WFC_NOHUDFX")) return;
+    if (hudEffect_ < 0 || WFC_ENV("WFC_NOHUDFX")) return;
     const int base = programFor(kMat[hudEffect_], nullptr, false);
     if (base < 0 || progs_[(size_t)base].screenProg < 0) {
         static bool logged[2] = {false, false};
@@ -3836,7 +3836,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
             prepassed = true;
             if (frameNo_ % 600 == 1)                       // evidence for A/B harnesses (WFC_NOZPREPASS=1: no such line)
                 LOG_INFO("wfc: world depth prepass on: %zu buckets, %zu draws this frame%s", preBuckets, preDraws,
-                         std::getenv("WFC_ZPREPASS_TEST") ? " (WFC_ZPREPASS_TEST: opaque world shading skipped)" : "");
+                         WFC_ENV("WFC_ZPREPASS_TEST") ? " (WFC_ZPREPASS_TEST: opaque world shading skipped)" : "");
             depthDirty_ = true;
         }
     }
@@ -4242,7 +4242,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         // the weapon is lit by its owner's environment (no update from the weapon's own bounds)
         if (dleRobotSamples_.empty()) { dleRobotSamples_ = kRobotSamples; dleVehicleSamples_ = kVehicleSamples; }
         DirectLightEnvState& st = dle_[envForm_];
-        if (!weapon && st.lastFrame != frameNo_ && !std::getenv("WFC_OLDCHARENV")) {
+        if (!weapon && st.lastFrame != frameNo_ && !WFC_ENV("WFC_OLDCHARENV")) {
             st.lastFrame = frameNo_;
             tickDirectLightEnv(envForm_, c, envBoundsExtent_, core::Vec3{model.m[12], model.m[13], model.m[14]});
         }
@@ -4260,7 +4260,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
             po.mn = {std::min(po.mn.x, w.x), std::min(po.mn.y, w.y), std::min(po.mn.z, w.z)};
             po.mx = {std::max(po.mx.x, w.x), std::max(po.mx.y, w.y), std::max(po.mx.z, w.z)};
         }
-        if (pawnOccPrepOn() && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
+        if (pawnOccPrepOn() && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // + the composite-shadow volume
             ShadowProjector scratch;
             if (const ShadowProjector* sp = projectorFor(envForm_, scratch); sp && sp->on && sp->type >= 1 && sp->type <= 3) {
                 const core::Vec3 B = envBoundsCenter_;
@@ -4315,7 +4315,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     // must not cast or depth-write its whole silhouette)
     inDynamicDraw_ = true;
     poseBlend_ = blend ? 1 : 0; poseAlpha_ = blend ? alpha : 1.0f;
-    if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
+    if (envSamples_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         const auto ts0 = std::chrono::steady_clock::now();
         if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
@@ -4877,7 +4877,7 @@ void Pipeline::drawCanvasTiles() {
         drawParams_ = &t.params;
         bool ok = drawSprites(t.material.c_str(), &s, 1, core::Vec3{0, 0, 1});
         static int logged = 0;
-        if (std::getenv("WFC_TILELOG") && logged++ < 8) LOG_INFO("canvas tile %s -> %d", t.material.c_str(), ok ? 1 : 0);
+        if (WFC_ENV("WFC_TILELOG") && logged++ < 8) LOG_INFO("canvas tile %s -> %d", t.material.c_str(), ok ? 1 : 0);
         drawParams_ = nullptr;
     }
     canvasInvGamma_ = 0.0f;
@@ -4897,7 +4897,7 @@ void Pipeline::endFrame() {
     deferTrans_ = false;
     double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
     gStats.renderMs += thisRenderMs;
-    if (std::getenv("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
+    if (WFC_ENV("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
         static auto lastEnd = std::chrono::steady_clock::now();
         auto nowT = std::chrono::steady_clock::now();
         double frameMs = std::chrono::duration<double, std::milli>(nowT - lastEnd).count();
@@ -4905,7 +4905,7 @@ void Pipeline::endFrame() {
         if (frameMs > 50.0 && frameNo_ > 3)
             LOG_INFO("wfc spike: frame %d total %.1f ms, render span %.1f ms", frameNo_, frameMs, thisRenderMs);
     }
-    if (std::getenv("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
+    if (WFC_ENV("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
         auto g0 = std::chrono::steady_clock::now();   // diagnostics only: wait for the GPU on the scene
         glFinish();
         double gms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - g0).count();
@@ -4966,10 +4966,10 @@ void Pipeline::endFrame() {
             frames = 0; acc = 0; gStats = RenderStats{};
         }
     }
-    if (std::getenv("WFC_SHADOWSELFTEST") && frameNo_ == 3) runShadowMaskSelfTest();
+    if (WFC_ENV("WFC_SHADOWSELFTEST") && frameNo_ == 3) runShadowMaskSelfTest();
     if (distUsed_) applyDistortion();
-    if (std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES") &&
-        frameNo_ == (int)std::atol(std::getenv("WFC_SMOKE_FRAMES")))
+    if (WFC_ENV("WFC_FRAMEREPORT") && WFC_ENV("WFC_SMOKE_FRAMES") &&
+        frameNo_ == (int)std::atol(WFC_ENV("WFC_SMOKE_FRAMES")))
         writeFrameReport();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -4979,8 +4979,8 @@ void Pipeline::endFrame() {
     ActiveTexture(GL_TEXTURE0);
     // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
-    bool dof = post_.dof && !std::getenv("WFC_NODOF");
-    bool bloom = bloomGatherProg_ && blurProg_ && ((post_.bloom && !std::getenv("WFC_NOBLOOM")) || dof);
+    bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
+    bool bloom = bloomGatherProg_ && blurProg_ && ((post_.bloom && !WFC_ENV("WFC_NOBLOOM")) || dof);
     if (bloom) {
         BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[0]);
         glViewport(0, 0, bloomW_, bloomH_);
@@ -4991,7 +4991,7 @@ void Pipeline::endFrame() {
         Uniform1i(G("uScene"), 0);
         Uniform1i(G("uDepth"), 1);
         Uniform2f(G("uTexel"), 1.0f / (float)fbW_, 1.0f / (float)fbH_);
-        Uniform1f(G("uBloomScale"), (post_.bloom && !std::getenv("WFC_NOBLOOM")) ? post_.bloomScale : 0.0f);
+        Uniform1f(G("uBloomScale"), (post_.bloom && !WFC_ENV("WFC_NOBLOOM")) ? post_.bloomScale : 0.0f);
         Uniform1f(G("uBloomThreshold"), post_.bloomThreshold);
         Uniform4f(G("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
         Uniform2f(G("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
@@ -5025,7 +5025,7 @@ void Pipeline::endFrame() {
     Uniform4f(U("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
     Uniform2f(U("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
     Uniform2f(U("uNearFar"), znear_, zfar_);
-    bool clut = clutTex_ && !std::getenv("WFC_NOCLUT");
+    bool clut = clutTex_ && !WFC_ENV("WFC_NOCLUT");
     Uniform1i(U("uClutOn"), clut ? 1 : 0);
     // UE3 ColorCorrectionTexCoordScaleBias for an N^3 LUT: scale (N-1)/N, bias 0.5/N
     Uniform2f(U("uClutScaleBias"), (float)(clutSize_ - 1) / (float)clutSize_, 0.5f / (float)clutSize_);

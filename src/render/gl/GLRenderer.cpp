@@ -231,7 +231,7 @@ public:
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
         glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
-        if (const char* hf = std::getenv("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
+        if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         slowFrameGpu();
@@ -251,7 +251,7 @@ public:
             }
         }
         pacingSample(camIn);
-        if (const char* dt = std::getenv("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
+        if (const char* dt = WFC_ENV("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
             static int frames = 0;
             if (++frames == 20) {
                 core::Vec3 p{0, 0, 0}; std::sscanf(dt, "%f,%f,%f", &p.x, &p.y, &p.z);
@@ -261,7 +261,7 @@ public:
                 else spawnDecal("FX_Decals_p.DeathDecal_MAT", hit, {0, -1, 0}, 8.75f, 8.75f, 3.0f, 37.0f, 30.0f);
             }
         }
-        if (const char* it = std::getenv("WFC_IMPACTTEST")) {   // diagnostics: 7 impacts across the view centre
+        if (const char* it = WFC_ENV("WFC_IMPACTTEST")) {   // diagnostics: 7 impacts across the view centre
             static int frames = 0;
             if (++frames == 20) {
                 std::string w = it; const bool proj = w.find(",projectile") != std::string::npos;
@@ -306,7 +306,7 @@ public:
 
         // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
         Camera camOv = cam0;
-        if (const char* rc = std::getenv("WFC_RENDERCAM"))
+        if (const char* rc = WFC_ENV("WFC_RENDERCAM"))
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
         // Measurements: WFC_FIXEDCAM="x,y,z,yawDeg,pitchDeg" holds every MATCH frame at one view (menu scenes keep their
         // own cameras), so performance runs see the same scene regardless of where the local player goes
@@ -357,12 +357,12 @@ public:
         if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
         slotWaited_ = false;
         { static int frames = 0; watchdog::frameDone(++frames);
-          if (frames == 60 && std::getenv("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
+          if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
               watchdog::phase("WFC_HANGTEST stall");
               std::this_thread::sleep_for(std::chrono::seconds(7));
           } }
         watchdog::phase("after endFrame (buffer swap / game update)");
-        if (std::getenv("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
+        if (WFC_ENV("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
             RenderDiagnostics d = renderDiagnostics();
             LOG_INFO("FRAME %d gpu=%.2fms (cpu %.2fms) draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
                      d.frame, glx::lastGpuFrameMs(), glx::lastGpuFrameCpuMs(), d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws, d.opaqueDraws,
@@ -998,7 +998,7 @@ public:
     // A map or frontend scene asked for the original presentation and did not get it: a red frame on screen, so a
     // broken run cannot pass as a visual success. WFC_LEGACYRENDER (intended fallback) draws nothing.
     void drawLegacyMarker() {
-        if (!renderDataRequested_ || wfc_.active() || std::getenv("WFC_LEGACYRENDER") || !inFrame_) return;
+        if (!renderDataRequested_ || wfc_.active() || WFC_ENV("WFC_LEGACYRENDER") || !inFrame_) return;
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         glDisable(GL_DEPTH_TEST); glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D); glDisable(GL_FOG);
         glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
@@ -1688,7 +1688,7 @@ public:
                 float k = b.colorScale;
                 s.color[0] = p.r * k; s.color[1] = p.g * k; s.color[2] = p.b * k; s.color[3] = p.a;
             }
-            if (std::getenv("WFC_FXLOG")) {
+            if (WFC_ENV("WFC_FXLOG")) {
                 static int logged = 0;
                 if (logged++ < 8) LOG_INFO("fx sprites %s: n=%zu color0=(%.2f,%.2f,%.2f,%.2f)", b.material, sp.size(),
                                            sp[0].color[0], sp[0].color[1], sp[0].color[2], sp[0].color[3]);

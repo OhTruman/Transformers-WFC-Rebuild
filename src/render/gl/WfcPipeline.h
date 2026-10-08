@@ -8,6 +8,11 @@
 //    diffuse sat(N.L*0.6778+0.3333)^2 and Phong specular pow(sat(R.L), SpecularPower)
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
+#include <cstdlib>
+// Hot-path environment switches: std::getenv takes the CRT environment lock and scans the whole environment on every
+// call (a per-particle FXTEST check alone was ~15 % of the 64-player main thread). WFC_ENV reads each call site once;
+// nothing in the program changes the environment at runtime.
+#define WFC_ENV(name) ([]() -> const char* { static const char* const v = std::getenv(name); return v; }())
 #include <array>
 #include <tuple>
 #include <chrono>
