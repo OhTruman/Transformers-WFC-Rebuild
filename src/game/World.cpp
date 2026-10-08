@@ -2122,7 +2122,14 @@ void World::clearMatchActors() {
     rollers_.clear();
     beacons_.clear();
     buffShots_.clear();
+    mines_.clear();
     missile_ = GuidedMissile{}; missileDelay_ = -1.0f;
+    // The local player's world-level combat state (the pawn's own buffs reset with its respawn).
+    lockCandidate_ = lockTarget_ = -1; lockTimer_ = holdLockTimer_ = 0.0f; locked_ = false;
+    grenadeTossDelay_ = -1.0f; grenadeCooldown_ = 0.0f;
+    deferredKillstreak_ = false; lockedClip_ = 0;
+    repairBeam_.time = 0.0f; repairBeam_.active = false;
+    lastSentryHit_ = lastBarrierHit_ = -1;
     partWeapons_.clear();
     participantShots_.clear();
     partShotFx_.clear();
