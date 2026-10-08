@@ -80,6 +80,22 @@ if(WFC_MIMALLOC)
     target_compile_definitions(wfc_rebuild PRIVATE WFC_MIMALLOC=1)
 endif()
 
+# [Systems, 300 fps] PGO: -DWFC_PGO=gen builds the instrumented exe (training: tools/systems/pgo_train.sh); -DWFC_PGO=<path to
+# .profdata> builds with the profile; empty = off. [integration 09c] Release defaults to tools/pgo/wfc.profdata when present (a stale
+# profile only loses gain, never correctness). No behaviour change.
+set(WFC_PGO_DEFAULT "")
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND EXISTS "${CMAKE_SOURCE_DIR}/tools/pgo/wfc.profdata")
+    set(WFC_PGO_DEFAULT "${CMAKE_SOURCE_DIR}/tools/pgo/wfc.profdata")
+endif()
+set(WFC_PGO "${WFC_PGO_DEFAULT}" CACHE STRING "PGO: 'gen' (instrumented) or a .profdata path (use); empty = off")
+if(WFC_PGO STREQUAL "gen")
+    target_compile_options(wfc_rebuild PRIVATE -fprofile-generate)
+    target_link_options(wfc_rebuild PRIVATE -fprofile-generate)
+elseif(WFC_PGO)
+    target_compile_options(wfc_rebuild PRIVATE "-fprofile-use=${WFC_PGO}" -Wno-profile-instr-unprofiled
+                           -Wno-profile-instr-out-of-date -Wno-backend-plugin)
+endif()
+
 # Headless frontend / game-flow tests (docs/FRONTEND.md): catalog, URLs, UI controller, boot -> match -> return.
 file(GLOB FRONTEND_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp")
 add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES}

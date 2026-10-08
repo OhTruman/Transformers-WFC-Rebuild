@@ -1,0 +1,13 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ (after the WFC_LTO / WFC_MIMALLOC block) @@
++# [Systems, 300 fps] PGO: -DWFC_PGO=gen builds the instrumented exe (training: tools/systems/pgo_train.sh); -DWFC_PGO=<path to
++# .profdata> (normally ${CMAKE_SOURCE_DIR}/tools/pgo/wfc.profdata) builds with the profile. Empty = off. No behaviour change.
++set(WFC_PGO "" CACHE STRING "PGO: 'gen' (instrumented) or a .profdata path (use); empty = off")
++if(WFC_PGO STREQUAL "gen")
++    target_compile_options(wfc_rebuild PRIVATE -fprofile-generate)
++    target_link_options(wfc_rebuild PRIVATE -fprofile-generate)
++elseif(WFC_PGO)
++    target_compile_options(wfc_rebuild PRIVATE "-fprofile-use=${WFC_PGO}" -Wno-profile-instr-unprofiled
++                           -Wno-profile-instr-out-of-date -Wno-backend-plugin)
++endif()

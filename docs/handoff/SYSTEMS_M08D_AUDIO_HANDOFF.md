@@ -535,3 +535,10 @@ ON, switchable for A/B. Build ~50 s either way; the linker map (crash report) is
 A/B (09c baa1d0d, Release, uncapped, seeded, steady match state, 2 cams), sim step ms none / LTO / mimalloc / both:
 20p 0.349 / 0.354 / 0.330 / 0.316, 64p 0.483 / 0.482 / 0.459 / 0.453 (both: -6 to -9 % sim CPU); average fps within noise
 (GPU / present bound on this machine), p99 frame slightly better with mimalloc.
+
+## PGO (300 fps lane)
+
+`docs/handoff/SYSTEMS_PGO_cmake.patch` (WFC_PGO: '' off, 'gen' instrumented, a .profdata path = use), `tools/systems/pgo_train.sh`
+(regeneration: 3 maps x 10 v 10 / 32 v 32 live TDM + the frontend flow, seeded), `tools/pgo/wfc.profdata` (trained on 09c 23eb534).
+A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-match only, 2 passes, 2 cams): sim step 20p
+-6 %, 64p -2 %; 64p player cam 394 -> 409 fps, p99 4.70 -> 4.48 ms; fixed cam +1 %; 20p frames within noise.
