@@ -448,7 +448,7 @@ DisplayObject* Player::instantiate(MovieClip* parent, const std::shared_ptr<cons
         Object* proto = vm_->movieClipProto;
         if (en != def->exportNames.end()) {
             auto rc = vm_->registeredClasses.find(en->second);
-            if (std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX place %s char %d linkage %s class %s", name.c_str(), (int)charId, en->second.c_str(), rc != vm_->registeredClasses.end() ? "yes" : "NO");
+            if (gfxClassLog()) LOG_INFO("GFX place %s char %d linkage %s class %s", name.c_str(), (int)charId, en->second.c_str(), rc != vm_->registeredClasses.end() ? "yes" : "NO");
             if (rc != vm_->registeredClasses.end()) {
                 Value p = vm_->get(rc->second, "prototype");
                 if (p.isObject()) proto = p.o;
@@ -674,7 +674,7 @@ MovieClip* Player::attachMovie(MovieClip* parent, const std::string& linkage, co
     applyFrameTags(mc, 0, true);
     mc->frame = 0;
     constructClip(mc, initObj);
-    if (std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX attachMovie %s as %s depth %d -> %s", linkage.c_str(), name.c_str(), asDepth, mc->targetPath().c_str());
+    if (gfxClassLog()) LOG_INFO("GFX attachMovie %s as %s depth %d -> %s", linkage.c_str(), name.c_str(), asDepth, mc->targetPath().c_str());
     queueAction([this, mc]() { if (!mc->removed) dispatchClipEvent(mc, "onLoad", EvLoad); });
     return mc;
 }

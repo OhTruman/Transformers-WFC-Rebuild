@@ -16,6 +16,9 @@
 
 namespace gfx {
 
+// Diagnostics WFC_GFX_CLASSLOG (placement / attach / remove log), read once: it was a getenv per placed object.
+inline bool gfxClassLog() { static const bool on = std::getenv("WFC_GFX_CLASSLOG") != nullptr; return on; }
+
 class Player;
 class MovieClip;
 
