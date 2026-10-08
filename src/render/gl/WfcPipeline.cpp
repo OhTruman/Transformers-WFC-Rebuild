@@ -25,7 +25,8 @@ unsigned long gShaderCompiles = 0, gTexCreates = 0;
 // WFC_MEMSTATS: bytes handed to GL since the map load (RGBA8 + mips for textures: what the driver allocates and, on
 // some drivers, mirrors in system memory), by class
 unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 0;
-unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;   // pending instanced character draws: flushed before any draw / blit
+unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;
+unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -731,7 +732,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
-    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
@@ -1207,8 +1208,29 @@ static std::vector<uint16_t> pwlToLinear16(const ImageData& img) {
     return out;
 }
 
+// The PWL degamma output is always k / 1023 (Xenos' 10-bit linear), so an opaque texture (alpha all 255) stores it
+// exactly in RGB10_A2 at half of RGBA16's memory. Opt-in (WFC_RGB10=1) until the original mip chains (AssetTools DDS)
+// are loaded: with generated mips, the 10-bit mip levels differ by up to 2/255 from today's 16-bit ones.
+static bool uploadPwlRgb10(GLenum target, const ImageData& img) {
+    static const bool off = std::getenv("WFC_RGB10") == nullptr;
+    if (off) return false;
+    for (size_t i = 3; i < img.rgba.size(); i += 4) if (img.rgba[i] != 255) return false;
+    static uint32_t lut[256];
+    static bool init = false;
+    if (!init) {
+        for (int i = 0; i < 256; ++i) lut[i] = (uint32_t)std::lround(pwlGammaToLinear(i / 255.0f) * 1023.0f);
+        init = true;
+    }
+    std::vector<uint32_t> px(img.rgba.size() / 4);
+    for (size_t i = 0, k = 0; k < px.size(); ++k, i += 4)
+        px[k] = lut[img.rgba[i]] | (lut[img.rgba[i + 1]] << 10) | (lut[img.rgba[i + 2]] << 20) | (3u << 30);
+    glTexImage2D(target, 0, GL_RGB10_A2, img.w, img.h, 0, GL_RGBA, 0x8368 /*GL_UNSIGNED_INT_2_10_10_10_REV*/, px.data());
+    return true;
+}
+
 static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
     static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // A/B: GL sRGB curve
+    if (srgb && !srgbCurve && uploadPwlRgb10(target, img)) return;
     if (srgb && !srgbCurve) {
         std::vector<uint16_t> lin = pwlToLinear16(img);
         glTexImage2D(target, 0, GL_RGBA16, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_SHORT, lin.data());
@@ -1228,9 +1250,14 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
         ++gTexCreates;
         {
-            const unsigned long long b = (unsigned long long)img.w * (unsigned long long)img.h * 4ull * 4ull / 3ull;
+            static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // uploadTex: PWL sRGB -> RGBA16
+            static const bool noRgb10 = std::getenv("WFC_RGB10") == nullptr;             // (opaque: RGB10_A2)
+            bool opaque = !noRgb10;
+            for (size_t i = 3; opaque && i < img.rgba.size(); i += 4) opaque = img.rgba[i] == 255;
+            const unsigned long long bpp = srgb && !srgbCurve && !opaque ? 8ull : 4ull;
+            const unsigned long long b = (unsigned long long)img.w * (unsigned long long)img.h * bpp * 4ull / 3ull;
             if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += b; ++gMemLightmaps; }
-            else { gMemTextureBytes += b; ++gMemTextures; }
+            else { gMemTextureBytes += b; ++gMemTextures; if (srgb && !srgbCurve) gMemSrgbTexBytes += b; }
         }
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
@@ -2726,9 +2753,9 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 void Pipeline::logMemStats(const char* when) {
     static const bool on = std::getenv("WFC_MEMSTATS") != nullptr;
     if (!on) return;
-    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (RGBA8 + mips), static meshes %lu = %.0f MB; "
+    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB), static meshes %lu = %.0f MB; "
              "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
-             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemMeshes,
+             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemMeshes,
              gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
 }
 
