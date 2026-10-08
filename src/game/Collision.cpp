@@ -1,3 +1,4 @@
+#include <cstring>
 #include "game/Collision.h"
 #include "core/Log.h"
 
@@ -9,6 +10,7 @@ namespace game {
 bool CollisionWorld::build(const render::MeshData& mesh) {
     tris_.clear();
     grid_.clear();
+    triYMin_.clear(); triYMax_.clear();
     if (mesh.indices.size() < 3 || mesh.positions.size() < 9) return false;
 
     auto V = [&](uint32_t i) {
@@ -21,6 +23,7 @@ bool CollisionWorld::build(const render::MeshData& mesh) {
         t.a = V(mesh.indices[i]); t.b = V(mesh.indices[i + 1]); t.c = V(mesh.indices[i + 2]);
         t.n = core::normalize(core::cross(t.b - t.a, t.c - t.a));
         tris_.push_back(t);
+        triYMin_.push_back(std::min({t.a.y, t.b.y, t.c.y})); triYMax_.push_back(std::max({t.a.y, t.b.y, t.c.y}));
         for (const core::Vec3* p : {&t.a, &t.b, &t.c}) {
             bmin_ = {std::min(bmin_.x, p->x), std::min(bmin_.y, p->y), std::min(bmin_.z, p->z)};
             bmax_ = {std::max(bmax_.x, p->x), std::max(bmax_.y, p->y), std::max(bmax_.z, p->z)};
@@ -90,7 +93,78 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
     return found;
 }
 
-bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+// The segment walk [exact: the same hits as segmentHitReference]: the 2D DDA over the cells the segment's XZ projection crosses, as
+// before, plus a height test per triangle: within the current cell the segment spans y in [y(tEnter), y(tExit)], and a triangle whose
+// y range lies outside that (with a 1 cm margin for rounding) cannot be hit there. The XZ grid bins floors, walls and roofs of every
+// level into the same columns, so most of a cell's triangles fail this cheap test. Any = stop at the first hit (visibility queries).
+template <bool Any>
+bool CollisionWorld::walk(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+    if (grid_.empty()) return false;
+    const core::Vec3 d = b - a;
+    float bestT = 1e30f;
+    bool hit = false;
+    const bool haveY = triYMin_.size() == tris_.size();
+    auto testCell = [&](int cx, int cz, float ylo, float yhi) {
+        for (int ti : grid_[(size_t)cz * gx_ + cx]) {
+            if (haveY && (triYMin_[(size_t)ti] > yhi || triYMax_[(size_t)ti] < ylo)) continue;
+            const Tri& t = tris_[(size_t)ti];
+            const core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a;
+            const core::Vec3 p = core::cross(d, e2);
+            const float det = core::dot(e1, p);
+            if (std::fabs(det) < 1e-8f) continue;
+            const float inv = 1.0f / det;
+            const core::Vec3 tv = a - t.a;
+            const float u = core::dot(tv, p) * inv;
+            if (u < 0 || u > 1) continue;
+            const core::Vec3 q = core::cross(tv, e1);
+            const float v = core::dot(d, q) * inv;
+            if (v < 0 || u + v > 1) continue;
+            const float tt = core::dot(e2, q) * inv;
+            if (tt >= 0 && tt <= 1 && tt < bestT) { bestT = tt; hit = true; if (Any) return true; }
+        }
+        return false;
+    };
+    const float gxMax = bmin_.x + gx_ * cell_, gzMax = bmin_.z + gz_ * cell_;
+    float t0 = 0.0f, t1 = 1.0f;
+    const float o[2] = {a.x, a.z}, dd[2] = {d.x, d.z}, lo[2] = {bmin_.x, bmin_.z}, hi[2] = {gxMax, gzMax};
+    for (int k = 0; k < 2; ++k) {
+        if (std::fabs(dd[k]) < 1e-12f) {
+            if (o[k] < lo[k] || o[k] > hi[k]) return false;
+        } else {
+            float ta = (lo[k] - o[k]) / dd[k], tb = (hi[k] - o[k]) / dd[k];
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta); t1 = std::min(t1, tb);
+            if (t0 > t1) return false;
+        }
+    }
+    float sx = a.x + d.x * t0, sz = a.z + d.z * t0;
+    int cx, cz;
+    cellRange(sx, sz, cx, cz);
+    const int stepX = d.x > 0 ? 1 : (d.x < 0 ? -1 : 0), stepZ = d.z > 0 ? 1 : (d.z < 0 ? -1 : 0);
+    const float inf = 1e30f;
+    const float tDeltaX = stepX ? cell_ / std::fabs(d.x) : inf, tDeltaZ = stepZ ? cell_ / std::fabs(d.z) : inf;
+    const float nextX = stepX > 0 ? bmin_.x + (cx + 1) * cell_ : bmin_.x + cx * cell_;
+    const float nextZ = stepZ > 0 ? bmin_.z + (cz + 1) * cell_ : bmin_.z + cz * cell_;
+    float tMaxX = stepX ? (nextX - a.x) / d.x : inf, tMaxZ = stepZ ? (nextZ - a.z) / d.z : inf;
+    float tEnter = t0;
+    for (int guard = 0; guard < gx_ + gz_ + 4; ++guard) {
+        const float tExit = std::min(std::min(tMaxX, tMaxZ), t1);
+        const float y0 = a.y + d.y * std::max(0.0f, tEnter), y1 = a.y + d.y * std::min(1.0f, tExit);
+        if (testCell(cx, cz, std::min(y0, y1) - 0.01f, std::max(y0, y1) + 0.01f) && Any) { outT = bestT; return true; }
+        if (hit && bestT <= tExit) break;          // nothing in later cells can be nearer
+        if (tExit >= t1) break;                    // segment ends inside this cell
+        tEnter = tExit;
+        if (tMaxX < tMaxZ) { cx += stepX; tMaxX += tDeltaX; } else { cz += stepZ; tMaxZ += tDeltaZ; }
+        if (cx < 0 || cz < 0 || cx >= gx_ || cz >= gz_) break;
+    }
+    if (hit) outT = bestT;
+    return hit;
+}
+
+bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const { return walk<false>(a, b, outT); }
+bool CollisionWorld::segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const { float t; return walk<true>(a, b, t); }
+
+bool CollisionWorld::segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const {
     // Moller-Trumbore against the triangles of the grid cells the segment's XZ projection passes
     // through, walked front to back with a 2D DDA (Amanatides-Woo) and stopped as soon as the
     // nearest hit lies before the current cell's exit. Exact: a triangle is binned into every cell
@@ -236,6 +310,8 @@ void CollisionWorld::setDynamicEnabled(int id, bool enabled) {
 void CollisionWorld::setDynamicPose(int id, const core::Mat4& pose) {
     if (id < 0 || (size_t)id >= dyn_.size()) return;
     DynamicSet& s = dyn_[(size_t)id];
+    if (s.posed && s.world.size() == s.local.size() / 3 && std::memcmp(&s.lastPose, &pose, sizeof pose) == 0) return;   // unchanged
+    s.lastPose = pose; s.posed = true;
     s.world.resize(s.local.size() / 3);
     for (size_t i = 0; i + 2 < s.local.size(); i += 3) {
         Tri& t = s.world[i / 3];

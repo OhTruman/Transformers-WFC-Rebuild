@@ -179,7 +179,8 @@ bool Application::init() {
     if (std::getenv("WFC_MARKERSTEST")) { runMarkersTest(); return false; }        // presented().markers per mode (RE 7bb8ec1 rules)
     if (std::getenv("WFC_ENGAGETEST")) { runEngageTest(); return false; }          // bots engage the local player
     if (std::getenv("WFC_ASYNCSTEPTEST")) { runAsyncStepTest(); return false; }    // async step == sync step (WFC_ASYNCSTEP=1)
-    if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }            // per-phase step cost vs participant count
+    if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }
+    if (std::getenv("WFC_RAYBENCH")) { runRayBench(); return false; }            // per-phase step cost vs participant count
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5627,6 +5628,45 @@ void Application::runScaleTest() {
     }
     game::World::setStepProfiling(false);
     LOG_INFO("SCALE done");
+}
+
+// WFC_RAYBENCH: the collision segment walk vs its reference on random segments over the loaded map (navmesh cells, 0.5-8 m up; ground
+// rays 2-60 m, light-like rays from 5-30 m above): identical hit / t, and the time per query.
+void Application::runRayBench() {
+    world_.ensureBotNav();
+    const game::CollisionWorld* cw = world_.weaponCollision() ? world_.weaponCollision() : world_.collision();
+    const auto& cells = world_.botNav().cells();
+    if (!cw || cells.empty()) { LOG_INFO("RAYBENCH no collision / nav"); return; }
+    unsigned s = 12345u;
+    auto rnd = [&]() { s = s * 1664525u + 1013904223u; return (float)(s >> 8) / 16777216.0f; };
+    struct Seg { core::Vec3 a, b; };
+    std::vector<Seg> segs;
+    for (int i = 0; i < 40000; ++i) {
+        const core::Vec3 c = cells[(size_t)(rnd() * cells.size()) % cells.size()].centroid;
+        const core::Vec3 a = c + core::Vec3{(rnd() - 0.5f) * 4.0f, 0.5f + rnd() * 7.5f, (rnd() - 0.5f) * 4.0f};
+        const float yaw = rnd() * 6.2831853f, len = 2.0f + rnd() * 58.0f;
+        core::Vec3 b = a + core::Vec3{std::cos(yaw) * len, (rnd() - 0.5f) * len * 0.3f, std::sin(yaw) * len};
+        if (i % 2) b = a + core::Vec3{(rnd() - 0.5f) * 10.0f, 5.0f + rnd() * 25.0f, (rnd() - 0.5f) * 10.0f};   // light-like
+        segs.push_back({a, b});
+    }
+    auto nowMs = [] { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+    std::vector<int> hr(segs.size()), hn(segs.size()), ha(segs.size()); std::vector<float> tr(segs.size()), tn(segs.size());
+    double t0 = nowMs();
+    for (size_t i = 0; i < segs.size(); ++i) { float t = -1; hr[i] = cw->segmentHitReference(segs[i].a, segs[i].b, t); tr[i] = t; }
+    double t1 = nowMs();
+    for (size_t i = 0; i < segs.size(); ++i) { float t = -1; hn[i] = cw->segmentHit(segs[i].a, segs[i].b, t); tn[i] = t; }
+    double t2 = nowMs();
+    for (size_t i = 0; i < segs.size(); ++i) ha[i] = cw->segmentAnyHit(segs[i].a, segs[i].b);
+    double t3 = nowMs();
+    int mismatch = 0, anyMismatch = 0, hits = 0;
+    for (size_t i = 0; i < segs.size(); ++i) {
+        hits += hr[i];
+        if (hr[i] != hn[i] || (hr[i] && tr[i] != tn[i])) ++mismatch;
+        if (hr[i] != ha[i]) ++anyMismatch;
+    }
+    LOG_INFO("RAYBENCH %zu segments, %d hit: reference %.3f us / query, segmentHit %.3f us, segmentAnyHit %.3f us; mismatches %d (t exact), any-hit %d",
+             segs.size(), hits, (t1 - t0) * 1000.0 / segs.size(), (t2 - t1) * 1000.0 / segs.size(), (t3 - t2) * 1000.0 / segs.size(), mismatch, anyMismatch);
+    LOG_INFO("RAYBENCH %s", mismatch == 0 && anyMismatch == 0 ? "PASS" : "FAIL");
 }
 
 } // namespace core
