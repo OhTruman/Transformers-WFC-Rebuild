@@ -9,11 +9,13 @@
 // the interpreter's own semantics (Add2 / Subtract / Multiply / Divide / Less2 / Equals2 / StrictEquals / ToInteger, the
 // method calls), so results are identical. WFC_NONATIVEINTERP=1 keeps the scripts (A/B).
 #include "ui/gfx/Avm1.h"
+#include "ui/gfx/Display.h"
 #include "core/Log.h"
 
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 
 namespace gfx::avm1 {
 
@@ -160,6 +162,279 @@ Value nativeFindInterpValueImpl(VM& vm, Args& a) {
     return Value::undef();
 }
 
+// ---- updateInterpObjects (1417 bytes) ----
+// Runs every frame while tweens live. Its working variables (q, objProp, newValue, rVal, gVal, bVal) are undeclared,
+// so the script resolves them through its scope chain (they land on the library's timeline object, where callbacks it
+// calls could see them): the port reads / writes them the same way, in the same order, through the original
+// function's scope (the interpreter's lookupVar / setVariable rules; the activation holds nothing: this / arguments
+// suppressed, no locals). Registers: r1 = _global (preloaded).
+constexpr uint64_t kUpdateInterpObjectsHash = 0x03d91ab538964457ull;
+
+struct ScopeVars {
+    VM& vm;
+    Object* fn;   // the original script function (scope chain, defining timeline)
+    Value self;
+    Value get(const std::string& n) {
+        for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
+            Object* s = *it;
+            if (!s) continue;
+            if (s == vm.global) break;
+            if (vm.has(s, n)) return vm.get(s, n);
+        }
+        if (vm.has(vm.global, n)) return vm.get(vm.global, n);
+        return Value::undef();
+    }
+    Object* targetObj() {
+        gfx::DisplayObject* t = fn->defTarget;
+        if (!t && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip) t = self.o->display;
+        if (!t || (t->removed && !fn->defTarget)) t = vm.player()->root();
+        return t ? vm.player()->scriptObject(t) : nullptr;
+    }
+    // CallFunction <name>(args): the name through the scope chain, 'this' = the calling timeline.
+    Value callFunction(const std::string& n, Args args) {
+        Value f = get(n);
+        if (!f.isObject() || f.o->kind != ObjKind::Function) return Value::undef();
+        Object* t = targetObj();
+        return vm.call(f, t ? Value(t) : Value::undef(), args);
+    }
+    void set(const std::string& n, const Value& v) {
+        for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
+            Object* s = *it;
+            if (!s || s == vm.global) continue;
+            if (vm.has(s, n)) { vm.set(s, n, v); return; }
+        }
+        for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
+            Object* s = *it;
+            if (s && s->kind == ObjKind::Clip) { vm.set(s, n, v); return; }
+        }
+        gfx::DisplayObject* t = fn->defTarget;
+        if (!t && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip) t = self.o->display;
+        if (!t || (t->removed && !fn->defTarget)) t = vm.player()->root();
+        if (Object* to = t ? vm.player()->scriptObject(t) : nullptr) { vm.set(to, n, v); return; }
+        vm.set(vm.global, n, v);
+    }
+};
+
+// GetMember / SetMember with a Value name, as the interpreter's ops do it.
+Value getMember(VM& vm, const Value& o, const Value& nameV) {
+    if (nameV.t == VType::Number && o.t == VType::Object && o.o && o.o->kind == ObjKind::Array && !o.o->zombie &&
+        nameV.n >= 0.0 && nameV.n < 1e9 && nameV.n == std::floor(nameV.n)) {
+        const size_t i = (size_t)nameV.n;
+        return i < o.o->elems.size() ? o.o->elems[i] : Value::undef();
+    }
+    if (nameV.t == VType::String) return vm.getV(o, nameV.s, nameV.atom);
+    return vm.getV(o, nameV.t == VType::Number ? VM::numberToString(nameV.n) : vm.toString(nameV));
+}
+Value getMember(VM& vm, const Value& o, const char* name) { return vm.getV(o, name); }
+void setMember(VM& vm, const Value& o, const Value& nameV, const Value& v) {
+    if (nameV.t == VType::Number && o.isObject() && o.o->kind == ObjKind::Array && !o.o->zombie && o.o->watches.empty() &&
+        nameV.n >= 0.0 && nameV.n == std::floor(nameV.n) && nameV.n < (double)o.o->elems.size()) {
+        o.o->elems[(size_t)nameV.n] = v;
+        return;
+    }
+    if (!o.isObject()) return;
+    if (nameV.t == VType::String) vm.set(o.o, nameV.s, v, nameV.atom);
+    else vm.set(o.o, nameV.t == VType::Number ? VM::numberToString(nameV.n) : vm.toString(nameV), v);
+}
+void setMember(VM& vm, const Value& o, const char* name, const Value& v) { if (o.isObject()) vm.set(o.o, name, v); }
+
+Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
+    ScopeVars sv{vm, orig, self};
+    Ops op{vm};
+    const Value r1(vm.global);
+    const Value one(1.0), hundred(100.0);
+    // interpController.currentTime = getTimer()
+    setMember(vm, getMember(vm, r1, "interpController"), "currentTime", Value(std::floor(vm.player()->timeMs())));
+    sv.set("q", Value(0.0));
+    auto splice = [&]() {
+        Value qv = sv.get("q");
+        Value list = getMember(vm, getMember(vm, r1, "interpController"), "propInterpList");
+        vm.callMethod(list, "splice", {qv, one});
+        sv.set("q", Value(vm.toNumber(sv.get("q")) - 1.0));
+    };
+    auto objProp = [&]() { return sv.get("objProp"); };
+    auto curTime = [&]() { return getMember(vm, getMember(vm, r1, "interpController"), "currentTime"); };
+    // findInterpValue(propInit, propDest, timeInit, currentTime, timeDest, animType, curve, overShoot), its pushes in
+    // the bytecode's order (overShoot first, propInit last).
+    auto interp = [&](const char* sub) {
+        Value os = getMember(vm, objProp(), "_overShoot");
+        Value cu = getMember(vm, objProp(), "_interpCurve");
+        Value an = getMember(vm, objProp(), "_animType");
+        Value td = getMember(vm, objProp(), "_timeDest");
+        Value ct = curTime();
+        Value ti = getMember(vm, objProp(), "_timeInit");
+        Value pd = getMember(vm, objProp(), "_propDest");
+        if (sub) pd = getMember(vm, pd, sub);
+        Value pi = getMember(vm, objProp(), "_propInit");
+        if (sub) pi = getMember(vm, pi, sub);
+        return vm.callMethod(r1, "findInterpValue", {pi, pd, ti, ct, td, an, cu, os});
+    };
+    auto applyColour = [&](const Value& red, const Value& green, const Value& blue) {
+        setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "redMultiplier", red);
+        setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "greenMultiplier", green);
+        setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "blueMultiplier", blue);
+        setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "alphaMultiplier",
+                  op.div(getMember(vm, getMember(vm, objProp(), "_targ"), "_alpha"), hundred));
+        setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "objTrans"), "colorTransform",
+                  getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"));
+    };
+    for (int guard = 0; guard < 1000000; ++guard) {
+        // while (q < interpController.propInterpList.length)
+        Value qv = sv.get("q");
+        Value len = getMember(vm, getMember(vm, getMember(vm, r1, "interpController"), "propInterpList"), "length");
+        if (!vm.toBool(vm.lessThan(qv, len))) break;
+        sv.set("objProp", getMember(vm, getMember(vm, getMember(vm, r1, "interpController"), "propInterpList"), sv.get("q")));
+        if (vm.looseEquals(getMember(vm, getMember(vm, objProp(), "_targ"), "_name"), Value::undef())) {
+            splice();                                            // the target went away
+        } else {
+            bool assign = true;
+            if (!vm.toBool(vm.lessThan(curTime(), getMember(vm, objProp(), "_timeDest")))) {
+                // finished: the destination
+                const Value r0 = getMember(vm, objProp(), "_prop");
+                if (vm.strictEquals(r0, Value("callback"))) {
+                    if (vm.looseEquals(Value(vm.typeOf(getMember(vm, objProp(), "_propDest"))), Value("function")))
+                        vm.callMethod(objProp(), "_propDest", {});
+                } else if (vm.strictEquals(r0, Value("color"))) {
+                    Value pd = getMember(vm, objProp(), "_propDest");
+                    // the bytecode reads _propDest.red / green / blue afresh for each multiplier
+                    setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "redMultiplier",
+                              getMember(vm, getMember(vm, objProp(), "_propDest"), "red"));
+                    setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "greenMultiplier",
+                              getMember(vm, getMember(vm, objProp(), "_propDest"), "green"));
+                    setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "blueMultiplier",
+                              getMember(vm, getMember(vm, objProp(), "_propDest"), "blue"));
+                    setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "alphaMultiplier",
+                              op.div(getMember(vm, getMember(vm, objProp(), "_targ"), "_alpha"), hundred));
+                    setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "objTrans"), "colorTransform",
+                              getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"));
+                    (void)pd;
+                }
+                sv.set("newValue", getMember(vm, objProp(), "_propDest"));
+                splice();
+            } else {
+                const Value r0 = getMember(vm, objProp(), "_prop");
+                if (vm.strictEquals(r0, Value("color"))) {
+                    sv.set("rVal", interp("red"));
+                    sv.set("gVal", interp("green"));
+                    sv.set("bVal", interp("blue"));
+                    applyColour(sv.get("rVal"), sv.get("gVal"), sv.get("bVal"));
+                    // newValue = {red: rVal, green: gVal, blue: bVal} (InitObject sets them red, green, blue)
+                    Value rv = sv.get("rVal"), gv = sv.get("gVal"), bv = sv.get("bVal");
+                    Object* nv = vm.newPlain();
+                    vm.set(nv, "red", rv); vm.set(nv, "green", gv); vm.set(nv, "blue", bv);
+                    sv.set("newValue", Value(nv));
+                } else {
+                    sv.set("newValue", interp(nullptr));
+                }
+            }
+            if (assign) {
+                // objProp._targ[objProp._prop] = newValue
+                Value targ = getMember(vm, objProp(), "_targ");
+                Value prop = getMember(vm, objProp(), "_prop");
+                setMember(vm, targ, prop, sv.get("newValue"));
+            }
+        }
+        sv.set("q", Value(vm.toNumber(sv.get("q")) + 1.0));
+    }
+    if (vm.looseEquals(getMember(vm, getMember(vm, getMember(vm, r1, "interpController"), "propInterpList"), "length"), Value(0.0)))
+        vm.callMethod(r1, "removeInterpController", {});
+    return Value::undef();
+}
+
+// ---- addInterp (921 bytes) ----
+// addInterp(targetObj, interpTime, animType, interpCurve, overShoot, interpParams). Registers: r3 targetObj, r17 time,
+// r16 animType, r19 curve, r18 overShoot, r2 params, r1 _global, r20 the enumerated property. The dedupe counter n and
+// the colour channels rVal / gVal / bVal are undeclared variables (scope chain / timeline, as in updateInterpObjects).
+constexpr uint64_t kAddInterpHash = 0x2b272695c978e5bfull;   // PlayerList / InGameStats / ... (same canonical body)
+
+Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
+    auto arg = [&](size_t i) { return i < a.size() ? a[i] : Value::undef(); };
+    ScopeVars sv{vm, orig, self};
+    Ops op{vm};
+    const Value r1(vm.global), r3 = arg(0), r2 = arg(5), r19 = arg(3), r18 = arg(4);
+    Value r17 = arg(1), r16 = arg(2);
+    const Value one(1.0), two(2.0), zero(0.0);
+    if (vm.looseEquals(r17, Value::undef())) r17 = one;
+    {
+        bool c = vm.looseEquals(r16, Value::undef());
+        if (!c) c = vm.looseEquals(r16, Value(""));
+        if (c) r16 = Value("linear");
+    }
+    if (vm.looseEquals(getMember(vm, r1, "interpController"), Value::undef())) vm.callMethod(r1, "createInterpController", {});
+    setMember(vm, getMember(vm, r1, "interpController"), "currentTime", Value(std::floor(vm.player()->timeMs())));
+    // for (r20 in interpParams): Enumerate2 pushes the keys in enumeration order; the loop pops them (reverse order)
+    std::vector<std::string> keys;
+    if (r2.isObject()) keys = vm.enumerate(r2.o);
+    auto list = [&]() { return getMember(vm, getMember(vm, r1, "interpController"), "propInterpList"); };
+    for (auto kit = keys.rbegin(); kit != keys.rend(); ++kit) {
+        const Value r20(*kit);
+        sv.set("n", zero);
+        for (int guard = 0; guard < 1000000; ++guard) {
+            if (!vm.toBool(vm.lessThan(sv.get("n"), getMember(vm, list(), "length")))) break;
+            if (vm.looseEquals(getMember(vm, getMember(vm, list(), sv.get("n")), "_targ"), r3) &&
+                vm.looseEquals(getMember(vm, getMember(vm, list(), sv.get("n")), "_prop"), r20)) {
+                Value nv = sv.get("n");
+                vm.callMethod(list(), "splice", {nv, one});
+                sv.set("n", Value(vm.toNumber(sv.get("n")) - 1.0));
+            }
+            sv.set("n", Value(vm.toNumber(sv.get("n")) + 1.0));
+        }
+        if (vm.looseEquals(r20, Value("color"))) {
+            // targetObj.colorTrans = new flash.geom.ColorTransform(); targetObj.objTrans = new flash.geom.Transform(targetObj)
+            {
+                Value geom = getMember(vm, sv.get("flash"), "geom");
+                Value ctor = vm.getV(geom, "ColorTransform");
+                Args none;
+                setMember(vm, r3, "colorTrans", ctor.isObject() ? vm.construct(ctor.o, none) : Value::undef());
+            }
+            {
+                Value geom = getMember(vm, sv.get("flash"), "geom");
+                Value ctor = vm.getV(geom, "Transform");
+                Args ta{r3};
+                setMember(vm, r3, "objTrans", ctor.isObject() ? vm.construct(ctor.o, ta) : Value::undef());
+            }
+            if (vm.looseEquals(Value(vm.typeOf(getMember(vm, r2, r20))), Value("number")))
+                setMember(vm, r2, r20, vm.callMethod(getMember(vm, r2, r20), "toString", {Value(16.0)}));
+            for (int guard = 0; guard < 64; ++guard) {
+                if (!vm.toBool(vm.lessThan(getMember(vm, getMember(vm, r2, r20), "length"), Value(6.0)))) break;
+                setMember(vm, r2, r20, op.add2(Value("0"), getMember(vm, r2, r20)));
+            }
+            auto channel = [&](double from) {
+                Value sub = vm.callMethod(getMember(vm, r2, r20), "substr", {Value(from), two});
+                return op.div(sv.callFunction("parseInt", {op.add2(Value("0x"), sub)}), Value(255.0));
+            };
+            sv.set("rVal", channel(0));
+            sv.set("gVal", channel(2));
+            sv.set("bVal", channel(4));
+            {
+                Value rv = sv.get("rVal"), gv = sv.get("gVal"), bv = sv.get("bVal");
+                Object* o = vm.newPlain();
+                vm.set(o, "red", rv); vm.set(o, "green", gv); vm.set(o, "blue", bv);
+                setMember(vm, r2, r20, Value(o));
+            }
+            {
+                auto mult = [&](const char* m) { return getMember(vm, getMember(vm, getMember(vm, r3, "objTrans"), "colorTransform"), m); };
+                Value rr = mult("redMultiplier"), gg = mult("greenMultiplier"), bb = mult("blueMultiplier");
+                Object* o = vm.newPlain();
+                vm.set(o, "red", rr); vm.set(o, "green", gg); vm.set(o, "blue", bb);
+                setMember(vm, r3, "color", Value(o));
+            }
+        }
+        // propInterpList.push({_targ, _prop, _propInit, _propDest, _timeInit, _timeDest, _animType, _overShoot,
+        // _interpCurve}) - the values in push order, set in that order (InitObject)
+        Value pInit = getMember(vm, r3, r20);
+        Value pDest = getMember(vm, r2, r20);
+        Value tInit = getMember(vm, getMember(vm, r1, "interpController"), "currentTime");
+        Value tDest = op.add2(getMember(vm, getMember(vm, r1, "interpController"), "currentTime"), op.mul(r17, Value(1000.0)));
+        Object* e = vm.newPlain();
+        vm.set(e, "_targ", r3); vm.set(e, "_prop", r20); vm.set(e, "_propInit", pInit); vm.set(e, "_propDest", pDest);
+        vm.set(e, "_timeInit", tInit); vm.set(e, "_timeDest", tDest); vm.set(e, "_animType", r16);
+        vm.set(e, "_overShoot", r18); vm.set(e, "_interpCurve", r19);
+        vm.callMethod(list(), "push", {Value(e)});
+    }
+    return Value::undef();
+}
+
 }  // namespace
 
 // Called when a script function is assigned to _global.<name>: the native port when the body is the known version.
@@ -167,12 +442,32 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
     static const bool off = std::getenv("WFC_NONATIVEINTERP") != nullptr;
     static const bool logHash = std::getenv("WFC_AVMHASH") != nullptr;   // DEV TOOL: log candidates' hashes
     if (off || !v.isObject() || !v.o->script) return false;
-    if (name != "findInterpValue") return false;
+    if (name != "findInterpValue" && name != "updateInterpObjects" && name != "addInterp") return false;
     const uint64_t h = canonicalFunctionHash(*v.o->script, v.o->pool.get());
     if (logHash) LOG_INFO("avmhash %s %016llx", name.c_str(), (unsigned long long)h);
     if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash) {
         vm.global->setRaw("__wfcScript_" + name, v, DontEnum);   // the script, for WFC_INTERPVERIFY (and rooted)
         v = Value(vm.newFunction(nativeFindInterpValue, name, 8));
+        return true;
+    }
+    if (name == "updateInterpObjects" && h == kUpdateInterpObjectsHash) {
+        vm.global->setRaw("__wfcScript_" + name, v, DontEnum);   // rooted: its scope chain and timeline are used
+        Object* orig = v.o;
+        v = Value(vm.newFunction([orig](VM& m, const Value& self, Args&) {
+            static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
+            if (verify) return m.call(Value(orig), self, *std::make_unique<Args>());   // verify runs: the script itself
+            return nativeUpdateInterpObjects(m, orig, self);
+        }, name, 0));
+        return true;
+    }
+    if (name == "addInterp" && kAddInterpHash && h == kAddInterpHash) {
+        vm.global->setRaw("__wfcScript_" + name, v, DontEnum);
+        Object* orig = v.o;
+        v = Value(vm.newFunction([orig](VM& m, const Value& self, Args& args) {
+            static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
+            if (verify) return m.call(Value(orig), self, args);
+            return nativeAddInterp(m, orig, self, args);
+        }, name, 6));
         return true;
     }
     return false;
