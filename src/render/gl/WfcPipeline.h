@@ -446,6 +446,7 @@ private:
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;
+    std::unordered_map<int, float> ownerRenderedTime_;   // draw owner -> time_ when last rendered (light env LastRenderTime)
     std::map<int, std::chrono::steady_clock::time_point> ownerRendered_;   // draw owner -> last rendered (not culled)                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
     GLuint screenFxVao_ = 0, screenFxVbo_ = 0, screenFxIbo_ = 0;
     void drawHudScreenEffect();
@@ -511,6 +512,27 @@ private:
     float znear_ = 0.1f, zfar_ = 20000.0f;
     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
     int drawOwner_ = 0;                              // character instance of the current dynamic draws
+    // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
+    // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque
+    // pass (GL_ANY_SAMPLES_PASSED, colour / depth writes off); the result of the query issued two frames earlier
+    // decides whether the owner's main draws are skipped (its shadow and light environment still update). An owner is
+    // skipped only when the queries of frames -2 AND -3 both found no sample (hysteresis; revealing is never delayed
+    // beyond one result); a result not yet available, a camera inside the box, or an owner not drawn in that frame =
+    // visible. Opt-in WFC_PAWNOCCLUSION=1 (no measured gain while culled bodies still prepare bounds / shadow).
+    struct PawnOcc {
+        GLuint q[4] = {0, 0, 0, 0};
+        int qFrame[4] = {-1, -1, -1, -1};  // frame each slot's query was issued (-1 none)
+        bool occluded = false;             // decision for this frame
+        core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
+        int boxFrame = -1, lastSeen = -1;
+    };
+    std::unordered_map<int, PawnOcc> pawnOcc_;
+    GLuint occProg_ = 0, occVao_ = 0, occVbo_ = 0, occIbo_ = 0;
+    GLint occUVP_ = -1, occUMin_ = -1, occUMax_ = -1;
+    int statOccCulled_ = 0, statOccTested_ = 0;
+    static bool pawnOcclusionOn();
+    void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2
+    void pawnOcclusionQueries();       // after the opaque pass: this frame's queries
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
