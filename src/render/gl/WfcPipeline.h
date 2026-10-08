@@ -518,7 +518,7 @@ private:
     // decides whether the owner's main draws are skipped (its shadow and light environment still update). An owner is
     // skipped only when the queries of frames -2 AND -3 both found no sample (hysteresis; revealing is never delayed
     // beyond one result); a result not yet available, a camera inside the box, or an owner not drawn in that frame =
-    // visible. Opt-in WFC_PAWNOCCLUSION=1 (no measured gain while culled bodies still prepare bounds / shadow).
+    // visible. Default on (with the prep skip below); WFC_NOPAWNOCCLUSION=1 = reference.
     struct PawnOcc {
         GLuint q[4] = {0, 0, 0, 0};
         int qFrame[4] = {-1, -1, -1, -1};  // frame each slot's query was issued (-1 none)
@@ -529,7 +529,13 @@ private:
     std::unordered_map<int, PawnOcc> pawnOcc_;
     GLuint occProg_ = 0, occVao_ = 0, occVbo_ = 0, occIbo_ = 0;
     GLint occUVP_ = -1, occUMin_ = -1, occUMax_ = -1;
-    int statOccCulled_ = 0, statOccTested_ = 0;
+    int statOccCulled_ = 0, statOccTested_ = 0, statOccPrepSkipped_ = 0;
+    // Prep skip (default on; WFC_NOPAWNOCCPREP=1 off): the query box also covers the owner's composite-shadow volume, so a
+    // hidden result means neither body nor shadow can reach a visible pixel; such an owner skips its skinned prep
+    // (exact bounds, palette upload), shadow and draw. Its light environment still ticks (last exact bounds, current
+    // model transform) so lighting is current when it reappears.
+    bool skinPrepSkipped_ = false;
+    static bool pawnOccPrepOn();
     static bool pawnOcclusionOn();
     void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2
     void pawnOcclusionQueries();       // after the opaque pass: this frame's queries

@@ -5961,6 +5961,26 @@ Every change below is image-identical to the previous path (verified by determin
   WFC_NOLMARRAY=1, 10 maps x 2 views: 0-190 px per view, mostly < 30 levels, max 193 on 2 px of Complex view 3;
   crops visually identical) - the accepted seam class of the batching decision below. Gain: Streets 10 v 10 1080p
   p50 2.5 -> 2.1 ms. WFC_NOLMARRAY=1 = previous per-page buckets.
+- **LastRenderTime / light-environment throttle (2026-10-07):** an owner's render time advances only when it is
+  actually drawn - not for frustum-culled (or, with WFC_PAWNOCCLUSION=1, occlusion-culled) owners. RE b7fb4ea:
+  CONFIRMED native write site 0x82ECE818 (from 0x82ED3F60, the last step of the scene render) sets
+  Component.LastRenderTime and Owner.LastRenderTime (+0xA4) for primitives in the view's drawn-visibility bitmap only;
+  occlusion-culled primitives leave that set (HIGH, stock UE3). Consumers: the light environment's "not rendered > 0.1
+  s -> 10x distance threshold" (previously never active here - it measured time since the last tick) and the
+  TransformerHealthBar marker (EnemyMarkerHysterisis 0.25 s, CONFIRMED script; versus tags do not use it).
+  Pawn occlusion queries (stock UE3, HIGH) are default on with a prep skip: the query box covers the body and its
+  composite-shadow volume (projection reach of the shadow pass), and an owner hidden in two consecutive results skips
+  exact bounds, palette upload, shadow and draw; its light environment still ticks from its last exact bounds moved
+  with the model. Seeded lockstep match captures vs WFC_NOPAWNOCCLUSION=1: no missing / popping body; where the
+  reference reproduces itself exactly, differences are <= 4 levels on <= 193 px (light-env state of bodies revealed
+  after being hidden). Occlusion buffering depth in WFC: UNKNOWN (ours: results of frames -2 and -3).
+- **Held weapons share the owning pawn's light environment (2026-10-07):** RE 5122915 CONFIRMED script
+  (HmWeaponMesh.Attach: SetLightEnvironment(BaseMesh.LightEnvironment), own environment disabled, SetShadowParent(pawn
+  mesh)). Our form test read the raw wfcName, which Gameplay's weapon meshes leave empty, so every held weapon was lit
+  by a world cell / cache environment (a full computeEnv with visibility rays per weapon per frame: ~8 % of the main
+  thread at 64 players). Classification now uses the resolved material name. Match captures: only distant bots'
+  weapons change (they take their owner's lighting). WFC_ENVRAWNAMES=1 = previous. [follow-up: the weapon as the
+  pawn's shadow child - our character shadow depth pass draws the body only]
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
