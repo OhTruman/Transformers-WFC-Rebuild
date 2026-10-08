@@ -375,8 +375,25 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     return {};
 }
 
+BridgeValue DataStores::readCell(const std::string& m, const std::string& col, const std::string& rowStr, bool asBool) {
+    core::prof::Scope prof("ds.call");
+    bool isColl = false;
+    const Collection& c = cachedCollection(m, isColl);
+    const size_t row = (size_t)std::atoi(rowStr.c_str());
+    for (size_t i = 0; i < c.columns.size(); ++i)
+        if (c.columns[i] == col && row < c.rows.size()) {
+            if (asBool) return BridgeValue(c.rows[row][i] == "1" || c.rows[row][i] == "true");
+            return BridgeValue(c.rows[row][i]);
+        }
+    if (isColl) FlowTrace::emit("datastore.unhandled", {{"fn", asBool ? "ReadCollectionBoolValue" : "ReadCollectionValue"}, {"markup", m}, {"column", col}});
+    return BridgeValue(std::string());
+}
+
 const DataStores::Collection& DataStores::cachedCollection(const std::string& markup, bool& ok) {
-    CachedCollection& e = collCache_[markup];
+    // std::map nodes are stable: the last entry is reused while the same markup is read (cells of one collection).
+    CachedCollection& e = lastColl_ && markup == lastCollMarkup_ ? *lastColl_ : collCache_[markup];
+    lastColl_ = &e;
+    if (lastCollMarkup_ != markup) lastCollMarkup_ = markup;
     if (e.gen != frameGen_) { e.c = Collection(); e.ok = collection(markup, e.c); e.gen = frameGen_; }
     ok = e.ok;
     return e.c;

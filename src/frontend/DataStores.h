@@ -21,6 +21,9 @@ public:
 
     // Dispatch of "DataStores.<Fn>" bridge calls.
     BridgeValue call(const std::string& fn, const std::vector<std::string>& args, const std::string& movie = "");
+    // ReadCollectionValue / ReadCollectionBoolValue(markup, column, row) without the generic dispatch (the PlayerList
+    // reads ~1000 cells per refresh): the same result and traces as call("ReadCollection[Bool]Value", ...).
+    BridgeValue readCell(const std::string& markup, const std::string& column, const std::string& row, bool asBool);
     void forgetMovie(const std::string& movie);   // movie closed: drop its callbacks
     // Current value of a markup as the binding returns it ("" when unknown); `known` tells whether it has a source.
     std::string read(const std::string& markup, bool* known = nullptr);
@@ -44,6 +47,8 @@ private:
     std::map<std::string, CachedCollection> collCache_;
     unsigned frameGen_ = 1;
     const Collection& cachedCollection(const std::string& markup, bool& ok);
+    CachedCollection* lastColl_ = nullptr;   // the last collection read (map lookup skipped for repeated reads)
+    std::string lastCollMarkup_;
 public:
     void invalidate() { ++frameGen_; }   // a state-changing call: collections rebuild on their next read
 private:

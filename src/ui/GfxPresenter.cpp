@@ -381,6 +381,14 @@ GfxMovie* GfxPresenter::openMovie(const std::string& object) {
 
 Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
     core::prof::Scope prof("gfx.bridge");
+    // Cell reads (PlayerList: ~1000 per refresh) straight to the data stores: the arguments converted as below (undefined /
+    // null -> ""), the same result as the generic path (FrontendRuntime::bridge -> DataStores::call).
+    if (fn.size() > 25 && fn.compare(0, 25, "DataStores.ReadCollection") == 0 &&
+        (fn == "DataStores.ReadCollectionValue" || fn == "DataStores.ReadCollectionBoolValue")) {
+        gfx::avm1::VM& vm = m.player().vm();
+        auto s = [&](size_t i) { return i < a.size() && !a[i].isNullish() ? vm.toString(a[i]) : std::string(); };
+        return toValue(vm, rt_.dataStores().readCell(s(0), s(1), s(2), fn.size() == 34));
+    }
     std::vector<std::string> sa;
     // An undefined / null argument reaches an UnrealScript string parameter as "" (not "undefined"): e.g. the
     // Customize.CommitCharacter weapon list of an unset slot.

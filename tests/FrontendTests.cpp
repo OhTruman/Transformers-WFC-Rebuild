@@ -327,6 +327,23 @@ static void testFlow() {
     FrontendRuntime rt;
     check(rt.init(), "flow.init");
     GameFlow& f = rt.flow();
+    {   // DataStores::readCell (the PlayerList cell fast path) answers exactly as the generic ReadCollection[Bool]Value call.
+        DataStores& ds = rt.dataStores();
+        bool same = true;
+        std::string detail;
+        const char* markups[] = {"<CurrentGame:Players>", "<TnMenuItems:Maps>", "<NoSuchStore:X>"};
+        const char* cols[] = {"PlayerName", "TeamID", "IsConnecting", "MapId", "MapFilename", "NoSuchColumn", ""};
+        const char* rows[] = {"0", "1", "5", "", "NaN", "-1"};
+        for (const char* m : markups)
+            for (const char* c : cols)
+                for (const char* r : rows)
+                    for (int b = 0; b < 2; ++b) {
+                        BridgeValue g = ds.call(b ? "ReadCollectionBoolValue" : "ReadCollectionValue", {m, c, r});
+                        BridgeValue q = ds.readCell(m, c, r, b != 0);
+                        if (g.kind != q.kind || g.b != q.b || g.s != q.s) { same = false; detail = std::string(m) + " " + c + " " + r; }
+                    }
+        check(same, "datastores.readcell_matches_call", detail);
+    }
     {   // Selected-character contract: the committed custom slot, resolved once (Soldier = Warpath / Brawl).
         GameFlow::SelectedCharacter s = rt.selectionFor("Soldier");
         check(s.specialty == "Soldier" && s.chassis[0] == "Tank3" && s.chassis[1] == "Tank2" && s.type == 0, "selection.soldier_chassis");
