@@ -417,8 +417,9 @@ public:
     // chain -1 = none, 0 = StaticDischargeScreenEffect, 1 = LowHealthScreenEffect. One slot, on / off instantly; drawn
     // over the finished 3D frame, under the HUD canvas / GFx. Default no-op.
     virtual void setHudScreenEffect(int chain) { (void)chain; }
-    // Seconds since a dynamic mesh of draw owner `owner` was last rendered (passed the view cull); < 0 = never.
-    // (Mesh.LastRenderTime for EnemyMarkerHysterisis markers.)
+    // Seconds since a dynamic mesh of draw owner `owner` was last actually drawn (after frustum and occlusion culling:
+    // UE3 LastRenderTime, RE b7fb4ea); < 0 = never. Renderer time: under WFC_LOCKSTEP frame-based (deterministic).
+    // Consumers: EnemyMarkerHysterisis markers; weapon-FX EffectIsRelevant (shooter rendered within 1 s, RE 4cce28f).
     virtual float drawOwnerRenderAge(int owner) const { (void)owner; return -1.0f; }
     virtual void setFrameLimit(float hz) { (void)hz; }
     virtual float frameLimit() const { return 0.0f; }
@@ -452,6 +453,14 @@ public:
         (void)handle; (void)pos; (void)forward; (void)up; return false;
     }
     virtual void stopParticleEffect(int handle) { (void)handle; }
+    // The effect was spawned through UE3's EmitterPool (EmitterPool.SpawnEmitter: muzzle flashes, tracers, impacts - RE
+    // f28504c). WFC caps active pooled effects at MaxActiveEffects 50 (Xe-TransGame.ini, CONFIRMED) and reclaims the
+    // oldest beyond it (HIGH). The renderer counts them; the cap itself is applied only with WFC_EMITTERPOOLCAP=1
+    // (visible in big firefights - pending a user decision).
+    virtual void setParticleEffectPooled(int handle) { (void)handle; }
+    // User decision (2026-10-08): the MaxActiveEffects 50 cap is on only in extended lobbies (more than the original's
+    // 10 participants, PC EXTENSION); the match glue sets it per match. WFC_EMITTERPOOLCAP=0 / 1 overrides.
+    virtual void setEmitterPoolCap(bool on) { (void)on; }
     // PSC instance parameters (UE3 SetVectorParameter / SetColorParameter), held until changed. "Color" drives
     // ColorByParameter (linear RGBA; e.g. a vehicle boost's EnergonColor -> Yellow lerp, alpha 100..255 / 255);
     // a vector parameter feeds the template's ParticleModuleSizeMultiplyLife whose distribution names it (HoverFX

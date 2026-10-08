@@ -489,6 +489,19 @@ int Pipeline::fxMeshFor(const FxLod& L) {
 
 // ---- simulation (UE3 FParticleEmitterInstance order: kill/update, then spawn) ----
 void Pipeline::tickMapFx(float dt) {
+    {   // EmitterPool accounting (active pooled effects per frame; logged every 600 frames)
+        int active = 0;
+        for (const FxInstance& fi : fxInstances_) active += fi.poolSeq > 0 ? 1 : 0;
+        statPoolPeak_ = std::max(statPoolPeak_, active);
+        statPoolOver_ += active > 50 ? 1 : 0;
+        if (++statPoolFrames_ >= 600) {
+            if (statPoolPeak_ > 0 || statPoolReclaimed_ > 0)
+                LOG_INFO("wfc emitter pool: peak %d active pooled effects, %d of 600 frames over 50, %d reclaimed (cap %s)",
+                         statPoolPeak_, statPoolOver_, statPoolReclaimed_,
+                         (std::getenv("WFC_EMITTERPOOLCAP") ? std::getenv("WFC_EMITTERPOOLCAP")[0] == '1' : poolCapOn_) ? "on" : "off");
+            statPoolPeak_ = statPoolOver_ = statPoolReclaimed_ = statPoolFrames_ = 0;
+        }
+    }
     statLiveParticles_ = 0;
     for (const FxInstance& fi : fxInstances_) for (const FxEmitterRT& e : fi.emitters) statLiveParticles_ += e.parts.size();
     if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
@@ -977,6 +990,29 @@ void Pipeline::tickMapFx(float dt) {
 }
 
 // ---- runtime particle effects (template library) ----
+void Pipeline::markFxPooled(int id) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) { in.poolSeq = ++fxPoolSeq_; break; }
+    // WFC EmitterPool (MaxActiveEffects 50, CONFIRMED; the oldest reclaimed past it, HIGH stock UE3)
+    constexpr int kMaxActiveEffects = 50;
+    // user decision: on in extended lobbies (> 10 participants, PC EXTENSION) via setEmitterPoolCap from the match glue,
+    // off in original-size matches; WFC_EMITTERPOOLCAP=0 / 1 forces it either way (A/B)
+    const char* ev = std::getenv("WFC_EMITTERPOOLCAP");
+    const bool cap = ev ? ev[0] == '1' : poolCapOn_;
+    int active = 0;
+    for (const FxInstance& in : fxInstances_) active += in.poolSeq > 0 ? 1 : 0;
+    if (!cap) return;
+    while (active > kMaxActiveEffects) {              // reclaim the oldest pooled effect (its particles end now)
+        auto oldest = fxInstances_.end();
+        for (auto it = fxInstances_.begin(); it != fxInstances_.end(); ++it)
+            if (it->poolSeq > 0 && (oldest == fxInstances_.end() || it->poolSeq < oldest->poolSeq)) oldest = it;
+        if (oldest == fxInstances_.end()) break;
+        fxInstances_.erase(oldest);
+        --active;
+        ++statPoolReclaimed_;
+    }
+}
+
 int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target) {
     // AMD stability (Milestone E): a hard budget on runtime effect instances (an immortal-particle template keeps its
     // instance alive; the list must never grow without bound)
@@ -1030,6 +1066,10 @@ bool Pipeline::setFxTarget(int id, const float target[3]) {
 }
 
 bool Pipeline::setFxParam(int id, const std::string& name, const float v[4]) {
+    if (name == "Pooled") {                          // EmitterPool marker (Gameplay: same pattern as "Team")
+        if (v && v[0] >= 0.5f) markFxPooled(id);
+        return true;
+    }
     for (FxInstance& in : fxInstances_)
         if (in.transient && in.id == id) { in.colorParams[name] = {v[0], v[1], v[2], v[3]}; return true; }
     return false;
@@ -1750,11 +1790,30 @@ void Pipeline::drawMapPresentation() {
             } else {                                          // sprites
                 std::vector<Sprite> sp;
                 sp.reserve(rt.parts.size());
+                // a particle whose quad (any orientation: inside the sphere of radius |(w, h)| / 2 about its centre;
+                // octagon / best-fit polygons stay inside the quad) is wholly outside the view frustum draws nothing:
+                // it is not generated (300+ fps lobbies: every particle of every system built sprites every frame).
+                // The simulation is untouched. Opt-in until its A/B: WFC_FXCULL=1.
+                static const bool noFxCull = !(std::getenv("WFC_FXCULL") && std::getenv("WFC_FXCULL")[0] == '1');
+                float fplane[6][4];
+                for (int f = 0; f < 6; ++f) {
+                    const float* pl = frustum_[f];
+                    const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+                    const float inv = len > 0.0f ? 1.0f / len : 0.0f;
+                    for (int k = 0; k < 4; ++k) fplane[f][k] = pl[k] * inv;
+                }
                 for (const FxParticle& q : rt.parts) {
                     float wp[3]; worldPos(q.pos, wp);
                     core::Vec3 c = ueToGltf(wp);
                     float w = q.size[0] * sizeScale[0] * 0.01f,
                           h = (L.rectangle || L.velocityAligned ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
+                    if (!noFxCull) {
+                        const float rad = 0.5f * std::sqrt(w * w + h * h) + 0.01f;   // (squares: sign-free)
+                        bool outside = false;
+                        for (int f = 0; f < 6 && !outside; ++f)
+                            outside = fplane[f][0] * c.x + fplane[f][1] * c.y + fplane[f][2] * c.z + fplane[f][3] < -rad;
+                        if (outside) continue;
+                    }
                     core::Vec3 ax, ay;
                     bool aligned = false;
                     // Our quad: U grows along ax, V grows along -ay (c0 = c - hx - hy has UV (0, 1)).
