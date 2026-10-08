@@ -321,6 +321,7 @@ void World::botThink(BotBody o, BotBrain& b) {
     }
     std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& c) { return a.d < c.d; });
     int checks = 0;
+    b.dbgCands = (int)cands.size(); b.dbgFov = 0; b.dbgLos = 0; b.dbgVis = 0;
     for (auto& kv : b.seen) kv.second.visible = false;
     for (const Cand& c : cands) {
         const bool current = c.p == b.target;
@@ -330,10 +331,12 @@ void World::botThink(BotBody o, BotBrain& b) {
         const bool inFov = cosAng >= std::cos(sk.fovDeg * 0.5f * 0.0174533f) || c.d < 6.0f ||
                            (b.lastAttacker == c.p && now - b.lastDamageTime < 1.5f);   // hit from behind: turn to the attacker
         if (!inFov && !current) continue;
+        ++b.dbgFov;
         // TnBuffCloak: cloaked enemies are only noticed close up (PC ADAPTATION of the player-only cloak).
         if (c.c->cloakRemain_ > 0.0f && c.d > 8.0f) continue;
-        ++checks;
+        ++checks; ++b.dbgLos;
         if (!botLineOfSight(eye, targetable(*c.c))) continue;
+        ++b.dbgVis;
         BotBrain::Seen& s = b.seen[c.p];
         s.pos = c.c->position(); s.time = now; s.visible = true;
     }
@@ -574,7 +577,10 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
-    if ((b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid() && botSearchOwner_ < 0 && botPathBudget_ > 0) {
+    const bool wants = (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
+    if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
+    if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
+        botSearchQueue_.pop_front();
         --botPathBudget_;
         b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
         if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
@@ -749,6 +755,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
         const float rr = pc.cylinderRadius(pc.moveForm()) + 0.3f;
         for (const BarrierState& br : barriers_) {
             if (!br.alive || hdist(br.pos, pos) > 15.0f) continue;
+            if (std::find(br.passThrough.begin(), br.passThrough.end(), b.player) != br.passThrough.end()) continue;   // walking out of it
             bool blocked = false;
             for (float s : {1.0f, 2.0f, 3.0f}) {
                 const core::Vec3 q = core::transformPoint(br.boxInv, pos + md * s + core::Vec3{0, 1.0f, 0});
@@ -984,7 +991,9 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
         const Weapon* lw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
         LOG_INFO("PLAYERBOT goal %s path %zu wp %zu tgt %d vis %d mi %.2f/%.2f f %.2f r %.2f fire %d wantVeh %d pos (%.1f %.1f) shots %u kills %d", botGoalName(b.goal.kind), b.path.size(), b.wp,
                  b.target, (int)visible, mi.moveForward, mi.moveRight, f, r, (int)b.fireWish, (int)b.wantVehicle, pc.position().x, pc.position().z,
-                 lw ? lw->shotSerial : 0u, match_.players()[(size_t)localPlayer_].kills); } }
+                 lw ? lw->shotSerial : 0u, match_.players()[(size_t)localPlayer_].kills);
+        LOG_INFO("PLAYERBOT perception: %d enemies in sight range, %d in FOV, %d LOS checks, %d visible; yaw %.2f team %d sight %.0f m fov %.0f", b.dbgCands, b.dbgFov,
+                 b.dbgLos, b.dbgVis, b.yaw, match_.players()[(size_t)localPlayer_].team, botSkill(b.difficulty).sightM, botSkill(b.difficulty).fovDeg); } }
     return true;
 }
 
@@ -999,6 +1008,12 @@ void World::tickBots(float dt) {
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
     botPathBudget_ = 1;   // at most one new search per simulation step
+    // Waiting entries whose bot is gone (dead / despawned / removed) leave the queue, so its front is always someone who can take it.
+    botSearchQueue_.erase(std::remove_if(botSearchQueue_.begin(), botSearchQueue_.end(), [&](int p) {
+        if (p == localPlayer_) return !(playerBotDifficulty() >= 0 && !localDead_);
+        const MatchOpponent* q = (size_t)p < oppByPlayer_.size() ? oppByPlayer_[(size_t)p] : nullptr;
+        return !q || !q->spawned();
+    }), botSearchQueue_.end());
     // The active search runs at most 1500 cell expansions per step (~1 ms); a long route completes over a few steps.
     if (botSearchOwner_ >= 0 && botNav_.stepSearch(1500) == 1) {
         std::vector<BotNav::Waypoint> path;
@@ -1114,6 +1129,9 @@ void World::tickBots(float dt) {
                          pc.moveForm() == Form::Vehicle ? "VEH" : "ROB", pc.isTransforming() ? "*" : "", (int)b.wantVehicle, (int)pc.vehicleState().driving,
                          v.x, v.y, v.z, (int)pc.onGround(), in.moveForward, in.moveRight, pc.yaw(), in.faceYaw, botGoalName(b.goal.kind), b.wp, b.path.size(),
                          b.stuckLevel, (int)b.hasRejoin, b.target);
+                LOG_INFO("STUCKWATCH   search: wantRepath %d repathTimer %.2f owner %d (vehicle %d) noPaths %d noVehicleUntil %.1f (now %.1f) goal (%.1f %.1f %.1f) d %.1f hasGoal %d vehiclePath %d",
+                         (int)b.wantRepath, b.repathTimer, botSearchOwner_, (int)botSearchVehicle_, b.noPaths, b.noVehicleUntil, match_.matchTime(),
+                         b.goal.pos.x, b.goal.pos.y, b.goal.pos.z, hdist(b.goal.pos, p), (int)b.hasGoal, (int)b.vehiclePath);
                 if (b.wp < b.path.size()) LOG_INFO("STUCKWATCH   next waypoint (%.2f %.2f %.2f) action %d cell %d", b.path[b.wp].pos.x, b.path[b.wp].pos.y, b.path[b.wp].pos.z, b.path[b.wp].action, b.path[b.wp].cell);
                 for (size_t q = 0; q < match_.players().size(); ++q)
                     if ((int)q != b.player) if (const Character* c = participantPawn((int)q)) if (hdist(c->position(), p) < 8.0f)
@@ -1124,8 +1142,14 @@ void World::tickBots(float dt) {
                     const bool hs = collision() && collision()->segmentHit(o0, o0 + d, th);
                     float td; core::Vec3 nd;
                     const bool hd = collision() && collision()->segmentHit(o0, o0 + d, td, nd);   // incl. moving sets (barriers, movers)
-                    LOG_INFO("STUCKWATCH   dir %d: static %s, with dynamic %s", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear",
-                             hd ? (std::to_string(td * 4.0f) + " m").c_str() : "clear");
+                    float tset; const int set = collision() ? collision()->dynamicSetHit(o0, o0 + d, tset) : -1;
+                    std::string who = "-";
+                    if (set >= 0) {
+                        who = "set " + std::to_string(set);
+                        for (const BarrierState& br : barriers_) if (br.dyn == set) who += " (barrier of p" + std::to_string(br.owner) + (br.alive ? "" : ", dead") + ")";
+                    }
+                    LOG_INFO("STUCKWATCH   dir %d: static %s, with dynamic %s [%s]", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear",
+                             hd ? (std::to_string(td * 4.0f) + " m").c_str() : "clear", who.c_str());
                 }
                 for (const BarrierState& br : barriers_)
                     if ((br.alive || br.delay >= 0.0f) && hdist(br.pos, p) < 15.0f)

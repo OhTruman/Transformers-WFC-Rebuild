@@ -246,7 +246,9 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
     float dynT = 1e30f; core::Vec3 dynN{0, 1, 0};
     core::Vec3 smin{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
     core::Vec3 smax{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
-    for (const DynamicSet& s : dyn_) {
+    for (size_t si = 0; si < dyn_.size(); ++si) {
+        const DynamicSet& s = dyn_[si];
+        if (isIgnored(si)) continue;
         if (!s.enabled || smax.x < s.bmin.x || smin.x > s.bmax.x || smax.y < s.bmin.y || smin.y > s.bmax.y ||
             smax.z < s.bmin.z || smin.z > s.bmax.z) continue;
         for (const Tri& t : s.world) {
@@ -329,7 +331,9 @@ void CollisionWorld::setDynamicPose(int id, const core::Mat4& pose) {
 
 bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const {
     bool found = false;
-    for (const DynamicSet& s : dyn_) {
+    for (size_t si = 0; si < dyn_.size(); ++si) {
+        const DynamicSet& s = dyn_[si];
+        if (isIgnored(si)) continue;
         if (!s.enabled || x < s.bmin.x || x > s.bmax.x || z < s.bmin.z || z > s.bmax.z || s.bmin.y > ceil) continue;
         for (const Tri& t : s.world) {
             float x1 = t.a.x, z1 = t.a.z, x2 = t.b.x, z2 = t.b.z, x3 = t.c.x, z3 = t.c.z;
@@ -344,6 +348,29 @@ bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, co
         }
     }
     return found;
+}
+
+
+int CollisionWorld::dynamicSetHit(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+    const core::Vec3 d = b - a;
+    int best = -1; float bt = 1e30f;
+    for (size_t si = 0; si < dyn_.size(); ++si) {
+        const DynamicSet& s = dyn_[si];
+        if (!s.enabled) continue;
+        for (const Tri& t : s.world) {
+            core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a, pv = core::cross(d, e2);
+            float det = core::dot(e1, pv);
+            if (std::fabs(det) < 1e-8f) continue;
+            float inv = 1.0f / det; core::Vec3 tv = a - t.a;
+            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) continue;
+            core::Vec3 q = core::cross(tv, e1);
+            float v = core::dot(d, q) * inv; if (v < 0 || u + v > 1) continue;
+            float tt = core::dot(e2, q) * inv;
+            if (tt >= 0 && tt <= 1 && tt < bt) { bt = tt; best = (int)si; }
+        }
+    }
+    if (best >= 0) outT = bt;
+    return best;
 }
 
 } // namespace game

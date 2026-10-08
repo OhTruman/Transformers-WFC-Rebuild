@@ -37,6 +37,17 @@ public:
     void setDynamicPose(int id, const core::Mat4& pose);
     void setDynamicEnabled(int id, bool enabled);
     size_t dynamicSetCount() const { return dyn_.size(); }
+    // Moving sets this thread's queries ignore while the scope lives (a pawn walking out of a barrier that spawned around it: its
+    // movement runs on one thread, so the exemption is that pawn's only, also on the worker pool).
+    struct IgnoreDynamicScope {
+        const std::vector<int>* prev;
+        explicit IgnoreDynamicScope(const std::vector<int>* sets) : prev(ignored()) { ignored() = sets; }
+        ~IgnoreDynamicScope() { ignored() = prev; }
+    };
+    static const std::vector<int>*& ignored() { static thread_local const std::vector<int>* p = nullptr; return p; }
+    static bool isIgnored(size_t set) { const std::vector<int>* l = ignored(); if (!l) return false; for (int v : *l) if ((size_t)v == set) return true; return false; }
+    // Diagnostics: the nearest enabled moving set the segment hits (-1 none), with its t.
+    int dynamicSetHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
 
 private:
     struct Tri { core::Vec3 a, b, c, n; };
