@@ -1,5 +1,10 @@
 #include <chrono>
 #include "platform/CpuPreference.h"
+// [integration 09c] A per-call-site cached getenv for the per-frame diagnostic switches (the CRT getenv takes the environment
+// lock and scans every variable per call; the frame loop has ~50 of them). The environment is fixed at launch for these.
+#ifndef WFC_ENV   // same definition as Rendering's (render/gl/WfcPipeline.h)
+#define WFC_ENV(name) ([]() -> const char* { static const char* const v = std::getenv(name); return v; }())
+#endif
 #ifdef _WIN32
 #include <windows.h>
 #include <psapi.h>
@@ -506,7 +511,7 @@ Application::MatchExit Application::runMatch() {
         if (lockstep) realDt = 1.0 / 60.0;
         // Diagnostics: deterministic display rate other than the 60 Hz simulation (WFC_RENDERHZ=144 -> 0 or 1 steps
         // per frame), to reproduce frame-pacing artefacts in captures.
-        if (const char* hz = std::getenv("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
+        if (const char* hz = WFC_ENV("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
 
         if (!window_->pump(frontend_ ? pumped : input)) break;
         if (frontend_) qaTick(pumped);   // DEBUG QA panel (development builds; F10)
@@ -535,10 +540,10 @@ Application::MatchExit Application::runMatch() {
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
         static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
-        if (std::getenv("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
-        if (std::getenv("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
-        if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
-        if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
+        if (WFC_ENV("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
+        if (WFC_ENV("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
+        if (WFC_ENV("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
+        if (WFC_ENV("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
         // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
         // holds Fire (or Forward) from this frame's input sample until the first frame whose draw shows the effect (a new shot serial /
         // the pawn moved > 1 mm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
@@ -552,16 +557,16 @@ Application::MatchExit Application::runMatch() {
         }
         if (latProbe && lat.phase == 2) input.down[(int)(latFire ? platform::Button::Fire : platform::Button::Forward)] = true;
         if (latProbe && lat.phase == 0 && lat.idle == 45 && latFire) input.pressed[(int)platform::Button::Reload] = true;   // keep a clip
-        if (const char* s = std::getenv("WFC_AUTOBOOST")) if (frame >= std::atol(s)) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held) from frame N
-        if (const char* s = std::getenv("WFC_AUTOBOOST_CYCLE"))         // repeated Boost: hold N frames, release N
+        if (const char* s = WFC_ENV("WFC_AUTOBOOST")) if (frame >= std::atol(s)) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held) from frame N
+        if (const char* s = WFC_ENV("WFC_AUTOBOOST_CYCLE"))         // repeated Boost: hold N frames, release N
             if (long n = std::atol(s); n > 0 && (frame / n) % 2 == 1) input.down[(int)platform::Button::FineAim] = true;
-        if (const char* s = std::getenv("WFC_AUTOJUMP_EVERY"))          // repeated Jump press every N frames
+        if (const char* s = WFC_ENV("WFC_AUTOJUMP_EVERY"))          // repeated Jump press every N frames
             if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::Jump] = true;
-        if (const char* s = std::getenv("WFC_AUTOSWITCH_EVERY"))        // repeated NextWeapon press every N frames (soak)
+        if (const char* s = WFC_ENV("WFC_AUTOSWITCH_EVERY"))        // repeated NextWeapon press every N frames (soak)
             if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::NextWeapon] = true;
-        if (const char* s = std::getenv("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
-        if (const char* s = std::getenv("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
-        if (const char* s = std::getenv("WFC_AUTOWALK_UNTIL"))           // release scripted input
+        if (const char* s = WFC_ENV("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
+        if (const char* s = WFC_ENV("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
+        if (const char* s = WFC_ENV("WFC_AUTOWALK_UNTIL"))           // release scripted input
             if (frame > std::atol(s)) {
                 input.down[(int)platform::Button::Forward] = false;
                 input.down[(int)platform::Button::Right] = false;
@@ -569,22 +574,22 @@ Application::MatchExit Application::runMatch() {
             }
         // Fine-aim test hooks: press the FineAim button (toggle) on the given frames; WFC_PADLT holds
         // the pad trigger instead.
-        if (const char* s = std::getenv("WFC_FINEAIM_ON"))  if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
-        if (const char* s = std::getenv("WFC_FINEAIM_OFF")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
-        if (std::getenv("WFC_PADLT")) input.padLT = 1.0f;
-        if (std::getenv("WFC_AUTOJUMP") && frame == 20) input.pressed[(int)platform::Button::Jump] = true;
-        if (std::getenv("WFC_AUTORELOAD")) {                       // fire a few rounds, then reload
+        if (const char* s = WFC_ENV("WFC_FINEAIM_ON"))  if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
+        if (const char* s = WFC_ENV("WFC_FINEAIM_OFF")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
+        if (WFC_ENV("WFC_PADLT")) input.padLT = 1.0f;
+        if (WFC_ENV("WFC_AUTOJUMP") && frame == 20) input.pressed[(int)platform::Button::Jump] = true;
+        if (WFC_ENV("WFC_AUTORELOAD")) {                       // fire a few rounds, then reload
             if (frame <= 12) input.down[(int)platform::Button::Fire] = true;
             if (frame == 15) { input.pressed[(int)platform::Button::Reload] = true;   // one-frame tap:
                                input.down[(int)platform::Button::Reload] = true; }  // fires on release
         }
         if (autoTransform > 0 && frame == autoTransform) world_.player().pawn().beginTransform();
-        if (const char* s = std::getenv("WFC_PRESSTRANSFORM")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Transform] = true;
-        if (const char* s = std::getenv("WFC_RAMSELF")) if (frame == std::atol(s)) {   // diagnostic: robot ram reaction
+        if (const char* s = WFC_ENV("WFC_PRESSTRANSFORM")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Transform] = true;
+        if (const char* s = WFC_ENV("WFC_RAMSELF")) if (frame == std::atol(s)) {   // diagnostic: robot ram reaction
             auto& pw = world_.player().pawn();
             pw.rammedAsRobot(core::forwardFromYawPitch(pw.yaw(), 0.0f) * -1.0f);
         }
-        if (const char* s = std::getenv("WFC_PRESSTRANSFORM_EVERY"))    // soak: transform every N frames
+        if (const char* s = WFC_ENV("WFC_PRESSTRANSFORM_EVERY"))    // soak: transform every N frames
             if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::Transform] = true;
 
         if (input.wasPressed(platform::Button::CameraToggle)) {
@@ -596,17 +601,17 @@ Application::MatchExit Application::runMatch() {
         if (smokeFrames <= 0 && input.wasPressed(platform::Button::Debug))
             core::DebugFlags::get().enabled = !core::DebugFlags::get().enabled;
 
-        if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw
+        if (const char* fy = WFC_ENV("WFC_FIXYAW"))   // diagnostic: pin the camera yaw
             world_.player().controller().setCameraYaw((float)std::atof(fy));
-        if (const char* at = std::getenv("WFC_AUTOTURN")) {  // diagnostic: rotate the aim (rad/s)
+        if (const char* at = WFC_ENV("WFC_AUTOTURN")) {  // diagnostic: rotate the aim (rad/s)
             auto& pc = world_.player().controller();
             pc.setCameraYaw(pc.camYaw() + (float)std::atof(at) * (float)realDt);
         }
-        if (const char* fp = std::getenv("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
+        if (const char* fp = WFC_ENV("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
             world_.player().controller().setCameraPitch((float)std::atof(fp));
         // WFC_MATCH_SECONDS=N (determinism / lockstep comparisons): exit after N s of match time in progress, so runs end at the same
         // simulation point however many frames loading took (a frame budget counted from boot truncates runs at different match times).
-        if (const char* ms = std::getenv("WFC_MATCH_SECONDS"))
+        if (const char* ms = WFC_ENV("WFC_MATCH_SECONDS"))
             if (world_.matchActive() && world_.match().state() == game::Match::State::InProgress && world_.match().elapsedTime() >= (float)std::atof(ms)) {
                 LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at frame %ld (step-identical end point)", (int)world_.match().elapsedTime(), frame);
                 break;
@@ -645,13 +650,13 @@ Application::MatchExit Application::runMatch() {
             }
         }
 
-        if (smokeFrames > 0 && std::getenv("WFC_AUTOBOOST") && frame % 3 == 0) {
+        if (smokeFrames > 0 && WFC_ENV("WFC_AUTOBOOST") && frame % 3 == 0) {
             const auto& pw = world_.player().pawn();
             const core::Vec3& vv = pw.velocity();
             LOG_INFO("boost frame %ld speed=%.2f y=%.2f form=%s", frame,
                      std::sqrt(vv.x * vv.x + vv.z * vv.z), pw.position().y, game::formName(pw.form()));
         }
-        if (smokeFrames > 0 && std::getenv("WFC_AUTOJUMP") && frame % 5 == 0) {
+        if (smokeFrames > 0 && WFC_ENV("WFC_AUTOJUMP") && frame % 5 == 0) {
             const auto& pw = world_.player().pawn();
             LOG_INFO("jump frame %ld y=%.2f vy=%.2f grounded=%d", frame,
                      pw.position().y, pw.velocity().y, (int)pw.onGround());
@@ -685,7 +690,7 @@ Application::MatchExit Application::runMatch() {
                      (int)world_.player().controller().hudAimState().crosshairVisible);
         }
 
-        if (std::getenv("WFC_HUDLOG"))   // diagnostic: the TnHUD Movie.Invoke calls produced this frame
+        if (WFC_ENV("WFC_HUDLOG"))   // diagnostic: the TnHUD Movie.Invoke calls produced this frame
             for (const auto& n : world_.player().controller().hudNotifies())
                 LOG_INFO("HUD f%ld %s", frame,
                          n.type == game::HudNotify::Type::WeaponSpread ? ("NotifyWeaponSpreadChanged(" + std::to_string(n.spread) + ")").c_str()
@@ -696,7 +701,7 @@ Application::MatchExit Application::runMatch() {
         static const bool noInterp = std::getenv("WFC_NOINTERP") != nullptr;   // A/B diagnostic
         world_.setRenderAlpha(noInterp ? 1.0f : clock_.alpha());
         world_.player().controller().updateCamera(camera_);
-        if (std::getenv("WFC_CAMLOG")) {   // diagnostics: pawn screen position per rendered frame (frame pacing)
+        if (WFC_ENV("WFC_CAMLOG")) {   // diagnostics: pawn screen position per rendered frame (frame pacing)
             core::Vec3 pp = world_.player().pawn().position() + core::Vec3{0, 2.0f, 0};
             core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
             core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
@@ -710,16 +715,16 @@ Application::MatchExit Application::runMatch() {
         world_.player().controller().setViewAspect(camera_.aspect);
 
         // WFC_BOTCAM (diagnostics): frame the first spawned bot from 6 m behind / 2.5 m above, looking at it.
-        if (std::getenv("WFC_BOTCAM"))
+        if (WFC_ENV("WFC_BOTCAM"))
             for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned()) {
                 const core::Vec3 bp = o->pawn().actorLocation();
                 const core::Vec3 fw = core::forwardFromYawPitch(o->pawn().yaw(), 0.0f); const core::Vec3 rt = core::normalize(core::cross(fw, core::Vec3{0, 1, 0}));
-                const core::Vec3 back = std::getenv("WFC_BOTCAM")[0] == 's' ? rt * 6.0f + fw * 2.0f : fw * -6.0f;   // WFC_BOTCAM=side: from its right
+                const core::Vec3 back = WFC_ENV("WFC_BOTCAM")[0] == 's' ? rt * 6.0f + fw * 2.0f : fw * -6.0f;   // WFC_BOTCAM=side: from its right
                 camera_.pos = bp + back + core::Vec3{0, 1.5f, 0}; const core::Vec3 d = core::normalize(bp - camera_.pos);
                 camera_.yaw = std::atan2(-d.x, -d.z); camera_.pitch = std::asin(d.y); break;
             }
         // Debug camera overrides (for diagnosis / screenshots): WFC_DEBUGCAM=top|front
-        if (const char* dc = std::getenv("WFC_DEBUGCAM")) {
+        if (const char* dc = WFC_ENV("WFC_DEBUGCAM")) {
             core::Vec3 pp = world_.player().pawn().position();
             if (dc[0] == 't') {            // top-down
                 camera_.pos = pp + core::Vec3{0, 45, 0};
@@ -742,7 +747,7 @@ Application::MatchExit Application::runMatch() {
         // re-load the world's meshes (as a travel back into the match does).
         // Diagnostic: WFC_FXTEST="<template>[;<template>...]" spawns each runtime particle template (M32 template
         // library) 4 m in front of the camera, emitting to the camera's right, every 30 frames, side by side.
-        if (const char* ft = std::getenv("WFC_FXTEST")) {
+        if (const char* ft = WFC_ENV("WFC_FXTEST")) {
             static std::vector<std::string> tpls;
             static bool parsed = false;
             if (!parsed) {
@@ -762,7 +767,7 @@ Application::MatchExit Application::runMatch() {
                     if (!t.empty() && t[0] == '>') h = renderer_->spawnParticleEffectSegment(t.substr(1), p - right * 5.0f + f * 2.0f, p + right * 5.0f + f * 2.0f);
                     else if (!t.empty() && t[0] == '~') { if (frame == 1) { h = renderer_->spawnParticleEffect(t.substr(1), p, right, core::Vec3{0, 1, 0}); orbit_.push_back({h, p}); } }
                     else h = renderer_->spawnParticleEffect(t, p, right, core::Vec3{0, 1, 0});   // authored colours
-                    if (const char* zs = std::getenv("WFC_FXTEST_SIZE")) {   // PSC 'Size' parameter on every spawn
+                    if (const char* zs = WFC_ENV("WFC_FXTEST_SIZE")) {   // PSC 'Size' parameter on every spawn
                         float z = (float)std::atof(zs); const float v[4] = {z, z, z, 1.0f};
                         if (h >= 0) renderer_->setParticleEffectParam(h, "Size", v);
                     }
@@ -778,7 +783,7 @@ Application::MatchExit Application::runMatch() {
             }
         }
         // "<frame>[,<period>]": with a period the cycle repeats (M28 texture-lifetime soak: live textures must plateau).
-        if (const char* rt = std::getenv("WFC_RELOADTEST")) {
+        if (const char* rt = WFC_ENV("WFC_RELOADTEST")) {
             long first = std::atol(rt), period = 0;
             if (const char* c = std::strchr(rt, ',')) period = std::atol(c + 1);
             if (frame == first || (period > 0 && frame > first && (frame - first) % period == 0)) {
@@ -793,7 +798,7 @@ Application::MatchExit Application::runMatch() {
         static bool shotListLoaded = false;
         if (!shotListLoaded) {
             shotListLoaded = true;
-            if (const char* sl = std::getenv("WFC_SHOTLIST")) {
+            if (const char* sl = WFC_ENV("WFC_SHOTLIST")) {
                 std::ifstream in(sl);
                 std::string name, cam;
                 while (in >> name >> cam) {
@@ -814,7 +819,7 @@ Application::MatchExit Application::runMatch() {
             camera_.yaw = std::atan2(-f.x, -f.z);
         }
 
-        if (std::getenv("WFC_FACELOG") && smokeFrames > 0 && frame % 10 == 0) {
+        if (WFC_ENV("WFC_FACELOG") && smokeFrames > 0 && frame % 10 == 0) {
             const auto& pw = world_.player().pawn();
             core::Vec3 pp = pw.position();
             // The mesh's authored forward is model +X, so measure it through the actual draw rotation.
@@ -839,7 +844,7 @@ Application::MatchExit Application::runMatch() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
-        if (std::getenv("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
+        if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
             static render::IRenderer::PickHit last;
             static bool lastOk = false;
             static long pickFrame = -100;
@@ -872,7 +877,7 @@ Application::MatchExit Application::runMatch() {
             renderer_->drawCanvasText("MarkerFont", line1 + d, 20.0f, y, col);
             if (!line2.empty()) renderer_->drawCanvasText("MarkerFont", line2, 20.0f, y + 22.0f, col);
         }
-        if (std::getenv("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
+        if (WFC_ENV("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
             static render::HudMarkers hm;
             static bool hmLoaded = hm.load(render::wfcRenderDataRoot());
             if (hmLoaded) {
@@ -888,7 +893,7 @@ Application::MatchExit Application::runMatch() {
                 e.key = "enemy"; e.setup = "EnemyMarkerSetup"; e.base = p + f * 25.0f - rt * 4.0f + core::Vec3{0, 4.2f, 0};
                 e.label = "Megatron"; e.drawHealthBar = false;
                 ms.push_back(a); ms.push_back(e);
-                if (std::atoi(std::getenv("WFC_MARKERTEST")) == 2) {   // RE 7bb8ec1 rules: enemy-carried flag (Kill, pulse)
+                if (std::atoi(WFC_ENV("WFC_MARKERTEST")) == 2) {   // RE 7bb8ec1 rules: enemy-carried flag (Kill, pulse)
                     static float t = 0.0f; t += 1.0f / 60.0f;
                     render::MarkerRequest fl;
                     fl.key = "flag"; fl.type = "TnObjectiveMarkerTypeFlag"; fl.setup = "MarkerSetup";
@@ -926,7 +931,7 @@ Application::MatchExit Application::runMatch() {
                 }
             }
         }
-        if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
+        if (WFC_ENV("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
             using RB = render::IRenderer;
             const float W = (float)window_->width(), H = (float)window_->height();
             RB::ScreenBatch fade; fade.blend = RB::ScreenBlend::Alpha;
@@ -941,7 +946,7 @@ Application::MatchExit Application::runMatch() {
             quad(panel, W * 0.1f, H * 0.8f, W * 0.5f, H * 0.9f, 80, 181, 213, 255);   // friendly label colour
             renderer_->drawScreenTriangles(panel);
         }
-        if (std::getenv("WFC_TILETEST")) {             // diagnostics: Canvas material tiles (HUD marker materials)
+        if (WFC_ENV("WFC_TILETEST")) {             // diagnostics: Canvas material tiles (HUD marker materials)
             const float W = (float)window_->width(), H = (float)window_->height(), S = std::min(W, H);
             auto tile = [&](const char* m, float cx, float cy, float size,
                             std::vector<std::pair<std::string, std::array<float, 4>>> params, float rot = 0.0f) {
@@ -968,15 +973,15 @@ Application::MatchExit Application::runMatch() {
         if (frontend_) frontend_->draw(window_->width(), window_->height());   // open movies (pause, end game)
         if (frontend_ && !pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
 
-        if (const char* sa = std::getenv("WFC_SHOWACTOR"))       // diagnostic: Gameplay-style unhide (e.g. a KOTH zone)
+        if (const char* sa = WFC_ENV("WFC_SHOWACTOR"))       // diagnostic: Gameplay-style unhide (e.g. a KOTH zone)
             renderer_->setActorHidden(sa, false);
-        if (const char* ds = std::getenv("WFC_DESTRUCTSTATE"))   // diagnostic: destructible presentation state
+        if (const char* ds = WFC_ENV("WFC_DESTRUCTSTATE"))   // diagnostic: destructible presentation state
             if (frame == 1) renderer_->setDestructibleState("TnStaticDestructibleActor_14465", std::atoi(ds));
         // Diagnostic: WFC_PICKUPTEST=<factory actor>,<take frame>,<respawn frame> drives the pickup presentation
         // (SetPickupHidden / SetPickupVisible) the way Gameplay's PickupEvents will. [integration] Gameplay's
         // syncMapPresentation now pushes the real factory state every frame, so this forced state only lasts one
         // frame; take a pickup in play instead.
-        if (const char* pt = std::getenv("WFC_PICKUPTEST")) {
+        if (const char* pt = WFC_ENV("WFC_PICKUPTEST")) {
             char actor[128] = {0}; long take = -1, back = -1;
             if (std::sscanf(pt, "%127[^,],%ld,%ld", actor, &take, &back) == 3) {
                 if (frame == take) {
@@ -989,8 +994,8 @@ Application::MatchExit Application::runMatch() {
             }
         }
         if (smokeFrames > 0 && frame == smokeFrames)
-            if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
-        if (const char* se = std::getenv("WFC_SHOTEVERY")) {   // diagnostics: <dir>,<from>,<to> every frame
+            if (const char* shot = WFC_ENV("WFC_SHOT")) renderer_->captureScreenshot(shot);
+        if (const char* se = WFC_ENV("WFC_SHOTEVERY")) {   // diagnostics: <dir>,<from>,<to> every frame
             char dir[260] = {0}; long f0 = 0, f1 = 0;
             if (std::sscanf(se, "%259[^,],%ld,%ld", dir, &f0, &f1) == 3 && frame >= f0 && frame <= f1) {
                 char path[300]; std::snprintf(path, sizeof path, "%s/f%04ld.bmp", dir, frame);
@@ -998,13 +1003,13 @@ Application::MatchExit Application::runMatch() {
             }
         }
         if (!shotList.empty() && frame % 8 == 0 && (size_t)(frame / 8 - 1) < shotList.size()) {
-            const char* dir = std::getenv("WFC_SHOTDIR");
+            const char* dir = WFC_ENV("WFC_SHOTDIR");
             std::string out = std::string(dir ? dir : ".") + "/" + shotList[(size_t)(frame / 8 - 1)].first + ".bmp";
             renderer_->captureScreenshot(out.c_str());
         }
         // WFC_SHOTMATCH=<dir>,<fromStep>,<toStep>,<stride>: capture by steps since the match went InProgress (dir/m%05ld.bmp), so lockstep
         // A/B captures name the same match moment however many frames loading took (WFC_SHOTEVERY counts frames from boot).
-        if (const char* sm = std::getenv("WFC_SHOTMATCH")) {
+        if (const char* sm = WFC_ENV("WFC_SHOTMATCH")) {
             static std::string dir; static long from = 0, to = -1, stride = 1, last = -1;
             if (to < 0) {
                 std::string v = sm; std::vector<std::string> f; size_t p = 0;
