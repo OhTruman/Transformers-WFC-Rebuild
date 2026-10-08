@@ -1829,7 +1829,9 @@ void World::finishRemainder() {
         uint64_t h = 1469598103934665603ULL;
         auto mix = [&](const void* p, size_t n) { const unsigned char* c = (const unsigned char*)p; for (size_t i = 0; i < n; ++i) { h ^= c[i]; h *= 1099511628211ULL; } };
         const long detail = std::atol(sh); const char* dash = std::strchr(sh, '-'); const long detailTo = dash ? std::atol(dash + 1) : detail;
-        const bool inDetail = step >= detail && step <= detailTo && detail > 0;
+        static const long period = std::getenv("WFC_SIMHASH_PERIOD") ? std::atol(std::getenv("WFC_SIMHASH_PERIOD")) : 0;   // two runs in one process
+        const long inRun = period > 0 ? (step - 1) % period + 1 : step;
+        const bool inDetail = inRun >= detail && inRun <= detailTo && detail > 0;
         auto pawn = [&](const Character& c, int player) {
             const core::Vec3 p = c.position(), v = c.velocity(); const float hp = c.health().current, y = c.yaw();
             mix(&p, sizeof p); mix(&v, sizeof v); mix(&hp, sizeof hp); mix(&y, sizeof y);
@@ -1841,7 +1843,7 @@ void World::finishRemainder() {
         for (const BotBrain& b : bots_) {
             mix(&b.wp, sizeof b.wp); mix(&b.yaw, sizeof b.yaw); mix(&b.pitch, sizeof b.pitch); mix(&b.target, sizeof b.target);
             const size_t ps = b.path.size(); mix(&ps, sizeof ps);
-            if (inDetail && false) LOG_INFO("SIMHASH %ld bot p%d wp %zu/%zu yaw %.6f tgt %d", step, b.player, b.wp, b.path.size(), b.yaw, b.target);
+            if (inDetail) LOG_INFO("SIMHASH %ld bot p%d wp %zu/%zu yaw %.6f tgt %d", step, b.player, b.wp, b.path.size(), b.yaw, b.target);
         }
         LOG_INFO("SIMHASH %ld %016llx", step, (unsigned long long)h);
     }
@@ -2825,7 +2827,14 @@ void World::clearMatchActors() {
     rollers_.clear();
     beacons_.clear();
     buffShots_.clear();
+    mines_.clear();
     missile_ = GuidedMissile{}; missileDelay_ = -1.0f;
+    // The local player's world-level combat state (the pawn's own buffs reset with its respawn).
+    lockCandidate_ = lockTarget_ = -1; lockTimer_ = holdLockTimer_ = 0.0f; locked_ = false;
+    grenadeTossDelay_ = -1.0f; grenadeCooldown_ = 0.0f;
+    deferredKillstreak_ = false; lockedClip_ = 0;
+    repairBeam_.time = 0.0f; repairBeam_.active = false;
+    lastSentryHit_ = lastBarrierHit_ = -1;
     partWeapons_.clear();
     participantShots_.clear();
     partShotFx_.clear();
