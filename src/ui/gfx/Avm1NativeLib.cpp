@@ -475,6 +475,330 @@ Value nativeAssignDataStoreRead(VM& vm, Object* orig, const Value& self, Args& a
     return Value::undef();
 }
 
+// ---- UpdatePlayerEntry(PlayerInfo) (586 bytes): PlayerList's per-row update ----
+// Find the row clip whose [PlayerElementId] matches (attach + CreateRowElements a new one otherwise), then copy every
+// PlayerInfo field onto it (and its panel in iconic mode), except CurrentCharacterString while specialties cycle.
+constexpr uint64_t kUpdatePlayerEntryHash = 0x6b42021d552baf71ull;
+Value nativeUpdatePlayerEntry(VM& vm, Object* orig, const Value& self, Args& a) {
+    ScopeVars sv{vm, orig, self};
+    Ops op{vm};
+    const Value r3 = a.empty() ? Value::undef() : a[0];
+    Value r1 = Value::undef();
+    bool found = false;
+    Value r2(0.0);
+    for (int guard = 0; guard < 1000000; ++guard) {
+        if (!vm.toBool(vm.lessThan(r2, getMember(vm, sv.get("PlayerListElements"), "length")))) break;
+        Value mine = getMember(vm, getMember(vm, sv.get("PlayerListElements"), r2), sv.get("PlayerElementId"));
+        Value theirs = getMember(vm, r3, sv.get("PlayerElementId"));
+        if (vm.looseEquals(mine, theirs)) {
+            r1 = getMember(vm, sv.get("PlayerListElements"), r2);
+            found = true;
+            break;
+        }
+        r2 = Value(vm.toNumber(r2) + 1.0);
+    }
+    // IconicMode && !DisableIconicDisplay, with the bytecode's value chain
+    auto iconic = [&]() {
+        Value v = sv.get("IconicMode");
+        if (vm.toBool(v)) v = Value(!vm.toBool(sv.get("DisableIconicDisplay")));
+        return vm.toBool(v);
+    };
+    if (!found) {
+        const bool ic = iconic();
+        Value list = sv.get("playerList_mc");
+        Value depth = vm.callMethod(list, "getNextHighestDepth", {});
+        Value name = op.add2(op.add2(Value(ic ? "iconicEntry" : "playerEntry"), sv.get("PlayerEntryCount")), Value("_mc"));
+        r1 = vm.callMethod(sv.get("playerList_mc"), "attachMovie", {Value(ic ? "mc_iconicEntry" : "mc_playerEntry"), name, depth});
+        if (ic) sv.callFunction("CreateRowElements", {getMember(vm, r1, "panel_mc"), sv.get("PlayerEntryDisplayModel"), Value(44.0)});
+        else sv.callFunction("CreateRowElements", {r1, sv.get("PlayerEntryDisplayModel")});
+        setMember(vm, r1, "_y", sv.get("ListElementPosition"));
+        vm.callMethod(sv.get("PlayerListElements"), "push", {r1});
+        sv.set("PlayerEntryCount", Value(vm.toNumber(sv.get("PlayerEntryCount")) + 1.0));
+    }
+    std::vector<std::string> keys;
+    if (r3.isObject()) keys = vm.enumerate(r3.o);
+    for (auto it = keys.rbegin(); it != keys.rend(); ++it) {
+        const Value r5(*it);
+        Value c = sv.get("ShouldCycleSpecialtyLevels");
+        if (vm.toBool(c)) c = Value(vm.looseEquals(r5, Value("CurrentCharacterString")));
+        if (vm.toBool(c)) c = Value(vm.looseEquals(getMember(vm, r1, r5), Value::undef()));
+        if (vm.toBool(c)) {
+            setMember(vm, r1, r5, getMember(vm, sv.get("SpecialtyCycleOrder"), sv.get("CurrentSpecialtyCycle")));
+        } else if (iconic()) {
+            setMember(vm, r1, r5, getMember(vm, r3, r5));
+            setMember(vm, getMember(vm, r1, "panel_mc"), r5, getMember(vm, r3, r5));
+        } else {
+            setMember(vm, r1, r5, getMember(vm, r3, r5));
+        }
+    }
+    return r1;
+}
+
+// ---- BuildPlayerList() (1541 bytes): PlayerList's once-a-second layout pass ----
+constexpr uint64_t kBuildPlayerListHash = 0x0f878fb7f23831f4ull;
+Value nativeBuildPlayerList(VM& vm, Object* orig, const Value& self, Args&) {
+    ScopeVars sv{vm, orig, self};
+    Ops op{vm};
+    const Value undef = Value::undef(), one(1.0), zero(0.0);
+    auto inc = [&](const Value& v) { return Value(vm.toNumber(v) + 1.0); };
+    auto dec = [&](const Value& v) { return Value(vm.toNumber(v) - 1.0); };
+    auto iconic = [&]() {
+        Value v = sv.get("IconicMode");
+        if (vm.toBool(v)) v = Value(!vm.toBool(sv.get("DisableIconicDisplay")));
+        return vm.toBool(v);
+    };
+    sv.set("ListElementPosition", zero);
+    {
+        Value ctor = sv.get("Array");
+        Args none;
+        sv.set("FocusElements", ctor.isObject() ? vm.construct(ctor.o, none) : undef);
+    }
+    // rows: headers / entries / spacers, each tweened to its slot
+    Value r7 = zero;
+    for (int guard = 0; guard < 1000000; ++guard) {
+        if (!vm.toBool(vm.lessThan(r7, getMember(vm, sv.get("PlayerListData"), "length")))) break;
+        Value r2 = undef, r5 = undef;
+        auto data = [&]() { return getMember(vm, sv.get("PlayerListData"), r7); };
+        if (!vm.looseEquals(getMember(vm, data(), "TeamName"), undef)) {
+            r2 = sv.callFunction("UpdateTeamHeader", {data()});
+            r5 = Value(54.0);
+        } else if (!vm.looseEquals(getMember(vm, data(), "TeamIndex"), undef)) {
+            r2 = sv.callFunction("UpdateTeamHeader", {data()});
+            r5 = Value(20.0);
+        } else if (!vm.looseEquals(getMember(vm, data(), "PlayerName"), undef)) {
+            r2 = sv.callFunction("UpdatePlayerEntry", {data()});
+            r5 = Value(iconic() ? 104.0 : 25.0);
+        } else {
+            r5 = data();
+        }
+        if (!vm.looseEquals(r2, undef)) {
+            Object* params = vm.newPlain();
+            vm.set(params, "_y", sv.get("ListElementPosition"));
+            vm.callMethod(r2, "interp", {Value(0.4), Value("easeout"), Value(3.0), Value(params)});
+            if (vm.looseEquals(getMember(vm, r2, "__proto__"), getMember(vm, sv.get("HmButton"), "prototype")))
+                vm.callMethod(sv.get("FocusElements"), "push", {r2});
+        }
+        sv.set("ListElementPosition", op.add2(sv.get("ListElementPosition"), r5));
+        r7 = inc(r7);
+    }
+    // focus links (wrapping)
+    auto fe = [&]() { return sv.get("FocusElements"); };
+    r7 = zero;
+    for (int guard = 0; guard < 1000000; ++guard) {
+        if (!vm.toBool(vm.lessThan(r7, getMember(vm, fe(), "length")))) break;
+        setMember(vm, getMember(vm, fe(), r7), "ListIndex", r7);
+        if (vm.toBool(vm.lessThan(op.sub(r7, one), zero)))
+            setMember(vm, getMember(vm, fe(), r7), "focusUp",
+                      getMember(vm, getMember(vm, fe(), op.sub(getMember(vm, fe(), "length"), one)), "_name"));
+        else
+            setMember(vm, getMember(vm, fe(), r7), "focusUp", getMember(vm, getMember(vm, fe(), op.sub(r7, one)), "_name"));
+        // Greater(r7 + 1, length - 1)
+        if (vm.toBool(vm.lessThan(op.sub(getMember(vm, fe(), "length"), one), op.add2(r7, one))))
+            setMember(vm, getMember(vm, fe(), r7), "focusDown", getMember(vm, getMember(vm, fe(), zero), "_name"));
+        else
+            setMember(vm, getMember(vm, fe(), r7), "focusDown", getMember(vm, getMember(vm, fe(), op.add2(r7, one)), "_name"));
+        r7 = inc(r7);
+    }
+    // rows no longer in the data: removed (moving the focus off a removed focused row)
+    auto ple = [&]() { return sv.get("PlayerListElements"); };
+    r7 = zero;
+    for (int guard = 0; guard < 1000000; ++guard) {
+        if (!vm.toBool(vm.lessThan(r7, getMember(vm, ple(), "length")))) break;
+        bool r6 = false;
+        Value r1 = zero;
+        for (int g2 = 0; g2 < 1000000; ++g2) {
+            if (!vm.toBool(vm.lessThan(r1, getMember(vm, sv.get("PlayerListData"), "length")))) break;
+            Value c(!vm.looseEquals(getMember(vm, getMember(vm, ple(), r7), sv.get("PlayerElementId")), undef));
+            if (vm.toBool(c))
+                c = Value(vm.looseEquals(getMember(vm, getMember(vm, ple(), r7), sv.get("PlayerElementId")),
+                                         getMember(vm, getMember(vm, sv.get("PlayerListData"), r1), sv.get("PlayerElementId"))));
+            if (vm.toBool(c)) { r6 = true; break; }
+            c = Value(!vm.looseEquals(getMember(vm, getMember(vm, ple(), r7), sv.get("HeaderElementId")), undef));
+            if (vm.toBool(c))
+                c = Value(vm.looseEquals(getMember(vm, getMember(vm, ple(), r7), sv.get("HeaderElementId")),
+                                         getMember(vm, getMember(vm, sv.get("PlayerListData"), r1), sv.get("HeaderElementId"))));
+            if (vm.toBool(c)) { r6 = true; break; }
+            r1 = inc(r1);
+        }
+        if (!r6) {
+            if (vm.looseEquals(getMember(vm, ple(), r7), getMember(vm, sv.get("playerList_mc"), "currentFocus"))) {
+                Value r4 = getMember(vm, getMember(vm, ple(), r7), "ListIndex");
+                Value r3 = getMember(vm, fe(), r4);
+                for (int g3 = 0; g3 < 1000000 && vm.looseEquals(getMember(vm, r3, "_name"), undef); ++g3) {
+                    r4 = dec(r4);
+                    r3 = getMember(vm, fe(), r4);
+                }
+                sv.set("SelectedPlayerEntry", r3);
+                sv.callFunction("UpdateCurrentFocus", {});
+            }
+            vm.callMethod(getMember(vm, ple(), r7), "removeMovieClip", {});
+            vm.callMethod(ple(), "splice", {r7, one});
+            r7 = dec(r7);
+        }
+        r7 = inc(r7);
+    }
+    // nothing selected: the local player's row, else the first
+    if (vm.looseEquals(sv.get("SelectedPlayerEntry"), undef)) {
+        r7 = zero;
+        for (int guard = 0; guard < 1000000; ++guard) {
+            if (!vm.toBool(vm.lessThan(r7, getMember(vm, fe(), "length")))) break;
+            if (vm.looseEquals(getMember(vm, getMember(vm, fe(), r7), "PlayerName"), sv.get("LocalPlayerName"))) {
+                sv.set("SelectedPlayerEntry", getMember(vm, fe(), r7));
+                sv.callFunction("UpdateCurrentFocus", {});
+                return undef;
+            }
+            r7 = inc(r7);
+        }
+        sv.set("SelectedPlayerEntry", getMember(vm, fe(), zero));
+        sv.callFunction("UpdateCurrentFocus", {});
+    }
+    return undef;
+}
+
+// ---- UpdatePlayerListData() (1610 bytes): PlayerList's once-a-second data pass ----
+// Players (and teams) read cell by cell from the data stores, sorted, grouped under their team headers (spacers /
+// the unassigned group as the movie lays them out), then BuildPlayerList and the specialty-cycling switch.
+constexpr uint64_t kUpdatePlayerListDataHash = 0x06b555848a7ddf74ull;
+Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&) {
+    ScopeVars sv{vm, orig, self};
+    const Value undef = Value::undef(), one(1.0), zero(0.0);
+    auto inc = [&](const Value& v) { return Value(vm.toNumber(v) + 1.0); };
+    auto dec = [&](const Value& v) { return Value(vm.toNumber(v) - 1.0); };
+    auto less = [&](const Value& a, const Value& b) { return vm.toBool(vm.lessThan(a, b)); };
+    auto newObj = [&](const char* ctorName) {   // NewObject <name> with no arguments
+        Value ctor = sv.get(ctorName);
+        Args none;
+        return ctor.isObject() ? vm.construct(ctor.o, none) : undef;
+    };
+    auto bitOr = [&](const Value& x, const Value& b) { return Value((double)(vm.toInt32(x) | vm.toInt32(b))); };
+    auto arrConst = [&](const char* n) { return getMember(vm, sv.get("Array"), n); };
+    auto rowCount = [&](const char* markup) {
+        return vm.callMethod(getMember(vm, sv.get("HmExternalInterface"), "DataStores"), "GetCollectionRowCount", {Value(markup)});
+    };
+    // rows of a collection: one object per row, each column assigned by AssignDataStoreRead
+    auto readRows = [&](const Value& into, const Value& count, const char* markup, const char* columnsVar) {
+        Value r6 = zero;
+        for (int guard = 0; guard < 1000000 && less(r6, count); ++guard) {
+            Value row = newObj("Object");
+            Value r2 = zero;
+            for (int g2 = 0; g2 < 1000000; ++g2) {
+                if (!less(r2, getMember(vm, sv.get(columnsVar), "length"))) break;
+                Value col = getMember(vm, sv.get(columnsVar), r2);
+                sv.callFunction("AssignDataStoreRead", {row, Value(markup), col, r6});
+                r2 = inc(r2);
+            }
+            vm.callMethod(into, "push", {row});
+            r6 = inc(r6);
+        }
+    };
+    // !IconicMode || DisableIconicDisplay, with the bytecode's value chain
+    auto plainLayout = [&]() {
+        Value v(!vm.toBool(sv.get("IconicMode")));
+        if (!vm.toBool(v)) v = sv.get("DisableIconicDisplay");
+        return vm.toBool(v);
+    };
+    auto pld = [&]() { return sv.get("PlayerListData"); };
+
+    const Value r1 = newObj("Array");
+    {
+        Value r9 = rowCount("<CurrentGame:Players>");
+        readRows(r1, r9, "<CurrentGame:Players>", "PlayerColumnsToGet");
+    }
+    {
+        // the InitArray operands in push order (Array.X read left to right); elements are the reverse
+        Value ci = arrConst("CASEINSENSITIVE");
+        Value n1 = arrConst("NUMERIC");
+        Value nA = arrConst("NUMERIC"), dA = arrConst("DESCENDING");
+        Value nd1 = bitOr(nA, dA);
+        Value nB = arrConst("NUMERIC"), dB = arrConst("DESCENDING");
+        Value nd2 = bitOr(nB, dB);
+        Value opts(vm.newArray({zero, nd2, nd1, n1, ci}));
+        Value fields(vm.newArray({Value("IsConnecting"), Value("Score"), Value("Kills"), Value("Deaths"), Value("PlayerName")}));
+        vm.callMethod(r1, "sortOn", {fields, opts});
+    }
+    bool r8 = false;
+    {
+        Value r6 = zero;
+        for (int guard = 0; guard < 1000000 && less(r6, getMember(vm, r1, "length")); ++guard) {
+            if (less(getMember(vm, getMember(vm, r1, r6), "TeamID"), Value(255.0))) { r8 = true; break; }
+            r6 = inc(r6);
+        }
+    }
+    const Value r3 = newObj("Array");
+    if (r8) {
+        Value r10 = rowCount("<CurrentGame:Teams>");
+        readRows(r3, r10, "<CurrentGame:Teams>", "TeamColumnsToGet");
+        Value n1 = arrConst("NUMERIC");
+        Value nA = arrConst("NUMERIC"), dA = arrConst("DESCENDING");
+        Value nd = bitOr(nA, dA);
+        Value opts(vm.newArray({nd, n1}));
+        Value fields(vm.newArray({Value("Score"), Value("TeamIndex")}));
+        vm.callMethod(r3, "sortOn", {fields, opts});
+    }
+    sv.set("PlayerListData", newObj("Array"));
+    // the team's players, moved out of r1 into PlayerListData after the header
+    auto moveTeam = [&](const Value& r6) {
+        Value r2 = zero;
+        for (int guard = 0; guard < 1000000 && less(r2, getMember(vm, r1, "length")); ++guard) {
+            if (vm.looseEquals(getMember(vm, getMember(vm, r1, r2), "TeamID"), getMember(vm, getMember(vm, r3, r6), "TeamIndex"))) {
+                vm.callMethod(pld(), "push", {getMember(vm, r1, r2)});
+                vm.callMethod(r1, "splice", {r2, one});
+                r2 = dec(r2);
+            }
+            r2 = inc(r2);
+        }
+    };
+    {
+        Value r6 = zero;
+        for (int guard = 0; guard < 1000000 && less(r6, getMember(vm, r3, "length")); ++guard) {
+            if (vm.looseEquals(sv.get("GameTeamStatus"), Value("GTS_TeamGame"))) {
+                vm.callMethod(pld(), "push", {getMember(vm, r3, r6)});
+                moveTeam(r6);
+                vm.callMethod(pld(), "push", {Value(30.0)});
+            } else {
+                bool r5 = false;
+                Value r2 = zero;
+                for (int g2 = 0; g2 < 1000000 && less(r2, getMember(vm, r1, "length")); ++g2) {
+                    if (vm.looseEquals(getMember(vm, getMember(vm, r1, r2), "TeamID"), getMember(vm, getMember(vm, r3, r6), "TeamIndex"))) {
+                        r5 = true;
+                        break;
+                    }
+                    r2 = inc(r2);
+                }
+                if (r5) {
+                    vm.callMethod(pld(), "push", {getMember(vm, r3, r6)});
+                    moveTeam(r6);
+                    if (plainLayout()) vm.callMethod(pld(), "push", {Value(30.0)});
+                }
+            }
+            r6 = inc(r6);
+        }
+    }
+    // players left without a team: under a TeamIndex 255 header (plain layout), then each
+    if (vm.toBool(vm.lessThan(zero, getMember(vm, r1, "length")))) {
+        if (plainLayout()) {
+            Object* hdr = vm.newPlain();
+            vm.set(hdr, "TeamIndex", Value(255.0));
+            vm.callMethod(pld(), "push", {Value(hdr)});
+        }
+        Value r6 = zero;
+        for (int guard = 0; guard < 1000000 && less(r6, getMember(vm, r1, "length")); ++guard) {
+            vm.callMethod(pld(), "push", {getMember(vm, r1, r6)});
+            r6 = inc(r6);
+        }
+    }
+    sv.callFunction("BuildPlayerList", {});
+    if (vm.toBool(sv.get("ShouldCycleSpecialtyLevels"))) {
+        if (!vm.toBool(sv.get("SpecialtiesAreCycling"))) {
+            sv.callFunction("CycleSpecialtyLevels", {});
+            sv.set("SpecialtiesAreCycling", Value(true));
+        }
+    } else {
+        sv.set("SpecialtiesAreCycling", Value(false));
+    }
+    return undef;
+}
+
 }  // namespace
 
 // Called when a script function is assigned to _global.<name>: the native port when the body is the known version.
@@ -483,7 +807,8 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
     static const bool logHash = std::getenv("WFC_AVMHASH") != nullptr;   // DEV TOOL: log candidates' hashes
     if (off || !v.isObject() || !v.o->script) return false;
     if (name != "findInterpValue" && name != "updateInterpObjects" && name != "addInterp" && name != "AssignDataStoreRead" &&
-        name != "ReadCollectionValue" && name != "ReadCollectionBoolValue") return false;
+        name != "ReadCollectionValue" && name != "ReadCollectionBoolValue" && name != "UpdatePlayerEntry" &&
+        name != "BuildPlayerList" && name != "UpdatePlayerListData") return false;
     const uint64_t h = canonicalFunctionHash(*v.o->script, v.o->pool.get());
     if (logHash) LOG_INFO("avmhash %s %016llx", name.c_str(), (unsigned long long)h);
     if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash) {
@@ -514,6 +839,9 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
         return true;
     };
     if (name == "AssignDataStoreRead" && h == kAssignDataStoreReadHash) return bindDs(nativeAssignDataStoreRead);
+    if (name == "UpdatePlayerEntry" && h == kUpdatePlayerEntryHash) return bindDs(nativeUpdatePlayerEntry);
+    if (name == "BuildPlayerList" && h == kBuildPlayerListHash) return bindDs(nativeBuildPlayerList);
+    if (name == "UpdatePlayerListData" && h == kUpdatePlayerListDataHash) return bindDs(nativeUpdatePlayerListData);
     if (name == "ReadCollectionValue" && h == kReadCollectionValueHash)
         return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionValue"); });
     if (name == "ReadCollectionBoolValue" && h == kReadCollectionBoolValueHash)
