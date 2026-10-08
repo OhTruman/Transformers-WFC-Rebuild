@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
+#include <chrono>
 #include <cstring>
 #include <limits>
 #include <random>
@@ -26,7 +28,7 @@ struct Ctx {
     std::shared_ptr<std::vector<uint8_t>> keep;
     const uint8_t* code = nullptr;
     size_t end = 0;
-    std::shared_ptr<std::vector<std::string>> pool;
+    std::shared_ptr<ConstPool> pool;
     std::vector<Value> regs;
     std::vector<Object*> scope;              // [_global, timeline clip, ..., activation] innermost last
     std::vector<Object*> withs;              // With objects, innermost last
@@ -37,6 +39,7 @@ struct Ctx {
     Object* superProto = nullptr;
     Object* callee = nullptr;
     std::vector<Value> stack;
+    Ctx() { stack.reserve(16); }   // one allocation per call instead of 0 -> 1 -> 2 -> 4 -> 8 -> 16 regrowths
     bool returned = false;
     Value retval;
 };
@@ -118,13 +121,23 @@ struct Interp {
         return Value::undef();
     }
 
-    Value lookupVar(Ctx& c, const std::string& n) {
+    Value lookupVar(Ctx& c, const std::string& n, uint32_t atomHint = 0) {
         for (auto it = c.withs.rbegin(); it != c.withs.rend(); ++it)
             if (vm.has(*it, n)) return vm.get(*it, n);
+        const bool protoKey = n == "__proto__";
+        uint32_t atom = atomHint;   // resolved once for the plain-scope fast path
+        bool atomKnown = atomHint != 0;
         for (auto it = c.scope.rbegin(); it != c.scope.rend(); ++it) {
             Object* s = *it;
             if (!s) continue;
             if (s == vm.global) break;
+            // A plain object without prototype or display (function activations): has() is its own property lookup, and
+            // get() returns that property - one hash lookup instead of has() + get().
+            if (s->kind == ObjKind::Plain && !s->proto && !s->display && !s->zombie && !protoKey) {
+                if (!atomKnown) { atom = atomFind(n); atomKnown = true; }
+                if (Property* p = s->findOwnA(atom)) return p->getter ? vm.get(s, n) : p->v;
+                continue;
+            }
             if (vm.has(s, n)) return vm.get(s, n);
         }
         bool found;
@@ -134,14 +147,14 @@ struct Interp {
         return Value::undef();
     }
 
-    Value getVariable(Ctx& c, const std::string& n) {
+    Value getVariable(Ctx& c, const std::string& n, uint32_t atomHint = 0) {
         if (isPath(n)) {
             Value base; std::string name;
             if (!resolvePath(c, n, base, name)) return Value::undef();
             if (name.empty()) return base;
             return vm.getV(base, name);
         }
-        return lookupVar(c, n);
+        return lookupVar(c, n, atomHint);
     }
 
     void setVariable(Ctx& c, const std::string& n, const Value& v) {
@@ -315,8 +328,17 @@ struct Interp {
                 }
                 break;
             }
-            case 0x1C: { std::string n = vm.toString(pop(c)); push(c, getVariable(c, n)); break; }
-            case 0x1D: { Value v = pop(c); std::string n = vm.toString(pop(c)); setVariable(c, n, v); break; }
+            case 0x1C: {   // GetVariable (a string name is moved out of the popped value, not copied)
+                Value nv = pop(c);
+                if (nv.t == VType::String) push(c, getVariable(c, nv.s, nv.atom)); else push(c, getVariable(c, vm.toString(nv)));
+                break;
+            }
+            case 0x1D: {   // SetVariable
+                Value v = pop(c);
+                Value nv = pop(c);
+                if (nv.t == VType::String) setVariable(c, nv.s, v); else setVariable(c, vm.toString(nv), v);
+                break;
+            }
             case 0x9A: {   // GetURL2
                 std::string tgt = vm.toString(pop(c)), url = vm.toString(pop(c));
                 fsOrUrl(url, tgt);
@@ -395,13 +417,14 @@ struct Interp {
                 break;
             }
             case 0x88: {   // ConstantPool
-                auto pool = std::make_shared<std::vector<std::string>>();
+                auto pool = std::make_shared<ConstPool>();
                 uint16_t n = (uint16_t)(a[0] | (a[1] << 8));
                 size_t p = 2;
                 for (int i = 0; i < n && p < len; ++i) {
                     std::string s((const char*)a + p);
                     p += s.size() + 1;
-                    pool->push_back(s);
+                    pool->atoms.push_back(atomIntern(s));
+                    pool->push_back(std::move(s));
                 }
                 c.pool = pool;
                 break;
@@ -458,7 +481,15 @@ struct Interp {
             case 0x4E: {   // GetMember
                 Value nameV = pop(c);
                 Value o = pop(c);
-                push(c, vm.getV(o, keyOf(nameV)));
+                // arr[i] with a whole-number index: the element directly (VM::get resolves array indices first, so the
+                // result is the same without the number -> string -> index round trip).
+                if (nameV.t == VType::Number && o.t == VType::Object && o.o && o.o->kind == ObjKind::Array && !o.o->zombie &&
+                    nameV.n >= 0.0 && nameV.n < 1e9 && nameV.n == std::floor(nameV.n)) {
+                    const size_t i = (size_t)nameV.n;
+                    push(c, i < o.o->elems.size() ? o.o->elems[i] : Value::undef());
+                    break;
+                }
+                push(c, nameV.t == VType::String ? vm.getV(o, nameV.s, nameV.atom) : vm.getV(o, keyOf(nameV)));
                 break;
             }
             case 0x42: {   // InitArray
@@ -496,7 +527,13 @@ struct Interp {
                 Value v = pop(c);
                 Value nameV = pop(c);
                 Value o = pop(c);
-                if (o.isObject()) vm.set(o.o, keyOf(nameV), v);
+                // arr[i] = v inside the array, no watch: the element directly (as VM::set does for an index)
+                if (nameV.t == VType::Number && o.isObject() && o.o->kind == ObjKind::Array && !o.o->zombie && o.o->watches.empty() &&
+                    nameV.n >= 0.0 && nameV.n == std::floor(nameV.n) && nameV.n < (double)o.o->elems.size()) {
+                    o.o->elems[(size_t)nameV.n] = v;
+                    break;
+                }
+                if (o.isObject()) { if (nameV.t == VType::String) vm.set(o.o, nameV.s, v, nameV.atom); else vm.set(o.o, keyOf(nameV), v); }
                 break;
             }
             case 0x45: {   // TargetPath
@@ -647,6 +684,7 @@ struct Interp {
     Args popArgs(Ctx& c) {
         int n = (int)vm.toNumber(pop(c));
         Args args;
+        args.reserve((size_t)std::max(0, std::min(n, (int)c.stack.size())));
         for (int i = 0; i < n && i < 10000; ++i) args.push_back(pop(c));
         return args;
     }
@@ -723,8 +761,19 @@ struct Interp {
                 break;
             }
             case 7: { int32_t v; std::memcpy(&v, a + p, 4); p += 4; push(c, Value((double)v)); break; }
-            case 8: { uint8_t i = a[p++]; push(c, c.pool && i < c.pool->size() ? Value((*c.pool)[i]) : Value::undef()); break; }
-            case 9: { uint16_t i = (uint16_t)(a[p] | (a[p + 1] << 8)); p += 2; push(c, c.pool && i < c.pool->size() ? Value((*c.pool)[i]) : Value::undef()); break; }
+            case 8: {
+                uint8_t i = a[p++];
+                if (c.pool && i < c.pool->size()) { Value v((*c.pool)[i]); v.atom = c.pool->atoms[i]; push(c, std::move(v)); }
+                else push(c, Value::undef());
+                break;
+            }
+            case 9: {
+                uint16_t i = (uint16_t)(a[p] | (a[p + 1] << 8));
+                p += 2;
+                if (c.pool && i < c.pool->size()) { Value v((*c.pool)[i]); v.atom = c.pool->atoms[i]; push(c, std::move(v)); }
+                else push(c, Value::undef());
+                break;
+            }
             default: return;
             }
         }
@@ -759,6 +808,37 @@ struct Interp {
 
 // ---------------------------------------------------------------------------------------------------------------
 
+namespace {
+// WFC_AVMPROF=1 (diagnostics): self / inclusive time per script function, keyed by its code buffer and start offset
+// (the offsets of the .as.txt dumps); the top functions by self time are logged every 5 s.
+struct AvmProf {
+    struct Entry { double self = 0, incl = 0; long calls = 0; std::string label; };
+    std::unordered_map<const void*, std::unordered_map<size_t, Entry>> fns;
+    std::vector<double> childStack;   // children time of the frames in progress
+    double lastDump = 0;
+    static bool on() { static const bool v = std::getenv("WFC_AVMPROF") != nullptr; return v; }
+    static double now() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    void dumpMaybe() {
+        const double t = now();
+        if (lastDump == 0) { lastDump = t; return; }
+        if (t - lastDump < 5000) return;
+        std::vector<const Entry*> all;
+        for (auto& [k, m] : fns) for (auto& [o, e] : m) all.push_back(&e);
+        std::sort(all.begin(), all.end(), [](const Entry* a, const Entry* b) { return a->self > b->self; });
+        std::string out;
+        for (size_t i = 0; i < all.size() && i < 15; ++i) {
+            char b[256];
+            std::snprintf(b, sizeof b, "\n  self %7.2f ms  incl %7.2f ms  calls %6ld  %s", all[i]->self, all[i]->incl, all[i]->calls, all[i]->label.c_str());
+            out += b;
+        }
+        LOG_INFO("avmprof %.0f ms window:%s", t - lastDump, out.c_str());
+        fns.clear();
+        lastDump = t;
+    }
+};
+AvmProf g_avmProf;
+}
+
 Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superProto) {
     if (!fnV.isObject() || fnV.o->kind != ObjKind::Function) return Value::undef();
     Object* fn = fnV.o;
@@ -792,8 +872,10 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     c.origTarget = c.target;
     c.superProto = superProto;
     c.callee = fn;
-    Object* argsObj = newArray(args);
-    argsObj->setRaw("callee", Value(fn), DontEnum);
+    // DefineFunction2 with suppressArguments and no preloadArguments: no code can reach the arguments object.
+    const bool needArgs = !sc.v2 || !(sc.flags & 0x0008) || (sc.flags & 0x0004);
+    Object* argsObj = nullptr;
+    if (needArgs) { argsObj = newArray(args); argsObj->setRaw("callee", Value(fn), DontEnum); }
     if (sc.v2) {
         c.regs.assign(std::max<size_t>(sc.regCount, 1) + 1, Value::undef());
         uint8_t r = 1;
@@ -838,6 +920,24 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     c.end = sc.start + sc.length;
     struct TargetScope { VM& v; gfx::DisplayObject* prev; ~TargetScope() { v.currentTarget = prev; } } ts{*this, currentTarget};
     currentTarget = c.target;
+    if (AvmProf::on()) {
+        const double t0 = AvmProf::now();
+        g_avmProf.childStack.push_back(0.0);
+        in.run(c, sc.start, c.end, jt);
+        const double dt = AvmProf::now() - t0, kids = g_avmProf.childStack.back();
+        g_avmProf.childStack.pop_back();
+        if (!g_avmProf.childStack.empty()) g_avmProf.childStack.back() += dt;
+        AvmProf::Entry& e = g_avmProf.fns[sc.code.get()][sc.start];
+        if (e.label.empty()) {
+            char b[160];
+            std::snprintf(b, sizeof b, "%s @%zx (buf %zu bytes) %s", player_ && player_->rootDef() ? player_->rootDef()->baseName().c_str() : "?",
+                          sc.start, sc.code ? sc.code->size() : (size_t)0, sc.name.c_str());
+            e.label = b;
+        }
+        e.self += dt - kids; e.incl += dt; ++e.calls;
+        if (g_avmProf.childStack.empty()) g_avmProf.dumpMaybe();
+        return c.returned ? c.retval : Value::undef();
+    }
     in.run(c, sc.start, c.end, jt);
     return c.returned ? c.retval : Value::undef();
 }

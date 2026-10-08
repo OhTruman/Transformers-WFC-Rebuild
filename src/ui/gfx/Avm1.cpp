@@ -13,13 +13,38 @@
 
 namespace gfx::avm1 {
 
+namespace {
+struct AtomTable {
+    std::unordered_map<std::string, uint32_t> ids;
+    std::vector<const std::string*> names;
+};
+AtomTable& atoms() { static AtomTable t; return t; }
+}
+
+uint32_t atomIntern(const std::string& s) {
+    AtomTable& t = atoms();
+    auto it = t.ids.find(s);
+    if (it != t.ids.end()) return it->second;
+    const uint32_t id = (uint32_t)t.ids.size() + 1;
+    auto ins = t.ids.emplace(s, id).first;
+    t.names.push_back(&ins->first);
+    return id;
+}
+
+uint32_t atomFind(const std::string& s) {
+    const AtomTable& t = atoms();
+    auto it = t.ids.find(s);
+    return it == t.ids.end() ? 0 : it->second;
+}
+
 bool Object::removeOwn(const std::string& k) {
-    auto it = index.find(k);
+    const uint32_t a = atomFind(k);
+    auto it = a ? index.find(a) : index.end();
     if (it == index.end()) return false;
     size_t i = it->second;
     props.erase(props.begin() + (long)i);
     index.clear();
-    for (size_t j = 0; j < props.size(); ++j) index[props[j].first] = j;
+    for (size_t j = 0; j < props.size(); ++j) index[atomIntern(props[j].first)] = (uint32_t)j;
     return true;
 }
 
@@ -61,7 +86,7 @@ Object* VM::newFunction(NativeFn fn, const std::string& name, int length) {
 }
 
 Object* VM::newScriptFunction(const std::shared_ptr<ScriptCode>& code, const std::vector<Object*>& scope,
-                              const std::shared_ptr<std::vector<std::string>>& pool, gfx::DisplayObject* target) {
+                              const std::shared_ptr<ConstPool>& pool, gfx::DisplayObject* target) {
     Object* f = newObject(functionProto);
     f->kind = ObjKind::Function;
     f->script = code;
@@ -153,9 +178,16 @@ std::string VM::numberToString(double d, int radix) {
         return s;
     }
     if (std::fabs(d) < 1e15 && d == std::trunc(d)) {
-        char b[32];
-        std::snprintf(b, sizeof b, "%.0f", d);
-        return b;
+        // Whole numbers: the same digits "%.0f" prints, without snprintf (hot: indices, counters, data-store rows).
+        int64_t v = (int64_t)d;
+        char b[24];
+        int p = 23;
+        b[p] = 0;
+        const bool neg = v < 0;
+        uint64_t u = neg ? (uint64_t)(-v) : (uint64_t)v;
+        do { b[--p] = (char)('0' + (int)(u % 10)); u /= 10; } while (u);
+        if (neg) b[--p] = '-';
+        return std::string(b + p, (size_t)(23 - p));
     }
     char b[64];
     std::snprintf(b, sizeof b, "%.15g", d);
@@ -349,9 +381,11 @@ static bool isIndex(const std::string& k, size_t& out) {
 }
 
 Object* VM::findOwner(Object* o, const std::string& key) {
+    const uint32_t a = atomFind(key);
+    if (!a) return nullptr;
     int guard = 0;
     for (Object* p = o; p && guard < 256; p = p->proto, ++guard)
-        if (p->findOwn(key)) return p;
+        if (p->findOwnA(a)) return p;
     return nullptr;
 }
 
@@ -377,7 +411,7 @@ void VM::zombieUse(Object* o, const char* op, const std::string& key) {
              (int)o->kind, o->className.c_str(), o->nativeType.c_str(), (void*)o->display, props.c_str());
 }
 
-Value VM::get(Object* o, const std::string& key) {
+Value VM::get(Object* o, const std::string& key, uint32_t atomHint) {
     if (!o) return Value::undef();
     if (o->zombie) zombieUse(o, "get", key);
     if (key == "__proto__") return o->proto ? Value(o->proto) : Value::undef();
@@ -398,7 +432,8 @@ Value VM::get(Object* o, const std::string& key) {
         return p->v;
     }
     // Own property (with getter).
-    if (Property* p = o->findOwn(key)) {
+    const uint32_t atom = atomHint ? atomHint : atomFind(key);
+    if (Property* p = o->findOwnA(atom)) {
         if (p->getter) { Args a; return call(Value(p->getter), Value(o), a); }
         return p->v;
     }
@@ -409,7 +444,7 @@ Value VM::get(Object* o, const std::string& key) {
     }
     int guard = 0;
     for (Object* p = o->proto; p && guard < 256; p = p->proto, ++guard) {
-        if (Property* pr = p->findOwn(key)) {
+        if (Property* pr = p->findOwnA(atom)) {
             if (pr->getter) { Args a; return call(Value(pr->getter), Value(o), a); }
             return pr->v;
         }
@@ -417,8 +452,11 @@ Value VM::get(Object* o, const std::string& key) {
     // __resolve
     if (key != "__resolve") {
         Value r = Value::undef();
-        if (Object* owner = findOwner(o, "__resolve")) {
-            Value f = owner->findOwn("__resolve")->v;
+        static const uint32_t kResolve = atomIntern("__resolve");
+        Object* owner = nullptr;
+        { int g = 0; for (Object* q = o; q && g < 256; q = q->proto, ++g) if (q->findOwnA(kResolve)) { owner = q; break; } }
+        if (owner) {
+            Value f = owner->findOwnA(kResolve)->v;
             if (f.isObject() && f.o->kind == ObjKind::Function) { Args a{Value(key)}; r = call(f, Value(o), a); }
         }
         return r;
@@ -426,7 +464,7 @@ Value VM::get(Object* o, const std::string& key) {
     return Value::undef();
 }
 
-Value VM::getV(const Value& base, const std::string& key) {
+Value VM::getV(const Value& base, const std::string& key, uint32_t atomHint) {
     if (base.isNullish()) return Value::undef();
     if (base.t == VType::String) {
         if (key == "length") { extern size_t utf8Length(const std::string&); return Value((double)utf8Length(base.s)); }
@@ -434,14 +472,34 @@ Value VM::getV(const Value& base, const std::string& key) {
     }
     if (base.t == VType::Number) return get(numberProto, key);
     if (base.t == VType::Bool) return get(booleanProto, key);
-    return get(base.o, key);
+    return get(base.o, key, atomHint);
 }
 
-void VM::set(Object* o, const std::string& key, const Value& vIn) {
+void VM::set(Object* o, const std::string& key, const Value& vIn, uint32_t atomHint) {
     if (!o) return;
     if (o->zombie) zombieUse(o, "set", key);
     Value v = vIn;
+    // DEV TOOL: WFC_AVMDUMPFN=<name>: a script function assigned to _global.<name> has its bytecode and constant pool
+    // written to avmfn_<name>.bin / .pool.txt (native ports are checked against the exact operations).
+    if (o == global && v.isObject() && v.o->kind == ObjKind::Function && v.o->script) {
+        static const char* want = std::getenv("WFC_AVMDUMPFN");
+        if (want && (std::string(",") + want + ",").find("," + key + ",") != std::string::npos) {
+            const ScriptCode& sc = *v.o->script;
+            if (FILE* fb = std::fopen(("avmfn_" + key + ".bin").c_str(), "wb")) {
+                std::fwrite(sc.code->data() + sc.start, 1, sc.length, fb);
+                std::fclose(fb);
+            }
+            if (FILE* fp = std::fopen(("avmfn_" + key + ".pool.txt").c_str(), "w")) {
+                std::fprintf(fp, "v2=%d regs=%d flags=%04x params=", sc.v2 ? 1 : 0, (int)sc.regCount, (unsigned)sc.flags);
+                for (const auto& pr : sc.params) std::fprintf(fp, "%d:%s ", (int)pr.first, pr.second.c_str());
+                std::fputc('\n', fp);
+                if (v.o->pool) for (size_t i = 0; i < v.o->pool->size(); ++i) std::fprintf(fp, "%zu %s\n", i, (*v.o->pool)[i].c_str());
+                std::fclose(fp);
+            }
+        }
+    }
     if (key == "__proto__") { o->proto = v.isObject() ? v.o : nullptr; return; }
+    if (o == global && v.isObject() && v.o->kind == ObjKind::Function && v.o->script) nativeLibraryOverride(*this, key, v);
     if (!o->watches.empty()) {
         auto w = o->watches.find(key);
         if (w != o->watches.end()) {
@@ -464,7 +522,8 @@ void VM::set(Object* o, const std::string& key, const Value& vIn) {
         }
     }
     if (o->kind == ObjKind::Super) { set(o->superThis, key, v); return; }
-    if (Property* p = o->findOwn(key)) {
+    const uint32_t atom = atomHint ? atomHint : atomFind(key);
+    if (Property* p = o->findOwnA(atom)) {
         if (p->setter) { Args a{v}; call(Value(p->setter), Value(o), a); return; }
         if (p->getter) return;   // getter without setter: read only
         if (p->flags & ReadOnly) return;
@@ -476,7 +535,7 @@ void VM::set(Object* o, const std::string& key, const Value& vIn) {
     // Inherited setter (addProperty on a prototype).
     int guard = 0;
     for (Object* p = o->proto; p && guard < 256; p = p->proto, ++guard) {
-        if (Property* pr = p->findOwn(key)) {
+        if (Property* pr = p->findOwnA(atom)) {
             if (pr->setter) { Args a{v}; call(Value(pr->setter), Value(o), a); return; }
             if (pr->getter) return;
             break;
