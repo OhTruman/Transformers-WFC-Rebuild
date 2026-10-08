@@ -184,13 +184,24 @@ void World::load(render::IRenderer& renderer) {
             // original-size matches keep every impact. WFC_IMPACTRELEVANCE=0 / 1 forces it off / on.
             bool relevant = true;
             static const char* irEnv = std::getenv("WFC_IMPACTRELEVANCE");
-            const bool gate = irEnv ? std::atoi(irEnv) != 0 : match_.players().size() > 10;
+            const bool gate = irEnv ? std::atoi(irEnv) != 0 : extendedLobby();
             if (shot.impact && gate && shot.player != localPlayer_ && renderer_) {
                 const float age = renderer_->drawOwnerRenderAge(100 + shot.player);
                 const core::Vec3 cam = player_.controller().cameraPos();
                 const core::Vec3 toImpact = shot.to - cam;
                 const bool behind = core::dot(toImpact, core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch())) < 0.0f;
                 relevant = age >= 0.0f && age <= 1.0f && core::length(toImpact) <= (behind ? 16.0f : 25.0f);   // 1600 / 2500 UU
+            }
+            if (shot.impact && relevant && gate && shot.player != localPlayer_) {
+                // SkipSquibEffect: only ImpactSquibPercentage of the attempts spawn (per shooter, a deterministic accumulator instead
+                // of the original's per-second random roll). The ImpactSquibMaxCount bucket (5-14 live per weapon mesh) is not
+                // enforced: the renderer has no kill for a live one-shot, and squibs are short-lived (pool peak 3-4 at 64 players).
+                const float pct = impactFxRule(shot.weapon).squibPercentage;
+                if (pct < 1.0f) {
+                    float& acc = squibAccum_[shot.player];
+                    acc += pct;
+                    if (acc < 1.0f) relevant = false; else acc -= 1.0f;
+                }
             }
             if (shot.impact && relevant) {
                 fxSpawnPooled_ = true;   // impact squibs: pooled
@@ -3244,7 +3255,7 @@ void World::syncMapPresentation(render::IRenderer& r) const {
     if (pushedRulesMode_ != (int)mapState_.mode()) { r.setActiveGameRules(mapState_.gameRules()); pushedRulesMode_ = (int)mapState_.mode(); }
     r.setMapClock(mapState_.clock());
     {   // [integration 09c] EmitterPool MaxActiveEffects 50 (original) only in extended lobbies (user decision 2026-10-08)
-        const int ext = matchActive_ && match_.players().size() > 10 ? 1 : 0;
+        const int ext = extendedLobby() ? 1 : 0;
         if (ext != pushedPoolCap_) { r.setEmitterPoolCap(ext != 0); pushedPoolCap_ = ext; }
     }
     for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
