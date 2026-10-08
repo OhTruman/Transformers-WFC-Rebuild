@@ -254,6 +254,11 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
         if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}" -f $sfN, $row.slowframe_bins, $sfAvg) "Rendering" }
+        if ($k -eq 1) {   # the size actually rendered vs requested (2026-10-08: a 3840x2160 window on a 2560x1440 desktop may be clamped)
+            $rm = [regex]::Match(($segL -join "`n"), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)')
+            if (-not $rm.Success) { $rm = [regex]::Match([IO.File]::ReadAllText($lg), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)') }
+            $rendered = if ($rm.Success) { "$($rm.Groups[1].Value)x$($rm.Groups[2].Value)" } else { "" }
+            Res "$mt.resolution" $(if (-not $rendered) { "UNKNOWN" } elseif ($rendered -eq $resol) { "PASS" } else { "FAIL" }) $(if (-not $rendered) { "no 'warm-up draw ... at WxH' line - rendered size unknown (requested $resol)" } elseif ($rendered -eq $resol) { "rendered $rendered as requested" } else { "requested $resol but the world rendered at $rendered (window clamped by the desktop / OS?) - this row is NOT a $resol measurement" }) "Experimental" }
         $viewShot = Join-Path $ds "m00600.bmp"   # split run (same cam; captures stall ~50 ms, so never in the timing run)
         if ($k -eq 1 -and (Test-Path $viewShot)) {   # the measured view: near-black / flat = the fixed cam sees a wall, numbers unrepresentative
             Add-Type -AssemblyName System.Drawing; $vb = New-Object System.Drawing.Bitmap $viewShot; $ls = New-Object System.Collections.Generic.List[double]
