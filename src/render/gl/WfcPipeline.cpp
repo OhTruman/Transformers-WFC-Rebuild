@@ -4172,7 +4172,10 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     // stock UE3, HIGH): the TransformerHealthBar marker (now - LastRenderTime < 0.25 s, CONFIRMED script) hides behind
     // walls as in WFC. WFC_OCCMARKERREFRESH=1 = refresh for occlusion-culled owners too (previous behaviour)
     static const bool occRefresh = std::getenv("WFC_OCCMARKERREFRESH") != nullptr;
-    if (!warmup_ && (!occluded || occRefresh)) ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();
+    if (!warmup_ && (!occluded || occRefresh)) {
+        ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();
+        ownerRenderedGame_[drawOwner_] = time_;
+    }
     if (!warmup_ && !occluded) ownerRenderedTime_[drawOwner_] = time_;
     GpuMesh& g = ds.g;
     g.vao = drawVao;

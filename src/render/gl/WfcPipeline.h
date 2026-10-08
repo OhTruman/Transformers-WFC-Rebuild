@@ -452,11 +452,15 @@ private:
     void drawHudScreenEffect();
 public:
     void setHudScreenEffect(int chain) { hudEffect_ = chain < 0 ? -1 : (chain > 1 ? 1 : chain); }
+    // seconds of renderer time (lockstep: frame-based, deterministic) since the owner was last actually drawn
     float drawOwnerRenderAge(int owner) const {
-        auto it = ownerRendered_.find(owner);
-        if (it == ownerRendered_.end()) return -1.0f;
-        return std::chrono::duration<float>(std::chrono::steady_clock::now() - it->second).count();
+        auto it = ownerRenderedGame_.find(owner);
+        if (it == ownerRenderedGame_.end()) return -1.0f;
+        return std::max(time_ - it->second, 0.0f);
     }
+    std::unordered_map<int, float> ownerRenderedGame_;   // owner -> time_ of the last render (markers / FX relevance)
+    void setEmitterPoolCap(bool on) { poolCapOn_ = on; }
+    bool poolCapOn_ = false;                              // EmitterPool MaxActiveEffects 50 (extended lobbies)
 private:
     struct PosedBuf {
         GLuint vao = 0, vbo = 0, ibo = 0, prevVbo = 0;
@@ -707,6 +711,9 @@ public:
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
     bool setFxTarget(int id, const float target[3]);   // segment end (beam target), UE units
     void stopFx(int id);
+    void markFxPooled(int id);                 // EmitterPool effect (see IRenderer::setParticleEffectPooled)
+    long fxPoolSeq_ = 0;
+    int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
@@ -820,6 +827,7 @@ private:
         int id = 0; bool transient = false;   // runtime spawned (spawnFx), released when finished / at unload
         bool hasTarget = false; float target[3] = {0, 0, 0};
         float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
+        long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
     };
     int nextFxId_ = 1;
     size_t statLiveParticles_ = 0;    // live map-FX particles at the start of the tick (global budget guard)

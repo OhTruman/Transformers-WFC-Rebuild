@@ -1212,6 +1212,8 @@ public:
         return wfc_.active() && wfc_.setMaterialParam(actor, param, v);
     }
     int liveParticleEffects() const override { return wfc_.liveFx(); }
+    void setParticleEffectPooled(int handle) override { wfc_.markFxPooled(handle); }
+    void setEmitterPoolCap(bool on) override { wfc_.setEmitterPoolCap(on); }
     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
     void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
