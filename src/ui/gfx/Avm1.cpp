@@ -499,7 +499,7 @@ void VM::set(Object* o, const std::string& key, const Value& vIn, uint32_t atomH
         }
     }
     if (key == "__proto__") { o->proto = v.isObject() ? v.o : nullptr; return; }
-    if (o == global && v.isObject() && v.o->kind == ObjKind::Function && v.o->script) nativeLibraryOverride(*this, key, v);
+    if (v.isObject() && v.o->kind == ObjKind::Function && v.o->script) nativeLibraryOverride(*this, key, v);   // by name + bytecode hash
     if (!o->watches.empty()) {
         auto w = o->watches.find(key);
         if (w != o->watches.end()) {
