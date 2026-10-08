@@ -25,6 +25,9 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       # (Gameplay's WFC_PLAYERBOT) with the normal follow camera / HUD; use WITHOUT -FixedCam. Builds without the hook fall back to
       # scripted input (walk / strafe / jump / turn / fire) and the row says "scripted (approximation)".
       [int]$PlayerBot = -1,
+      # -RenderSize WxH: Rendering's WFC_RENDERSIZE - every 3D pass renders at WxH and the post pass scales into the window
+      # (-Resolutions); for 4K rows on a smaller desktop. The rendered-size check then expects WxH.
+      [string]$RenderSize = "",
       # -AsyncModes "0,1": every row with WFC_ASYNCSTEP=0 and =1 (Gameplay's async sim step); =1 rows also log WFC_ASYNCLOG
       # (local part / background part / join wait), reported per row
       [string[]]$AsyncModes = @(),
@@ -107,6 +110,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
           }   # (no screenshot in the TIMING run: a capture stalls the main thread ~50 ms - the view check uses the split run, below)
         if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
         foreach ($k in $extraEnvMap.Keys) { $e[$k] = $extraEnvMap[$k] }
+        if ($RenderSize) { if ($H.Contains("WFC_RENDERSIZE")) { $e.WFC_RENDERSIZE = $RenderSize } else { Write-Warning "build has no WFC_RENDERSIZE - rows will FAIL the rendered-size check" } }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
     }
     # CPU / GPU split: a separate ONE-match run with WFC_RENDERSTATS (glFinish per frame distorts timing, so never in the timing run)
@@ -127,6 +131,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"]
                 if ($H.Contains("WFC_SHOTMATCH")) { $e2.WFC_SHOTMATCH = "$ds,600,600,1" } }   # the measured view, captured in the untimed split run
             if ($asyncM -ne "") { $e2.WFC_ASYNCSTEP = $asyncM }
+            if ($RenderSize -and $H.Contains("WFC_RENDERSIZE")) { $e2.WFC_RENDERSIZE = $RenderSize }
             $null = Invoke-WfcExe $exe $ds $e2 "run.log" 700
         }
     }
@@ -258,7 +263,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             $rm = [regex]::Match(($segL -join "`n"), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)')
             if (-not $rm.Success) { $rm = [regex]::Match([IO.File]::ReadAllText($lg), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)') }
             $rendered = if ($rm.Success) { "$($rm.Groups[1].Value)x$($rm.Groups[2].Value)" } else { "" }
-            Res "$mt.resolution" $(if (-not $rendered) { "UNKNOWN" } elseif ($rendered -eq $resol) { "PASS" } else { "FAIL" }) $(if (-not $rendered) { "no 'warm-up draw ... at WxH' line - rendered size unknown (requested $resol)" } elseif ($rendered -eq $resol) { "rendered $rendered as requested" } else { "requested $resol but the world rendered at $rendered (window clamped by the desktop / OS?) - this row is NOT a $resol measurement" }) "Experimental" }
+            $want = if ($RenderSize) { $RenderSize } else { $resol }
+            Res "$mt.resolution" $(if (-not $rendered) { "UNKNOWN" } elseif ($rendered -eq $want) { "PASS" } else { "FAIL" }) $(if (-not $rendered) { "no 'warm-up draw ... at WxH' line - rendered size unknown (requested $want)" } elseif ($rendered -eq $want) { "rendered $rendered as requested$(if ($RenderSize) { " (WFC_RENDERSIZE; window $resol)" })" } else { "requested $want but the world rendered at $rendered (window clamped / RENDERSIZE not applied?) - this row is NOT a $want measurement" }) "Experimental" }
         $viewShot = Join-Path $ds "m00600.bmp"   # split run (same cam; captures stall ~50 ms, so never in the timing run)
         if ($k -eq 1 -and (Test-Path $viewShot)) {   # the measured view: near-black / flat = the fixed cam sees a wall, numbers unrepresentative
             Add-Type -AssemblyName System.Drawing; $vb = New-Object System.Drawing.Bitmap $viewShot; $ls = New-Object System.Collections.Generic.List[double]
@@ -303,7 +309,7 @@ Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", 
 if ($PerfLog) {
     $lines = New-Object System.Collections.Generic.List[string]
     if (-not (Test-Path $PerfLog)) { $lines.Add("# PERFORMANCE LOG (Experimental; user scalability brief, Integration 2026-10-07)"); $lines.Add(""); $lines.Add("Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with bots, second-match (warm) figures. Steady stats exclude hitch events (> 50 ms), which are counted separately; the first 180 in-play frames are warm-up. 1 % / 0.1 % low = fps of the slowest 1 % / 0.1 % of steady frames. Splits come from a separate profiling run (glFinish-serialised: ratios, not absolute).") }
-    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($FixedCam) { " - cam $CamSet" })$(if ($PlayerBot -ge 0) { " - real play: " + $(if ($H.Contains("WFC_PLAYERBOT")) { "PLAYERBOT $PlayerBot, follow cam" } else { "scripted input (approximation), follow cam" }) })$(if ($Note) { " - $Note" })"); $lines.Add("")
+    $lines.Add(""); $lines.Add("## $(Get-Date -Format 'yyyy-MM-dd HH:mm') - $($sha.Substring(0, [Math]::Min(7, $sha.Length)))$(if ($RenderSize) { " - 3D at $RenderSize" })$(if ($FixedCam) { " - cam $CamSet" })$(if ($PlayerBot -ge 0) { " - real play: " + $(if ($H.Contains("WFC_PLAYERBOT")) { "PLAYERBOT $PlayerBot, follow cam" } else { "scripted input (approximation), follow cam" }) })$(if ($Note) { " - $Note" })"); $lines.Add("")
     $lines.Add("| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |")
     $lines.Add("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     foreach ($r in @($rows | Where-Object { $_.match -eq 2 } | Sort-Object map, res, async, participants)) {
