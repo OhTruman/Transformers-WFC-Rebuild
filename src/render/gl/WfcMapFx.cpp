@@ -1371,6 +1371,17 @@ void Pipeline::drawMapPresentation() {
     if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
     if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
+    // WFC_MAPFXPROF=1 (diagnostics): average CPU ms per frame of this function's sections, logged every 600 frames
+    static const bool secProf = std::getenv("WFC_MAPFXPROF") != nullptr;
+    static double secMs[5] = {0, 0, 0, 0, 0};
+    static int secFrames = 0;
+    auto secT = std::chrono::steady_clock::now();
+    auto sec = [&](int k) {
+        if (!secProf) return;
+        const auto now = std::chrono::steady_clock::now();
+        secMs[k] += std::chrono::duration<double, std::milli>(now - secT).count();
+        secT = now;
+    };
     // props
     for (MapProp& p : mapProps_) {
         if (actorHidden(p.actorLower)) continue;
@@ -1387,6 +1398,7 @@ void Pipeline::drawMapPresentation() {
             draw(p.stateMesh[0], mv != moverDelta_.end() ? mv->second * p.model : p.model);
         }
     }
+    sec(0);
     // pickup factory meshes (render_index pickup_factory_visuals)
     {
         float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
@@ -1418,6 +1430,7 @@ void Pipeline::drawMapPresentation() {
             draw(pm.meshId, ueRowsToGltf(rows, wt));
         }
     }
+    sec(1);
     // particles
     core::Vec3 camR{camView_.m[0], camView_.m[4], camView_.m[8]};
     core::Vec3 camU{camView_.m[1], camView_.m[5], camView_.m[9]};
@@ -2038,6 +2051,7 @@ void Pipeline::drawMapPresentation() {
                                    std::getenv("WFC_FXTEST") != nullptr;
         if (serial || n < 8) { for (size_t i = 0; i < n; ++i) buildInstance(fxInstances_[i], fxOut[i]); }
         else renderPoolRun((int)n, [&](int i) { buildInstance(fxInstances_[(size_t)i], fxOut[(size_t)i]); });
+        sec(2);
         for (size_t i = 0; i < n; ++i) {                 // replay in instance order: the serial loop's call sequence
             FxOut& o = fxOut[i];
             sprites += o.sprites; meshes += o.meshes;
@@ -2045,7 +2059,9 @@ void Pipeline::drawMapPresentation() {
                 FxCmd& c = o.cmds[k];
                 if (c.kind == 0) {
                     if (c.hasDyn) std::copy(c.dyn, c.dyn + 4, dynParam_);
+                    spriteSwapSrc_ = &c.sp;                  // deferred: the batch takes the buffer (no copy)
                     drawSprites(c.material, c.sp.data(), c.sp.size(), c.facing);
+                    spriteSwapSrc_ = nullptr;
                     std::fill(dynParam_, dynParam_ + 4, 1.0f);
                 } else {
                     drawFx(c.meshId, c.M, c.col);
@@ -2054,6 +2070,12 @@ void Pipeline::drawMapPresentation() {
         }
     }
     statFxSprites_ += sprites; statFxMeshes_ += meshes;
+    sec(3);
+    if (secProf && ++secFrames == 600) {
+        LOG_INFO("MAPFXPROF ms/frame: props %.3f, pickups %.3f, particle build %.3f, replay %.3f (%zu instances, %d sprites / frame)",
+                 secMs[0] / 600, secMs[1] / 600, secMs[2] / 600, secMs[3] / 600, fxInstances_.size(), sprites);
+        for (double& v : secMs) v = 0; secFrames = 0;
+    }
     glx::gpuMark(glx::kPassMapFx);
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     glx::gpuMark(glx::kPassTranslucent);

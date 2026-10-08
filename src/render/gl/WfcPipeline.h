@@ -354,6 +354,7 @@ private:
     GLuint spriteFrameVao_ = 0, spriteFrameVbo_ = 0, spriteFrameCbo_ = 0, spriteFrameSbo_ = 0, spriteFrameIbo_ = 0;
     size_t spriteFrameIboQuads_ = 0;
     GpuMesh spriteFrameMesh_;
+    std::vector<Sprite>* spriteSwapSrc_ = nullptr;     // set by the FX replay: drawSprites may take this vector's buffer
     void spriteCoverage(const char* material, const Sprite* sp, size_t n);
     void spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, RawFloats& v, RawFloats& col, RawFloats& sub);
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
