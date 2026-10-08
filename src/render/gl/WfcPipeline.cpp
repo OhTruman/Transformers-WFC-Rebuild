@@ -4710,6 +4710,14 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
     time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
+    // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
+    winW_ = w; winH_ = h;
+    {
+        static int rw = 0, rh = 0;
+        static const bool rs = [] { const char* e = std::getenv("WFC_RENDERSIZE"); return e && std::sscanf(e, "%dx%d", &rw, &rh) == 2 && rw > 0 && rh > 0; }();
+        if (rs) { w = rw; h = rh; }
+    }
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -4751,7 +4759,7 @@ void Pipeline::drawCanvasTiles() {
     const std::vector<IRenderer::MaterialTile>& tiles = uiTiles_;
     const core::Mat4 saveVP = viewProj_;
     const bool saveFog = fogOn_;
-    float W = (float)std::max(vpW_, 1), Hh = (float)std::max(vpH_, 1);
+    float W = (float)std::max(winW_ > 0 ? winW_ : vpW_, 1), Hh = (float)std::max(winH_ > 0 ? winH_ : vpH_, 1);   // window pixels
     core::Mat4 ortho = core::Mat4::identity();         // pixels -> NDC, y down
     ortho.m[0] = 2.0f / W; ortho.m[5] = -2.0f / Hh; ortho.m[10] = -1.0f; ortho.m[12] = -1.0f; ortho.m[13] = 1.0f;
     viewProj_ = ortho;
@@ -4908,7 +4916,7 @@ void Pipeline::endFrame() {
         }
     }
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, vpW_, vpH_);
+    glViewport(0, 0, winW_ > 0 ? winW_ : vpW_, winH_ > 0 ? winH_ : vpH_);   // the window (WFC_RENDERSIZE: scaled)
     UseProgram(postProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
