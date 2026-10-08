@@ -8,8 +8,11 @@ enum class LogLevel { Trace, Info, Warn, Error };
 
 void logMessage(LogLevel level, const char* fmt, ...);
 // Lines are written by a background thread (see Log.cpp); this writes everything logged so far, in order, before returning
-// (the crash handler, shutdown paths). Errors are flushed this way automatically.
+// (shutdown paths; a crash filter uses logTryFlush below). Errors are flushed this way automatically.
 void logFlush();
+// Crash-handler variant: writes what is pending only if no thread holds the writer's locks (try_lock), with raw OS writes,
+// never blocking or allocating; returns false if it could not (the lines are then lost, the crash report is not).
+bool logTryFlush();
 
 } // namespace core
 

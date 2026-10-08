@@ -8,6 +8,10 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#endif
 
 namespace core {
 
@@ -76,6 +80,33 @@ Writer& Writer::writer() { static Writer* w = new Writer; return *w; }   // neve
 } // namespace
 
 void logFlush() { Writer::writer().drain(); }
+
+bool logTryFlush() {
+    // Crash-filter safe: never blocks (try_lock only - the faulting thread may hold either mutex), never allocates, bypasses
+    // stdio's own locks (raw WriteFile on the OS handles). Every completed write was already fflush'ed, so the CRT buffers
+    // are empty and these bytes land after them, in order.
+    Writer& w = Writer::writer();
+    if (!w.io.try_lock()) return false;
+    if (!w.m.try_lock()) { w.io.unlock(); return false; }
+    bool ok = true;
+#ifdef _WIN32
+    if (!w.pending.empty()) {
+        HANDLE hs[2] = {GetStdHandle(STD_OUTPUT_HANDLE), INVALID_HANDLE_VALUE};
+        if (std::FILE* f = logFile()) hs[1] = (HANDLE)_get_osfhandle(_fileno(f));
+        for (HANDLE h : hs) {
+            if (h == INVALID_HANDLE_VALUE || h == nullptr) continue;
+            DWORD written = 0;
+            ok = WriteFile(h, w.pending.data(), (DWORD)w.pending.size(), &written, nullptr) && ok;
+        }
+        w.pending.clear();                                  // keeps the capacity: no free
+    }
+#else
+    if (!w.pending.empty()) { w.writeOut(w.pending); w.pending.clear(); }
+#endif
+    w.m.unlock();
+    w.io.unlock();
+    return ok;
+}
 
 void logMessage(LogLevel level, const char* fmt, ...) {
     const char* tag = "[..]";
