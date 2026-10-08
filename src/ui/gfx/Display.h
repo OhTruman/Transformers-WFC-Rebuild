@@ -369,6 +369,7 @@ private:
     std::vector<Interval> intervals_;
     int nextInterval_ = 1;
     int gcCounter_ = 0;                       // advances since start (collection every 300 per movie)
+    int forceGcFrames_ = 0;                   // DEV TOOL (WFC_GFX_FORCEGC): advances still to collect after a loadClip
     struct PendingLoad { MovieClip* target; std::string url; avm1::Object* loader; };
     std::vector<PendingLoad> loads_;
     double timeMs_ = 0;

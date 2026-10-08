@@ -174,7 +174,14 @@ struct ScopeVars {
     VM& vm;
     Object* fn;   // the original script function (scope chain, defining timeline)
     Value self;
+    // Diagnostics: the original must be alive (under WFC_GFX_GCCHECK a collected one is kept as a zombie and caught here).
+    void checkAlive() const {
+        if (!fn->zombie) return;
+        static int logged = 0;
+        if (logged++ < 20) LOG_WARN("AVM1 GCCHECK: native port '%s' uses its collected original script", fn->script ? fn->script->name.c_str() : "?");
+    }
     Value get(const std::string& n) {
+        checkAlive();
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
             if (!s) continue;
@@ -198,6 +205,7 @@ struct ScopeVars {
         return vm.call(f, t ? Value(t) : Value::undef(), args);
     }
     void set(const std::string& n, const Value& v) {
+        checkAlive();
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
             if (!s || s == vm.global) continue;

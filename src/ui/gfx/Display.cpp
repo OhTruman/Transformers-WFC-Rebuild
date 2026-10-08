@@ -836,6 +836,7 @@ void Player::processLoads() {
             continue;
         }
         LOG_INFO("GFX loadClip %s -> %s", l.url.c_str(), def->baseName().c_str());
+        if (std::getenv("WFC_GFX_FORCEGC")) forceGcFrames_ = 3;   // DEV TOOL: collect on the next advances
         for (auto& [d, ch] : l.target->children) { unloadClip(ch.get()); graveyard.push_back(std::move(ch)); }
         l.target->children.clear();
         Object* so = scriptObject(l.target);
@@ -1281,7 +1282,14 @@ void Player::advance(float dt) {
     // Per movie: a counter shared by all players (a function static) made the same movie take every 300th tick while
     // the open-movie count divided 300, so the others collected only when that count changed (heaps of ~200k objects).
     static const bool noGc = std::getenv("WFC_GFX_NO_GC") != nullptr;   // diagnostics: never collect
-    if (!noGc && ++gcCounter_ % 300 == 0 && vm_->heapSize() > 20000) {
+    // DEV TOOL WFC_GFX_FORCEGC=<n>: a full collection on the 3 advances after every loadClip (the loaded movie's init
+    // actions have run by then) and, for n > 1, every n advances regardless of heap size - stale-object hunting.
+    static const int forceEvery = std::getenv("WFC_GFX_FORCEGC") ? std::atoi(std::getenv("WFC_GFX_FORCEGC")) : 0;
+    ++gcCounter_;
+    bool forced = false;
+    if (forceGcFrames_ > 0) { --forceGcFrames_; forced = true; }
+    if (forceEvery > 1 && gcCounter_ % forceEvery == 0) forced = true;
+    if (!noGc && (forced || (gcCounter_ % 300 == 0 && vm_->heapSize() > 20000))) {
         std::vector<Object*> roots;
         for (Object* o : keyListeners) roots.push_back(o);
         for (Object* o : stageListeners) roots.push_back(o);
