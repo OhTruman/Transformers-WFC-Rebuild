@@ -104,7 +104,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             if ($H.Contains("WFC_PLAYERBOT")) { foreach ($k in "WFC_AUTOWALK", "WFC_AUTOSTRAFE", "WFC_AUTOJUMP_EVERY") { $e.Remove($k) }; $e.WFC_PLAYERBOT = "$PlayerBot"; $e.WFC_PLAYERBOTLOG = "1" }
             else { $e.WFC_AUTOTURN = "0.6"; $e.WFC_AUTOFIRE = "1" } }
         if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"]
-            if ($H.Contains("WFC_SHOTMATCH")) { $e.WFC_SHOTMATCH = "$d,600,600,1" } }   # one capture of the measured view per match
+          }   # (no screenshot in the TIMING run: a capture stalls the main thread ~50 ms - the view check uses the split run, below)
         if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
         foreach ($k in $extraEnvMap.Keys) { $e[$k] = $extraEnvMap[$k] }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
@@ -124,7 +124,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                      WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_RENDERSTATS = "1"; WFC_TICKPROF = "1"; WFC_DRAWPROF = "1"; WFC_FRAMEPROF = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"
                      WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=600" }
             if ($H.Contains("WFC_CHARSELECT")) { $e2.WFC_CHARSELECT = "1" }
-            if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"] }
+            if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"]
+                if ($H.Contains("WFC_SHOTMATCH")) { $e2.WFC_SHOTMATCH = "$ds,600,600,1" } }   # the measured view, captured in the untimed split run
             if ($asyncM -ne "") { $e2.WFC_ASYNCSTEP = $asyncM }
             $null = Invoke-WfcExe $exe $ds $e2 "run.log" 700
         }
@@ -253,14 +254,14 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
         if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}" -f $sfN, $row.slowframe_bins, $sfAvg) "Rendering" }
-        $viewShot = Join-Path $d "m00600.bmp"
+        $viewShot = Join-Path $ds "m00600.bmp"   # split run (same cam; captures stall ~50 ms, so never in the timing run)
         if ($k -eq 1 -and (Test-Path $viewShot)) {   # the measured view: near-black / flat = the fixed cam sees a wall, numbers unrepresentative
             Add-Type -AssemblyName System.Drawing; $vb = New-Object System.Drawing.Bitmap $viewShot; $ls = New-Object System.Collections.Generic.List[double]
             for ($vy = 0; $vy -lt $vb.Height; $vy += 24) { for ($vx = 0; $vx -lt $vb.Width; $vx += 24) { $c = $vb.GetPixel($vx, $vy); $ls.Add(0.299 * $c.R + 0.587 * $c.G + 0.114 * $c.B) } }
-            $vs = New-Object System.Drawing.Bitmap $vb, 480, 270; $vs.Save((Join-Path $d "view.png"), [System.Drawing.Imaging.ImageFormat]::Png); $vs.Dispose(); $vb.Dispose()
+            $vs = New-Object System.Drawing.Bitmap $vb, 480, 270; $vs.Save((Join-Path $ds "view.png"), [System.Drawing.Imaging.ImageFormat]::Png); $vs.Dispose(); $vb.Dispose()
             $lsrt = @($ls | Sort-Object); $med = $lsrt[[int]($lsrt.Count / 2)]; $flat = 100.0 * @($ls | Where-Object { [Math]::Abs($_ - $med) -le 6 }).Count / $ls.Count
             $lm = ($ls | Measure-Object -Average).Average
-            Res "$mt.view" $(if ($lm -lt 30 -or $flat -gt 85) { "FAIL" } else { "INFO" }) ("measured view (match step 600, $(Split-Path $d -Leaf)\view.png): mean luma {0:N0}, {1:N0} % flat{2}" -f $lm, $flat, $(if ($lm -lt 30 -or $flat -gt 85) { " - NEAR-BLACK / FLAT: the fixed cam sees a wall; frame times are not representative of play" } else { "" })) "Experimental" }
+            Res "$mt.view" $(if ($lm -lt 30 -or $flat -gt 85) { "FAIL" } else { "INFO" }) ("measured view (match step 600 of the split run, $(Split-Path $ds -Leaf)\view.png): mean luma {0:N0}, {1:N0} % flat{2}" -f $lm, $flat, $(if ($lm -lt 30 -or $flat -gt 85) { " - NEAR-BLACK / FLAT: the fixed cam sees a wall; frame times are not representative of play" } else { "" })) "Experimental" }
         if ($PlayerBot -ge 0 -and $H.Contains("WFC_PLAYERBOT")) {   # the pilot must actually play: log lines + shots
             $pb = @($segL | Where-Object { $_ -match 'PLAYERBOT' }); $pbShots = @($pb | ForEach-Object { $mm = [regex]::Match($_, 'shots (\d+)'); if ($mm.Success) { [int]$mm.Groups[1].Value } }) | Measure-Object -Maximum
             Res "$mt.pilot" $(if (-not $pb.Count) { "UNKNOWN" } elseif ($pbShots.Count -and $pbShots.Maximum -eq 0) { "FAIL" } else { "INFO" }) ("player bot: {0} PLAYERBOT log lines, max shots {1}{2}" -f $pb.Count, $(if ($pbShots.Count) { $pbShots.Maximum } else { "n/a (no 'shots' field)" }), $(if ($pb.Count) { "; last: " + ($pb[-1] -replace '^\[[^\]]*\]\s*', '').Substring(0, [Math]::Min(160, ($pb[-1] -replace '^\[[^\]]*\]\s*', '').Length)) } else { " - the pilot never logged (hook not wired into the loop?)" })) "Gameplay" }
