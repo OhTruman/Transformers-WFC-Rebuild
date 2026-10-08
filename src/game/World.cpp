@@ -205,16 +205,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         LOG_INFO("collision: movement %s, weapon %s", authored ? "collision_pawn.glb" : "collision.glb (fallback)",
                  weaponCollision_.valid() ? "collision_weapon.glb" : "movement world");
         renderer.setVisibilityQuery([this](const core::Vec3& a, const core::Vec3& b) {
-            // March in short pieces: segmentHit scans every grid cell in the segment's AABB,
-            // which is prohibitive for long light-visibility rays.
-            core::Vec3 d = b - a;
-            float len = core::length(d);
-            int n = std::max(1, (int)std::ceil(len / 2.0f));
+            // One exact query: segmentHit walks only the grid cells the segment crosses and stops at the first hit (the old 2 m march
+            // dated from an AABB scan and cost a setup per piece - Rendering's 64p profile: segmentHit 8.7 % of the main thread).
+            // Static triangles only (the renderer calls this on the main thread while the step may run).
             float t;
             const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;   // zero-extent line checks
-            for (int i = 0; i < n; ++i)
-                if (lineWorld.segmentHit(a + d * ((float)i / n), a + d * ((float)(i + 1) / n), t)) return true;
-            return false;
+            return lineWorld.segmentHit(a, b, t);
         });
         // KillZ of the persistent level's WorldInfo (physics.json world[<Map>_BASE_m].KillZ) [CONF authored]: Streets -75000,
         // Gorge -7500, Debris +10000 UU ... Streets' value stays the fallback.
