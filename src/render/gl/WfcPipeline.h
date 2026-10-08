@@ -331,13 +331,31 @@ private:
     std::vector<uint32_t> spriteIdx_;
     GpuMesh spriteMesh_;
     // the frame sprite stream (flushTranslucency): every sprite group's vertices, uploaded once per frame
-    std::vector<float> spriteFrameV_, spriteFrameCol_, spriteFrameSub_;
+    // growable float buffer that is never zero-filled (every element is written before the upload)
+    struct RawFloats {
+        std::unique_ptr<float[]> p;
+        size_t n = 0, cap = 0;
+        void clear() { n = 0; }
+        size_t size() const { return n; }
+        const float* data() const { return p.get(); }
+        float* grow(size_t add) {
+            if (n + add > cap) {
+                const size_t nc = std::max(cap * 2, n + add);
+                std::unique_ptr<float[]> q(new float[nc]);
+                if (n) std::memcpy(q.get(), p.get(), n * sizeof(float));
+                p = std::move(q); cap = nc;
+            }
+            float* r = p.get() + n;
+            n += add;
+            return r;
+        }
+    };
+    RawFloats spriteFrameV_, spriteFrameCol_, spriteFrameSub_;
     GLuint spriteFrameVao_ = 0, spriteFrameVbo_ = 0, spriteFrameCbo_ = 0, spriteFrameSbo_ = 0, spriteFrameIbo_ = 0;
     size_t spriteFrameIboQuads_ = 0;
     GpuMesh spriteFrameMesh_;
     void spriteCoverage(const char* material, const Sprite* sp, size_t n);
-    void spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, std::vector<float>& v, std::vector<float>& col,
-                      std::vector<float>& sub);
+    void spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, RawFloats& v, RawFloats& col, RawFloats& sub);
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
     // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
