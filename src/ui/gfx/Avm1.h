@@ -26,6 +26,7 @@ enum class VType : uint8_t { Undefined, Null, Bool, Number, String, Object };
 struct Value {
     VType t = VType::Undefined;
     bool b = false;
+    uint32_t atom = 0;   // a constant-pool string's property-name atom (0: none; set by Push, carried by copies)
     double n = 0.0;
     std::string s;
     Object* o = nullptr;
@@ -73,6 +74,20 @@ struct ScriptCode {
     std::string name;
 };
 
+// Property names as atoms: every name stored as a property is interned once (process-wide, main thread); property
+// indexes hash the small integer, and a lookup walking a prototype chain resolves the name once instead of hashing the
+// string again at every level. atomFind returns 0 for a name never interned - no object can have such a property.
+struct ScriptCode;
+class VM;
+struct Value;
+// A constant pool with each string's atom (computed once when the ConstantPool action runs).
+struct ConstPool : std::vector<std::string> { std::vector<uint32_t> atoms; };
+// Native ports of the shared ActionScript library (Avm1NativeLib.cpp): replaces v when it is the known body.
+bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v);
+uint64_t canonicalFunctionHash(const ScriptCode& sc, const std::vector<std::string>* pool);
+uint32_t atomIntern(const std::string& s);
+uint32_t atomFind(const std::string& s);
+
 class Object {
 public:
     explicit Object(ObjKind k = ObjKind::Plain) : kind(k) {}
@@ -81,7 +96,7 @@ public:
     ObjKind kind;
     Object* proto = nullptr;                 // __proto__
     std::vector<std::pair<std::string, Property>> props;
-    std::unordered_map<std::string, size_t> index;
+    std::unordered_map<uint32_t, uint32_t> index;   // atom -> props slot
     bool marked = false;
     bool zombie = false;                     // diagnostics (WFC_GFX_GCCHECK): collected but kept to catch later use
     std::string className;                   // diagnostics / typeof ("movieclip")
@@ -90,7 +105,7 @@ public:
     NativeFn native;
     std::shared_ptr<ScriptCode> script;
     std::vector<Object*> scope;              // captured scope chain (innermost last)
-    std::shared_ptr<std::vector<std::string>> pool;   // constant pool active at definition
+    std::shared_ptr<ConstPool> pool;         // constant pool active at definition
     gfx::DisplayObject* defTarget = nullptr; // timeline the function was defined in (for _root/_parent preload)
     bool isConstructorOnly = false;
 
@@ -114,18 +129,23 @@ public:
     // Watchpoints (Object.watch).
     std::map<std::string, std::pair<Object*, Value>> watches;
 
-    Property* findOwn(const std::string& k) {
-        auto it = index.find(k);
+    Property* findOwnA(uint32_t a) {
+        if (!a || index.empty()) return nullptr;
+        auto it = index.find(a);
         return it == index.end() ? nullptr : &props[it->second].second;
     }
-    const Property* findOwn(const std::string& k) const {
-        auto it = index.find(k);
+    const Property* findOwnA(uint32_t a) const {
+        if (!a || index.empty()) return nullptr;
+        auto it = index.find(a);
         return it == index.end() ? nullptr : &props[it->second].second;
     }
+    Property* findOwn(const std::string& k) { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
+    const Property* findOwn(const std::string& k) const { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
     Property& own(const std::string& k) {
-        auto it = index.find(k);
+        const uint32_t a = atomIntern(k);
+        auto it = index.find(a);
         if (it != index.end()) return props[it->second].second;
-        index[k] = props.size();
+        index[a] = (uint32_t)props.size();
         props.push_back({k, Property{}});
         return props.back().second;
     }
@@ -149,7 +169,7 @@ public:
     Object* newArray(const std::vector<Value>& elems = {});
     Object* newFunction(NativeFn fn, const std::string& name = "", int length = 0);
     Object* newScriptFunction(const std::shared_ptr<ScriptCode>& code, const std::vector<Object*>& scope,
-                              const std::shared_ptr<std::vector<std::string>>& pool, gfx::DisplayObject* target);
+                              const std::shared_ptr<ConstPool>& pool, gfx::DisplayObject* target);
     Object* newClipObject(gfx::DisplayObject* d, Object* proto);
     size_t heapSize() const { return heap_.size(); }
     void collect(const std::vector<Object*>& extraRoots);   // mark-sweep from globals + extra roots
@@ -170,9 +190,12 @@ public:
     bool instanceOf(const Value& v, Object* ctor);
 
     // ---- properties ----
-    Value get(Object* o, const std::string& key);          // with __proto__ chain, getters, clip/textfield virtuals
-    Value getV(const Value& base, const std::string& key);
-    void set(Object* o, const std::string& key, const Value& v);
+    Value get(Object* o, const std::string& key) { return get(o, key, 0u); }   // with __proto__ chain, getters, clip/textfield virtuals
+    Value get(Object* o, const std::string& key, uint32_t atomHint);           // atomHint: key's atom when known (0: look up)
+    Value getV(const Value& base, const std::string& key) { return getV(base, key, 0u); }
+    Value getV(const Value& base, const std::string& key, uint32_t atomHint);
+    void set(Object* o, const std::string& key, const Value& v) { set(o, key, v, 0u); }
+    void set(Object* o, const std::string& key, const Value& v, uint32_t atomHint);
     void setV(const Value& base, const std::string& key, const Value& v);
     bool has(Object* o, const std::string& key);
     bool deleteProp(Object* o, const std::string& key);
