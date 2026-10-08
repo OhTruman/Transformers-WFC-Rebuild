@@ -453,6 +453,8 @@ private:
     std::vector<MdiBucket> mdiBuckets_;
     long mdiMesh_ = -1;
     GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
+    GLuint zPreProg_ = 0;                              // world depth prepass (MDI VS + empty FS)
+    static inline GLuint vsMdiShared_ = 0;             // the MDI vertex shader (shared by every MDI program)
     // Lightmap pages of the common size share one GL_TEXTURE_2D_ARRAY (unit 21); each page's 2D texture becomes a
     // texture view of its layer (same storage, exact texels / mips), so MDI buckets key on the program alone for them.
     GLuint lmArray_ = 0;

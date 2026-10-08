@@ -1518,10 +1518,15 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             bool ok = vs.find("uniform vec4 uLMCoord;") != std::string::npos && vs.find("void main() {") != std::string::npos;
             replaceAll(vs, "uniform vec4 uLMCoord;", "vec4 uLMCoord;");
             replaceAll(vs, "void main() {", "void wfcVSBody() {");
+            {   // the world depth prepass links this VS too: identical depth (declared before any use)
+                const size_t nl = vs.find('\n');
+                vs.insert(nl == std::string::npos ? 0 : nl + 1, "invariant gl_Position;\n");
+            }
             vs += "layout(location=11) in float aDrawRow;\nuniform sampler2D uRowTex;\nflat out int vRow;\n"
                   "void main() {\n    vRow = int(aDrawRow + 0.5);\n    uLMCoord = texelFetch(uRowTex, ivec2(0, vRow), 0);\n"
                   "    wfcVSBody();\n}\n";
             vsMdi = ok ? compile(GL_VERTEX_SHADER, vs, "world_mdi.vs") : 0;
+            vsMdiShared_ = vsMdi;
             if (!vsMdi) LOG_WARN("wfc: MDI vertex shader unavailable (world MDI off)");
         }
         if (!vsMdi || fs.find("void main()") == std::string::npos) return -1;
@@ -3783,6 +3788,46 @@ void Pipeline::drawMdi(GpuMesh& g) {
     }
     size_t qn = 0;
     if (profFrame) QueryCounter(bq[qn++], 0x8E28);
+    // World depth prepass (4K: the world's pixel shading dominates the GPU frame). The opaque buckets' depth first,
+    // with the same (invariant) vertex shader and an empty fragment shader; the shading pass then runs each material
+    // only for its visible pixels. LEQUAL either way, so the result is identical (ties: the last draw wins as before).
+    // Masked buckets (clip in the material) are not prepassed. WFC_NOZPREPASS=1 off.
+    static const bool zPre = std::getenv("WFC_NOZPREPASS") == nullptr;
+    bool prepassed = false;
+    if (zPre && vsMdiShared_ && !warmup_) {
+        if (!zPreProg_) {
+            const char* fs = "#version 330 compatibility\nvoid main() {}\n";
+            GLuint f = compile(GL_FRAGMENT_SHADER, fs, "world_zprepass.fs");
+            if (f) zPreProg_ = link(vsMdiShared_, f, "world_zprepass");
+        }
+        if (zPreProg_) {
+            UseProgram(zPreProg_);
+            glx::uniformCacheForgetCurrent();
+            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uViewProj"), 1, GL_FALSE, viewProj_.m);
+            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uModel"), 1, GL_FALSE, core::Mat4::identity().m);
+            Uniform1i(GetUniformLocation(zPreProg_, "uSkin"), 0);
+            Uniform1i(GetUniformLocation(zPreProg_, "uPoseBlend"), 0);
+            Uniform1i(GetUniformLocation(zPreProg_, "uVertexLM"), 0);
+            Uniform4f(GetUniformLocation(zPreProg_, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+            Uniform1i(GetUniformLocation(zPreProg_, "uRowTex"), 20);
+            ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
+            ActiveTexture(GL_TEXTURE0);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+            glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+            static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
+            for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
+                const size_t n = ranges[bi].second - ranges[bi].first;
+                const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
+                if (!n || M.blend != 0) continue;
+                if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+                MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
+            }
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glx::uniformCacheForgetCurrent();
+            prepassed = true;
+            depthDirty_ = true;
+        }
+    }
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
         if (!n) continue;
@@ -3794,7 +3839,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         for (int i = 0; i < 3; ++i) if (M.uRTSet[i] >= 0) Uniform1i(M.uRTSet[i], 0);   // static: no character colours
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
         if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
-        glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND); glDepthMask(prepassed && M.blend == 0 ? GL_FALSE : GL_TRUE);   // (depth already written)
         Uniform1i(uloc(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
         if (b.lm[0] >= 0) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
@@ -3810,6 +3855,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         depthDirty_ = true;
         if (profFrame) QueryCounter(bq[qn++], 0x8E28);
     }
+    glDepthMask(GL_TRUE);
     if (profFrame && qn > 1) {
         std::vector<unsigned long long> t(qn);
         for (size_t k = 0; k < qn; ++k) GetQueryObjectui64v(bq[k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
