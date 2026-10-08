@@ -48,14 +48,18 @@ bool GfxPresenter::init() {
 
 gfx::Player* GfxPresenter::focusPlayer() {
     if (loading_) return &loading_->player();
-    if (scoreboard_) return &scoreboard_->player();
+    if (scoreboard_ && scoreboardShown_) return &scoreboard_->player();
     return movies_.empty() ? nullptr : &movies_.back().movie->player();
 }
 
 void GfxPresenter::setHud(bool open, bool visible) {
     if (!open) {
         if (hud_) { rt_.dataStores().forgetMovie(hud_->object()); shapesStale_ = true; }
-        hud_.reset(); hudVisible_ = false; return;
+        hud_.reset(); hudVisible_ = false;
+        // TnHUD.Destroyed -> ScoreboardMovie.Close(false): the kept scoreboard instance is unloaded with the HUD.
+        if (scoreboard_) { rt_.dataStores().forgetMovie(scoreboard_->object()); shapesStale_ = true; }
+        scoreboard_.reset(); scoreboardShown_ = false;
+        return;
     }
     if (!hud_) {
         {   // Match start: the respawn screen (opened on every death), the scoreboard and the results screen (a 58 ms open
@@ -76,19 +80,35 @@ void GfxPresenter::setHud(bool open, bool visible) {
     hudVisible_ = visible;
 }
 
+// TnHUD.UpdatePlayerListDataCallback (CDO default, CONFIRMED), invoked with no arguments on every show. On the first
+// show it finds nothing yet: InGameStats loads PlayerList.swf asynchronously (loadClip), and the list's own setInterval
+// (1 s) refreshes it while the movie advances.
+static const char* const kScoreboardRefresh = "_global.UpdatePlayerListData";
+
+// The scoreboard as TnHUD drives it [RE: TnHUD.SetShowScores, CONFIRMED script; native Start / Close HIGH]: one
+// InGameStats_GFX instance (TnHUD.ScoreboardMovie) for the HUD's lifetime, never started before the first show
+// (SetupNewHud only Close(true)s it, so the first press of a match pays the load). Show = Start (the first one loads it)
+// + SetFocus + SetVisibility(true) + Invoke(UpdatePlayerListDataCallback) to refresh the list; hide =
+// Close(KeepLoaded = true): kept loaded but not advanced, drawn, focused or fed data-store updates until the next show.
 void GfxPresenter::setScoreboard(bool open) {
     if (!open) {
-        if (scoreboard_) { rt_.dataStores().forgetMovie(scoreboard_->object()); shapesStale_ = true; }
-        scoreboard_.reset();
+        if (scoreboardShown_) frontend::FlowTrace::emit("gfx.scoreboard", {{"shown", "false"}});
+        scoreboardShown_ = false;
         return;
     }
-    if (scoreboard_) return;
-    scoreboard_ = std::make_unique<GfxMovie>();
-    bool ok = scoreboard_->open(lib_, &rt_.catalog(), "UI_GFxInGameStats_p.InGameStats_GFX_1",
-                                [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
-                                [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
-    frontend::FlowTrace::emit("gfx.movie", {{"movie", "UI_GFxInGameStats_p.InGameStats_GFX_1"}, {"opened", frontend::FlowTrace::boolean(ok)}});
-    if (!ok) scoreboard_.reset();
+    if (scoreboardShown_) return;
+    if (!scoreboard_) {
+        scoreboard_ = std::make_unique<GfxMovie>();
+        bool ok = scoreboard_->open(lib_, &rt_.catalog(), "UI_GFxInGameStats_p.InGameStats_GFX_1",
+                                    [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
+                                    [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", "UI_GFxInGameStats_p.InGameStats_GFX_1"}, {"opened", frontend::FlowTrace::boolean(ok)}});
+        if (!ok) { scoreboard_.reset(); return; }
+    }
+    scoreboardShown_ = true;
+    scoreboard_->resetClock();   // resumes where it was closed (no catch-up of the closed time)
+    scoreboard_->invoke(kScoreboardRefresh, {});
+    frontend::FlowTrace::emit("gfx.scoreboard", {{"shown", "true"}});
 }
 
 // Keyboard prompts in the movies' Gamepad* glyph slots (PC ADAPTATION: the PC SKU's own movies are not in the dump; the
@@ -488,7 +508,7 @@ std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
     for (Open& o : movies_) { movies += (movies.empty() ? "" : "+") + o.object; add(*o.movie); }
     int focusExtras = 0;
     for (Extra& e : extras_) { extras += (extras.empty() ? "" : "+") + e.object + (e.focus ? "*" : ""); add(*e.movie); focusExtras += e.focus; }
-    GfxMovie* focus = scoreboard_ ? scoreboard_.get() : (movies_.empty() ? nullptr : movies_.back().movie.get());
+    GfxMovie* focus = scoreboard_ && scoreboardShown_ ? scoreboard_.get() : (movies_.empty() ? nullptr : movies_.back().movie.get());
     for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
     std::string owner = "-", ownerVisible = "-";
     if (focus) {
@@ -508,7 +528,7 @@ std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
     r.push_back({"inputOwner", owner});
     r.push_back({"inputOwnerVisible", ownerVisible});
     r.push_back({"popup", rt_.flow().popup().open ? "open" : "closed"});
-    r.push_back({"scoreboard", scoreboard_ ? "1" : "0"});
+    r.push_back({"scoreboard", scoreboard_ && scoreboardShown_ ? "1" : "0"});
     r.push_back({"asHeap", std::to_string(heap)});
     r.push_back({"displayNodes", std::to_string(nodes)});
     r.push_back({"graveyard", std::to_string(grave)});
@@ -874,8 +894,9 @@ void GfxPresenter::syncWorldLabels() {
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
-    if (loading_ || (movies_.empty() && !scoreboard_)) return;
-    GfxMovie* focus = scoreboard_ ? scoreboard_.get() : movies_.back().movie.get();
+    const bool sb = scoreboard_ && scoreboardShown_;
+    if (loading_ || (movies_.empty() && !sb)) return;
+    GfxMovie* focus = sb ? scoreboard_.get() : movies_.back().movie.get();
     for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
     // Text entry (PC: TextPrompt_GFX input field for account names / character renaming): typed characters and the
     // editing keys without a UI action (Backspace, Delete) go to the focused movie; arrows / Home / End / Enter / Escape
@@ -1129,7 +1150,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     if (cursor_) cursor_->advance(dt);
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
-    if (scoreboard_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
+    if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string>& objs = objsScratch_;
@@ -1183,7 +1204,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     // Data-store change callbacks (HmWidget.updateDSValue(markup, value) by target path).
     for (const auto& c : rt_.dataStores().poll()) {
         if (hud_ && hud_->object() == c.movie) { hud_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
-        if (scoreboard_ && scoreboard_->object() == c.movie) { scoreboard_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
+        if (scoreboard_ && scoreboard_->object() == c.movie) { if (scoreboardShown_) scoreboard_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
         for (Open& op : movies_)
             if (op.object == c.movie) {
                 Value r = op.movie->invoke(c.callback, {Value(c.markup), Value(c.value)});
@@ -1202,7 +1223,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     gfx::Player::hostViewportW = (float)w;   // a noScale movie opened later lays out for this viewport
     gfx::Player::hostViewportH = (float)h;
     if (shapesStale_) { gl_.forgetShapes(); shapesStale_ = false; }
-    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !scoreboard_) return;
+    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !(scoreboard_ && scoreboardShown_)) return;
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {
@@ -1216,7 +1237,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     else if (loading_) drawMovie(*loading_);
     else {
         if (hud_ && hudVisible_) drawMovie(*hud_);
-        if (scoreboard_) drawMovie(*scoreboard_);
+        if (scoreboard_ && scoreboardShown_) drawMovie(*scoreboard_);
         for (Open& o : movies_) drawMovie(*o.movie);
         for (Extra& e : extras_) drawMovie(*e.movie);
     }
