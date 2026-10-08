@@ -20,7 +20,9 @@
 #   .\tools\fidelity\visual-guard.ps1 -Ref work\ab\<reference> -Opt work\ab\<optimized> -OutDir <dir> [-From 300] [-To 900] [-Stride 10] [-Bots 8]
 param([Parameter(Mandatory)][string]$Ref, [Parameter(Mandatory)][string]$Opt, [Parameter(Mandatory)][string]$OutDir, [int]$From = 300, [int]$To = 900,
       [int]$Stride = 10, [int]$Bots = 8, [int]$Seed = 123, [int]$Threshold = 24, [double]$FlagPct = 0.5, [string]$Cam = "100,-700,-680,-141.6,-12",
-      [string[]]$Sets = @("fixed", "moving"), [switch]$ReportOnly)
+      [string[]]$Sets = @("fixed", "moving"),
+      # -RefEnv / -OptEnv "K=V;K=V": per-side env, e.g. the SAME build with a feature on vs off (-Ref X -Opt X -OptEnv "WFC_NOZPREPASS=1")
+      [string]$RefEnv = "", [string]$OptEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 Add-Type -AssemblyName System.Drawing
@@ -29,7 +31,8 @@ $Sets = @($Sets | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() 
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "visual.$id" $status $null $note $owner }
 $url = "MP_IAC_Streets?GameModeTag=TDM?BotsAutobot={0}?BotsDecepticon={0}?BotDifficulty=1?ExtendedPlayers=1" -f $Bots
 function Sha($root) { $f = Join-Path $root "M05_TARGET.txt"; if (Test-Path $f) { (((Get-Content $f) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '').Substring(0, 7) } else { Split-Path $root -Leaf } }
-$builds = @(@{ role = "ref"; root = (Resolve-Path $Ref).Path }, @{ role = "opt"; root = (Resolve-Path $Opt).Path })
+function EnvMap([string]$s) { $m = @{}; foreach ($kv in @($s -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $m[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }; return $m }
+$builds = @(@{ role = "ref"; root = (Resolve-Path $Ref).Path; env = (EnvMap $RefEnv) }, @{ role = "opt"; root = (Resolve-Path $Opt).Path; env = (EnvMap $OptEnv) })
 foreach ($b in $builds) { $b.sha = Sha $b.root; $b.hooks = Get-ExeHooks (Join-Path $b.root "build-release\bin\wfc_rebuild.exe") }
 $matchAligned = @($builds | Where-Object { $_.hooks.Contains("WFC_SHOTMATCH") }).Count -eq 2
 $shotGlob = if ($matchAligned) { "m*.bmp" } else { "f*.bmp" }
@@ -42,7 +45,8 @@ foreach ($set in $Sets) { foreach ($b in $builds) {
             WFC_VISUALCHECK = "1" }
     if ($matchAligned) { $e.WFC_SHOTMATCH = "$d,$From,$To,$Stride"; $e.WFC_MATCH_SECONDS = "$([Math]::Ceiling($To / 60.0) + 1)"; $e.WFC_SMOKE_FRAMES = "1000000" }
     else { $e.WFC_SHOTEVERY = "$d,$From,$To" }
-    if ($b.hooks.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$Seed" }   # GameFlow RNG is clock-seeded otherwise
+    if ($b.hooks.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$Seed" }
+    foreach ($k in $b.env.Keys) { $e[$k] = $b.env[$k] }   # GameFlow RNG is clock-seeded otherwise
     if ($set -eq "fixed") { $e.WFC_FIXEDCAM = $Cam } else { $e.WFC_AUTOWALK = "1"; $e.WFC_AUTOSTRAFE = "1"; $e.WFC_AUTOTURN = "0.6" }
     $exe = Join-Path $b.root "build-release\bin\wfc_rebuild.exe"
     $null = Invoke-WfcExe $exe $d $e "run.log" 1200
@@ -101,7 +105,7 @@ foreach ($set in $Sets) {
         New-WfcSheet $tiles (Join-Path $OutDir "flagged_$set.png") 3 480 270 }
     $mx = ($rows | Where-Object { $_.set -eq $set } | Measure-Object pct_over -Maximum).Maximum
     $sheetNote = if ($flagged.Count) { "; see flagged_$set.png (ref | opt | diff)" } else { "" }
-    $note = "$($builds[0].sha) vs $($builds[1].sha), $($frames.Count) frames compared ($(if ($matchAligned) { 'match steps' } else { 'boot frames' }) $From..$To every $Stride); flagged (> $FlagPct % pixels differ by > $Threshold): $($flagged.Count) [$(($flagged | ForEach-Object { $_ -replace '\.bmp$', '' }) -join ' ')]; max $mx %$sheetNote"
+    $note = "$($builds[0].sha)$(if ($RefEnv) { " [$RefEnv]" }) vs $($builds[1].sha)$(if ($OptEnv) { " [$OptEnv]" }), $($frames.Count) frames compared ($(if ($matchAligned) { 'match steps' } else { 'boot frames' }) $From..$To every $Stride); flagged (> $FlagPct % pixels differ by > $Threshold): $($flagged.Count) [$(($flagged | ForEach-Object { $_ -replace '\.bmp$', '' }) -join ' ')]; max $mx %$sheetNote"
     # a comparison of near-black / flat frames proves nothing: void it (mean luma < 30 or > 85 % of pixels within +-6 of the median)
     $setRows = @($rows | Where-Object { $_.set -eq $set }); $bad = @($setRows | Where-Object { $_.ref_luma -lt 30 -or $_.ref_flat_pct -gt 85 })
     if ($bad.Count * 2 -gt $setRows.Count) {
