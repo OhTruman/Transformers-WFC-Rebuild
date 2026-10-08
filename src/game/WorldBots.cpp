@@ -394,6 +394,21 @@ void World::botThink(BotBody o, BotBrain& b) {
     if (haveOg && b.mission) ng = og;
     else if (b.healTarget >= 0 && participantPawn(b.healTarget)) { ng.kind = BotGoalKind::Support; ng.pos = participantPawn(b.healTarget)->position(); ng.radius = 6.0f; ng.target = b.healTarget; }
     else if (b.target >= 0) { ng.kind = BotGoalKind::Attack; ng.pos = b.seen[b.target].pos; ng.target = b.target; ng.radius = 4.0f; b.mission = false; }
+    // WFC_PLAYERBOT only (a test harness, not a player or bot behaviour): with no target the local player's brain heads for the
+    // nearest living enemy instead of roaming, so real-play perf rows have firefights from the start. Re-aimed when that enemy has
+    // moved 15 m from the goal (not every think: each new goal is a path search).
+    else if (b.player == localPlayer_ && playerBotDifficulty() >= 0 && !haveOg && [&] {
+        int best = -1; float bd = 1e30f;
+        for (size_t i = 0; i < match_.players().size(); ++i) {
+            const int p = (int)i;
+            if (p == b.player || !match_.players()[i].alive || (match_.settings().teamGame && match_.sameTeam(p, b.player))) continue;
+            if (const Character* e = participantPawn(p)) { const float d = hdist(e->position(), pc.position()); if (d < bd) { bd = d; best = p; } }
+        }
+        if (best < 0) return false;
+        const core::Vec3 ep = participantPawn(best)->position();
+        const bool keep = b.hasGoal && b.goal.kind == BotGoalKind::Attack && b.goal.target == best && hdist(b.goal.pos, ep) < 15.0f;
+        ng.kind = BotGoalKind::Attack; ng.pos = keep ? b.goal.pos : ep; ng.target = best; ng.radius = 6.0f;
+        return true; }()) {}
     else if (haveOg) ng = og;
     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
              hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f)
