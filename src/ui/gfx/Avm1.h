@@ -96,7 +96,12 @@ public:
     ObjKind kind;
     Object* proto = nullptr;                 // __proto__
     std::vector<std::pair<std::string, Property>> props;
-    std::unordered_map<uint32_t, uint32_t> index;   // atom -> props slot
+    // Lookup by atom: slotAtoms[i] is props[i]'s atom. Small objects (most: rows, cells, tween entries, transforms) are
+    // scanned linearly; the hash index is built only past kLinearProps (a hash node per property was the main allocation
+    // cost of building the PlayerList). props alone keeps the order (enumeration).
+    static constexpr size_t kLinearProps = 16;
+    std::vector<uint32_t> slotAtoms;
+    std::unordered_map<uint32_t, uint32_t> index;   // atom -> props slot (only when props.size() > kLinearProps)
     bool marked = false;
     bool zombie = false;                     // diagnostics (WFC_GFX_GCCHECK): collected but kept to catch later use
     std::string className;                   // diagnostics / typeof ("movieclip")
@@ -129,26 +134,30 @@ public:
     // Watchpoints (Object.watch).
     std::map<std::string, std::pair<Object*, Value>> watches;
 
-    Property* findOwnA(uint32_t a) {
-        if (!a || index.empty()) return nullptr;
-        auto it = index.find(a);
-        return it == index.end() ? nullptr : &props[it->second].second;
+    int slotOf(uint32_t a) const {
+        if (!a) return -1;
+        if (!index.empty()) { auto it = index.find(a); return it == index.end() ? -1 : (int)it->second; }
+        for (size_t i = 0; i < slotAtoms.size(); ++i) if (slotAtoms[i] == a) return (int)i;
+        return -1;
     }
-    const Property* findOwnA(uint32_t a) const {
-        if (!a || index.empty()) return nullptr;
-        auto it = index.find(a);
-        return it == index.end() ? nullptr : &props[it->second].second;
-    }
-    Property* findOwn(const std::string& k) { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
-    const Property* findOwn(const std::string& k) const { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
+    Property* findOwnA(uint32_t a) { const int i = slotOf(a); return i < 0 ? nullptr : &props[(size_t)i].second; }
+    const Property* findOwnA(uint32_t a) const { const int i = slotOf(a); return i < 0 ? nullptr : &props[(size_t)i].second; }
+    Property* findOwn(const std::string& k) { return props.empty() ? nullptr : findOwnA(atomFind(k)); }
+    const Property* findOwn(const std::string& k) const { return props.empty() ? nullptr : findOwnA(atomFind(k)); }
     Property& own(const std::string& k) { return ownA(atomIntern(k), k); }
     Property& ownA(uint32_t a, const std::string& k) {   // a = atomIntern(k)
-        auto it = index.find(a);
-        if (it != index.end()) return props[it->second].second;
-        index[a] = (uint32_t)props.size();
+        const int i = slotOf(a);
+        if (i >= 0) return props[(size_t)i].second;
+        if (props.empty()) { props.reserve(4); slotAtoms.reserve(4); }
         props.push_back({k, Property{}});
+        slotAtoms.push_back(a);
+        if (props.size() > kLinearProps) {
+            if (index.empty()) for (size_t j = 0; j < slotAtoms.size(); ++j) index[slotAtoms[j]] = (uint32_t)j;
+            else index[a] = (uint32_t)(props.size() - 1);
+        }
         return props.back().second;
     }
+    void clearProps() { props.clear(); slotAtoms.clear(); index.clear(); }
     bool removeOwn(const std::string& k);
     void setRaw(const std::string& k, const Value& v, uint8_t flags = 0) { setRawA(atomIntern(k), k, v, flags); }
     void setRawA(uint32_t a, const std::string& k, const Value& v, uint8_t flags = 0) { Property& p = ownA(a, k); p.v = v; p.flags = flags; p.getter = p.setter = nullptr; }

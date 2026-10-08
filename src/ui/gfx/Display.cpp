@@ -840,8 +840,7 @@ void Player::processLoads() {
         for (auto& [d, ch] : l.target->children) { unloadClip(ch.get()); graveyard.push_back(std::move(ch)); }
         l.target->children.clear();
         Object* so = scriptObject(l.target);
-        so->props.clear();
-        so->index.clear();
+        so->clearProps();
         so->proto = vm_->movieClipProto;
         l.target->def = def;
         l.target->sprite = &def->root;

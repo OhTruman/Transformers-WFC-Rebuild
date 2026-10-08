@@ -38,13 +38,12 @@ uint32_t atomFind(const std::string& s) {
 }
 
 bool Object::removeOwn(const std::string& k) {
-    const uint32_t a = atomFind(k);
-    auto it = a ? index.find(a) : index.end();
-    if (it == index.end()) return false;
-    size_t i = it->second;
-    props.erase(props.begin() + (long)i);
+    const int i = slotOf(atomFind(k));
+    if (i < 0) return false;
+    props.erase(props.begin() + i);
+    slotAtoms.erase(slotAtoms.begin() + i);
     index.clear();
-    for (size_t j = 0; j < props.size(); ++j) index[atomIntern(props[j].first)] = (uint32_t)j;
+    if (props.size() > kLinearProps) for (size_t j = 0; j < slotAtoms.size(); ++j) index[slotAtoms[j]] = (uint32_t)j;
     return true;
 }
 
