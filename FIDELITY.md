@@ -1305,6 +1305,14 @@ Every change below is image-identical to the previous path (verified by determin
   pawn's shadow child: its last recorded draw (persistent buffers, transform, skinning state) is drawn into the owner's
   composite-shadow depth and the subject bounds of the fit include it (one frame stale: ~3 ms at 300 fps).
   WFC_NOWEAPONSHADOW=1 = body only. Seeded match captures: small additions only (<= 132 faint px per frame).
+- **USER DECISION (2026-10-08, via Integration): original FX limits only in extended lobbies.** WFC's EmitterPool
+  MaxActiveEffects 50 (CONFIRMED Xe-TransGame.ini; oldest reclaimed past it, HIGH - RE f28504c) and its
+  EffectIsRelevant gate for non-local impacts / shell casings (shooter rendered within 1 s and the spawn within 400 /
+  1000 UU x view LOD factor, RE 4cce28f) apply ONLY when the match has more than the original's 10 participants (PC
+  EXTENSION); original-size matches (5 v 5 / 10 v 10) keep every effect. The renderer exposes setEmitterPoolCap /
+  setParticleEffectPooled (or param "Pooled") and drawOwnerRenderAge (renderer time, LastRenderTime semantics); the
+  match glue sets the policy. WFC_EMITTERPOOLCAP=0 / 1 forces the cap for A/B. Not original and not done: pausing
+  unrendered systems (SecondsBeforeInactive is 0 on all 544 systems, RE f28504c).
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
