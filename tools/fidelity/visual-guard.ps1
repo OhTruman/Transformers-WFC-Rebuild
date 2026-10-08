@@ -42,6 +42,7 @@ foreach ($set in $Sets) { foreach ($b in $builds) {
             WFC_VISUALCHECK = "1" }
     if ($matchAligned) { $e.WFC_SHOTMATCH = "$d,$From,$To,$Stride"; $e.WFC_MATCH_SECONDS = "$([Math]::Ceiling($To / 60.0) + 1)"; $e.WFC_SMOKE_FRAMES = "1000000" }
     else { $e.WFC_SHOTEVERY = "$d,$From,$To" }
+    if ($b.hooks.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$Seed" }   # GameFlow RNG is clock-seeded otherwise
     if ($set -eq "fixed") { $e.WFC_FIXEDCAM = $Cam } else { $e.WFC_AUTOWALK = "1"; $e.WFC_AUTOSTRAFE = "1"; $e.WFC_AUTOTURN = "0.6" }
     $exe = Join-Path $b.root "build-release\bin\wfc_rebuild.exe"
     $null = Invoke-WfcExe $exe $d $e "run.log" 1200

@@ -99,6 +99,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_AMBLOG = "1"; WFC_BOTLOG = "all"; WFC_BOTPERF = "5"
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
+        if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "1" }   # GameFlow RNG (team pick, rotation, tips) is clock-seeded otherwise (Frontend 2026-10-07)
         if ($PlayerBot -ge 0) {
             if ($H.Contains("WFC_PLAYERBOT")) { foreach ($k in "WFC_AUTOWALK", "WFC_AUTOSTRAFE", "WFC_AUTOJUMP_EVERY") { $e.Remove($k) }; $e.WFC_PLAYERBOT = "$PlayerBot"; $e.WFC_PLAYERBOTLOG = "1" }
             else { $e.WFC_AUTOTURN = "0.6"; $e.WFC_AUTOFIRE = "1" } }

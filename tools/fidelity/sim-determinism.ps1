@@ -39,6 +39,7 @@ function RunOne([string]$tag, [string]$seed, [bool]$serial) {
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$seed"; WFC_SMOKE_FRAMES = "$Frames"; WFC_LOGEVERY = "0"
             WFC_BOTLOG = "all"; WFC_XPLOG = "1"; WFC_NOMOUSE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150" }
     if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "1000000" }
+    if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$seed" }   # GameFlow RNG is clock-seeded otherwise (Frontend 2026-10-07)
     if ($H.Contains("WFC_SIMHASH")) { $e.WFC_SIMHASH = $(if ($HashDetail) { $HashDetail } else { "0" }) }
     if ($serial) { $e.WFC_SIMTHREADS = "0" } else { foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] } }
     $null = Invoke-WfcExe $exe $d $e "run.log" 1800
