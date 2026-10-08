@@ -268,8 +268,9 @@ BotGoal World::botObjectiveGoal(BotBrain& b, const Character& pc) {
         }
     }
     if (g.target >= 0 && match_.matchTime() >= b.ignoreSightingsUntil) {
-        // The sighting may be a jump apex / ledge off the mesh: aim for the nav cell under or near it.
-        const int c = botNav_.findCell(g.pos, 15.0f);
+        // The sighting may be a jump apex / ledge off the mesh: aim for the nav cell under or near it - at most 3 m below it, so a
+        // lower level (a pit under the fight) never stands in for the enemy's floor.
+        const int c = botNav_.findCell(g.pos, 15.0f, 3.0f);
         if (c >= 0) { g.pos = botNav_.cells()[(size_t)c].centroid; g.kind = BotGoalKind::Attack; g.radius = 6.0f; return g; }
     }
     g.target = -1;
@@ -379,6 +380,12 @@ void World::botThink(BotBody o, BotBrain& b) {
     // Objective modes re-evaluate every think (carriers, flags and zones move); an objective errand (carrying, defusing,
     // returning, standing on a point) keeps its goal through combat - the bot fights on the move.
     const bool objectiveMode = matchMode_ != MatchMode::TDM && matchMode_ != MatchMode::DM;
+    // Reached a team-sighting Attack goal without seeing anyone there: that sighting is not reachable from here (another level,
+    // a prop top) - ignore team sightings for a while so the next goal hunts / roams instead of re-picking the same spot forever
+    // (WFC_STUCKWATCH: vehicle bots parked in the pit below a fight, refreshed sightings above them) [PC ADAPTATION: versus bots].
+    if (b.hasGoal && b.goal.kind == BotGoalKind::Attack && b.target < 0 && hdist(b.goal.pos, pc.position()) < b.goal.radius + 2.0f &&
+        (b.path.empty() || b.wp >= b.path.size()))
+        b.ignoreSightingsUntil = std::max(b.ignoreSightingsUntil, now + 8.0f);
     BotGoal og; bool haveOg = false;
     if (objectiveMode) { og = botObjectiveGoal(b, pc); haveOg = og.kind != BotGoalKind::Roam; }
     if (haveOg && b.mission) ng = og;
@@ -1066,6 +1073,30 @@ void World::tickBots(float dt) {
             pc.tickSpreadModifier(dt);
             pc.tickWeaponSwitch(dt);
             pc.weapon().tick(dt);
+        }
+        // WFC_STUCKWATCH (diagnostics): a bot that moved < 1 m in 20 s is logged once with its whole movement state.
+        static const bool stuckWatch = std::getenv("WFC_STUCKWATCH") != nullptr;
+        if (stuckWatch) {
+            if (hdist(pc.position(), b.watchPos) > 1.0f) { b.watchPos = pc.position(); b.watchT = 0.0f; b.watchLogged = false; }
+            else if ((b.watchT += dt) > 20.0f && !b.watchLogged) {
+                b.watchLogged = true;
+                const core::Vec3 p = pc.position(), v = pc.velocity();
+                LOG_INFO("STUCKWATCH p%d %s at (%.2f %.2f %.2f) cell %d form %s%s wantVeh %d driving %d vel (%.2f %.2f %.2f) ground %d in %.2f/%.2f yaw %.2f face %.2f goal %s wp %zu/%zu stuck %d rejoin %d tgt %d",
+                         b.player, match_.players()[(size_t)b.player].name.c_str(), p.x, p.y, p.z, botNav_.findCell(p, 0.0f),
+                         pc.moveForm() == Form::Vehicle ? "VEH" : "ROB", pc.isTransforming() ? "*" : "", (int)b.wantVehicle, (int)pc.vehicleState().driving,
+                         v.x, v.y, v.z, (int)pc.onGround(), in.moveForward, in.moveRight, pc.yaw(), in.faceYaw, botGoalName(b.goal.kind), b.wp, b.path.size(),
+                         b.stuckLevel, (int)b.hasRejoin, b.target);
+                if (b.wp < b.path.size()) LOG_INFO("STUCKWATCH   next waypoint (%.2f %.2f %.2f) action %d cell %d", b.path[b.wp].pos.x, b.path[b.wp].pos.y, b.path[b.wp].pos.z, b.path[b.wp].action, b.path[b.wp].cell);
+                for (size_t q = 0; q < match_.players().size(); ++q)
+                    if ((int)q != b.player) if (const Character* c = participantPawn((int)q)) if (hdist(c->position(), p) < 8.0f)
+                        LOG_INFO("STUCKWATCH   near p%d at %.1f m (%s)", (int)q, hdist(c->position(), p), c->moveForm() == Form::Vehicle ? "VEH" : "ROB");
+                for (int k = 0; k < 8; ++k) {
+                    const float a = 6.2831853f * (float)k / 8.0f; float th;
+                    const core::Vec3 o0 = p + core::Vec3{0, 0.6f, 0}, d = core::Vec3{std::cos(a), 0.0f, std::sin(a)} * 4.0f;
+                    const bool hs = collision() && collision()->segmentHit(o0, o0 + d, th);
+                    LOG_INFO("STUCKWATCH   dir %d: static %s", k, hs ? (std::to_string(th * 4.0f) + " m").c_str() : "clear");
+                }
+            }
         }
         const double ta0 = tickProfOn() ? profMsBots() : 0.0;
         botAimAndFire(*o, b, dt);
