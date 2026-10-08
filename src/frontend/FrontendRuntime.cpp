@@ -221,7 +221,12 @@ bool FrontendRuntime::init() {
     hud_.setPromptTranslator([this](const std::string& t) { return prompts_.translate(t, device_.pad()); });
     GameFlow::Options o;
     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
+    // Flow RNG (loading tips, lobby team pick, map rotation): WFC_FLOWSEED; else, in deterministic runs, WFC_SEED or a
+    // fixed seed under WFC_LOCKSTEP (lockstep harnesses diverged mid-match from a clock-seeded team pick). Players: clock.
     if (const char* s = std::getenv("WFC_FLOWSEED")) o.seed = (unsigned)std::strtoul(s, nullptr, 10);
+    else if (const char* s2 = std::getenv("WFC_SEED")) o.seed = (unsigned)std::strtoul(s2, nullptr, 10);
+    else if (std::getenv("WFC_LOCKSTEP")) o.seed = 12345u;
+    if (o.seed == 0 && (std::getenv("WFC_SEED") || std::getenv("WFC_LOCKSTEP"))) o.seed = 1u;   // 0 means "clock"
     script_.bridgeHook = [this](const std::string& fn, const std::vector<std::string>& a) { bridge("", fn, a); };
     script_.hudCallHook = [this](const std::string& fn, const std::vector<std::string>& a) {
         if (!presenter_) return;
