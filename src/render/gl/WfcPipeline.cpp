@@ -1253,7 +1253,8 @@ static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
 // The DDS root is WFC_DDS_ROOT, else <ExtractedAssets>/../AssetTools/out/dds. WFC_NODDS=1 = the PNG path (reference).
 // WFC_DDSCHECK=1: the CPU-decoded top level is compared with the PNG (a warning per mismatching texture).
 namespace {
-struct DdsEntry { std::string dds, fmt; bool alpha = true; };
+// opaque: the cooked alpha is 0 everywhere but the PNG path has always sampled it as 255 (kept; open RE question)
+struct DdsEntry { std::string dds, fmt; bool alpha = true, opaque = false; };
 const std::unordered_map<std::string, DdsEntry>& ddsIndex() {
     static const std::unordered_map<std::string, DdsEntry> idx = [] {
         std::unordered_map<std::string, DdsEntry> m;
@@ -1266,7 +1267,8 @@ const std::unordered_map<std::string, DdsEntry>& ddsIndex() {
             return m;
         }
         for (const auto& kv : J["textures"].obj)
-            m[kv.first] = DdsEntry{kv.second["dds"].asString(), kv.second["fmt"].asString(), kv.second["alpha"].asBool(true)};
+            m[kv.first] = DdsEntry{kv.second["dds"].asString(), kv.second["fmt"].asString(), kv.second["alpha"].asBool(true),
+                                   kv.second["opaque"].asBool(false)};
         LOG_INFO("wfc: original texture blocks: %zu textures indexed (root %s)", m.size(), "WFC_DDS_ROOT or AssetTools/out/dds");
         return m;
     }();
@@ -1382,7 +1384,7 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;
     static const bool check = std::getenv("WFC_DDSCHECK") != nullptr;
     const bool pwl = srgb && !srgbCurve;
-    const bool blocks = !srgb && (E.fmt == "DXT1" || E.fmt == "DXT5") && CompressedTexImage2D;
+    const bool blocks = !srgb && !E.opaque && (E.fmt == "DXT1" || E.fmt == "DXT5") && CompressedTexImage2D;
     static uint32_t lut10[256];
     static uint16_t lut16[256];
     static bool lutInit = false;
@@ -1414,6 +1416,7 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
         }
         ImageData img;
         decodeLevel(E.fmt, d, w, h, img);
+        if (E.opaque) for (size_t i = 3; i < img.rgba.size(); i += 4) img.rgba[i] = 255;
         if (check && l == 0) {
             ImageData png;
             if (platform::decodeImage(file, png) && (png.w != img.w || png.h != img.h || png.rgba != img.rgba))
