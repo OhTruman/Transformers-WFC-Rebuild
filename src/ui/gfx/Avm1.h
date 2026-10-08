@@ -141,8 +141,8 @@ public:
     }
     Property* findOwn(const std::string& k) { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
     const Property* findOwn(const std::string& k) const { return index.empty() ? nullptr : findOwnA(atomFind(k)); }
-    Property& own(const std::string& k) {
-        const uint32_t a = atomIntern(k);
+    Property& own(const std::string& k) { return ownA(atomIntern(k), k); }
+    Property& ownA(uint32_t a, const std::string& k) {   // a = atomIntern(k)
         auto it = index.find(a);
         if (it != index.end()) return props[it->second].second;
         index[a] = (uint32_t)props.size();
@@ -150,7 +150,8 @@ public:
         return props.back().second;
     }
     bool removeOwn(const std::string& k);
-    void setRaw(const std::string& k, const Value& v, uint8_t flags = 0) { Property& p = own(k); p.v = v; p.flags = flags; p.getter = p.setter = nullptr; }
+    void setRaw(const std::string& k, const Value& v, uint8_t flags = 0) { setRawA(atomIntern(k), k, v, flags); }
+    void setRawA(uint32_t a, const std::string& k, const Value& v, uint8_t flags = 0) { Property& p = ownA(a, k); p.v = v; p.flags = flags; p.getter = p.setter = nullptr; }
 };
 
 // Exceptions thrown by AS "throw" (Value) cross native frames as this type.
@@ -197,14 +198,17 @@ public:
     void set(Object* o, const std::string& key, const Value& v) { set(o, key, v, 0u); }
     void set(Object* o, const std::string& key, const Value& v, uint32_t atomHint);
     void setV(const Value& base, const std::string& key, const Value& v);
-    bool has(Object* o, const std::string& key);
+    bool has(Object* o, const std::string& key) { return has(o, key, 0u); }
+    bool has(Object* o, const std::string& key, uint32_t atomHint);          // atomHint: key's atom when known (0: look up)
     bool deleteProp(Object* o, const std::string& key);
     Object* findOwner(Object* o, const std::string& key);  // object in the chain that owns key
+    Object* findOwnerA(Object* o, uint32_t atom);           // the same by the key's atom (0: none)
     std::vector<std::string> enumerate(Object* o);
 
     // ---- calls ----
     Value call(const Value& fn, const Value& self, Args& args, Object* superProto = nullptr);
-    Value callMethod(const Value& base, const std::string& name, Args args);
+    Value callMethod(const Value& base, const std::string& name, Args args) { return callMethod(base, name, std::move(args), 0u); }
+    Value callMethod(const Value& base, const std::string& name, Args args, uint32_t atomHint);
     Value construct(Object* ctor, Args& args);
     // Run an action block on a timeline (DoAction / DoInitAction / clip event body).
     void runBlock(const std::shared_ptr<std::vector<uint8_t>>& code, size_t start, size_t len, gfx::DisplayObject* target,

@@ -380,8 +380,9 @@ static bool isIndex(const std::string& k, size_t& out) {
     return true;
 }
 
-Object* VM::findOwner(Object* o, const std::string& key) {
-    const uint32_t a = atomFind(key);
+Object* VM::findOwner(Object* o, const std::string& key) { return findOwnerA(o, atomFind(key)); }
+
+Object* VM::findOwnerA(Object* o, uint32_t a) {
     if (!a) return nullptr;
     int guard = 0;
     for (Object* p = o; p && guard < 256; p = p->proto, ++guard)
@@ -389,9 +390,9 @@ Object* VM::findOwner(Object* o, const std::string& key) {
     return nullptr;
 }
 
-bool VM::has(Object* o, const std::string& key) {
+bool VM::has(Object* o, const std::string& key, uint32_t atomHint) {
     if (!o) return false;
-    if (findOwner(o, key)) return true;
+    if (findOwnerA(o, atomHint ? atomHint : atomFind(key))) return true;
     if (o->kind == ObjKind::Array) { size_t i; if (key == "length" || (isIndex(key, i) && i < o->elems.size())) return true; }
     if ((o->kind == ObjKind::Clip || o->kind == ObjKind::TextField) && o->display) {
         Value tmp;
@@ -586,19 +587,22 @@ std::vector<std::string> VM::enumerate(Object* o) {
 // ---------------------------------------------------------------------------------------------------------------
 // Calls
 
-Value VM::callMethod(const Value& base, const std::string& name, Args args) {
-    Value f = getV(base, name);
+Value VM::callMethod(const Value& base, const std::string& name, Args args, uint32_t atomHint) {
+    const uint32_t a = atomHint ? atomHint : atomFind(name);
+    Value f = getV(base, name, a);
     if (!f.isObject() || f.o->kind != ObjKind::Function) return Value::undef();
-    Object* owner = base.isObject() ? findOwner(base.o, name) : nullptr;
+    Object* owner = base.isObject() ? findOwnerA(base.o, a) : nullptr;
     return call(f, base, args, owner ? owner->proto : nullptr);
 }
 
 Value VM::construct(Object* ctor, Args& args) {
     if (!ctor || ctor->kind != ObjKind::Function) return Value::undef();
-    Value protoV = get(ctor, "prototype");
+    static const uint32_t aProto = atomIntern("prototype"), aCtorU = atomIntern("__constructor__"), aCtor = atomIntern("constructor");
+    static const std::string kCtorU = "__constructor__", kCtor = "constructor";
+    Value protoV = get(ctor, "prototype", aProto);
     Object* obj = newObject(protoV.isObject() ? protoV.o : objectProto);
-    obj->setRaw("__constructor__", Value(ctor), DontEnum);
-    obj->setRaw("constructor", Value(ctor), DontEnum);
+    obj->setRawA(aCtorU, kCtorU, Value(ctor), DontEnum);
+    obj->setRawA(aCtor, kCtor, Value(ctor), DontEnum);
     Object* superProto = protoV.isObject() ? protoV.o->proto : nullptr;
     Value r = call(Value(ctor), Value(obj), args, superProto);
     if (ctor->native && r.isObject()) return r;   // native constructors build their own object
