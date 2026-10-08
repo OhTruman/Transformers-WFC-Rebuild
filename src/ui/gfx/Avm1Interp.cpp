@@ -839,6 +839,32 @@ struct AvmProf {
 AvmProf g_avmProf;
 }
 
+// A DefineFunction2 body whose activation object would stay empty and never be captured: every parameter in a
+// register, arguments / this suppressed or preloaded (never stored on it), and no DefineLocal / DefineLocal2 /
+// DefineFunction / DefineFunction2 (the only ops that write it or capture the scope chain). Lookups through an empty,
+// prototype-less object always miss, so leaving it out of the scope chain is unobservable.
+static bool activationFree(const ScriptCode& sc) {
+    if (sc.activationFree >= 0) return sc.activationFree == 1;
+    bool ok = sc.v2;
+    const uint16_t f = sc.flags;
+    if (ok && !(f & 0x0008) && !(f & 0x0004)) ok = false;   // arguments stored on the activation
+    if (ok && !(f & 0x0002) && !(f & 0x0001)) ok = false;   // this stored on the activation
+    for (const auto& p : sc.params) if (!p.first) ok = false;
+    const std::vector<uint8_t>& code = *sc.code;
+    for (size_t pc = sc.start, end = std::min(code.size(), sc.start + sc.length); ok && pc < end;) {
+        const uint8_t op = code[pc];
+        if (op == 0x3C || op == 0x41 || op == 0x9B || op == 0x8E) { ok = false; break; }
+        if (op >= 0x80) {
+            if (pc + 2 >= end) { ok = false; break; }
+            pc += 3 + (size_t)(code[pc + 1] | (code[pc + 2] << 8));
+        } else {
+            ++pc;
+        }
+    }
+    sc.activationFree = ok ? 1 : 0;
+    return ok;
+}
+
 Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superProto) {
     if (!fnV.isObject() || fnV.o->kind != ObjKind::Function) return Value::undef();
     Object* fn = fnV.o;
@@ -854,10 +880,11 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     c.keep = sc.code;
     c.code = sc.code->data();
     c.pool = fn->pool;
-    c.scope = fn->scope;
-    Object* act = newObject(nullptr);
+    c.scope.reserve(fn->scope.size() + 2);
+    c.scope.assign(fn->scope.begin(), fn->scope.end());
+    Object* act = activationFree(sc) ? nullptr : newObject(nullptr);
     c.activation = act;
-    c.scope.push_back(act);
+    if (act) c.scope.push_back(act);
     c.thisv = self.isNullish() ? Value::undef() : self;
     // _parent / _root / unqualified timeline calls inside a function use the timeline the function was defined on
     // (its scope), not `this`. Functions defined outside any timeline fall back to the receiving clip.
