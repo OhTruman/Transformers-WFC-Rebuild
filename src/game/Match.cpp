@@ -291,6 +291,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
         deathTime_[(size_t)victim] = matchTime_;
     }
     emit(MatchEvent::Type::PlayerKilled, victim, 0, suicide ? "suicide" : (killer < 0 ? "environment" : ""), killer);
+    events_.back().damageType = suicide ? "Engine.DmgType_Suicided" : (damageType.empty() ? (killer < 0 ? "Engine.DmgType_Fell" : "") : damageType);
     {
         // The authoritative death record (one per death) + the assist + an acquired killstreak.
         const GameplayEventType t = (suicide || killedSelf) ? GameplayEventType::Suicide

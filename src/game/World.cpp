@@ -342,9 +342,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             // One exact query: segmentHit walks only the grid cells the segment crosses and stops at the first hit (the old 2 m march
             // dated from an AABB scan and cost a setup per piece - Rendering's 64p profile: segmentHit 8.7 % of the main thread).
             // Static triangles only (the renderer calls this on the main thread while the step may run).
-            float t;
             const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;   // zero-extent line checks
-            return lineWorld.segmentHit(a, b, t);
+            return lineWorld.segmentAnyHit(a, b);   // a boolean: stops at the first hit
         });
         // KillZ: the persistent level's TnWorldInfo (<map>_BASE_m in physics.json "world") [CONF AssetTools physics].
         // [integration M06] Read per map (was Streets' -75000 UU for every map; Gorge authors -7500, Seed -1500).
@@ -1643,12 +1642,12 @@ struct TickProf {
     static bool env() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
     static bool& forced() { static bool f = false; return f; }   // World::setStepProfiling (WFC_SCALETEST)
     static bool on() { return env() || forced(); }
-    double acc[29] = {}; long n = 0;
-    const char* names[29] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+    double acc[30] = {}; long n = 0;
+    const char* names[30] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim(cpu)", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
                              "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
                              // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
                              // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
-                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose"};
+                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues", "ab.sentry.search", "ab.sentry.pose", "presentedFill"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
 }
@@ -1657,10 +1656,10 @@ void World::setStepProfiling(bool on) { TickProf::forced() = on; }
 void World::stepProfileReset() { for (double& a : tickProf().acc) a = 0.0; }
 std::vector<std::pair<std::string, double>> World::stepProfileSums() {
     std::vector<std::pair<std::string, double>> v;
-    for (int i = 0; i < 29; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
+    for (int i = 0; i < 30; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
     return v;
 }
-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 29) tickProf().acc[slot] += ms; }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 30) tickProf().acc[slot] += ms; }
 namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
@@ -1792,7 +1791,7 @@ void World::finishRemainder() {
         }
         LOG_INFO("SIMHASH %ld %016llx", step, (unsigned long long)h);
     }
-    fillPresented(fillBack_ ? presentedBack_ : presented_);
+    { TickTimer tf(29); fillPresented(fillBack_ ? presentedBack_ : presented_); }
     // A frame may have drawn (and cached the palettes of) the poses before this part animated them.
     player_.pawn().invalidatePalettes();
     for (MatchOpponent* o : opponents_) o->pawn().invalidatePalettes();
@@ -1810,7 +1809,16 @@ void World::finishRemainder() {
 
 // Weapon models of every held weapon, loaded on the main thread before the background part may switch to one (GL uploads).
 void World::preloadHeldWeaponsOfPawns() {
-    auto pre = [&](const Character& c) { for (const Weapon& w : c.inventory()) if (w.def && w.def->meshGltf && *w.def->meshGltf) weaponModelFor(*w.def); };
+    // Change-driven: a def is looked up in the (string-keyed) model cache once; afterwards a sorted pointer search (~256 per step at 64).
+    auto pre = [&](const Character& c) {
+        for (const Weapon& w : c.inventory()) {
+            if (!w.def || !w.def->meshGltf || !*w.def->meshGltf) continue;
+            auto it = std::lower_bound(preloadedDefs_.begin(), preloadedDefs_.end(), w.def);
+            if (it != preloadedDefs_.end() && *it == w.def) continue;
+            weaponModelFor(*w.def);
+            preloadedDefs_.insert(it, w.def);
+        }
+    };
     pre(player_.pawn());
     for (MatchOpponent* o : opponents_) if (o->spawned()) pre(o->pawn());
 }
@@ -1823,7 +1831,7 @@ void World::tickPrefix(float dt) {
     struct PrefixTime { double& acc; double t0 = profNowMs(); ~PrefixTime() { acc += profNowMs() - t0; } } prefixTime{prefixMsAcc_};
     if (TickProf::env() && ++tickProf().n % 300 == 0) {
         std::string line;
-        for (int i = 0; i < 29; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        for (int i = 0; i < 30; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step (this local part + the background part)

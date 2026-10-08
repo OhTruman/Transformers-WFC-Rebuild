@@ -114,6 +114,7 @@ private:
     void runEngageTest();
     void runAsyncStepTest();
     void runScaleTest();
+    void runRayBench();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

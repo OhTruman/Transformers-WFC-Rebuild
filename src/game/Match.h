@@ -72,6 +72,7 @@ struct MatchEvent {
     int player = -1, other = -1;       // victim / killer, spawned player, winning player (FFA)
     int value = 0;                     // countdown, announcement switch, winning team (-1 = none / tie)
     std::string text;                  // EndGame reason ("Score", "", "Forfeit"), spawn start actor
+    std::string damageType;            // PlayerKilled: the killing DamageType class (as KillFeedEntry::damageType), on the event itself
 };
 
 // One TnDeathMessage broadcast (GameInfo.BroadcastDeathMessage -> BroadcastLocalized(DeathMessageClass, switch, Killer.PRI,

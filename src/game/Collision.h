@@ -23,6 +23,10 @@ public:
 
     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+    // Any hit on a-b (no nearest t): the renderer's light-visibility queries. Same boolean as segmentHit, stops at the first hit.
+    bool segmentAnyHit(const core::Vec3& a, const core::Vec3& b) const;
+    // The previous segmentHit (no height rejection), kept for WFC_RAYBENCH's equality check.
+    bool segmentHitReference(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the
     // moving collision sets below (the 3-argument query is static geometry only).
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const;
@@ -41,6 +45,8 @@ private:
         std::vector<Tri> world;          // posed copy
         core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
         bool enabled = true;
+        core::Mat4 lastPose{};           // setDynamicPose skips an unchanged pose (a mover holding still): same triangles
+        bool posed = false;
     };
     std::vector<DynamicSet> dyn_;
     bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const;
@@ -49,6 +55,8 @@ private:
     void cellRange(float x, float z, int& cx, int& cz) const;
 
     std::vector<Tri> tris_;
+    std::vector<float> triYMin_, triYMax_;   // per triangle (static): the walk skips triangles above / below the segment in a cell
+    template <bool Any> bool walk(const core::Vec3& a, const core::Vec3& b, float& outT) const;
     core::Vec3 bmin_{0, 0, 0}, bmax_{0, 0, 0};
 
     // Uniform grid over XZ for ground queries.

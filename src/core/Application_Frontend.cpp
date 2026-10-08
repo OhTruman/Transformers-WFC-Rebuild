@@ -1065,11 +1065,13 @@ void Application::routeMatchToFrontend(float dt) {
             frontend::FlowTrace::emit("match.kill", {{"victim", std::to_string(e.player)}, {"killer", std::to_string(e.other)}, {"how", e.text}});
             {   // RUNTIME-EVENTS: kill (score already applied by Gameplay), team / player score, death
                 const core::Vec3 dp = posOf(e.player);
-                // [integration 09c] weapon = the kill record's damage type (Match::killed fills it; the event text is only the
-                // suicide / environment tag), newest record for this victim.
-                std::string kdmg = e.text;
-                for (auto it = pf.kills.rbegin(); it != pf.kills.rend(); ++it)
-                    if (it->victim == e.player) { if (!it->damageType.empty()) kdmg = it->damageType; break; }
+                // [integration 09c] weapon = the event's own damage type (Gameplay 5e4fe8e: the same value as the kill record, so it
+                // no longer depends on the record reaching presented() in the same step); fallback: the newest kill record.
+                std::string kdmg = e.damageType;
+                if (kdmg.empty())
+                    for (auto it = pf.kills.rbegin(); it != pf.kills.rend(); ++it)
+                        if (it->victim == e.player) { if (!it->damageType.empty()) kdmg = it->damageType; break; }
+                if (kdmg.empty()) kdmg = e.text;
                 LOG_INFO("MATCH kill killer=%d victim=%d killer_team=%d victim_team=%d weapon=%s", e.other, e.player, teamOf(e.other),
                          teamOf(e.player), kdmg.empty() ? "unknown" : kdmg.c_str());
                 if (e.other >= 0 && e.other != e.player) {

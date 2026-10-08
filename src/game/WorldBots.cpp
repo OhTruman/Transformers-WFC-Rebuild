@@ -929,7 +929,13 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     in.down[(int)platform::Button::Back] = f < -0.3f;
     in.down[(int)platform::Button::Right] = r > 0.3f;
     in.down[(int)platform::Button::Left] = r < -0.3f;
-    in.down[(int)platform::Button::Fire] = b.fireWish;
+    // The brain wishes a shot only on frames its weapon is ready; the controller needs Fire held through a burst (automatic weapons)
+    // and a fresh press per shot of a semi-automatic one: hold 0.15 s after each wish, with a press edge when Fire was up.
+    if (b.fireWish) playerBotFireHold_ = 0.15f; else playerBotFireHold_ = std::max(0.0f, playerBotFireHold_ - dt);
+    const bool fireDown = b.fireWish || playerBotFireHold_ > 0.0f;
+    in.down[(int)platform::Button::Fire] = fireDown;
+    if (fireDown && (!playerBotFireDown_ || b.fireWish)) in.pressed[(int)platform::Button::Fire] = true;
+    playerBotFireDown_ = fireDown;
     in.down[(int)platform::Button::FineAim] = vehicle && mi.wantBoost;            // RMB = Boost in vehicle form
     if (mi.wantJump) in.pressed[(int)platform::Button::Jump] = true;
     if (mi.wantDash) in.pressed[(int)platform::Button::Dash] = true;
