@@ -3822,22 +3822,31 @@ void Pipeline::drawMdi(GpuMesh& g) {
             glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
             glDisable(GL_BLEND); glDepthMask(GL_TRUE);
             static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
+            size_t preBuckets = 0, preDraws = 0;
             for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
                 const size_t n = ranges[bi].second - ranges[bi].first;
                 const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
                 if (!n || M.blend != 0) continue;
+                ++preBuckets; preDraws += n;
                 if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
                 MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
             }
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             glx::uniformCacheForgetCurrent();
             prepassed = true;
+            if (frameNo_ % 600 == 1)                       // evidence for A/B harnesses (WFC_NOZPREPASS=1: no such line)
+                LOG_INFO("wfc: world depth prepass on: %zu buckets, %zu draws this frame%s", preBuckets, preDraws,
+                         std::getenv("WFC_ZPREPASS_TEST") ? " (WFC_ZPREPASS_TEST: opaque world shading skipped)" : "");
             depthDirty_ = true;
         }
     }
+    // WFC_ZPREPASS_TEST=1 (positive control only): the prepassed buckets are not shaded, so the opaque world shows
+    // the clear colour / sky - visibly wrong whenever the prepass is active
+    static const bool zTest = std::getenv("WFC_ZPREPASS_TEST") != nullptr;
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
         if (!n) continue;
+        if (zTest && prepassed && progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg].blend == 0) continue;
         if (profFrame) profMarks.push_back({bi, qn});
         const MdiBucket& b = mdiBuckets_[bi];
         const Program& M = progs_[(size_t)progs_[(size_t)b.prog].mdiProg];
