@@ -60,6 +60,7 @@ public:
     bool create(int w, int h, const char* title) {
         width_ = w; height_ = h;
         hinst_ = GetModuleHandleW(nullptr);
+        enableDpiAwareness();
 
         WNDCLASSEXW wc = {};
         wc.cbSize = sizeof(wc);
@@ -71,7 +72,7 @@ public:
         if (!RegisterClassExW(&wc)) { LOG_ERROR("RegisterClassExW failed"); return false; }
 
         RECT r = {0, 0, w, h};
-        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+        adjustFrame(r, systemDpi());
 
         wchar_t wtitle[256];
         MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, 256);
@@ -252,7 +253,7 @@ public:
         restoreDesktopMode();
         SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
         RECT r = {0, 0, w, h};
-        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+        adjustFrame(r, windowDpi());
         int x = fullscreen_ ? windowedRect_.left : CW_USEDEFAULT, y = fullscreen_ ? windowedRect_.top : CW_USEDEFAULT;
         if (x == CW_USEDEFAULT) { RECT cur; GetWindowRect(hwnd_, &cur); x = cur.left; y = cur.top; }
         SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
@@ -370,6 +371,41 @@ private:
             {"LStickRight", kPadLStickRight}};
         for (const auto& e : t) if (n == e.name) return e.m;
         return 0;
+    }
+
+    // PC ADAPTATION (high-DPI desktops): the process is per-monitor DPI aware (V2), so Windows does not render the game at
+    // the scaled logical size and stretch it (soft image on a 125-150 % 4K desktop). Every window / cursor coordinate is
+    // then in physical pixels: the client size (the render size), GetCursorPos / ScreenToClient / SetCursorPos (menu
+    // pointer, mouse-look recentring), the monitor rectangle and the display modes all agree. The entry points are looked
+    // up at run time (Windows 10 1703+ for V2; older systems fall back to system-DPI awareness).
+    static void enableDpiAwareness() {
+        static bool done = false;
+        if (done) return;
+        done = true;
+        HMODULE u = GetModuleHandleW(L"user32.dll");
+        typedef BOOL(WINAPI * PFN_SetCtx)(HANDLE);
+        typedef BOOL(WINAPI * PFN_SetAware)();
+        auto setCtx = u ? (PFN_SetCtx)(void*)GetProcAddress(u, "SetProcessDpiAwarenessContext") : nullptr;
+        if (setCtx && setCtx((HANDLE)(intptr_t)-4)) { LOG_INFO("window: per-monitor DPI aware (V2)"); return; }   // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        if (setCtx && GetLastError() == ERROR_ACCESS_DENIED) { LOG_INFO("window: DPI awareness already set (manifest)"); return; }
+        auto setAware = u ? (PFN_SetAware)(void*)GetProcAddress(u, "SetProcessDPIAware") : nullptr;
+        if (setAware && setAware()) LOG_INFO("window: system DPI aware (no per-monitor V2 on this Windows)");
+    }
+    static UINT systemDpi() {
+        typedef UINT(WINAPI * PFN)();
+        static PFN f = (PFN)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+        return f ? f() : 96;
+    }
+    UINT windowDpi() const {
+        typedef UINT(WINAPI * PFN)(HWND);
+        static PFN f = (PFN)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+        return f && hwnd_ ? f(hwnd_) : systemDpi();
+    }
+    // The window rectangle around a client rectangle for a DPI (frame and caption scale with the monitor).
+    static void adjustFrame(RECT& r, UINT dpi) {
+        typedef BOOL(WINAPI * PFN)(LPRECT, DWORD, BOOL, DWORD, UINT);
+        static PFN f = (PFN)(void*)GetProcAddress(GetModuleHandleW(L"user32.dll"), "AdjustWindowRectExForDpi");
+        if (!f || !f(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi)) AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
     }
 
     // PC ADAPTATION (RX 7900 XTX driver-reset hardening, Rendering request): recreate the context through
@@ -491,6 +527,25 @@ private:
                 if (width_ < 1) width_ = 1;
                 if (height_ < 1) height_ = 1;
                 return 0;
+            case 0x02E4: {   // WM_GETDPISCALEDSIZE: the window size for the new DPI keeps the client size (no rescale)
+                if (fullscreen_) return FALSE;
+                RECT c; GetClientRect(hwnd, &c);
+                RECT r = {0, 0, c.right - c.left, c.bottom - c.top};
+                adjustFrame(r, (UINT)wp);
+                SIZE* sz = reinterpret_cast<SIZE*>(lp);
+                sz->cx = r.right - r.left; sz->cy = r.bottom - r.top;
+                return TRUE;
+            }
+            case 0x02E0: {   // WM_DPICHANGED: moved to a monitor with another scale
+                if (fullscreen_) return 0;   // the popup already covers its monitor in physical pixels
+                const RECT* sug = reinterpret_cast<const RECT*>(lp);
+                RECT c; GetClientRect(hwnd, &c);
+                RECT r = {0, 0, c.right - c.left, c.bottom - c.top};
+                adjustFrame(r, HIWORD(wp));
+                SetWindowPos(hwnd, nullptr, sug->left, sug->top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
+                LOG_INFO("window: monitor DPI %u, client stays %dx%d", (unsigned)HIWORD(wp), (int)(c.right - c.left), (int)(c.bottom - c.top));
+                return 0;
+            }
             case WM_SETFOCUS: focused_ = true; return 0;
             case WM_MOUSEWHEEL: wheel_ += GET_WHEEL_DELTA_WPARAM(wp); return 0;
             case WM_SETCURSOR:
