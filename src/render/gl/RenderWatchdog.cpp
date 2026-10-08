@@ -188,6 +188,9 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
     const int n = std::snprintf(msg, sizeof msg, "wfc_rebuild crashed: report %s, minidump %s%s\n", path, dpath, dumped ? "" : " (failed)");
     DWORD w = 0;
     if (n > 0) WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg, (DWORD)n, &w, nullptr);
+    // [integration 09c] the buffered log's last lines (Systems): last, after the report and dump are on disk; never blocks
+    // (try-locks, returns at once if the faulting thread holds the writer).
+    core::logTryFlush();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
