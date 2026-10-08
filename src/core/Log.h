@@ -7,6 +7,9 @@ namespace core {
 enum class LogLevel { Trace, Info, Warn, Error };
 
 void logMessage(LogLevel level, const char* fmt, ...);
+// Lines are written by a background thread (see Log.cpp); this writes everything logged so far, in order, before returning
+// (the crash handler, shutdown paths). Errors are flushed this way automatically.
+void logFlush();
 
 } // namespace core
 
