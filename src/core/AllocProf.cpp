@@ -1,3 +1,5 @@
+// The global C++ operator new / delete: mimalloc (third_party/mimalloc) when built with WFC_MIMALLOC (the Release allocator
+// for the 32 v 32 allocation rate), else the CRT malloc. Aligned new / delete keep the library's own pair.
 // DEV TOOL (WFC_ALLOCPROF): counts heap allocations and samples their call stacks, to find per-frame / per-step allocations.
 // Off by default: operator new then costs one static flag check over malloc. With WFC_ALLOCPROF=<N> (sample every N-th
 // main-thread allocation, default 16) it counts main-thread and other-thread allocations, and every ~10 s writes the rate and
@@ -11,6 +13,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#if defined(WFC_MIMALLOC) && WFC_MIMALLOC
+#include <mimalloc.h>
+#define WFC_RAW_ALLOC(n) mi_malloc(n)
+#define WFC_RAW_FREE(q) mi_free(q)
+#else
+#define WFC_RAW_ALLOC(n) std::malloc(n)
+#define WFC_RAW_FREE(q) std::free(q)
+#endif
 
 namespace {
 
@@ -108,18 +118,18 @@ void record(std::size_t n) {
 
 void* operator new(std::size_t n) {
     if (prof().on) record(n);
-    if (void* q = std::malloc(n ? n : 1)) return q;
+    if (void* q = WFC_RAW_ALLOC(n ? n : 1)) return q;
     throw std::bad_alloc();
 }
 void* operator new[](std::size_t n) { return ::operator new(n); }
 void* operator new(std::size_t n, const std::nothrow_t&) noexcept {
     if (prof().on) record(n);
-    return std::malloc(n ? n : 1);
+    return WFC_RAW_ALLOC(n ? n : 1);
 }
 void* operator new[](std::size_t n, const std::nothrow_t& t) noexcept { return ::operator new(n, t); }
-void operator delete(void* q) noexcept { std::free(q); }
-void operator delete[](void* q) noexcept { std::free(q); }
-void operator delete(void* q, std::size_t) noexcept { std::free(q); }
-void operator delete[](void* q, std::size_t) noexcept { std::free(q); }
-void operator delete(void* q, const std::nothrow_t&) noexcept { std::free(q); }
-void operator delete[](void* q, const std::nothrow_t&) noexcept { std::free(q); }
+void operator delete(void* q) noexcept { WFC_RAW_FREE(q); }
+void operator delete[](void* q) noexcept { WFC_RAW_FREE(q); }
+void operator delete(void* q, std::size_t) noexcept { WFC_RAW_FREE(q); }
+void operator delete[](void* q, std::size_t) noexcept { WFC_RAW_FREE(q); }
+void operator delete(void* q, const std::nothrow_t&) noexcept { WFC_RAW_FREE(q); }
+void operator delete[](void* q, const std::nothrow_t&) noexcept { WFC_RAW_FREE(q); }
