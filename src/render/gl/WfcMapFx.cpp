@@ -1367,6 +1367,23 @@ private:
 void renderPoolRun(int n, const std::function<void(int)>& f) { RenderPool::get().run(n, f); }
 }  // namespace
 
+// The pickup factory mesh (shared per glTF): loaded on demand - warmupWorld loads every one under the loading screen
+// (the first match frame paid ~25-60 ms for the glTF read + upload).
+void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
+    if (pm.meshId != -1) return;
+    pm.meshId = -2;
+    for (const PickupMeshRT& o : pickupMeshes_) if (o.gltf == pm.gltf && o.meshId >= 0) pm.meshId = o.meshId;
+    MeshData md;
+    if (pm.meshId < 0 && assets::loadGlb(contentRoot() + pm.gltf, md)) {
+        const std::string pkg = pm.mesh.substr(0, pm.mesh.rfind('.'));
+        for (render::Material& m : md.mats) {
+            std::string full = pkg + "." + m.sourceName;
+            m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
+        }
+        pm.meshId = upload(md); yieldLoad();
+    }
+}
+
 void Pipeline::drawMapPresentation() {
     if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
     if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
@@ -1377,10 +1394,15 @@ void Pipeline::drawMapPresentation() {
     static int secFrames = 0;
     auto secT = std::chrono::steady_clock::now();
     auto sec = [&](int k) {
-        if (!secProf) return;
         const auto now = std::chrono::steady_clock::now();
-        secMs[k] += std::chrono::duration<double, std::milli>(now - secT).count();
+        const double ms = std::chrono::duration<double, std::milli>(now - secT).count();
+        secMs[k] += ms;
         secT = now;
+        static int spikes = 0;                         // a section over 10 ms (first-use work) is named, a few times
+        if (ms > 10.0 && spikes++ < 12) {
+            static const char* kName[5] = {"props", "pickups", "particle build", "replay", "?"};
+            LOG_WARN("map FX section %s took %.1f ms in frame %d (%zu instances)", kName[k], ms, frameNo_, fxInstances_.size());
+        }
     };
     // props
     for (MapProp& p : mapProps_) {
@@ -1404,19 +1426,7 @@ void Pipeline::drawMapPresentation() {
         float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
         for (PickupMeshRT& pm : pickupMeshes_) {
             if (pickupMeshHidden_.count(pm.owner)) continue;
-            if (pm.meshId == -1) {                        // lazy, shared per glTF
-                pm.meshId = -2;
-                for (const PickupMeshRT& o : pickupMeshes_) if (o.gltf == pm.gltf && o.meshId >= 0) pm.meshId = o.meshId;
-                MeshData md;
-                if (pm.meshId < 0 && assets::loadGlb(contentRoot() + pm.gltf, md)) {
-                    const std::string pkg = pm.mesh.substr(0, pm.mesh.rfind('.'));
-                    for (render::Material& m : md.mats) {
-                        std::string full = pkg + "." + m.sourceName;
-                        m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
-                    }
-                    pm.meshId = upload(md); yieldLoad();
-                }
-            }
+            ensurePickupMesh(pm);                         // (loaded under the loading screen by warmupWorld)
             if (pm.meshId < 0) continue;
             if (pickupRuleBlocked(pm.owner)) continue;    // factory Disabled outside its game rule (flag / bomb)
             float dx = pm.T[0] - camUE[0], dy = pm.T[1] - camUE[1], dz = pm.T[2] - camUE[2];
@@ -1456,7 +1466,7 @@ void Pipeline::drawMapPresentation() {
                    std::vector<Sprite> sp; int meshId = -1; core::Mat4 M; float col[4] = {1, 1, 1, 1}; };
     struct FxOut { std::vector<FxCmd> cmds; size_t used = 0; int sprites = 0, meshes = 0; };
     static std::vector<FxOut> fxOut;
-    auto buildInstance = [&](FxInstance& in, FxOut& out) {
+    auto buildInstance = [&](FxInstance& in, FxOut& out, size_t eBegin, size_t eEnd) {   // emitters [eBegin, eEnd)
         auto sysIt = fxSystems_.find(in.system);
         if (sysIt == fxSystems_.end() || in.hidden) return;
         const FxSystem& sys = sysIt->second;
@@ -1473,7 +1483,7 @@ void Pipeline::drawMapPresentation() {
             FxCmd& c = nextCmd();
             c.kind = 1; c.meshId = meshId; c.M = M; std::copy(col, col + 4, c.col);
         };
-        for (size_t e = 0; e < sys.emitters.size(); ++e) {
+        for (size_t e = eBegin; e < std::min(eEnd, sys.emitters.size()); ++e) {
             FxEmitterRT& rt = in.emitters[e];
             if (rt.parts.empty()) continue;
             const FxLod& L = sys.emitters[e].lods[(size_t)rt.lod];
@@ -2044,13 +2054,24 @@ void Pipeline::drawMapPresentation() {
         }
     };
     {
-        const size_t n = fxInstances_.size();
+        // work items: one per (instance, emitter with particles), in instance-then-emitter order (a few large systems
+        // dominate the cost, so the split is per emitter; each emitter's build uses only its own state and local RNGs)
+        static std::vector<std::pair<uint32_t, uint32_t>> items;
+        items.clear();
+        for (size_t i = 0; i < fxInstances_.size(); ++i) {
+            const FxInstance& in = fxInstances_[i];
+            if (in.hidden) continue;
+            for (size_t e = 0; e < in.emitters.size(); ++e)
+                if (!in.emitters[e].parts.empty()) items.push_back({(uint32_t)i, (uint32_t)e});
+        }
+        const size_t n = items.size();
         if (fxOut.size() < n) fxOut.resize(n);
         for (size_t i = 0; i < n; ++i) { fxOut[i].used = 0; fxOut[i].sprites = fxOut[i].meshes = 0; }
         static const bool serial = !(std::getenv("WFC_FXPAR") && std::getenv("WFC_FXPAR")[0] == '1') ||
                                    std::getenv("WFC_FXTEST") != nullptr;
-        if (serial || n < 8) { for (size_t i = 0; i < n; ++i) buildInstance(fxInstances_[i], fxOut[i]); }
-        else renderPoolRun((int)n, [&](int i) { buildInstance(fxInstances_[(size_t)i], fxOut[(size_t)i]); });
+        auto runItem = [&](size_t k) { buildInstance(fxInstances_[items[k].first], fxOut[k], items[k].second, items[k].second + 1); };
+        if (serial || n < 8) { for (size_t k = 0; k < n; ++k) runItem(k); }
+        else renderPoolRun((int)n, [&](int k) { runItem((size_t)k); });
         sec(2);
         for (size_t i = 0; i < n; ++i) {                 // replay in instance order: the serial loop's call sequence
             FxOut& o = fxOut[i];

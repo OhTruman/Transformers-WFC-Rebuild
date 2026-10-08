@@ -2741,6 +2741,12 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     warmup_ = true;
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     draw(id, core::Mat4::identity());
+    // the pickup factory meshes and map props too (their first draw at the first match frame cost ~60 ms: first-use
+    // programs / textures); same target, cleared by the first frame
+    for (PickupMeshRT& pm : pickupMeshes_) ensurePickupMesh(pm);
+    for (const PickupMeshRT& pm : pickupMeshes_) if (pm.meshId >= 0) draw(pm.meshId, core::Mat4::identity());
+    for (const MapProp& p : mapProps_)
+        for (int k = 0; k < 2; ++k) if (p.stateMesh[k] >= 0) draw(p.stateMesh[k], core::Mat4::identity());
     warmup_ = false;
     // the static light environments it cached were evaluated before the first frame's movers / Matinee light state:
     // dropped, so the first frame computes them exactly as without the warm-up
@@ -3843,7 +3849,7 @@ void Pipeline::pawnOcclusionResults() {
     }
 }
 
-void Pipeline::pawnOcclusionQueries() {
+void Pipeline::ensurePawnOcclusionProgram() {
     if (!occProg_) {
         const char* vs = "#version 330 core\nlayout(location=0) in vec3 aPos; uniform mat4 uVP; uniform vec3 uMin; uniform vec3 uMax;\n"
                          "void main(){ gl_Position = uVP * vec4(mix(uMin, uMax, aPos), 1.0); }\n";
@@ -3863,6 +3869,11 @@ void Pipeline::pawnOcclusionQueries() {
         BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof idx, idx, GL_STATIC_DRAW);
         BindVertexArray(0);
     }
+}
+
+void Pipeline::pawnOcclusionQueries() {
+    ensurePawnOcclusionProgram();
+    if (!occProg_) return;
     flushInstances();
     // the state this pass touches is saved and restored exactly (no effect on any later draw)
     GLint saveDepthFunc = GL_LESS; GLboolean saveDepthMask = GL_TRUE, saveColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
@@ -4396,6 +4407,18 @@ void Pipeline::prewarmPlacedFx() {
             }
         }
     }
+    // every other loaded system too (runtime templates: weapons / impacts / projectiles spawn later in the match)
+    for (const auto& kv : fxSystems_)
+        for (const FxEmitter& em : kv.second.emitters) {
+            if (!em.renderable) continue;
+            for (const FxLod& L : em.lods) {
+                if (!L.meshGltf.empty()) fxMeshFor(L);
+                else if (!L.material.empty()) spriteProgram(L.material);
+                auto now = std::chrono::steady_clock::now();
+                if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
+            }
+        }
+    if (pawnOcclusionOn()) ensurePawnOcclusionProgram();   // compiled under the loading screen, not on the first frame
     LOG_INFO("wfc: prewarmed placed effects: %zu sprite materials, %zu meshes in %.0f ms", spriteProg_.size() - progs,
              fxMeshes_.size() - meshes, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
 }

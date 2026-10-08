@@ -568,6 +568,7 @@ private:
     static bool pawnOcclusionOn();
     void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2
     void pawnOcclusionQueries();       // after the opaque pass: this frame's queries
+    void ensurePawnOcclusionProgram(); // its program / box geometry (prewarmed at load)
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
@@ -884,6 +885,7 @@ private:
     };
     std::map<std::string, float> pickupSpin_;         // factory (lower) -> accumulated yaw (UU) while available
     std::vector<PickupMeshRT> pickupMeshes_;
+    void ensurePickupMesh(PickupMeshRT& pm);   // the pickup factory mesh, loaded on demand / at the warm-up
     std::set<std::string> pickupMeshHidden_;
     float pickupYaw(const std::string& ownerLower) const;
     bool pickupRuleBlocked(const std::string& ownerLower) const;
