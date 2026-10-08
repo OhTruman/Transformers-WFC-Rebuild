@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <unordered_map>
 
 namespace gfx::avm1 {
 
@@ -57,6 +58,21 @@ uint64_t canonicalFunctionHash(const ScriptCode& sc, const std::vector<std::stri
 }
 
 namespace {
+
+// A string literal's property atom, interned once per literal address: re-hashing the same names on every lookup was the
+// largest single cost of the PlayerList ports (sampling profile of the Tab-open frame). Only for literals (static storage).
+uint32_t litAtom(const char* s) {
+    static std::unordered_map<const char*, uint32_t> cache;
+    auto it = cache.find(s);
+    if (it != cache.end()) return it->second;
+    const uint32_t a = atomIntern(s);
+    cache.emplace(s, a);
+    return a;
+}
+// vm.callMethod with a literal method name (its atom from litAtom).
+template <size_t N>
+Value callM(VM& vm, const Value& base, const char (&name)[N], Args args) { return vm.callMethod(base, name, std::move(args), litAtom(name)); }
+Value callM(VM& vm, const Value& base, const std::string& name, Args args) { return vm.callMethod(base, name, std::move(args)); }
 
 // The shared library's findInterpValue (812 bytes): canonical hash of the SharedComponents version.
 constexpr uint64_t kFindInterpValueHash = 0x35ffa920f1ebb41bull;   // PlayerList / InGameStats / ... (same canonical body)
@@ -115,9 +131,9 @@ Value nativeFindInterpValueImpl(VM& vm, Args& a) {
     const Value r2 = r14;
     const Value r7 = r6;
     bool linear = vm.looseEquals(r6, Value(0.0));
-    if (!linear) linear = vm.toBool(Value(vm.looseEquals(vm.callMethod(r9, "toLowerCase", {}), Value("linear"))));
+    if (!linear) linear = vm.toBool(Value(vm.looseEquals(callM(vm, r9, "toLowerCase", {}), Value("linear"))));
     if (linear) return o.add2(o.div(o.mul(r4, r1), r3), r5);
-    const Value r0 = vm.callMethod(r9, "toLowerCase", {});
+    const Value r0 = callM(vm, r9, "toLowerCase", {});
     const Value one(1.0), two(2.0), zero(0.0), half(0.5);
     if (vm.strictEquals(r0, Value("easein"))) {
         r1 = o.div(r1, r3);
@@ -180,15 +196,18 @@ struct ScopeVars {
         static int logged = 0;
         if (logged++ < 20) LOG_WARN("AVM1 GCCHECK: native port '%s' uses its collected original script", fn->script ? fn->script->name.c_str() : "?");
     }
-    Value get(const std::string& n) {
+    template <size_t N>
+    Value get(const char (&n)[N]) { return getA(n, litAtom(n)); }
+    Value get(const std::string& n) { return getA(n, atomFind(n)); }
+    Value getA(const std::string& n, uint32_t a) {   // a: n's atom (0: never interned - the lookups fall back to the name)
         checkAlive();
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
             if (!s) continue;
             if (s == vm.global) break;
-            if (vm.has(s, n)) return vm.get(s, n);
+            if (vm.has(s, n, a)) return vm.get(s, n, a);
         }
-        if (vm.has(vm.global, n)) return vm.get(vm.global, n);
+        if (vm.has(vm.global, n, a)) return vm.get(vm.global, n, a);
         return Value::undef();
     }
     Object* targetObj() {
@@ -198,28 +217,32 @@ struct ScopeVars {
         return t ? vm.player()->scriptObject(t) : nullptr;
     }
     // CallFunction <name>(args): the name through the scope chain, 'this' = the calling timeline.
-    Value callFunction(const std::string& n, Args args) {
-        Value f = get(n);
+    template <size_t N>
+    Value callFunction(const char (&n)[N], Args args) { return callFunctionA(n, litAtom(n), std::move(args)); }
+    Value callFunctionA(const std::string& n, uint32_t a, Args args) {
+        Value f = getA(n, a);
         if (!f.isObject() || f.o->kind != ObjKind::Function) return Value::undef();
         Object* t = targetObj();
         return vm.call(f, t ? Value(t) : Value::undef(), args);
     }
-    void set(const std::string& n, const Value& v) {
+    template <size_t N>
+    void set(const char (&n)[N], const Value& v) { setA(n, litAtom(n), v); }
+    void setA(const std::string& n, uint32_t a, const Value& v) {
         checkAlive();
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
             if (!s || s == vm.global) continue;
-            if (vm.has(s, n)) { vm.set(s, n, v); return; }
+            if (vm.has(s, n, a)) { vm.set(s, n, v, a); return; }
         }
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
-            if (s && s->kind == ObjKind::Clip) { vm.set(s, n, v); return; }
+            if (s && s->kind == ObjKind::Clip) { vm.set(s, n, v, a); return; }
         }
         gfx::DisplayObject* t = fn->defTarget;
         if (!t && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip) t = self.o->display;
         if (!t || (t->removed && !fn->defTarget)) t = vm.player()->root();
-        if (Object* to = t ? vm.player()->scriptObject(t) : nullptr) { vm.set(to, n, v); return; }
-        vm.set(vm.global, n, v);
+        if (Object* to = t ? vm.player()->scriptObject(t) : nullptr) { vm.set(to, n, v, a); return; }
+        vm.set(vm.global, n, v, a);
     }
 };
 
@@ -233,7 +256,8 @@ Value getMember(VM& vm, const Value& o, const Value& nameV) {
     if (nameV.t == VType::String) return vm.getV(o, nameV.s, nameV.atom);
     return vm.getV(o, nameV.t == VType::Number ? VM::numberToString(nameV.n) : vm.toString(nameV));
 }
-Value getMember(VM& vm, const Value& o, const char* name) { return vm.getV(o, name); }
+template <size_t N>
+Value getMember(VM& vm, const Value& o, const char (&name)[N]) { return vm.getV(o, name, litAtom(name)); }
 void setMember(VM& vm, const Value& o, const Value& nameV, const Value& v) {
     if (nameV.t == VType::Number && o.isObject() && o.o->kind == ObjKind::Array && !o.o->zombie && o.o->watches.empty() &&
         nameV.n >= 0.0 && nameV.n == std::floor(nameV.n) && nameV.n < (double)o.o->elems.size()) {
@@ -244,7 +268,8 @@ void setMember(VM& vm, const Value& o, const Value& nameV, const Value& v) {
     if (nameV.t == VType::String) vm.set(o.o, nameV.s, v, nameV.atom);
     else vm.set(o.o, nameV.t == VType::Number ? VM::numberToString(nameV.n) : vm.toString(nameV), v);
 }
-void setMember(VM& vm, const Value& o, const char* name, const Value& v) { if (o.isObject()) vm.set(o.o, name, v); }
+template <size_t N>
+void setMember(VM& vm, const Value& o, const char (&name)[N], const Value& v) { if (o.isObject()) vm.set(o.o, name, v, litAtom(name)); }
 
 Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
     ScopeVars sv{vm, orig, self};
@@ -257,7 +282,7 @@ Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
     auto splice = [&]() {
         Value qv = sv.get("q");
         Value list = getMember(vm, getMember(vm, r1, "interpController"), "propInterpList");
-        vm.callMethod(list, "splice", {qv, one});
+        callM(vm, list, "splice", {qv, one});
         sv.set("q", Value(vm.toNumber(sv.get("q")) - 1.0));
     };
     auto objProp = [&]() { return sv.get("objProp"); };
@@ -275,7 +300,7 @@ Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
         if (sub) pd = getMember(vm, pd, sub);
         Value pi = getMember(vm, objProp(), "_propInit");
         if (sub) pi = getMember(vm, pi, sub);
-        return vm.callMethod(r1, "findInterpValue", {pi, pd, ti, ct, td, an, cu, os});
+        return callM(vm, r1, "findInterpValue", {pi, pd, ti, ct, td, an, cu, os});
     };
     auto applyColour = [&](const Value& red, const Value& green, const Value& blue) {
         setMember(vm, getMember(vm, getMember(vm, objProp(), "_targ"), "colorTrans"), "redMultiplier", red);
@@ -301,7 +326,7 @@ Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
                 const Value r0 = getMember(vm, objProp(), "_prop");
                 if (vm.strictEquals(r0, Value("callback"))) {
                     if (vm.looseEquals(Value(vm.typeOf(getMember(vm, objProp(), "_propDest"))), Value("function")))
-                        vm.callMethod(objProp(), "_propDest", {});
+                        callM(vm, objProp(), "_propDest", {});
                 } else if (vm.strictEquals(r0, Value("color"))) {
                     Value pd = getMember(vm, objProp(), "_propDest");
                     // the bytecode reads _propDest.red / green / blue afresh for each multiplier
@@ -345,7 +370,7 @@ Value nativeUpdateInterpObjects(VM& vm, Object* orig, const Value& self) {
         sv.set("q", Value(vm.toNumber(sv.get("q")) + 1.0));
     }
     if (vm.looseEquals(getMember(vm, getMember(vm, getMember(vm, r1, "interpController"), "propInterpList"), "length"), Value(0.0)))
-        vm.callMethod(r1, "removeInterpController", {});
+        callM(vm, r1, "removeInterpController", {});
     return Value::undef();
 }
 
@@ -368,7 +393,7 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
         if (!c) c = vm.looseEquals(r16, Value(""));
         if (c) r16 = Value("linear");
     }
-    if (vm.looseEquals(getMember(vm, r1, "interpController"), Value::undef())) vm.callMethod(r1, "createInterpController", {});
+    if (vm.looseEquals(getMember(vm, r1, "interpController"), Value::undef())) callM(vm, r1, "createInterpController", {});
     setMember(vm, getMember(vm, r1, "interpController"), "currentTime", Value(std::floor(vm.player()->timeMs())));
     // for (r20 in interpParams): Enumerate2 pushes the keys in enumeration order; the loop pops them (reverse order)
     std::vector<std::string> keys;
@@ -400,7 +425,7 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
                 if ((!tv.isObject() && !tv.isNullish()) || pv.isObject()) break;
                 if (vm.looseEquals(tv, r3) && vm.looseEquals(pv, r20)) {
                     sv.set("n", Value(n));
-                    vm.callMethod(lv, "splice", {Value(n), one});
+                    callM(vm, lv, "splice", {Value(n), one});
                     n -= 1.0;
                 }
                 n += 1.0;
@@ -412,7 +437,7 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
             if (vm.looseEquals(getMember(vm, getMember(vm, list(), sv.get("n")), "_targ"), r3) &&
                 vm.looseEquals(getMember(vm, getMember(vm, list(), sv.get("n")), "_prop"), r20)) {
                 Value nv = sv.get("n");
-                vm.callMethod(list(), "splice", {nv, one});
+                callM(vm, list(), "splice", {nv, one});
                 sv.set("n", Value(vm.toNumber(sv.get("n")) - 1.0));
             }
             sv.set("n", Value(vm.toNumber(sv.get("n")) + 1.0));
@@ -432,13 +457,13 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
                 setMember(vm, r3, "objTrans", ctor.isObject() ? vm.construct(ctor.o, ta) : Value::undef());
             }
             if (vm.looseEquals(Value(vm.typeOf(getMember(vm, r2, r20))), Value("number")))
-                setMember(vm, r2, r20, vm.callMethod(getMember(vm, r2, r20), "toString", {Value(16.0)}));
+                setMember(vm, r2, r20, callM(vm, getMember(vm, r2, r20), "toString", {Value(16.0)}));
             for (int guard = 0; guard < 64; ++guard) {
                 if (!vm.toBool(vm.lessThan(getMember(vm, getMember(vm, r2, r20), "length"), Value(6.0)))) break;
                 setMember(vm, r2, r20, op.add2(Value("0"), getMember(vm, r2, r20)));
             }
             auto channel = [&](double from) {
-                Value sub = vm.callMethod(getMember(vm, r2, r20), "substr", {Value(from), two});
+                Value sub = callM(vm, getMember(vm, r2, r20), "substr", {Value(from), two});
                 return op.div(sv.callFunction("parseInt", {op.add2(Value("0x"), sub)}), Value(255.0));
             };
             sv.set("rVal", channel(0));
@@ -468,7 +493,7 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
         vm.set(e, "_targ", r3); vm.set(e, "_prop", r20); vm.set(e, "_propInit", pInit); vm.set(e, "_propDest", pDest);
         vm.set(e, "_timeInit", tInit); vm.set(e, "_timeDest", tDest); vm.set(e, "_animType", r16);
         vm.set(e, "_overShoot", r18); vm.set(e, "_interpCurve", r19);
-        vm.callMethod(list(), "push", {Value(e)});
+        callM(vm, list(), "push", {Value(e)});
     }
     return Value::undef();
 }
@@ -482,7 +507,7 @@ Value nativeReadCollection(VM& vm, Object* orig, const Value& self, Args& a, con
     auto arg = [&](size_t i) { return i < a.size() ? a[i] : Value::undef(); };
     ScopeVars sv{vm, orig, self};
     Value ei = getMember(vm, getMember(vm, sv.get("flash"), "external"), "ExternalInterface");
-    return vm.callMethod(ei, "call", {Value(call), arg(0), arg(1), arg(2)});
+    return callM(vm, ei, "call", {Value(call), arg(0), arg(1), arg(2)});
 }
 
 // AssignDataStoreRead(DataObject, DSMarkup, Column "Name:Type", Row) - PlayerList's per-cell read.
@@ -492,7 +517,7 @@ Value nativeAssignDataStoreRead(VM& vm, Object* orig, const Value& self, Args& a
     ScopeVars sv{vm, orig, self};
     const Value r3 = arg(0), r5 = arg(1), r6 = arg(2), r4 = arg(3);
     if (vm.toBool(getMember(vm, r3, "IsConnecting"))) return Value::undef();
-    const Value r2 = vm.callMethod(r6, "split", {Value(":")});
+    const Value r2 = callM(vm, r6, "split", {Value(":")});
     const Value r1 = getMember(vm, r2, Value(0.0));
     {
         const bool eq = vm.looseEquals(r1, Value("CurrentCharacterString"));
@@ -503,12 +528,12 @@ Value nativeAssignDataStoreRead(VM& vm, Object* orig, const Value& self, Args& a
     const Value r0 = getMember(vm, r2, Value(1.0));
     auto ds = [&]() { return getMember(vm, sv.get("HmExternalInterface"), "DataStores"); };
     if (vm.strictEquals(r0, Value("Number"))) {
-        Value raw = vm.callMethod(ds(), "ReadCollectionValue", {r5, r1, r4});
+        Value raw = callM(vm, ds(), "ReadCollectionValue", {r5, r1, r4});
         setMember(vm, r3, r1, sv.callFunction("parseInt", {raw}));
     } else if (vm.strictEquals(r0, Value("Boolean"))) {
-        setMember(vm, r3, r1, vm.callMethod(ds(), "ReadCollectionBoolValue", {r5, r1, r4}));
+        setMember(vm, r3, r1, callM(vm, ds(), "ReadCollectionBoolValue", {r5, r1, r4}));
     } else {
-        setMember(vm, r3, r1, vm.callMethod(ds(), "ReadCollectionValue", {r5, r1, r4}));
+        setMember(vm, r3, r1, callM(vm, ds(), "ReadCollectionValue", {r5, r1, r4}));
     }
     return Value::undef();
 }
@@ -544,13 +569,13 @@ Value nativeUpdatePlayerEntry(VM& vm, Object* orig, const Value& self, Args& a) 
     if (!found) {
         const bool ic = iconic();
         Value list = sv.get("playerList_mc");
-        Value depth = vm.callMethod(list, "getNextHighestDepth", {});
+        Value depth = callM(vm, list, "getNextHighestDepth", {});
         Value name = op.add2(op.add2(Value(ic ? "iconicEntry" : "playerEntry"), sv.get("PlayerEntryCount")), Value("_mc"));
-        r1 = vm.callMethod(sv.get("playerList_mc"), "attachMovie", {Value(ic ? "mc_iconicEntry" : "mc_playerEntry"), name, depth});
+        r1 = callM(vm, sv.get("playerList_mc"), "attachMovie", {Value(ic ? "mc_iconicEntry" : "mc_playerEntry"), name, depth});
         if (ic) sv.callFunction("CreateRowElements", {getMember(vm, r1, "panel_mc"), sv.get("PlayerEntryDisplayModel"), Value(44.0)});
         else sv.callFunction("CreateRowElements", {r1, sv.get("PlayerEntryDisplayModel")});
         setMember(vm, r1, "_y", sv.get("ListElementPosition"));
-        vm.callMethod(sv.get("PlayerListElements"), "push", {r1});
+        callM(vm, sv.get("PlayerListElements"), "push", {r1});
         sv.set("PlayerEntryCount", Value(vm.toNumber(sv.get("PlayerEntryCount")) + 1.0));
     }
     std::vector<std::string> keys;
@@ -612,9 +637,9 @@ Value nativeBuildPlayerList(VM& vm, Object* orig, const Value& self, Args&) {
         if (!vm.looseEquals(r2, undef)) {
             Object* params = vm.newPlain();
             vm.set(params, "_y", sv.get("ListElementPosition"));
-            vm.callMethod(r2, "interp", {Value(0.4), Value("easeout"), Value(3.0), Value(params)});
+            callM(vm, r2, "interp", {Value(0.4), Value("easeout"), Value(3.0), Value(params)});
             if (vm.looseEquals(getMember(vm, r2, "__proto__"), getMember(vm, sv.get("HmButton"), "prototype")))
-                vm.callMethod(sv.get("FocusElements"), "push", {r2});
+                callM(vm, sv.get("FocusElements"), "push", {r2});
         }
         sv.set("ListElementPosition", op.add2(sv.get("ListElementPosition"), r5));
         r7 = inc(r7);
@@ -669,8 +694,8 @@ Value nativeBuildPlayerList(VM& vm, Object* orig, const Value& self, Args&) {
                 sv.set("SelectedPlayerEntry", r3);
                 sv.callFunction("UpdateCurrentFocus", {});
             }
-            vm.callMethod(getMember(vm, ple(), r7), "removeMovieClip", {});
-            vm.callMethod(ple(), "splice", {r7, one});
+            callM(vm, getMember(vm, ple(), r7), "removeMovieClip", {});
+            callM(vm, ple(), "splice", {r7, one});
             r7 = dec(r7);
         }
         r7 = inc(r7);
@@ -711,7 +736,7 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
     auto bitOr = [&](const Value& x, const Value& b) { return Value((double)(vm.toInt32(x) | vm.toInt32(b))); };
     auto arrConst = [&](const char* n) { return getMember(vm, sv.get("Array"), n); };
     auto rowCount = [&](const char* markup) {
-        return vm.callMethod(getMember(vm, sv.get("HmExternalInterface"), "DataStores"), "GetCollectionRowCount", {Value(markup)});
+        return callM(vm, getMember(vm, sv.get("HmExternalInterface"), "DataStores"), "GetCollectionRowCount", {Value(markup)});
     };
     // rows of a collection: one object per row, each column assigned by AssignDataStoreRead
     auto readRows = [&](const Value& into, const Value& count, const char* markup, const char* columnsVar) {
@@ -725,7 +750,7 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
                 sv.callFunction("AssignDataStoreRead", {row, Value(markup), col, r6});
                 r2 = inc(r2);
             }
-            vm.callMethod(into, "push", {row});
+            callM(vm, into, "push", {row});
             r6 = inc(r6);
         }
     };
@@ -752,7 +777,7 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
         Value nd2 = bitOr(nB, dB);
         Value opts(vm.newArray({zero, nd2, nd1, n1, ci}));
         Value fields(vm.newArray({Value("IsConnecting"), Value("Score"), Value("Kills"), Value("Deaths"), Value("PlayerName")}));
-        vm.callMethod(r1, "sortOn", {fields, opts});
+        callM(vm, r1, "sortOn", {fields, opts});
     }
     bool r8 = false;
     {
@@ -771,7 +796,7 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
         Value nd = bitOr(nA, dA);
         Value opts(vm.newArray({nd, n1}));
         Value fields(vm.newArray({Value("Score"), Value("TeamIndex")}));
-        vm.callMethod(r3, "sortOn", {fields, opts});
+        callM(vm, r3, "sortOn", {fields, opts});
     }
     sv.set("PlayerListData", newObj("Array"));
     // the team's players, moved out of r1 into PlayerListData after the header
@@ -779,8 +804,8 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
         Value r2 = zero;
         for (int guard = 0; guard < 1000000 && less(r2, getMember(vm, r1, "length")); ++guard) {
             if (vm.looseEquals(getMember(vm, getMember(vm, r1, r2), "TeamID"), getMember(vm, getMember(vm, r3, r6), "TeamIndex"))) {
-                vm.callMethod(pld(), "push", {getMember(vm, r1, r2)});
-                vm.callMethod(r1, "splice", {r2, one});
+                callM(vm, pld(), "push", {getMember(vm, r1, r2)});
+                callM(vm, r1, "splice", {r2, one});
                 r2 = dec(r2);
             }
             r2 = inc(r2);
@@ -790,9 +815,9 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
         Value r6 = zero;
         for (int guard = 0; guard < 1000000 && less(r6, getMember(vm, r3, "length")); ++guard) {
             if (vm.looseEquals(sv.get("GameTeamStatus"), Value("GTS_TeamGame"))) {
-                vm.callMethod(pld(), "push", {getMember(vm, r3, r6)});
+                callM(vm, pld(), "push", {getMember(vm, r3, r6)});
                 moveTeam(r6);
-                vm.callMethod(pld(), "push", {Value(30.0)});
+                callM(vm, pld(), "push", {Value(30.0)});
             } else {
                 bool r5 = false;
                 Value r2 = zero;
@@ -804,9 +829,9 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
                     r2 = inc(r2);
                 }
                 if (r5) {
-                    vm.callMethod(pld(), "push", {getMember(vm, r3, r6)});
+                    callM(vm, pld(), "push", {getMember(vm, r3, r6)});
                     moveTeam(r6);
-                    if (plainLayout()) vm.callMethod(pld(), "push", {Value(30.0)});
+                    if (plainLayout()) callM(vm, pld(), "push", {Value(30.0)});
                 }
             }
             r6 = inc(r6);
@@ -817,11 +842,11 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
         if (plainLayout()) {
             Object* hdr = vm.newPlain();
             vm.set(hdr, "TeamIndex", Value(255.0));
-            vm.callMethod(pld(), "push", {Value(hdr)});
+            callM(vm, pld(), "push", {Value(hdr)});
         }
         Value r6 = zero;
         for (int guard = 0; guard < 1000000 && less(r6, getMember(vm, r1, "length")); ++guard) {
-            vm.callMethod(pld(), "push", {getMember(vm, r1, r6)});
+            callM(vm, pld(), "push", {getMember(vm, r1, r6)});
             r6 = inc(r6);
         }
     }
@@ -852,14 +877,14 @@ Value nativeSetColor(VM& vm, Object* orig, const Value& self, Args& a) {
         return ctor.isObject() ? vm.construct(ctor.o, args) : Value::undef();
     };
     setMember(vm, r1, "colorTrans", geomNew("ColorTransform", {}));
-    if (vm.looseEquals(Value(vm.typeOf(r2)), Value("number"))) r2 = vm.callMethod(r2, "toString", {Value(16.0)});
+    if (vm.looseEquals(Value(vm.typeOf(r2)), Value("number"))) r2 = callM(vm, r2, "toString", {Value(16.0)});
     for (int guard = 0; guard < 64; ++guard) {
         if (!vm.toBool(vm.lessThan(getMember(vm, r2, "length"), Value(6.0)))) break;
         r2 = op.add2(Value("0"), r2);
     }
     auto channel = [&](const char* mult, double from) {
         Value ct = getMember(vm, r1, "colorTrans");
-        Value sub = vm.callMethod(r2, "substr", {Value(from), Value(2.0)});
+        Value sub = callM(vm, r2, "substr", {Value(from), Value(2.0)});
         setMember(vm, ct, mult, op.div(sv.callFunction("parseInt", {op.add2(Value("0x"), sub)}), Value(255.0)));
     };
     channel("redMultiplier", 0);
