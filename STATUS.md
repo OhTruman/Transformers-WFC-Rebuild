@@ -602,6 +602,22 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE E - SCALABILITY PASS (2026-10-08, playtest build 09c 0afd806)
+- Result (Experimental, verified Streets overview cam, 1080p): 64 participants p50 2.67 ms, p90 3.34 ms (1 % low 183
+  fps; walking real play p90 2.93); 20 participants p90 2.25 ms (300 fps met). Visual guard vs 5990311: 0 flagged.
+- Rendering items (each A/B'd; images identical or within the accepted seam class): drawSubs O(N) translucent scan,
+  lightmap texture array (MDI buckets by program), per-mesh dynamic draw lists + per-frame allocation cuts, frame
+  sprite stream, held weapons on the owner's light environment (RE 5122915: fixed a per-weapon computeEnv bug), pawn
+  occlusion queries with prep skip (body + shadow volume hidden), light-env LastRenderTime throttle (RE b7fb4ea),
+  FX particle frustum cull, FX replay buffer hand-over, load-time prewarm (pickup meshes / FX templates / occlusion
+  program: removed the 65 ms first match frame), weapon in the owner's shadow depth (shadow child).
+- User decisions recorded in FIDELITY: batched rendering default (WFC_MDI=0 reference); Scatter Blaster smoke authored;
+  EmitterPool cap / EffectIsRelevant only in extended lobbies.
+- Measured no gain, left opt-in: texture-bind cache (dropped), parallel FX generation (WFC_FXPAR=1).
+- Diagnostics added: WFC_SLOWFRAME, WFC_GPUBUCKETS, WFC_MAPFXPROF, WFC_MEMSTATS, crash report + minidump (product).
+- Next build: original DXT texture blocks / original lightmap format (AssetTools export; ~5 GB private bytes at 64),
+  per-character prep via a submit-then-draw interface, fewer GL calls per character sub / world bucket.
+
 ## RENDERING MILESTONE E (2026-10-07) — 300+ fps work, HUD / markers / FX fidelity
 - Performance (all verified image-identical by lockstep A/B except world MDI; see FIDELITY.md "RENDER SUBMISSION"):
   GPU skinning (IRenderer::drawSkinnedMesh, exact skinned bounds via hull + SSE2, bitwise), GPU pose blend,
