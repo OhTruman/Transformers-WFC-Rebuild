@@ -369,6 +369,36 @@ Value nativeAddInterp(VM& vm, Object* orig, const Value& self, Args& a) {
     for (auto kit = keys.rbegin(); kit != keys.rend(); ++kit) {
         const Value r20(*kit);
         sv.set("n", zero);
+        // Fast scan (O(list) hash reads instead of scope-chain walks for n per step): while the list is a plain array
+        // and each entry's _targ / _prop are own data properties whose comparison runs no script (object identity,
+        // non-object primitives), n lives in a local and is written back before the native splice and at the end -
+        // nothing can observe it in between. Anything else hands over to the step-by-step loop below at the same n.
+        if (r3.isObject() && r20.isString()) {
+            static const uint32_t aTarg = atomIntern("_targ"), aProp = atomIntern("_prop");
+            double n = 0.0;
+            for (int guard = 0; guard < 1000000; ++guard) {
+                Value lv = list();
+                if (!lv.isObject() || lv.o->kind != ObjKind::Array || lv.o->zombie || !lv.o->watches.empty()) break;
+                const std::vector<Value>& el = lv.o->elems;
+                if (n >= (double)el.size()) break;
+                const Value& ev = el[(size_t)n];
+                if (!ev.isObject() || ev.o->kind != ObjKind::Plain || ev.o->zombie || !ev.o->watches.empty()) break;
+                const Property* pt = ev.o->findOwnA(aTarg);
+                const Property* pp = ev.o->findOwnA(aProp);
+                if (!pt || !pp || pt->getter || pp->getter) break;
+                const Value& tv = pt->v;
+                const Value& pv = pp->v;
+                // object vs primitive would ToPrimitive (script): only objects / nullish _targ, non-object _prop here
+                if ((!tv.isObject() && !tv.isNullish()) || pv.isObject()) break;
+                if (vm.looseEquals(tv, r3) && vm.looseEquals(pv, r20)) {
+                    sv.set("n", Value(n));
+                    vm.callMethod(lv, "splice", {Value(n), one});
+                    n -= 1.0;
+                }
+                n += 1.0;
+            }
+            sv.set("n", Value(n));
+        }
         for (int guard = 0; guard < 1000000; ++guard) {
             if (!vm.toBool(vm.lessThan(sv.get("n"), getMember(vm, list(), "length")))) break;
             if (vm.looseEquals(getMember(vm, getMember(vm, list(), sv.get("n")), "_targ"), r3) &&
@@ -799,6 +829,46 @@ Value nativeUpdatePlayerListData(VM& vm, Object* orig, const Value& self, Args&)
     return undef;
 }
 
+// ---- setColor(color) (366 bytes): PlayerList's element tint (this = the clip, r1) ----
+// this.colorTrans = new flash.geom.ColorTransform(); color as 6 hex digits ("0"-padded, numbers via toString(16));
+// red / green / blue multipliers = parseInt("0x" + pair) / 255, alpha = this._alpha / 100;
+// this.objTrans = new flash.geom.Transform(this); this.objTrans.colorTransform = this.colorTrans.
+constexpr uint64_t kSetColorHash = 0x725eb84004e47947ull;
+Value nativeSetColor(VM& vm, Object* orig, const Value& self, Args& a) {
+    ScopeVars sv{vm, orig, self};
+    Ops op{vm};
+    const Value r1 = self;
+    Value r2 = a.empty() ? Value::undef() : a[0];
+    auto geomNew = [&](const char* cls, Args args) {
+        Value ctor = vm.getV(getMember(vm, sv.get("flash"), "geom"), cls);
+        return ctor.isObject() ? vm.construct(ctor.o, args) : Value::undef();
+    };
+    setMember(vm, r1, "colorTrans", geomNew("ColorTransform", {}));
+    if (vm.looseEquals(Value(vm.typeOf(r2)), Value("number"))) r2 = vm.callMethod(r2, "toString", {Value(16.0)});
+    for (int guard = 0; guard < 64; ++guard) {
+        if (!vm.toBool(vm.lessThan(getMember(vm, r2, "length"), Value(6.0)))) break;
+        r2 = op.add2(Value("0"), r2);
+    }
+    auto channel = [&](const char* mult, double from) {
+        Value ct = getMember(vm, r1, "colorTrans");
+        Value sub = vm.callMethod(r2, "substr", {Value(from), Value(2.0)});
+        setMember(vm, ct, mult, op.div(sv.callFunction("parseInt", {op.add2(Value("0x"), sub)}), Value(255.0)));
+    };
+    channel("redMultiplier", 0);
+    channel("greenMultiplier", 2);
+    channel("blueMultiplier", 4);
+    {
+        Value ct = getMember(vm, r1, "colorTrans");
+        setMember(vm, ct, "alphaMultiplier", op.div(getMember(vm, r1, "_alpha"), Value(100.0)));
+    }
+    setMember(vm, r1, "objTrans", geomNew("Transform", {r1}));
+    {
+        Value ot = getMember(vm, r1, "objTrans");
+        setMember(vm, ot, "colorTransform", getMember(vm, r1, "colorTrans"));
+    }
+    return Value::undef();
+}
+
 }  // namespace
 
 // Called when a script function is assigned to _global.<name>: the native port when the body is the known version.
@@ -808,7 +878,7 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
     if (off || !v.isObject() || !v.o->script) return false;
     if (name != "findInterpValue" && name != "updateInterpObjects" && name != "addInterp" && name != "AssignDataStoreRead" &&
         name != "ReadCollectionValue" && name != "ReadCollectionBoolValue" && name != "UpdatePlayerEntry" &&
-        name != "BuildPlayerList" && name != "UpdatePlayerListData") return false;
+        name != "BuildPlayerList" && name != "UpdatePlayerListData" && name != "setColor") return false;
     const uint64_t h = canonicalFunctionHash(*v.o->script, v.o->pool.get());
     if (logHash) LOG_INFO("avmhash %s %016llx", name.c_str(), (unsigned long long)h);
     if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash) {
@@ -842,6 +912,7 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
     if (name == "UpdatePlayerEntry" && h == kUpdatePlayerEntryHash) return bindDs(nativeUpdatePlayerEntry);
     if (name == "BuildPlayerList" && h == kBuildPlayerListHash) return bindDs(nativeBuildPlayerList);
     if (name == "UpdatePlayerListData" && h == kUpdatePlayerListDataHash) return bindDs(nativeUpdatePlayerListData);
+    if (name == "setColor" && h == kSetColorHash) return bindDs(nativeSetColor);
     if (name == "ReadCollectionValue" && h == kReadCollectionValueHash)
         return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionValue"); });
     if (name == "ReadCollectionBoolValue" && h == kReadCollectionBoolValueHash)
