@@ -5537,11 +5537,13 @@ void Application::runAsyncStepTest() {
                 for (int k = 0; k < 3; ++k) (void)std::rand();  // presentation randomness between steps
                 if (f == 0) world_.tickPrefix(dt);
                 const double tp = nowMs();
-                if (renderer_ && window_) {
+                static const bool noDraw = std::getenv("WFC_ASYNCSTEP_NODRAW") != nullptr;
+                if (renderer_ && window_ && !noDraw) {
                     world_.setRenderAlpha((float)f / (float)frames);
                     world_.player().controller().updateCamera(camera_);
                     renderer_->beginFrame(camera_, window_->width(), window_->height());
-                    world_.draw(*renderer_);
+                    static const bool noWorldDraw = std::getenv("WFC_ASYNCSTEP_NOWORLDDRAW") != nullptr;
+                    if (!noWorldDraw) world_.draw(*renderer_);
                     world_.launchStep();
                     renderer_->endFrame();
                 } else world_.launchStep();

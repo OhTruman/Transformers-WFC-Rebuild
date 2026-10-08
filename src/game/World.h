@@ -677,7 +677,8 @@ public:
     double prefixSecMs_[12] = {}, prefixMark_ = 0.0;   // WFC_ASYNCLOG: the local part by section   // a model needed by the background part: loaded at the join (GL)
     void preloadHeldWeaponsOfPawns();
     std::vector<const WeaponDef*> preloadedDefs_;   // weapon defs whose model is cached (sorted; a pointer search, not the string map)
-    void ensureAbilityModels();      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
+    void ensureAbilityModels();
+    void clearMatchActors();   // a new match starts with no projectiles / ability actors / weapon views of the previous one      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
     BotBrain playerBot_;             // WFC_PLAYERBOT's brain for the local player
     float playerBotTransformCd_ = 0.0f;
     float playerBotFireHold_ = 0.0f;   // s Fire stays held after the brain's last shot wish (bursts; auto weapons need it held)
