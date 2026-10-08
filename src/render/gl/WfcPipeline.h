@@ -535,6 +535,12 @@ private:
     // (exact bounds, palette upload), shadow and draw. Its light environment still ticks (last exact bounds, current
     // model transform) so lighting is current when it reappears.
     bool skinPrepSkipped_ = false;
+    // The held weapon is the pawn's shadow child (RE 5122915: HmWeaponMesh.Attach SetShadowParent(pawn mesh)): its last
+    // draw (persistent draw list, transform, skinning state, world box) is recorded per owner and drawn into the owner's
+    // composite-shadow depth with it; the subject bounds of the fit include it. WFC_NOWEAPONSHADOW=1 = body only.
+    struct WeaponShadowRec { GpuMesh* g = nullptr; core::Mat4 model; int skinMode = 0, skinRow = 0, skinBones = 0;
+                             float skinAlpha = 1.0f; core::Vec3 mn, mx; int frame = -1; };
+    std::unordered_map<int, WeaponShadowRec> weaponShadow_;
     static bool pawnOccPrepOn();
     static bool pawnOcclusionOn();
     void pawnOcclusionResults();       // beginFrame: decisions from the queries of frame - 2

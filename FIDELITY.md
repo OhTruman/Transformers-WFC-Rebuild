@@ -1301,8 +1301,10 @@ Every change below is image-identical to the previous path (verified by determin
   mesh)). Our form test read the raw wfcName, which Gameplay's weapon meshes leave empty, so every held weapon was lit
   by a world cell / cache environment (a full computeEnv with visibility rays per weapon per frame: ~8 % of the main
   thread at 64 players). Classification now uses the resolved material name. Match captures: only distant bots'
-  weapons change (they take their owner's lighting). WFC_ENVRAWNAMES=1 = previous. [follow-up: the weapon as the
-  pawn's shadow child - our character shadow depth pass draws the body only]
+  weapons change (they take their owner's lighting). WFC_ENVRAWNAMES=1 = previous. The held weapon is also the
+  pawn's shadow child: its last recorded draw (persistent buffers, transform, skinning state) is drawn into the owner's
+  composite-shadow depth and the subject bounds of the fit include it (one frame stale: ~3 ms at 300 fps).
+  WFC_NOWEAPONSHADOW=1 = body only. Seeded match captures: small additions only (<= 132 faint px per frame).
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
