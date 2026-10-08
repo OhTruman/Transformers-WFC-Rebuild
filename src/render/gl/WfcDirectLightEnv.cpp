@@ -84,7 +84,15 @@ void Pipeline::tickDirectLightEnv(int form, const core::Vec3& boundsCenter, cons
                                   const core::Vec3& actorPos) {
     DirectLightEnvState& st = dle_[form];
     float dtTick = st.lastTickTime < 0 ? 0.0f : std::max(time_ - st.lastTickTime, 0.0f);
+    // time since the owner was last rendered (its Mesh.LastRenderTime: after frustum and occlusion culling, RE 8ec2c46):
+    // an owner off screen / behind a wall for > 0.1 s uses the 10x distance threshold, as in WFC. (Was the time since
+    // the last tick, which never exceeded a frame because culled bodies tick too.) WFC_DLETICKAGE=1 = previous rule.
     float notRendered = dtTick;
+    static const bool tickAge = std::getenv("WFC_DLETICKAGE") != nullptr;
+    if (!tickAge) {
+        auto rt = ownerRenderedTime_.find(form / 16);
+        notRendered = rt == ownerRenderedTime_.end() ? 1e9f : std::max(time_ - rt->second, 0.0f);
+    }
     st.velUE = (st.lastTickTime >= 0 && dtTick > 0) ? (toUE(actorPos) - toUE(st.lastActorPos)) * (1.0f / dtTick)
                                                     : core::Vec3{0, 0, 0};
     st.lastTickTime = time_;

@@ -3793,6 +3793,104 @@ void Pipeline::evictPosed(bool all) {
     }
 }
 
+bool Pipeline::pawnOcclusionOn() {
+    // opt-in: measured no gain at 64 players (lockstep A/B, verified Streets cam: p50 5.20 vs 5.15 ms with ~35 part
+    // draws / frame skipped) - an occluded body's cost is its bounds / palette / shadow / light env, which still run
+    static const bool on = [] { const char* e = std::getenv("WFC_PAWNOCCLUSION");
+                                return e && e[0] == '1' && std::getenv("WFC_NOPAWNOCCLUSION") == nullptr; }();
+    return on && BeginQuery && EndQuery && GenQueries && GetQueryObjectiv;
+}
+
+void Pipeline::pawnOcclusionResults() {
+    for (auto it = pawnOcc_.begin(); it != pawnOcc_.end();) {
+        PawnOcc& po = it->second;
+        if (frameNo_ - po.lastSeen > 600) {               // owner gone: free its queries
+            for (GLuint& q : po.q) if (q) { DeleteQueries(1, &q); q = 0; }
+            it = pawnOcc_.erase(it);
+            continue;
+        }
+        auto hidden = [&](int f) {                         // the query of frame f found no sample (and is ready)
+            if (f < 0) return false;
+            const int slot = f % 4;
+            if (po.qFrame[slot] != f) return false;
+            GLint avail = 0;
+            GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
+            if (!avail) return false;
+            GLint any = 1;
+            GetQueryObjectiv(po.q[slot], 0x8866 /*GL_QUERY_RESULT*/, &any);
+            return any == 0;
+        };
+        po.occluded = po.boxFrame >= frameNo_ - 2 && hidden(frameNo_ - 2) && hidden(frameNo_ - 3);
+        ++it;
+    }
+}
+
+void Pipeline::pawnOcclusionQueries() {
+    if (!occProg_) {
+        const char* vs = "#version 330 core\nlayout(location=0) in vec3 aPos; uniform mat4 uVP; uniform vec3 uMin; uniform vec3 uMax;\n"
+                         "void main(){ gl_Position = uVP * vec4(mix(uMin, uMax, aPos), 1.0); }\n";
+        const char* fs = "#version 330 core\nout vec4 oColor; void main(){ oColor = vec4(0.0); }\n";
+        GLuint v = compile(GL_VERTEX_SHADER, vs, "pawnocc.vs"), f = compile(GL_FRAGMENT_SHADER, fs, "pawnocc.fs");
+        if (v && f) occProg_ = link(v, f, "pawnocc");
+        if (!occProg_) return;
+        occUVP_ = GetUniformLocation(occProg_, "uVP"); occUMin_ = GetUniformLocation(occProg_, "uMin"); occUMax_ = GetUniformLocation(occProg_, "uMax");
+        const float cube[8][3] = {{0,0,0},{1,0,0},{0,1,0},{1,1,0},{0,0,1},{1,0,1},{0,1,1},{1,1,1}};
+        const uint32_t idx[36] = {0,1,3, 0,3,2, 4,6,7, 4,7,5, 0,4,5, 0,5,1, 2,3,7, 2,7,6, 0,2,6, 0,6,4, 1,5,7, 1,7,3};
+        GenVertexArrays(1, &occVao_); GenBuffers(1, &occVbo_); GenBuffers(1, &occIbo_);
+        BindVertexArray(occVao_);
+        BindBuffer(GL_ARRAY_BUFFER, occVbo_);
+        BufferData(GL_ARRAY_BUFFER, sizeof cube, cube, GL_STATIC_DRAW);
+        EnableVertexAttribArray(0); VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+        BindBuffer(GL_ELEMENT_ARRAY_BUFFER, occIbo_);
+        BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof idx, idx, GL_STATIC_DRAW);
+        BindVertexArray(0);
+    }
+    flushInstances();
+    // the state this pass touches is saved and restored exactly (no effect on any later draw)
+    GLint saveDepthFunc = GL_LESS; GLboolean saveDepthMask = GL_TRUE, saveColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    glGetIntegerv(GL_DEPTH_FUNC, &saveDepthFunc);
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &saveDepthMask);
+    glGetBooleanv(GL_COLOR_WRITEMASK, saveColorMask);
+    const GLboolean saveDepthTest = glIsEnabled(GL_DEPTH_TEST), saveCull = glIsEnabled(GL_CULL_FACE), saveBlend = glIsEnabled(GL_BLEND);
+    UseProgram(occProg_);
+    UniformMatrix4fv(occUVP_, 1, GL_FALSE, viewProj_.m);
+    BindVertexArray(occVao_);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+    const int slot = frameNo_ % 4;
+    for (auto& kv : pawnOcc_) {
+        PawnOcc& po = kv.second;
+        if (po.boxFrame != frameNo_) { po.qFrame[slot] = -1; continue; }
+        po.lastSeen = frameNo_;
+        const core::Vec3 mn = po.mn - core::Vec3{0.5f, 0.5f, 0.5f}, mx = po.mx + core::Vec3{0.5f, 0.5f, 0.5f};
+        const float nearPad = znear_ * 4.0f + 0.1f;     // the camera in or at the box: visible, no query
+        if (camPos_.x > mn.x - nearPad && camPos_.x < mx.x + nearPad && camPos_.y > mn.y - nearPad && camPos_.y < mx.y + nearPad &&
+            camPos_.z > mn.z - nearPad && camPos_.z < mx.z + nearPad) { po.qFrame[slot] = -1; continue; }
+        if (!po.q[slot]) GenQueries(1, &po.q[slot]);
+        Uniform3f(occUMin_, mn.x, mn.y, mn.z);
+        Uniform3f(occUMax_, mx.x, mx.y, mx.z);
+        BeginQuery(0x8C2F /*GL_ANY_SAMPLES_PASSED*/, po.q[slot]);
+        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, (void*)0);
+        EndQuery(0x8C2F);
+        po.qFrame[slot] = frameNo_;
+        ++statOccTested_;
+    }
+    BindVertexArray(0);
+    glColorMask(saveColorMask[0], saveColorMask[1], saveColorMask[2], saveColorMask[3]);
+    glDepthMask(saveDepthMask);
+    glDepthFunc((GLenum)saveDepthFunc);
+    if (saveDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (saveCull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (saveBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if ((frameNo_ % 600) == 0 && statOccTested_)
+        LOG_INFO("wfc pawn occlusion: %d tested, %d part draws skipped in the last 600 frames", statOccTested_, statOccCulled_);
+    if ((frameNo_ % 600) == 0) statOccTested_ = statOccCulled_ = 0;
+}
+
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey, uint64_t serial,
                            const std::vector<float>* prevP, const std::vector<float>* prevN, float alpha) {
     if (m.empty()) return;
@@ -3998,7 +4096,25 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     const auto tEnv1 = std::chrono::steady_clock::now();
     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
-    if (!warmup_) ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();   // Mesh.LastRenderTime (markers)
+    bool occluded = false;
+    if (envSamples_ && !warmup_ && pawnOcclusionOn()) {   // character / weapon parts: the owner's occlusion box
+        PawnOcc& po = pawnOcc_[drawOwner_];
+        if (po.boxFrame != frameNo_) { po.mn = {1e30f, 1e30f, 1e30f}; po.mx = {-1e30f, -1e30f, -1e30f}; po.boxFrame = frameNo_; }
+        for (int k = 0; k < 8; ++k) {
+            const core::Vec3 p{(k & 1) ? bmx.x : bmn.x, (k & 2) ? bmx.y : bmn.y, (k & 4) ? bmx.z : bmn.z};
+            const core::Vec3 w = core::transformPoint(model, p);
+            po.mn = {std::min(po.mn.x, w.x), std::min(po.mn.y, w.y), std::min(po.mn.z, w.z)};
+            po.mx = {std::max(po.mx.x, w.x), std::max(po.mx.y, w.y), std::max(po.mx.z, w.z)};
+        }
+        occluded = po.occluded;
+        if (occluded) ++statOccCulled_;
+    }
+    // Mesh.LastRenderTime: set only for owners actually rendered (after frustum AND occlusion culling, RE 8ec2c46 /
+    // stock UE3, HIGH): the TransformerHealthBar marker (now - LastRenderTime < 0.25 s, CONFIRMED script) hides behind
+    // walls as in WFC. WFC_OCCMARKERREFRESH=1 = refresh for occlusion-culled owners too (previous behaviour)
+    static const bool occRefresh = std::getenv("WFC_OCCMARKERREFRESH") != nullptr;
+    if (!warmup_ && (!occluded || occRefresh)) ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();
+    if (!warmup_ && !occluded) ownerRenderedTime_[drawOwner_] = time_;
     GpuMesh& g = ds.g;
     g.vao = drawVao;
     const auto tSubs1 = std::chrono::steady_clock::now();
@@ -4014,7 +4130,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
-    {
+    if (!occluded) {
         const auto td = std::chrono::steady_clock::now();
         drawSubs(g, model, true);
         gStats.dynDrawMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td).count();
@@ -4446,6 +4562,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     gInstPipeline = this;
     touchNewTextures();                                // textures created since the last frame (loads, prewarms)
     ++frameNo_;
+    if (pawnOcclusionOn()) pawnOcclusionResults();
     {   // WFC_RENDERSTATS: frame intervals over WFC_HITCH_MS (default 20) are logged by frame number, next to the
         // "wfc first-use" lines (programs / textures / meshes created that frame) - first-appearance hitch evidence
         static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;

@@ -1275,6 +1275,7 @@ float Pipeline::pickupYaw(const std::string& ownerLower) const {
 
 // ---- drawing (after the frame's opaque + character draws, before post) ----
 void Pipeline::drawMapPresentation() {
+    if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
     if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
     // props
