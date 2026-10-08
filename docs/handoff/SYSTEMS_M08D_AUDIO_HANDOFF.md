@@ -525,3 +525,13 @@ nearly all render (WfcPipeline draws, DirectLightEnv queries, sprite batches, ca
 per-factory string keys; no audio site in the top 25 (data sent to Rendering and Integration).
 SoundCues::findCue (every play) was a linear scan with a string compare over all cues; now an FNV-1a hash index -> ascending
 indices (first match wins, as before; alias names hashed as prefix + rest, no temporary string). Suite 747 / 0.
+
+## Release CPU: ThinLTO + mimalloc (300 fps lane; CMake diff for Integration)
+
+`docs/handoff/SYSTEMS_PERF_BUILD_cmake.patch` (CMakeLists.txt is integration-owned): options WFC_LTO (ThinLTO on optimised
+builds, incremental cache in build/thinlto-cache) and WFC_MIMALLOC (third_party/mimalloc v2.1.7, MIT, unmodified, built from
+src/static.c; used by src/core/AllocProf.cpp as the C++ operator new / delete; WFC_ALLOCPROF still works on top). Both default
+ON, switchable for A/B. Build ~50 s either way; the linker map (crash report) is produced either way.
+A/B (09c baa1d0d, Release, uncapped, seeded, steady match state, 2 cams), sim step ms none / LTO / mimalloc / both:
+20p 0.349 / 0.354 / 0.330 / 0.316, 64p 0.483 / 0.482 / 0.459 / 0.453 (both: -6 to -9 % sim CPU); average fps within noise
+(GPU / present bound on this machine), p99 frame slightly better with mimalloc.
