@@ -26,7 +26,8 @@ unsigned long gShaderCompiles = 0, gTexCreates = 0;
 // some drivers, mirrors in system memory), by class
 unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 0;
 unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;
-unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures   // pending instanced character draws: flushed before any draw / blit
+unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures
+unsigned long gMemDdsTextures = 0;                      // of gMemTextures: loaded from the original blocks   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -732,7 +733,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
-    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
@@ -1240,6 +1241,210 @@ static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
     }
 }
 
+// ---- original cooked texture blocks (AssetTools DDS export + tools/render/build_texture_formats.py) ----
+// <render data root>/texture_formats.json maps a texture's PNG path (relative to ExtractedAssets, lower case) to its
+// DDS (the original DXT1 / DXT5 / A8R8G8B8 / G8 blocks and mip chain) and whether any material reads its alpha.
+// Upload, keeping the top level's sampled values identical to the PNG path's and using the original mip chain below
+// it (no GenerateMipmap):
+//   SRGB (Xenos PWL degamma, see uploadTex): decoded on the CPU per level, PWL -> RGB10_A2 when no material reads the
+//     alpha (exact: PWL output is k / 1023), else RGBA16 as before;
+//   linear DXT1 / DXT5: the original blocks (glCompressedTexImage2D, the hardware's block decode);
+//   other formats: decoded to RGBA8 per level.
+// The DDS root is WFC_DDS_ROOT, else <ExtractedAssets>/../AssetTools/out/dds. WFC_NODDS=1 = the PNG path (reference).
+// WFC_DDSCHECK=1: the CPU-decoded top level is compared with the PNG (a warning per mismatching texture).
+namespace {
+struct DdsEntry { std::string dds, fmt; bool alpha = true; };
+const std::unordered_map<std::string, DdsEntry>& ddsIndex() {
+    static const std::unordered_map<std::string, DdsEntry> idx = [] {
+        std::unordered_map<std::string, DdsEntry> m;
+        if (WFC_ENV("WFC_NODDS")) return m;
+        assets::Json J;
+        const std::string t = readText(Pipeline::renderDataRoot() + "/texture_formats.json");
+        if (t.empty() || !assets::Json::parse(t, J)) {
+            LOG_WARN("wfc: texture_formats.json not found under %s: textures load from PNG (tools/render/build_texture_formats.py)",
+                     Pipeline::renderDataRoot().c_str());
+            return m;
+        }
+        for (const auto& kv : J["textures"].obj)
+            m[kv.first] = DdsEntry{kv.second["dds"].asString(), kv.second["fmt"].asString(), kv.second["alpha"].asBool(true)};
+        LOG_INFO("wfc: original texture blocks: %zu textures indexed (root %s)", m.size(), "WFC_DDS_ROOT or AssetTools/out/dds");
+        return m;
+    }();
+    return idx;
+}
+std::string ddsRoot() {
+    static const std::string root = [] {
+        if (const char* e = std::getenv("WFC_DDS_ROOT")) return std::string(e);
+        std::string c = Pipeline::contentRoot();                       // .../ExtractedAssets/content/
+        while (!c.empty() && (c.back() == '/' || c.back() == '\\')) c.pop_back();
+        for (int k = 0; k < 2; ++k) { size_t s = c.find_last_of("/\\"); c = s == std::string::npos ? std::string(".") : c.substr(0, s); }
+        return c + "/AssetTools/out/dds";
+    }();
+    return root;
+}
+// the index key of a texture file: ExtractedAssets-relative PNG path, or verticalslice/maps/<map>/lightmaps/<name>.png
+std::string ddsKey(const std::string& file) {
+    std::string f = file;
+    std::replace(f.begin(), f.end(), '\\', '/');
+    std::transform(f.begin(), f.end(), f.begin(), ::tolower);
+    const size_t lm = f.find("/lightmaps/");
+    if (lm != std::string::npos && lm > 0) {
+        const size_t ms = f.find_last_of('/', lm - 1);
+        if (ms == std::string::npos) return std::string();
+        return "verticalslice/maps/" + f.substr(ms + 1, lm - ms - 1) + f.substr(lm);
+    }
+    const size_t ea = f.find("extractedassets/");
+    return ea == std::string::npos ? std::string() : f.substr(ea + 16);
+}
+inline void rgb565(uint16_t c, int o[3]) {
+    const int r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
+    o[0] = (r << 3) | (r >> 2); o[1] = (g << 2) | (g >> 4); o[2] = (b << 3) | (b >> 2);
+}
+// BC1 / BC3 colour block -> 4x4 RGBA (D3D9 decode; DXT3/5 colour blocks always use the four-colour mode)
+void decodeColorBlock(const uint8_t* b, bool dxt1, uint8_t out[16][4]) {
+    const uint16_t c0 = (uint16_t)(b[0] | (b[1] << 8)), c1 = (uint16_t)(b[2] | (b[3] << 8));
+    int p[4][4];
+    rgb565(c0, p[0]); rgb565(c1, p[1]); p[0][3] = p[1][3] = 255;
+    if (!dxt1 || c0 > c1) {
+        for (int k = 0; k < 3; ++k) { p[2][k] = (2 * p[0][k] + p[1][k]) / 3; p[3][k] = (p[0][k] + 2 * p[1][k]) / 3; }
+        p[2][3] = p[3][3] = 255;
+    } else {
+        for (int k = 0; k < 3; ++k) { p[2][k] = (p[0][k] + p[1][k]) / 2; p[3][k] = 0; }
+        p[2][3] = 255; p[3][3] = 0;
+    }
+    const uint32_t bits = (uint32_t)b[4] | ((uint32_t)b[5] << 8) | ((uint32_t)b[6] << 16) | ((uint32_t)b[7] << 24);
+    for (int i = 0; i < 16; ++i) { const int s = (bits >> (2 * i)) & 3; for (int k = 0; k < 4; ++k) out[i][k] = (uint8_t)p[s][k]; }
+}
+void decodeAlphaBlock(const uint8_t* b, uint8_t out[16][4]) {
+    int a[8]; a[0] = b[0]; a[1] = b[1];
+    if (a[0] > a[1]) for (int i = 1; i < 7; ++i) a[i + 1] = ((7 - i) * a[0] + i * a[1]) / 7;
+    else { for (int i = 1; i < 5; ++i) a[i + 1] = ((5 - i) * a[0] + i * a[1]) / 5; a[6] = 0; a[7] = 255; }
+    uint64_t bits = 0;
+    for (int i = 0; i < 6; ++i) bits |= (uint64_t)b[2 + i] << (8 * i);
+    for (int i = 0; i < 16; ++i) out[i][3] = (uint8_t)a[(bits >> (3 * i)) & 7];
+}
+size_t levelBytes(const std::string& fmt, int w, int h) {
+    if (fmt == "DXT1") return (size_t)((w + 3) / 4) * ((h + 3) / 4) * 8;
+    if (fmt == "DXT5" || fmt == "DXT3") return (size_t)((w + 3) / 4) * ((h + 3) / 4) * 16;
+    if (fmt == "G8") return (size_t)w * h;
+    return (size_t)w * h * 4;                                          // A8R8G8B8 (BGRA bytes)
+}
+void decodeLevel(const std::string& fmt, const uint8_t* d, int w, int h, ImageData& img) {
+    img.w = w; img.h = h; img.rgba.assign((size_t)w * h * 4, 0);
+    if (fmt == "DXT1" || fmt == "DXT5" || fmt == "DXT3") {
+        const bool dxt1 = fmt == "DXT1";
+        const size_t bs = dxt1 ? 8 : 16;
+        uint8_t px[16][4];
+        for (int by = 0; by < (h + 3) / 4; ++by)
+            for (int bx = 0; bx < (w + 3) / 4; ++bx, d += bs) {
+                decodeColorBlock(d + (dxt1 ? 0 : 8), dxt1, px);
+                if (fmt == "DXT5") decodeAlphaBlock(d, px);
+                else if (fmt == "DXT3")
+                    for (int i = 0; i < 16; ++i) { const int n = (d[i / 2] >> (4 * (i & 1))) & 15; px[i][3] = (uint8_t)(n * 17); }
+                for (int i = 0; i < 16; ++i) {
+                    const int x = bx * 4 + (i & 3), y = by * 4 + (i >> 2);
+                    if (x < w && y < h) std::memcpy(&img.rgba[((size_t)y * w + x) * 4], px[i], 4);
+                }
+            }
+    } else if (fmt == "G8") {
+        for (size_t i = 0; i < (size_t)w * h; ++i) { uint8_t* o = &img.rgba[i * 4]; o[0] = o[1] = o[2] = d[i]; o[3] = 255; }
+    } else {
+        for (size_t i = 0; i < (size_t)w * h; ++i) {
+            uint8_t* o = &img.rgba[i * 4]; const uint8_t* s = d + i * 4;
+            o[0] = s[2]; o[1] = s[1]; o[2] = s[0]; o[3] = s[3];
+        }
+    }
+}
+}  // namespace
+
+// Loads `file`'s original blocks into the bound GL_TEXTURE_2D (levels 0..n-1, GL_TEXTURE_MAX_LEVEL n-1); false = no
+// DDS for it (the caller decodes the PNG). `bytes` receives the uploaded size (MEMSTATS).
+static bool uploadDds(const std::string& file, bool srgb, unsigned long long& bytes) {
+    const auto& idx = ddsIndex();
+    if (idx.empty()) return false;
+    const std::string key = ddsKey(file);
+    auto it = idx.find(key);
+    if (key.empty() || it == idx.end()) return false;
+    const DdsEntry& E = it->second;
+    const std::string path = ddsRoot() + "/" + E.dds;
+    std::ifstream in(path, std::ios::binary);
+    std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) {
+        LOG_WARN("wfc: DDS missing or invalid (%s): PNG used", path.c_str());
+        return false;
+    }
+    auto u32 = [&](size_t o) { uint32_t v; std::memcpy(&v, &f[o], 4); return v; };
+    const int h0 = (int)u32(12), w0 = (int)u32(16);
+    const int mips = std::max(1, (int)((u32(8) & 0x20000u) ? u32(28) : 1u));
+    size_t off = 128, need = off;
+    for (int l = 0; l < mips; ++l) need += levelBytes(E.fmt, std::max(1, w0 >> l), std::max(1, h0 >> l));
+    if (w0 <= 0 || h0 <= 0 || f.size() < need) { LOG_WARN("wfc: DDS truncated (%s): PNG used", path.c_str()); return false; }
+    static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;
+    static const bool check = std::getenv("WFC_DDSCHECK") != nullptr;
+    const bool pwl = srgb && !srgbCurve;
+    const bool blocks = !srgb && (E.fmt == "DXT1" || E.fmt == "DXT5") && CompressedTexImage2D;
+    static uint32_t lut10[256];
+    static uint16_t lut16[256];
+    static bool lutInit = false;
+    if (!lutInit) {
+        for (int i = 0; i < 256; ++i) {
+            lut10[i] = (uint32_t)std::lround(pwlGammaToLinear(i / 255.0f) * 1023.0f);
+            lut16[i] = (uint16_t)std::lround(pwlGammaToLinear(i / 255.0f) * 65535.0f);
+        }
+        lutInit = true;
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    bytes = 0;
+    for (int l = 0; l < mips; ++l) {
+        const int w = std::max(1, w0 >> l), h = std::max(1, h0 >> l);
+        const size_t n = levelBytes(E.fmt, w, h);
+        const uint8_t* d = f.data() + off;
+        off += n;
+        if (blocks) {
+            CompressedTexImage2D(GL_TEXTURE_2D, l, E.fmt == "DXT1" ? 0x83F1 /*RGBA_S3TC_DXT1*/ : 0x83F3 /*RGBA_S3TC_DXT5*/,
+                                 w, h, 0, (GLsizei)n, d);
+            bytes += n;
+            if (check && l == 0) {
+                ImageData png, dec;
+                decodeLevel(E.fmt, d, w, h, dec);
+                if (platform::decodeImage(file, png) && png.rgba != dec.rgba)
+                    LOG_WARN("DDSCHECK %s: CPU block decode differs from the PNG", file.c_str());
+            }
+            continue;
+        }
+        ImageData img;
+        decodeLevel(E.fmt, d, w, h, img);
+        if (check && l == 0) {
+            ImageData png;
+            if (platform::decodeImage(file, png) && (png.w != img.w || png.h != img.h || png.rgba != img.rgba))
+                LOG_WARN("DDSCHECK %s: top level differs from the PNG (%dx%d vs %dx%d)", file.c_str(), img.w, img.h, png.w, png.h);
+        }
+        if (pwl && !E.alpha) {                                            // exact; the alpha is never sampled
+            std::vector<uint32_t> px((size_t)w * h);
+            for (size_t i = 0; i < px.size(); ++i) {
+                const uint8_t* s = &img.rgba[i * 4];
+                px[i] = lut10[s[0]] | (lut10[s[1]] << 10) | (lut10[s[2]] << 20) | (3u << 30);
+            }
+            glTexImage2D(GL_TEXTURE_2D, l, GL_RGB10_A2, w, h, 0, GL_RGBA, 0x8368 /*GL_UNSIGNED_INT_2_10_10_10_REV*/, px.data());
+            bytes += px.size() * 4;
+        } else if (pwl) {
+            std::vector<uint16_t> px(img.rgba.size());
+            for (size_t i = 0; i < img.rgba.size(); i += 4) {
+                px[i] = lut16[img.rgba[i]]; px[i + 1] = lut16[img.rgba[i + 1]]; px[i + 2] = lut16[img.rgba[i + 2]];
+                px[i + 3] = (uint16_t)(img.rgba[i + 3] * 257);
+            }
+            glTexImage2D(GL_TEXTURE_2D, l, GL_RGBA16, w, h, 0, GL_RGBA, GL_UNSIGNED_SHORT, px.data());
+            bytes += px.size() * 2;
+        } else {
+            glTexImage2D(GL_TEXTURE_2D, l, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+            bytes += img.rgba.size();
+        }
+    }
+    glTexParameteri(GL_TEXTURE_2D, 0x813C /*GL_TEXTURE_BASE_LEVEL*/, 0);
+    glTexParameteri(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, mips - 1);
+    return true;
+}
+
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
@@ -1247,6 +1452,27 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     FirstUseTimer fu{"texture", file, frameNo_};
     ImageData img;
     GLuint id = 0;
+    if (!file.empty()) {                               // the original blocks first (see uploadDds)
+        glGenTextures(1, &id);
+        glBindTexture(GL_TEXTURE_2D, id);
+        unsigned long long bytes = 0;
+        if (uploadDds(file, srgb, bytes)) {
+            ++gTexCreates;
+            if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += bytes; ++gMemLightmaps; }
+            else { gMemTextureBytes += bytes; ++gMemTextures; if (srgb) gMemSrgbTexBytes += bytes; ++gMemDdsTextures; }
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+            texCache_[key] = id;
+            touchQueue_.push_back({id, false});
+            yieldLoad();
+            return id;
+        }
+        glDeleteTextures(1, &id);
+        id = 0;
+    }
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
         ++gTexCreates;
         {
@@ -2759,9 +2985,9 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 void Pipeline::logMemStats(const char* when) {
     static const bool on = std::getenv("WFC_MEMSTATS") != nullptr;
     if (!on) return;
-    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB), static meshes %lu = %.0f MB; "
+    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB; %lu from the original blocks), static meshes %lu = %.0f MB; "
              "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
-             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemMeshes,
+             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemDdsTextures, gMemMeshes,
              gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
 }
 
@@ -3668,10 +3894,20 @@ void Pipeline::buildLmArray() {
     lmLayer_.assign(lmTextures_.size(), -1);
     if (lmArray_ || !TexStorage3D || !CopyImageSubData || !TextureView || std::getenv("WFC_NOLMARRAY")) return;
     constexpr GLenum kArr = 0x8C1A;                            // GL_TEXTURE_2D_ARRAY
-    constexpr GLint kSize = 256, kLevels = 9;                  // the common page size; full mip chain (GenerateMipmap)
+    // the common page size; the most common (format, level count) among the eligible pages (9 levels = the full chain
+    // from GenerateMipmap; the original DDS chains stop at 4x4 = 7): only pages with exactly that join the array
+    constexpr GLint kSize = 256;
+    GLint kLevels = 0;
     GLint refFmt = 0;
     int layers = 0;
+    std::vector<std::pair<GLint, GLint>> pageKind(lmTextures_.size(), {0, 0});   // (format, levels); 0 = not eligible
+    std::map<std::pair<GLint, GLint>, int> kindCount;
+    for (int pass = 0; pass < 2; ++pass)
     for (size_t k = 0; k < lmTextures_.size(); ++k) {
+        if (pass == 1) {
+            if (pageKind[k].first && pageKind[k].first == refFmt && pageKind[k].second == kLevels) lmLayer_[k] = layers++;
+            continue;
+        }
         if (!lmTextures_[k]) continue;
         glBindTexture(GL_TEXTURE_2D, lmTextures_[k]);
         GLint w = 0, h = 0, fmt = 0, comp = 0, w8 = 0;
@@ -3679,10 +3915,14 @@ void Pipeline::buildLmArray() {
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x1003 /*GL_TEXTURE_INTERNAL_FORMAT*/, &fmt);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x86A1 /*GL_TEXTURE_COMPRESSED*/, &comp);
-        glGetTexLevelParameteriv(GL_TEXTURE_2D, kLevels - 1, GL_TEXTURE_WIDTH, &w8);   // mip chain present
-        if (w != kSize || h != kSize || comp || w8 != 1) continue;
-        if (!refFmt) refFmt = fmt;
-        if (fmt == refFmt) lmLayer_[k] = layers++;
+        GLint maxL = 1000;
+        glGetTexParameteriv(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, &maxL);
+        const GLint levels = std::min<GLint>(maxL + 1, 9);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, levels - 1, GL_TEXTURE_WIDTH, &w8);   // that mip chain present
+        if (w != kSize || h != kSize || comp || w8 != (kSize >> (levels - 1))) continue;
+        pageKind[k] = {fmt, levels};
+        const int c = ++kindCount[pageKind[k]];
+        if (c > (refFmt ? kindCount[{refFmt, kLevels}] : 0) || !refFmt) { refFmt = fmt; kLevels = levels; }
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     if (layers < 2) { lmLayer_.assign(lmTextures_.size(), -1); return; }
@@ -3720,8 +3960,8 @@ void Pipeline::buildLmArray() {
         for (GLuint& t : lmTextures_) if (t == kv.first) t = kv.second;
         glDeleteTextures(1, &kv.first);
     }
-    LOG_INFO("wfc: lightmap array: %d of %zu pages (%dx%d, format 0x%x) as views of one texture array", layers,
-             lmTextures_.size(), kSize, kSize, refFmt);
+    LOG_INFO("wfc: lightmap array: %d of %zu pages (%dx%d, %d levels, format 0x%x) as views of one texture array", layers,
+             lmTextures_.size(), kSize, kSize, kLevels, refFmt);
 }
 
 void Pipeline::drawMdi(GpuMesh& g) {
