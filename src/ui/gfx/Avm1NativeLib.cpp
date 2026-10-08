@@ -86,14 +86,14 @@ struct Ops {
 // bytecode's registers r1 elapsed, r5 init, r4 change, r3 duration, r2 overshoot, r7 curve.
 Value nativeFindInterpValueImpl(VM& vm, Args& a);
 
-// WFC_INTERPVERIFY=1 (diagnostics): every call also runs the original script (kept as _global.__wfcScript_findInterpValue)
-// and logs a result that differs (the port must be exact).
-Value nativeFindInterpValue(VM& vm, const Value& self, Args& a) {
+// WFC_INTERPVERIFY=1 (diagnostics): every call also runs the original script and logs a result that differs (the port
+// must be exact).
+Value nativeFindInterpValue(VM& vm, Object* origFn, const Value& self, Args& a) {
     static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
     Value r = nativeFindInterpValueImpl(vm, a);
     if (verify) {
         static long calls = 0, bad = 0;
-        Value orig = vm.get(vm.global, "__wfcScript_findInterpValue");
+        Value orig(origFn);
         Args copy = a;
         Value s = vm.call(orig, self, copy);
         const bool same = vm.strictEquals(r, s) || (r.t == VType::Number && s.t == VType::Number && std::isnan(r.n) && std::isnan(s.n));
@@ -881,33 +881,27 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
         name != "BuildPlayerList" && name != "UpdatePlayerListData" && name != "setColor") return false;
     const uint64_t h = canonicalFunctionHash(*v.o->script, v.o->pool.get());
     if (logHash) LOG_INFO("avmhash %s %016llx", name.c_str(), (unsigned long long)h);
-    if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash) {
-        vm.global->setRaw("__wfcScript_" + name, v, DontEnum);   // the script, for WFC_INTERPVERIFY (and rooted)
-        v = Value(vm.newFunction(nativeFindInterpValue, name, 8));
-        return true;
-    }
-    if (name == "updateInterpObjects" && h == kUpdateInterpObjectsHash) {
-        vm.global->setRaw("__wfcScript_" + name, v, DontEnum);   // rooted: its scope chain and timeline are used
+    // The native closure keeps a raw pointer to the original script (its scope chain, timeline and verify runs use it):
+    // the original is rooted on the native function object itself, so it lives exactly as long as any reference to the
+    // native. (A per-VM key such as _global.__wfcScript_<name> is overwritten when a second movie in the same player
+    // defines the library again - EndGameStats loading PlayerList - and the first native, still held by a running
+    // interpController.onEnterFrame, then read a collected script: the 64-player results-screen crash.)
+    auto bind = [&](Value (*fnp)(VM&, Object*, const Value&, Args&), bool verifyScript) {
         Object* orig = v.o;
-        v = Value(vm.newFunction([orig](VM& m, const Value& self, Args&) {
+        Object* f = vm.newFunction([orig, fnp, verifyScript](VM& m, const Value& self, Args& args) {
             static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
-            if (verify) return m.call(Value(orig), self, *std::make_unique<Args>());   // verify runs: the script itself
-            return nativeUpdateInterpObjects(m, orig, self);
-        }, name, 0));
-        return true;
-    }
-    auto bindDs = [&](Value (*fnp)(VM&, Object*, const Value&, Args&)) {
-        // the script stays reachable from the native closure (and is kept alive by the binding object below)
-        Object* orig = v.o;
-        Object* f = vm.newFunction([orig, fnp](VM& m, const Value& self, Args& args) {
-            static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
-            if (verify) return m.call(Value(orig), self, args);
+            if (verify && verifyScript) return m.call(Value(orig), self, args);
             return fnp(m, orig, self, args);
         }, name, (int)orig->script->params.size());
-        f->setRaw("__wfcScript", Value(orig), DontEnum);   // GC root for the original (its scope chain is used)
+        f->setRaw("__wfcScript", Value(orig), DontEnum);   // GC root for the original
         v = Value(f);
         return true;
     };
+    auto bindDs = [&](Value (*fnp)(VM&, Object*, const Value&, Args&)) { return bind(fnp, true); };
+    if (name == "findInterpValue" && kFindInterpValueHash && h == kFindInterpValueHash)
+        return bind(nativeFindInterpValue, false);   // its verify mode compares the port against the script per call
+    if (name == "updateInterpObjects" && h == kUpdateInterpObjectsHash)
+        return bind([](VM& m, Object* o, const Value& self, Args&) { return nativeUpdateInterpObjects(m, o, self); }, true);
     if (name == "AssignDataStoreRead" && h == kAssignDataStoreReadHash) return bindDs(nativeAssignDataStoreRead);
     if (name == "UpdatePlayerEntry" && h == kUpdatePlayerEntryHash) return bindDs(nativeUpdatePlayerEntry);
     if (name == "BuildPlayerList" && h == kBuildPlayerListHash) return bindDs(nativeBuildPlayerList);
@@ -917,16 +911,7 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v) {
         return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionValue"); });
     if (name == "ReadCollectionBoolValue" && h == kReadCollectionBoolValueHash)
         return bindDs([](VM& m, Object* o, const Value& self, Args& a) { return nativeReadCollection(m, o, self, a, "DataStores.ReadCollectionBoolValue"); });
-    if (name == "addInterp" && kAddInterpHash && h == kAddInterpHash) {
-        vm.global->setRaw("__wfcScript_" + name, v, DontEnum);
-        Object* orig = v.o;
-        v = Value(vm.newFunction([orig](VM& m, const Value& self, Args& args) {
-            static const bool verify = std::getenv("WFC_INTERPVERIFY") != nullptr;
-            if (verify) return m.call(Value(orig), self, args);
-            return nativeAddInterp(m, orig, self, args);
-        }, name, 6));
-        return true;
-    }
+    if (name == "addInterp" && kAddInterpHash && h == kAddInterpHash) return bindDs(nativeAddInterp);
     return false;
 }
 
