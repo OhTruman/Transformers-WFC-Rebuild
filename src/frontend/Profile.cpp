@@ -45,7 +45,8 @@ bool LocalProfile::isOriginalField(const std::string& field) { return defaults()
 std::string LocalProfile::playerName() const {
     if (!loggedInAccount.empty()) return loggedInAccount;
     if (!identityName.empty()) return identityName;
-    if (const char* n = std::getenv("WFC_PLAYERNAME")) if (*n) return n;
+    static const char* const envName = std::getenv("WFC_PLAYERNAME");   // read once (a getenv per collection row before)
+    if (envName && *envName) return envName;
     return "Player";
 }
 

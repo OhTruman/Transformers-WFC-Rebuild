@@ -327,7 +327,7 @@ void VM::installDisplayBuiltins() {
     method(vm, P, "removeMovieClip", [](VM& vm, const Value& self, Args&) -> Value {
         gfx::MovieClip* mc = clipOf(self);
         // Only script-created clips, or clips moved to the script depth range, can be removed.
-        if (mc && std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX removeMovieClip %s", mc->targetPath().c_str());
+        if (mc && gfx::gfxClassLog()) LOG_INFO("GFX removeMovieClip %s", mc->targetPath().c_str());
         if (mc && mc->parent && mc->depth >= gfx::kDepthOffset && mc->depth < gfx::kDepthOffset + 1048576) vm.player()->removeObject(mc);
         return Value::undef();
     });
