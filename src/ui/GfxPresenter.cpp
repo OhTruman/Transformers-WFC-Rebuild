@@ -696,6 +696,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     for (size_t i = movies_.size(); i-- > 0;) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
             rt_.dataStores().forgetMovie(movies_[i].object);
+            botRowsBuilt_.erase(&movies_[i].movie->player());   // keyed by the Player's address: gone with the movie
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1224,6 +1225,28 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     core::prof::Scope prof("ui.draw");
+    // DEV TOOL WFC_GFXMEM=<seconds>: per open movie the AVM1 heap / graveyard sizes, and the renderer / atom table totals,
+    // every n seconds (leak sweeps: a series that only grows across cycles is a leak).
+    static const double memEvery = std::getenv("WFC_GFXMEM") ? std::atof(std::getenv("WFC_GFXMEM")) : 0.0;
+    if (memEvery > 0.0) {
+        static auto last = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration<double>(now - last).count() >= memEvery) {
+            last = now;
+            std::string per;
+            auto add = [&](const char* tag, GfxMovie* m) {
+                if (!m) return;
+                per += std::string(" ") + tag + "=" + std::to_string(m->player().vm().heapSize()) + "/" + std::to_string(m->player().graveyard.size());
+            };
+            add("hud", hud_.get());
+            add(scoreboardShown_ ? "scores" : "scores(closed)", scoreboard_.get());
+            add("loading", loading_.get());
+            for (Open& o : movies_) add(o.object.c_str(), o.movie.get());
+            for (Extra& e : extras_) add(e.object.c_str(), e.movie.get());
+            LOG_INFO("gfxmem shapes=%zu textures=%zu atoms=%zu movies(heap/graveyard):%s", gl_.cachedShapes(), gl_.textures(),
+                     gfx::avm1::atomCount(), per.c_str());
+        }
+    }
     UiProfScope uiProf(g_uiDraw);
     g_uiFrame.tick(frontend::uiStateName(flow.ui().state()));
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }

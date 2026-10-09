@@ -31,6 +31,8 @@ uint32_t atomIntern(const std::string& s) {
     return id;
 }
 
+size_t atomCount() { return atoms().names.size(); }
+
 uint32_t atomFind(const std::string& s) {
     const AtomTable& t = atoms();
     auto it = t.ids.find(s);
@@ -128,7 +130,7 @@ void VM::mark(Object* o) {
     }
 }
 
-void VM::collect(const std::vector<Object*>& extraRoots) {
+void VM::collect(const std::vector<Object*>& extraRoots, const std::function<bool(VM&)>& extend) {
     const auto gcT0 = std::chrono::steady_clock::now();
     for (auto& o : heap_) o->marked = false;
     for (Object* r : {global, objectProto, functionProto, arrayProto, stringProto, numberProto, booleanProto, movieClipProto,
@@ -140,6 +142,7 @@ void VM::collect(const std::vector<Object*>& extraRoots) {
     // Objects bound to live display objects stay alive (their display owns them).
     for (auto& o : heap_)
         if (!o->marked && o->display && !o->display->removed) mark(o.get());
+    if (extend) for (int guard = 0; guard < 64 && extend(*this); ++guard) {}
     static const bool gcCheck = std::getenv("WFC_GFX_GCCHECK") != nullptr;
     if (gcCheck) {   // diagnostics: keep collected objects as zombies and report any later use
         for (auto& o : heap_) if (!o->marked) { o->zombie = true; zombies_.push_back(std::move(o)); }
