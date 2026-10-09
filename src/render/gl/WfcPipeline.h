@@ -774,6 +774,8 @@ public:
     // optional spatial upscaling (FSR 1): scale in (0.25, 1] = 3D render size / window; sharpness = RCAS stops
     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
     void setUpscaling(float scale, float sharpness);
+    void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
+    int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
     bool setFxParam(int id, const std::string& name, const float v[4]);

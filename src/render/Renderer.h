@@ -136,6 +136,9 @@ public:
     // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
     // originals); stored until that root exists.
     virtual void setHdTextures(bool on) { (void)on; }
+    // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
+    // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
+    virtual void setAnisotropy(int level) { (void)level; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
     // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].

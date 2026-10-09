@@ -768,10 +768,12 @@ void Pipeline::release() {
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
+    const int keepAniso = anisotropy_;
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
+    anisotropy_ = keepAniso;
 }
 
 // ------------------------------------------------------------------------- loading
@@ -1537,7 +1539,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
             texCache_[key] = id;
             touchQueue_.push_back({id, false});
             yieldLoad();
@@ -1567,7 +1569,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, clampU ? GL_CLAMP_TO_EDGE : GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, clampV ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
     } else if (!file.empty()) {
         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
     }
@@ -4042,12 +4044,12 @@ void Pipeline::buildLmArray() {
     glBindTexture(kArr, lmArray_);
     TexStorage3D(kArr, kLevels, (GLenum)refFmt, kSize, kSize, layers);
     // the pages' sampler state (texture(): trilinear, clamp, 8x anisotropy)
-    auto params = [](GLenum target) {
+    auto params = [this](GLenum target) {
         glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+        glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
     };
     params(kArr);
     glBindTexture(kArr, 0);
@@ -4263,6 +4265,29 @@ void Pipeline::releaseMeshCaches(const MeshData* m) {
         for (GLuint* b : {&pb->second.vbo, &pb->second.ibo, &pb->second.prevVbo}) if (*b) DeleteBuffers(1, b);
         posed_.erase(pb);
     }
+}
+
+// Anisotropic filtering for material textures and lightmap pages. Original: Xe-TransEngine.ini [SystemSettings]
+// MaxAnisotropy=4 (the default); 8 / 16 are PC options (user decision). Applied live to every loaded texture.
+void Pipeline::setAnisotropy(int level) {
+    const int a = level >= 16 ? 16 : level >= 8 ? 8 : 4;
+    if (a == anisotropy_) return;
+    anisotropy_ = a;
+    std::set<GLuint> done;
+    for (const auto& kv : texCache_) {
+        if (!kv.second || !done.insert(kv.second).second || kv.first.compare(0, 5, "cube|") == 0) continue;
+        glBindTexture(GL_TEXTURE_2D, kv.second);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)a);
+    }
+    for (GLuint t : lmTextures_)
+        if (t && done.insert(t).second) { glBindTexture(GL_TEXTURE_2D, t); glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)a); }
+    if (lmArray_) {
+        glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArray_);
+        glTexParameterf(0x8C1A, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)a);
+        glBindTexture(0x8C1A, 0);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    LOG_INFO("renderer: anisotropic filtering %dx%s (%zu textures)", a, a == 4 ? " (original)" : "", done.size());
 }
 
 void Pipeline::evictSkin(bool all) {
