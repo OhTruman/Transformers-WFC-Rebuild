@@ -253,22 +253,35 @@ void VM::installBuiltins() {
         int opts = 0;
         if (fields.empty() && !a.empty() && a[0].isObject() && a[0].o->kind == ObjKind::Function) { cmp = a[0]; opts = (int)vm.toNumber(arg(a, 1)); }
         else if (fields.empty() && !a.empty()) opts = (int)vm.toNumber(a[0]);
-        else if (!fields.empty() && a.size() > 1) opts = (int)vm.toNumber(a[1]);
-        if (std::isnan((double)opts)) opts = 0;
+        // sortOn(fieldNames, options): options is a number for every field or (Flash 8 / GFx) an array with one set
+        // per field - NUMERIC / DESCENDING / CASEINSENSITIVE per field, UNIQUESORT / RETURNINDEXEDARRAY from the first.
+        // (The array form was read as NaN -> 0, so PlayerList's [0, NUMERIC|DESCENDING, ...] sorted everything as
+        // ascending strings: an FFA list at 64 showed scores out of order.)
+        std::vector<int> fieldOpts;
+        auto num = [&](const Value& v) { double d = vm.toNumber(v); return std::isnan(d) ? 0 : (int)d; };
+        if (!fields.empty() && a.size() > 1 && a[1].isObject() && a[1].o->kind == ObjKind::Array) {
+            for (size_t i = 0; i < fields.size(); ++i) fieldOpts.push_back(i < a[1].o->elems.size() ? num(a[1].o->elems[i]) : 0);
+            opts = fieldOpts.empty() ? 0 : (fieldOpts[0] & (4 | 8));
+        }
+        else if (!fields.empty() && a.size() > 1) opts = num(a[1]);
         std::vector<size_t> idx(o->elems.size());
         for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
         auto key = [&](const Value& v, const std::string& f) { return f.empty() ? v : vm.getV(v, f); };
         auto compare = [&](const Value& x, const Value& y) -> int {
             if (cmp.isObject()) { Args ca{x, y}; return (int)vm.toNumber(vm.call(cmp, Value::undef(), ca)); }
-            for (const std::string& f : fields.empty() ? std::vector<std::string>{""} : fields) {
+            const std::vector<std::string> fs = fields.empty() ? std::vector<std::string>{""} : fields;
+            for (size_t k = 0; k < fs.size(); ++k) {
+                const std::string& f = fs[k];
+                const int fo = fieldOpts.empty() ? opts : fieldOpts[k];
                 Value kx = key(x, f), ky = key(y, f);
                 int r = 0;
-                if (opts & 16) { double nx = vm.toNumber(kx), ny = vm.toNumber(ky); r = nx < ny ? -1 : nx > ny ? 1 : 0; }
+                if (fo & 16) { double nx = vm.toNumber(kx), ny = vm.toNumber(ky); r = nx < ny ? -1 : nx > ny ? 1 : 0; }
                 else {
                     std::string sx = vm.toString(kx), sy = vm.toString(ky);
-                    if (opts & 1) { for (auto& ch : sx) ch = (char)std::tolower((unsigned char)ch); for (auto& ch : sy) ch = (char)std::tolower((unsigned char)ch); }
+                    if (fo & 1) { for (auto& ch : sx) ch = (char)std::tolower((unsigned char)ch); for (auto& ch : sy) ch = (char)std::tolower((unsigned char)ch); }
                     r = sx < sy ? -1 : sx > sy ? 1 : 0;
                 }
+                if (!fieldOpts.empty() && (fo & 2)) r = -r;   // per-field DESCENDING
                 if (r) return r;
             }
             return 0;
