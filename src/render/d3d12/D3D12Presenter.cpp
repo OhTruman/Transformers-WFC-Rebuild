@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 namespace render {
 namespace {
@@ -45,6 +46,7 @@ typedef void(APIENTRY* PFN_BlitFramebuffer)(GLint, GLint, GLint, GLint, GLint, G
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutTransferDst = 0x9593 /*GL_LAYOUT_TRANSFER_DST_EXT*/, kLayoutTransferSrc = 0x9592;
 constexpr UINT kBuffers = 2;
+constexpr UINT kRing = 3;                        // shared textures: GL writes one while D3D12 reads another
 
 template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
@@ -99,51 +101,71 @@ public:
         gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
         RECT rc; GetClientRect(hwnd_, &rc);
         if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
-        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %s) over the GL renderer (%dx%d)", kBuffers,
+        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable, %s) over the GL renderer (%dx%d)", kBuffers, kRing,
                  vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", w_, h_);
         return true;
     }
 
     // the platform hook: copy the GL back buffer to the shared texture, D3D12 copies + presents
     bool present() {
+        using clk = std::chrono::steady_clock;
+        const clk::time_point t0 = clk::now();
         RECT rc; GetClientRect(hwnd_, &rc);
         const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
         if (w != w_ || h != h_) { waitIdle(); if (!resize(w, h)) return false; }
-        // GL waits until D3D12 has finished reading the shared texture (the value D3D12 signalled last)
-        if (value_) {
-            const GLuint64_ v = value_;
+        const UINT slot = (UINT)(presented_ % kRing);
+        // variants (A/B): WFC_D3D12_NOGLWAIT=1 skips the GL-side semaphore wait (relies on the ring age + the CPU
+        // latency wait); WFC_D3D12_NOFLUSH=1 skips glFlush after the signal
+        static const bool noGlWait = std::getenv("WFC_D3D12_NOGLWAIT") != nullptr;
+        static const bool noFlush = std::getenv("WFC_D3D12_NOFLUSH") != nullptr;
+        // GL waits only until D3D12 finished reading THIS ring slot (kRing frames ago: normally long done)
+        if (readDone_[slot] && !noGlWait) {
+            const GLuint64_ v = readDone_[slot];
             gl_.semParam(sem_, kFenceValue, &v);
             const GLenum layout = kLayoutTransferDst;
-            gl_.waitSem(sem_, 0, nullptr, 1, &glTex_, &layout);
+            gl_.waitSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
         }
+        const clk::time_point tA = clk::now();
         GLint prevRead = 0, prevDraw = 0;
         glGetIntegerv(0x8CAA /*GL_READ_FRAMEBUFFER_BINDING*/, &prevRead);
         glGetIntegerv(0x8CA6 /*GL_DRAW_FRAMEBUFFER_BINDING*/, &prevDraw);
         gl_.bindFb(0x8CA8 /*GL_READ_FRAMEBUFFER*/, 0);
         glReadBuffer(GL_BACK);
-        gl_.bindFb(0x8CA9 /*GL_DRAW_FRAMEBUFFER*/, glFbo_);
+        gl_.bindFb(0x8CA9 /*GL_DRAW_FRAMEBUFFER*/, glFbo_[slot]);
         gl_.blit(0, 0, w_, h_, 0, h_, w_, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);   // flipped: D3D's origin is top-left
         gl_.bindFb(0x8CA8, (GLuint)prevRead);
         gl_.bindFb(0x8CA9, (GLuint)prevDraw);
+        const clk::time_point tB = clk::now();
         ++value_;
         {
             const GLuint64_ v = value_;
             gl_.semParam(sem_, kFenceValue, &v);
             const GLenum layout = kLayoutTransferSrc;
-            gl_.signalSem(sem_, 0, nullptr, 1, &glTex_, &layout);
+            gl_.signalSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
         }
-        glFlush();
+        const clk::time_point tC = clk::now();
+        if (!noFlush) glFlush();
+        const clk::time_point t1 = clk::now();
+        {
+            subSum_[0] += std::chrono::duration<double, std::milli>(tA - t0).count();
+            subSum_[1] += std::chrono::duration<double, std::milli>(tB - tA).count();
+            subSum_[2] += std::chrono::duration<double, std::milli>(tC - tB).count();
+            subSum_[3] += std::chrono::duration<double, std::milli>(t1 - tC).count();
+        }
         // D3D12: wait for GL, copy into the back buffer, present, signal
+        if (waitable_) WaitForSingleObjectEx(waitable_, 1000, TRUE);   // frame-latency pacing (no fence spin)
+        const clk::time_point t2 = clk::now();
         const UINT bi = swap_->GetCurrentBackBufferIndex();
         throttle(bi);
+        const clk::time_point t3 = clk::now();
         alloc_[bi]->Reset();
         list_->Reset(alloc_[bi], nullptr);
         D3D12_RESOURCE_BARRIER b[2]{};
         for (auto& x : b) { x.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; x.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES; }
-        b[0].Transition.pResource = shared_; b[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON; b[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        b[0].Transition.pResource = shared_[slot]; b[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON; b[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         b[1].Transition.pResource = back_[bi]; b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; b[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
         list_->ResourceBarrier(2, b);
-        list_->CopyResource(back_[bi], shared_);
+        list_->CopyResource(back_[bi], shared_[slot]);
         // WFC_D3D12SHOT=<frame>,<file.bmp> (verification): the presented image read back from the D3D12 side
         static int shotFrame = -1; static std::string shotFile;
         static const bool shotParsed = [] { if (const char* e = std::getenv("WFC_D3D12SHOT")) { std::string t = e; size_t c = t.find(',');
@@ -177,10 +199,30 @@ public:
         queue_->Wait(fence_, value_);
         ID3D12CommandList* lists[] = {list_};
         queue_->ExecuteCommandLists(1, lists);
+        const clk::time_point t4 = clk::now();
         const HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
         ++value_;
         queue_->Signal(fence_, value_);
         frameValue_[bi] = value_;
+        readDone_[slot] = value_;
+        {   // phase timers (CPU ms): GL copy + signal + flush | latency wait | fence throttle | D3D12 submit | Present
+            const clk::time_point t5 = clk::now();
+            const double ph[5] = {std::chrono::duration<double, std::milli>(t1 - t0).count(), std::chrono::duration<double, std::milli>(t2 - t1).count(),
+                                  std::chrono::duration<double, std::milli>(t3 - t2).count(), std::chrono::duration<double, std::milli>(t4 - t3).count(),
+                                  std::chrono::duration<double, std::milli>(t5 - t4).count()};
+            for (int k = 0; k < 5; ++k) { phSum_[k] += ph[k]; phMax_[k] = std::max(phMax_[k], ph[k]); }
+            if (++phN_ == 300) {
+                LOG_INFO("PRESENT D3D12 phases (avg / max ms over 300): GL copy+signal %.3f / %.2f, latency wait %.3f / %.2f, "
+                         "throttle %.3f / %.2f, submit %.3f / %.2f, Present %.3f / %.2f",
+                         phSum_[0] / 300, phMax_[0], phSum_[1] / 300, phMax_[1], phSum_[2] / 300, phMax_[2], phSum_[3] / 300, phMax_[3],
+                         phSum_[4] / 300, phMax_[4]);
+                LOG_INFO("PRESENT D3D12 GL sub-phases (avg ms): resize + semaphore wait %.3f, blit %.3f, semaphore signal %.3f, glFlush %.3f",
+                         subSum_[0] / 300, subSum_[1] / 300, subSum_[2] / 300, subSum_[3] / 300);
+                for (int k = 0; k < 4; ++k) subSum_[k] = 0;
+                for (int k = 0; k < 5; ++k) { phSum_[k] = 0; phMax_[k] = 0; }
+                phN_ = 0;
+            }
+        }
         if (FAILED(hr)) { LOG_WARN("D3D12 present: Present failed (0x%08lx)", (unsigned long)hr); }
         if (readback) {                                // wait, then write a top-down 32-bit BMP of the presented image
             waitIdle();
@@ -218,7 +260,7 @@ private:
         DXGI_SWAP_CHAIN_DESC1 sd{};
         sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = kBuffers; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        sd.Flags = tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+        sd.Flags = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         IDXGISwapChain1* sc1 = nullptr;
         if (FAILED(factory_->CreateSwapChainForHwnd(queue_, hwnd_, &sd, nullptr, nullptr, &sc1)) || !sc1) {
             LOG_WARN("D3D12 present: CreateSwapChainForHwnd failed (the GL window may not accept a flip-model swapchain)");
@@ -227,39 +269,45 @@ private:
         factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
         sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
         rel(sc1);
+        if (swap_) { swap_->SetMaximumFrameLatency(2); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
         return resize(w, h, false);
     }
     bool resize(int w, int h, bool resizeBuffers = true) {
         for (auto& b : back_) rel(b);
         if (resizeBuffers && FAILED(swap_->ResizeBuffers(kBuffers, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM,
-                                                         tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0))) return false;
+                                                         (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT))) return false;
         for (UINT i = 0; i < kBuffers; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
-        // the shared texture + its GL import
-        if (glFbo_) { gl_.deleteFb(1, &glFbo_); glFbo_ = 0; }
-        if (glTex_) { glDeleteTextures(1, &glTex_); glTex_ = 0; }
-        if (glMem_) { gl_.deleteMem(1, &glMem_); glMem_ = 0; }
-        if (sharedHandle_) { CloseHandle(sharedHandle_); sharedHandle_ = nullptr; }
-        rel(shared_);
+        // the shared texture ring + its GL imports
+        for (UINT k = 0; k < kRing; ++k) {
+            if (glFbo_[k]) { gl_.deleteFb(1, &glFbo_[k]); glFbo_[k] = 0; }
+            if (glTex_[k]) { glDeleteTextures(1, &glTex_[k]); glTex_[k] = 0; }
+            if (glMem_[k]) { gl_.deleteMem(1, &glMem_[k]); glMem_[k] = 0; }
+            if (sharedHandle_[k]) { CloseHandle(sharedHandle_[k]); sharedHandle_[k] = nullptr; }
+            rel(shared_[k]);
+            readDone_[k] = 0;
+        }
         D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{};
         rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)w; rd.Height = (UINT)h; rd.DepthOrArraySize = 1;
         rd.MipLevels = 1; rd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; rd.SampleDesc.Count = 1;
         rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
-        if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                                 __uuidof(ID3D12Resource), (void**)&shared_))) return false;
-        if (FAILED(dev_->CreateSharedHandle(shared_, nullptr, GENERIC_ALL, nullptr, &sharedHandle_))) return false;
-        gl_.createMem(1, &glMem_);
-        GLint dedicated = GL_TRUE;
-        if (gl_.memParam) gl_.memParam(glMem_, kDedicated, &dedicated);
         const D3D12_RESOURCE_ALLOCATION_INFO ai = dev_->GetResourceAllocationInfo(0, 1, &rd);
-        gl_.importMem(glMem_, ai.SizeInBytes, kHandleD3D12Resource, sharedHandle_);
-        glGenTextures(1, &glTex_);
-        glBindTexture(GL_TEXTURE_2D, glTex_);
-        gl_.texStorageMem(GL_TEXTURE_2D, 1, 0x8058 /*GL_RGBA8*/, w, h, glMem_, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        gl_.genFb(1, &glFbo_);
-        gl_.bindFb(0x8D40 /*GL_FRAMEBUFFER*/, glFbo_);
-        gl_.fbTex(0x8D40, 0x8CE0 /*GL_COLOR_ATTACHMENT0*/, GL_TEXTURE_2D, glTex_, 0);
+        for (UINT k = 0; k < kRing; ++k) {
+            if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                     __uuidof(ID3D12Resource), (void**)&shared_[k]))) return false;
+            if (FAILED(dev_->CreateSharedHandle(shared_[k], nullptr, GENERIC_ALL, nullptr, &sharedHandle_[k]))) return false;
+            gl_.createMem(1, &glMem_[k]);
+            GLint dedicated = GL_TRUE;
+            if (gl_.memParam) gl_.memParam(glMem_[k], kDedicated, &dedicated);
+            gl_.importMem(glMem_[k], ai.SizeInBytes, kHandleD3D12Resource, sharedHandle_[k]);
+            glGenTextures(1, &glTex_[k]);
+            glBindTexture(GL_TEXTURE_2D, glTex_[k]);
+            gl_.texStorageMem(GL_TEXTURE_2D, 1, 0x8058 /*GL_RGBA8*/, w, h, glMem_[k], 0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            gl_.genFb(1, &glFbo_[k]);
+            gl_.bindFb(0x8D40 /*GL_FRAMEBUFFER*/, glFbo_[k]);
+            gl_.fbTex(0x8D40, 0x8CE0 /*GL_COLOR_ATTACHMENT0*/, GL_TEXTURE_2D, glTex_[k], 0);
+        }
         gl_.bindFb(0x8D40, 0);
         w_ = w; h_ = h;
         for (auto& v : frameValue_) v = 0;
@@ -294,12 +342,15 @@ private:
     ID3D12GraphicsCommandList* list_ = nullptr;
     IDXGISwapChain3* swap_ = nullptr;
     ID3D12Resource* back_[kBuffers] = {};
-    ID3D12Resource* shared_ = nullptr;
-    HANDLE sharedHandle_ = nullptr, fenceHandle_ = nullptr;
+    ID3D12Resource* shared_[kRing] = {};
+    HANDLE sharedHandle_[kRing] = {}, fenceHandle_ = nullptr, waitable_ = nullptr;
+    UINT64 readDone_[kRing] = {};
     ID3D12Fence* fence_ = nullptr;
     UINT64 value_ = 0, frameValue_[kBuffers] = {};
-    GLuint glMem_ = 0, glTex_ = 0, glFbo_ = 0, sem_ = 0;
+    GLuint glMem_[kRing] = {}, glTex_[kRing] = {}, glFbo_[kRing] = {}, sem_ = 0;
     int w_ = 0, h_ = 0, presented_ = 0;
+    double phSum_[5] = {}, phMax_[5] = {}, subSum_[4] = {};
+    int phN_ = 0;
     bool tearing_ = false, vsync_ = false;
     static std::string shotFile_() { const char* e = std::getenv("WFC_D3D12SHOT"); std::string t = e ? e : ""; size_t c = t.find(','); return c == std::string::npos ? t : t.substr(c + 1); }
 };

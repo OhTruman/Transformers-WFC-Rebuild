@@ -511,6 +511,18 @@ private:
     void buildLmArray();
     std::vector<float> mdiRows_;                           // CPU copy (light environments filled at first sight)
     std::vector<char> mdiEnvFilled_;
+    // A second multi-draw set for the level BSP mesh (Seed: 985 BSP subs were drawn singly). The active set lives in
+    // the mdi* members above; swapMdiSlot exchanges them with the saved BSP set around its build / draw.
+    struct MdiSlot {
+        std::vector<MdiBucket> buckets; long mesh = -1; GLuint rowTex = 0, rowVbo = 0, cmdBuf = 0;
+        std::vector<float> rows; std::vector<char> envFilled;
+    };
+    MdiSlot bspMdi_;
+    void swapMdiSlot(MdiSlot& s) {
+        std::swap(mdiBuckets_, s.buckets); std::swap(mdiMesh_, s.mesh); std::swap(mdiRowTex_, s.rowTex);
+        std::swap(mdiRowVbo_, s.rowVbo); std::swap(mdiCmdBuf_, s.cmdBuf); std::swap(mdiRows_, s.rows);
+        std::swap(mdiEnvFilled_, s.envFilled);
+    }
     bool mdiWanted_ = false, mdiBuild_ = false;
     static constexpr int kMdiW = 24;
     void buildMdi(int meshId);

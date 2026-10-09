@@ -692,6 +692,9 @@ void Pipeline::release() {
     if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
+    if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
+    for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
+    bspMdi_ = MdiSlot{};
     progTouchQueue_.clear();
     // GL objects created lazily per pipeline that the reset below (*this = Pipeline()) would otherwise orphan at every
     // map unload (leak audit: the first-use touch target, pawn occlusion program / box / queries, the frame sprite
@@ -2849,8 +2852,10 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const long meshIdx = (&g >= meshes_.data() && &g < meshes_.data() + meshes_.size()) ? (long)(&g - meshes_.data()) : -1;
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;   // diagnostics: old order
     const bool canDefer = deferTrans_ && !flushingTrans_ && !immediateTrans && meshIdx >= 0 && !g.decal;
-    const bool mdiMesh = meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty();
-    if (mdiMesh) drawMdi(g);
+    const bool bspSet = meshIdx >= 0 && meshIdx == bspMdi_.mesh && !warmup_ && onlySub < 0 && !bspMdi_.buckets.empty();
+    const bool mdiMesh = bspSet || (meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty());
+    if (bspSet) { swapMdiSlot(bspMdi_); drawMdi(g); swapMdiSlot(bspMdi_); }
+    else if (mdiMesh) drawMdi(g);
     for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
         // one sub (a queued translucent draw): index it directly - scanning every sub of the world mesh per queued
         // item was ~10 % of the main thread at 10 v 10
@@ -3164,6 +3169,12 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
     applyRenderScale(w, h);
     if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
+    static const bool noBspMdi = std::getenv("WFC_NOBSPMDI") != nullptr;   // A/B: BSP subs drawn singly
+    if (!noBspMdi && bspMesh_ >= 0 && bspMdi_.mesh < 0 && mdiMesh_ >= 0) {   // the level BSP as its own multi-draw set
+        swapMdiSlot(bspMdi_);
+        buildMdi(bspMesh_);
+        swapMdiSlot(bspMdi_);
+    }
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
     const auto t0 = std::chrono::steady_clock::now();
     w = w > 0 ? w : 1280; h = h > 0 ? h : 720;
@@ -4031,7 +4042,7 @@ void Pipeline::buildMdi(int meshId) {
     if (!g.world) return;
     std::map<std::tuple<int, int, int, int>, size_t> idx;
     mdiRows_.clear(); mdiEnvFilled_.clear(); mdiBuckets_.clear();
-    buildLmArray();
+    if (!lmArray_) buildLmArray();                      // (a second set reuses the array and its layer table)
     size_t arrayed = 0;
     uint32_t row = 0;
     for (size_t si = 0; si < g.subs.size(); ++si) {
@@ -4077,8 +4088,8 @@ void Pipeline::buildMdi(int meshId) {
     VertexAttribDivisor(11, 1);
     BindVertexArray(0);
     mdiMesh_ = meshId;
-    LOG_INFO("wfc: world MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)", row,
-             mdiBuckets_.size(), arrayed);
+    LOG_INFO("wfc: %s MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)",
+             meshId == bspMesh_ ? "level BSP" : "world", row, mdiBuckets_.size(), arrayed);
 }
 
 void Pipeline::buildLmArray() {

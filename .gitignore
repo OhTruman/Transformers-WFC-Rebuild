@@ -34,3 +34,4 @@ __pycache__/
 # Frontend runtime state in the working directory: decoded movie audio cache, local profile, input overrides
 wfc_cache/
 wfc_profile.ini
+third_party/ffx_sdk/
