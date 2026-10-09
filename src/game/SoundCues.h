@@ -224,6 +224,7 @@ private:
         float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
         float lastGain = 1.0f;                                    // gainOf() at the last refresh
         bool waiting = false;     // a streamed cue still decoding on the worker: starts (age 0) when its waves are adopted
+        std::chrono::steady_clock::time_point requested{};   // when a waiting instance was played (its start delay is logged)
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;

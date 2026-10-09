@@ -121,7 +121,11 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         case LogLevel::Error: tag = "[error]"; break;
     }
     thread_local char line[2048];
-    int n = std::snprintf(line, sizeof line, "%s ", tag);
+    // WFC_LOGTIME=1 (diagnostics): seconds since the first log line in front of the tag, for timing questions across systems.
+    static const bool timed = std::getenv("WFC_LOGTIME") != nullptr;
+    static const auto t0 = std::chrono::steady_clock::now();
+    int n = timed ? std::snprintf(line, sizeof line, "%9.3f %s ", std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), tag)
+                  : std::snprintf(line, sizeof line, "%s ", tag);
     va_list args;
     va_start(args, fmt);
     const int body = std::vsnprintf(line + n, sizeof line - (size_t)n - 1, fmt, args);
