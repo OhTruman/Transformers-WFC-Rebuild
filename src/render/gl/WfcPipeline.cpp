@@ -1145,7 +1145,12 @@ bool Pipeline::load(const std::string& mapName) {
     active_ = true;
     {
         MeshData bsp;
-        if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) {
+        // UI scenes (frontend / lobbies) have no level BSP: none in their cooked packages (build_lighting.py: "no level
+        // BSP nodes"), so a missing bsp.glb is expected there and not probed
+        const bool hasBspFile = std::ifstream(dataDir_ + "/bsp.glb").good();
+        const bool uiScene = dataDir_.find("/UI_") != std::string::npos || dataDir_.find("\UI_") != std::string::npos;
+        if (!hasBspFile && uiScene) LOG_INFO("wfc: no level BSP in this UI scene (none in its cooked packages)");
+        else if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) {
             bspMesh_ = upload(bsp);
             bspTris_.clear();                          // glTF (x, y, z) m -> UE (x, z, y) * 100
             bspTris_.reserve(bsp.indices.size() * 3);
@@ -1154,7 +1159,7 @@ bool Pipeline::load(const std::string& mapName) {
                 bspTris_.push_back(p[0] * 100.0f); bspTris_.push_back(p[2] * 100.0f); bspTris_.push_back(p[1] * 100.0f);
             }
         }
-        else LOG_WARN("wfc: bsp.glb missing; level BSP stays unlit");
+        else LOG_WARN("wfc: bsp.glb missing; level BSP stays unlit");   // a map without it: render data incomplete
         MeshData dec;
         if (assets::loadGlb(dataDir_ + "/decals.glb", dec)) {
             decalMesh_ = upload(dec);
