@@ -45,6 +45,12 @@ static void testProfileBotMigration() {
     frontend::LocalProfile c;
     const bool again = c.loadFrom(cur);
     check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
+    // Bot AI (PC EXTENSION): unset follows the default (Classic for now); an explicit choice persists.
+    check(c.bots.ai == -1 && c.bots.aiEffective() == frontend::LocalProfile::kBotAiDefault, "profile.bot_ai_unset_follows_default");
+    std::istringstream smart("[PCSettings]\nBotAI=Smart\n");
+    frontend::LocalProfile sm;
+    sm.loadFrom(smart);
+    check(sm.bots.ai == 1 && sm.bots.aiEffective() == 1, "profile.bot_ai_smart_loaded");
     // PC EXTENSION graphics options: off by default (the original look), persisted under [PCSettings].
     frontend::LocalProfile g;
     check(g.display.upscaling == 0 && !g.display.hdTextures && g.display.anisotropy == 4 && g.display.frameGeneration == 0 && !g.display.rayTracing,
