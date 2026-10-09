@@ -39,6 +39,8 @@ public:
     //   upscaling: 0 Off, 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance (later DLSS / FSR 3 values follow);
     //   hdTextures: the HD texture set; anisotropy: 4 (the original's, default), 8 or 16;
     //   frameGeneration / rayTracing: reserved (no menu row yet, always off).
+    bool pcSettingsLoaded = false;   // the profile file had a [PCSettings] section (else: first launch -> auto-detect)
+    std::string autoDetectGpu;       // [PCSettings] AutoDetectGpu: the GPU the settings were detected for (PC EXTENSION)
     struct Display {
         int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
         int upscaling = 0; bool hdTextures = false; int anisotropy = 4; int frameGeneration = 0; bool rayTracing = false;

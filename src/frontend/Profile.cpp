@@ -84,7 +84,9 @@ bool LocalProfile::loadFrom(std::istream& f) {
         else if (section == "[Accounts]" && k == "Account" && !v.empty()) accounts.push_back(v);
         else if (section == "[Accounts]" && k == "SignedIn") loggedInAccount = v;
         else if (section == "[PCSettings]") {
-            if (k == "Width") display.width = std::atoi(v.c_str());
+            pcSettingsLoaded = true;
+            if (k == "AutoDetectGpu") autoDetectGpu = v;
+            else if (k == "Width") display.width = std::atoi(v.c_str());
             else if (k == "Height") display.height = std::atoi(v.c_str());
             else if (k == "Fullscreen") display.fullscreen = v == "1";
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
@@ -147,7 +149,7 @@ void LocalProfile::save() const {
       << "\nAnisotropy=" << display.anisotropy
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << (display.rayTracing ? 1 : 0) << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon
-      << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nBotsEdited=" << (bots.editedSinceMap ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";
+      << "\nAutoDetectGpu=" << autoDetectGpu << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nBotsEdited=" << (bots.editedSinceMap ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";
     f << "\n[Progression]\n";
     for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
     for (int i = 0; i < 4; ++i) f << "LastMatch" << progression::specialtyName(i) << "=" << progression.lastMatchXp[(size_t)i] << "\n";

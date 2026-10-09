@@ -18,6 +18,7 @@
 #include "ui/GfxPresenter.h"
 #include "ui/UiGL.h"
 #include "ui/gl/GlCensus.h"
+#include <thread>
 
 #include <algorithm>
 #include <cstdlib>
@@ -137,6 +138,32 @@ template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, boo
     if constexpr (HasRendererAnisotropy<R>::value) { if (r) { r->setAnisotropy(anisotropy); any = true; } }
     (void)r; (void)upscaling; (void)hdTextures; (void)anisotropy;
     return any ? "renderer" : "stored (no renderer API yet)";
+}
+
+// Graphics auto-detect facts (PC EXTENSION). Rendering 89fe8fd: render::GpuFacts IRenderer::gpuFacts() (vendor /
+// renderer GL strings, PCI vendorId, vramMB, rayTracing; cached, the first call costs tens of ms - boot only). Detected;
+// without it the GPU fields stay unknown and only the monitor / CPU facts are used.
+template <class R, class = void> struct HasRendererGpuFacts : std::false_type {};
+template <class R> struct HasRendererGpuFacts<R, std::void_t<decltype(std::declval<R&>().gpuFacts())>> : std::true_type {};
+template <class R, class = void> struct HasRendererHdPack : std::false_type {};
+template <class R> struct HasRendererHdPack<R, std::void_t<decltype(std::declval<R&>().hdTexturesAvailable())>> : std::true_type {};
+template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
+    frontend::HardwareFacts f;
+    if constexpr (HasRendererGpuFacts<R>::value) {
+        if (r) {
+            const auto g = r->gpuFacts();
+            f.gpuVendor = g.vendor;
+            f.gpuName = g.renderer;
+            f.gpuVendorId = (unsigned)g.vendorId;
+            f.vramMB = (int)g.vramMB;
+            f.rayTracing = g.rayTracing;
+        }
+    }
+    if constexpr (HasRendererHdPack<R>::value) { if (r) f.hdTexturePack = r->hdTexturesAvailable(); }
+    f.cpuCores = (int)std::thread::hardware_concurrency();
+    if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
+    (void)r;
+    return f;
 }
 
 // Rendering 50f0742: preparePreviewBody parses a body's AnimSets into the shared cache and prewarms its materials without
@@ -297,6 +324,10 @@ void Application::attachPresenter() {
     dh.apply = [this](int w, int h, bool fs) { window_->setDisplayMode(w, h, fs); };
     dh.vsync = [this](bool on) { window_->setVSync(on); };
     frontend_->setDisplayHooks(dh);
+    // Graphics auto-detect: first launch (no saved PC settings) or a changed GPU -> the recommended preset, then the
+    // display settings below apply it like saved ones.
+    frontend_->setHardwareFacts(gatherHardwareFacts(renderer_, window_));
+    frontend_->autoDetectGraphicsAtBoot();
     {
         const auto& d = frontend_->flow().profile().display;
         if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
