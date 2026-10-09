@@ -35,7 +35,13 @@ public:
 
     // PC SKU display settings (PCSettings.*).
     // frameLimit: PC EXTENSION ([PCSettings] FrameLimit, not an original setting; 0 = no cap, the default).
-    struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0; };
+    // PC EXTENSION graphics options (not in the original; default off = the original look), [PCSettings]:
+    //   upscaling: 0 Off, 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance (later DLSS / FSR 3 values follow);
+    //   hdTextures: the HD texture set; frameGeneration / rayTracing: reserved (no menu row yet, always off).
+    struct Display {
+        int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
+        int upscaling = 0; bool hdTextures = false; int frameGeneration = 0; bool rayTracing = false;
+    };
     // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and
     // opponents for offline private matches; difficulty 0 EASY, 1 MEDIUM, 2 HARD (the campaign's names; MP has none).
     // Team modes: bots per faction (autobot / decepticon); free-for-all: enemy (opponents). extended: the Custom Game
