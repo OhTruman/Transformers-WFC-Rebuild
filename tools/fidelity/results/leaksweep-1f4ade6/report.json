@@ -1,0 +1,231 @@
+﻿{
+    "summary":  {
+                    "pass":  18,
+                    "fail":  4,
+                    "known":  0,
+                    "info":  13,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  1
+                },
+    "results":  [
+                    {
+                        "id":  "leak.diagnostics",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "build 1f4ade6; diagnostics env: WFC_GLTRACE=1;WFC_ALLOCPROF_LIVE=64;WFC_GFXMEM=30;WFC_ALLOCPROF=64;WFC_TEXTRACE=1;WFC_ALLOCPROF_EVERY_S=3"
+                    },
+                    {
+                        "id":  "leak.maps.matches",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "16 matches loaded / 16 unloaded; maps: IAC_Seed, IAC_Berth, UND_Complex, IAC_Rust, ORB_Debris, IAC_Streets, KON_Molten, UND_Gorge, IAC_Seed, IAC_Berth, UND_Complex, IAC_Rust, ORB_Debris, IAC_Streets, KON_Molten, UND_Gorge"
+                    },
+                    {
+                        "id":  "leak.maps.private_at_unload",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "private MB at match.unloaded (not settled): 4508 4352 4504 5131 4850 4974 5167 5118 5476 5056 5117 5574 5249 5244 5384 5210"
+                    },
+                    {
+                        "id":  "leak.maps.private_settled_lobby",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "private MB in the lobby 20 s after each match (settled): 15 cycles [3449.8 3566.7 3829.8 3885.3 4009.1 4040.3 4210 4187.5 4165.9 4179.8 4321 4206.5 4300.9 4290 4284.4]; later half slope 18.427 MB/cycle, rise 96.92 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_textures",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live textures after each unload: 16 cycles [51 53 54 55 57 60 61 62 62 63 63 63 63 63 63 63]; later half slope 0.083 names/cycle, rise 1 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_buffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live buffers after each unload: 16 cycles [139 131 130 135 124 133 142 142 135 134 133 135 123 133 132 139]; later half slope 0.071 names/cycle, rise 4 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_framebuffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live framebuffers after each unload: 16 cycles [4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_renderbuffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live renderbuffers after each unload: 16 cycles [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_vertexArrays",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live vertexArrays after each unload: 16 cycles [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_programs",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live programs after each unload: 16 cycles [756 947 1150 1408 1504 1504 1504 1504 1504 1504 1504 1504 1504 1504 1504 1504]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_programs_cap",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "max live GL programs after an unload 1504 (Rendering\u0027s map-program cache cap 1500 + UI / census programs outside it; FAIL above 1532)"
+                    },
+                    {
+                        "id":  "leak.maps.heap_new_lobby",
+                        "status":  "PARTIAL",
+                        "owner":  "Systems",
+                        "note":  "C++ heap (operator new live) at lobby samples: 7 cycles [383.1 386.9 392.2 394.7 398.2 401.3 404.8]; later half slope 3.34 MB/cycle, rise 10.1 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_sites_grew",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "no site grew on most later dumps (34 dumps per type)"
+                    },
+                    {
+                        "id":  "leak.maps.gl_sites_warmup",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "occasional growth (first-use caches?): textures GfxRendererGL.cpp:527: grew in 1 of the last 17 dumps; site live total at those dumps 36; buffers [ui::GfxRendererGL::drawMesh+0x2f4]: grew in 9 of the last 17 dumps; site live total at those dumps 141,134,133,132,134,122,132,131,138; buffers [ui::GfxRendererGL::drawStroke+0x9e]: grew in 8 of the last 17 dumps; site live total at those dumps 20,20,20,20,8,20,8,20"
+                    },
+                    {
+                        "id":  "leak.maps.textrace",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "last TEXTRACE lines: TEXTRACE after unloadMapRenderData: 63 live traced textures; sites that grew since the last dump: none || TEXTRACE after unloadMapRenderData: 63 live traced textures; sites that grew since the last dump: none || TEXTRACE after unloadMapRenderData: 63 live traced textures; sites that grew since the last dump: none"
+                    },
+                    {
+                        "id":  "leak.maps.revisit",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "private MB after unload, same map first vs last visit: IAC_Seed 967.9; IAC_Berth 704; UND_Complex 612.4; IAC_Rust 442.9; ORB_Debris 398.9; IAC_Streets 269.6; KON_Molten 216.7; UND_Gorge 92.7; mean 463.1 MB; verdict on the last three maps (warm caches): max 269.6 MB"
+                    },
+                    {
+                        "id":  "leak.modes.matches",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "24 matches loaded / 24 unloaded; maps: IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets, IAC_Streets"
+                    },
+                    {
+                        "id":  "leak.modes.private_at_unload",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "private MB at match.unloaded (not settled): 3736 3832 3847 3834 3824 3851 3861 3872 3869 3873 3881 3890 3892 3910 3913 3886 3903 3917 3925 3892 3897 3939 3947 3932"
+                    },
+                    {
+                        "id":  "leak.modes.private_settled_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Rendering/Systems",
+                        "note":  "private MB in the lobby 20 s after each match (settled): 23 cycles [2806.5 2817.4 2879 2853.6 2875.3 2767.8 2915.6 2920.8 2892.1 2912.4 2892.1 2922.1 2867.4 2954.9 2954.8 2934.2 2908.2 2918.7 2967 2928.4 2935.7 2904.1 2933.2]; later half slope 1.03 MB/cycle, rise 11.11 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_textures",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live textures after each unload: 24 cycles [51 52 52 52 52 52 52 52 52 52 52 52 52 52 52 52 52 53 53 53 53 54 54 54]; later half slope 0.217 names/cycle, rise 2 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_buffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live buffers after each unload: 24 cycles [112 119 112 112 114 124 112 103 117 119 115 103 112 118 121 108 114 119 114 111 111 119 112 111]; later half slope -0.273 names/cycle, rise -1 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_framebuffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live framebuffers after each unload: 24 cycles [4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_renderbuffers",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live renderbuffers after each unload: 24 cycles [3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3 3]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_vertexArrays",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live vertexArrays after each unload: 24 cycles [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_programs",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL live programs after each unload: 24 cycles [707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707 707]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_programs_cap",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "max live GL programs after an unload 707 (Rendering\u0027s map-program cache cap 1500 + UI / census programs outside it; FAIL above 1532)"
+                    },
+                    {
+                        "id":  "leak.modes.heap_new_lobby",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "C++ heap (operator new live) at lobby samples: 15 cycles [376.5 377.2 377.3 377.3 377.3 377.7 377.9 377.7 379.2 378.3 378 378 378.5 382 380.7]; later half slope 0.424 MB/cycle, rise 3 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_sites_grew",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "no site grew on most later dumps (50 dumps per type)"
+                    },
+                    {
+                        "id":  "leak.modes.gl_sites_warmup",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "occasional growth (first-use caches?): textures GfxRendererGL.cpp:527: grew in 2 of the last 25 dumps; site live total at those dumps 26,27; buffers [ui::GfxRendererGL::drawMesh+0x2f4]: grew in 13 of the last 25 dumps; site live total at those dumps 102,111,117,120 ... 110,118,111,110; buffers [ui::GfxRendererGL::drawStroke+0x9e]: grew in 12 of the last 25 dumps; site live total at those dumps 20,20,20,20 ... 20,20,20,20"
+                    },
+                    {
+                        "id":  "leak.modes.textrace",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "last TEXTRACE lines: TEXTRACE after unloadMapRenderData: 54 live traced textures; sites that grew since the last dump: none || TEXTRACE after unloadMapRenderData: 54 live traced textures; sites that grew since the last dump: none || TEXTRACE after unloadMapRenderData: 54 live traced textures; sites that grew since the last dump: none"
+                    },
+                    {
+                        "id":  "leak.modes.played",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "modes played in order: TDM, CTF, DOM, KOTH, TDM, CTF, DOM, KOTH, TDM, CTF, DOM, KOTH, TDM, CTF, DOM, KOTH, TDM, CTF, DOM, KOTH, TDM, CTF, DOM, KOTH"
+                    },
+                    {
+                        "id":  "leak.long.heap_new_per_min",
+                        "status":  "FAIL",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "C++ heap (operator new live) per in-match minute after 3 min: 18 cycles [1069 1074.9 1073.4 1071.7 1079.3 1074.6 1078.6 1071.2 1073.7 1075.5 1069.2 1078.8 1080.3 1075.1 1075.8 1072 1137.6 1139.4]; later half slope 7.373 MB/cycle, rise 63.87 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.long.private_per_min",
+                        "status":  "FAIL",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "committed private per in-match minute after 3 min: 18 cycles [4659.1 4665.7 4663.6 4662.8 4669.1 4665.7 4667.8 4661.8 4665.3 4666.6 4660.3 4670 4670.4 4665.7 4670.7 4664.5 4804.8 4816.7]; later half slope 17.05 MB/cycle, rise 150.15 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.maps.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "71 GFXMEM lines; last: gfxmem shapes=136 textures=36 atoms=2984 movies(heap/graveyard): UI_GFxLobbies_p.GameLobby_GFX_1=2899/18"
+                    },
+                    {
+                        "id":  "leak.modes.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "97 GFXMEM lines; last: gfxmem shapes=112 textures=27 atoms=2980 movies(heap/graveyard): hud=3096/14 UI_GFxEndGameStats_p.EndGameStats_GFX_1=12674/50"
+                    },
+                    {
+                        "id":  "leak.long.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "41 GFXMEM lines; last: gfxmem shapes=113 textures=30 atoms=2911 movies(heap/graveyard): hud=5655/68"
+                    }
+                ]
+}

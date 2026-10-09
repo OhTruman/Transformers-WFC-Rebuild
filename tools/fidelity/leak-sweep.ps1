@@ -66,12 +66,16 @@ function MemSamples([string]$dir) {
 # dumps. Verdict per site over the dumps after the first: FAIL if it grew in >= 3 dumps AND in >= half of them; INFO otherwise.
 function GrewCheck([string]$dir, [string]$tag) {
     $lg = Join-Path $dir "wfc.log"; if (-not (Test-Path $lg)) { return }
+    # symbolise through the build's own gltrace_sym.py + linker map (raw exe+0x offsets move per build)
+    $src = $lg; $sym = Join-Path $Root "tools\render\gltrace_sym.py"; $map = Join-Path $Root "build-release\bin\wfc_rebuild.map"
+    $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
+    if ((Test-Path $sym) -and (Test-Path $map) -and (Test-Path $py)) { $src = Join-Path $dir "gltrace_sym.txt"; if (-not (Test-Path $src)) { & $py $sym $map $lg 2>$null | Set-Content -Encoding UTF8 $src } }
     $dumps = @{}   # type -> list of @{ site -> delta }
-    foreach ($l in [IO.File]::ReadLines($lg)) {
+    foreach ($l in [IO.File]::ReadLines($src)) {
         $m = [regex]::Match($l, '(GLTRACE|TEXTRACE) after unloadMapRenderData: (\d+) live (?:traced )?(\w+); sites that grew(?: since the last dump)?: (.*)$')
         if (-not $m.Success) { continue }
         $type = $m.Groups[3].Value; if (-not $dumps.ContainsKey($type)) { $dumps[$type] = New-Object System.Collections.Generic.List[object] }
-        $sites = @{}; foreach ($sm in [regex]::Matches($m.Groups[4].Value, '(\S+) \+(\d+) \((\d+)\)')) { $sites[$sm.Groups[1].Value] = @([int]$sm.Groups[2].Value, [int]$sm.Groups[3].Value) }
+        $sites = @{}; foreach ($sm in [regex]::Matches($m.Groups[4].Value, '(\[[^\]]+\]|\S+) \+(\d+) \((\d+)\)')) { $sites[$sm.Groups[1].Value] = @([int]$sm.Groups[2].Value, [int]$sm.Groups[3].Value) }
         $dumps[$type].Add([pscustomobject]@{ live = [int]$m.Groups[2].Value; sites = $sites })
     }
     if (-not $dumps.Count) { if ($diag.ContainsKey("WFC_GLTRACE")) { Res "$tag.gltrace" "UNKNOWN" "WFC_GLTRACE set but no GLTRACE / TEXTRACE dumps logged" "Experimental" }; return }
@@ -87,7 +91,9 @@ function GrewCheck([string]$dir, [string]$tag) {
             # 2026-10-09, src/ui/gl/GlCensus.cpp begin()); the symbol only shows after gltrace_sym, so match the raw offset too
             if ($k -match 'GlCensus' -or $k -eq 'exe+0x501136') { continue }
             $t = @($tot[$k]); $th = if ($t.Count -ge 4) { @($t | Select-Object -Skip ([int][Math]::Floor($t.Count / 2))) } else { $t }
-            $rising = $t.Count -ge 3 -and (Slope $th) -gt 0.5 -and ($th[-1] - $th[0]) -gt 1.5
+            # a leak's site total only goes up; an oscillating per-movie cache (UI drawMesh / drawStroke buffers) does not
+            $mono = $true; for ($q = 1; $q -lt $th.Count; $q++) { if ($th[$q] -lt $th[$q - 1]) { $mono = $false; break } }
+            $rising = $t.Count -ge 3 -and $mono -and (Slope $th) -gt 0.5 -and ($th[-1] - $th[0]) -gt 1.5
             $txt = "{0} {1}: grew in {2} of the last {3} dumps; site live total at those dumps {4}" -f $type, $k, $count[$k], $later.Count, $(if ($t.Count -le 10) { $t -join "," } else { (($t | Select-Object -First 4) -join ",") + " ... " + (($t | Select-Object -Last 4) -join ",") })
             if ($rising) { $leaks += $txt } else { $warm += $txt } }
     }
