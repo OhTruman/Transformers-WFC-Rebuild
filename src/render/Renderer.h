@@ -129,6 +129,13 @@ public:
     // at renderScale x the window and is upscaled; sharpness in RCAS stops (0 = strongest, 2 = mild). renderScale 1
     // with sharpness < 0 = off: the original presentation (default). Effective from the next frame.
     virtual void setUpscaling(float renderScale, float sharpness) { (void)renderScale; (void)sharpness; }
+    // The PC Graphics menu's Upscaling row: 0 Off (the original path), 1 FSR 1 Quality (1.5x: scale 0.667),
+    // 2 Balanced (1.7x: 0.588), 3 Performance (2x: 0.5); AMD's default RCAS sharpness (0.2 stops). Safe at any time:
+    // the render size changes at the next frame.
+    virtual void setUpscaling(int mode) { (void)mode; }
+    // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
+    // originals); stored until that root exists.
+    virtual void setHdTextures(bool on) { (void)on; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
     // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
