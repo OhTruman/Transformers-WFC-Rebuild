@@ -424,7 +424,16 @@ private:
     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
     int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
+    // optional FSR 1 upscaling (WfcFsr.cpp; OFF by default: scale 1, sharpness < 0)
+    float fsrScale_ = 1.0f, fsrSharpness_ = -1.0f;
+    bool fsrFailed_ = false;
+    GLuint fsrEasuProg_ = 0, fsrRcasProg_ = 0, fsrInFbo_ = 0, fsrInTex_ = 0, fsrMidFbo_ = 0, fsrMidTex_ = 0;
+    int fsrInW_ = 0, fsrInH_ = 0, fsrMidW_ = 0, fsrMidH_ = 0;
+    bool fsrActive() const;
+    bool ensureFsr(int inW, int inH, int outW, int outH);
+    void runFsr(int inW, int inH, int outW, int outH);
     static void renderSizeOverride(int& w, int& h);
+    void applyRenderScale(int& w, int& h) const;
     int skinMode_ = 0, skinRow_ = 0, skinBones_ = 0;      // VS: 0 off, 1 skin, 2 skin + blend with the prev palette
     float skinAlpha_ = 1.0f;
     void evictSkin(bool all);
@@ -746,6 +755,9 @@ public:
     void stopFx(int id);
     void markFxPooled(int id);                 // EmitterPool effect (see IRenderer::setParticleEffectPooled)
     void releaseMeshCaches(const MeshData* m); // IRenderer::releaseMeshCaches
+    // optional spatial upscaling (FSR 1): scale in (0.25, 1] = 3D render size / window; sharpness = RCAS stops
+    // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
+    void setUpscaling(float scale, float sharpness);
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
     bool setFxParam(int id, const std::string& name, const float v[4]);

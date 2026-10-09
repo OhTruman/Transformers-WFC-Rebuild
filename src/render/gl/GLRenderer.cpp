@@ -1536,6 +1536,7 @@ public:
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
+    void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";

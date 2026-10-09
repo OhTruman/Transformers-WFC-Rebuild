@@ -700,6 +700,9 @@ void Pipeline::release() {
         auto delVao = [](GLuint& v) { if (v) { DeleteVertexArrays(1, &v); v = 0; } };
         auto delProg = [](GLuint& p) { if (p) { DeleteProgram(p); p = 0; } };
         if (touchFbo_) { DeleteFramebuffers(1, &touchFbo_); touchFbo_ = 0; }
+        for (GLuint* f : {&fsrInFbo_, &fsrMidFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
+        delTex(fsrInTex_); delTex(fsrMidTex_);
+        for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
         delVao(occVao_); delVao(spriteFrameVao_);
@@ -759,9 +762,11 @@ void Pipeline::release() {
     gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
+    const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
+    fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
 }
 
 // ------------------------------------------------------------------------- loading
@@ -3053,8 +3058,16 @@ void Pipeline::renderSizeOverride(int& w, int& h) {
     if (rs) { w = rw; h = rh; }
 }
 
+// the 3D render size with the optional upscaler's scale applied (FSR 1; scale 1 = the window size)
+void Pipeline::applyRenderScale(int& w, int& h) const {
+    if (fsrScale_ >= 0.999f || fsrFailed_) return;
+    w = std::max(1, (int)std::lround(w * fsrScale_));
+    h = std::max(1, (int)std::lround(h * fsrScale_));
+}
+
 void Pipeline::warmupWorld(int id, int w, int h) {
     renderSizeOverride(w, h);                          // the warm-up (and its log line) at the 3D target size
+    applyRenderScale(w, h);
     if (id >= 0 && (size_t)id < meshes_.size()) buildMdi(id);
     if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
     const auto t0 = std::chrono::steady_clock::now();
@@ -5128,7 +5141,13 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
     winW_ = w; winH_ = h;
+    {   // WFC_FSR=<scale>[,<sharpness>] (test switch; the setting comes through IRenderer::setUpscaling)
+        static const char* e = std::getenv("WFC_FSR");
+        static bool applied = false;
+        if (e && !applied) { float s = 1.0f, sh = 0.2f; std::sscanf(e, "%f,%f", &s, &sh); setUpscaling(s, sh); applied = true; }
+    }
     renderSizeOverride(w, h);
+    if (fsrActive()) { winW_ = w; winH_ = h; applyRenderScale(w, h); }   // upscale to the (override) output size
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -5326,8 +5345,11 @@ void Pipeline::endFrame() {
             glDrawArrays(GL_TRIANGLES, 0, 3);
         }
     }
-    BindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, winW_ > 0 ? winW_ : vpW_, winH_ > 0 ? winH_ : vpH_);   // the window (WFC_RENDERSIZE: scaled)
+    const int outW = winW_ > 0 ? winW_ : vpW_, outH = winH_ > 0 ? winH_ : vpH_;
+    const bool fsr = fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
+    BindVertexArray(postVao_);
+    if (fsr) { BindFramebuffer(GL_FRAMEBUFFER, fsrInFbo_); glViewport(0, 0, vpW_, vpH_); }   // FSR input (render size)
+    else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(0, 0, outW, outH); }   // the window (WFC_RENDERSIZE: scaled)
     UseProgram(postProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
@@ -5354,6 +5376,7 @@ void Pipeline::endFrame() {
     Uniform1f(U("uDesat"), post_.desat);
     Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
     glDrawArrays(GL_TRIANGLES, 0, 3);
+    if (fsr) runFsr(vpW_, vpH_, outW, outH);           // EASU (+ RCAS) into the window
     BindVertexArray(0);
     UseProgram(0);
     drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)

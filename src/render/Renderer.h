@@ -125,6 +125,10 @@ public:
     // cached under its address (GPU-skin static buffers, draw list, posed buffers) now instead of after its
     // unused-time eviction, so nothing outlives the object and a new mesh at the same address starts clean.
     virtual void releaseMeshCaches(const MeshData& mesh) { (void)mesh; }
+    // Optional spatial upscaling (PC ADAPTATION; AMD FSR 1 EASU + RCAS). renderScale in [0.25, 1]: the 3D frame renders
+    // at renderScale x the window and is upscaled; sharpness in RCAS stops (0 = strongest, 2 = mild). renderScale 1
+    // with sharpness < 0 = off: the original presentation (default). Effective from the next frame.
+    virtual void setUpscaling(float renderScale, float sharpness) { (void)renderScale; (void)sharpness; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
     // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
