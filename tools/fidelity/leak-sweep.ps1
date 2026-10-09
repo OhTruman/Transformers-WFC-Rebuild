@@ -70,18 +70,22 @@ function GrewCheck([string]$dir, [string]$tag) {
         $m = [regex]::Match($l, '(GLTRACE|TEXTRACE) after unloadMapRenderData: (\d+) live (?:traced )?(\w+); sites that grew(?: since the last dump)?: (.*)$')
         if (-not $m.Success) { continue }
         $type = $m.Groups[3].Value; if (-not $dumps.ContainsKey($type)) { $dumps[$type] = New-Object System.Collections.Generic.List[object] }
-        $sites = @{}; foreach ($sm in [regex]::Matches($m.Groups[4].Value, '(\S+) \+(\d+) \((\d+)\)')) { $sites[$sm.Groups[1].Value] = [int]$sm.Groups[2].Value }
+        $sites = @{}; foreach ($sm in [regex]::Matches($m.Groups[4].Value, '(\S+) \+(\d+) \((\d+)\)')) { $sites[$sm.Groups[1].Value] = @([int]$sm.Groups[2].Value, [int]$sm.Groups[3].Value) }
         $dumps[$type].Add([pscustomobject]@{ live = [int]$m.Groups[2].Value; sites = $sites })
     }
     if (-not $dumps.Count) { if ($diag.ContainsKey("WFC_GLTRACE")) { Res "$tag.gltrace" "UNKNOWN" "WFC_GLTRACE set but no GLTRACE / TEXTRACE dumps logged" "Experimental" }; return }
     $leaks = @(); $warm = @()
     foreach ($type in $dumps.Keys) {
-        $later = @($dumps[$type] | Select-Object -Skip 1); if ($later.Count -lt 1) { continue }
-        $count = @{}; $total = @{}
-        foreach ($d in $later) { foreach ($k in $d.sites.Keys) { $count[$k] = 1 + [int]$count[$k]; $total[$k] = $d.sites[$k] + [int]$total[$k] } }
+        # judge the LATER HALF of the run's dumps: first-use caches (per-new-map UI images, shader programs) fill during the first
+        # pass and then stop; a leak keeps growing on revisits (942cbe2: GfxRendererGL.cpp:527 6 -> 48 over the first map pass, then flat)
+        $later = @($dumps[$type] | Select-Object -Skip ([Math]::Max(1, [int][Math]::Floor($dumps[$type].Count / 2)))); if ($later.Count -lt 1) { continue }
+        $count = @{}; $tot = @{}   # tot: the site's live total each time it grew (only reported on growth)
+        foreach ($d in $later) { foreach ($k in $d.sites.Keys) { $count[$k] = 1 + [int]$count[$k]; if (-not $tot.ContainsKey($k)) { $tot[$k] = New-Object System.Collections.Generic.List[double] }; $tot[$k].Add($d.sites[$k][1]) } }
         foreach ($k in $count.Keys) {
-            $txt = "{0} {1}: grew in {2} of {3} later dumps (+{4} total; live {5} -> {6})" -f $type, $k, $count[$k], $later.Count, $total[$k], $dumps[$type][0].live, $dumps[$type][-1].live
-            if ($count[$k] -ge 3 -and $count[$k] * 2 -ge $later.Count) { $leaks += $txt } else { $warm += $txt } }
+            $t = @($tot[$k]); $th = if ($t.Count -ge 4) { @($t | Select-Object -Skip ([int][Math]::Floor($t.Count / 2))) } else { $t }
+            $rising = $t.Count -ge 3 -and (Slope $th) -gt 0.5 -and ($th[-1] - $th[0]) -gt 1.5
+            $txt = "{0} {1}: grew in {2} of the last {3} dumps; site live total at those dumps {4}" -f $type, $k, $count[$k], $later.Count, $(if ($t.Count -le 10) { $t -join "," } else { (($t | Select-Object -First 4) -join ",") + " ... " + (($t | Select-Object -Last 4) -join ",") })
+            if ($rising) { $leaks += $txt } else { $warm += $txt } }
     }
     $nd = ($dumps.Values | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
     Res "$tag.gl_sites_grew" $(if ($leaks.Count) { "FAIL" } elseif ($nd -lt 4) { "UNKNOWN" } else { "PASS" }) $(if ($leaks.Count) { "persistent GL growth (symbolise exe+0x... with tools/render/gltrace_sym.py + the .map): " + ($leaks -join "; ") } elseif ($nd -lt 4) { "only $nd dumps per type - too few to separate warm-up from leaks" } else { "no site grew on most later dumps ($nd dumps per type)" }) "Rendering"
@@ -122,7 +126,7 @@ function MatchSeries([string]$dir, [string]$tag, [string]$owner) {
     # programs: Rendering's M54 cross-map program cache (LRU-trimmed at each unload, cap 1500 - WFC_PROGCACHEMAX): it may grow while
     # new maps load (first pass) but must stay <= the cap and flat on revisits (the later-half verdict above covers the revisits)
     if ($cen.Count) { $pmax = ($cen | ForEach-Object { $_[5] } | Measure-Object -Maximum).Maximum
-        Res "$tag.gl_programs_cap" $(if ($pmax -le 1500) { "PASS" } else { "FAIL" }) ("max live GL programs after an unload {0} (Rendering's program-cache cap 1500)" -f $pmax) "Rendering" }
+        Res "$tag.gl_programs_cap" $(if ($pmax -le 1532) { "PASS" } else { "FAIL" }) ("max live GL programs after an unload {0} (Rendering's map-program cache cap 1500 + UI / census programs outside it; FAIL above 1532)" -f $pmax) "Rendering" }
     # C++ heap live in the lobby: the last ALLOCPROF sample before each next match load (context = lobby / flow lines)
     $ms = MemSamples $dir
     if ($ms.Count) {

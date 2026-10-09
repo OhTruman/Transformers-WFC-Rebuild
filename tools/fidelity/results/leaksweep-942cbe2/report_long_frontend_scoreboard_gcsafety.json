@@ -1,0 +1,147 @@
+﻿{
+    "summary":  {
+                    "pass":  7,
+                    "fail":  2,
+                    "known":  0,
+                    "info":  9,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  3,
+                    "waiting":  0,
+                    "partial":  1
+                },
+    "results":  [
+                    {
+                        "id":  "leak.diagnostics",
+                        "status":  "INFO",
+                        "owner":  "Experimental",
+                        "note":  "build 942cbe2; diagnostics env: WFC_GLTRACE=1;WFC_ALLOCPROF_LIVE=64;WFC_GFXMEM=30;WFC_ALLOCPROF=64;WFC_TEXTRACE=1;WFC_ALLOCPROF_EVERY_S=3"
+                    },
+                    {
+                        "id":  "leak.long.heap_new_per_min",
+                        "status":  "FAIL",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "C++ heap (operator new live) per in-match minute after 3 min: 18 cycles [1065.8 1076.1 1071.3 1072.4 1079 1077.1 1078.7 1072.2 1076.1 1075.7 1080.6 1076.8 1080.4 1080.5 1079.9 1082.3 1276.8 1331]; later half slope 27.003 MB/cycle, rise 255.3 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.long.private_per_min",
+                        "status":  "FAIL",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "committed private per in-match minute after 3 min: 18 cycles [4740 4747 4751.1 4752.8 4756.4 4757.5 4769.2 4765.3 4767.7 4767.2 4770.4 4767.4 4770.8 4773.4 4770.8 4770.8 5050.2 5137.3]; later half slope 38.777 MB/cycle, rise 370.05 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.frontend.cycles",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "30 cycle checks; UI states at the check: InLobby"
+                    },
+                    {
+                        "id":  "leak.frontend.private",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "private MB at each cycle check: 29 cycles [1696.1 1696.4 1696.6 1697.1 1696.7 1697.2 ... 1698.6 1698.4 1698.5 1698.3 1698.5 1698.3]; later half slope 0.115 MB/cycle, rise 1.52 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.frontend.gl_textures",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "GL live textures at each cycle check: 29 cycles [210 210 210 210 210 210 ... 210 210 210 210 210 210]; later half slope 0 names/cycle, rise 0 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.frontend.preview_meshes",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "CaC preview cached meshes: 29 cycles [0 0 0 0 0 0 ... 0 0 0 0 0 0]; later half slope 0 meshes/cycle, rise 0 meshes (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.frontend.heap_new",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "C++ heap (operator new live) at samples right after each check: 16 cycles [338.9 338.9 338.9 339 338.9 338.9 339 338.9 338.9 339 338.9 338.9 339 338.9 338.9 339]; later half slope 0.004 MB/cycle, rise 0.1 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.frontend.gl_sites_grew",
+                        "status":  "UNKNOWN",
+                        "owner":  "Rendering",
+                        "note":  "only 1 dumps per type - too few to separate warm-up from leaks"
+                    },
+                    {
+                        "id":  "leak.scoreboard.cycles",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "12 cycle checks; UI states at the check: InGame"
+                    },
+                    {
+                        "id":  "leak.scoreboard.private",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "private MB at each cycle check: 11 cycles [4714 4722.1 4714.5 4724.4 4696.1 4688.9 4690.7 4691.1 4685.3 4683.8 4687.4]; later half slope -0.973 MB/cycle, rise -1.52 MB (FAIL if slope \u003e 5 and rise \u003e 15)"
+                    },
+                    {
+                        "id":  "leak.scoreboard.gl_textures",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "GL live textures at each cycle check: 11 cycles [835 835 835 835 835 835 835 835 836 836 836]; later half slope 0.257 names/cycle, rise 1 names (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.scoreboard.preview_meshes",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "CaC preview cached meshes: 11 cycles [0 0 0 0 0 0 0 0 0 0 0]; later half slope 0 meshes/cycle, rise 0 meshes (FAIL if slope \u003e 0.5 and rise \u003e 1.5)"
+                    },
+                    {
+                        "id":  "leak.scoreboard.heap_new",
+                        "status":  "UNKNOWN",
+                        "owner":  "Systems",
+                        "note":  "C++ heap (operator new live) at samples right after each check - only 0 samples"
+                    },
+                    {
+                        "id":  "leak.scoreboard.gl_sites_grew",
+                        "status":  "UNKNOWN",
+                        "owner":  "Rendering",
+                        "note":  "only 3 dumps per type - too few to separate warm-up from leaks"
+                    },
+                    {
+                        "id":  "leak.scoreboard.gl_sites_warmup",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "occasional growth (first-use caches?): textures GfxRendererGL.cpp:562: grew in 2 of the last 2 dumps; site live total at those dumps 8,11; textures GfxRendererGL.cpp:527: grew in 1 of the last 2 dumps; site live total at those dumps 10; buffers exe+0x4fe55e: grew in 1 of the last 2 dumps; site live total at those dumps 20; buffers exe+0x4fe3c4: grew in 1 of the last 2 dumps; site live total at those dumps 29; programs exe+0x3c296c: grew in 1 of the last 2 dumps; site live total at those dumps 212"
+                    },
+                    {
+                        "id":  "leak.gcsafety",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "3 processes x 2 matches, 64p real play, WFC_GFX_FORCEGC + GCCHECK: 0 guard hits, 0 crashes, 6 results screens"
+                    },
+                    {
+                        "id":  "leak.maps.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "179 GFXMEM lines; last: gfxmem shapes=143 textures=29 atoms=2977 movies(heap/graveyard): UI_GFxLobbies_p.GameLobby_GFX_1=18279/121"
+                    },
+                    {
+                        "id":  "leak.modes.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "115 GFXMEM lines; last: gfxmem shapes=82 textures=43 atoms=2984 movies(heap/graveyard): hud=16158/531"
+                    },
+                    {
+                        "id":  "leak.long.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "41 GFXMEM lines; last: gfxmem shapes=83 textures=47 atoms=2976 movies(heap/graveyard): hud=3946/21 UI_GFxChallengeNotifies_p.ChallengeNotify_GFX=886/4"
+                    },
+                    {
+                        "id":  "leak.frontend.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "46 GFXMEM lines; last: gfxmem shapes=217 textures=11 atoms=2090 movies(heap/graveyard): UI_GFxLobbies_p.PartyLobby_GFX_1=6402/62 UI_GFxShared_p.MessagePrompt_GFX_1=1232/1"
+                    },
+                    {
+                        "id":  "leak.scoreboard.gfxmem",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "6 GFXMEM lines; last: gfxmem shapes=130 textures=24 atoms=2900 movies(heap/graveyard): hud=7585/31 scores(closed)=8108/10"
+                    }
+                ]
+}
