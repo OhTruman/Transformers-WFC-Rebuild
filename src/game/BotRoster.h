@@ -18,6 +18,8 @@ struct BotLaunch {
     int difficultyAutobot = -1, difficultyDecepticon = -1;   // optional per-faction difficulty (tests / custom games; -1 = difficulty)
     int difficulty = 1;            // 0 EASY, 1 MEDIUM, 2 HARD (labels borrowed from the campaign; PC ADAPTATION)
     bool extended = false;         // ?ExtendedPlayers=1: CUSTOM-GAME EXTENSION slots (16 bots per team), see MatchSettings
+    int ai = -1;                   // ?BotAI=Smart|Classic (lobby "Bot AI"; -1 = the default, Classic until Smart passes its gates)
+    int aiAutobot = -1, aiDecepticon = -1;   // ?BotAIAutobot / ?BotAIDecepticon: per faction (Smart-vs-Classic duels)
 };
 
 struct BotIdentity {

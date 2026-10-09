@@ -1037,6 +1037,137 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     return true;
 }
 
+// ---- Smart AI, S1: hearing, memory, team call-outs (decisions are still Classic's until S2) ----
+
+// Serial, at the start of a step's background part: the previous step's participant shots, the local player's shot and the blasts
+// since the last collect become sounds; sounds older than 0.5 s are dropped (every bot perceives at least every 0.25 s).
+void World::smartCollectNoises() {
+    const float now = match_.matchTime();
+    for (const ParticipantShot& s : participantShots_)
+        if (s.pellet == 0 && s.weapon != "RepairRay") smartNoises_.push_back({s.from, s.player, 1, now});
+    if (!localDead_ && localPlayer_ >= 0) {
+        const Character& pc = player_.pawn();
+        const Weapon* lw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+        const unsigned serial = lw ? lw->shotSerial : 0u;
+        if (serial != smartLocalShot_ && serial != 0u) smartNoises_.push_back({pc.position(), localPlayer_, 1, now});
+        smartLocalShot_ = serial;
+    }
+    {
+        std::lock_guard<std::mutex> lk(smartBlastMutex_);
+        // A fixed order whatever thread recorded them (determinism): by instigator, then position.
+        std::sort(smartBlasts_.begin(), smartBlasts_.end(), [](const SmartNoise& x, const SmartNoise& y) {
+            if (x.player != y.player) return x.player < y.player;
+            if (x.pos.x != y.pos.x) return x.pos.x < y.pos.x;
+            if (x.pos.y != y.pos.y) return x.pos.y < y.pos.y;
+            return x.pos.z < y.pos.z; });
+        for (const SmartNoise& n : smartBlasts_) smartNoises_.push_back(n);
+        smartBlasts_.clear();
+    }
+    size_t drop = 0;
+    while (drop < smartNoises_.size() && now - smartNoises_[drop].time > 0.5f) ++drop;
+    if (drop) smartNoises_.erase(smartNoises_.begin(), smartNoises_.begin() + (long)drop);
+}
+
+// Serial (the decision pass): what this bot now believes about each enemy. Sight comes from the Classic perception it just ran
+// (b.seen); hearing (gunfire / explosions through walls, footsteps and engines close by: user decision), the hit it just took
+// (direction-accurate by skill), and teammates' call-outs after the skill's delay. No hidden information: a bot only knows what
+// one of these told it. Newer or more certain knowledge replaces older; confidence decays over smartSkill().memorySeconds.
+void World::smartPerceive(BotBody o, BotBrain& b, SmartBot& s) {
+    const Character& pc = o.pawn();
+    const float now = match_.matchTime();
+    const SmartSkill& sk = smartSkill(b.difficulty);
+    const size_t n = match_.players().size();
+    if (s.mem.size() < n) s.mem.resize(n);
+    const bool teamGame = match_.settings().teamGame;
+    const int team = match_.players()[(size_t)b.player].team;
+    auto enemy = [&](int p) { return p >= 0 && (size_t)p < n && p != b.player && !(teamGame && match_.sameTeam(p, b.player)); };
+    auto current = [&](const SmartMemory& m) { const float age = now - m.time; return age < 0.0f ? m.confidence : m.confidence * std::max(0.0f, 1.0f - age / sk.memorySeconds); };
+    auto learn = [&](int p, const core::Vec3& pos, const core::Vec3& vel, float conf, uint8_t src) {
+        SmartMemory& m = s.mem[(size_t)p];
+        if (src != 1 && conf < current(m)) return false;
+        m.pos = pos; m.vel = vel; m.time = now; m.confidence = conf; m.source = src;
+        return true;
+    };
+    auto jitter = [&](float r) { return core::Vec3{(s.rand01() * 2.0f - 1.0f) * r, 0.0f, (s.rand01() * 2.0f - 1.0f) * r}; };
+    // Sight, and call-outs to the team.
+    for (const auto& kv : b.seen) {
+        if (!kv.second.visible || !enemy(kv.first)) continue;
+        const Character* c = participantPawn(kv.first);
+        const core::Vec3 vel = c ? c->velocity() : core::Vec3{0, 0, 0};
+        learn(kv.first, kv.second.pos, vel, 1.0f, 1); ++s.seen;
+        if (teamGame && team >= 0 && team < 2) {
+            std::vector<SmartSighting>& board = smartBoard_[(size_t)team];
+            if (board.size() < n) board.resize(n);
+            SmartSighting& sg = board[(size_t)kv.first];
+            if (sg.time < now) { sg.enemy = kv.first; sg.by = b.player; sg.pos = kv.second.pos; sg.vel = vel; sg.time = now; ++s.posted; }
+        }
+    }
+    // Hearing: gunfire and explosions through walls; the position is as uncertain as the sound is far.
+    for (const SmartNoise& nz : smartNoises_) {
+        if (nz.time <= s.lastPerceive || !enemy(nz.player)) continue;
+        const float range = nz.kind == 1 ? sk.hearGunfireM : sk.hearExplosionM;
+        const float d = core::length(nz.pos - pc.position());
+        if (d > range) continue;
+        if (learn(nz.player, nz.pos + jitter(d * 0.1f), core::Vec3{0, 0, 0}, 0.2f + 0.5f * (1.0f - d / range), 2)) ++s.heard;
+    }
+    // Footsteps (running robots) and engines (moving vehicles) close by.
+    for (size_t q = 0; q < n; ++q) {
+        if (!enemy((int)q)) continue;
+        const Character* c = participantPawn((int)q);
+        if (!c) continue;
+        const core::Vec3 v = c->velocity();
+        const float speed = std::sqrt(v.x * v.x + v.z * v.z);
+        const bool veh = c->moveForm() == Form::Vehicle;
+        if (speed < (veh ? 2.0f : 3.0f)) continue;
+        const float d = core::length(c->position() - pc.position());
+        if (d > (veh ? sk.hearEngineM : sk.hearFootstepsM)) continue;
+        if (learn((int)q, c->position() + jitter(d * 0.08f), v, 0.45f, 2)) ++s.heard;
+    }
+    // A hit: the shooter's direction (and roughly its distance, by skill).
+    const float hp = pc.health().current;
+    if (s.lastHealth >= 0.0f && hp < s.lastHealth) {
+        const int by = match_.lastHitBy(b.player);
+        if (enemy(by)) if (const Character* c = participantPawn(by)) {
+            const float d = core::length(c->position() - pc.position());
+            if (learn(by, c->position() + jitter(d * 0.3f * (1.0f - sk.hitAwareness)), core::Vec3{0, 0, 0}, 0.4f + 0.4f * sk.hitAwareness, 4)) ++s.hitBy;
+        }
+    }
+    s.lastHealth = hp;
+    // Teammates' call-outs, once they have had time to reach this bot.
+    if (teamGame && team >= 0 && team < 2)
+        for (const SmartSighting& sg : smartBoard_[(size_t)team]) {
+            if (sg.enemy < 0 || sg.by == b.player || !enemy(sg.enemy)) continue;
+            const float age = now - sg.time;
+            if (age < sk.calloutDelay) continue;
+            const float conf = 0.7f * std::max(0.0f, 1.0f - age / sk.memorySeconds);
+            if (conf <= 0.0f) continue;
+            if (learn(sg.enemy, sg.pos + sg.vel * std::min(age, 1.0f), sg.vel, conf, 3)) ++s.callouts;
+        }
+    s.lastPerceive = now;
+}
+
+// WFC_AIMETRICS: every 10 s of match time, what the Smart bots perceive (S1); later stages add their behaviour metrics here.
+void World::smartMetrics(float dt) {
+    static const bool on = std::getenv("WFC_AIMETRICS") != nullptr;
+    if (!on || !anySmart_) return;
+    static float acc = 0.0f;
+    if ((acc += dt) < 10.0f) return;
+    acc = 0.0f;
+    const float now = match_.matchTime();
+    int bots = 0, aware = 0; long seen = 0, heard = 0, callouts = 0, hitBy = 0, posted = 0;
+    for (size_t p = 0; p < smart_.size(); ++p) {
+        const SmartBot& s = smart_[p];
+        if (!s.active) continue;
+        ++bots; seen += s.seen; heard += s.heard; callouts += s.callouts; hitBy += s.hitBy; posted += s.posted;
+        int diff = 1;
+        for (const BotBrain& bb : bots_) if (bb.player == (int)p) diff = bb.difficulty;
+        const SmartSkill& sk = smartSkill(diff);
+        for (const SmartMemory& m : s.mem) if (m.confidence * std::max(0.0f, 1.0f - (now - m.time) / sk.memorySeconds) > 0.2f) ++aware;
+    }
+    LOG_INFO("AIMETRICS t %.0f: %d Smart bots, %.1f enemies known per bot; totals seen %ld heard %ld call-outs %ld hit-by %ld posted %ld; noises %zu",
+             now, bots, bots ? (float)aware / bots : 0.0f, seen, heard, callouts, hitBy, posted, smartNoises_.size());
+}
+
 void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
     // MatchOver / PendingMatch / between rounds: bots do not think, move or fire (the original end state stops play: no damage,
@@ -1048,6 +1179,7 @@ void World::tickBots(float dt) {
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
     botPathBudget_ = 1;   // at most one new search per simulation step
+    smartMetrics(dt);
     // Waiting entries whose bot is gone (dead / despawned / removed) leave the queue, so its front is always someone who can take it.
     botSearchQueue_.erase(std::remove_if(botSearchQueue_.begin(), botSearchQueue_.end(), [&](int p) {
         if (p == localPlayer_) return !(playerBotDifficulty() >= 0 && !localDead_);
@@ -1101,6 +1233,7 @@ void World::tickBots(float dt) {
             b.thinkTimer = 0.25f;
             const double tp0 = tickProfOn() ? profMsBots() : 0.0;
             botThink(*o, b);
+            if (anySmart_ && botIsSmart(b.player)) smartPerceive(*o, b, smart_[(size_t)b.player]);   // Smart S1: perception / memory
             if (tickProfOn()) tickProfAdd(19, profMsBots() - tp0);
         }
         botPathUpkeep(*o, b, dt);

@@ -21,6 +21,8 @@
 #include "game/MatchOpponent.h"
 #include "game/BotRoster.h"
 #include "game/BotBrain.h"
+#include "game/BotSmart.h"
+#include <mutex>
 #include "game/BotNav.h"
 #include "game/Progression.h"
 #include "game/Destructible.h"
@@ -1016,6 +1018,21 @@ private:
     AwardProducer awards_;
     size_t xpLogged_ = 0;
     std::vector<BotBrain> bots_;
+    // Smart AI (BotSmart.h): per match player; Classic bots have active == false and never reach the Smart code.
+    std::vector<SmartBot> smart_;
+    bool anySmart_ = false;
+    std::vector<SmartNoise> smartNoises_;        // sounds of the last ~0.5 s (gunfire, explosions), oldest first
+    std::vector<SmartNoise> smartBlasts_;        // explosions since the last collect (radiusDamage may run off the bot pass)
+    std::mutex smartBlastMutex_;
+    std::array<std::vector<SmartSighting>, 2> smartBoard_;   // team call-outs, indexed by the enemy player
+    unsigned smartLocalShot_ = 0;
+    void smartCollectNoises();
+    void smartPerceive(BotBody o, BotBrain& b, SmartBot& s);
+    void smartMetrics(float dt);
+public:
+    bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
+    const SmartBot* smartBot(int player) const { return botIsSmart(player) ? &smart_[(size_t)player] : nullptr; }
+private:
     BotNav botNav_;
     bool botNavTried_ = false;
     int botPathBudget_ = 0;

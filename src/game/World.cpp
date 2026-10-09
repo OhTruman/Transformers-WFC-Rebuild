@@ -2098,6 +2098,7 @@ void World::debugForceStreak() {
 // The background part of a step (after the local controller): bots, participants, weapons, FX, audio glue, projectiles, actors.
 void World::stepRemainder(float dt) {
     TickTimer tickTotal(14);
+    if (anySmart_) smartCollectNoises();   // Smart hearing: the previous step's shots / blasts (before the list is cleared)
     participantShots_.clear();
     { TickTimer tt(1); tickAbilityActors(dt); }
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
@@ -2388,6 +2389,9 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (opt.count("BotsDecepticon")) out.bots.decepticon = std::max(0, std::atoi(opt["BotsDecepticon"].c_str()));
     if (opt.count("BotDifficultyAutobot")) out.bots.difficultyAutobot = std::clamp(std::atoi(opt["BotDifficultyAutobot"].c_str()), 0, 2);
     if (opt.count("BotDifficultyDecepticon")) out.bots.difficultyDecepticon = std::clamp(std::atoi(opt["BotDifficultyDecepticon"].c_str()), 0, 2);
+    if (opt.count("BotAI")) out.bots.ai = (int)botAiFromString(opt["BotAI"].c_str(), BotAi::Classic);
+    if (opt.count("BotAIAutobot")) out.bots.aiAutobot = (int)botAiFromString(opt["BotAIAutobot"].c_str(), BotAi::Classic);
+    if (opt.count("BotAIDecepticon")) out.bots.aiDecepticon = (int)botAiFromString(opt["BotAIDecepticon"].c_str(), BotAi::Classic);
     for (const char* k : {"ExtendedPlayers", "BotsExtended"})
         if (opt.count(k) && std::atoi(opt[k].c_str()) != 0) { out.bots.extended = true; out.settings.applyExtendedSlots(); }
     return !out.map.empty();
@@ -2890,6 +2894,8 @@ void World::clearMatchActors() {
 }
 
 void World::removeBots() {
+    smart_.clear(); anySmart_ = false; smartNoises_.clear(); smartBlasts_.clear();
+    for (auto& board : smartBoard_) board.clear();
     size_t first = match_.players().size();
     for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }
     if (first == match_.players().size()) { bots_.clear(); return; }
@@ -2940,6 +2946,18 @@ int World::addBots(const BotLaunch& launch) {
         o->pressesPickup = true;
         const int perTeam = mp.team == 0 ? b.difficultyAutobot : (mp.team == 1 ? b.difficultyDecepticon : -1);
         addBotBrain(p, perTeam >= 0 ? perTeam : botDifficulty_);
+        {   // Bot AI: WFC_BOTAI (DEV / TEST) over the per-faction option over ?BotAI over the default
+            static const char* envAi = std::getenv("WFC_BOTAI");
+            const int perTeamAi = mp.team == 0 ? b.aiAutobot : (mp.team == 1 ? b.aiDecepticon : -1);
+            BotAi ai = perTeamAi >= 0 ? (BotAi)perTeamAi : (b.ai >= 0 ? (BotAi)b.ai : BotAi::Classic);
+            ai = botAiFromString(envAi, ai);
+            if (smart_.size() <= (size_t)p) smart_.resize((size_t)p + 1);
+            smart_[(size_t)p] = SmartBot{};
+            smart_[(size_t)p].active = ai == BotAi::Smart;
+            smart_[(size_t)p].rng = 0x51a7b07U ^ ((unsigned)p * 2654435761U);
+            anySmart_ |= ai == BotAi::Smart;
+            LOG_INFO("bots: p%d AI %s", p, botAiName(ai));
+        }
         opponents_.push_back(o.get());
         rebuildOppIndex();
         actors_.push_back(std::move(o));
@@ -3926,6 +3944,7 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
 }
 
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
+    if (anySmart_) { std::lock_guard<std::mutex> lk(smartBlastMutex_); smartBlasts_.push_back({at, instigator, 2, match_.matchTime()}); }
     // Actor.HurtRadius -> TakeRadiusDamage: Dist = max(|Location - origin| - collision radius, 0), scale = 1 - Dist / DamageRadius
     // (bFullDamage false) [HIGH stock UE3 Actor.TakeRadiusDamage]; teammates are filtered by applyMatchDamage (projectile
     // damage types are not TnDamageTypeAOE).
