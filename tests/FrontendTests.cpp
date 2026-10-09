@@ -3,6 +3,7 @@
 // Exit code = number of failed checks. Every check prints "PASS|FAIL <name> ..." for the Experimental harness.
 #include "frontend/Catalog.h"
 #include "frontend/FrontendRuntime.h"
+#include "frontend/GraphicsAutoDetect.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
 #include "frontend/Hud.h"
@@ -63,6 +64,35 @@ static void testProfileBotMigration() {
     frontend::LocalProfile o;
     o.loadFrom(odd);
     check(o.display.anisotropy == 8, "profile.anisotropy_snaps_to_4_8_16", std::to_string(o.display.anisotropy));
+}
+
+static void testGraphicsAutoDetect() {
+    // The shipped preset table (data/frontend/graphics_presets.json): first tier the PC meets.
+    frontend::GraphicsPresetTable t;
+    check(t.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/graphics_presets.json"), "autodetect.table_loads");
+    frontend::HardwareFacts big;
+    big.gpuName = "NVIDIA GeForce RTX 4080/PCIe/SSE2"; big.gpuVendorId = 0x10DE; big.vramMB = 16376; big.cpuCores = 16;
+    big.nativeW = 3840; big.nativeH = 2160; big.nativeHz = 144; big.hdTexturePack = true;
+    frontend::GraphicsPreset a = t.pick(big);
+    check(a.tier == "ultra" && a.width == 3840 && a.height == 2160 && a.fullscreen && a.frameLimit == 144 && a.anisotropy == 16 &&
+          a.upscaling == 0 && a.hdTextures && a.textureQuality == 2, "autodetect.strong_pc_native_4k", a.tier + " " + a.why);
+    big.hdTexturePack = false;
+    check(!t.pick(big).hdTextures, "autodetect.hd_textures_only_with_pack");
+    frontend::HardwareFacts mid = big;
+    mid.gpuName = "NVIDIA GeForce RTX 3060 Ti"; mid.vramMB = 8192; mid.cpuCores = 8;
+    frontend::GraphicsPreset b = t.pick(mid);
+    check(b.tier == "high" && b.width == 3840 && b.upscaling == 1 && b.anisotropy == 16, "autodetect.mid_gpu_4k_fsr_quality", b.tier + " " + b.why);
+    frontend::HardwareFacts low = big;
+    low.gpuName = "NVIDIA GeForce GTX 1050 Ti"; low.vramMB = 4096; low.cpuCores = 4; low.nativeW = 1920; low.nativeH = 1080; low.nativeHz = 60;
+    frontend::GraphicsPreset c = t.pick(low);
+    check(c.tier == "medium" && c.width == 1920 && c.upscaling == 0 && c.anisotropy == 8 && !c.hdTextures && c.frameLimit == 60,
+          "autodetect.4gb_1080p_native", c.tier + " " + c.why);
+    frontend::HardwareFacts igp = big;
+    igp.gpuName = "Intel(R) UHD Graphics 770"; igp.gpuVendorId = 0x8086; igp.vramMB = 128; igp.cpuCores = 12; igp.nativeW = 2560; igp.nativeH = 1440;
+    frontend::GraphicsPreset d = t.pick(igp);
+    check(d.tier == "low" && d.height == 1080 && d.width == 1920 && d.upscaling == 2 && d.anisotropy == 4, "autodetect.integrated_low_1080_fsr",
+          d.tier + " " + std::to_string(d.width) + "x" + std::to_string(d.height) + " " + d.why);
+    check(t.isIntegrated("AMD Radeon(TM) Graphics") && !t.isIntegrated("AMD Radeon RX 7900 XTX"), "autodetect.integrated_keywords");
 }
 
 static void testRecommendedBots() {
@@ -503,6 +533,7 @@ int main() {
     testUrl();
     testProfileBotMigration();
     testRecommendedBots();
+    testGraphicsAutoDetect();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);
