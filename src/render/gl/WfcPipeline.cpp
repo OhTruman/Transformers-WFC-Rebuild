@@ -3883,11 +3883,24 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         else if (usePrev && !boundsOf(*prevPalette, si.pmn, si.pmx)) return true;
         si.boundsPal.assign(palette.begin(), palette.end());
         static std::vector<float> row;
-        row.assign(1024 * 4, 0.0f);
+        row.resize(1024 * 4);
         for (size_t j = 0; j < palette.size(); ++j) std::memcpy(&row[j * 16], palette[j].m, 16 * sizeof(float));
         if (usePrev) for (size_t j = 0; j < prevPalette->size(); ++j) std::memcpy(&row[(512 + j * 4) * 4], (*prevPalette)[j].m, 16 * sizeof(float));
         glBindTexture(GL_TEXTURE_2D, skinTex_);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, si.row, 1024, 1, GL_RGBA, GL_FLOAT, row.data());
+        // only the texels the skinning shader reads (bones j < uSkinBones = palette size, current at 4j, previous at
+        // 512 + 4j): the rest of the 1024-texel row was uploaded as zeros and never read (WFC_SKINFULLROW=1: whole row)
+        static const bool fullRow = std::getenv("WFC_SKINFULLROW") != nullptr;
+        if (fullRow) {
+            for (size_t k = palette.size() * 16; k < (size_t)512 * 4; ++k) row[k] = 0.0f;
+            for (size_t k = (usePrev ? 512 + prevPalette->size() * 4 : 512) * 4; k < row.size(); ++k) row[k] = 0.0f;
+            if (!usePrev) std::fill(row.begin() + 512 * 4, row.end(), 0.0f);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, si.row, 1024, 1, GL_RGBA, GL_FLOAT, row.data());
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, si.row, (GLsizei)(palette.size() * 4), 1, GL_RGBA, GL_FLOAT, row.data());
+            if (usePrev)
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 512, si.row, (GLsizei)(prevPalette->size() * 4), 1, GL_RGBA, GL_FLOAT,
+                                row.data() + 512 * 4);
+        }
         si.serial = serial; si.prev = usePrev;
     }
     SkinDraw d;
