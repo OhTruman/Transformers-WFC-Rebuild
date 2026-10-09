@@ -29,6 +29,7 @@ $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcR
 $diag = @{}
 if ($H.Contains("WFC_ALLOCPROF_LIVE")) { $diag.WFC_ALLOCPROF = "64"; $diag.WFC_ALLOCPROF_LIVE = "64"; if ($H.Contains("WFC_ALLOCPROF_EVERY_S")) { $diag.WFC_ALLOCPROF_EVERY_S = "3" } }
 if ($H.Contains("WFC_TEXTRACE")) { $diag.WFC_TEXTRACE = "1" }
+if ($H.Contains("WFC_GLTRACE")) { $diag.WFC_GLTRACE = "1" }   # Rendering: per-unload live counts of every GL object type + creation sites that grew
 foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $diag[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $diagStr = (($diag.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';')
 Res "diagnostics" "INFO" ("build {0}; diagnostics env: {1}" -f $sha.Substring(0, [Math]::Min(7, $sha.Length)), $(if ($diagStr) { $diagStr } else { "none (build lacks ALLOCPROF_LIVE / TEXTRACE)" })) "Experimental"
@@ -54,6 +55,15 @@ function MemSamples([string]$dir) {
         if ($m.Success) { $out.Add([pscustomobject]@{ newMb = [double]$m.Groups[1].Value; heapsMb = [double]$m.Groups[2].Value; privMb = [double]$m.Groups[3].Value; ctx = $ctx }) }
     }
     return ,$out.ToArray()
+}
+# GLTRACE / TEXTRACE "sites that grew" lines = a GL leak with its creation site (Rendering 2026-10-08)
+function GrewCheck([string]$dir, [string]$tag) {
+    $lg = Join-Path $dir "wfc.log"; if (-not (Test-Path $lg)) { return }
+    $g = @(Select-String $lg -Pattern '(GLTRACE|TEXTRACE).*(grew|sites that grew)' -ErrorAction SilentlyContinue)
+    $any = @(Select-String $lg -Pattern 'GLTRACE' -ErrorAction SilentlyContinue).Count
+    if (-not $any -and -not $g.Count) { if ($diag.ContainsKey("WFC_GLTRACE")) { Res "$tag.gltrace" "UNKNOWN" "WFC_GLTRACE set but no GLTRACE lines logged" "Experimental" }; return }
+    $ex = @($g | Select-Object -First 4 | ForEach-Object { $t = $_.Line -replace '^\[[^\]]*\]\s*', ''; $t.Substring(0, [Math]::Min(240, $t.Length)) })
+    Res "$tag.gl_sites_grew" $(if ($g.Count) { "FAIL" } else { "PASS" }) $(if ($g.Count) { "{0} 'sites that grew' lines (GL objects not released at unload; symbolise with tools/render/gltrace_sym.py + the .map): {1}" -f $g.Count, ($ex -join " || ") } else { "no 'sites that grew' lines over $any GLTRACE / TEXTRACE reports" }) "Rendering"
 }
 function Run([string]$name, [hashtable]$e, [int]$timeoutS) {
     $d = Join-Path $OutDir $name; New-Item -ItemType Directory -Force $d | Out-Null
@@ -89,6 +99,7 @@ function MatchSeries([string]$dir, [string]$tag, [string]$owner) {
         $lobby = @($ms | Where-Object { $_.ctx -match 'GameLobby|PartyLobby|match\.unloaded|unloadMapRenderData|scene\.view' })
         Judge "$tag.heap_new_lobby" "C++ heap (operator new live) at lobby samples" @($lobby | ForEach-Object { $_.newMb }) $TolMb "MB" "Systems"
     }
+    GrewCheck $dir $tag
     $tt = @(Select-String $lg -Pattern 'TEXTRACE' -ErrorAction SilentlyContinue | Select-Object -Last 3 | ForEach-Object { ($_.Line -replace '^\[[^\]]*\]\s*', '').Substring(0, [Math]::Min(220, ($_.Line -replace '^\[[^\]]*\]\s*', '').Length)) })
     if ($tt.Count) { Res "$tag.textrace" "INFO" ("last TEXTRACE lines: " + ($tt -join " || ")) "Rendering" }
 }
@@ -105,6 +116,7 @@ function NavSeries([string]$dir, [string]$tag, [string]$prefix) {
     $pm = @($rows | Select-Object -Skip 1 | Where-Object { $_.meshes -ne $null } | ForEach-Object { $_.meshes }); if ($pm.Count -ge 4) { Judge "$tag.preview_meshes" "CaC preview cached meshes" $pm 0.5 "meshes" "Frontend/Rendering" }
     $ms = MemSamples $dir
     if ($ms.Count) { $near = @($ms | Where-Object { $_.ctx -match "nav\.check label=$prefix" }); Judge "$tag.heap_new" "C++ heap (operator new live) at samples right after each check" @($near | Select-Object -Skip 1 | ForEach-Object { $_.newMb }) $TolMb "MB" "Systems" }
+    GrewCheck $dir $tag
     Write-WfcCsv $rows (Join-Path $dir "cycles.csv")
 }
 
