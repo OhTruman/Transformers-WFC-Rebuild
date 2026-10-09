@@ -411,7 +411,8 @@ void World::botThink(BotBody o, BotBrain& b) {
         return true; }()) {}
     else if (haveOg) ng = og;
     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
-             hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f)
+             hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f ||
+             (b.goal.kind == BotGoalKind::Roam && !b.path.empty() && b.wp >= b.path.size() && !b.wantRepath))   // the path ended short of the goal: idled up to 40 s (WFC_STUCKWATCH Berth)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;
     if (!b.hasGoal || hdist(ng.pos, b.goal.pos) > 4.0f || ng.kind != b.goal.kind) { b.wantRepath = true; b.goalTime = now; }
@@ -651,19 +652,32 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             if (!vehicle && b.wp == 0 && botNav_.findCell(pos, 0.0f) < 0 && collision()) {
                 const core::Vec3 c0 = pos + core::Vec3{0, 1.0f, 0};
                 float th;
-                const bool legBlocked = collision()->segmentHit(c0, core::Vec3{w.pos.x, c0.y, w.pos.z}, th);
-                if (legBlocked && (!b.hasRejoin || match_.matchTime() > b.rejoinUntil)) {
+                // Clear at knee (0.4 m) and chest (1 m) height: a low ledge or kerb blocks a pawn that a chest-high line passes over.
+                auto clearLine = [&](const core::Vec3& from, const core::Vec3& to) {
+                    for (float hgt : {0.4f, 1.0f}) {
+                        const core::Vec3 a0{from.x, pos.y + hgt, from.z}, a1{to.x, pos.y + hgt, to.z};
+                        if (collision()->segmentHit(a0, a1, th)) return false;
+                    }
+                    return true;
+                };
+                const bool legBlocked = !clearLine(pos, w.pos);
+                // Off the mesh and not moving (pushing into something the probes or the leg test do not see): search too.
+                if (hdist(pos, b.offMeshFrom) > 0.5f) { b.offMeshFrom = pos; b.offMeshStall = 0.0f; } else b.offMeshStall += dt;
+                const bool stalled = b.offMeshStall > 3.0f;
+                if ((legBlocked || stalled) && (!b.hasRejoin || match_.matchTime() > b.rejoinUntil)) {
+                    b.offMeshStall = 0.0f;
                     b.hasRejoin = false;
                     for (float r : {2.0f, 4.0f, 6.0f, 8.0f, 12.0f}) {
                         float bestScore = 1e9f;
                         for (int k = 0; k < 16; ++k) {
                             const float a = 6.2831853f * (float)k / 16.0f;
                             const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
-                            if (collision()->segmentHit(c0, q + core::Vec3{0, 1.0f, 0}, th)) continue;   // a clear straight line
+                            if (!clearLine(pos, q)) continue;   // a clear straight line (knee and chest height)
                             const int cell = botNav_.findCell(q, 1.5f, 8.0f);
                             if (cell < 0) continue;
                             const float score = hdist(q, w.pos);   // prefer the side toward the corridor
-                            if (score < bestScore) { bestScore = score; b.rejoin = botNav_.cells()[(size_t)cell].centroid; b.hasRejoin = true; }
+                            // The clear probe point itself (its cell's centroid may lie behind a wall: the walk there pinned bots)
+                            if (score < bestScore) { bestScore = score; b.rejoin = q; b.hasRejoin = true; }
                         }
                         if (b.hasRejoin) break;
                     }
@@ -680,7 +694,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                         if (hdist(pos, b.rejoinFrom) > 0.5f) { b.rejoinFrom = pos; b.rejoinStall = 0.0f; }
                         else if ((b.rejoinStall += dt) > 2.0f) {
                             const float step = std::min(rl, 3.0f * dt);
-                            if (!collision()->segmentHit(c0, c0 + moveDir * (step + 0.3f), th)) b.unwedge = moveDir * step;
+                            if (clearLine(pos, pos + moveDir * (step + 0.3f))) b.unwedge = moveDir * step;
                         }
                     } else { b.hasRejoin = false; b.wantRepath = true; }
                 }
@@ -780,8 +794,19 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             const core::Mat4 rot = core::Mat4::rotateY(br.yaw + core::config::kMeshYawOffset);
             const core::Vec3 along = core::transformDir(rot, core::Vec3{0, 0, 1}), across = core::transformDir(rot, core::Vec3{1, 0, 0});
             const core::Vec3 lp = core::transformPoint(br.boxInv, pos);
-            const core::Vec3 slide = along * (lp.z >= 0.0f ? 1.0f : -1.0f) + across * (lp.x >= 0.0f ? 0.3f : -0.3f);
-            moveDir = core::normalize(core::Vec3{slide.x, 0.0f, slide.z});
+            // The nearer end, unless walls close it (a barrier set across a corridor or into a corner: WFC_STUCKWATCH Debris, a bot
+            // boxed in by its own barrier); then the far end; both closed: no slide (the stuck logic repaths / picks a new goal).
+            const float nearSign = lp.z >= 0.0f ? 1.0f : -1.0f;
+            bool slid = false;
+            for (float sign : {nearSign, -nearSign}) {
+                const core::Vec3 slide = along * sign + across * (lp.x >= 0.0f ? 0.3f : -0.3f);
+                const core::Vec3 sd = core::normalize(core::Vec3{slide.x, 0.0f, slide.z});
+                float th;
+                const core::Vec3 c0 = pos + core::Vec3{0, 1.0f, 0};
+                if (collision() && collision()->segmentHit(c0, c0 + sd * 3.0f, th)) continue;   // a wall that way
+                moveDir = sd; slid = true; break;
+            }
+            (void)slid;
             break;
         }
     }
@@ -1135,7 +1160,15 @@ void World::tickBots(float dt) {
         // WFC_STUCKWATCH (diagnostics): a bot that moved < 1 m in 20 s is logged once with its whole movement state.
         static const bool stuckWatch = std::getenv("WFC_STUCKWATCH") != nullptr;
         if (stuckWatch) {
-            if (hdist(pc.position(), b.watchPos) > 1.0f) { b.watchPos = pc.position(); b.watchT = 0.0f; b.watchLogged = false; }
+            const bool onMesh = botNav_.findCell(pc.position(), 0.0f) >= 0;
+            if (onMesh) b.lastMeshPos = pc.position();
+            else if (b.watchOnMesh) {   // just left the mesh: remember how
+                b.offMeshAt = match_.matchTime(); b.offMeshLife = b.life; b.offMeshAir = pc.onGround() ? 0 : 1; b.offMeshJump = pc.jumpState_;
+                b.offMeshSpeed = core::length(core::Vec3{pc.velocity().x, 0.0f, pc.velocity().z});
+            }
+            b.watchOnMesh = onMesh;
+            const bool shooting = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;   // has a shot: fighting, not stuck
+            if (hdist(pc.position(), b.watchPos) > 1.0f || shooting) { b.watchPos = pc.position(); b.watchT = 0.0f; b.watchLogged = false; }
             else if ((b.watchT += dt) > 20.0f && !b.watchLogged) {
                 b.watchLogged = true;
                 const core::Vec3 p = pc.position(), v = pc.velocity();
@@ -1144,6 +1177,12 @@ void World::tickBots(float dt) {
                          pc.moveForm() == Form::Vehicle ? "VEH" : "ROB", pc.isTransforming() ? "*" : "", (int)b.wantVehicle, (int)pc.vehicleState().driving,
                          v.x, v.y, v.z, (int)pc.onGround(), in.moveForward, in.moveRight, pc.yaw(), in.faceYaw, botGoalName(b.goal.kind), b.wp, b.path.size(),
                          b.stuckLevel, (int)b.hasRejoin, b.target);
+                if (!b.watchOnMesh)
+                    LOG_INFO("STUCKWATCH   off the mesh since t %.1f (%s; life %.1f s, %s, jump state %d, speed %.1f m/s), last on-mesh (%.2f %.2f %.2f) %.1f m away",
+                             b.offMeshAt, b.offMeshLife < 1.0f ? "at spawn" : b.offMeshAir ? "airborne" : "walking", b.offMeshLife,
+                             b.offMeshAir ? "in the air" : "on ground", b.offMeshJump, b.offMeshSpeed, b.lastMeshPos.x, b.lastMeshPos.y, b.lastMeshPos.z,
+                             hdist(b.lastMeshPos, p));
+                if (b.target >= 0) LOG_INFO("STUCKWATCH   target p%d %s", b.target, b.seen.count(b.target) && b.seen[b.target].visible ? "visible" : "NOT visible (no line of sight)");
                 LOG_INFO("STUCKWATCH   search: wantRepath %d repathTimer %.2f owner %d (vehicle %d) noPaths %d noVehicleUntil %.1f (now %.1f) goal (%.1f %.1f %.1f) d %.1f hasGoal %d vehiclePath %d",
                          (int)b.wantRepath, b.repathTimer, botSearchOwner_, (int)botSearchVehicle_, b.noPaths, b.noVehicleUntil, match_.matchTime(),
                          b.goal.pos.x, b.goal.pos.y, b.goal.pos.z, hdist(b.goal.pos, p), (int)b.hasGoal, (int)b.vehiclePath);
