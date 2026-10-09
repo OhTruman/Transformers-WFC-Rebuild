@@ -1698,12 +1698,12 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
-    if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, 2);
+    if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, kMaxBotDifficulty);
     // CUSTOM-GAME EXTENSION: 16 bots per team (+ the human); off = the original 10-player slots.
     if (opt.count("BotsAutobot")) out.bots.autobot = std::max(0, std::atoi(opt["BotsAutobot"].c_str()));
     if (opt.count("BotsDecepticon")) out.bots.decepticon = std::max(0, std::atoi(opt["BotsDecepticon"].c_str()));
-    if (opt.count("BotDifficultyAutobot")) out.bots.difficultyAutobot = std::clamp(std::atoi(opt["BotDifficultyAutobot"].c_str()), 0, 2);
-    if (opt.count("BotDifficultyDecepticon")) out.bots.difficultyDecepticon = std::clamp(std::atoi(opt["BotDifficultyDecepticon"].c_str()), 0, 2);
+    if (opt.count("BotDifficultyAutobot")) out.bots.difficultyAutobot = std::clamp(std::atoi(opt["BotDifficultyAutobot"].c_str()), 0, kMaxBotDifficulty);
+    if (opt.count("BotDifficultyDecepticon")) out.bots.difficultyDecepticon = std::clamp(std::atoi(opt["BotDifficultyDecepticon"].c_str()), 0, kMaxBotDifficulty);
     if (opt.count("BotAI")) out.bots.ai = (int)botAiFromString(opt["BotAI"].c_str(), BotAi::Classic);
     if (opt.count("BotAIAutobot")) out.bots.aiAutobot = (int)botAiFromString(opt["BotAIAutobot"].c_str(), BotAi::Classic);
     if (opt.count("BotAIDecepticon")) out.bots.aiDecepticon = (int)botAiFromString(opt["BotAIDecepticon"].c_str(), BotAi::Classic);
@@ -2217,7 +2217,7 @@ int World::addBots(const BotLaunch& launch) {
     }
     if (!matchActive_ || (b.friendly <= 0 && b.enemy <= 0)) return 0;
     ensureBotNav();   // under the match load, not on a simulation step
-    botDifficulty_ = std::clamp(b.difficulty, 0, 2);
+    botDifficulty_ = std::clamp(b.difficulty, 0, kMaxBotDifficulty);
     const MatchSettings& s = match_.settings();
     std::vector<std::string> taken;
     int humans = 0;
@@ -2260,6 +2260,7 @@ int World::addBots(const BotLaunch& launch) {
                  resolveChassis(id.selection, match_.faction(p)).c_str(), id.level,
                  id.selection.abilities.size() > 0 ? id.selection.abilities[0].c_str() : "-", id.selection.abilities.size() > 1 ? id.selection.abilities[1].c_str() : "-");
     }
+    if (anySmart_) ensureSmartTactics();   // under the match load (Smart cover / exposure tables, once per map)
     return (int)ids.size();
 }
 

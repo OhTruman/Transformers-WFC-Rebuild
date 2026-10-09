@@ -23,6 +23,7 @@ const SmartSkill kSkills[] = {
     {"Easy",   3.0f, 1.5f, 70.0f, 90.0f, 10.0f, 30.0f, 0.2f},
     {"Normal", 6.0f, 0.9f, 70.0f, 90.0f, 15.0f, 35.0f, 0.5f},
     {"Hard",  10.0f, 0.4f, 70.0f, 90.0f, 15.0f, 40.0f, 0.8f},
+    {"Expert", 14.0f, 0.25f, 70.0f, 90.0f, 15.0f, 40.0f, 0.95f},   // user decision 2026-10-09 (PC EXTENSION)
 };
 }  // namespace
 

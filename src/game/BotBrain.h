@@ -57,6 +57,8 @@ struct BotSkill {
     float pauseScale;        // multiplier on the authored burst pause
 };
 const BotSkill& botSkill(int difficulty);
+// Bot difficulties: 0 EASY, 1 MEDIUM, 2 HARD, 3 EXPERT (user decision 2026-10-09: EXPERT above HARD, PC EXTENSION).
+constexpr int kMaxBotDifficulty = 3;
 
 // Objective goal layer shared by every mode (TDM uses Roam / Attack): what a bot is trying to do and where.
 enum class BotGoalKind { Roam, Attack, Defend, Capture, Hold, Contest, Retrieve, Return, Support };

@@ -771,6 +771,19 @@ private:
     void smartCollectNoises();
     void smartPerceive(BotBody o, BotBrain& b, SmartBot& s);
     void smartMetrics(float dt);
+    // S2 tactics: per nav cell, the clear distance (m, <= 80) in 16 directions at 1.2 m (body) and 2.4 m (eye) above its floor, built
+    // once per map (worker pool, under the first Smart match's load); per team, each cell's exposure = how many enemies the team knows
+    // of could see it (2 Hz, serial), which Smart routes are costed by and cover is chosen against.
+    std::vector<uint8_t> smartClear_;
+    std::string smartClearMap_;
+    std::array<std::vector<float>, 2> smartThreat_;
+    float smartThreatTimer_ = 0.0f;
+    void ensureSmartTactics();
+    void smartThreatField(float dt);
+    float smartClearAt(int cell, const core::Vec3& toward, bool eye) const;
+    float smartExposure(int team, int cell) const;
+    void smartDecide(BotBody o, BotBrain& b, SmartBot& s);
+    void smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in);
 public:
     bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
     const SmartBot* smartBot(int player) const { return botIsSmart(player) ? &smart_[(size_t)player] : nullptr; }

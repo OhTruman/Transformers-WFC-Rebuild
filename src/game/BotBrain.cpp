@@ -39,10 +39,13 @@ AiWeaponData aiWeaponData(const char* weaponId, int clip) {
 
 const BotSkill& botSkill(int difficulty) {
     //                          react turn  err  fov   sight mem  strafe burst pause
-    static const BotSkill s[3] = {{0.80f, 220.0f, 7.0f, 110.0f, 50.0f, 2.0f, 0.45f, 0.6f, 1.5f},    // EASY
+    // EXPERT (PC EXTENSION, user decision 2026-10-09): HARD pushed further on every knob - reaction 0.22 -> 0.15 s, turn 620 -> 800
+    // deg/s, aim error 2.0 -> 1.2 deg, FOV 160 -> 175 deg, sight 70 -> 80 m, memory 6 -> 8 s, pause between bursts x0.85.
+    static const BotSkill s[4] = {{0.80f, 220.0f, 7.0f, 110.0f, 50.0f, 2.0f, 0.45f, 0.6f, 1.5f},    // EASY
                                   {0.45f, 380.0f, 4.0f, 130.0f, 60.0f, 4.0f, 0.75f, 0.85f, 1.15f},  // MEDIUM
-                                  {0.22f, 620.0f, 2.0f, 160.0f, 70.0f, 6.0f, 1.0f, 1.0f, 1.0f}};    // HARD
-    return s[std::clamp(difficulty, 0, 2)];
+                                  {0.22f, 620.0f, 2.0f, 160.0f, 70.0f, 6.0f, 1.0f, 1.0f, 1.0f},     // HARD
+                                  {0.15f, 800.0f, 1.2f, 175.0f, 80.0f, 8.0f, 1.0f, 1.0f, 0.85f}};   // EXPERT (PC EXTENSION)
+    return s[std::clamp(difficulty, 0, kMaxBotDifficulty)];
 }
 
 const char* botGoalName(BotGoalKind k) {

@@ -42,8 +42,17 @@ struct SmartBot {
     std::vector<SmartMemory> mem;        // by match player
     float lastHealth = -1.0f;
     float lastPerceive = -1e9f;          // match time of the last perception pass (noises newer than this are heard)
+    // S2 decision state: the Smart action layered over the Classic goal.
+    enum Action : uint8_t { None = 0, Hunt = 1, Retreat = 2, TakeCover = 3, HoldCover = 4 };
+    uint8_t action = None;
+    core::Vec3 actionPos{0, 0, 0};
+    int actionTarget = -1;
+    float actionSince = 0.0f, lastHitAt = -1e9f, lostTargetAt = -1e9f;
+    bool ownMission = false;             // Smart set BotBrain::mission (follow the path while fighting): Smart clears it again
     // Metrics (WFC_AIMETRICS).
     int seen = 0, heard = 0, callouts = 0, hitBy = 0, posted = 0;
+    int hunts = 0, retreats = 0, covers = 0;
+    float coverSeconds = 0.0f, engagedSeconds = 0.0f;
     float rand01() { rng = rng * 1664525U + 1013904223U; return (float)(rng >> 8) * (1.0f / 16777216.0f); }
 };
 
