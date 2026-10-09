@@ -61,6 +61,7 @@ private:
     bool appliedHdTextures_ = false;
     int appliedAnisotropy_ = -1;
     void qaTick(const platform::InputFrame& in);
+    void playtestOverlayTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;
     platform::QaRequest qaLast_;
     std::string qaCharacter_;

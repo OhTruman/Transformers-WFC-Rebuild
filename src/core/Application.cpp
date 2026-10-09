@@ -243,6 +243,7 @@ Application::MatchExit Application::runMatch() {
 
         if (!window_->pump(frontend_ ? pumped : input)) break;
         if (frontend_) qaTick(pumped);   // DEBUG QA panel (development builds; F10)
+        if (frontend_) playtestOverlayTick(pumped);   // playtest bot overlay (F9 / WFC_BOTOVERLAY), every build
         if (frontend_) input = pumped;
         if (frontend_) {
             // Frontend boot: Escape / Start is "|onrelease showmenu" (Xe-TransInput.ini) -> pause UI, not quit.
