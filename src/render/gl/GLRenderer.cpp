@@ -17,6 +17,7 @@
 
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
+#include "platform/FileCompression.h"
 #include "render/gl/RenderWatchdog.h"
 #include "render/FrameLimiter.h"
 #include "platform/Image.h"
@@ -676,10 +677,10 @@ public:
             const std::string& l = levels[li];
             std::string d = l.size() > 2 && l.compare(l.size() - 2, 2, "_m") == 0 ? l.substr(0, l.size() - 2) : l;
             std::ifstream probe(data + "/" + d + "/materials_glsl.json");
-            std::ifstream glb(assets + "/Maps/" + d + "/world.glb", std::ios::binary | std::ios::ate);
-            if (!probe || !glb) continue;
+            const long long glbSize = platform::dataFileSize(assets + "/Maps/" + d + "/world.glb");   // or its .xpr twin
+            if (!probe || glbSize < 0) continue;
             if (li == 0) { dir = d; break; }
-            size_t sz = (size_t)glb.tellg();
+            size_t sz = (size_t)glbSize;
             if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
         }
         if (dir.empty()) {

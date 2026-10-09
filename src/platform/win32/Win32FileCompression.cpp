@@ -89,6 +89,14 @@ bool decompressBuffer(const uint8_t* data, size_t n, std::vector<uint8_t>& out) 
     return ok;
 }
 
+long long dataFileSize(const std::string& path) {
+    for (const std::string& p : {path, path + kCompressedSuffix}) {
+        std::ifstream f(p, std::ios::binary | std::ios::ate);
+        if (f) return (long long)f.tellg();
+    }
+    return -1;
+}
+
 bool readFileMaybeCompressed(const std::string& path, std::vector<uint8_t>& out) {
     if (readAll(path, out)) return true;
     std::vector<uint8_t> packed;
