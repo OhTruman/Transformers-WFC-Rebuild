@@ -723,7 +723,9 @@ void Pipeline::release() {
     for (GLuint id : progIds) if (!gProgCacheById.count(id)) { GLuint p = id; prog(p); }   // uncached (none expected)
     if (gProgCache.size() > progCacheMax()) {      // trim: least recently used, not used by this pipeline
         std::vector<std::pair<uint64_t, const std::string*>> lru;
-        for (const auto& kv : gProgCache) if (!progIds.count(kv.second.id)) lru.push_back({kv.second.lastUse, &kv.first});
+        // every cached program is a candidate (the released pipeline's own were used last, so they go last): with a cap
+        // below the map's program count the map's programs are released too (WFC_PROGCACHEMAX A/B, driver memory)
+        for (const auto& kv : gProgCache) lru.push_back({kv.second.lastUse, &kv.first});
         std::sort(lru.begin(), lru.end());
         size_t drop = std::min(lru.size(), gProgCache.size() - progCacheMax());
         for (size_t i = 0; i < drop; ++i) {
