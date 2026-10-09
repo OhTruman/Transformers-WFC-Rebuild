@@ -221,7 +221,8 @@ bool Application::init() {
     if (std::getenv("WFC_ASYNCSTEPTEST")) { runAsyncStepTest(); return false; }    // async step == sync step (WFC_ASYNCSTEP=1)
     if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }
     if (std::getenv("WFC_RAYBENCH")) { runRayBench(); return false; }
-    if (std::getenv("WFC_BARRIERWALKTEST")) { runBarrierWalkTest(); return false; }            // per-phase step cost vs participant count
+    if (std::getenv("WFC_BARRIERWALKTEST")) { runBarrierWalkTest(); return false; }
+    if (std::getenv("WFC_EVICTTEST")) { runEvictTest(); return false; }            // per-phase step cost vs participant count
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -6260,6 +6261,38 @@ void Application::runBarrierWalkTest() {
     }
     check(left, "the bot walked out (" + std::to_string(t / 60.0f) + " s)");
     LOG_INFO("BARRIERWALK SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_EVICTTEST: session caches bounded per match. Six matches with alternating rosters (12 v 12, then 2 v 2, ...): every match load
+// evicts what the new roster does not use, a chassis that returns reloads under the load (never after the match began), every
+// participant has a body, and the chassis cache never exceeds what one match needs.
+void Application::runEvictTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("EVICT %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    size_t maxCached = 0, firstBig = 0;
+    for (int k = 0; k < 6; ++k) {
+        const bool big = k % 2 == 0;
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + std::string("_BASE_m?GameModeTag=TDM?TimeLimit=600?BotDifficulty=1") +
+                                   (big ? "?BotsFriendly=11?BotsEnemy=12?ExtendedPlayers=1" : "?BotsFriendly=1?BotsEnemy=2"), L);
+        if (!world_.launchMatch(L)) { check(false, "launch " + std::to_string(k)); break; }
+        const int loads0 = world_.chassisLoads(), wloads0 = world_.weaponLoads();
+        const size_t cached = world_.chassisCached();
+        maxCached = std::max(maxCached, cached);
+        if (k == 0) firstBig = cached;
+        for (int i = 0; i < 60 * 25; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }   // countdown + 15 s of play
+        int bodies = 0, spawned = 0;
+        for (game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned()) { ++spawned; if (o->pawn().bodyModel() && o->pawn().bodyModel()->valid()) ++bodies; }
+        LOG_INFO("EVICT match %d (%s): %zu chassis cached, %zu textures, loads during play: %d chassis / %d weapons, %d / %d spawned with a body", k,
+                 big ? "24p" : "4p", cached, world_.texturesCached(), world_.chassisLoads() - loads0, world_.weaponLoads() - wloads0, bodies, spawned);
+        check(world_.chassisLoads() == loads0, "match " + std::to_string(k) + ": no chassis load after the match load");
+        check(spawned > 0 && bodies == spawned, "match " + std::to_string(k) + ": every spawned participant has a body");
+        if (!big && k > 0) check(cached < firstBig, "match " + std::to_string(k) + ": the small match's cache shrank (" + std::to_string(cached) + " < " + std::to_string(firstBig) + ")");
+    }
+    check(maxCached <= firstBig + 8, "the chassis cache stays bounded (max " + std::to_string(maxCached) + ")");
+    LOG_INFO("EVICT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

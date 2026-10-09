@@ -276,6 +276,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // and the harnesses use the iconic "Truck" (Optimus Prime) export, exactly like a selection of it.
     if (!applyChassisToLocalPawn("Truck")) return false;
     LOG_INFO("textures: %d loaded, %d failed, %zu unique", texLoaded_, texFailed_, texCache_.size());
+    for (const auto& kv : texCache_) pinnedTex_.insert(kv.first);   // the map's textures (and the boot body's) stay for the session
 
     // Baked lightmap atlases: resolve each submesh's _LM atlas name to a GL texture.
     const std::string lmDir = mapDir() + "lightmaps/";
@@ -1431,6 +1432,7 @@ bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
 // Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
 const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
     auto it = weaponModels_.find(d.id);
+    weaponUse_[d.id] = cacheGen_;
     if (it != weaponModels_.end()) return it->second.get();
     if (!onMainThread()) {   // the async background part: GL uploads only on the main thread; loaded at the join, retried next step
         deferredWeaponLoads_.push_back(&d);
@@ -1445,6 +1447,9 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
         if (renderer_) { render::MeshData md; md.subs = m->subs; md.mats = m->mats; fxPrewarm(*renderer_, md, 0); }
     } else LOG_ERROR("weapon %s: mesh %s unavailable", d.id, d.meshGltf ? d.meshGltf : "-");
     const assets::SkinnedModel* raw = ok ? m.get() : nullptr;
+    ++weaponLoads_;
+    if (matchActive_ && match_.state() == Match::State::InProgress)   // a load during play is a frame hitch: every weapon a pawn can hold should load at the match load
+        LOG_WARN("weapon model %s loaded during play (local weapon %s)", d.id, player_.pawn().hasWeapon() && player_.pawn().weapon().def ? player_.pawn().weapon().def->id : "-");
     weaponModels_[d.id] = std::move(m);
     return raw;
 }
@@ -1479,8 +1484,8 @@ void World::queueSelectionAudio(const std::string& chassis, const std::vector<st
 void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     for (const std::string& n : weapons) {
         const WeaponDef* d = findWeaponDef(n);
-        // Only weapons that can be the held weapon (primary / heavy) and draw a mesh; the Ion Blaster uses the boot model.
-        if (!d || (d->typeCode != 0 && d->typeCode != 1) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
+        // Only weapons that can be the held weapon (primary / heavy, and grenade bags: held while tossed) and draw a mesh; the Ion Blaster uses the boot model.
+        if (!d || (d->typeCode != 0 && d->typeCode != 1 && d->typeCode != 4) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
         weaponModelFor(*d);
     }
 }
@@ -2766,6 +2771,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     resetForNewLevel();
     clearMatchActors();   // the previous match's projectiles and ability actors go with it (a fresh level in the original)
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
+    ++cacheGen_;    // from here on, what this match loads or reuses is stamped; the rest is evicted after the roster loads
     awards_.setXpScale(1.0f);
     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
         const char* sd = std::getenv("WFC_SEED");
@@ -2775,6 +2781,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
+    evictUnusedAssets();
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
@@ -3566,6 +3573,66 @@ void World::draw(render::IRenderer& r) const {
     }
 }
 
+// Rendering's IRenderer::releaseMeshCaches / releaseTexture (integration 09c), compile-time detected.
+template <class R> auto rmReleaseMesh(R& r, const render::MeshData& md, int) -> decltype(r.releaseMeshCaches(md), void()) { r.releaseMeshCaches(md); }
+template <class R> void rmReleaseMesh(R&, const render::MeshData&, long) {}
+template <class R> auto rmReleaseTex(R& r, render::TextureHandle h, int) -> decltype(r.releaseTexture(h), void()) { r.releaseTexture(h); }
+template <class R> void rmReleaseTex(R&, render::TextureHandle, long) {}
+
+void World::releaseModelGpu(const assets::SkinnedModel& m) {
+    Character::forgetRig(m);   // a rig cached by this model's address must not serve a later model at the same address
+    if (renderer_ && m.gpuBind.mesh) rmReleaseMesh(*renderer_, *m.gpuBind.mesh, 0);
+}
+
+// Frees the session caches' entries the new match did not load or reuse (launchMatch, after the roster loaded; no draw or step is
+// running). Kept besides what the roster stamped: the local pawn's body and its inventory's weapons. The ability-actor meshes and the
+// boot weapon are members, not cache entries. A chassis that returns later reloads under that match's load. Load scheduling only.
+void World::evictUnusedAssets() {
+    if (!localChassis_.empty()) chassisAssets(localChassis_);
+    {   // every participant still present (bots were just added; any non-bot participant keeps its body and weapons)
+        for (size_t i = 0; i < match_.players().size(); ++i) {
+            const CharacterSelection& sel = match_.players()[i].selection;
+            const ChassisAssets* ca = chassisAssets(resolveChassis(sel, match_.faction((int)i)));
+            if (sel.type == 0 && !sel.weapons.empty()) preloadHeldWeaponModels(sel.weapons);
+            else if (ca) preloadHeldWeaponModels(ca->def.iconicWeapons);
+        }
+    }
+    for (const Weapon& w : player_.pawn().inventory()) if (w.def) weaponUse_[w.def->id] = cacheGen_;
+    if (player_.pawn().hasWeapon() && player_.pawn().weapon().def) weaponUse_[player_.pawn().weapon().def->id] = cacheGen_;
+    size_t nc = 0, nw = 0, na = 0, nt = 0;
+    for (auto it = chassisCache_.begin(); it != chassisCache_.end();) {
+        if (it->second->lastUse == cacheGen_) { ++it; continue; }
+        for (const assets::SkinnedModel* m : {&it->second->robot, &it->second->vehicle, &it->second->arm}) releaseModelGpu(*m);
+        it = chassisCache_.erase(it); ++nc;
+    }
+    for (auto it = weaponModels_.begin(); it != weaponModels_.end();) {
+        auto u = weaponUse_.find(it->first);
+        if (u != weaponUse_.end() && u->second == cacheGen_) { ++it; continue; }
+        if (it->second) releaseModelGpu(*it->second);
+        const std::string id = it->first;
+        it = weaponModels_.erase(it); weaponUse_.erase(id); ++nw;
+        preloadedDefs_.erase(std::remove_if(preloadedDefs_.begin(), preloadedDefs_.end(), [&](const WeaponDef* d) { return d && id == d->id; }), preloadedDefs_.end());
+    }
+    if (nw) preloadedSelection_.clear();
+    for (auto it = animFiles_.begin(); it != animFiles_.end();) {
+        if (it->second->lastUse == cacheGen_) { ++it; continue; }
+        it = animFiles_.erase(it); ++na;
+    }
+    // Textures: kept when pinned (map) or used by a model still cached / owned; the rest are released.
+    std::set<render::TextureHandle> used;
+    auto useModel = [&](const assets::SkinnedModel& m) { for (const render::Material& M : m.mats) { used.insert(M.tex); used.insert(M.emissiveTexHandle); } };
+    for (const auto& kv : chassisCache_) { useModel(kv.second->robot); useModel(kv.second->vehicle); useModel(kv.second->arm); }
+    for (const auto& kv : weaponModels_) if (kv.second) useModel(*kv.second);
+    useModel(barrierModel_); useModel(sentryModel_); useModel(weaponModel_);
+    for (auto it = texCache_.begin(); it != texCache_.end();) {
+        if (pinnedTex_.count(it->first) || used.count(it->second)) { ++it; continue; }
+        if (renderer_ && it->second != render::kInvalidTexture) rmReleaseTex(*renderer_, it->second, 0);
+        it = texCache_.erase(it); ++nt;
+    }
+    LOG_INFO("assets: match load evicted %zu chassis, %zu weapon models, %zu anim files, %zu textures (kept %zu / %zu / %zu / %zu)",
+             nc, nw, na, nt, chassisCache_.size(), weaponModels_.size(), animFiles_.size(), texCache_.size());
+}
+
 render::TextureHandle World::resolveTexture(const std::string& uri) {
     if (uri.empty() || !renderer_) return render::kInvalidTexture;
     auto it = texCache_.find(uri);
@@ -3588,7 +3655,7 @@ void World::resolveModelTextures(assets::SkinnedModel& m) {
 
 const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     auto it = chassisCache_.find(id);
-    if (it != chassisCache_.end()) return it->second.get();
+    if (it != chassisCache_.end()) { it->second->lastUse = cacheGen_; return it->second.get(); }
     struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF chassis load %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
     auto a = std::make_unique<ChassisAssets>();
     double chProf[6] = {0, 0, 0, 0, 0, 0};   // SPAWNPROF split: robot glb, vehicle glb, textures, arm, prewarm
@@ -3637,6 +3704,7 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     }
     if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, textures %.0f, arm %.0f, prewarm %.0f",
                                          id.c_str(), chProf[1] - chProf[0], chProf[2] - chProf[1], chProf[3] - chProf[2], chProf[4] - chProf[3], profNowMs() - chProf[4]);
+    a->lastUse = cacheGen_; ++chassisLoads_;
     chassisCache_[id] = std::move(a);
     return raw;
 }
@@ -6322,11 +6390,12 @@ static bool glbMaterialsOnly(const std::string& path, std::vector<render::Materi
 
 const World::SharedAnimFile* World::sharedAnimFile(const std::string& path) {
     auto it = animFiles_.find(path);
-    if (it != animFiles_.end()) return it->second.get();
+    if (it != animFiles_.end()) { it->second->lastUse = cacheGen_; return it->second.get(); }
     auto f = std::make_unique<SharedAnimFile>();
     f->ok = assets::loadAnimationFile(path, f->file);
     for (size_t i = 0; i < f->file.clips.size(); ++i) f->byName.emplace(f->file.clips[i].name, i);   // first clip of a name
     const SharedAnimFile* raw = f.get();
+    f->lastUse = cacheGen_;
     animFiles_[path] = std::move(f);
     return raw;
 }

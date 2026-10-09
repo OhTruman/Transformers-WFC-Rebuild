@@ -964,6 +964,7 @@ public:
         ChassisDef def;
         assets::SkinnedModel robot, vehicle, arm;
         bool ok = false, hasArm = false;
+        unsigned lastUse = 0;   // cacheGen_ of the last match that used it (evictUnusedAssets)
         std::string error;
     };
     const ChassisAssets* chassisAssets(const std::string& id);
@@ -1093,7 +1094,7 @@ private:
     // Robot bodies assembled from shared AnimSets: each .anim.gltf is parsed once (loadAnimationFile) and its clips are
     // appended to every skeleton that uses it, instead of re-parsing each chassis' robot.glb with its baked copy of ~300
     // clips (~1.2 s of the ~2 s first load, WFC_SPAWNPROF). Load scheduling only, not original behaviour.
-    struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; };
+    struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; unsigned lastUse = 0; };
     std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
     const SharedAnimFile* sharedAnimFile(const std::string& path);
 public:
@@ -1227,6 +1228,22 @@ private:
     void tickHazards(float dt);
     render::IRenderer* renderer_ = nullptr;
     std::map<std::string, render::TextureHandle> texCache_;
+    // Session caches are bounded per match (user decision 2026-10-08: no growth across matches): launchMatch bumps cacheGen_ after the
+    // previous match's pawns are gone, everything the new match loads or reuses is stamped, and evictUnusedAssets frees the rest
+    // (models with their renderer mesh caches, shared anim files, textures no kept model or the map uses).
+    unsigned cacheGen_ = 1;
+    std::map<std::string, unsigned> weaponUse_;
+    std::set<std::string> pinnedTex_;          // the map's (and the boot-time) textures: never evicted
+    void evictUnusedAssets();
+public:
+    // WFC_EVICTTEST: chassis / weapon model loads and evictions so far (a load after a match began is a mid-match hitch).
+    int chassisLoads() const { return chassisLoads_; }
+    int weaponLoads() const { return weaponLoads_; }
+    size_t chassisCached() const { return chassisCache_.size(); }
+    size_t texturesCached() const { return texCache_.size(); }
+private:
+    int chassisLoads_ = 0, weaponLoads_ = 0;
+    void releaseModelGpu(const assets::SkinnedModel& m);
     int texLoaded_ = 0, texFailed_ = 0;
     render::TextureHandle resolveTexture(const std::string& uri);
     void resolveModelTextures(assets::SkinnedModel& m);
