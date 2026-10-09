@@ -279,6 +279,53 @@ void APIENTRY cUniform4fv(GLint l, GLsizei n, const GLfloat* v) { if (n < 0 || !
 void APIENTRY cUniformMatrix4fv(GLint l, GLsizei n, GLboolean t, const GLfloat* v) {
     if (t != GL_FALSE || n < 0 || !uSame(l, v, (uint32_t)n * 16)) realUniformMatrix4fv(l, n, t, v);
 }
+// ---- WFC_GLTRACE / WFC_TEXTRACE: every GL buffer / VAO / program / framebuffer / renderbuffer / query created through
+// these entry points records its caller (return address, module-relative: symbolise with wfc_rebuild.map,
+// tools/render/gltrace_sym.py); deletes drop it. textureTraceDump logs live counts per kind and the sites that grew.
+namespace gltrace {
+bool on() {
+    static const bool v = std::getenv("WFC_GLTRACE") != nullptr || std::getenv("WFC_TEXTRACE") != nullptr;
+    return v;
+}
+std::map<GLuint, uintptr_t> live[6];                  // buffers, vaos, programs, framebuffers, renderbuffers, queries
+const char* kKind[6] = {"buffers", "vaos", "programs", "framebuffers", "renderbuffers", "queries"};
+uintptr_t rel(void* ra) {
+    static const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
+    return (uintptr_t)ra - base;
+}
+void add(int k, GLsizei n, const GLuint* ids, void* ra) { for (GLsizei i = 0; i < n; ++i) live[k][ids[i]] = rel(ra); }
+void del(int k, GLsizei n, const GLuint* ids) { for (GLsizei i = 0; i < n; ++i) live[k].erase(ids[i]); }
+PFN_GenBuffers rGenBuffers; PFN_DeleteBuffers rDeleteBuffers; PFN_GenVertexArrays rGenVertexArrays;
+PFN_DeleteVertexArrays rDeleteVertexArrays; PFN_CreateProgram rCreateProgram; PFN_DeleteProgram rDeleteProgram;
+PFN_GenFramebuffers rGenFramebuffers; PFN_DeleteFramebuffers rDeleteFramebuffers; PFN_GenRenderbuffers rGenRenderbuffers;
+PFN_DeleteRenderbuffers rDeleteRenderbuffers; PFN_GenQueries rGenQueries; PFN_DeleteQueries rDeleteQueries;
+void APIENTRY tGenBuffers(GLsizei n, GLuint* p) { rGenBuffers(n, p); add(0, n, p, __builtin_return_address(0)); }
+void APIENTRY tDeleteBuffers(GLsizei n, const GLuint* p) { del(0, n, p); rDeleteBuffers(n, p); }
+void APIENTRY tGenVertexArrays(GLsizei n, GLuint* p) { rGenVertexArrays(n, p); add(1, n, p, __builtin_return_address(0)); }
+void APIENTRY tDeleteVertexArrays(GLsizei n, const GLuint* p) { del(1, n, p); rDeleteVertexArrays(n, p); }
+GLuint APIENTRY tCreateProgram() { GLuint p = rCreateProgram(); add(2, 1, &p, __builtin_return_address(0)); return p; }
+void APIENTRY tDeleteProgram(GLuint p) { del(2, 1, &p); rDeleteProgram(p); }
+void APIENTRY tGenFramebuffers(GLsizei n, GLuint* p) { rGenFramebuffers(n, p); add(3, n, p, __builtin_return_address(0)); }
+void APIENTRY tDeleteFramebuffers(GLsizei n, const GLuint* p) { del(3, n, p); rDeleteFramebuffers(n, p); }
+void APIENTRY tGenRenderbuffers(GLsizei n, GLuint* p) { rGenRenderbuffers(n, p); add(4, n, p, __builtin_return_address(0)); }
+void APIENTRY tDeleteRenderbuffers(GLsizei n, const GLuint* p) { del(4, n, p); rDeleteRenderbuffers(n, p); }
+void APIENTRY tGenQueries(GLsizei n, GLuint* p) { rGenQueries(n, p); add(5, n, p, __builtin_return_address(0)); }
+void APIENTRY tDeleteQueries(GLsizei n, const GLuint* p) { del(5, n, p); rDeleteQueries(n, p); }
+void install() {
+    if (!on() || GenBuffers == tGenBuffers) return;
+    rGenBuffers = GenBuffers; GenBuffers = tGenBuffers; rDeleteBuffers = DeleteBuffers; DeleteBuffers = tDeleteBuffers;
+    rGenVertexArrays = GenVertexArrays; GenVertexArrays = tGenVertexArrays;
+    rDeleteVertexArrays = DeleteVertexArrays; DeleteVertexArrays = tDeleteVertexArrays;
+    rCreateProgram = CreateProgram; CreateProgram = tCreateProgram; rDeleteProgram = DeleteProgram; DeleteProgram = tDeleteProgram;
+    rGenFramebuffers = GenFramebuffers; GenFramebuffers = tGenFramebuffers;
+    rDeleteFramebuffers = DeleteFramebuffers; DeleteFramebuffers = tDeleteFramebuffers;
+    rGenRenderbuffers = GenRenderbuffers; GenRenderbuffers = tGenRenderbuffers;
+    rDeleteRenderbuffers = DeleteRenderbuffers; DeleteRenderbuffers = tDeleteRenderbuffers;
+    if (GenQueries && DeleteQueries) { rGenQueries = GenQueries; GenQueries = tGenQueries; rDeleteQueries = DeleteQueries; DeleteQueries = tDeleteQueries; }
+    LOG_INFO("GL trace: on (buffers, VAOs, programs, framebuffers, renderbuffers, queries, textures)");
+}
+}  // namespace gltrace
+
 void installUniformCache() {
     static const bool off = std::getenv("WFC_NOUNICACHE") != nullptr;
     if (off || UseProgram == cUseProgram) return;   // disabled, or already wrapped (load() runs per renderer init)
@@ -314,7 +361,7 @@ void cachedBindTexture(GLenum target, GLuint texture) {
 namespace {
 struct TexSite { const char* file; int line; };
 std::map<GLuint, TexSite>& texTrace() { static std::map<GLuint, TexSite> m; return m; }
-bool texTraceOn() { static const bool on = std::getenv("WFC_TEXTRACE") != nullptr; return on; }
+bool texTraceOn() { static const bool on = std::getenv("WFC_TEXTRACE") != nullptr || std::getenv("WFC_GLTRACE") != nullptr; return on; }
 }  // namespace
 void tracedGenTextures(GLsizei n, GLuint* textures, const char* file, int line) {
     ::glGenTextures(n, textures);
@@ -338,6 +385,19 @@ void textureTraceDump(const char* tag) {
     LOG_INFO("TEXTRACE %s: %zu live traced textures; sites that grew since the last dump:%s", tag, texTrace().size(),
              grew.empty() ? " none" : grew.c_str());
     prev = now;
+    static std::map<uintptr_t, int> prevSites[6];
+    for (int k = 0; k < 6; ++k) {
+        std::map<uintptr_t, int> sites;
+        for (const auto& kv : gltrace::live[k]) sites[kv.second]++;
+        std::string g;
+        for (const auto& kv : sites) {
+            const int d = kv.second - (prevSites[k].count(kv.first) ? prevSites[k][kv.first] : 0);
+            if (d > 0) { char b[64]; std::snprintf(b, sizeof b, " exe+0x%llx +%d (%d)", (unsigned long long)kv.first, d, kv.second); g += b; }
+        }
+        LOG_INFO("GLTRACE %s: %zu live %s; sites that grew:%s", tag, gltrace::live[k].size(), gltrace::kKind[k],
+                 g.empty() ? " none" : g.c_str());
+        prevSites[k] = sites;
+    }
 }
 void cachedDeleteTextures(GLsizei n, const GLuint* textures) {
     ::glDeleteTextures(n, textures);
@@ -377,7 +437,7 @@ bool load() {
 #undef WFC_GL_LOAD_OPT
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
-    if (ok) { installUniformCache(); installUploadCounters(); }
+    if (ok) { installUniformCache(); installUploadCounters(); gltrace::install(); }
     textureCacheInvalidate();
     return ok;
 }

@@ -873,7 +873,7 @@ public:
             if (textures_[i] && !persistentTex_[i]) { glDeleteTextures(1, &textures_[i]); textures_[i] = 0; ++freed; }
         texEpoch_ = textures_.size();
         LOG_INFO("renderer: unloadMapRenderData released %d match textures (%d live)", freed, liveTextureCount());
-        glx::textureTraceDump("after unloadMapRenderData");
+        glx::textureTraceDump("after unloadMapRenderData");   // WFC_GLTRACE / WFC_TEXTRACE (leak hunting)
     }
 
     // ---- validation (M10) ------------------------------------------------------------------------------------
