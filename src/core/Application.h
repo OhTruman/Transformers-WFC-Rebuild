@@ -57,6 +57,8 @@ private:
     uint32_t selectionSentSerial_ = 0;   // GameFlow::selectionSerial() last forwarded to Gameplay (0 = none this match)
     // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
     int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
+    int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
+    bool appliedHdTextures_ = false;
     void qaTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;
     platform::QaRequest qaLast_;

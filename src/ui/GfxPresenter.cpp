@@ -956,15 +956,35 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     }
     if (!listed) choice(current, "Custom (" + std::to_string(current) + ")");
     choice(0, "Uncapped");   // the user's wording (Milestone E settings brief)
-    gfx::avm1::Object* item = vm.newPlain();
-    vm.set(item, "choiceArray", gfx::avm1::Value(vm.newArray(choices)));
-    vm.set(item, "dataStore", gfx::avm1::Value(std::string("<PCSettings:FrameLimit>")));
-    vm.set(item, "hintText", gfx::avm1::Value(std::string("Limit the maximum frames per second.")));
-    vm.set(item, "panelWidth", gfx::avm1::Value(413.0));
-    vm.set(item, "text", gfx::avm1::Value(std::string("Frame Rate Limit")));
-    a.o->elems.insert(a.o->elems.end() - 1, gfx::avm1::Value(item));
+    // One lateral-selector row in the menu's own item form, inserted before Apply (the original rows keep their indices
+    // for writeGraphicsSettings).
+    auto row = [&](const std::vector<gfx::avm1::Value>& ch, const char* store, const char* hint, const char* label) {
+        gfx::avm1::Object* item = vm.newPlain();
+        vm.set(item, "choiceArray", gfx::avm1::Value(vm.newArray(ch)));
+        vm.set(item, "dataStore", gfx::avm1::Value(std::string(store)));
+        vm.set(item, "hintText", gfx::avm1::Value(std::string(hint)));
+        vm.set(item, "panelWidth", gfx::avm1::Value(413.0));
+        vm.set(item, "text", gfx::avm1::Value(std::string(label)));
+        a.o->elems.insert(a.o->elems.end() - 1, gfx::avm1::Value(item));
+    };
+    row(choices, "<PCSettings:FrameLimit>", "Limit the maximum frames per second.", "Frame Rate Limit");
+    // PC EXTENSION graphics options (default Off = the original look). Upscaling renders the 3D scene below the window
+    // resolution and upscales it (FSR 1 spatial upscaling); HD Textures uses the HD texture set where one exists.
+    // Rendering applies them (IRenderer::setUpscaling / setHdTextures, see Application_Frontend.cpp).
+    std::vector<gfx::avm1::Value> up, hd;
+    auto add = [&](std::vector<gfx::avm1::Value>& v, int value, const char* label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", gfx::avm1::Value((double)value));
+        vm.set(c, "FriendlyName", gfx::avm1::Value(std::string(label)));
+        v.push_back(gfx::avm1::Value(c));
+    };
+    add(up, 0, "Off"); add(up, 1, "FSR 1 Quality"); add(up, 2, "FSR 1 Balanced"); add(up, 3, "FSR 1 Performance");
+    add(hd, 0, "Off"); add(hd, 1, "On");
+    row(up, "<PCSettings:Upscaling>", "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
+    row(hd, "<PCSettings:HDTextures>", "Use high-resolution textures where available (more video memory).", "HD Textures");
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures"}, {"provenance", "PC EXTENSION"}});
 }
 }
 

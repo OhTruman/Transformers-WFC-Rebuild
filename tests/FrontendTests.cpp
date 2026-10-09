@@ -44,6 +44,20 @@ static void testProfileBotMigration() {
     frontend::LocalProfile c;
     const bool again = c.loadFrom(cur);
     check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
+    // PC EXTENSION graphics options: off by default (the original look), persisted under [PCSettings].
+    frontend::LocalProfile g;
+    check(g.display.upscaling == 0 && !g.display.hdTextures && g.display.frameGeneration == 0 && !g.display.rayTracing,
+          "profile.graphics_extensions_default_off");
+    g.display.upscaling = 2;
+    g.display.hdTextures = true;
+    g.save();
+    std::ifstream back("wfc_profile.ini");
+    frontend::LocalProfile r;
+    r.loadFrom(back);
+    check(r.display.upscaling == 2 && r.display.hdTextures, "profile.graphics_extensions_roundtrip",
+          std::to_string(r.display.upscaling) + "/" + std::to_string(r.display.hdTextures));
+    back.close();
+    std::remove("wfc_profile.ini");
 }
 
 static void testRecommendedBots() {

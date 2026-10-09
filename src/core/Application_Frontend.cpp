@@ -111,6 +111,25 @@ template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int h
     return "window";
 }
 
+// PC EXTENSION graphics options -> Rendering. The renderer opts in by providing (detected, so either side builds alone):
+//   void setUpscaling(int mode);   // 0 Off (default), 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance
+//   void setHdTextures(bool on);   // HD texture set where available (default off)
+// called at boot and on every Game.ApplyProfileSettings when the value changed. Values live in LocalProfile::Display
+// ([PCSettings] Upscaling / HDTextures), set from the PC graphics menu; WFC_UPSCALING / WFC_HDTEXTURES override for tests.
+template <class R, class = void> struct HasRendererUpscaling : std::false_type {};
+template <class R> struct HasRendererUpscaling<R, std::void_t<decltype(std::declval<R&>().setUpscaling(0))>> : std::true_type {};
+template <class R, class = void> struct HasRendererHdTextures : std::false_type {};
+template <class R> struct HasRendererHdTextures<R, std::void_t<decltype(std::declval<R&>().setHdTextures(true))>> : std::true_type {};
+template <class R> const char* applyGraphicsExtensions(R* r, int upscaling, bool hdTextures) {
+    if (const char* e = std::getenv("WFC_UPSCALING")) upscaling = std::clamp(std::atoi(e), 0, 3);
+    if (const char* e = std::getenv("WFC_HDTEXTURES")) hdTextures = std::atoi(e) != 0;
+    bool any = false;
+    if constexpr (HasRendererUpscaling<R>::value) { if (r) { r->setUpscaling(upscaling); any = true; } }
+    if constexpr (HasRendererHdTextures<R>::value) { if (r) { r->setHdTextures(hdTextures); any = true; } }
+    (void)r; (void)upscaling; (void)hdTextures;
+    return any ? "renderer" : "stored (no renderer API yet)";
+}
+
 // Rendering 50f0742: preparePreviewBody parses a body's AnimSets into the shared cache and prewarms its materials without
 // creating a body; loadContentMesh + prewarmDynamicMesh compile a mesh's materials. Detected.
 template <class R, class = void> struct HasPreparePreviewBody : std::false_type {};
@@ -279,6 +298,11 @@ void Application::attachPresenter() {
         if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
         const char* by = applyFrameLimit(renderer_, window_, cap);
         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
+        appliedUpscaling_ = d.upscaling;
+        appliedHdTextures_ = d.hdTextures;
+        const char* gx = applyGraphicsExtensions(renderer_, d.upscaling, d.hdTextures);
+        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(d.upscaling)}, {"hdTextures", frontend::FlowTrace::boolean(d.hdTextures)},
+                                                                 {"by", gx}, {"when", "boot"}, {"provenance", "PC EXTENSION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -298,6 +322,13 @@ void Application::attachPresenter() {
             appliedFrameLimit_ = p.display.frameLimit;
             const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
             frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
+        }
+        if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_) {
+            appliedUpscaling_ = p.display.upscaling;
+            appliedHdTextures_ = p.display.hdTextures;
+            const char* gx = applyGraphicsExtensions(renderer_, appliedUpscaling_, appliedHdTextures_);
+            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(appliedUpscaling_)},
+                                                                     {"hdTextures", frontend::FlowTrace::boolean(appliedHdTextures_)}, {"by", gx}, {"when", "apply"}});
         }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});

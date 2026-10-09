@@ -59,6 +59,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
     // PC ADAPTATION: the frame-rate limit entry the frontend adds to the PC graphics menu (Hz, 0 = unlimited).
     if (markup == "<PCSettings:FrameLimit>") return std::to_string(flow_.profile().display.frameLimit);
+    if (markup == "<PCSettings:Upscaling>") return std::to_string(flow_.profile().display.upscaling);    // PC EXTENSION
+    if (markup == "<PCSettings:HDTextures>") return flow_.profile().display.hdTextures ? "1" : "0";      // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
         if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
@@ -309,6 +311,16 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         return BridgeValue(v == "1" || v == "true" || v == "True");
     }
     // <OnlinePlayerData:ProfileData.Field>: the local profile (LocalProfile; original fields and defaults).
+    if (fn == "WriteValue" && m == "<PCSettings:Upscaling>") {   // PC EXTENSION; applied / saved by Game.ApplyProfileSettings
+        flow_.profile().display.upscaling = std::clamp(std::atoi(arg(1).c_str()), 0, 3);
+        FlowTrace::emit("settings.upscaling", {{"mode", std::to_string(flow_.profile().display.upscaling)}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION
+        flow_.profile().display.hdTextures = arg(1) == "1" || arg(1) == "true";
+        FlowTrace::emit("settings.hdTextures", {{"on", FlowTrace::boolean(flow_.profile().display.hdTextures)}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
     if (fn == "WriteValue" && m == "<PCSettings:FrameLimit>") {   // applied (and saved) by Game.ApplyProfileSettings
         flow_.profile().display.frameLimit = std::max(0, std::atoi(arg(1).c_str()));
         FlowTrace::emit("settings.frameLimit", {{"hz", std::to_string(flow_.profile().display.frameLimit)}, {"provenance", "PC ADAPTATION"}});
