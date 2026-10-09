@@ -5,11 +5,14 @@
 #
 #   .\tools\fidelity\filelog-pass.ps1 -Root work\ab\<target> -OutDir <dir> [-Maps 501,502,...] [-TimeLimit 45]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir,
-      [int[]]$Maps = @(501, 502, 503, 504, 507, 508, 509, 510), [int]$TimeLimit = 45, [switch]$ReportOnly)
+      [int[]]$Maps = @(501, 502, 503, 504, 507, 508, 509, 510), [int]$TimeLimit = 45,
+      # -Exe: run a packaged exe (e.g. the slim playtest package) instead of <Root>\build-release; -ExtraEnv "K=V;K=V" (package roots)
+      [string]$Exe = "", [string]$ExtraEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
-$exe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; $H = Get-ExeHooks $exe
+$exe = if ($Exe) { (Resolve-Path $Exe).Path } else { Join-Path $Root "build-release\bin\wfc_rebuild.exe" }; $H = Get-ExeHooks $exe
+$extra = @{}; foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $extra[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "filelog.$id" $status $null $note $owner }
 if (-not $H.Contains("WFC_FILELOG")) { Res "hook" "SKIP" "build has no WFC_FILELOG (Systems 37bafe7, 09c-next)" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
@@ -30,6 +33,7 @@ foreach ($map in $Maps) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_FILELOG = $fl; WFC_LOBBY_OPTIONS = "PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
         if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "1" }
+        foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
     }
     if (-not (Test-Path $lg)) { Res "$map" "UNKNOWN" "not run" "Experimental"; continue }
