@@ -51,7 +51,14 @@ public:
     // Team modes: bots per faction (autobot / decepticon); free-for-all: enemy (opponents). extended: the Custom Game
     // player limit (false = the original MaxPlayers 10, 5 v 5).
     // editedSinceMap: the player changed a count since the last lobby map change (map-aware Extended counts keep it).
-    struct Bots { int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false, editedSinceMap = false; };
+    // ai (PC EXTENSION, [PCSettings] BotAI=Smart|Classic, Gameplay's ?BotAI): -1 = never chosen -> kBotAiDefault, so a
+    // later default change reaches players who did not pick; 0 Classic (the original behaviour), 1 Smart.
+    static constexpr int kBotAiDefault = 0;   // Classic for now (Integration flips it to Smart when Gameplay's gates pass)
+    struct Bots {
+        int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false, editedSinceMap = false;
+        int ai = -1;
+        int aiEffective() const { return ai >= 0 ? ai : kBotAiDefault; }
+    };
     Bots bots;
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
     // challenge stats / tiers); offline it lives in the local profile [PC ADAPTATION storage, original values].
