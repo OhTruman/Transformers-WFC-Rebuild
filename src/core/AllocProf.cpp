@@ -150,9 +150,13 @@ void liveReport(FILE* f) {
         using HeapSummaryFn = BOOL(WINAPI*)(HANDLE, DWORD, void*);
         const auto heapSummary = (HeapSummaryFn)(void*)GetProcAddress(GetModuleHandleA("kernel32.dll"), "HeapSummary");
         struct { DWORD cb; SIZE_T allocated, committed, reserved, maxReserve; } hs;
+        double heapMB[64] = {}, heapAllocMB[64] = {};
         for (DWORD i = 0; i < nh && i < 64; ++i) {
             hs.cb = sizeof hs;
-            if (heapSummary && heapSummary(heaps[i], 0, &hs)) heapsMB += hs.committed / 1048576.0;
+            if (heapSummary && heapSummary(heaps[i], 0, &hs)) {
+                heapsMB += hs.committed / 1048576.0;
+                heapMB[i] = hs.committed / 1048576.0; heapAllocMB[i] = hs.allocated / 1048576.0;
+            }
         }
         double privMB2 = 0.0, mappedMB = 0.0, imageMB = 0.0;
         MEMORY_BASIC_INFORMATION mbi;
@@ -166,6 +170,25 @@ void liveReport(FILE* f) {
         }
         std::fprintf(f, "MEM: operator new live (all sizes) %.1f MB; Windows heaps committed %.1f MB (%lu heaps); committed private %.1f MB, mapped %.1f MB, image %.1f MB\n",
                      gNewLive.load() / 1048576.0, heapsMB, (unsigned long)nh, privMB2, mappedMB, imageMB);
+        // per heap: committed / allocated (the process heap is the CRT malloc heap under UCRT; the others are driver / system heaps)
+        std::fprintf(f, "MEM heaps (committed / allocated MB):");
+        const HANDLE crt = GetProcessHeap();
+        for (DWORD i = 0; i < nh && i < 64; ++i)
+            std::fprintf(f, " %s%p:%.0f/%.0f", heaps[i] == crt ? "CRT=" : "", (void*)heaps[i], heapMB[i], heapAllocMB[i]);
+        std::fprintf(f, "\n");
+        {   // committed private by allocation size: many small allocations = driver / runtime pools, few large = buffers / arenas
+            double bucketMB[4] = {}; int bucketN[4] = {};
+            char* base = nullptr; double mb = 0.0;
+            auto put = [&] { if (!base || mb <= 0.0) return; const int b = mb < 1.0 ? 0 : mb < 4.0 ? 1 : mb < 16.0 ? 2 : 3; bucketMB[b] += mb; ++bucketN[b]; };
+            for (char* a3 = nullptr; VirtualQuery(a3, &mbi, sizeof mbi) == sizeof mbi; a3 = (char*)mbi.BaseAddress + mbi.RegionSize) {
+                if ((char*)mbi.AllocationBase != base) { put(); base = (char*)mbi.AllocationBase; mb = 0.0; }
+                if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE) mb += mbi.RegionSize / 1048576.0;
+                if ((uintptr_t)mbi.BaseAddress + mbi.RegionSize < (uintptr_t)mbi.BaseAddress) break;
+            }
+            put();
+            std::fprintf(f, "MEM private by allocation size: <1 MB %d = %.0f MB, 1-4 MB %d = %.0f MB, 4-16 MB %d = %.0f MB, >=16 MB %d = %.0f MB\n",
+                         bucketN[0], bucketMB[0], bucketN[1], bucketMB[1], bucketN[2], bucketMB[2], bucketN[3], bucketMB[3]);
+        }
         // the largest committed private allocations (by AllocationBase): size patterns tell driver pools / staging / our own
         struct Rg { char* base; double mb; double wsMB; };
         Rg top[16]; int nTop = 0;

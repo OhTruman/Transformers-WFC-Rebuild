@@ -1,0 +1,20 @@
+diff --git a/src/core/FrontendSceneGL.cpp b/src/core/FrontendSceneGL.cpp
+index c210063..88b13bd 100644
+--- a/src/core/FrontendSceneGL.cpp
++++ b/src/core/FrontendSceneGL.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include <cmath>
+ #include <cstdlib>
++#include "core/HeapTrim.h"
+ #include <fstream>
+ #include <map>
+ 
+@@ -204,6 +205,7 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
+         nativePreviewHook(r_, this, true);
+         LOG_INFO("frontend scene: %s presented by the renderer (loadFrontendScene)%s", family.c_str(),
+                  HasPreviewDraw<render::IRenderer>::value ? " + preview pawns" : "");
++        core::trimHeap("frontend scene loaded");   // [Systems] the scene load's temporaries back to the OS (under the loading screen)
+         return true;
+     }
+     native_ = false;
