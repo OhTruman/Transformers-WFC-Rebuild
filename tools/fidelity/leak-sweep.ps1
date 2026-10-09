@@ -1,7 +1,7 @@
 # LEAK SWEEP (tier TARGETED, untimed; user 2026-10-08: "every memory leak found and fixed"). Five scenarios, one process each,
 # every series checked for a per-cycle slope (FAIL on growth that keeps going in the LATER half - a one-time warm-up step is
 # not a leak). With Systems' WFC_ALLOCPROF live sampling and Rendering's WFC_TEXTRACE when the build has them.
-#   maps      all 10 MP maps (501..510) x -Passes, 32 v 32 (WFC_LOBBY_OPTIONS), matches end on -MatchSeconds
+#   maps      the TDM-compatible MP maps (501-504, 507-510; 505 BrokenHope / 506 Remnant are Escalation-only, CompatibleGameTypes=SV) x -Passes, 32 v 32 (WFC_LOBBY_OPTIONS), matches end on -MatchSeconds
 #   modes     Streets, team modes TDM / CTF / DOM / KOTH round-robin (-ModeMatches), 10 v 10
 #   long      ONE 32 v 32 match of -LongMinutes (PLAYERBOT), memory sampled through the match (within-match growth)
 #   frontend  title -> party lobby -> Create a Character (enter, browse, back) -> title, -FrontendCycles times
@@ -16,7 +16,7 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       # gcsafety: the 64p frontend match -> results -> lobby loop with WFC_GFX_FORCEGC + GCCHECK (0 guard hits, no crash) - the
       # GFx graveyard pruning (Frontend 2026-10-08) frees objects that used to live forever
       [string[]]$Scenarios = @("maps", "modes", "long", "frontend", "scoreboard", "gcsafety"), [int]$GcSafetyRuns = 3,
-      [int[]]$MapIds = @(501, 502, 503, 504, 505, 506, 507, 508, 509, 510), [int]$Passes = 2, [int]$MatchSeconds = 60,
+      [int[]]$MapIds = @(501, 502, 503, 504, 507, 508, 509, 510), [int]$Passes = 2, [int]$MatchSeconds = 60,
       [int]$ModeMatches = 12, [int]$LongMinutes = 20, [int]$FrontendCycles = 30, [int]$ToggleCycles = 60, [double]$TolMb = 5,
       [string]$ExtraEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
