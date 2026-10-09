@@ -61,6 +61,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:FrameLimit>") return std::to_string(flow_.profile().display.frameLimit);
     if (markup == "<PCSettings:Upscaling>") return std::to_string(flow_.profile().display.upscaling);    // PC EXTENSION
     if (markup == "<PCSettings:HDTextures>") return flow_.profile().display.hdTextures ? "1" : "0";      // PC EXTENSION
+    if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
         if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
@@ -314,6 +315,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     if (fn == "WriteValue" && m == "<PCSettings:Upscaling>") {   // PC EXTENSION; applied / saved by Game.ApplyProfileSettings
         flow_.profile().display.upscaling = std::clamp(std::atoi(arg(1).c_str()), 0, 3);
         FlowTrace::emit("settings.upscaling", {{"mode", std::to_string(flow_.profile().display.upscaling)}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:Anisotropy>") {   // PC EXTENSION
+        flow_.profile().display.anisotropy = LocalProfile::Display::clampAnisotropy(std::atoi(arg(1).c_str()));
+        FlowTrace::emit("settings.anisotropy", {{"x", std::to_string(flow_.profile().display.anisotropy)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION
