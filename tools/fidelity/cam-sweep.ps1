@@ -61,20 +61,25 @@ for ($i = 0; $i -lt $Cams.Count; $i++) {
     if (-not $ReportOnly -and -not (Test-Path $shot)) {
         if (-not (Wait-WfcGpu)) { Res "c$i.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
         $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_FIXEDCAM = $cam; WFC_SMOKE_FRAMES = "$($Frame + 5)"; WFC_LOGEVERY = "0"; WFC_NOMOUSE = "1"
-                WFC_SHOTEVERY = "$d,$Frame,$Frame" }
+                WFC_SHOTEVERY = "$d,$Frame,$Frame"; WFC_VISUALCHECK = "1" }   # VISUALCHECK json beside the shot: draw counts of the view
         $null = Invoke-WfcExe $exe $d $e "run.log" 400
     }
     if (-not (Test-Path $shot)) { Res "c$i" "UNKNOWN" "$cam - no capture" "Experimental"; continue }
     $s = [CamScore]::Score($shot)
     $ok = $s[0] -ge 30 -and $s[1] -le 60 -and $s[2] -ge 4
     $png = Join-Path $d "view.png"; $b = New-Object System.Drawing.Bitmap $shot; $t = New-Object System.Drawing.Bitmap $b, 480, 270; $t.Save($png, [System.Drawing.Imaging.ImageFormat]::Png); $t.Dispose(); $b.Dispose()
-    $rows.Add([pscustomobject][ordered]@{ id = "c$i"; cam = $cam; luma = [Math]::Round($s[0], 1); flat_pct = [Math]::Round($s[1], 1); edge_pct = [Math]::Round($s[2], 1); usable = $ok })
+    $vj = "$shot.json"; $draws = $null; $world = $null
+    if (Test-Path $vj) { try { $J = Get-Content -Raw $vj | ConvertFrom-Json; $draws = $J.draws; $world = $J.world_draws } catch {} }
+    $rows.Add([pscustomobject][ordered]@{ id = "c$i"; cam = $cam; luma = [Math]::Round($s[0], 1); flat_pct = [Math]::Round($s[1], 1); edge_pct = [Math]::Round($s[2], 1); draws = $draws; world_draws = $world; usable = $ok })
     $tiles += @(@{ png = $png; label = ("c{0} {1} L{2:N0} F{3:N0}% E{4:N0}%{5}" -f $i, $cam, $s[0], $s[1], $s[2], $(if ($ok) { "" } else { " X" })) })
 }
 if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "cams.png") 4 480 270 }
 Write-WfcCsv $rows (Join-Path $OutDir "cams.csv")
-$use = @($rows | Where-Object { $_.usable } | Sort-Object edge_pct -Descending)
-Res "pick" $(if ($use.Count) { "HUMAN" } else { "FAIL" }) $(if ($use.Count) { "usable candidates by structure in view: " + (($use | Select-Object -First 4 | ForEach-Object { "$($_.id) $($_.cam) (E $($_.edge_pct) %)" }) -join "; ") + " - look at cams.png and pick the widest lit view of the arena" } else { "no candidate passed the view check (luma >= 30, flat <= 60 %, edges >= 4 %)" }) "Experimental"
+# HEAVIEST representative view (per-map perf verdict, 2026-10-09): among the usable (lit, not flat, structured) candidates, the one
+# with the most world draws; ties / missing counts fall back to structure in view
+$use = @($rows | Where-Object { $_.usable } | Sort-Object @{ Expression = { if ($_.world_draws -ne $null) { [int]$_.world_draws } else { -1 } }; Descending = $true }, @{ Expression = "edge_pct"; Descending = $true })
+if ($use.Count) { Set-Content -Encoding ASCII (Join-Path $OutDir "pick.txt") $use[0].cam }
+Res "pick" $(if ($use.Count) { "HUMAN" } else { "FAIL" }) $(if ($use.Count) { "usable candidates, heaviest first: " + (($use | Select-Object -First 4 | ForEach-Object { "$($_.id) $($_.cam) ($($_.world_draws) world draws, E $($_.edge_pct) %)" }) -join "; ") + " - look at cams.png and pick the widest lit view of the arena" } else { "no candidate passed the view check (luma >= 30, flat <= 60 %, edges >= 4 %)" }) "Experimental"
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 "CAM SWEEP: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
 $res.ToArray() | ForEach-Object { "{0} {1}: {2}" -f $_.status, $_.id, $_.note }
