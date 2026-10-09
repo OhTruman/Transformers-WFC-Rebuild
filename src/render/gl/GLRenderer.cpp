@@ -1553,8 +1553,7 @@ public:
     }
     GpuFacts gpuFacts_;
     bool gpuFactsRead_ = false;
-    void setHdTextures(bool on) override { hdTextures_ = on; LOG_INFO("renderer: HD textures %s (no HD root yet: originals)", on ? "on" : "off"); }
-    bool hdTextures_ = false;
+    void setHdTextures(bool on) override { wfc_.setHdTextures(on); }
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";

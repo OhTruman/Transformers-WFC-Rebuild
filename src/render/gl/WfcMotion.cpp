@@ -28,7 +28,7 @@ void main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); gl_Positio
 // static geometry: depth -> world (inverse current view-projection) -> previous clip -> previous UV
 const char* kCameraFS = R"(#version 430
 uniform sampler2D uDepth;
-uniform mat4 uInvVP, uPrevVP;
+uniform mat4 uInvVP, uCurVP, uPrevVP;   // uInvVP: the (jittered) VP that rendered the depth; velocity unjittered
 uniform vec2 uSize;
 out vec2 oVel;
 void main() {
@@ -36,9 +36,8 @@ void main() {
     float d = texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r;
     vec4 w = uInvVP * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
     w /= w.w;
-    vec4 p = uPrevVP * w;
-    vec2 puv = p.xy / p.w * 0.5 + 0.5;
-    oVel = puv - uv;
+    vec4 c = uCurVP * w, p = uPrevVP * w;
+    oVel = (p.xy / p.w * 0.5 + 0.5) - (c.xy / c.w * 0.5 + 0.5);
 }
 )";
 const char* kViewFS = R"(#version 430
@@ -60,7 +59,7 @@ layout(location=10) in vec4 aWeights;
 uniform sampler2D uCurTex, uPrevTex;
 uniform int uRow, uBones, uMode, uPrevSrc, uPrevMode;
 uniform float uAlpha, uPrevAlpha;
-uniform mat4 uVP, uPrevVP, uModel, uPrevModel;
+uniform mat4 uVP, uVPNJ, uPrevVP, uModel, uPrevModel;   // uVP rasterises (jittered); uVPNJ / uPrevVP: velocity
 out vec4 vCur, vPrev;
 mat4 bone(sampler2D t, int base, int j) {
     return mat4(texelFetch(t, ivec2(base + j * 4, uRow), 0), texelFetch(t, ivec2(base + j * 4 + 1, uRow), 0),
@@ -84,9 +83,10 @@ vec3 pose(sampler2D t, int mode, float a) {
 void main() {
     vec3 c = pose(uCurTex, uMode, uAlpha);
     vec3 pr = uPrevSrc == 1 ? pose(uPrevTex, uPrevMode, uPrevAlpha) : pose(uCurTex, uPrevMode, uPrevAlpha);
-    vCur = uVP * (uModel * vec4(c, 1.0));
+    vec4 wc = uModel * vec4(c, 1.0);
+    gl_Position = uVP * wc;
+    vCur = uVPNJ * wc;
     vPrev = uPrevVP * (uPrevModel * vec4(pr, 1.0));
-    gl_Position = vCur;
 }
 )";
 const char* kObjectFS = R"(#version 430
@@ -98,12 +98,13 @@ void main() { oVel = (vPrev.xy / vPrev.w * 0.5 + 0.5) - (vCur.xy / vCur.w * 0.5 
 // rigid objects (movers, mover-posed props, pickups): the same vertex through this and last frame's transform
 const char* kRigidVS = R"(#version 430
 layout(location=0) in vec3 aPos;
-uniform mat4 uVP, uPrevVP, uModel, uPrevModel;
+uniform mat4 uVP, uVPNJ, uPrevVP, uModel, uPrevModel;
 out vec4 vCur, vPrev;
 void main() {
-    vCur = uVP * (uModel * vec4(aPos, 1.0));
+    vec4 wc = uModel * vec4(aPos, 1.0);
+    gl_Position = uVP * wc;
+    vCur = uVPNJ * wc;
     vPrev = uPrevVP * (uPrevModel * vec4(aPos, 1.0));
-    gl_Position = vCur;
 }
 )";
 
@@ -132,9 +133,80 @@ bool invert(const float* m, float* out) {        // column-major 4x4 (core::Mat4
 }
 }  // namespace
 
+bool Pipeline::temporalActive() const {
+    static const bool env = std::getenv("WFC_TEMPORAL") != nullptr;   // test switch until a temporal upscaler sets it
+    return temporalOn_ || env;
+}
+
 bool Pipeline::motionVectorsOn() const {
     static const bool env = std::getenv("WFC_MOTIONVECTORS") != nullptr || std::getenv("WFC_MOTIONVIEW") != nullptr;
-    return motionOn_ || env;
+    return motionOn_ || env || temporalActive();
+}
+
+// Reactive mask (temporal upscalers): where the translucent pass changed the opaque image, the upscaler leans less on
+// its history (FFX's generate-reactive-mask idea: max channel difference, scaled, clamped). Opaque colour kept first.
+namespace {
+const char* kReactiveFS = R"(#version 430
+uniform sampler2D uOpaque, uFinal;
+out float oReactive;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec3 d = abs(texelFetch(uFinal, p, 0).rgb - texelFetch(uOpaque, p, 0).rgb);
+    oReactive = clamp(max(d.r, max(d.g, d.b)) * 0.9, 0.0, 0.9);
+}
+)";
+}  // namespace
+
+void Pipeline::reactiveBegin() {
+    if (!temporalActive() || !fbo_) return;
+    auto target = [&](GLuint& fbo, GLuint& tex, GLenum fmt, GLenum f2, GLenum type) {
+        if (!fbo) { GenFramebuffers(1, &fbo); glGenTextures(1, &tex); }
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, fmt, vpW_, vpH_, 0, f2, type, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, fbo);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    };
+    if (reactiveW_ != vpW_ || reactiveH_ != vpH_ || !opaqueCopyFbo_) {
+        target(opaqueCopyFbo_, opaqueCopyTex_, 0x881A /*GL_RGBA16F*/, GL_RGBA, GL_FLOAT);
+        target(reactiveFbo_, reactiveTex_, 0x8229 /*GL_R8*/, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE);
+        reactiveW_ = vpW_; reactiveH_ = vpH_;
+    }
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, opaqueCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+}
+
+void Pipeline::reactiveEnd() {
+    if (!temporalActive() || !reactiveFbo_) return;
+    if (!reactiveProg_) {
+        GLuint vs = compileShader(GL_VERTEX_SHADER, kMotionVS, "reactive.vs");
+        GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kReactiveFS, "reactive.fs") : 0;
+        reactiveProg_ = fs ? linkProgram(vs, fs, "reactive") : 0;
+        if (!reactiveProg_) return;
+    }
+    GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+    BindFramebuffer(GL_FRAMEBUFFER, reactiveFbo_);
+    glViewport(0, 0, vpW_, vpH_);
+    UseProgram(reactiveProg_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, opaqueCopyTex_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, colorTex_);
+    ActiveTexture(GL_TEXTURE0);
+    Uniform1i(GetUniformLocation(reactiveProg_, "uOpaque"), 0);
+    Uniform1i(GetUniformLocation(reactiveProg_, "uFinal"), 1);
+    BindVertexArray(postVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    BindVertexArray(0);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    if (depthOn) glEnable(GL_DEPTH_TEST);
+    if (blendOn) glEnable(GL_BLEND);
+    if (cullOn) glEnable(GL_CULL_FACE);
+    UseProgram((GLuint)prevProg);
+    glx::uniformCacheForgetCurrent();
 }
 
 // after the opaque passes (depth complete): the static-geometry velocity into velTex_ (render size)
@@ -174,7 +246,8 @@ void Pipeline::motionCameraPass() {
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
     Uniform1i(GetUniformLocation(velCameraProg_, "uDepth"), 0);
     UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uInvVP"), 1, GL_FALSE, inv);
-    const core::Mat4& pvp = havePrevVP_ ? prevViewProj_ : viewProj_;   // first frame: zero velocity
+    UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uCurVP"), 1, GL_FALSE, viewProjNoJitter_.m);
+    const core::Mat4& pvp = havePrevVP_ ? prevViewProj_ : viewProjNoJitter_;   // first frame: zero velocity
     UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uPrevVP"), 1, GL_FALSE, pvp.m);
     Uniform2f(GetUniformLocation(velCameraProg_, "uSize"), (float)vpW_, (float)vpH_);
     BindVertexArray(postVao_);
@@ -229,7 +302,8 @@ void Pipeline::motionObjectPass() {
     ActiveTexture(GL_TEXTURE0);
     Uniform1i(U("uCurTex"), 0); Uniform1i(U("uPrevTex"), 1);
     UniformMatrix4fv(U("uVP"), 1, GL_FALSE, viewProj_.m);
-    UniformMatrix4fv(U("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProj_).m);
+    UniformMatrix4fv(U("uVPNJ"), 1, GL_FALSE, viewProjNoJitter_.m);
+    UniformMatrix4fv(U("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProjNoJitter_).m);
     for (const MotionDraw& d : motionDraws_) {
         Uniform1i(U("uRow"), d.row); Uniform1i(U("uBones"), d.bones); Uniform1i(U("uMode"), d.mode);
         Uniform1f(U("uAlpha"), d.alpha);
@@ -245,7 +319,8 @@ void Pipeline::motionObjectPass() {
         UseProgram(velRigidProg_);
         auto R = [&](const char* n) { return GetUniformLocation(velRigidProg_, n); };
         UniformMatrix4fv(R("uVP"), 1, GL_FALSE, viewProj_.m);
-        UniformMatrix4fv(R("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProj_).m);
+        UniformMatrix4fv(R("uVPNJ"), 1, GL_FALSE, viewProjNoJitter_.m);
+        UniformMatrix4fv(R("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProjNoJitter_).m);
         for (const MotionRigid& d : motionRigid_) {
             UniformMatrix4fv(R("uModel"), 1, GL_FALSE, d.model.m);
             UniformMatrix4fv(R("uPrevModel"), 1, GL_FALSE, d.prevModel.m);

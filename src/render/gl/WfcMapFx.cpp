@@ -2109,7 +2109,9 @@ void Pipeline::drawMapPresentation() {
     glx::gpuMark(glx::kPassMapFx);
     motionCameraPass();                                // optional motion vectors: static geometry (opaque depth)
     motionObjectPass();                                // ... and the characters' own motion over it
+    reactiveBegin();                                   // temporal upscaling: the opaque colour (reactive mask)
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
+    reactiveEnd();
     glx::gpuMark(glx::kPassTranslucent);
     {
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
