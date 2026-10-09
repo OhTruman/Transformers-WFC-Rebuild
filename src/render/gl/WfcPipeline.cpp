@@ -553,7 +553,10 @@ struct CachedProg { GLuint id = 0; uint64_t lastUse = 0; };
 std::map<std::string, CachedProg> gProgCache;
 std::map<GLuint, const std::string*> gProgCacheById;
 uint64_t gProgUse = 0;
-constexpr size_t kProgCacheMax = 1500;
+size_t progCacheMax() {                                  // WFC_PROGCACHEMAX=<n>: A/B of the cap (memory)
+    static const size_t n = std::getenv("WFC_PROGCACHEMAX") ? (size_t)std::atol(std::getenv("WFC_PROGCACHEMAX")) : 1500;
+    return n;
+}
 } // namespace
 
 GLuint link(GLuint vs, GLuint fs, const std::string& tag) {
@@ -687,6 +690,23 @@ void Pipeline::release() {
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
     progTouchQueue_.clear();
+    // GL objects created lazily per pipeline that the reset below (*this = Pipeline()) would otherwise orphan at every
+    // map unload (leak audit: the first-use touch target, pawn occlusion program / box / queries, the frame sprite
+    // stream, the world depth prepass and touch programs, the instance texture)
+    {
+        auto delTex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
+        auto delBuf = [](GLuint& b) { if (b) { DeleteBuffers(1, &b); b = 0; } };
+        auto delVao = [](GLuint& v) { if (v) { DeleteVertexArrays(1, &v); v = 0; } };
+        auto delProg = [](GLuint& p) { if (p) { DeleteProgram(p); p = 0; } };
+        if (touchFbo_) { DeleteFramebuffers(1, &touchFbo_); touchFbo_ = 0; }
+        delTex(touchTex_); delTex(instTex_);
+        for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
+        delVao(occVao_); delVao(spriteFrameVao_);
+        for (GLuint* b : {&occVbo_, &occIbo_, &spriteFrameVbo_, &spriteFrameCbo_, &spriteFrameSbo_, &spriteFrameIbo_}) delBuf(*b);
+        for (auto& kv : pawnOcc_)
+            for (GLuint& q : kv.second.q) if (q && DeleteQueries) { DeleteQueries(1, &q); q = 0; }
+        pawnOcc_.clear();
+    }
     if (!active_ && meshes_.empty() && !fbo_) return;
     auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
     auto fbo = [](GLuint& f) { if (f) { DeleteFramebuffers(1, &f); f = 0; } };
@@ -700,11 +720,11 @@ void Pipeline::release() {
     std::set<GLuint> progIds;
     for (const Program& p : progs_) if (p.id) progIds.insert(p.id);
     for (GLuint id : progIds) if (!gProgCacheById.count(id)) { GLuint p = id; prog(p); }   // uncached (none expected)
-    if (gProgCache.size() > kProgCacheMax) {      // trim: least recently used, not used by this pipeline
+    if (gProgCache.size() > progCacheMax()) {      // trim: least recently used, not used by this pipeline
         std::vector<std::pair<uint64_t, const std::string*>> lru;
         for (const auto& kv : gProgCache) if (!progIds.count(kv.second.id)) lru.push_back({kv.second.lastUse, &kv.first});
         std::sort(lru.begin(), lru.end());
-        size_t drop = std::min(lru.size(), gProgCache.size() - kProgCacheMax);
+        size_t drop = std::min(lru.size(), gProgCache.size() - progCacheMax());
         for (size_t i = 0; i < drop; ++i) {
             auto it = gProgCache.find(*lru[i].second);
             GLuint p = it->second.id;
