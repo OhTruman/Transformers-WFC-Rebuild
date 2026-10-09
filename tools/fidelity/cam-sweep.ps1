@@ -79,9 +79,16 @@ for ($i = 0; $i -lt $Cams.Count; $i++) {
 }
 if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "cams.png") 4 480 270 }
 Write-WfcCsv $rows (Join-Path $OutDir "cams.csv")
-# HEAVIEST representative view (per-map perf verdict, 2026-10-09): among the usable (lit, not flat, structured) candidates, the one
+# HEAVY representative view (per-map perf verdict, 2026-10-09): among the usable (lit, not flat, structured) candidates, the one
 # with the most world draws; ties / missing counts fall back to structure in view
 $use = @($rows | Where-Object { $_.usable } | Sort-Object @{ Expression = { if ($_.world_draws -ne $null) { [int]$_.world_draws } else { -1 } }; Descending = $true }, @{ Expression = "edge_pct"; Descending = $true })
+# draw counts are nearly flat across candidates (frustum, not occlusion: Seed 2026-10-09 - the heaviest was a floor close-up):
+# among the usable candidates within 5 % of the heaviest, take the one with the most structure in view
+if ($use.Count -and $use[0].world_draws -ne $null) {
+    $top = [int]$use[0].world_draws
+    $near = @($use | Where-Object { $_.world_draws -ne $null -and [int]$_.world_draws -ge 0.95 * $top } | Sort-Object edge_pct -Descending)
+    if ($near.Count) { $use = @($near[0]) + @($use | Where-Object { $_.id -ne $near[0].id }) }
+}
 if ($use.Count) { Set-Content -Encoding ASCII (Join-Path $OutDir "pick.txt") $use[0].cam }
 Res "pick" $(if ($use.Count) { "HUMAN" } else { "FAIL" }) $(if ($use.Count) { "usable candidates, heaviest first: " + (($use | Select-Object -First 4 | ForEach-Object { "$($_.id) $($_.cam) ($($_.world_draws) world draws, E $($_.edge_pct) %)" }) -join "; ") + " - look at cams.png and pick the widest lit view of the arena" } else { "no candidate passed the view check (luma >= 30, flat <= 60 %, edges >= 4 %)" }) "Experimental"
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
