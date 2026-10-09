@@ -4,6 +4,9 @@
 # after -TimeoutSec).
 function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log = "run.log", [int]$TimeoutSec = 0) {
     New-Item -ItemType Directory -Force $Dir | Out-Null
+    # 09c d8b7a8e+: a profile without [PCSettings] and no frontend script auto-detects graphics (fullscreen native, 16x AF ...);
+    # harness runs keep their own settings unless a caller asks for auto-detect explicitly (unknown to older builds: no effect)
+    if (-not $Env.ContainsKey("WFC_AUTODETECT")) { $Env = $Env.Clone(); $Env.WFC_AUTODETECT = "0" }
     $saved = @{}
     foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, "Process"); [Environment]::SetEnvironmentVariable($k, [string]$Env[$k], "Process") }
     try {
