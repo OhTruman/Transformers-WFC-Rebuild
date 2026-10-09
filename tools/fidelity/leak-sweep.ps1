@@ -150,7 +150,7 @@ function NavSeries([string]$dir, [string]$tag, [string]$prefix) {
 # 1. all MP maps, 32 v 32, -Passes times round
 if ($Scenarios -contains "maps") {
     $script:lbN = 0
-    $one = { param($id) $script:lbN++; "call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($script:lbN);wait:t=4" }
+    $one = { param($id) $script:lbN++; "call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($script:lbN);wait:t=4" }
     $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
     for ($p = 0; $p -lt $Passes; $p++) { foreach ($id in $MapIds) { $steps += (& $one $id) } }
     $d = Join-Path $OutDir "maps"; $n = $MapIds.Count * $Passes
@@ -168,22 +168,24 @@ if ($Scenarios -contains "maps") {
 if ($Scenarios -contains "modes") {
     $modes = @("TDM", "CTF", "DOM", "KOTH"); $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
     for ($i = 0; $i -lt $ModeMatches; $i++) { $md = $modes[$i % $modes.Count]
-        $steps += "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($i + 1);wait:t=4" }
+        $steps += "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($i + 1);wait:t=4" }
     $d = Join-Path $OutDir "modes"
-    $d = Run "modes" (FrontendEnv (($steps + "quit") -join ";") "BotsAutobot=10;BotsDecepticon=10;PointsToWin=9999;TimeLimit=$MatchSeconds" $d) (600 + 240 * $ModeMatches)
+    $d = Run "modes" (FrontendEnv (($steps + "quit") -join ";") "BotsAutobot=10;BotsDecepticon=10;PointsToWin=3;TimeLimit=$MatchSeconds" $d) (600 + 300 * $ModeMatches)
     MatchSeries $d "modes" "Gameplay/Rendering/Systems"
     $lg = Join-Path $d "wfc.log"; if (Test-Path $lg) { $mp = @(Select-String $lg -Pattern '\] MATCH init mode=(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value }); Res "modes.played" "INFO" ("modes played in order: " + ($mp -join ", ")) "Frontend" }
 }
 # 3. one long 32 v 32 match (PLAYERBOT), within-match growth from the ALLOCPROF samples (first 3 minutes = warm-up, excluded)
 if ($Scenarios -contains "long") {
     $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5",
-             "call:Online.SetSelectedMapID,508", "wait:t=1", "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:ui=InGame", "wait:ui=GameEnded", "wait:t=3", "quit"))
+             "call:Online.SetSelectedMapID,508", "wait:t=1", "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:level=GameLobby", "wait:t=3", "quit"))
     $d = Join-Path $OutDir "long"; $e = FrontendEnv ($steps -join ";") "ExtendedPlayers=1;BotsAutobot=32;BotsDecepticon=32;PointsToWin=9999;TimeLimit=$($LongMinutes * 60)" $d
     if ($H.Contains("WFC_PLAYERBOT")) { $e.Remove("WFC_AUTOWALK"); $e.Remove("WFC_AUTOTURN"); $e.WFC_PLAYERBOT = "1" }
     if ($H.Contains("WFC_ALLOCPROF_EVERY_S")) { $diag.WFC_ALLOCPROF_EVERY_S = "15" }
     $d = Run "long" $e (900 + 60 * $LongMinutes)
     if ($H.Contains("WFC_ALLOCPROF_EVERY_S")) { $diag.WFC_ALLOCPROF_EVERY_S = "3" }
-    $ms = MemSamples $d; $inm = @($ms | Where-Object { $_.ctx -notmatch 'GameLobby|PartyLobby|FrontEnd|scene\.view|loadMap|uploaded|render data' })
+    $ms = MemSamples $d; $endI = -1; for ($i = 0; $i -lt $ms.Count; $i++) { if ($ms[$i].ctx -match 'MATCH end|to=GameEnded|EndGameStats') { $endI = $i; break } }
+    if ($endI -ge 0) { $ms = @($ms | Select-Object -First $endI) }   # results screen / return excluded
+    $inm = @($ms | Where-Object { $_.ctx -notmatch 'GameLobby|PartyLobby|FrontEnd|scene\.view|loadMap|uploaded|render data' })
     if ($inm.Count -ge 8) { $per = 60.0 / 15; $skip = [int](3 * $per); $w = @($inm | Select-Object -Skip $skip)
         # per-minute series (mean of the samples in each minute) so the slope is MB / minute
         $mins = @(for ($i = 0; $i -lt $w.Count; $i += [int]$per) { $c = @($w[$i..([Math]::Min($w.Count - 1, $i + [int]$per - 1))]); [pscustomobject]@{ newMb = ($c | Measure-Object newMb -Average).Average; privMb = ($c | Measure-Object privMb -Average).Average } })
@@ -215,7 +217,7 @@ if ($Scenarios -contains "gcsafety") {
     else { $hits = 0; $crashes = 0; $ends = 0
         for ($k = 1; $k -le $GcSafetyRuns; $k++) {
             $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
-            for ($m = 0; $m -lt 2; $m++) { $steps += "call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=4;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
+            for ($m = 0; $m -lt 2; $m++) { $steps += "call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
             $dn = "gcsafety$k"; $e = FrontendEnv (($steps + "quit") -join ";") "ExtendedPlayers=1;BotsAutobot=32;BotsDecepticon=32;PointsToWin=9999;TimeLimit=60" (Join-Path $OutDir $dn)
             $e.WFC_GFX_FORCEGC = "1"; $e.WFC_GFX_GCCHECK = "1"
             if ($H.Contains("WFC_PLAYERBOT")) { $e.Remove("WFC_AUTOWALK"); $e.Remove("WFC_AUTOTURN"); $e.WFC_PLAYERBOT = "1" }
