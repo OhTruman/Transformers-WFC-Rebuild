@@ -30,3 +30,4 @@ wfc.log
 # Python bytecode
 __pycache__/
 *.pyc
+third_party/ffx_sdk/
