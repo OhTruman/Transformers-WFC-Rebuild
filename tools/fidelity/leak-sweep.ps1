@@ -13,7 +13,9 @@
 #
 #   .\tools\fidelity\leak-sweep.ps1 -Root work\ab\<target> -OutDir <dir> [-Scenarios maps,modes,long,frontend,scoreboard] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir,
-      [string[]]$Scenarios = @("maps", "modes", "long", "frontend", "scoreboard"),
+      # gcsafety: the 64p frontend match -> results -> lobby loop with WFC_GFX_FORCEGC + GCCHECK (0 guard hits, no crash) - the
+      # GFx graveyard pruning (Frontend 2026-10-08) frees objects that used to live forever
+      [string[]]$Scenarios = @("maps", "modes", "long", "frontend", "scoreboard", "gcsafety"), [int]$GcSafetyRuns = 3,
       [int[]]$MapIds = @(501, 502, 503, 504, 505, 506, 507, 508, 509, 510), [int]$Passes = 2, [int]$MatchSeconds = 60,
       [int]$ModeMatches = 12, [int]$LongMinutes = 20, [int]$FrontendCycles = 30, [int]$ToggleCycles = 60, [double]$TolMb = 5,
       [string]$ExtraEnv = "", [switch]$ReportOnly)
@@ -29,7 +31,8 @@ $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcR
 $diag = @{}
 if ($H.Contains("WFC_ALLOCPROF_LIVE")) { $diag.WFC_ALLOCPROF = "64"; $diag.WFC_ALLOCPROF_LIVE = "64"; if ($H.Contains("WFC_ALLOCPROF_EVERY_S")) { $diag.WFC_ALLOCPROF_EVERY_S = "3" } }
 if ($H.Contains("WFC_TEXTRACE")) { $diag.WFC_TEXTRACE = "1" }
-if ($H.Contains("WFC_GLTRACE")) { $diag.WFC_GLTRACE = "1" }   # Rendering: per-unload live counts of every GL object type + creation sites that grew
+if ($H.Contains("WFC_GLTRACE")) { $diag.WFC_GLTRACE = "1" }
+if ($H.Contains("WFC_GFXMEM")) { $diag.WFC_GFXMEM = "30" }   # Frontend: per-movie GFx heap / graveyard + renderer shapes / textures / atoms every 30 s   # Rendering: per-unload live counts of every GL object type + creation sites that grew
 foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $diag[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $diagStr = (($diag.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';')
 Res "diagnostics" "INFO" ("build {0}; diagnostics env: {1}" -f $sha.Substring(0, [Math]::Min(7, $sha.Length)), $(if ($diagStr) { $diagStr } else { "none (build lacks ALLOCPROF_LIVE / TEXTRACE)" })) "Experimental"
@@ -181,6 +184,24 @@ if ($Scenarios -contains "scoreboard") {
     $d = Join-Path $OutDir "scoreboard"; $d = Run "scoreboard" (FrontendEnv ($steps -join ";") "BotsAutobot=10;BotsDecepticon=10;PointsToWin=9999;TimeLimit=3600" $d) (900 + 4 * $ToggleCycles)
     NavSeries $d "scoreboard" "sb"
 }
+# 6. GC safety: 64p real play, 2 x 60 s matches per process with forced GFx collection + the use-after-collect guard
+if ($Scenarios -contains "gcsafety") {
+    if (-not $H.Contains("WFC_GFX_FORCEGC")) { Res "gcsafety" "UNKNOWN" "build has no WFC_GFX_FORCEGC" "Experimental" }
+    else { $hits = 0; $crashes = 0; $ends = 0
+        for ($k = 1; $k -le $GcSafetyRuns; $k++) {
+            $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
+            for ($m = 0; $m -lt 2; $m++) { $steps += "call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=4;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
+            $dn = "gcsafety$k"; $e = FrontendEnv (($steps + "quit") -join ";") "ExtendedPlayers=1;BotsAutobot=32;BotsDecepticon=32;PointsToWin=9999;TimeLimit=60" (Join-Path $OutDir $dn)
+            $e.WFC_GFX_FORCEGC = "1"; $e.WFC_GFX_GCCHECK = "1"
+            if ($H.Contains("WFC_PLAYERBOT")) { $e.Remove("WFC_AUTOWALK"); $e.Remove("WFC_AUTOTURN"); $e.WFC_PLAYERBOT = "1" }
+            $d = Run $dn $e 1200; $lg = Join-Path $d "wfc.log"
+            if (Test-Path $lg) { $hits += @(Select-String $lg -Pattern 'AVM1 GCCHECK').Count; $ends += @(Select-String $lg -Pattern 'to=GameEnded').Count }
+            $crashes += @(Get-ChildItem $d -Filter "wfc_crash_*.txt" -ErrorAction SilentlyContinue).Count }
+        Res "gcsafety" $(if ($hits -or $crashes) { "FAIL" } elseif ($ends -ge 2 * $GcSafetyRuns) { "PASS" } else { "PARTIAL" }) ("{0} processes x 2 matches, 64p real play, WFC_GFX_FORCEGC + GCCHECK: {1} guard hits, {2} crashes, {3} results screens" -f $GcSafetyRuns, $hits, $crashes, $ends) "Frontend" }
+}
+# GFXMEM (Frontend): last per-movie report per scenario, for the record
+foreach ($sc in @("maps", "modes", "long", "frontend", "scoreboard")) { $lg = Join-Path (Join-Path $OutDir $sc) "wfc.log"
+    if (Test-Path $lg) { $gm = @(Select-String $lg -Pattern 'GFXMEM' -ErrorAction SilentlyContinue); if ($gm.Count) { $t = $gm[-1].Line -replace '^\[[^\]]*\]\s*', ''; Res "$sc.gfxmem" "INFO" ("{0} GFXMEM lines; last: {1}" -f $gm.Count, $t.Substring(0, [Math]::Min(240, $t.Length))) "Frontend" } } }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 "LEAK SWEEP ($($sha.Substring(0, [Math]::Min(7, $sha.Length)))): " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
 $res.ToArray() | Where-Object { $_.status -ne "PASS" } | ForEach-Object { "{0} {1}: {2}" -f $_.status, $_.id, $_.note }
