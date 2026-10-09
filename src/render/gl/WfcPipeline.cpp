@@ -1411,6 +1411,24 @@ void decodeLevel(const std::string& fmt, const uint8_t* d, int w, int h, ImageDa
 }
 }  // namespace
 
+// The optional HD texture pack: <root>/hd_index.json (AssetTools; layout being fixed). Available = the index parses.
+std::string hdRoot() {
+    if (const char* e = std::getenv("WFC_HD_ROOT")) return std::string(e);
+    std::string d = ddsRoot();                                        // .../AssetTools/out/dds
+    const size_t s = d.find_last_of("/\\");
+    return (s == std::string::npos ? std::string(".") : d.substr(0, s)) + "/hd";
+}
+bool Pipeline::hdTexturesAvailable() {
+    static const bool ok = [] {
+        assets::Json J;
+        const std::string t = readText(hdRoot() + "/hd_index.json");
+        const bool v = !t.empty() && assets::Json::parse(t, J);
+        LOG_INFO("wfc: HD texture pack %s (%s)", v ? "available" : "not installed", (hdRoot() + "/hd_index.json").c_str());
+        return v;
+    }();
+    return ok;
+}
+
 // platform::decodeImage's second source: the verified original top level (RGBA8, identical to the PNG)
 static bool decodeOriginalTop(const std::string& file, ImageData& out) {
     const auto& idx = ddsIndex();
