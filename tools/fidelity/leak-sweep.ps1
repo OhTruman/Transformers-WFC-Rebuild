@@ -32,6 +32,7 @@ $diag = @{}
 if ($H.Contains("WFC_ALLOCPROF_LIVE")) { $diag.WFC_ALLOCPROF = "64"; $diag.WFC_ALLOCPROF_LIVE = "64"; if ($H.Contains("WFC_ALLOCPROF_EVERY_S")) { $diag.WFC_ALLOCPROF_EVERY_S = "3" } }
 if ($H.Contains("WFC_TEXTRACE")) { $diag.WFC_TEXTRACE = "1" }
 if ($H.Contains("WFC_GLTRACE")) { $diag.WFC_GLTRACE = "1" }
+if ($H.Contains("WFC_GLCENSUS")) { $diag.WFC_GLCENSUS = "1" }   # Frontend gated match.glCensus behind it (09c after 1f4ade6)
 if ($H.Contains("WFC_GFXMEM")) { $diag.WFC_GFXMEM = "30" }   # Frontend: per-movie GFx heap / graveyard + renderer shapes / textures / atoms every 30 s   # Rendering: per-unload live counts of every GL object type + creation sites that grew
 foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $diag[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $diagStr = (($diag.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ';')
