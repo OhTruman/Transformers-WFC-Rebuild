@@ -28,7 +28,8 @@ unsigned long gShaderCompiles = 0, gTexCreates = 0;
 unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 0;
 unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;
 unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures
-unsigned long gMemDdsTextures = 0;                      // of gMemTextures: loaded from the original blocks   // pending instanced character draws: flushed before any draw / blit
+unsigned long gMemDdsTextures = 0;                      // of gMemTextures: loaded from the original blocks
+unsigned long gMemHdTextures = 0;                       // of those: from the HD texture pack   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -765,7 +766,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
-    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
@@ -1503,6 +1504,7 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
         path = ddsRoot() + "/" + E.dds;
     }
     const bool hdBlocks = hd && ht != hidx.end();
+    if (hdBlocks) ++gMemHdTextures;
     std::ifstream in(path, std::ios::binary);
     std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) {
@@ -3131,9 +3133,9 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 void Pipeline::logMemStats(const char* when) {
     static const bool on = std::getenv("WFC_MEMSTATS") != nullptr;
     if (!on) return;
-    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB; %lu from the original blocks), static meshes %lu = %.0f MB; "
+    LOG_INFO("MEMSTATS %s: lightmaps %lu = %.0f MB, other textures %lu = %.0f MB (PWL sRGB: RGB10_A2 opaque / RGBA16 with alpha, else RGBA8; + mips; of it SRGB %.0f MB; %lu from the original blocks, %lu HD), static meshes %lu = %.0f MB; "
              "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
-             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemDdsTextures, gMemMeshes,
+             when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemDdsTextures, gMemHdTextures, gMemMeshes,
              gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
 }
 
