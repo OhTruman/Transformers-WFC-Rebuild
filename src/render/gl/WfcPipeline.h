@@ -418,10 +418,12 @@ private:
         int lastFrame = 0;
     };
     struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0;
+                      std::vector<core::Mat4> boundsPal;   // the palette si.mn / si.mx were computed from (reuse as prev)
                       // motion vectors (optional): what this instance displayed in the frame it was last drawn
                       int motionFrame = -1, lastMode = 1; float lastAlpha = 1.0f; core::Mat4 lastModel; };
     std::map<const void*, SkinModel> skinModels_;
-    int statSkinRebuilds_ = 0;                            // skinned-model (re)builds since the last 600-frame log
+    int statSkinRebuilds_ = 0;
+    long statSkinBoundsReused_ = 0;                       // previous-palette bounds taken from the last step's                            // skinned-model (re)builds since the last 600-frame log
     std::map<const void*, SkinInst> skinInsts_;
     std::vector<int> freeSkinRows_;
     int skinRowsUsed_ = 0;
@@ -770,7 +772,7 @@ private:
     core::Mat4 camProj_;
     struct ShadowFrameInfo { int form = -1; int source = -1; int type = 0; int res = 0; float factor = 1.0f; };
     std::vector<ShadowFrameInfo> shadowFrame_;
-    void blurShadowMask();
+    void blurShadowMask(const int* rect = nullptr);   // rect: mask pixels (x0, y0, x1, y1) to recompute; null = all
     const ShadowProjector* projectorFor(int form, ShadowProjector& scratch) const;
     bool ensureShadowPrograms();
     void ensureShadowMask();
@@ -778,6 +780,23 @@ private:
     void fillMaskDepth();
     void drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& vp, GLuint prog);
     void castCharacterShadow(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p);
+    void projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses);
+    // WFC_SHADOWRECTCHECK=1: every scissored projection is repeated with the full-screen passes into a second mask set
+    // (swapped in) and the two blurred masks compared texel by texel (logged); diagnostics only
+    struct MaskSet {
+        GLuint fbo = 0, tex = 0, depthRb = 0, tmpFbo = 0, tmpTex = 0, blurFbo = 0, blurTex = 0;
+        int forW = 0, forH = 0, cleared = -1, drawn = -1;
+    };
+    MaskSet refMask_;
+    bool shadowRefPass_ = false;
+    long rectChecks_ = 0, rectDiffs_ = 0, rectMaxTexels_ = 0, rectMaxAbs_ = 0;
+    void swapMaskSet(MaskSet& m) {
+        std::swap(maskFbo_, m.fbo); std::swap(maskTex_, m.tex); std::swap(maskDepthRb_, m.depthRb);
+        std::swap(maskTmpFbo_, m.tmpFbo); std::swap(maskTmpTex_, m.tmpTex); std::swap(maskBlurFbo_, m.blurFbo);
+        std::swap(maskBlurTex_, m.blurTex); std::swap(maskForW_, m.forW); std::swap(maskForH_, m.forH);
+        std::swap(maskClearedFrame_, m.cleared); std::swap(maskDrawnFrame_, m.drawn);
+    }
+    void shadowRectCheck(const ShadowProjector& p, const ShadowRequest& rq);
     bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
     void runShadowMaskSelfTest();

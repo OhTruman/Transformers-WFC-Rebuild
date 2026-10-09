@@ -353,8 +353,9 @@ void Pipeline::fillMaskDepth() {
 }
 
 // BlurShadowMask (0x82DDB070): horizontal then vertical pass over the resolved mask.
-void Pipeline::blurShadowMask() {
+void Pipeline::blurShadowMask(const int* rect) {
     static const int tie = std::getenv("WFC_BLURTIE") ? 1 : 0;
+    if (rect) { glEnable(GL_SCISSOR_TEST); glScissor(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); }
     UseProgram(maskBlurProg_);
     Uniform1i(GetUniformLocation(maskBlurProg_, "uMask"), 0);
     Uniform2f(GetUniformLocation(maskBlurProg_, "uMaskSize"), (float)maskW_, (float)maskH_);
@@ -376,6 +377,7 @@ void Pipeline::blurShadowMask() {
     BindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
+    if (rect) glDisable(GL_SCISSOR_TEST);
 }
 
 // RenderProjection (0x8304EF70) for one shadow volume: z-fail stencil marking of the frustum box, then
@@ -597,13 +599,92 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     if (!renderShadowDepth(g, model, p, rq)) return;
     if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }   // World DPG pass
     depthPrepass(g, model);
-    ensureSceneDepth();
+    static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;
+    static const bool rectCheck = std::getenv("WFC_SHADOWRECTCHECK") != nullptr;
+    projectSubjectShadow(p, rq, fullPasses);
+    if (rectCheck && !fullPasses) shadowRectCheck(p, rq);
+}
+
+void Pipeline::shadowRectCheck(const ShadowProjector& p, const ShadowRequest& rq) {
+    std::vector<uint8_t> a((size_t)maskW_ * maskH_ * 4), b(a.size());
+    glBindTexture(GL_TEXTURE_2D, maskBlurTex_);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, a.data());
+    swapMaskSet(refMask_);
+    shadowRefPass_ = true;
+    projectSubjectShadow(p, rq, true);
+    shadowRefPass_ = false;
+    glBindTexture(GL_TEXTURE_2D, maskBlurTex_);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, b.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    swapMaskSet(refMask_);
+    long n = 0, mx = 0;
+    for (size_t i = 0; i < a.size(); i += 4) {
+        const long d = std::labs((long)a[i] - (long)b[i]);
+        if (d) { ++n; mx = std::max(mx, d); }
+    }
+    ++rectChecks_;
+    if (n) ++rectDiffs_;
+    rectMaxTexels_ = std::max(rectMaxTexels_, n); rectMaxAbs_ = std::max(rectMaxAbs_, mx);
+    if (rectChecks_ % 500 == 0)
+        LOG_INFO("SHADOWRECTCHECK %ld projections: %ld with differing blurred-mask texels (max %ld texels, max |d| %ld / 255)",
+                 rectChecks_, rectDiffs_, rectMaxTexels_, rectMaxAbs_);
+}
+
+void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses) {
+    // Every per-subject pass only changes (or reads) pixels inside the shadow volume's screen rect: the scene-depth
+    // copy, the mask depth fill, the stencil volume + its clear, and the blur (whose taps reach <= 4 mask texels per
+    // pass: recomputed over the rect + 8). Outside it the inputs are unchanged, so the result is identical to the
+    // full-screen passes (WFC_SHADOWFULL=1), which at 64 players on Seed were ~4 full-screen passes per robot (the
+    // GPU "chars" time: 1.9 ms at 1080p, 4.0 ms at 4K). The frame's first projection blurs the whole mask (its blur
+    // targets hold the previous frame).
+    ensureShadowMask();
+    int mr[4] = {0, 0, maskW_, maskH_};                      // mask pixels, x0 y0 x1 y1 (exclusive)
+    bool useRect = !fullPasses;
+    {
+        const core::Mat4 invS = inverse4(rq.viewProj);
+        float lo[2] = {1e30f, 1e30f}, hi[2] = {-1e30f, -1e30f};
+        for (int i = 0; i < 8 && useRect; ++i) {
+            const float x = (i & 1) ? 1.0f : -1.0f, y = (i & 2) ? 1.0f : -1.0f, z = (i & 4) ? 1.0f : -1.0f;
+            const float* m = invS.m;
+            const float ww = m[3] * x + m[7] * y + m[11] * z + m[15];
+            const core::Vec3 c{(m[0] * x + m[4] * y + m[8] * z + m[12]) / ww, (m[1] * x + m[5] * y + m[9] * z + m[13]) / ww,
+                               (m[2] * x + m[6] * y + m[10] * z + m[14]) / ww};
+            const float* v = viewProj_.m;
+            const float cw = v[3] * c.x + v[7] * c.y + v[11] * c.z + v[15];
+            if (!(cw > 1e-3f)) { useRect = false; break; }   // a corner at / behind the eye: whole screen
+            const float cx = (v[0] * c.x + v[4] * c.y + v[8] * c.z + v[12]) / cw;
+            const float cy = (v[1] * c.x + v[5] * c.y + v[9] * c.z + v[13]) / cw;
+            lo[0] = std::min(lo[0], cx); lo[1] = std::min(lo[1], cy); hi[0] = std::max(hi[0], cx); hi[1] = std::max(hi[1], cy);
+        }
+        if (useRect) {
+            const int M = 8;
+            mr[0] = std::max(0, (int)std::floor((lo[0] * 0.5f + 0.5f) * (float)maskW_) - M);
+            mr[1] = std::max(0, (int)std::floor((lo[1] * 0.5f + 0.5f) * (float)maskH_) - M);
+            mr[2] = std::min(maskW_, (int)std::ceil((hi[0] * 0.5f + 0.5f) * (float)maskW_) + M);
+            mr[3] = std::min(maskH_, (int)std::ceil((hi[1] * 0.5f + 0.5f) * (float)maskH_) + M);
+            if (mr[2] <= mr[0] || mr[3] <= mr[1]) { mr[0] = mr[1] = 0; mr[2] = mr[3] = 1; }   // off screen: a token texel
+        } else {
+            mr[0] = mr[1] = 0; mr[2] = maskW_; mr[3] = maskH_;
+        }
+    }
+    const bool firstThisFrame = maskDrawnFrame_ != frameNo_;
+    if (!useRect) ensureSceneDepth();
+    else if (depthDirty_ && depthCopyFbo_) {                 // copy only the rect (the copy stays dirty for others)
+        const int fx = (fbW_ + maskW_ - 1) / maskW_, fy = (fbH_ + maskH_ - 1) / maskH_;
+        const int x0 = std::max(0, mr[0] * fx - fx), y0 = std::max(0, mr[1] * fy - fy);
+        const int x1 = std::min(vpW_, mr[2] * fx + fx), y1 = std::min(vpH_, mr[3] * fy + fy);
+        BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+        BindFramebuffer(GL_DRAW_FRAMEBUFFER, depthCopyFbo_);
+        if (x1 > x0 && y1 > y0) BlitFramebuffer(x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    }
     const int Res = shadowDepthResolution(kMaxShadowResolution);
     const float k = kShadowFilterRadius / (float)Res;
     float edge[8], refine[24];
     for (int i = 0; i < 8; ++i) edge[i] = kEdgeSampleOffsets[i] * k;
     for (int i = 0; i < 24; ++i) refine[i] = kRefiningSampleOffsets[i] * k;
     beginShadowMask();
+    if (useRect) { glEnable(GL_SCISSOR_TEST); glScissor(mr[0], mr[1], mr[2] - mr[0], mr[3] - mr[1]); }
     fillMaskDepth();
     core::Mat4 invVP = inverse4(viewProj_);
     UseProgram(shadowProjProg_);
@@ -638,17 +719,20 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
         float wz = m[2] * x + m[6] * y + m[10] * z + m[14], ww = m[3] * x + m[7] * y + m[11] * z + m[15];
         corners[i] = core::Vec3{wx / ww, wy / ww, wz / ww};
     }
-    drawShadowVolume(corners, viewProj_, shadowProjProg_);
+    drawShadowVolume(corners, viewProj_, shadowProjProg_);   // (its stencil clear honours the scissor)
+    glDisable(GL_SCISSOR_TEST);
     ActiveTexture(GL_TEXTURE0);
     // FinishRenderingShadowMask (resolve) + BlurShadowMask: the blurred mask is rebuilt from the full
-    // product of this frame's projections each time one is added
-    blurShadowMask();
+    // product of this frame's projections each time one is added (only where it can have changed)
+    blurShadowMask(useRect && !firstThisFrame ? mr : nullptr);
     UseProgram(0);
     maskDrawnFrame_ = frameNo_;
-    ++statShadowProj_;
-    ShadowFrameInfo fi;
-    fi.form = envForm_; fi.source = p.source; fi.type = p.type; fi.res = rq.res; fi.factor = rq.modColor[0];
-    shadowFrame_.push_back(fi);
+    if (!shadowRefPass_) {
+        ++statShadowProj_;
+        ShadowFrameInfo fi;
+        fi.form = envForm_; fi.source = p.source; fi.type = p.type; fi.res = rq.res; fi.factor = rq.modColor[0];
+        shadowFrame_.push_back(fi);
+    }
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, vpW_, vpH_);
     glDepthFunc(GL_LEQUAL);
