@@ -572,4 +572,7 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
   decodes those only (cleared at release; the next warm-up picks again). DM_FINALSTRETCH_LP (6 waves, 248 MB, 2 events):
   Experimental's 20-min 32 v 32 sweep showed a +236 MB in-match step at ~60 s left; now 47-82 MB per pick (in game:
   81.9 MB, 115 ms on the worker vs 282 ms). Smaller streamed cues (announcer / dialogue) keep the pick at every play.
+  Pick per play is kept: the first play takes the pre-picked waves; a second play while they are resident decodes the full
+  set (until release) and launch picks among all waves again. A looping voice keeps its wave across wraps (as the original:
+  the pick is per instance).
   Suite: a check that only one wave per event of DM_FINALSTRETCH_LP is decoded (741 pass; the 42 FAKE_TEST_MAP data fails as before).

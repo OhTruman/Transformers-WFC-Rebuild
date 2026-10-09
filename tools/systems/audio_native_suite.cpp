@@ -1726,6 +1726,17 @@ static void testMatchAudio() {
             if (p.find("MX_ENTER_THE_CORE_") != std::string::npos || p.find("MX_MEGATRONS_POWER_FULL_03_LP") != std::string::npos) ++full;
         }
         CHECK(perc == 1 && full == 1, "DM_FINALSTRETCH_LP decodes only the picked wave per event (%d of 2, %d of 4)", perc, full);
+        // a second play while resident: the original picks per play -> the full set is decoded and picked from again
+        const int id2 = cues.play("BL_LVL_MP_MX.DM_FINALSTRETCH_LP", core::Vec3{0, 0, 0}, 0.0f, 0.0f);
+        run(0.5f);
+        perc = full = 0;
+        for (const auto& kv : rec.paths) {
+            const std::string& p = kv.first;
+            if (p.find("MX_OMEGA_LIVES_PERC_LP_01") != std::string::npos || p.find("MX_PRISON_BREAK_PERC_BASS_LP_01") != std::string::npos) ++perc;
+            if (p.find("MX_ENTER_THE_CORE_") != std::string::npos || p.find("MX_MEGATRONS_POWER_FULL_03_LP") != std::string::npos) ++full;
+        }
+        CHECK(id2 >= 0 && perc == 2 && full == 4, "a second play decodes the full set (pick per play kept): %d of 2, %d of 4", perc, full);
+        cues.stop(id2, 0.0f);
     }
     m.gameTypeMessage("TnGameTypeMessageTDM", 2, 1); run(0.2f);
     CHECK(host.music().queued().cue == "BL_LVL_MP_MX.DM_END_DECEPTICONS_WIN" && host.music().queued().priority == 1 &&
