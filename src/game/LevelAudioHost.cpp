@@ -9,7 +9,8 @@ bool LevelAudioHost::load(const std::string& level, const std::string& manifestP
     if (!audio_) return false;
     if (!level_.empty()) unload();
     const std::string path = manifestPath.empty() ? root_ + "/Maps/" + level + "/audio.json" : manifestPath;
-    cues_.waitWarm(level);                              // a prefetch's worker decodes for this level: done -> cache hits
+    // No wait for this level's prefetch: its worker decodes and the bank warm share files (a load waits for a file another
+    // worker is decoding), and cues not decoded yet start when ready - a main-thread wait here was a menu hitch with banks.
     const bool ok = ambient_.load(path, root_ + "/../content/", cues_, audio_, level);
     cues_.releaseWarmExcept(level);                     // other prefetched levels that never loaded: no orphan samples
     for (const auto& pm : prefetchedMusic_) {          // ... and no music pinned for them forever

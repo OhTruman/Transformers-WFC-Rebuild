@@ -1113,7 +1113,8 @@ static void testLifecycle() {
     for (int cycle = 0; cycle < 4; ++cycle) {
         const MapCase& mc = maps[cycle % 2];
         ramb.load(mc.path, content, rc, a);
-        peakBytes = std::max(peakBytes, a->residentBytes());
+        for (int k = 0; k < 500 && rc.bankWarms() > 0; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); rc.tick(1.0f / 30.0f); }
+        peakBytes = std::max(peakBytes, a->residentBytes());   // (original banks: after the map bank's worker decode is adopted)
         for (int k = 0; k < 30; ++k) {
             rc.setListener(mc.spot); ramb.tick(1.0f / 30.0f, mc.spot, mc.spot, rc);
             if (k % 10 == 0) rc.play("SHOOT", mc.spot, 0.0f);
@@ -1123,6 +1124,9 @@ static void testLifecycle() {
         const int during = a->activeVoices();
         ramb.unload(rc); rc.stopAll();
         const int after = a->activeVoices();
+        // Original banks decode asynchronously: a map bank still decoding at unload is orphaned and released when it finishes
+        // (the game keeps ticking); wait for that before checking the baseline.
+        for (int k = 0; k < 500 && rc.orphanDecodes() > 0; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); rc.tick(1.0f / 30.0f); }
         const size_t bytes = a->residentBytes();
         backendClean = backendClean && after == 0 && bytes == baseBytes;
         std::printf("  backend cycle %d %-14s voices %d -> %d, PCM peak %.1f MB -> %.1f MB (base %.1f MB)\n", cycle, mc.name, during, after,
@@ -2427,6 +2431,10 @@ static void testLevelWarm() {
         host.load("UI_PartyLobby_m");
         host.unload();
         for (int k = 0; k < 3; ++k) { host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f); }
+        for (int k = 0; k < 500 && (cues.orphanDecodes() > 0 || cues.warmLevels() > 0); ++k) {   // orphaned decodes finish, then go
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f);
+        }
         CHECK(a->residentBytes() == base && cues.warmLevels() == 0, "abandoned UI_Lobby_m prefetch: nothing left resident (%.1f MB over base)",
               (a->residentBytes() - base) / 1048576.0);
         // The 08o freeze scenario: a large streamed cue starts its worker decode, then the level unloads at once (match end ->
@@ -2435,11 +2443,13 @@ static void testLevelWarm() {
         game::MusicTrack mt;
         CHECK(game::AmbientAudio::levelMusicTrack("UI_FrontEnd_m", mt) && cues.play(mt.cue.c_str(), Vec3{0, 0, 0}, 0.0f) >= 0 &&
               cues.waitingInstances() == 1, "unprefetched title music: worker decode started, the instance waits");
+        const int orphansBefore = cues.orphanDecodes();
         auto u0 = std::chrono::steady_clock::now();
         host.unload();
         const double unloadMs = ms(u0);
-        CHECK(unloadMs < 50.0 && cues.orphanDecodes() == 1, "level unload during that decode returns at once (%.1f ms; was a wait on the decode), decode orphaned",
-              unloadMs);
+        CHECK(unloadMs < 50.0 && cues.orphanDecodes() >= orphansBefore + 1,
+              "level unload during that decode returns at once (%.1f ms; was a wait on the decode), decode orphaned (%d -> %d orphans: the music%s)",
+              unloadMs, orphansBefore, cues.orphanDecodes(), cues.orphanDecodes() > orphansBefore + 1 ? " + the level bank still decoding" : "");
         double worst = 0.0;
         for (int k = 0; k < 600 && cues.orphanDecodes() > 0; ++k) {
             auto t = std::chrono::steady_clock::now();

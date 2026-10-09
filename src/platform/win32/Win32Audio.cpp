@@ -17,7 +17,9 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <condition_variable>
 #include <deque>
+#include <set>
 #include <map>
 #include <mutex>
 #include <string>
@@ -383,14 +385,26 @@ public:
     }
     Sound load(const std::string& path) override {
         {
-            std::lock_guard<std::mutex> lk(mx_);
+            std::unique_lock<std::mutex> lk(mx_);
             auto it = loaded_.find(path);
             if (it != loaded_.end()) return it->second;
+            // Another worker is decoding this file (a level prefetch and that level's own warm-up, or an orphaned decode and
+            // its replacement): wait for its result instead of decoding the bank twice.
+            while (inflight_.count(path)) {
+                inflightCv_.wait(lk);
+                it = loaded_.find(path);
+                if (it != loaded_.end()) return it->second;
+            }
+            inflight_.insert(path);
         }
+        struct Done {                                  // whatever happens below: the file is no longer in flight
+            Win32Audio* a; const std::string& p;
+            ~Done() { { std::lock_guard<std::mutex> lk(a->mx_); a->inflight_.erase(p); } a->inflightCv_.notify_all(); }
+        } done{this, path};
         Sample smp;                                    // decode outside the lock
         if (!loadWav(path, smp.pcm, &smp.srcRate)) return kInvalidSound;
         std::lock_guard<std::mutex> lk(mx_);
-        auto again = loaded_.find(path);               // another thread (prefetch warming) decoded it meanwhile: one copy
+        auto again = loaded_.find(path);               // decoded meanwhile (a WAV path racing): one copy
         if (again != loaded_.end()) return again->second;
         size_t idx;
         if (!freeSlots_.empty()) {                     // reuse a released slot (its PCM is already freed), next generation
@@ -923,6 +937,8 @@ private:
     core::Vec3 lpos_{0, 0, 0}, lfwd_{0, 0, -1}, lright_{1, 0, 0};
     std::deque<Sample> sounds_;
     mutable std::mutex mx_;
+    std::set<std::string> inflight_;                           // paths being decoded right now (load(), outside mx_)
+    std::condition_variable inflightCv_;
     std::thread thread_;
     std::atomic<bool> run_{false};
     std::vector<Voice> voices_;

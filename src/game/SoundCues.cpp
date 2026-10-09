@@ -403,17 +403,27 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         } else toLoad.push_back(cues_.size() - 1);
         ++added;
     }
-    if (audio_ && audio_->threadSafeLoad()) {   // a map bank: decode its resident waves in parallel, then take cached handles
-        std::vector<std::string> paths;
-        for (size_t c : toLoad)
+    // Resident cues whose waves are plain WAV reads (or already decoded) load now. Those that would decode an original bank go
+    // to one pooled worker decode for the bank: a level load (the frontend menus have no loading screen) never waits for it;
+    // a play before it finishes starts when the waves are adopted, as the original streamed them.
+    BankWarm bw;
+    for (size_t c : toLoad) {
+        if (audio_ && audio_->threadSafeLoad() && costlyLoad(c)) {
+            bw.cues.push_back(c);
             for (const EventDef& e : cues_[c].events)
                 for (const std::string& f : e.waves) {
                     const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
-                    paths.push_back(abs ? f : contentRoot + f);
+                    bw.paths.push_back(abs ? f : contentRoot + f);
                 }
-        parallelLoad(audio_, paths);
+        } else loadWaves(c, contentRoot);
     }
-    for (size_t c : toLoad) loadWaves(c, contentRoot);
+    if (!bw.cues.empty()) {
+        audio::IAudio* a = audio_;
+        const std::vector<std::string> paths = bw.paths;
+        bw.done = levelLane().submit([a, paths] { parallelLoad(a, paths); });
+        LOG_INFO("sound cues: %zu map cues (%zu waves) decoding on the worker; they start when ready", bw.cues.size(), bw.paths.size());
+        bankWarm_.push_back(std::move(bw));
+    }
     return added;
 }
 
@@ -488,7 +498,21 @@ long long SoundCues::waveBytes(size_t c) {
 
 bool SoundCues::isWarming(size_t c) const {
     for (const Warm& w : warming_) if (w.cue == c) return true;
+    for (const BankWarm& w : bankWarm_) for (size_t x : w.cues) if (x == c) return true;
     return false;
+}
+
+bool SoundCues::adoptBankWarm() {
+    bool any = false;
+    for (size_t i = 0; i < bankWarm_.size();) {
+        BankWarm& w = bankWarm_[i];
+        if (w.done.valid() && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++i; continue; }
+        if (w.done.valid()) w.done.wait();
+        for (size_t c : w.cues) if (c < cues_.size()) loadWaves(c, contentRoot_);   // cache hits
+        bankWarm_.erase(bankWarm_.begin() + (long)i);
+        any = true;
+    }
+    return any;
 }
 
 bool SoundCues::startWarm(size_t c) {
@@ -538,6 +562,7 @@ void SoundCues::timedWait(std::future<void>& f, const char* why, const std::stri
 bool SoundCues::pathNeeded(const std::string& path) const {
     for (const Warm& w : warming_) for (const std::string& p : w.paths) if (p == path) return true;
     for (const LevelWarm& w : levelWarm_) for (const std::string& p : w.paths) if (p == path) return true;
+    for (const BankWarm& w : bankWarm_) for (const std::string& p : w.paths) if (p == path) return true;
     return false;
 }
 
@@ -570,7 +595,7 @@ int SoundCues::processOwnOrphans() {
                 bool needed = false;
                 for (const SoundCues* t : tables()) needed = needed || t->pathNeeded(p);   // a live decode / prefetch wants it
                 if (needed) continue;
-                const audio::Sound h = audio_->load(p);                     // cached: the orphan's handle, no decode
+                const audio::Sound h = audio_->cached(p);                   // the orphan's handle; never decodes here (main thread)
                 if (h == audio::kInvalidSound) continue;
                 bool owned = false;
                 for (const SoundCues* t : tables()) owned = owned || t->ownsSample(h);
@@ -630,8 +655,10 @@ int SoundCues::releaseWarmExcept(const std::string& keep) {
     int released = 0;
     for (size_t i = 0; i < levelWarm_.size();) {
         LevelWarm& w = levelWarm_[i];
-        if (w.tag != keep && w.done.valid() && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            orphans_.push_back({w.paths, w.tag, std::move(w.done)});      // still decoding: do not wait, release later
+        const bool busy = w.done.valid() && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+        if (busy) {   // still decoding: never waited for. Another level's: released when done. The kept level's own: its files
+                      // are owned by the level's cues or wanted by their bank warm, so the orphan pass releases nothing of them.
+            orphans_.push_back({w.paths, w.tag, std::move(w.done)});
             levelWarm_.erase(levelWarm_.begin() + (long)i);
             continue;
         }
@@ -698,6 +725,8 @@ int SoundCues::unloadMapCues() {
     adoptWarm(false);
     for (Warm& w : warming_) orphanWarm(w);
     warming_.clear();
+    for (BankWarm& w : bankWarm_) orphans_.push_back({w.paths, "map bank", std::move(w.done)});
+    bankWarm_.clear();
     for (size_t i = live_.size(); i-- > 0;) {
         if (!cues_[(size_t)live_[i].cue].mapBank) continue;
         const int id = live_[i].id;
@@ -800,11 +829,14 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
     if (!warming_.empty()) adoptWarm(false, c);        // a finished prefetch of this cue: take it now (no wait)
+    if (!bankWarm_.empty()) adoptBankWarm();
     if ((size_t)c < pick_.size() && !pick_[(size_t)c].empty() && pickUsed_[(size_t)c] && (size_t)c < resident_.size() &&
         resident_[(size_t)c]) {                         // played before with this pick: the original picks again per play
         pick_[(size_t)c].clear(); pickOff_[(size_t)c] = 1; resident_[(size_t)c] = 0;   // -> decode the full set below
     }
     bool deferred = false;
+    if (!cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c]) && isWarming((size_t)c))
+        deferred = true;                               // a map cue whose bank is still decoding: starts when adopted
     if (cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c])) {
         // Not resident (no prefetch, or still decoding): on a thread-safe backend decode on the worker and start the
         // instance when the waves are adopted (a short start delay instead of a 150-700 ms main-thread stall - the match
@@ -1047,6 +1079,7 @@ void SoundCues::stop(int id, float fade) {
 
 void SoundCues::tick(float dt) {
     if (!warming_.empty()) adoptWarm(false);
+    if (!bankWarm_.empty()) adoptBankWarm();
     processOrphans();                                  // this table's and any other (unticked) table's orphaned decodes
     for (size_t i = 0; i < live_.size(); ++i) {
         Instance& in = live_[i];
