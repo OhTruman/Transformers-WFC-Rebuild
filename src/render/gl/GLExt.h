@@ -97,7 +97,7 @@ namespace glx {
     X(void, Uniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, Uniform1iv, (GLint, GLsizei, const GLint*)) \
     X(void, Uniform3fv, (GLint, GLsizei, const GLfloat*)) \
-    X(void, Uniform4fv, (GLint, GLsizei, const GLfloat*)) \
+    X(void, Uniform4fv, (GLint, GLsizei, const GLfloat*))     X(void, Uniform4uiv, (GLint, GLsizei, const GLuint*)) \
     X(void, UniformMatrix4fv, (GLint, GLsizei, GLboolean, const GLfloat*)) \
     X(void, GenBuffers, (GLsizei, GLuint*)) \
     X(void, BindBuffer, (GLenum, GLuint)) \

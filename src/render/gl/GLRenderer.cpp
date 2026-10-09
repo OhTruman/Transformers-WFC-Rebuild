@@ -1536,6 +1536,16 @@ public:
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
+    void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
+    void setUpscaling(int mode) override {
+        static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};   // AMD FSR 1 presets (Quality / Balanced / Perf.)
+        if (mode <= 0 || mode > 3) wfc_.setUpscaling(1.0f, -1.0f);       // Off: the original presentation
+        else wfc_.setUpscaling(kScale[mode], 0.2f);
+        LOG_INFO("renderer: upscaling mode %d (%s)", mode, mode <= 0 || mode > 3 ? "off" : mode == 1 ? "FSR 1 Quality" :
+                 mode == 2 ? "FSR 1 Balanced" : "FSR 1 Performance");
+    }
+    void setHdTextures(bool on) override { hdTextures_ = on; LOG_INFO("renderer: HD textures %s (no HD root yet: originals)", on ? "on" : "off"); }
+    bool hdTextures_ = false;
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";
