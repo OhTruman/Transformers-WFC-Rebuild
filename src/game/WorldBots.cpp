@@ -673,7 +673,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                             const float a = 6.2831853f * (float)k / 16.0f;
                             const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
                             if (!clearLine(pos, q)) continue;   // a clear straight line (knee and chest height)
-                            const int cell = botNav_.findCell(q, 1.5f, 8.0f);
+                            const int cell = botNav_.findCell(q, 1.5f, 25.0f);   // drops allowed up to 25 m (a roof a blast threw it onto: Molten)
                             if (cell < 0) continue;
                             const float score = hdist(q, w.pos);   // prefer the side toward the corridor
                             // The clear probe point itself (its cell's centroid may lie behind a wall: the walk there pinned bots)
