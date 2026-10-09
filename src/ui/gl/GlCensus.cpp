@@ -50,12 +50,12 @@ void GlCensus::begin() {
     Fns& f = fns();
     if (!f.ok || !glx::GenBuffers) { active_ = false; return; }
     tex0_ = probe([](GLsizei c, GLuint* n) { glGenTextures(c, n); }, [](GLsizei c, const GLuint* n) { glDeleteTextures(c, n); });
-    buf0_ = probe(glx::GenBuffers, f.deleteBuffers);
+    buf0_ = probe(glx::GenBuffers, glx::DeleteBuffers);   // the glx entry points throughout (GL traces stay exact)
     fbo0_ = probe(glx::GenFramebuffers, glx::DeleteFramebuffers);
     rbo0_ = probe(glx::GenRenderbuffers, glx::DeleteRenderbuffers);
-    vao0_ = probe(glx::GenVertexArrays, f.deleteVertexArrays);
+    vao0_ = probe(glx::GenVertexArrays, glx::DeleteVertexArrays);
     GLuint p = glx::CreateProgram();
-    f.deleteProgram(p);
+    glx::DeleteProgram(p);
     prog0_ = p;
     active_ = true;
 }
@@ -99,11 +99,11 @@ std::string GlCensus::release(const Owned& keep) {
         return count;
     };
     int t = sweep(tex0_, [](GLuint n) { return glIsTexture(n) == GL_TRUE; }, [](GLuint n) { glDeleteTextures(1, &n); }, keep.textures);
-    int b = sweep(buf0_, [&](GLuint n) { return f.isBuffer(n) == GL_TRUE; }, [&](GLuint n) { f.deleteBuffers(1, &n); }, keep.buffers);
+    int b = sweep(buf0_, [&](GLuint n) { return f.isBuffer(n) == GL_TRUE; }, [&](GLuint n) { glx::DeleteBuffers(1, &n); }, keep.buffers);
     int fb = sweep(fbo0_, [&](GLuint n) { return f.isFramebuffer(n) == GL_TRUE; }, [&](GLuint n) { glx::DeleteFramebuffers(1, &n); }, keep.framebuffers);
     int rb = sweep(rbo0_, [&](GLuint n) { return f.isRenderbuffer(n) == GL_TRUE; }, [&](GLuint n) { glx::DeleteRenderbuffers(1, &n); }, keep.renderbuffers);
-    int va = sweep(vao0_, [&](GLuint n) { return f.isVertexArray(n) == GL_TRUE; }, [&](GLuint n) { f.deleteVertexArrays(1, &n); }, keep.vertexArrays);
-    int pr = sweep(prog0_, [&](GLuint n) { return f.isProgram(n) == GL_TRUE; }, [&](GLuint n) { f.deleteProgram(n); }, keep.programs);
+    int va = sweep(vao0_, [&](GLuint n) { return f.isVertexArray(n) == GL_TRUE; }, [&](GLuint n) { glx::DeleteVertexArrays(1, &n); }, keep.vertexArrays);
+    int pr = sweep(prog0_, [&](GLuint n) { return f.isProgram(n) == GL_TRUE; }, [&](GLuint n) { glx::DeleteProgram(n); }, keep.programs);
     char b2[256];
     std::snprintf(b2, sizeof b2, "textures=%d buffers=%d framebuffers=%d renderbuffers=%d vertexArrays=%d programs=%d", t, b, fb, rb, va, pr);
     return b2;
