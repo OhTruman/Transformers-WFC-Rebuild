@@ -652,6 +652,19 @@ std::string Pipeline::contentRoot() {
     return (s == std::string::npos ? std::string(".") : a.substr(0, s)) + "/content/";
 }
 
+std::string Pipeline::relocateDataPath(const std::string& path) const {
+    if (path.size() < 3 || path[1] != ':') return path;              // only drive-absolute paths from the build
+    std::string low = path;
+    for (char& c : low) c = c == '\\' ? '/' : (char)std::tolower((unsigned char)c);
+    static const std::string kContent = "/extractedassets/content/", kRender = "/work/render/";
+    size_t k = low.rfind(kContent);
+    if (k != std::string::npos) return contentRoot() + path.substr(k + kContent.size());
+    k = low.rfind(kRender);
+    const size_t sl = dataDir_.find_last_of("/\\");
+    if (k != std::string::npos && sl != std::string::npos) return dataDir_.substr(0, sl + 1) + path.substr(k + kRender.size());
+    return path;
+}
+
 // Prewarm: build every compiled original material not yet used (effect, weapon materials) and decode its textures,
 // as the original had them resident from the map's cooked packages before combat - instead of on first draw (the
 // first-shot hitch). M54: run by the map loader with the load yields (it used to run on frame 2: a ~1.2 s stall after
@@ -845,11 +858,11 @@ bool Pipeline::load(const std::string& mapName) {
         const assets::Json& tx = info["textures"];
         for (size_t i = 0; i < tx.size(); ++i) {
             const assets::Json& t = tx[i];
-            s.files.push_back(t["file"].asString());
+            s.files.push_back(relocateDataPath(t["file"].asString()));
             s.srgb.push_back(t["srgb"].asBool(true));
             s.cube.push_back(t["kind"].asString() == "cube");
             std::vector<std::string> fc;
-            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(t["faces"][k].asString());
+            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(relocateDataPath(t["faces"][k].asString()));
             s.faces.push_back(fc);
             s.clampU.push_back(t["address_x"].asString() == "TA_Clamp");
             s.clampV.push_back(t["address_y"].asString() == "TA_Clamp");

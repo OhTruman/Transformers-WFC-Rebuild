@@ -152,6 +152,10 @@ public:
     static std::string assetRoot();
     static std::string renderDataRoot();              // WFC_RENDER_DATA, else the first work/render above the exe holding data
     static std::string contentRoot();
+    // An absolute path written into render data by the build machine (".../ExtractedAssets/content/..." or
+    // ".../work/render/<map>/...") rebased onto this run's content root / render-data root, so a relocated package
+    // (another drive, the slim package's .xpr twins) reads its own copy; any other path is returned unchanged.
+    std::string relocateDataPath(const std::string& path) const;
     void release();                                   // delete every GL object, reset to the unloaded state
     static void clearProgramCache();                  // M54: linked programs kept across loads (renderer teardown)
     void prewarmMaterials();                          // M54: effect / weapon materials, yielding (map loads)
