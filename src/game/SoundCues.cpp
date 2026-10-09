@@ -181,7 +181,9 @@ const CueDef* SoundCues::cueDef(const char* name) const {
 void SoundCues::ensurePick(size_t c) {
     if (c >= cues_.size() || !cues_[c].streamed) return;
     if (pick_.size() <= c) pick_.resize(c + 1);
-    if (!pick_[c].empty() || waveBytes(c) <= kPrePickBytes) return;
+    if (pickOff_.size() <= c) pickOff_.resize(c + 1, 0);
+    if (pickUsed_.size() <= c) pickUsed_.resize(c + 1, 0);
+    if (!pick_[c].empty() || pickOff_[c] || waveBytes(c) <= kPrePickBytes) return;
     for (const EventDef& e : cues_[c].events)
         pick_[c].push_back(e.waves.size() > 1 ? std::rand() % (int)e.waves.size() : -1);   // launch's choice, made now
 }
@@ -614,7 +616,7 @@ void SoundCues::releaseWaves(size_t c) {
         ev.clear();
     }
     if (c < resident_.size()) resident_[c] = 0;
-    if (c < pick_.size()) pick_[c].clear();                         // the next warm-up picks again
+    if (c < pick_.size()) { pick_[c].clear(); pickUsed_[c] = 0; pickOff_[c] = 0; }   // the next warm-up picks again
 }
 
 int SoundCues::mapCueCount() const {
@@ -731,6 +733,10 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
     if (!warming_.empty()) adoptWarm(false, c);        // a finished prefetch of this cue: take it now (no wait)
+    if ((size_t)c < pick_.size() && !pick_[(size_t)c].empty() && pickUsed_[(size_t)c] && (size_t)c < resident_.size() &&
+        resident_[(size_t)c]) {                         // played before with this pick: the original picks again per play
+        pick_[(size_t)c].clear(); pickOff_[(size_t)c] = 1; resident_[(size_t)c] = 0;   // -> decode the full set below
+    }
     bool deferred = false;
     if (cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c])) {
         // Not resident (no prefetch, or still decoding): on a thread-safe backend decode on the worker and start the
@@ -743,6 +749,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
             LOG_INFO("sound cues: streamed %s decoded in %.1f ms", name, ticksToMs(nowTicks() - s0));
         }
     }
+    if ((size_t)c < pick_.size() && !pick_[(size_t)c].empty()) pickUsed_[(size_t)c] = 1;   // this play takes the pick
     if ((size_t)c < pinned_.size()) pinned_[(size_t)c] = 0;     // played: normal release rule from now on
     const CueDef& cd = cues_[(size_t)c];
     Instance in;

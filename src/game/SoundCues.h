@@ -298,8 +298,11 @@ private:
     std::vector<long long> waveBytes_;
     // A large streamed cue (the match music: DM_FINALSTRETCH_LP has 6 waves / 248 MB, of which one per event plays) picks its
     // wave per event when its decode is queued, not at launch, and decodes only those: the same random choice, made earlier.
-    // Cleared when the waves are released, so the next warm-up picks again.
+    // Cleared when the waves are released, so the next warm-up picks again. A second play while the picked waves are still
+    // resident would repeat the same wave where the original picks per play: that play decodes the full set (pickOff_) and
+    // launch picks among all of them again.
     std::vector<std::vector<int>> pick_;                           // [cue][event] the pre-picked wave (-1: all)
+    std::vector<char> pickUsed_, pickOff_;                         // [cue] the pick was played / full set until release
     void ensurePick(size_t cue);
     bool wanted(size_t cue, size_t event, size_t wave) const;
     void startInstance(Instance& in);                 // launch the t=0 events, queue the timed ones
