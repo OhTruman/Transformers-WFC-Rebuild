@@ -8,6 +8,7 @@
 #include "platform/Image.h"
 #include "core/Log.h"
 
+#include <cstdlib>
 #include <mutex>
 
 namespace platform {
@@ -33,9 +34,18 @@ std::wstring widen(const std::string& s) {
 
 } // namespace
 
+ImageFallback g_fallback = nullptr;
+
+void setImageFallback(ImageFallback f) { g_fallback = f; }
+
 bool decodeImage(const std::string& path, render::ImageData& out) {
-    ensureGdiplus();
     std::wstring wpath = widen(path);
+    static const bool ddsFirst = std::getenv("WFC_DDSFIRST") != nullptr;
+    static const bool pngLog = std::getenv("WFC_PNGLOG") != nullptr;
+    if (g_fallback && (ddsFirst || GetFileAttributesW(wpath.c_str()) == INVALID_FILE_ATTRIBUTES) && g_fallback(path, out))
+        return true;
+    if (pngLog) LOG_INFO("PNGLOG opened %s", path.c_str());
+    ensureGdiplus();
     Gdiplus::Bitmap bmp(wpath.c_str());
     if (bmp.GetLastStatus() != Gdiplus::Ok) {
         LOG_WARN("image: decode failed %s", path.c_str());

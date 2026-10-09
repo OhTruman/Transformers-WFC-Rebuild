@@ -1296,6 +1296,10 @@ std::string ddsKey(const std::string& file) {
     std::string f = file;
     std::replace(f.begin(), f.end(), '\\', '/');
     std::transform(f.begin(), f.end(), f.begin(), ::tolower);
+    for (size_t p; (p = f.find("/../")) != std::string::npos && p > 0;) {   // ".../verticalslice/../content/..."
+        const size_t q = f.find_last_of('/', p - 1);
+        f.erase(q == std::string::npos ? 0 : q, p + 3 - (q == std::string::npos ? 0 : q));
+    }
     const size_t lm = f.find("/lightmaps/");
     if (lm != std::string::npos && lm > 0) {
         const size_t ms = f.find_last_of('/', lm - 1);
@@ -1303,7 +1307,9 @@ std::string ddsKey(const std::string& file) {
         return "verticalslice/maps/" + f.substr(ms + 1, lm - ms - 1) + f.substr(lm);
     }
     const size_t ea = f.find("extractedassets/");
-    return ea == std::string::npos ? std::string() : f.substr(ea + 16);
+    if (ea != std::string::npos) return f.substr(ea + 16);
+    const size_t ct = f.rfind("/content/");                         // a relocated ExtractedAssets (packages)
+    return ct == std::string::npos ? std::string() : f.substr(ct + 1);
 }
 inline void rgb565(uint16_t c, int o[3]) {
     const int r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
@@ -1365,6 +1371,24 @@ void decodeLevel(const std::string& fmt, const uint8_t* d, int w, int h, ImageDa
     }
 }
 }  // namespace
+
+// platform::decodeImage's second source: the verified original top level (RGBA8, identical to the PNG)
+static bool decodeOriginalTop(const std::string& file, ImageData& out) {
+    const auto& idx = ddsIndex();
+    auto it = idx.find(ddsKey(file));
+    if (it == idx.end()) return false;
+    const DdsEntry& E = it->second;
+    std::ifstream in(ddsRoot() + "/" + E.dds, std::ios::binary);
+    std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) return false;
+    uint32_t h0, w0;
+    std::memcpy(&h0, &f[12], 4); std::memcpy(&w0, &f[16], 4);
+    if (!w0 || !h0 || f.size() < 128 + levelBytes(E.fmt, (int)w0, (int)h0)) return false;
+    decodeLevel(E.fmt, f.data() + 128, (int)w0, (int)h0, out);
+    if (E.opaque) for (size_t i = 3; i < out.rgba.size(); i += 4) out.rgba[i] = 255;
+    return true;
+}
+static const bool gImageFallbackRegistered = (platform::setImageFallback(&decodeOriginalTop), true);
 
 // Loads `file`'s original blocks into the bound GL_TEXTURE_2D (levels 0..n-1, GL_TEXTURE_MAX_LEVEL n-1); false = no
 // DDS for it (the caller decodes the PNG). `bytes` receives the uploaded size (MEMSTATS).
