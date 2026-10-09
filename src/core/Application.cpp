@@ -4460,7 +4460,7 @@ void Application::runBotTest() {
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
         if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
-        check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms)");
+        check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms): avg " + std::to_string(world_.botMsAverage()) + " ms for " + std::to_string(bots) + " bots, max " + std::to_string(world_.botMsMax()) + " ms");
         // Let the match run out: it completes and the next one starts clean.
         for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
         check(world_.match().state() == game::Match::State::MatchOver, "match completed");

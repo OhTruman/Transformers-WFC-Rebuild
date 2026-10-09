@@ -95,6 +95,10 @@ struct BotBrain {
     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
     core::Vec3 watchPos{0, 0, 0}; float watchT = 0.0f; bool watchLogged = false;   // WFC_STUCKWATCH          // WFC_PLAYERBOT: the brain would fire this step (the local player fires through the controller)
     core::Vec3 rejoinFrom{0, 0, 0}; float rejoinStall = 0.0f;   // no progress toward the rejoin point (s)
+    core::Vec3 offMeshFrom{0, 0, 0}; float offMeshStall = 0.0f;   // off the mesh without 0.5 m of movement (s): forces a rejoin search
+    // WFC_STUCKWATCH: when this bot last left the nav mesh, and how (life s, airborne, jump state, speed, the last on-mesh spot).
+    bool watchOnMesh = true; float offMeshAt = -1.0f, offMeshLife = 0.0f, offMeshSpeed = 0.0f; int offMeshAir = 0, offMeshJump = 0;
+    core::Vec3 lastMeshPos{0, 0, 0};
     core::Vec3 unwedge{0, 0, 0};                                 // this step's slide (applied in the serial pass)
     core::Vec3 stuckPos{0, 0, 0}; float stuckT = 0.0f;   // displacement-based stuck detection
     size_t progressWp = (size_t)-1; float progressBest = 1e9f, progressT = 0.0f;   // waypoint-progress stuck detection
