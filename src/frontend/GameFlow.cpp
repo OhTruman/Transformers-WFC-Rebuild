@@ -824,6 +824,15 @@ void GameFlow::chooseNextMap(int prevMapId) {
 
 void GameFlow::setMapId(int id) {
     const MapInfo* mi = cat_->mapById(id);
+    // The original only ever offers GetCompatibleMaps() (CompatibleGameTypes contains the mode tag) [CONFIRMED script];
+    // a request for another map (scripts, QA launch) is refused here so a match never starts on a map without the
+    // mode's spawns / objectives [PC hardening: the original UI cannot send one].
+    if (mi && !lobby_.gameModeTag.empty() && !mi->compatibleWith(lobby_.gameModeTag)) {
+        LOG_WARN("lobby: map %d (%s) is not compatible with %s; selection unchanged", id, mi->mapFilename.c_str(), lobby_.gameModeTag.c_str());
+        FlowTrace::emit("gamelobby.mapRejected", {{"mapId", std::to_string(id)}, {"map", mi->mapFilename}, {"mode", lobby_.gameModeTag},
+                                                  {"why", "not in CompatibleGameTypes"}});
+        return;
+    }
     const bool changed = id != lobby_.mapId;
     lobby_.mapId = id;
     // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
@@ -847,6 +856,11 @@ void GameFlow::hostRequestsGameStart() {
     const MapInfo* mi = cat_->mapById(lobby_.mapId);
     if (!mi || !mi->hasRequiredAssets) {
         FlowTrace::emit("gamelobby.startRefused", {{"mapId", std::to_string(lobby_.mapId)}, {"why", "map has no rebuild runtime data"}});
+        return;
+    }
+    if (!lobby_.gameModeTag.empty() && !mi->compatibleWith(lobby_.gameModeTag)) {
+        LOG_WARN("lobby: start refused - map %s is not compatible with %s", mi->mapFilename.c_str(), lobby_.gameModeTag.c_str());
+        FlowTrace::emit("gamelobby.startRefused", {{"mapId", std::to_string(lobby_.mapId)}, {"why", "map not in CompatibleGameTypes for " + lobby_.gameModeTag}});
         return;
     }
     // HostRequestsGameStart -> CountdownRubicon = true, BeginShortCountdown = 10 s -> FinalCountdown.

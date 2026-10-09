@@ -358,6 +358,13 @@ static void testFlow() {
     check(f.ui().state() == UIState::FrontEnd && f.ui().openMovie() == "UI_GFxFrontEnd_p.FrontEnd_GFX_1", "flow.frontend_ui");
     check(runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; }), "flow.reached_gamelobby");
     check(f.lobby().gameModeTag == "TDM" && f.lobby().mapSelectionMethod == 1, "flow.gamelobby_private_tdm");
+    {   // An Escalation-only map (CompatibleGameTypes=SV) requested for TDM is refused; a TDM map is accepted.
+        const int before = f.lobby().mapId;
+        f.call("Online.SetSelectedMapID", {"505"});
+        const bool refused = f.lobby().mapId == before;
+        f.call("Online.SetSelectedMapID", {"508"});
+        check(refused && f.lobby().mapId == 508, "flow.incompatible_map_refused", std::to_string(before) + " -> " + std::to_string(f.lobby().mapId));
+    }
     check(runUntil(rt, [&] { return f.hasPendingMatch(); }, 60 * 20), "flow.match_launch_after_countdown");
     const std::string expected = "MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame"
                                  "?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters="
