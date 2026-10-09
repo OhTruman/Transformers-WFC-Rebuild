@@ -46,11 +46,12 @@ template <class M> inline auto setBindTangents(M& dst, const std::vector<float>&
 template <class M> inline void setBindTangents(M&, const std::vector<float>&, long) {}
 
 // The bind-pose mesh of a model for the GPU path (built once; its address is the renderer's static-buffer key).
+// Main thread (the draw). Kept on the model (SkinnedModel::gpuBind): a static map keyed by model address grew by every reloaded
+// model (~9 MB per match, Systems) and could hand a new model at a freed address the old mesh.
 inline render::MeshData& bindMeshOf(const assets::SkinnedModel& m) {
-    static std::unordered_map<const assets::SkinnedModel*, render::MeshData> cache;
-    auto it = cache.find(&m);
-    if (it != cache.end()) return it->second;
-    render::MeshData& b = cache[&m];
+    if (m.gpuBind.mesh) return *m.gpuBind.mesh;
+    m.gpuBind.mesh = std::make_unique<render::MeshData>();
+    render::MeshData& b = *m.gpuBind.mesh;
     b.positions = m.positions; b.normals = m.normals; b.uv = m.uv; b.indices = m.indices; b.subs = m.subs; b.mats = m.mats;
     if (!m.tangents.empty()) setBindTangents(b, m.tangents, 0);
     return b;

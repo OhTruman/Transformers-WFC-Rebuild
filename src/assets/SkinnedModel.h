@@ -2,6 +2,7 @@
 // Self-contained (reads its own GLB); complements the static baker in Gltf.h.
 #pragma once
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 #include "core/Math.h"
@@ -43,6 +44,17 @@ struct Node {
 };
 
 struct SkinnedModel {
+    // GPU skinning's bind mesh (game/GpuSkin.h bindMeshOf): built at the model's first GPU-skinned draw and freed with the model.
+    // A copy, a move or an assignment (a reload) starts without one, so it can never describe other data or outlive its model.
+    struct BindCache {
+        std::unique_ptr<render::MeshData> mesh;
+        BindCache() = default;
+        BindCache(const BindCache&) {}
+        BindCache(BindCache&&) noexcept {}
+        BindCache& operator=(const BindCache&) { mesh.reset(); return *this; }
+        BindCache& operator=(BindCache&&) noexcept { mesh.reset(); return *this; }
+    };
+    mutable BindCache gpuBind;
     // Skinned mesh, in mesh-local space (one combined primitive set).
     std::vector<float> positions;    // 3/vertex
     std::vector<float> normals;      // 3/vertex
