@@ -95,6 +95,18 @@ out vec2 oVel;
 void main() { oVel = (vPrev.xy / vPrev.w * 0.5 + 0.5) - (vCur.xy / vCur.w * 0.5 + 0.5); }
 )";
 
+// rigid objects (movers, mover-posed props, pickups): the same vertex through this and last frame's transform
+const char* kRigidVS = R"(#version 430
+layout(location=0) in vec3 aPos;
+uniform mat4 uVP, uPrevVP, uModel, uPrevModel;
+out vec4 vCur, vPrev;
+void main() {
+    vCur = uVP * (uModel * vec4(aPos, 1.0));
+    vPrev = uPrevVP * (uPrevModel * vec4(aPos, 1.0));
+    gl_Position = vCur;
+}
+)";
+
 bool invert(const float* m, float* out) {        // column-major 4x4 (core::Mat4)
     float inv[16];
     inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
@@ -179,13 +191,26 @@ void Pipeline::motionCameraPass() {
 
 // the characters' own motion over the camera velocity: their visible pixels only (scene depth, LEQUAL with a small
 // bias toward the camera so the separately compiled VS still passes where the main pass wrote the depth)
+void Pipeline::motionRecordMesh(int id, const core::Mat4& model, const core::Mat4& prevModel) {
+    if (id < 0 || (size_t)id >= meshes_.size() || warmup_) return;
+    if (std::memcmp(model.m, prevModel.m, sizeof model.m) == 0) return;   // not moving: the camera velocity is right
+    const GpuMesh& g = meshes_[(size_t)id];
+    for (const Sub& s : g.subs)
+        if (s.count && (s.prog < 0 || progs_[(size_t)s.prog].blend <= 1)) motionRigid_.push_back({g.vao, s.first, s.count, model, prevModel});
+}
+
 void Pipeline::motionObjectPass() {
-    if (!motionVectorsOn() || motionDraws_.empty() || velValidFrame_ != frameNo_) return;
-    if (!velObjProg_) {
+    if (!motionVectorsOn() || (motionDraws_.empty() && motionRigid_.empty()) || velValidFrame_ != frameNo_) return;
+    if (!velRigidProg_) {
+        GLuint vs = compileShader(GL_VERTEX_SHADER, kRigidVS, "motion_rigid.vs");
+        GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kObjectFS, "motion_rigid.fs") : 0;
+        velRigidProg_ = fs ? linkProgram(vs, fs, "motion_rigid") : 0;
+    }
+    if (!velObjProg_ && !motionDraws_.empty()) {
         GLuint vs = compileShader(GL_VERTEX_SHADER, kObjectVS, "motion_object.vs");
         GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kObjectFS, "motion_object.fs") : 0;
         velObjProg_ = fs ? linkProgram(vs, fs, "motion_object") : 0;
-        if (!velObjProg_) { LOG_WARN("wfc: character motion vector shader unavailable"); motionDraws_.clear(); return; }
+        if (!velObjProg_) { LOG_WARN("wfc: character motion vector shader unavailable"); motionDraws_.clear(); }
     }
     GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
     const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
@@ -196,6 +221,7 @@ void Pipeline::motionObjectPass() {
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDepthMask(GL_FALSE);
     glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
     glEnable(GL_POLYGON_OFFSET_FILL); glPolygonOffset(-1.0f, -4.0f);
+    if (velObjProg_ && !motionDraws_.empty()) {
     UseProgram(velObjProg_);
     auto U = [&](const char* n) { return GetUniformLocation(velObjProg_, n); };
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, skinTex_);
@@ -214,6 +240,20 @@ void Pipeline::motionObjectPass() {
         BindVertexArray(d.vao);
         glDrawElements(GL_TRIANGLES, d.count, GL_UNSIGNED_INT, nullptr);
     }
+    }
+    if (velRigidProg_ && !motionRigid_.empty()) {
+        UseProgram(velRigidProg_);
+        auto R = [&](const char* n) { return GetUniformLocation(velRigidProg_, n); };
+        UniformMatrix4fv(R("uVP"), 1, GL_FALSE, viewProj_.m);
+        UniformMatrix4fv(R("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProj_).m);
+        for (const MotionRigid& d : motionRigid_) {
+            UniformMatrix4fv(R("uModel"), 1, GL_FALSE, d.model.m);
+            UniformMatrix4fv(R("uPrevModel"), 1, GL_FALSE, d.prevModel.m);
+            BindVertexArray(d.vao);
+            glDrawElements(GL_TRIANGLES, (GLsizei)d.count, GL_UNSIGNED_INT, (void*)(size_t)(d.first * 4));
+        }
+    }
+    motionRigid_.clear();
     BindVertexArray(0);
     glDisable(GL_POLYGON_OFFSET_FILL);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);

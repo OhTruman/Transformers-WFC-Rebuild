@@ -1418,6 +1418,10 @@ void Pipeline::drawMapPresentation() {
         } else if (p.kind == 3 && p.stateMesh[0] >= 0) {   // scene skeletal actor (bind pose) + its matinee / mover delta
             auto mv = moverDelta_.find(p.actorLower);
             draw(p.stateMesh[0], mv != moverDelta_.end() ? mv->second * p.model : p.model);
+            if (mv != moverDelta_.end() && motionVectorsOn()) {
+                auto pv = prevMoverDelta_.find(p.actorLower);
+                motionRecordMesh(p.stateMesh[0], mv->second * p.model, pv != prevMoverDelta_.end() ? pv->second * p.model : mv->second * p.model);
+            }
         }
     }
     sec(0);
@@ -1437,7 +1441,12 @@ void Pipeline::drawMapPresentation() {
                 for (int c = 0; c < 3; ++c) rows[r][c] = pm.R[r][0] * spin[0][c] + pm.R[r][1] * spin[1][c] + pm.R[r][2] * spin[2][c];
             float wt[3];                                  // component offset rotates with the actor
             for (int c = 0; c < 3; ++c) wt[c] = pm.T[c] + pm.off[0] * rows[0][c] + pm.off[1] * rows[1][c] + pm.off[2] * rows[2][c];
-            draw(pm.meshId, ueRowsToGltf(rows, wt));
+            const core::Mat4 pmodel = ueRowsToGltf(rows, wt);
+            draw(pm.meshId, pmodel);
+            if (motionVectorsOn()) {                      // motion vectors: the spin since the last drawn frame
+                motionRecordMesh(pm.meshId, pmodel, pm.prevFrame == frameNo_ - 1 ? pm.prevModel : pmodel);
+                pm.prevModel = pmodel; pm.prevFrame = frameNo_;
+            }
         }
     }
     sec(1);

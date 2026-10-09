@@ -705,7 +705,7 @@ void Pipeline::release() {
         delTex(fsrInTex_); delTex(fsrMidTex_);
         if (velFbo_) { DeleteFramebuffers(1, &velFbo_); velFbo_ = 0; }
         delTex(velTex_);
-        for (GLuint* p : {&velCameraProg_, &velViewProg_, &velObjProg_}) delProg(*p);
+        for (GLuint* p : {&velCameraProg_, &velViewProg_, &velObjProg_, &velRigidProg_}) delProg(*p);
         delTex(skinPrevTex_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delTex(touchTex_); delTex(instTex_);
@@ -2832,6 +2832,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (actorHidden(s.actor)) continue;
                 auto mv = moverDelta_.find(s.actor);
                 if (mv != moverDelta_.end()) { subModel = mv->second * model; moving = true; }
+            }
+            if (moving && !warmup_ && motionVectorsOn() && P.blend <= 1) {   // motion vectors: the mover's own motion
+                auto pv = prevMoverDelta_.find(s.actor);
+                const core::Mat4 prevModel = pv != prevMoverDelta_.end() ? pv->second * model : subModel;
+                if (std::memcmp(prevModel.m, subModel.m, sizeof prevModel.m) != 0)
+                    motionRigid_.push_back({g.vao, s.first, s.count, subModel, prevModel});
             }
             // frustum cull on the sub's bounds: valid only for baked world geometry (identity model); placed
             // meshes with authored components (map props) and movers keep their local / moving bounds
@@ -5223,7 +5229,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
-    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProj_; motionDraws_.clear(); }
+    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProj_; motionDraws_.clear(); motionRigid_.clear(); }
     viewProj_ = cam.proj() * cam.view();
     camProj_ = cam.proj();
     camView_ = cam.view();

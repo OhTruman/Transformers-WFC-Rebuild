@@ -51,6 +51,18 @@ struct CharacterColors {
 // at a UE location (UU) and rotation (pitch, yaw, roll in degrees), as the renderer places authored actors.
 core::Mat4 ueActorMatrix(const core::Vec3& posUE, const core::Vec3& rotUEdeg);
 
+// Facts about the GPU for graphics-settings auto-detection (PC ADAPTATION: the first launch picks the best look
+// the PC can hold). vendorId: PCI vendor (0x1002 AMD, 0x10DE NVIDIA, 0x8086 Intel), 0 unknown.
+struct GpuFacts {
+    std::string vendor, renderer;     // GL_VENDOR / GL_RENDERER
+    unsigned vendorId = 0;
+    int vramMB = 0;                   // dedicated video memory (DXGI; GL memory-info fallback), 0 unknown
+    std::string vulkanVersion;        // instance version of the Vulkan loader, empty = no Vulkan
+    bool rayTracing = false;          // a Vulkan device with ray tracing pipeline + acceleration structures
+    bool vulkanInterop = false;       // ... with Win32 external memory / semaphores (GL <-> Vulkan sharing)
+};
+GpuFacts readGpuFacts();              // (needs the renderer's GL context current; renderers cache it)
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -139,6 +151,8 @@ public:
     // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
     // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
     virtual void setAnisotropy(int level) { (void)level; }
+    // GPU facts for settings auto-detection (read once, cached; logged as "GPU facts: ...").
+    virtual GpuFacts gpuFacts() { return GpuFacts{}; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
     // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
