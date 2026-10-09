@@ -7,6 +7,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 #include "platform/Image.h"
+#include "platform/FileCompression.h"
 
 #include <algorithm>
 #include <chrono>
@@ -1404,6 +1405,8 @@ static bool decodeOriginalTop(const std::string& file, ImageData& out) {
     return true;
 }
 static const bool gImageFallbackRegistered = (platform::setImageFallback(&decodeOriginalTop), true);
+// asset data files (glTF .bin / .glb): the plain file, else its lossless compressed twin (platform/FileCompression.h)
+static const bool gFileReadHookRegistered = (assets::setFileReadHook(&platform::readFileMaybeCompressed), true);
 
 // Loads `file`'s original blocks into the bound GL_TEXTURE_2D (levels 0..n-1, GL_TEXTURE_MAX_LEVEL n-1); false = no
 // DDS for it (the caller decodes the PNG). `bytes` receives the uploaded size (MEMSTATS).

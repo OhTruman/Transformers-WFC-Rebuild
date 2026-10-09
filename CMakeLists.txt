@@ -53,3 +53,14 @@ if(WFC_BUILD_FIDELITY)
     enable_testing()
     add_subdirectory(tools/fidelity)
 endif()
+
+# Lossless file compression (platform/FileCompression.h): compress -> decompress byte-identical, twin reads.
+if(WIN32)
+    add_executable(wfc_compression_tests ${CMAKE_SOURCE_DIR}/tests/CompressionTests.cpp
+                   ${CMAKE_SOURCE_DIR}/src/platform/win32/Win32FileCompression.cpp)
+    target_include_directories(wfc_compression_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    set_target_properties(wfc_compression_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    target_link_options(wfc_compression_tests PRIVATE -static)
+    enable_testing()
+    add_test(NAME compression COMMAND wfc_compression_tests "${CMAKE_BINARY_DIR}")
+endif()
