@@ -297,6 +297,7 @@ private:
     struct BankWarm { std::vector<size_t> cues; std::vector<std::string> paths; std::future<void> done; };
     std::vector<BankWarm> bankWarm_;
     bool adoptBankWarm();                                           // finished bank decodes -> their cues resident
+    void adoptEarly();                                              // a waiting cue whose waves are all published (progressive) starts
     void adoptWarm(bool wait, long onlyCue = -1);
     bool startWarm(size_t cue);                       // queue the cue's waves on a worker (false: not thread-safe / no waves)
     bool isWarming(size_t cue) const;

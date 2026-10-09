@@ -21,6 +21,7 @@
 #include <deque>
 #include <set>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -74,6 +75,14 @@ bool bankFirst(const std::string& path) {
 }
 
 std::thread::id gMainThread;   // the thread that created the device (the game thread)
+
+// Long banks (music; > 512 KB of XMA = roughly 8 MB of PCM) load progressively: playable once their first second is decoded.
+bool progressiveBank(const std::string& path) {
+    if (!bankFirst(path)) return false;
+    WIN32_FILE_ATTRIBUTE_DATA fa{};
+    if (!GetFileAttributesExA(bankOf(path).c_str(), GetFileExInfoStandard, &fa)) return false;
+    return ((unsigned long long)fa.nFileSizeHigh << 32 | fa.nFileSizeLow) > 512ull * 1024;
+}
 
 bool loadBank(const std::string& path, std::vector<int16_t>& out, int* srcRate) {
     const auto t0 = std::chrono::steady_clock::now();
@@ -298,6 +307,12 @@ struct Sample {
     double loopStart = 0.0, loopEnd = -1.0;   // output frames; loopEnd exclusive, < 0: the sample end
     bool releasing = false;                   // released while a block was mixing: freed at its end, already gone for callers
     int gen = 0;                              // slot generation: a Sound handle = index | gen << kGenShift
+    // Progressive load (a long original bank, e.g. the title music): the PCM is sized to the full one-pass length up front
+    // and filled block by block by the decoding worker; voices may play the frames already decoded. Null = complete.
+    struct Fill { std::atomic<size_t> ready{0}; std::atomic<bool> done{false}, releaseWhenDone{false}; };
+    std::shared_ptr<Fill> fill;
+    size_t framesReady() const { return fill && !fill->done.load(std::memory_order_acquire) ? fill->ready.load(std::memory_order_acquire) : pcm.size() / 2; }
+    bool filling() const { return fill && !fill->done.load(std::memory_order_acquire); }
 };
 
 struct Voice {
@@ -401,6 +416,7 @@ public:
             Win32Audio* a; const std::string& p;
             ~Done() { { std::lock_guard<std::mutex> lk(a->mx_); a->inflight_.erase(p); } a->inflightCv_.notify_all(); }
         } done{this, path};
+        if (progressiveBank(path)) return loadProgressive(path);
         Sample smp;                                    // decode outside the lock
         if (!loadWav(path, smp.pcm, &smp.srcRate)) return kInvalidSound;
         std::lock_guard<std::mutex> lk(mx_);
@@ -422,6 +438,93 @@ public:
         return h;
     }
 
+    // Store a decoded sample under a new handle (slot reuse as load()); the caller holds mx_.
+    Sound storeLocked(const std::string& path, Sample&& smp) {
+        size_t idx;
+        if (!freeSlots_.empty()) {
+            idx = freeSlots_.back(); freeSlots_.pop_back();
+            const int g = (sounds_[idx].gen + 1) & kGenMask;
+            sounds_[idx] = std::move(smp);
+            sounds_[idx].gen = g;
+        } else {
+            if (sounds_.size() > (size_t)kIndexMask) return kInvalidSound;
+            sounds_.push_back(std::move(smp));
+            idx = sounds_.size() - 1;
+        }
+        const Sound h = handleOf(idx);
+        loaded_[path] = h;
+        return h;
+    }
+
+    // A long original bank (the title / match music): the sample is sized to its full one-pass length, published after its
+    // first second so a voice can start, and filled by this worker while it plays (the decode runs ~200x realtime; a voice
+    // that reaches the decode edge waits there instead of ending). Same conversion as toOutput, so the finished sample is
+    // identical to a whole-file load. The filling worker owns the PCM until done: a release meanwhile is deferred to it.
+    Sound loadProgressive(const std::string& path) {
+        const auto t0 = std::chrono::steady_clock::now();
+        platform::FsbStream st;
+        if (!st.open(bankOf(path)) || st.frames() <= 0) { LOG_WARN("audio: bank decode failed: %s", bankOf(path).c_str()); return kInvalidSound; }
+        ++activeFills_;
+        struct Fills { std::atomic<int>& n; ~Fills() { --n; } } fills{activeFills_};
+        const int ch = st.channels(), rate = st.rate();
+        const size_t srcFrames = (size_t)st.frames();
+        const size_t outFrames = (size_t)((double)srcFrames * kRate / rate);
+        Sample smp;
+        smp.srcRate = rate;
+        smp.pcm.assign(outFrames * kChannels, 0);
+        smp.fill = std::make_shared<Sample::Fill>();
+        const std::shared_ptr<Sample::Fill> fill = smp.fill;
+        int16_t* out = smp.pcm.data();                 // the buffer moves with the vector into the slot: stays valid
+        std::vector<int16_t> src;
+        src.reserve(srcFrames * (size_t)ch);
+        size_t outNext = 0;
+        auto convert = [&] {
+            const size_t avail = src.size() / (size_t)ch;
+            while (outNext < outFrames) {
+                size_t sf = (size_t)((double)outNext * rate / kRate);
+                if (sf >= srcFrames) sf = srcFrames - 1;
+                if (sf >= avail) break;
+                const int16_t l = src[sf * (size_t)ch];
+                out[outNext * kChannels] = l;
+                out[outNext * kChannels + 1] = ch > 1 ? src[sf * (size_t)ch + 1] : l;
+                ++outNext;
+            }
+        };
+        const size_t publishAt = std::min(outFrames, (size_t)kRate);   // ~1 s of output
+        Sound h = kInvalidSound;
+        auto publish = [&] {
+            {
+                std::lock_guard<std::mutex> lk(mx_);
+                fill->ready.store(outNext, std::memory_order_release);
+                h = storeLocked(path, std::move(smp));
+                inflight_.erase(path);                 // waiters take the handle now, not at the end of the decode
+            }
+            inflightCv_.notify_all();
+        };
+        bool ok = true;
+        const int16_t* b = nullptr;
+        for (int n; (n = st.next(b)) != 0;) {
+            if (n < 0) { ok = false; break; }
+            src.insert(src.end(), b, b + (size_t)n * (size_t)ch);
+            convert();
+            if (h == kInvalidSound) { if (outNext >= publishAt) publish(); }
+            else fill->ready.store(outNext, std::memory_order_release);
+        }
+        if (h == kInvalidSound) {
+            if (!ok || outNext == 0) { LOG_WARN("audio: bank decode failed: %s", bankOf(path).c_str()); return kInvalidSound; }
+            publish();
+        }
+        if (!ok) LOG_WARN("audio: bank decode stopped early (%zu / %zu frames): %s", outNext, outFrames, bankOf(path).c_str());
+        fill->ready.store(outNext, std::memory_order_release);
+        fill->done.store(true, std::memory_order_release);
+        const long long us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count();
+        platform::FsbStats& stats = platform::fsbStats();
+        ++stats.decodes; stats.microseconds += us; stats.pcmBytes += (long long)(srcFrames * (size_t)ch * 2);
+        if (std::this_thread::get_id() == gMainThread) { ++stats.mainThreadDecodes; stats.mainThreadMicroseconds += us; }
+        if (fill->releaseWhenDone.load()) release(h);  // released while filling: now it is
+        return h;
+    }
+
     // Fixed voice pool so handles stay valid; handle = index | generation << 12.
     // [CONF] Xe-TransEngine.ini [HM_Engine.FmodAudioDevice] MaxChannels=96. When every channel is busy a new
     // sound takes the channel of the least important playing voice by FMOD channel priority (larger number =
@@ -440,7 +543,7 @@ public:
         const int16_t* pcm = nullptr; size_t frames = 0;
         double lstart = 0.0, lend = 0.0, pos = 0.0, rate = 1.0;
         float gL = 0.0f, gR = 0.0f;
-        bool loop = false, positional = false, wet = false, ended = false;
+        bool loop = false, positional = false, wet = false, ended = false, filling = false;
     };
     std::vector<MixJob> jobs_;
     bool mixing_ = false;                                     // a block is being mixed outside mx_ (PCM releases wait)
@@ -561,6 +664,7 @@ public:
         const size_t idx = (size_t)(s & kIndexMask);
         for (Voice& v : voices_) if (v.active && v.sample == &smp) v.active = false;
         for (auto it = loaded_.begin(); it != loaded_.end(); ++it) if (it->second == s) { loaded_.erase(it); break; }
+        if (smp.filling()) { smp.fill->releaseWhenDone.store(true); return; }   // its worker is still writing the PCM
         if (mixing_) { smp.releasing = true; releaseLater_.push_back((Sound)idx); return; }   // the block being mixed may read its PCM
         dead.swap(smp.pcm);                                      // the slot goes to the free list (handles carry the generation)
         smp.loopStart = 0.0; smp.loopEnd = -1.0;
@@ -668,6 +772,7 @@ public:
             LOG_INFO("audio: %lld banks decoded (%.0f MB PCM, %.0f ms), %lld of them on the main thread (%.0f ms)", st.decodes.load(),
                      st.pcmBytes.load() / 1048576.0, st.microseconds.load() / 1000.0, st.mainThreadDecodes.load(),
                      st.mainThreadMicroseconds.load() / 1000.0);
+        for (int k = 0; k < 2000 && activeFills_.load() > 0; ++k) Sleep(1);   // a progressive load still writes into a sample
         run_ = false;
         if (thread_.joinable()) thread_.join();
         if (ok_) {
@@ -815,18 +920,20 @@ private:
             if (!v.active) continue;
             if (v.culled) {                                   // virtual: advance the timeline only
                 ++nvirt;
-                const double frames = (double)(v.data->size() / 2);
+                const bool filling = v.sample->filling();
+                const double frames = (double)v.sample->framesReady();
                 const double lstart = v.sample->loopStart;
                 const double lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : frames;
                 v.pos += v.rate * kBlockFrames;
-                if (v.loop && lend - lstart >= 2.0) { if (v.pos >= lend) v.pos = lstart + std::fmod(v.pos - lend, lend - lstart); }
+                if (filling) { if (v.pos + 1.0 >= frames) v.pos = std::max(0.0, frames - 1.0); }   // waits at the decode edge
+                else if (v.loop && lend - lstart >= 2.0) { if (v.pos >= lend) v.pos = lstart + std::fmod(v.pos - lend, lend - lstart); }
                 else if (v.pos + 1.0 >= frames) v.active = false;
                 continue;
             }
             ++nv; if (v.wet) ++nw;
             MixJob jb;
-            jb.idx = vi; jb.gen = v.gen; jb.pcm = v.data->data(); jb.frames = v.data->size() / 2;
-            jb.lstart = v.sample->loopStart; jb.lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)jb.frames;
+            jb.idx = vi; jb.gen = v.gen; jb.pcm = v.data->data(); jb.filling = v.sample->filling(); jb.frames = v.sample->framesReady();
+            jb.lstart = v.sample->loopStart; jb.lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)(v.data->size() / 2);
             jb.loop = v.loop; jb.pos = v.pos; jb.rate = v.rate; jb.gL = v.gL; jb.gR = v.gR; jb.positional = v.positional; jb.wet = v.wet;
             jobs_.push_back(jb);
         }
@@ -836,7 +943,7 @@ private:
         for (MixJob& jb : jobs_) {
             float* bus = jb.wet ? wet_.data() : dry_.data();
             const int16_t* s = jb.pcm;
-            const bool loops = jb.loop && jb.lend - jb.lstart >= 2.0;
+            const bool loops = jb.loop && !jb.filling && jb.lend - jb.lstart >= 2.0;   // a filling sample loops once complete
             for (int f = 0; f < kBlockFrames; ++f) {
                 // Loop region [loopStart, loopEnd): the FSB sample-header region (whole sample for every
                 // slice wave); the last frame interpolates into loopStart, so a period is exactly the region.
@@ -845,7 +952,7 @@ private:
                 size_t fi = (size_t)jb.pos;
                 size_t fn = fi + 1;
                 if (loops) { if ((double)fn >= jb.lend) fn = (size_t)jb.lstart; }
-                else if (fn >= jb.frames) { jb.ended = true; break; }
+                else if (fn >= jb.frames) { if (!jb.filling) jb.ended = true; break; }   // filling: wait at the decode edge
                 float u = (float)(jb.pos - (double)fi);      // linear interpolation for pitch
                 float sl = (s[fi * 2] + (s[fn * 2] - s[fi * 2]) * u) * k;
                 float sr = (s[fi * 2 + 1] + (s[fn * 2 + 1] - s[fi * 2 + 1]) * u) * k;
@@ -938,6 +1045,7 @@ private:
     std::deque<Sample> sounds_;
     mutable std::mutex mx_;
     std::set<std::string> inflight_;                           // paths being decoded right now (load(), outside mx_)
+    std::atomic<int> activeFills_{0};                          // progressive loads still writing their PCM
     std::condition_variable inflightCv_;
     std::thread thread_;
     std::atomic<bool> run_{false};

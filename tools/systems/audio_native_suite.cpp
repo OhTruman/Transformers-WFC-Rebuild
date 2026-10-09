@@ -16,6 +16,7 @@
 #include "game/CharacterAudio.h"
 #include "game/WeaponAudio.h"
 #include "audio/MovieAudio.h"
+#include "platform/FsbDecode.h"
 #include <algorithm>
 #include <atomic>
 #include "assets/Json.h"
@@ -533,6 +534,41 @@ static void testChannelModes() {
       for (int k = 0; k < 50; ++k) { a->release(s2); s2 = a->load(kRoot + "/../content/WL_ELEC/ELEC_TRANS_TV_03.wav"); }
       CHECK((s2 & 0xFFFFF) == (s & 0xFFFFF), "50 release / reload cycles stay in one slot (index %d)", s2 & 0xFFFFF);
       a->release(s2); a->release(s2);   // double release: harmless
+    }
+    if (platform::fsbDecodeAvailable() && platform::audioSource() == platform::AudioSource::Fsb) {
+        // Progressive load of a long original bank (WFC_AUDIO_SOURCE=fsb): published after ~1 s of decode, playable while the
+        // worker still fills it; a release while filling is deferred to the worker.
+        const std::string music = kRoot + "/../content/WL_MX_06/MX_MEGATRONS_POWER_FULL_03_LP.wav";   // ~25 MB one pass
+        const size_t base = a->residentBytes();
+        Sound worker = kInvalidSound;
+        auto t0 = std::chrono::steady_clock::now();
+        std::thread th([&] { worker = a->load(music); });
+        Sound early = kInvalidSound;
+        double earlyMs = -1.0;
+        for (int k = 0; k < 4000 && early == kInvalidSound; ++k) {
+            early = a->cached(music);
+            if (early != kInvalidSound) earlyMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        Voice pv = early != kInvalidSound ? a->playVoice(early, vp(1, Vec3{0, 0, 0})) : kInvalidVoice;
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        const bool playingEarly = pv >= 0 && a->isPlaying(pv);
+        th.join();
+        const double fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        CHECK(early != kInvalidSound && early == worker && earlyMs < fullMs * 0.6,
+              "progressive bank: playable after %.0f ms, decode done after %.0f ms (same handle)", earlyMs, fullMs);
+        CHECK(playingEarly, "a voice started on the partly decoded bank plays");
+        a->stopVoice(pv);
+        a->release(worker);
+        CHECK(a->residentBytes() == base, "released after the fill: back to base (%.1f MB over)", (a->residentBytes() - base) / 1048576.0);
+        // Release WHILE filling: deferred to the worker, then freed.
+        std::thread th2([&] { worker = a->load(music); });
+        Sound h2 = kInvalidSound;
+        for (int k = 0; k < 4000 && h2 == kInvalidSound; ++k) { h2 = a->cached(music); if (h2 == kInvalidSound) std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+        a->release(h2);
+        th2.join();
+        CHECK(h2 != kInvalidSound && a->residentBytes() == base, "release while filling is deferred to the worker, then freed (%.1f MB over)",
+              (a->residentBytes() - base) / 1048576.0);
     }
     delete a;
 }
@@ -1272,6 +1308,9 @@ static void testFrontend() {
           "it starts after the worker decode (%d frames, worst tick %.2f ms), resident +%.1f MB", frames, worstTick, (during - base) / 1048576.0);
     rfe.music().stopMusic(0.0f);
     rc.tick(1.0f / 30.0f);
+    // An original bank loads progressively (playable after its first second): a release while its worker still fills it is
+    // deferred to that worker, so the bytes return once the fill completes.
+    for (int k = 0; k < 500 && a->residentBytes() != base; ++k) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); rc.tick(1.0f / 30.0f); }
     std::printf("  FRONTEND_MX_ORBIT_01 unprefetched play: call %.2f ms, started after %d frames, +%.1f MB, after stop %+.1f MB\n", callMs,
                 frames, (during - base) / 1048576.0, ((double)a->residentBytes() - (double)base) / 1048576.0);
     CHECK(a->residentBytes() == base, "released after stop");

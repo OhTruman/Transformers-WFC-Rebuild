@@ -618,3 +618,12 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
   Frontend boot from banks (09c 1029e6c + this, 2 runs): 0 main-thread waits, 0 main-thread decodes (203 banks, 123 MB),
   the title music decoded once. Suite 742 pass in wav and fsb modes (lifecycle tests wait for orphaned decodes before the
   baseline checks: with banks the samples are released when the orphaned decode finishes, the game keeps ticking).
+- Progressive load of long original banks (Integration: must land before the laptop package; a slower CPU would start the
+  title music late): banks > 512 KB (music) decode block by block (platform::FsbStream; decodeFsb is built on it, so the 100 %
+  gate covers both - re-run 27,800 / 27,800 PASS). The sample is sized to its one-pass length, published after ~1 s of output
+  (waiters and SoundCues::adoptEarly take the handle then), and filled by its worker while it plays: the mixer reads only
+  decoded frames, a voice at the decode edge waits instead of ending, loops start once complete; a release while filling is
+  deferred to the worker (the destructor waits for running fills). Same conversion as toOutput: the finished sample is
+  identical to a whole-file load. Suite (fsb mode): 4 new checks (playable before the decode ends, plays while filling, release
+  after / while filling returns to base); 746 pass fsb, 742 wav. Frontend boot from banks on this machine: title music ready as
+  the menu opens (2.3 s decode in parallel with the menu's own load); progressive matters on slower CPUs.
