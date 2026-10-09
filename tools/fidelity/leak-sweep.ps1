@@ -119,6 +119,10 @@ function MatchSeries([string]$dir, [string]$tag, [string]$owner) {
     $cen = @(foreach ($l in [IO.File]::ReadLines($lg)) { $m = [regex]::Match($l, 'match\.glCensus live=textures=(\d+) buffers=(\d+) framebuffers=(\d+) renderbuffers=(\d+) vertexArrays=(\d+) programs=(\d+)'); if ($m.Success) { ,@(1..6 | ForEach-Object { [double]$m.Groups[$_].Value }) } })
     $names = @("textures", "buffers", "framebuffers", "renderbuffers", "vertexArrays", "programs")
     for ($k = 0; $k -lt 6; $k++) { Judge "$tag.gl_$($names[$k])" "GL live $($names[$k]) after each unload" @($cen | ForEach-Object { $_[$k] }) 0.5 "names" "Rendering" }
+    # programs: Rendering's M54 cross-map program cache (LRU-trimmed at each unload, cap 1500 - WFC_PROGCACHEMAX): it may grow while
+    # new maps load (first pass) but must stay <= the cap and flat on revisits (the later-half verdict above covers the revisits)
+    if ($cen.Count) { $pmax = ($cen | ForEach-Object { $_[5] } | Measure-Object -Maximum).Maximum
+        Res "$tag.gl_programs_cap" $(if ($pmax -le 1500) { "PASS" } else { "FAIL" }) ("max live GL programs after an unload {0} (Rendering's program-cache cap 1500)" -f $pmax) "Rendering" }
     # C++ heap live in the lobby: the last ALLOCPROF sample before each next match load (context = lobby / flow lines)
     $ms = MemSamples $dir
     if ($ms.Count) {
