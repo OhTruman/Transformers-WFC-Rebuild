@@ -13,6 +13,8 @@ void logFlush();
 // Crash-handler variant: writes what is pending only if no thread holds the writer's locks (try_lock), with raw OS writes,
 // never blocking or allocating; returns false if it could not (the lines are then lost, the crash report is not).
 bool logTryFlush();
+// The most recent log line (first ~150 chars; diagnostics only - racy by design, never blocks): dev tools use it as context.
+const char* logLastLine();
 
 } // namespace core
 

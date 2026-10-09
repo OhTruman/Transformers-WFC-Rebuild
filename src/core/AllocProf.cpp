@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include "core/Log.h"
 #if defined(WFC_MIMALLOC) && WFC_MIMALLOC
 #include <mimalloc.h>
 #define WFC_RAW_ALLOC(n) mi_malloc(n)
@@ -36,6 +37,7 @@ struct Prof {
     struct Slot { unsigned hash; long long count; void* frames[kDepth]; int depth; };
     bool on = false;
     int every = 16;
+    double reportEveryS = 10.0;                                // WFC_ALLOCPROF_EVERY_S
     DWORD mainTid = 0;
     std::atomic<long long> mainAllocs{0}, otherAllocs{0}, mainBytes{0};
     long long sampleTick = 0;                                  // main thread only
@@ -48,6 +50,7 @@ struct Prof {
             on = true;
             const int n = std::atoi(e);
             if (n > 0) every = n;
+            if (const char* r = std::getenv("WFC_ALLOCPROF_EVERY_S")) { const double v = std::atof(r); if (v > 0.1) reportEveryS = v; }
             mainTid = GetCurrentThreadId();                    // static initialisation runs on the main thread
         }
     }
@@ -220,6 +223,7 @@ void report(Prof& p, double t) {
     if (!f) return;
     const long long m = p.mainAllocs.load(), o = p.otherAllocs.load();
     const double dt = p.lastReport > 0.0 ? t - p.lastReport : 0.0;
+    std::fprintf(f, "== context: %s\n", core::logLastLine());
     std::fprintf(f, "== t %.1f s: main-thread allocations %lld (%.0f /s), other threads %lld (%.0f /s), main bytes %lld\n", t,
                  m, dt > 0 ? (m - p.lastMain) / dt : 0.0, o, dt > 0 ? (o - p.lastOther) / dt : 0.0, p.mainBytes.load());
     p.lastMain = m; p.lastOther = o; p.lastReport = t;
@@ -273,7 +277,7 @@ void record(std::size_t n) {
         }
         const double t = nowS();
         if (p.lastReport == 0.0) p.lastReport = t;
-        else if (t - p.lastReport >= 10.0) report(p, t);
+        else if (t - p.lastReport >= p.reportEveryS) report(p, t);
     }
     tInside = false;
 }
