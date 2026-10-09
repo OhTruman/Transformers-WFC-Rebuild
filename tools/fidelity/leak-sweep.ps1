@@ -59,14 +59,33 @@ function MemSamples([string]$dir) {
     }
     return ,$out.ToArray()
 }
-# GLTRACE / TEXTRACE "sites that grew" lines = a GL leak with its creation site (Rendering 2026-10-08)
+# GLTRACE / TEXTRACE dumps after each unloadMapRenderData: "<N> live <type>; sites that grew[ since the last dump]: <site> +d (total) ...".
+# The FIRST dump of each type compares against an empty baseline (every site shows +total), and first-use caches (shader programs,
+# UI glyph / shape textures) grow on the first few unloads: neither is a leak. A LEAK is a site that keeps growing on most later
+# dumps. Verdict per site over the dumps after the first: FAIL if it grew in >= 3 dumps AND in >= half of them; INFO otherwise.
 function GrewCheck([string]$dir, [string]$tag) {
     $lg = Join-Path $dir "wfc.log"; if (-not (Test-Path $lg)) { return }
-    $g = @(Select-String $lg -Pattern '(GLTRACE|TEXTRACE).*(grew|sites that grew)' -ErrorAction SilentlyContinue)
-    $any = @(Select-String $lg -Pattern 'GLTRACE' -ErrorAction SilentlyContinue).Count
-    if (-not $any -and -not $g.Count) { if ($diag.ContainsKey("WFC_GLTRACE")) { Res "$tag.gltrace" "UNKNOWN" "WFC_GLTRACE set but no GLTRACE lines logged" "Experimental" }; return }
-    $ex = @($g | Select-Object -First 4 | ForEach-Object { $t = $_.Line -replace '^\[[^\]]*\]\s*', ''; $t.Substring(0, [Math]::Min(240, $t.Length)) })
-    Res "$tag.gl_sites_grew" $(if ($g.Count) { "FAIL" } else { "PASS" }) $(if ($g.Count) { "{0} 'sites that grew' lines (GL objects not released at unload; symbolise with tools/render/gltrace_sym.py + the .map): {1}" -f $g.Count, ($ex -join " || ") } else { "no 'sites that grew' lines over $any GLTRACE / TEXTRACE reports" }) "Rendering"
+    $dumps = @{}   # type -> list of @{ site -> delta }
+    foreach ($l in [IO.File]::ReadLines($lg)) {
+        $m = [regex]::Match($l, '(GLTRACE|TEXTRACE) after unloadMapRenderData: (\d+) live (?:traced )?(\w+); sites that grew(?: since the last dump)?: (.*)$')
+        if (-not $m.Success) { continue }
+        $type = $m.Groups[3].Value; if (-not $dumps.ContainsKey($type)) { $dumps[$type] = New-Object System.Collections.Generic.List[object] }
+        $sites = @{}; foreach ($sm in [regex]::Matches($m.Groups[4].Value, '(\S+) \+(\d+) \((\d+)\)')) { $sites[$sm.Groups[1].Value] = [int]$sm.Groups[2].Value }
+        $dumps[$type].Add([pscustomobject]@{ live = [int]$m.Groups[2].Value; sites = $sites })
+    }
+    if (-not $dumps.Count) { if ($diag.ContainsKey("WFC_GLTRACE")) { Res "$tag.gltrace" "UNKNOWN" "WFC_GLTRACE set but no GLTRACE / TEXTRACE dumps logged" "Experimental" }; return }
+    $leaks = @(); $warm = @()
+    foreach ($type in $dumps.Keys) {
+        $later = @($dumps[$type] | Select-Object -Skip 1); if ($later.Count -lt 1) { continue }
+        $count = @{}; $total = @{}
+        foreach ($d in $later) { foreach ($k in $d.sites.Keys) { $count[$k] = 1 + [int]$count[$k]; $total[$k] = $d.sites[$k] + [int]$total[$k] } }
+        foreach ($k in $count.Keys) {
+            $txt = "{0} {1}: grew in {2} of {3} later dumps (+{4} total; live {5} -> {6})" -f $type, $k, $count[$k], $later.Count, $total[$k], $dumps[$type][0].live, $dumps[$type][-1].live
+            if ($count[$k] -ge 3 -and $count[$k] * 2 -ge $later.Count) { $leaks += $txt } else { $warm += $txt } }
+    }
+    $nd = ($dumps.Values | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
+    Res "$tag.gl_sites_grew" $(if ($leaks.Count) { "FAIL" } elseif ($nd -lt 4) { "UNKNOWN" } else { "PASS" }) $(if ($leaks.Count) { "persistent GL growth (symbolise exe+0x... with tools/render/gltrace_sym.py + the .map): " + ($leaks -join "; ") } elseif ($nd -lt 4) { "only $nd dumps per type - too few to separate warm-up from leaks" } else { "no site grew on most later dumps ($nd dumps per type)" }) "Rendering"
+    if ($warm.Count) { Res "$tag.gl_sites_warmup" "INFO" ("occasional growth (first-use caches?): " + (($warm | Select-Object -First 8) -join "; ")) "Rendering" }
 }
 function Run([string]$name, [hashtable]$e, [int]$timeoutS) {
     $d = Join-Path $OutDir $name; New-Item -ItemType Directory -Force $d | Out-Null
