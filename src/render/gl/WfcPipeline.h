@@ -782,6 +782,8 @@ public:
     void setUpscaling(float scale, float sharpness);
     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
+    void setHdTextures(bool on);
+    bool hdTextures_ = false;
     int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;

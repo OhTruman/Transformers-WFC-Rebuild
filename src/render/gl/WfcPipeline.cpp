@@ -768,11 +768,13 @@ void Pipeline::release() {
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
     const int keepAniso = anisotropy_;
+    const bool keepHd = hdTextures_;
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
     anisotropy_ = keepAniso;
+    hdTextures_ = keepHd;
 }
 
 // ------------------------------------------------------------------------- loading
@@ -1411,15 +1413,50 @@ std::string hdRoot() {
     const size_t s = d.find_last_of("/\\");
     return (s == std::string::npos ? std::string(".") : d.substr(0, s)) + "/hd";
 }
-bool Pipeline::hdTexturesAvailable() {
-    static const bool ok = [] {
+// The HD pack's index (AssetTools: one row per texture: key = the lower-case PNG path, dds relative to the root,
+// format; optional byte count). Complete = every row's file exists (with its byte count when given); an incomplete
+// or invalid pack is ignored as a whole (the originals stay in use).
+struct HdEntry { std::string dds, fmt; };
+const std::unordered_map<std::string, HdEntry>& hdIndex() {
+    static const std::unordered_map<std::string, HdEntry> idx = [] {
+        std::unordered_map<std::string, HdEntry> m;
         assets::Json J;
-        const std::string t = readText(hdRoot() + "/hd_index.json");
-        const bool v = !t.empty() && assets::Json::parse(t, J);
-        LOG_INFO("wfc: HD texture pack %s (%s)", v ? "available" : "not installed", (hdRoot() + "/hd_index.json").c_str());
-        return v;
+        const std::string root = hdRoot();
+        const std::string t = readText(root + "/hd_index.json");
+        if (t.empty() || !assets::Json::parse(t, J)) { LOG_INFO("wfc: HD texture pack not installed (%s/hd_index.json)", root.c_str()); return m; }
+        const assets::Json* rows = nullptr;
+        for (const char* k : {"textures", "rows", "entries"}) if (J[k].arr.size()) { rows = &J[k]; break; }
+        if (!rows) { LOG_WARN("wfc: HD texture pack index has no rows: ignored"); return m; }
+        size_t missing = 0;
+        for (const assets::Json& r : rows->arr) {
+            std::string key = r["key"].asString(), dds = r["dds"].asString(), fmt = r["format"].asString();
+            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+            if (fmt.compare(0, 3, "PF_") == 0) fmt = fmt.substr(3);
+            if (fmt == "BC1") fmt = "DXT1"; else if (fmt == "BC3") fmt = "DXT5"; else if (fmt == "BC2") fmt = "DXT3";
+            if (key.empty() || dds.empty()) continue;
+            std::ifstream f(root + "/" + dds, std::ios::binary | std::ios::ate);
+            const long long want = (long long)r["bytes"].asFloat(-1.0f);
+            if (!f || (want >= 0 && (long long)f.tellg() != want)) { ++missing; continue; }
+            if (fmt != "DXT1" && fmt != "DXT5" && fmt != "DXT3" && fmt != "A8R8G8B8" && fmt != "G8") {
+                LOG_WARN("wfc: HD texture pack format %s not supported yet: pack ignored", fmt.c_str());
+                m.clear(); return m;
+            }
+            m[key] = HdEntry{dds, fmt};
+        }
+        if (missing) { LOG_WARN("wfc: HD texture pack incomplete (%zu of %zu files missing / wrong size): ignored", missing,
+                                rows->arr.size()); m.clear(); return m; }
+        LOG_INFO("wfc: HD texture pack available: %zu textures (%s)", m.size(), root.c_str());
+        return m;
     }();
-    return ok;
+    return idx;
+}
+bool Pipeline::hdTexturesAvailable() { return !hdIndex().empty(); }
+// HD Textures setting: textures load from the pack (when available) from the next map / scene load on; a live
+// change does not reload the current map's textures (they are bound into its materials)
+void Pipeline::setHdTextures(bool on) {
+    hdTextures_ = on && hdTexturesAvailable();
+    LOG_INFO("renderer: HD textures %s%s", hdTextures_ ? "on" : "off",
+             on && !hdTextures_ ? " (pack not installed: originals)" : " (from the next map load)");
 }
 
 // platform::decodeImage's second source: the verified original top level (RGBA8, identical to the PNG)
@@ -1444,14 +1481,26 @@ static const bool gFileReadHookRegistered = (assets::setFileReadHook(&platform::
 
 // Loads `file`'s original blocks into the bound GL_TEXTURE_2D (levels 0..n-1, GL_TEXTURE_MAX_LEVEL n-1); false = no
 // DDS for it (the caller decodes the PNG). `bytes` receives the uploaded size (MEMSTATS).
-static bool uploadDds(const std::string& file, bool srgb, unsigned long long& bytes) {
+static bool uploadDds(const std::string& file, bool srgb, unsigned long long& bytes, bool hd) {
     const auto& idx = ddsIndex();
-    if (idx.empty()) return false;
     const std::string key = ddsKey(file);
+    if (key.empty()) return false;
     auto it = idx.find(key);
-    if (key.empty() || it == idx.end()) return false;
-    const DdsEntry& E = it->second;
-    const std::string path = ddsRoot() + "/" + E.dds;
+    DdsEntry E;
+    std::string path;
+    static const std::unordered_map<std::string, HdEntry> kNoHd;
+    const auto& hidx = hd ? hdIndex() : kNoHd;
+    auto ht = hd ? hidx.find(key) : hidx.end();
+    if (hd && ht != hidx.end()) {                      // the HD pack's blocks; the original's alpha-use rules
+        E.dds = ht->second.dds; E.fmt = ht->second.fmt;
+        if (it != idx.end()) { E.alpha = it->second.alpha; E.opaque = it->second.opaque; }
+        path = hdRoot() + "/" + E.dds;
+    } else {
+        if (idx.empty() || it == idx.end()) return false;
+        E = it->second;
+        path = ddsRoot() + "/" + E.dds;
+    }
+    const bool hdBlocks = hd && ht != hidx.end();
     std::ifstream in(path, std::ios::binary);
     std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) {
@@ -1465,7 +1514,7 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     for (int l = 0; l < mips; ++l) need += levelBytes(E.fmt, std::max(1, w0 >> l), std::max(1, h0 >> l));
     if (w0 <= 0 || h0 <= 0 || f.size() < need) { LOG_WARN("wfc: DDS truncated (%s): PNG used", path.c_str()); return false; }
     static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;
-    static const bool check = std::getenv("WFC_DDSCHECK") != nullptr;
+    const bool check = std::getenv("WFC_DDSCHECK") != nullptr && !hdBlocks;   // (HD blocks are not the PNG's size)
     const bool pwl = srgb && !srgbCurve;
     const bool blocks = !srgb && !E.opaque && (E.fmt == "DXT1" || E.fmt == "DXT5") && CompressedTexImage2D;
     static uint32_t lut10[256];
@@ -1542,7 +1591,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         unsigned long long bytes = 0;
-        if (uploadDds(file, srgb, bytes)) {
+        if (uploadDds(file, srgb, bytes, hdTextures_)) {
             ++gTexCreates;
             if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += bytes; ++gMemLightmaps; }
             else { gMemTextureBytes += bytes; ++gMemTextures; if (srgb) gMemSrgbTexBytes += bytes; ++gMemDdsTextures; }
