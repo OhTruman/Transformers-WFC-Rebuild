@@ -559,3 +559,11 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
 - Win32Audio: a released sample's slot is reused by the next load (it used to append a slot per wave per level load forever).
   Sound handles carry a slot generation (index | gen << 20); a stale handle no longer resolves (play / setLoopPoints / release
   are no-ops). Suite: 5 new checks (stale handle, slot reuse, 50 release / reload cycles in one slot, double release).
+- After one match (09c 942cbe2, settled lobby 20 s after the return vs the lobby before the match; single runs vary ~±200 MB):
+  +726 MB = regions of 4-16 MB +516 MB (71 -> 149 regions: the GL driver's pattern), the process (CRT) heap +166 MB *allocated*
+  (122 -> 288; shared by CRT malloc and the driver), >= 16 MB (mimalloc) +206 MB with operator new live only +42 MB
+  (fragmentation the trim cannot return). Five-match runs are flat after the first match: a one-time high-water mark, not a
+  per-match leak. The ALLOCPROF MEM report now also prints per-heap committed / allocated ("CRT=" marks the process heap) and
+  committed private by allocation size.
+- Optional third trim after the frontend scene loads: `docs/handoff/SYSTEMS_HEAPTRIM_lobby_optional.patch` (FrontendSceneGL.cpp).
+  Releases 135-157 MB in ~6 ms; first lobby before any match settles at ~1.72 vs ~1.88 GB; after a match no gain within noise.
