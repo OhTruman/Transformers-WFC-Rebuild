@@ -1148,7 +1148,7 @@ bool Pipeline::load(const std::string& mapName) {
         // UI scenes (frontend / lobbies) have no level BSP: none in their cooked packages (build_lighting.py: "no level
         // BSP nodes"), so a missing bsp.glb is expected there and not probed
         const bool hasBspFile = std::ifstream(dataDir_ + "/bsp.glb").good();
-        const bool uiScene = dataDir_.find("/UI_") != std::string::npos || dataDir_.find("\UI_") != std::string::npos;
+        const bool uiScene = dataDir_.find("/UI_") != std::string::npos || dataDir_.find("\\UI_") != std::string::npos;
         if (!hasBspFile && uiScene) LOG_INFO("wfc: no level BSP in this UI scene (none in its cooked packages)");
         else if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) {
             bspMesh_ = upload(bsp);
