@@ -99,7 +99,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "RayTracing") display.rayTracing = v == "1";
             else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
-            else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 3);   // 3 reserved (Expert)
+            else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 3);   // 3 = Expert (PC EXTENSION)
             else if (k == "BotAI") bots.ai = v == "Smart" ? 1 : v == "Classic" ? 0 : -1;
             else if (k == "BotsAutobot") { bots.autobot = std::max(0, std::atoi(v.c_str())); factionKeys = true; }
             else if (k == "BotsDecepticon") { bots.decepticon = std::max(0, std::atoi(v.c_str())); factionKeys = true; }

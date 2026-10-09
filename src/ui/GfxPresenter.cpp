@@ -1018,7 +1018,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
 namespace {
 std::vector<gfx::avm1::Value> botChoices(gfx::avm1::VM& vm, const std::string& field, int maxV, bool teams) {
     std::vector<gfx::avm1::Value> out;
-    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD", "EXPERT"};   // EXPERT shown only if botMax allows it
+    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD", "EXPERT"};   // EXPERT: PC EXTENSION (Gameplay's Expert AI)
     for (int v = 0; v <= maxV; ++v) {
         gfx::avm1::Object* c = vm.newPlain();
         vm.set(c, "Value", gfx::avm1::Value((double)v));
