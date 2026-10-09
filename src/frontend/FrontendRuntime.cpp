@@ -771,6 +771,8 @@ void FrontendRuntime::applyDisplaySettings() {
 }
 
 bool FrontendRuntime::autoDetectGraphicsAtBoot() {
+    // Without the HD pack the setting reads (and is handed over) as Off this session; the saved choice is not rewritten.
+    if (!hdTexturesAvailable()) flow_.profile().display.hdTextures = false;
     const char* force = std::getenv("WFC_AUTODETECT");
     if (force && std::string(force) == "0") return false;
     if (!force && std::getenv("WFC_FRONTEND_SCRIPT")) return false;   // automated runs keep their seeded settings

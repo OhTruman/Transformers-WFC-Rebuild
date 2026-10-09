@@ -322,7 +322,7 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         FlowTrace::emit("settings.anisotropy", {{"x", std::to_string(flow_.profile().display.anisotropy)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
-    if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION
+    if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION (the row offers On only with the pack)
         flow_.profile().display.hdTextures = arg(1) == "1" || arg(1) == "true";
         FlowTrace::emit("settings.hdTextures", {{"on", FlowTrace::boolean(flow_.profile().display.hdTextures)}, {"provenance", "PC EXTENSION"}});
         return {};
