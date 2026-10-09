@@ -9,6 +9,7 @@
 #include <xinput.h>
 
 #include "platform/Window.h"
+#include "platform/PresentHook.h"
 #include "core/Log.h"
 
 #include <cmath>
@@ -282,7 +283,10 @@ public:
     bool vsync() const override { return vsync_; }
 
     void present() override {
-        SwapBuffers(hdc_);
+        // [integration 09c] another API may present (D3D12 path, Rendering); the PC frame limiter runs for both paths.
+        bool presented = false;
+        if (platform::PresentOverride o = platform::presentOverride()) presented = o();
+        if (!presented) SwapBuffers(hdc_);
         if (frameLimit_ > 0) {   // PC EXTENSION frame cap: sleep (1 ms timer resolution) then spin to the deadline
             using clock = std::chrono::steady_clock;
             const auto period = std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(1.0 / frameLimit_));

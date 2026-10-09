@@ -17,6 +17,7 @@
 
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
+#include "platform/FileCompression.h"
 #include "render/gl/RenderWatchdog.h"
 #include "render/FrameLimiter.h"
 #include "platform/Image.h"
@@ -53,6 +54,8 @@
 #include <vector>
 
 namespace render {
+bool probeD3D12Interop(std::string& detail);   // D3D12InteropProbe.cpp
+void initD3D12PresentIfRequested();            // d3d12/D3D12Presenter.cpp
 namespace {
 
 class GLRenderer final : public IRenderer {
@@ -235,6 +238,11 @@ public:
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
         if (WFC_ENV("WFC_GPUFACTS") && !gpuFactsRead_) gpuFacts();   // test switch: log the GPU facts at the first frame
+        initD3D12PresentIfRequested();               // optional D3D12 presentation (WFC_D3D12PRESENT; A3a)
+        if (WFC_ENV("WFC_D3D12PROBE")) {               // A3a capability probe: GL <-> D3D12 sharing (once)
+            static bool probed = false;
+            if (!probed) { probed = true; std::string d; const bool ok = probeD3D12Interop(d); LOG_INFO("D3D12 INTEROP PROBE: %s - %s", ok ? "PASS" : "FAIL", d.c_str()); }
+        }
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         slowFrameGpu();
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
@@ -669,10 +677,10 @@ public:
             const std::string& l = levels[li];
             std::string d = l.size() > 2 && l.compare(l.size() - 2, 2, "_m") == 0 ? l.substr(0, l.size() - 2) : l;
             std::ifstream probe(data + "/" + d + "/materials_glsl.json");
-            std::ifstream glb(assets + "/Maps/" + d + "/world.glb", std::ios::binary | std::ios::ate);
-            if (!probe || !glb) continue;
+            const long long glbSize = platform::dataFileSize(assets + "/Maps/" + d + "/world.glb");   // or its .xpr twin
+            if (!probe || glbSize < 0) continue;
             if (li == 0) { dir = d; break; }
-            size_t sz = (size_t)glb.tellg();
+            size_t sz = (size_t)glbSize;
             if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
         }
         if (dir.empty()) {

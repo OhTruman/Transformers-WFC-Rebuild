@@ -15,6 +15,10 @@ constexpr const char* kCompressedSuffix = ".xpr";
 // neither exists or the twin is corrupt. WFC_FILELOG=1 logs each twin read.
 bool readFileMaybeCompressed(const std::string& path, std::vector<uint8_t>& out);
 
+// Existence / size check with the same rule: the plain file's size, else its compressed twin's (packed) size, else -1.
+// Use it wherever code checks a data file before loading it (a package may ship only the twin).
+long long dataFileSize(const std::string& path);
+
 // Codec (tools and tests): whole-buffer compress / decompress.
 bool compressBuffer(const uint8_t* data, size_t n, std::vector<uint8_t>& out);
 bool decompressBuffer(const uint8_t* data, size_t n, std::vector<uint8_t>& out);
