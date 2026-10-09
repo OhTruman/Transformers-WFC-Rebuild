@@ -608,3 +608,13 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
   Audio suite 742 pass in both WFC_AUDIO_SOURCE=wav and =fsb (the 42 FAKE_TEST_MAP data fails as before).
 - Dropping WAVs from the package is the packaging step (AssetTools / Integration): every content/**/*.wav has its .fsb beside it
   and passes the gate.
+- No main-thread waits with original banks (Experimental's slim run: 16.7 ms at the UI_FrontEnd_m load = a menu hitch):
+  LevelAudioHost::load no longer waits for the level's own prefetch; AmbientAudio's map bank (SoundCues::addCues) sends resident
+  cues that would decode a bank to ONE pooled worker decode (BankWarm; isWarming covers them, a play defers and starts when
+  adopted on tick); Win32Audio::load shares in-flight decodes (a worker asking for a file another worker is decoding waits
+  for it - the title music's 183.9 MB decode was orphaned by the level load and restarted from zero). releaseWarmExcept never
+  waits (busy prefetches become orphans; their files are owned or wanted by the bank warm). Bug fixed on the way: the orphan
+  release pass used load() and could DECODE a missing bank inside tick (206 ms tick in the suite); it uses cached() now.
+  Frontend boot from banks (09c 1029e6c + this, 2 runs): 0 main-thread waits, 0 main-thread decodes (203 banks, 123 MB),
+  the title music decoded once. Suite 742 pass in wav and fsb modes (lifecycle tests wait for orphaned decodes before the
+  baseline checks: with banks the samples are released when the orphaned decode finishes, the game keeps ticking).

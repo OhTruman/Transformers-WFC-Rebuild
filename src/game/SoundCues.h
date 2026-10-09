@@ -145,10 +145,12 @@ public:
         for (Warm& w : warming_) if (w.done.valid()) w.done.wait();
         for (LevelWarm& w : levelWarm_) if (w.done.valid()) w.done.wait();
         for (Orphan& w : orphans_) if (w.done.valid()) w.done.wait();
+        for (BankWarm& w : bankWarm_) if (w.done.valid()) w.done.wait();
         unregisterTable(this);
     }
     int warmingPrefetches() const { return (int)warming_.size(); }
     int orphanDecodes() const { return (int)orphans_.size(); }
+    int bankWarms() const { return (int)bankWarm_.size(); }          // map banks still decoding on the worker (not adopted yet)
     int waitingInstances() const { int n = 0; for (const Instance& in : live_) n += in.waiting ? 1 : 0; return n; }
     // Level-start warming (frontend frame budget): decode the eager (non-streamed, non-localized) waves of a manifest cue
     // bank for an upcoming level `tag` on a worker, so the level's addCues finds them in the device cache. Thread-safe
@@ -289,6 +291,11 @@ private:
     std::vector<Warm> warming_;
     struct LevelWarm { std::string tag; std::vector<std::string> paths; std::future<void> done; };
     std::vector<LevelWarm> levelWarm_;
+    // A map bank's resident cues whose waves still need decoding (original banks): one pooled worker decode for the bank; the
+    // cues count as warming (a play defers and starts when adopted) and the main thread never waits for them.
+    struct BankWarm { std::vector<size_t> cues; std::vector<std::string> paths; std::future<void> done; };
+    std::vector<BankWarm> bankWarm_;
+    bool adoptBankWarm();                                           // finished bank decodes -> their cues resident
     void adoptWarm(bool wait, long onlyCue = -1);
     bool startWarm(size_t cue);                       // queue the cue's waves on a worker (false: not thread-safe / no waves)
     bool isWarming(size_t cue) const;
