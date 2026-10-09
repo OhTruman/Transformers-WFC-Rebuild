@@ -296,6 +296,12 @@ private:
     // at play; a small one (HUD ticks, dialogue lines, ~0.1 MB) is decoded at once so it starts on time.
     long long waveBytes(size_t cue);
     std::vector<long long> waveBytes_;
+    // A large streamed cue (the match music: DM_FINALSTRETCH_LP has 6 waves / 248 MB, of which one per event plays) picks its
+    // wave per event when its decode is queued, not at launch, and decodes only those: the same random choice, made earlier.
+    // Cleared when the waves are released, so the next warm-up picks again.
+    std::vector<std::vector<int>> pick_;                           // [cue][event] the pre-picked wave (-1: all)
+    void ensurePick(size_t cue);
+    bool wanted(size_t cue, size_t event, size_t wave) const;
     void startInstance(Instance& in);                 // launch the t=0 events, queue the timed ones
 };
 

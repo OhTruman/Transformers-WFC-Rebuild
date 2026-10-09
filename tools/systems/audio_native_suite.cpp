@@ -1718,6 +1718,15 @@ static void testMatchAudio() {
     CHECK(mg == 1 && op == 0, "MP_1MinuteLeftDialog plays the Megatron wave only (%d / %d)", mg, op);
     m.gameTypeMessage("TnGameTypeMessageTDM", 1); run(0.2f);
     CHECK(host.music().current().cue == "BL_LVL_MP_MX.DM_FINALSTRETCH_LP", "nearly complete: DM_FINALSTRETCH_LP");
+    {   // 248 MB of waves, one per event plays: only the two picked waves are decoded (one of 2 + one of 4)
+        int perc = 0, full = 0;
+        for (const auto& kv : rec.paths) {
+            const std::string& p = kv.first;
+            if (p.find("MX_OMEGA_LIVES_PERC_LP_01") != std::string::npos || p.find("MX_PRISON_BREAK_PERC_BASS_LP_01") != std::string::npos) ++perc;
+            if (p.find("MX_ENTER_THE_CORE_") != std::string::npos || p.find("MX_MEGATRONS_POWER_FULL_03_LP") != std::string::npos) ++full;
+        }
+        CHECK(perc == 1 && full == 1, "DM_FINALSTRETCH_LP decodes only the picked wave per event (%d of 2, %d of 4)", perc, full);
+    }
     m.gameTypeMessage("TnGameTypeMessageTDM", 2, 1); run(0.2f);
     CHECK(host.music().queued().cue == "BL_LVL_MP_MX.DM_END_DECEPTICONS_WIN" && host.music().queued().priority == 1 &&
           host.music().current().cue == "BL_LVL_MP_MX.DM_FINALSTRETCH_LP", "end, Decepticons win: DM_END_DECEPTICONS_WIN queued (priority 1) behind SpazTime");

@@ -567,3 +567,9 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
   committed private by allocation size.
 - Optional third trim after the frontend scene loads: `docs/handoff/SYSTEMS_HEAPTRIM_lobby_optional.patch` (FrontendSceneGL.cpp).
   Releases 135-157 MB in ~6 ms; first lobby before any match settles at ~1.72 vs ~1.88 GB; after a match no gain within noise.
+- Large streamed cues decode only the waves that will play: a SoundNodeWaveEvent plays one random SoundNodeWaveEx, so a
+  streamed cue above 16 MB of waves (kPrePickBytes; the match music) makes launch's random pick when its decode is queued and
+  decodes those only (cleared at release; the next warm-up picks again). DM_FINALSTRETCH_LP (6 waves, 248 MB, 2 events):
+  Experimental's 20-min 32 v 32 sweep showed a +236 MB in-match step at ~60 s left; now 47-82 MB per pick (in game:
+  81.9 MB, 115 ms on the worker vs 282 ms). Smaller streamed cues (announcer / dialogue) keep the pick at every play.
+  Suite: a check that only one wave per event of DM_FINALSTRETCH_LP is decoded (741 pass; the 42 FAKE_TEST_MAP data fails as before).

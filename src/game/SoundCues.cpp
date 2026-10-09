@@ -75,6 +75,7 @@ struct FsbLoop { const char* wav; int rate, channels; uint32_t totalSamples, loo
 
 constexpr float UU = 0.01f;
 constexpr long long kDeferDecodeBytes = 2ll * 1024 * 1024;   // streamed cues above this decode on the worker at play
+constexpr long long kPrePickBytes = 16ll * 1024 * 1024;      // streamed cues above this decode only the waves that will play
 constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
 constexpr float kSpeedParamMax = 120.0f; // [CONF] SoundParameters.Optimus_Prime_Speed.Max
 constexpr float kSlipParamMax = 1.57f;   // [CONF] SoundParameters.Optimus_Prime_Tire_Squeal.Max
@@ -177,14 +178,31 @@ const CueDef* SoundCues::cueDef(const char* name) const {
     return c >= 0 ? &cues_[(size_t)c] : nullptr;
 }
 
+void SoundCues::ensurePick(size_t c) {
+    if (c >= cues_.size() || !cues_[c].streamed) return;
+    if (pick_.size() <= c) pick_.resize(c + 1);
+    if (!pick_[c].empty() || waveBytes(c) <= kPrePickBytes) return;
+    for (const EventDef& e : cues_[c].events)
+        pick_[c].push_back(e.waves.size() > 1 ? std::rand() % (int)e.waves.size() : -1);   // launch's choice, made now
+}
+
+bool SoundCues::wanted(size_t c, size_t e, size_t w) const {
+    if (c >= pick_.size() || e >= pick_[c].size() || pick_[c][e] < 0) return true;
+    return (int)w == pick_[c][e];
+}
+
 void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
     if (waves_.size() <= c) waves_.resize(c + 1);
     if (resident_.size() <= c) resident_.resize(c + 1, 0);
+    ensurePick(c);
     waves_[c].clear();
     resident_[c] = 1;
-    for (const EventDef& e : cues_[c].events) {
+    for (size_t ei = 0; ei < cues_[c].events.size(); ++ei) {
+        const EventDef& e = cues_[c].events[ei];
         std::vector<audio::Sound> w;
-        for (const std::string& f : e.waves) {
+        for (size_t wi = 0; wi < e.waves.size(); ++wi) {
+            if (!wanted(c, ei, wi)) continue;
+            const std::string& f = e.waves[wi];
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');       // a localized twin outside content/
             audio::Sound s = audio_ ? audio_->load(abs ? f : contentRoot + f) : audio::kInvalidSound;
             if (s != audio::kInvalidSound) w.push_back(s);
@@ -410,16 +428,23 @@ bool SoundCues::isWarming(size_t c) const {
 
 bool SoundCues::startWarm(size_t c) {
     if (!audio_ || !audio_->threadSafeLoad()) return false;
+    ensurePick(c);
     std::vector<std::string> paths;
-    for (const EventDef& e : cues_[c].events)
-        for (const std::string& f : e.waves) {
+    long long bytes = 0;
+    for (size_t ei = 0; ei < cues_[c].events.size(); ++ei)
+        for (size_t wi = 0; wi < cues_[c].events[ei].waves.size(); ++wi) {
+            if (!wanted(c, ei, wi)) continue;
+            const std::string& f = cues_[c].events[ei].waves[wi];
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
             paths.push_back(abs ? f : contentRoot_ + f);
+            std::error_code ec;
+            const auto sz = std::filesystem::file_size(paths.back(), ec);
+            if (!ec) bytes += (long long)sz;
         }
     if (paths.empty()) return false;
     audio::IAudio* a = audio_;
     Warm w;
-    w.cue = c; w.paths = paths; w.name = cues_[c].name; w.bytes = waveBytes(c); w.start = std::chrono::steady_clock::now();
+    w.cue = c; w.paths = paths; w.name = cues_[c].name; w.bytes = bytes; w.start = std::chrono::steady_clock::now();
     // One worker decode at a time (decodeMutex): a match's final-stretch + end music (up to ~250 MB of waves each) must not
     // decode concurrently - peak memory, and the device lock they share.
     w.done = warmLane().submit([a, paths] {
@@ -589,6 +614,7 @@ void SoundCues::releaseWaves(size_t c) {
         ev.clear();
     }
     if (c < resident_.size()) resident_[c] = 0;
+    if (c < pick_.size()) pick_[c].clear();                         // the next warm-up picks again
 }
 
 int SoundCues::mapCueCount() const {
