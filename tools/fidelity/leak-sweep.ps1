@@ -92,14 +92,19 @@ function MatchSeries([string]$dir, [string]$tag, [string]$owner) {
     if (-not (Test-Path $fl)) { Res "$tag.ran" "UNKNOWN" "no flow trace (not run?)" "Experimental"; return }
     $F = Read-FlowLog $fl; $ul = @(Flow-Ev $F "match.unloaded"); $ld = @(Flow-Ev $F "match.loaded")
     Res "$tag.matches" $(if ($ul.Count -ge 4) { "INFO" } else { "FAIL" }) ("{0} matches loaded / {1} unloaded; maps: {2}" -f $ld.Count, $ul.Count, ((@($ld | ForEach-Object { $_.map -replace '^MP_', '' -replace '_Base_m$|_BASE_m$', '' })) -join ", ")) "Frontend"
-    Judge "$tag.private_after_unload" "private MB back in the lobby after each match" @($ul | Select-Object -Skip 1 | ForEach-Object { [double]$_.privateMB }) $TolMb "MB" $owner
+    # private at match.unloaded keeps dropping for ~10-20 s while the lobby settles (Systems 2026-10-08): INFO only; the verdict is
+    # the settled lobby sample (nav.check lb<N>, 20 s after each return) below
+    Res "$tag.private_at_unload" "INFO" ("private MB at match.unloaded (not settled): " + ((@($ul | ForEach-Object { [Math]::Round([double]$_.privateMB) })) -join " ")) $owner
+    $lb = @(foreach ($l in [IO.File]::ReadLines($lg)) { $m = [regex]::Match($l, 'FLOW nav\.check label=lb\d+ .* privateMB=([\d.]+)'); if ($m.Success) { [double]$m.Groups[1].Value } })
+    Judge "$tag.private_settled_lobby" "private MB in the lobby 20 s after each match (settled)" @($lb | Select-Object -Skip 1) $TolMb "MB" $owner
     $cen = @(foreach ($l in [IO.File]::ReadLines($lg)) { $m = [regex]::Match($l, 'match\.glCensus live=textures=(\d+) buffers=(\d+) framebuffers=(\d+) renderbuffers=(\d+) vertexArrays=(\d+) programs=(\d+)'); if ($m.Success) { ,@(1..6 | ForEach-Object { [double]$m.Groups[$_].Value }) } })
     $names = @("textures", "buffers", "framebuffers", "renderbuffers", "vertexArrays", "programs")
     for ($k = 0; $k -lt 6; $k++) { Judge "$tag.gl_$($names[$k])" "GL live $($names[$k]) after each unload" @($cen | ForEach-Object { $_[$k] }) 0.5 "names" "Rendering" }
     # C++ heap live in the lobby: the last ALLOCPROF sample before each next match load (context = lobby / flow lines)
     $ms = MemSamples $dir
     if ($ms.Count) {
-        $lobby = @($ms | Where-Object { $_.ctx -match 'GameLobby|PartyLobby|match\.unloaded|unloadMapRenderData|scene\.view' })
+        $lobby = @($ms | Where-Object { $_.ctx -match 'nav\.check label=lb' })
+        if ($lobby.Count -lt 4) { $lobby = @($ms | Where-Object { $_.ctx -match 'GameLobby|PartyLobby|match\.unloaded|unloadMapRenderData|scene\.view' }) }
         Judge "$tag.heap_new_lobby" "C++ heap (operator new live) at lobby samples" @($lobby | ForEach-Object { $_.newMb }) $TolMb "MB" "Systems"
     }
     GrewCheck $dir $tag
@@ -125,7 +130,8 @@ function NavSeries([string]$dir, [string]$tag, [string]$prefix) {
 
 # 1. all MP maps, 32 v 32, -Passes times round
 if ($Scenarios -contains "maps") {
-    $one = { param($id) "call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
+    $script:lbN = 0
+    $one = { param($id) $script:lbN++; "call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($script:lbN);wait:t=4" }
     $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
     for ($p = 0; $p -lt $Passes; $p++) { foreach ($id in $MapIds) { $steps += (& $one $id) } }
     $d = Join-Path $OutDir "maps"; $n = $MapIds.Count * $Passes
@@ -143,7 +149,7 @@ if ($Scenarios -contains "maps") {
 if ($Scenarios -contains "modes") {
     $modes = @("TDM", "CTF", "DOM", "KOTH"); $steps = @($lobbyIn + @("call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5"))
     for ($i = 0; $i -lt $ModeMatches; $i++) { $md = $modes[$i % $modes.Count]
-        $steps += "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
+        $steps += "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=20;navcheck:lb$($i + 1);wait:t=4" }
     $d = Join-Path $OutDir "modes"
     $d = Run "modes" (FrontendEnv (($steps + "quit") -join ";") "BotsAutobot=10;BotsDecepticon=10;PointsToWin=9999;TimeLimit=$MatchSeconds" $d) (600 + 240 * $ModeMatches)
     MatchSeries $d "modes" "Gameplay/Rendering/Systems"
@@ -171,7 +177,7 @@ if ($Scenarios -contains "frontend") {
     $steps = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2")
     for ($i = 1; $i -le $FrontendCycles; $i++) {
         $steps += @("call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:t=3", "clickclip:lobby_mc.menuAnchor_mc.menu_mc.customCharacters_mc", "wait:t=3", "ui:Accept", "wait:t=5",
-                    "ui:Down", "wait:t=0.5", "ui:Down", "wait:t=0.5", "ui:Accept", "wait:t=3", "ui:Down", "wait:t=1.5", "ui:Back", "wait:t=2", "ui:Back", "wait:t=2", "ui:Back", "wait:t=2", "ui:Back", "wait:t=3",
+                    "ui:Down", "wait:t=0.5", "ui:Down", "wait:t=0.5", "ui:Accept", "wait:t=3", "ui:Down", "wait:t=1.5", "ui:Back", "wait:t=2", "ui:Back", "wait:t=2", "ui:Back", "wait:t=2", "ui:Back", "wait:t=20",
                     "navcheck:fe$i", "wait:t=4") }
     $d = Join-Path $OutDir "frontend"; $d = Run "frontend" (FrontendEnv (($steps + "quit") -join ";") "" $d) (600 + 45 * $FrontendCycles)
     NavSeries $d "frontend" "fe"
