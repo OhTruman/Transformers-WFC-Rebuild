@@ -59,6 +59,7 @@ private:
     int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
     bool appliedHdTextures_ = false;
+    int appliedAnisotropy_ = -1;
     void qaTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;
     platform::QaRequest qaLast_;

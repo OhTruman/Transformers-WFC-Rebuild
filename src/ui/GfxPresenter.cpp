@@ -971,7 +971,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     // PC EXTENSION graphics options (default Off = the original look). Upscaling renders the 3D scene below the window
     // resolution and upscales it (FSR 1 spatial upscaling); HD Textures uses the HD texture set where one exists.
     // Rendering applies them (IRenderer::setUpscaling / setHdTextures, see Application_Frontend.cpp).
-    std::vector<gfx::avm1::Value> up, hd;
+    std::vector<gfx::avm1::Value> up, hd, af;
     auto add = [&](std::vector<gfx::avm1::Value>& v, int value, const char* label) {
         gfx::avm1::Object* c = vm.newPlain();
         vm.set(c, "Value", gfx::avm1::Value((double)value));
@@ -980,11 +980,13 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     };
     add(up, 0, "Off"); add(up, 1, "FSR 1 Quality"); add(up, 2, "FSR 1 Balanced"); add(up, 3, "FSR 1 Performance");
     add(hd, 0, "Off"); add(hd, 1, "On");
+    add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
     row(up, "<PCSettings:Upscaling>", "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
     row(hd, "<PCSettings:HDTextures>", "Use high-resolution textures where available (more video memory).", "HD Textures");
+    row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
-    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures,Anisotropic Filtering"}, {"provenance", "PC EXTENSION"}});
 }
 }
 

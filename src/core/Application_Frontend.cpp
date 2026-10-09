@@ -118,22 +118,28 @@ template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int h
 // PC EXTENSION graphics options -> Rendering. The renderer opts in by providing (detected, so either side builds alone):
 //   void setUpscaling(int mode);   // 0 Off (default), 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance
 //   void setHdTextures(bool on);   // HD texture set where available (default off)
+//   void setAnisotropy(int x);     // 4 (the original's, default), 8 or 16
 // called at boot and on every Game.ApplyProfileSettings when the value changed. Values live in LocalProfile::Display
-// ([PCSettings] Upscaling / HDTextures), set from the PC graphics menu; WFC_UPSCALING / WFC_HDTEXTURES override for tests.
+// ([PCSettings] Upscaling / HDTextures / Anisotropy), set from the PC graphics menu; WFC_UPSCALING / WFC_HDTEXTURES /
+// WFC_ANISOTROPY override for tests.
 template <class R, class = void> struct HasRendererUpscaling : std::false_type {};
 template <class R> struct HasRendererUpscaling<R, std::void_t<decltype(std::declval<R&>().setUpscaling(0))>> : std::true_type {};
 template <class R, class = void> struct HasRendererHdTextures : std::false_type {};
 template <class R> struct HasRendererHdTextures<R, std::void_t<decltype(std::declval<R&>().setHdTextures(true))>> : std::true_type {};
+template <class R, class = void> struct HasRendererAnisotropy : std::false_type {};
+template <class R> struct HasRendererAnisotropy<R, std::void_t<decltype(std::declval<R&>().setAnisotropy(4))>> : std::true_type {};
 // upscaling / hdTextures: in the profile values, out the values handed over (after the test overrides); envOverride
 // says whether one applied (for the trace).
-template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, bool& hdTextures, bool& envOverride) {
+template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, bool& hdTextures, int& anisotropy, bool& envOverride) {
     envOverride = false;
+    if (const char* e = std::getenv("WFC_ANISOTROPY")) { anisotropy = frontend::LocalProfile::Display::clampAnisotropy(std::atoi(e)); envOverride = true; }
     if (const char* e = std::getenv("WFC_UPSCALING")) { upscaling = std::clamp(std::atoi(e), 0, 3); envOverride = true; }
     if (const char* e = std::getenv("WFC_HDTEXTURES")) { hdTextures = std::atoi(e) != 0; envOverride = true; }
     bool any = false;
     if constexpr (HasRendererUpscaling<R>::value) { if (r) { r->setUpscaling(upscaling); any = true; } }
     if constexpr (HasRendererHdTextures<R>::value) { if (r) { r->setHdTextures(hdTextures); any = true; } }
-    (void)r; (void)upscaling; (void)hdTextures;
+    if constexpr (HasRendererAnisotropy<R>::value) { if (r) { r->setAnisotropy(anisotropy); any = true; } }
+    (void)r; (void)upscaling; (void)hdTextures; (void)anisotropy;
     return any ? "renderer" : "stored (no renderer API yet)";
 }
 
@@ -315,10 +321,12 @@ void Application::attachPresenter() {
         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
         appliedUpscaling_ = d.upscaling;
         appliedHdTextures_ = d.hdTextures;
-        int up = d.upscaling;
+        appliedAnisotropy_ = d.anisotropy;
+        int up = d.upscaling, af = d.anisotropy;
         bool hd = d.hdTextures, env = false;
-        const char* gx = applyGraphicsExtensions(renderer_, up, hd, env);
+        const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
         frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+                                                                 {"anisotropy", std::to_string(af)},
                                                                  {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
                                                                  {"provenance", "PC EXTENSION"}});
     }
@@ -352,13 +360,15 @@ void Application::attachPresenter() {
             const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
             frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
         }
-        if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_) {
+        if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
             appliedUpscaling_ = p.display.upscaling;
             appliedHdTextures_ = p.display.hdTextures;
-            int up = appliedUpscaling_;
+            appliedAnisotropy_ = p.display.anisotropy;
+            int up = appliedUpscaling_, af = appliedAnisotropy_;
             bool hd = appliedHdTextures_, env = false;
-            const char* gx = applyGraphicsExtensions(renderer_, up, hd, env);
+            const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
             frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+                                                                     {"anisotropy", std::to_string(af)},
                                                                      {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
         }
         if (applyLookSettings(world_.player().controller(), p))

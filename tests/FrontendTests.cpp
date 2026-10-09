@@ -46,18 +46,23 @@ static void testProfileBotMigration() {
     check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
     // PC EXTENSION graphics options: off by default (the original look), persisted under [PCSettings].
     frontend::LocalProfile g;
-    check(g.display.upscaling == 0 && !g.display.hdTextures && g.display.frameGeneration == 0 && !g.display.rayTracing,
+    check(g.display.upscaling == 0 && !g.display.hdTextures && g.display.anisotropy == 4 && g.display.frameGeneration == 0 && !g.display.rayTracing,
           "profile.graphics_extensions_default_off");
     g.display.upscaling = 2;
     g.display.hdTextures = true;
+    g.display.anisotropy = 16;
     g.save();
     std::ifstream back("wfc_profile.ini");
     frontend::LocalProfile r;
     r.loadFrom(back);
-    check(r.display.upscaling == 2 && r.display.hdTextures, "profile.graphics_extensions_roundtrip",
+    check(r.display.upscaling == 2 && r.display.hdTextures && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
           std::to_string(r.display.upscaling) + "/" + std::to_string(r.display.hdTextures));
     back.close();
     std::remove("wfc_profile.ini");
+    std::istringstream odd("[PCSettings]\nAnisotropy=12\n");
+    frontend::LocalProfile o;
+    o.loadFrom(odd);
+    check(o.display.anisotropy == 8, "profile.anisotropy_snaps_to_4_8_16", std::to_string(o.display.anisotropy));
 }
 
 static void testRecommendedBots() {
