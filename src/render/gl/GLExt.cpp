@@ -1,5 +1,6 @@
 #define WFC_NO_TEXCACHE_MACROS   // this file implements the cache over the real entry points
 #include "render/gl/GLExt.h"
+#include <string>
 #include "core/Log.h"
 
 #include <chrono>
@@ -310,8 +311,37 @@ void cachedBindTexture(GLenum target, GLuint texture) {
     ++gTexIssued;
     if (s >= 0 && gActiveUnit >= 0) { gTexBound[gActiveUnit][s] = texture; gTexKnown[gActiveUnit][s] = true; }
 }
+namespace {
+struct TexSite { const char* file; int line; };
+std::map<GLuint, TexSite>& texTrace() { static std::map<GLuint, TexSite> m; return m; }
+bool texTraceOn() { static const bool on = std::getenv("WFC_TEXTRACE") != nullptr; return on; }
+}  // namespace
+void tracedGenTextures(GLsizei n, GLuint* textures, const char* file, int line) {
+    ::glGenTextures(n, textures);
+    if (texTraceOn()) for (GLsizei i = 0; i < n; ++i) texTrace()[textures[i]] = TexSite{file, line};
+}
+void textureTraceDump(const char* tag) {
+    if (!texTraceOn()) return;
+    std::map<std::string, int> now;
+    for (const auto& kv : texTrace()) {
+        const char* f = kv.second.file;
+        const char* s = std::strrchr(f, '/'); const char* b = std::strrchr(f, '\\');
+        if (b > s) s = b;
+        now[std::string(s ? s + 1 : f) + ":" + std::to_string(kv.second.line)]++;
+    }
+    static std::map<std::string, int> prev;
+    std::string grew;
+    for (const auto& kv : now) {
+        const int d = kv.second - (prev.count(kv.first) ? prev[kv.first] : 0);
+        if (d > 0) grew += " " + kv.first + " +" + std::to_string(d) + " (" + std::to_string(kv.second) + ")";
+    }
+    LOG_INFO("TEXTRACE %s: %zu live traced textures; sites that grew since the last dump:%s", tag, texTrace().size(),
+             grew.empty() ? " none" : grew.c_str());
+    prev = now;
+}
 void cachedDeleteTextures(GLsizei n, const GLuint* textures) {
     ::glDeleteTextures(n, textures);
+    if (texTraceOn()) for (GLsizei i = 0; i < n; ++i) texTrace().erase(textures[i]);
     for (GLsizei i = 0; i < n; ++i)
         for (int u = 0; u < kTexUnits; ++u)
             for (int s = 0; s < 3; ++s)

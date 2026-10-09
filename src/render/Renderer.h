@@ -121,6 +121,10 @@ public:
     // Call when a mesh that will be drawn later is loaded (e.g. a character's vehicle form at spawn), so its first
     // visible frame does not pay for them (first R->V transform: 59 ms program + 51 ms textures in one frame).
     virtual void prewarmDynamicMesh(const MeshData& mesh) { (void)mesh; }
+    // The caller is about to free `mesh` (a bind / dynamic mesh it drew by reference): the renderer drops what it
+    // cached under its address (GPU-skin static buffers, draw list, posed buffers) now instead of after its
+    // unused-time eviction, so nothing outlives the object and a new mesh at the same address starts clean.
+    virtual void releaseMeshCaches(const MeshData& mesh) { (void)mesh; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
     // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].

@@ -207,10 +207,15 @@ void cachedBindTexture(GLenum target, GLuint texture);
 void cachedDeleteTextures(GLsizei n, const GLuint* textures);
 void textureCacheInvalidate();
 void textureCacheStats(unsigned long long& issued, unsigned long long& skipped);
+// WFC_TEXTRACE=1 (leak hunting): glGenTextures in every file including this header records its file:line;
+// textureTraceDump logs the live textures per creation site and which sites grew since the previous dump.
+void tracedGenTextures(GLsizei n, GLuint* textures, const char* file, int line);
+void textureTraceDump(const char* tag);
 
 } // namespace glx
 
 #ifndef WFC_NO_TEXCACHE_MACROS
 #define glBindTexture glx::cachedBindTexture
 #define glDeleteTextures glx::cachedDeleteTextures
+#define glGenTextures(n, t) glx::tracedGenTextures((n), (t), __FILE__, __LINE__)
 #endif

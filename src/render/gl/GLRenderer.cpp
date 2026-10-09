@@ -873,6 +873,7 @@ public:
             if (textures_[i] && !persistentTex_[i]) { glDeleteTextures(1, &textures_[i]); textures_[i] = 0; ++freed; }
         texEpoch_ = textures_.size();
         LOG_INFO("renderer: unloadMapRenderData released %d match textures (%d live)", freed, liveTextureCount());
+        glx::textureTraceDump("after unloadMapRenderData");
     }
 
     // ---- validation (M10) ------------------------------------------------------------------------------------
@@ -1534,6 +1535,7 @@ public:
     void setDrawMaterialParam(const std::string& n, const float v[4]) override { wfc_.setDrawMaterialParam(n, v); }
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
+    void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";
