@@ -773,6 +773,10 @@ void Pipeline::release() {
                       &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1]})
         fbo(*f);
     if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
+    for (GLuint* t : {&refMask_.tex, &refMask_.tmpTex, &refMask_.blurTex}) tex(*t);   // (WFC_SHADOWRECTCHECK set)
+    for (GLuint* f : {&refMask_.fbo, &refMask_.tmpFbo, &refMask_.blurFbo}) fbo(*f);
+    if (refMask_.depthRb) DeleteRenderbuffers(1, &refMask_.depthRb);
+    refMask_ = MaskSet{};
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
     for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
@@ -3785,7 +3789,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
                     for (size_t k = 0; k < n4; k += 4) {
                         const __m128 x = _mm_loadu_ps(&v[k]), y = _mm_loadu_ps(&v[n4 + k]), z = _mm_loadu_ps(&v[2 * n4 + k]);
                         __m128 t = _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(a, x), _mm_mul_ps(b, y)), _mm_mul_ps(c, z)), d);
-                        t = _mm_add_ps(zero, _mm_mul_ps(t, _mm_set1_ps(1.0f)));
+                        t = _mm_add_ps(zero, t);              // (x * 1 is a bitwise identity: dropped)
                         lo[r3] = _mm_min_ps(t, lo[r3]);
                         hi[r3] = _mm_max_ps(t, hi[r3]);
                     }
@@ -3874,8 +3878,17 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         const auto tb = std::chrono::steady_clock::now();
         struct BTimer { std::chrono::steady_clock::time_point t; ~BTimer() { gStats.skinBoundsMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinUploads; } } bt{tb};
         for (const core::Mat4& M : palette) if (!finiteMat(M)) { reportNonFinite("bone palette", bind.mats.empty() ? std::string("?") : bind.mats[0].wfcName); return true; }
+        // the previous palette is normally the one the current bounds were computed from last step: same input bits,
+        // same bounds, so they are reused instead of recomputed (WFC_NOSKINBOUNDSREUSE=1: always recompute)
+        static const bool noReuse = std::getenv("WFC_NOSKINBOUNDSREUSE") != nullptr;
+        const bool reusePrev = usePrev && !noReuse && si.boundsPal.size() == prevPalette->size() && !si.boundsPal.empty() &&
+                               std::memcmp(si.boundsPal.data(), prevPalette->data(), prevPalette->size() * sizeof(core::Mat4)) == 0;
+        const core::Vec3 oldMn = si.mn, oldMx = si.mx;
+        si.boundsPal.clear();                            // (invalid until this palette's bounds are complete)
         if (!boundsOf(palette, si.mn, si.mx)) return true;
-        if (usePrev && !boundsOf(*prevPalette, si.pmn, si.pmx)) return true;
+        if (reusePrev) { si.pmn = oldMn; si.pmx = oldMx; ++statSkinBoundsReused_; }
+        else if (usePrev && !boundsOf(*prevPalette, si.pmn, si.pmx)) return true;
+        si.boundsPal.assign(palette.begin(), palette.end());
         static std::vector<float> row;
         row.assign(1024 * 4, 0.0f);
         for (size_t j = 0; j < palette.size(); ++j) std::memcpy(&row[j * 16], palette[j].m, 16 * sizeof(float));
@@ -5288,6 +5301,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
         LOG_INFO("wfc gpu skin: %d model builds in the last 600 frames (%zu models, %zu instances live)", statSkinRebuilds_,
                  skinModels_.size(), skinInsts_.size());
         statSkinRebuilds_ = 0;
+    }
+    if (frameNo_ % 600 == 0 && statSkinBoundsReused_) {
+        LOG_INFO("wfc gpu skin: previous-pose bounds reused %ld times in the last 600 frames", statSkinBoundsReused_);
+        statSkinBoundsReused_ = 0;
     }
     if ((frameNo_ & 255) == 64) {
         for (auto it = dynSubs_.begin(); it != dynSubs_.end();)
