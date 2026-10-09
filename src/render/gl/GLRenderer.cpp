@@ -234,6 +234,7 @@ public:
         glx::textureCacheInvalidate();               // ... and textures
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
+        if (WFC_ENV("WFC_GPUFACTS") && !gpuFactsRead_) gpuFacts();   // test switch: log the GPU facts at the first frame
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         slowFrameGpu();
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
@@ -1545,6 +1546,12 @@ public:
                  mode == 2 ? "FSR 1 Balanced" : "FSR 1 Performance");
     }
     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
+    GpuFacts gpuFacts() override {
+        if (!gpuFactsRead_) { gpuFacts_ = readGpuFacts(); gpuFactsRead_ = true; }
+        return gpuFacts_;
+    }
+    GpuFacts gpuFacts_;
+    bool gpuFactsRead_ = false;
     void setHdTextures(bool on) override { hdTextures_ = on; LOG_INFO("renderer: HD textures %s (no HD root yet: originals)", on ? "on" : "off"); }
     bool hdTextures_ = false;
     void prewarmDynamicMesh(const MeshData& m) override {
