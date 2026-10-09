@@ -12,7 +12,9 @@
 #
 #   .\tools\fidelity\match-repeat-memory.ps1 -Root work\ab\<target> -OutDir <dir> [-Matches 6] [-Friendly 3] [-Enemy 4] [-Goal 10] [-Control] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [Alias("Matches")][int]$MatchCount = 6, [int]$Friendly = 3, [int]$Enemy = 4,
-      [int]$Goal = 10, [int]$MapId = 508, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
+      [int]$Goal = 10, [int]$MapId = 508, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release",
+      # -ExtraEnv "K=V;K=V": extra env for the run (e.g. Systems' WFC_ALLOCPROF=64;WFC_ALLOCPROF_LIVE=64;WFC_ALLOCPROF_EVERY_S=10)
+      [string]$ExtraEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -46,6 +48,7 @@ if (-not $ReportOnly -and -not (Test-Path $lg)) {
     $env2 = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = $fl; WFC_FLOW_TIMEOUT = "3000";
                WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_LIFECYCLE = "$Goal"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2" }
     if ($H.Contains("WFC_CHARSELECT")) { $env2.WFC_CHARSELECT = "1" }
+    foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $env2[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
     $null = Invoke-WfcExe $exe $OutDir $env2 "run.log" (300 + 240 * $MatchCount)
 }
 if (-not (Test-Path $fl)) { Res "ran" "UNKNOWN" "no flow trace" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
