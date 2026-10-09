@@ -1352,7 +1352,10 @@ void Application::unloadMatch() {
         if (g_scene) g_scene->setRenderer(renderer_);
         applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
     }
-    {   // owner split for the census: GL the UI presenter (GFx movies, HUD, fonts) holds right now
+    // Measurement only (WFC_GLCENSUS): the live-name scan is up to millions of glIs* calls, so normal play skips it at
+    // every match transition; GlCensus::release (the per-match GL release above) always runs.
+    static const bool glCensusTrace = std::getenv("WFC_GLCENSUS") != nullptr;
+    if (glCensusTrace) {   // owner split for the census: GL the UI presenter (GFx movies, HUD, fonts) holds right now
         ui::GlCensus::Owned ui;
         if (presenter_) presenter_->ownedGl(ui);
         frontend::FlowTrace::emit("match.glCensus", {{"live", ui::GlCensus::snapshot()}, {"renderer", recreate ? "recreated" : "persistent"},
