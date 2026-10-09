@@ -247,6 +247,7 @@ struct Sample {
     int srcRate = 0;
     double loopStart = 0.0, loopEnd = -1.0;   // output frames; loopEnd exclusive, < 0: the sample end
     bool releasing = false;                   // released while a block was mixing: freed at its end, already gone for callers
+    int gen = 0;                              // slot generation: a Sound handle = index | gen << kGenShift
 };
 
 struct Voice {
@@ -316,6 +317,16 @@ public:
         auto it = loaded_.find(path);
         return it == loaded_.end() ? kInvalidSound : it->second;
     }
+    // Sound handles carry the slot's generation, so a released slot can be reused by the next load (a level reload used to append
+    // a new slot per wave every match) while a stale handle to the old sample simply stops resolving.
+    static constexpr int kGenShift = 20, kIndexMask = (1 << kGenShift) - 1, kGenMask = 0x7FF;
+    Sound handleOf(size_t idx) const { return (Sound)((int)idx | (sounds_[idx].gen << kGenShift)); }
+    Sample* sampleOf(Sound s) {
+        if (s < 0) return nullptr;
+        const size_t idx = (size_t)(s & kIndexMask);
+        if (idx >= sounds_.size() || sounds_[idx].gen != ((s >> kGenShift) & kGenMask)) return nullptr;
+        return &sounds_[idx];
+    }
     Sound load(const std::string& path) override {
         {
             std::lock_guard<std::mutex> lk(mx_);
@@ -327,9 +338,20 @@ public:
         std::lock_guard<std::mutex> lk(mx_);
         auto again = loaded_.find(path);               // another thread (prefetch warming) decoded it meanwhile: one copy
         if (again != loaded_.end()) return again->second;
-        sounds_.push_back(std::move(smp));             // deque: existing voices' data pointers stay valid
-        loaded_[path] = (Sound)(sounds_.size() - 1);
-        return (Sound)(sounds_.size() - 1);
+        size_t idx;
+        if (!freeSlots_.empty()) {                     // reuse a released slot (its PCM is already freed), next generation
+            idx = freeSlots_.back(); freeSlots_.pop_back();
+            const int g = (sounds_[idx].gen + 1) & kGenMask;
+            sounds_[idx] = std::move(smp);
+            sounds_[idx].gen = g;
+        } else {
+            if (sounds_.size() > (size_t)kIndexMask) return kInvalidSound;
+            sounds_.push_back(std::move(smp));         // deque: existing voices' data pointers stay valid
+            idx = sounds_.size() - 1;
+        }
+        const Sound h = handleOf(idx);
+        loaded_[path] = h;
+        return h;
     }
 
     // Fixed voice pool so handles stay valid; handle = index | generation << 12.
@@ -354,7 +376,8 @@ public:
     };
     std::vector<MixJob> jobs_;
     bool mixing_ = false;                                     // a block is being mixed outside mx_ (PCM releases wait)
-    std::vector<Sound> releaseLater_;
+    std::vector<Sound> releaseLater_;                         // slot indices (not handles)
+    std::vector<size_t> freeSlots_;                           // released slots, reused by load()
     std::vector<std::vector<int16_t>> deadPcm_;               // released PCM waiting to be freed outside mx_
     bool envPending_ = false, compPending_ = false;
     Environment envNext_; float envFade_ = 0.0f; float compNext_[4] = {0, 0, 0, 0};
@@ -389,11 +412,12 @@ public:
         return &voices_[(size_t)best];
     }
     Voice* start(Sound s, int& index, int priority = 128, bool startsVirtual = false, bool protect = false) {
-        if (!ok_ || s < 0 || (size_t)s >= sounds_.size() || sounds_[(size_t)s].pcm.size() < 4 || sounds_[(size_t)s].releasing) return nullptr;   // released / empty
+        Sample* smp = sampleOf(s);
+        if (!ok_ || !smp || smp->pcm.size() < 4 || smp->releasing) return nullptr;   // released / stale / empty
         Voice* v = freeVoice(index, priority, startsVirtual, protect);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
-        *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s].pcm; v->sample = &sounds_[(size_t)s]; v->active = true;
+        *v = Voice{}; v->gen = gen; v->data = &smp->pcm; v->sample = smp; v->active = true;
         return v;
     }
 
@@ -463,13 +487,16 @@ public:
     void release(Sound s) override {
         std::vector<int16_t> dead;                               // freed after the lock is released (declared first): freeing
         std::lock_guard<std::mutex> lk(mx_);                     // tens of MB of music under mx_ stalled the step ~11 ms
-        if (s < 0 || (size_t)s >= sounds_.size()) return;
-        Sample& smp = sounds_[(size_t)s];
+        Sample* sp = sampleOf(s);
+        if (!sp || sp->releasing) return;                        // stale handle / already released
+        Sample& smp = *sp;
+        const size_t idx = (size_t)(s & kIndexMask);
         for (Voice& v : voices_) if (v.active && v.sample == &smp) v.active = false;
         for (auto it = loaded_.begin(); it != loaded_.end(); ++it) if (it->second == s) { loaded_.erase(it); break; }
-        if (mixing_) { smp.releasing = true; releaseLater_.push_back(s); return; }   // the block being mixed may read its PCM
-        dead.swap(smp.pcm);                                      // the slot stays (handles of other samples keep their index)
+        if (mixing_) { smp.releasing = true; releaseLater_.push_back((Sound)idx); return; }   // the block being mixed may read its PCM
+        dead.swap(smp.pcm);                                      // the slot goes to the free list (handles carry the generation)
         smp.loopStart = 0.0; smp.loopEnd = -1.0;
+        freeSlots_.push_back(idx);
     }
     void stopAllVoices() override {
         std::lock_guard<std::mutex> lk(mx_);
@@ -489,8 +516,9 @@ public:
     }
     bool setLoopPoints(Sound s, uint32_t start, uint32_t end) override {
         std::lock_guard<std::mutex> lk(mx_);
-        if (s < 0 || (size_t)s >= sounds_.size() || end <= start) return false;
-        Sample& smp = sounds_[(size_t)s];
+        Sample* sp = sampleOf(s);
+        if (!sp || end <= start) return false;
+        Sample& smp = *sp;
         double k = (double)kRate / (double)std::max(1, smp.srcRate);    // source frames -> output frames
         smp.loopStart = (double)start * k;
         smp.loopEnd = std::min((double)(smp.pcm.size() / 2), (double)(end + 1) * k);   // end inclusive
@@ -776,6 +804,7 @@ private:
                 Sample& smp = sounds_[(size_t)r];
                 deadPcm_.emplace_back(); deadPcm_.back().swap(smp.pcm);   // freed below, after the unlock
                 smp.loopStart = 0.0; smp.loopEnd = -1.0; smp.releasing = false;
+                freeSlots_.push_back((size_t)r);                           // releaseLater_ holds slot indices
             }
         releaseLater_.clear();
         stats_.peakDb = peak > 1e-6f ? 20.0f * std::log10(peak) : -96.0f;

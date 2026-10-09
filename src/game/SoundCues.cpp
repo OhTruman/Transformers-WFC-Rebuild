@@ -12,6 +12,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <condition_variable>
+#include <deque>
+#include <thread>
 
 namespace game {
 using namespace cuedata;
@@ -20,6 +23,45 @@ namespace {
 using LARGE_INTEGER_T = long long;
 LARGE_INTEGER_T nowTicks() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 double ticksToMs(LARGE_INTEGER_T t) { return (double)t / 1e6; }
+
+// Persistent decode lanes (one thread each, created once, never joined). Worker decodes used to start a new thread per
+// selection warm-up / level bank (std::async): each exited thread left its allocator segments abandoned, and the PCM later
+// freed there stayed committed - the process grew a few tens of MB per match. Two lanes keep the old concurrency: a level's
+// bank loads while a selection warm-up decodes. Tasks run in submission order per lane.
+class DecodeLane {
+public:
+    std::future<void> submit(std::function<void()> fn) {
+        std::packaged_task<void()> task(std::move(fn));
+        std::future<void> f = task.get_future();
+        {
+            std::lock_guard<std::mutex> lk(mx_);
+            if (!started_) { started_ = true; std::thread([this] { run(); }).detach(); }
+            q_.push_back(std::move(task));
+        }
+        cv_.notify_one();
+        return f;
+    }
+private:
+    void run() {
+        for (;;) {
+            std::packaged_task<void()> task;
+            {
+                std::unique_lock<std::mutex> lk(mx_);
+                cv_.wait(lk, [this] { return !q_.empty(); });
+                task = std::move(q_.front());
+                q_.pop_front();
+            }
+            task();
+        }
+    }
+    std::mutex mx_;
+    std::condition_variable cv_;
+    std::deque<std::packaged_task<void()>> q_;
+    bool started_ = false;
+};
+// Leaked on purpose: detached lanes may still wait on them during static destruction at exit.
+DecodeLane& warmLane() { static DecodeLane* l = new DecodeLane; return *l; }
+DecodeLane& levelLane() { static DecodeLane* l = new DecodeLane; return *l; }
 
 const CueDef kCues[] = {
 #include "game/SoundCues.inc"
@@ -380,7 +422,7 @@ bool SoundCues::startWarm(size_t c) {
     w.cue = c; w.paths = paths; w.name = cues_[c].name; w.bytes = waveBytes(c); w.start = std::chrono::steady_clock::now();
     // One worker decode at a time (decodeMutex): a match's final-stretch + end music (up to ~250 MB of waves each) must not
     // decode concurrently - peak memory, and the device lock they share.
-    w.done = std::async(std::launch::async, [a, paths] {
+    w.done = warmLane().submit([a, paths] {
         static std::mutex decodeMutex;
         std::lock_guard<std::mutex> lk(decodeMutex);
         for (const std::string& p : paths) a->load(p);
@@ -477,7 +519,7 @@ int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& content
     if (paths.empty()) return 0;
     audio::IAudio* a = audio_;
     const int n = (int)paths.size();
-    levelWarm_.push_back({tag, paths, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
+    levelWarm_.push_back({tag, paths, levelLane().submit([a, paths] { for (const std::string& p : paths) a->load(p); })});
     return n;
 }
 

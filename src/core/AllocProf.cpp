@@ -19,7 +19,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include "core/HeapTrim.h"
 #include "core/Log.h"
+#include <malloc.h>
 #if defined(WFC_MIMALLOC) && WFC_MIMALLOC
 #include <mimalloc.h>
 #define WFC_RAW_ALLOC(n) mi_malloc(n)
@@ -321,3 +323,28 @@ void operator delete(void* q, std::size_t) noexcept { wfcFree(q); }
 void operator delete[](void* q, std::size_t) noexcept { wfcFree(q); }
 void operator delete(void* q, const std::nothrow_t&) noexcept { wfcFree(q); }
 void operator delete[](void* q, const std::nothrow_t&) noexcept { wfcFree(q); }
+
+namespace core {
+void trimHeap(const char* why) {
+    static const bool off = std::getenv("WFC_NOHEAPTRIM") != nullptr;   // A/B
+    if (off) return;
+    using GetPmi = BOOL(WINAPI*)(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+    static const auto getPmi = (GetPmi)(void*)GetProcAddress(GetModuleHandleA("kernel32.dll"), "K32GetProcessMemoryInfo");
+    auto privMB = [] {
+        PROCESS_MEMORY_COUNTERS_EX pmc{}; pmc.cb = sizeof pmc;
+        return getPmi && getPmi(GetCurrentProcess(), (PPROCESS_MEMORY_COUNTERS)&pmc, sizeof pmc) ? pmc.PrivateUsage / 1048576.0 : 0.0;
+    };
+    const double before = privMB();
+    LARGE_INTEGER f, t0, t1;
+    QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
+#if defined(WFC_MIMALLOC) && WFC_MIMALLOC
+    mi_collect(true);
+#else
+    _heapmin();
+#endif
+    QueryPerformanceCounter(&t1);
+    const double after = privMB();
+    LOG_INFO("heap trim (%s): private %.0f -> %.0f MB (released %.0f MB) in %.1f ms", why ? why : "", before, after, before - after,
+             (double)(t1.QuadPart - t0.QuadPart) * 1000.0 / (double)f.QuadPart);
+}
+}   // namespace core

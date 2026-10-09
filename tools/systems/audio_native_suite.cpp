@@ -520,6 +520,19 @@ static void testChannelModes() {
       CHECK(near(i.pan, amt, 2e-3f) && near(i.atten, 0.2f * (1.0f - (1.0f - 0.7079458f) * amt), 1e-3f) && near(i.dist, 20.0f, 1e-3f),
             "PreferPlayer far: listener reference (pan %.3f atten %.4f dist %.2f)", i.pan, i.atten, i.dist);
       a->stopVoice(v); }
+    { // released slots are reused (a level reload no longer appends a slot per wave each match); stale handles stop resolving
+      a->release(s);
+      CHECK(a->playVoice(s, vp(1, Vec3{0, 0, 0})) < 0, "released handle plays nothing");
+      Sound s2 = a->load(kRoot + "/../content/WL_ELEC/ELEC_TRANS_TV_03.wav");
+      CHECK(s2 != kInvalidSound && s2 != s && (s2 & 0xFFFFF) == (s & 0xFFFFF), "reload reuses the slot with a new handle (%d -> %d)", s, s2);
+      CHECK(a->playVoice(s, vp(1, Vec3{0, 0, 0})) < 0, "the stale handle does not play the new sample");
+      Voice v = a->playVoice(s2, vp(1, Vec3{0, 0, 0}));
+      CHECK(v >= 0, "the new handle plays");
+      a->stopVoice(v);
+      for (int k = 0; k < 50; ++k) { a->release(s2); s2 = a->load(kRoot + "/../content/WL_ELEC/ELEC_TRANS_TV_03.wav"); }
+      CHECK((s2 & 0xFFFFF) == (s & 0xFFFFF), "50 release / reload cycles stay in one slot (index %d)", s2 & 0xFFFFF);
+      a->release(s2); a->release(s2);   // double release: harmless
+    }
     delete a;
 }
 
