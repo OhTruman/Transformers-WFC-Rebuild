@@ -400,6 +400,9 @@ private:
     struct SkinModel {
         GLuint vao = 0, vbo = 0, jwVbo = 0, ibo = 0;
         size_t verts = 0, idx = 0;
+        // identity of the bind mesh behind the key (its address): the position buffer and its first / last vertex, so a
+        // different mesh allocated at a freed one's address (next match, same sizes) rebuilds instead of drawing stale data
+        const float* posData = nullptr; float fp[6] = {0, 0, 0, 0, 0, 0};
         int joints = 0;                                   // highest influencing joint + 1
         std::vector<core::Vec3> jc; std::vector<float> jr;   // per joint: bind-space centre / radius of its vertices
         // exact bounds, reduced: per joint the rigid (single influence, weight 1) vertices that can be extreme under a

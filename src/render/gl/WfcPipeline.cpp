@@ -3513,7 +3513,14 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
     SkinModel& sm = skinModels_[&bind];
     sm.lastFrame = frameNo_;
-    if (!sm.vao || sm.verts != n || sm.idx != bind.indices.size()) {
+    float fp[6] = {0, 0, 0, 0, 0, 0};
+    if (n) {
+        std::memcpy(fp, bind.positions.data(), 3 * sizeof(float));
+        std::memcpy(fp + 3, bind.positions.data() + (n - 1) * 3, 3 * sizeof(float));
+    }
+    const bool sameMesh = sm.posData == bind.positions.data() && std::memcmp(sm.fp, fp, sizeof fp) == 0;
+    if (!sm.vao || sm.verts != n || sm.idx != bind.indices.size() || !sameMesh) {
+        sm.posData = bind.positions.data(); std::memcpy(sm.fp, fp, sizeof fp);
         if (!sm.vao) { GenVertexArrays(1, &sm.vao); GenBuffers(1, &sm.vbo); GenBuffers(1, &sm.jwVbo); GenBuffers(1, &sm.ibo); }
         std::vector<float> v;
         buildVertices(bind, v, true);
