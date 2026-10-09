@@ -1,0 +1,33 @@
+{
+  "_doc": [
+    "Graphics auto-detect presets (PC EXTENSION; frontend/GraphicsAutoDetect). On first launch (no saved PC settings) or",
+    "when the GPU changes, the frontend reads the hardware facts (Rendering's IRenderer::gpuFacts: vendor, renderer name,",
+    "VRAM, ray tracing; the window's native monitor mode; CPU cores) and picks the FIRST tier whose requirements the PC",
+    "meets ('best look the PC can hold'), then applies its values. The user can change anything afterwards; Graphics ->",
+    "Recommended Settings re-applies the pick. Tune by editing this file; no rebuild needed.",
+    "Tier fields:",
+    "  minVramMB / minCpuCores   requirements (0 = none)",
+    "  allowIntegrated           false: GPUs matching integratedKeywords skip this tier",
+    "  nativePixelBudget         width*height the tier renders at native without upscaling; above it the tier applies",
+    "                            upscalingOverBudget (1 FSR 1 Quality, 2 Balanced, 3 Performance)",
+    "  maxHeight                 0 = native resolution; else the largest monitor-aspect resolution with height <= this",
+    "  anisotropy 4/8/16, hdTextures (only when the HD pack is installed), textureQuality 0-2, fullscreen, vsync",
+    "  frameLimit                'refresh' = the monitor's refresh rate, or a number (0 = uncapped)",
+    "Ray Tracing and Frame Generation are never turned on by auto-detect (user choice)."
+  ],
+  "integratedKeywords": ["Intel(R) UHD", "Intel(R) HD", "Intel(R) Iris", "Iris(R) Xe", "Radeon(TM) Graphics", "Radeon Vega", "Vega 8", "Vega 6"],
+  "tiers": [
+    { "name": "ultra",  "minVramMB": 10000, "minCpuCores": 6, "allowIntegrated": false, "nativePixelBudget": 8294400,
+      "upscalingOverBudget": 1, "maxHeight": 0, "anisotropy": 16, "hdTextures": true, "textureQuality": 2,
+      "fullscreen": true, "vsync": false, "frameLimit": "refresh" },
+    { "name": "high",   "minVramMB": 6000, "minCpuCores": 4, "allowIntegrated": false, "nativePixelBudget": 3686400,
+      "upscalingOverBudget": 1, "maxHeight": 0, "anisotropy": 16, "hdTextures": true, "textureQuality": 2,
+      "fullscreen": true, "vsync": false, "frameLimit": "refresh" },
+    { "name": "medium", "minVramMB": 3000, "minCpuCores": 4, "allowIntegrated": false, "nativePixelBudget": 2073600,
+      "upscalingOverBudget": 1, "maxHeight": 0, "anisotropy": 8, "hdTextures": false, "textureQuality": 2,
+      "fullscreen": true, "vsync": false, "frameLimit": "refresh" },
+    { "name": "low",    "minVramMB": 0, "minCpuCores": 0, "allowIntegrated": true, "nativePixelBudget": 921600,
+      "upscalingOverBudget": 2, "maxHeight": 1080, "anisotropy": 4, "hdTextures": false, "textureQuality": 1,
+      "fullscreen": true, "vsync": false, "frameLimit": "refresh" }
+  ]
+}

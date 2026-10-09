@@ -727,6 +727,69 @@ BridgeValue FrontendRuntime::commitCharacter(const std::vector<std::string>& arg
     return {};
 }
 
+GraphicsPreset FrontendRuntime::applyRecommendedGraphics(const char* why) {
+    if (!presetsLoaded_) {
+        presetsLoaded_ = true;
+        if (!presets_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/graphics_presets.json"))
+            LOG_WARN("graphics auto-detect: data/frontend/graphics_presets.json missing; built-in conservative tier");
+    }
+    GraphicsPreset g = presets_.pick(hardware_);
+    if (std::getenv("WFC_AUTODETECT_WINDOWED")) g.fullscreen = false;   // TEST ONLY: automated runs stay windowed
+    LocalProfile& p = flow_.profile();
+    p.display.width = g.width;
+    p.display.height = g.height;
+    p.display.fullscreen = g.fullscreen;
+    p.display.vsync = g.vsync;
+    p.display.frameLimit = g.frameLimit;
+    p.display.anisotropy = g.anisotropy;
+    p.display.upscaling = g.upscaling;
+    p.display.hdTextures = g.hdTextures;
+    p.display.textureQuality = g.textureQuality;
+    // Ray tracing / frame generation stay as they are (off by default; never enabled by auto-detect).
+    p.autoDetectGpu = hardware_.gpuId();
+    p.save();
+    const HardwareFacts& f = hardware_;
+    char hw[96];
+    std::snprintf(hw, sizeof hw, "%dx%d@%d", f.nativeW, f.nativeH, f.nativeHz);
+    FlowTrace::emit("settings.autodetect", {{"why", why}, {"gpu", f.gpuName}, {"vendorId", std::to_string(f.gpuVendorId)},
+                                            {"vramMB", std::to_string(f.vramMB)}, {"rayTracing", FlowTrace::boolean(f.rayTracing)},
+                                            {"cpuCores", std::to_string(f.cpuCores)}, {"monitor", hw},
+                                            {"hdPack", FlowTrace::boolean(f.hdTexturePack)}, {"tier", g.tier},
+                                            {"resolution", std::to_string(g.width) + "x" + std::to_string(g.height)},
+                                            {"fullscreen", FlowTrace::boolean(g.fullscreen)}, {"frameLimit", std::to_string(g.frameLimit)},
+                                            {"anisotropy", std::to_string(g.anisotropy)}, {"upscaling", std::to_string(g.upscaling)},
+                                            {"hdTextures", FlowTrace::boolean(g.hdTextures)}, {"textureQuality", std::to_string(g.textureQuality)},
+                                            {"reason", g.why}, {"source", "autodetect"}, {"provenance", "PC EXTENSION"}});
+    return g;
+}
+
+void FrontendRuntime::applyDisplaySettings() {
+    LocalProfile& p = flow_.profile();
+    if (display_.apply) display_.apply(p.display.width, p.display.height, p.display.fullscreen);
+    if (display_.vsync) display_.vsync(p.display.vsync);
+    p.apply();
+}
+
+bool FrontendRuntime::autoDetectGraphicsAtBoot() {
+    const char* force = std::getenv("WFC_AUTODETECT");
+    if (force && std::string(force) == "0") return false;
+    if (!force && std::getenv("WFC_FRONTEND_SCRIPT")) return false;   // automated runs keep their seeded settings
+    if (!hardwareKnown_) return false;
+    LocalProfile& p = flow_.profile();
+    const std::string id = hardware_.gpuId();
+    const bool first = !p.pcSettingsLoaded;
+    // A GPU change re-detects only against a previously detected GPU; older profiles (no AutoDetectGpu) keep the
+    // user's settings and just record the GPU.
+    const bool changed = !p.autoDetectGpu.empty() && !hardware_.gpuName.empty() && p.autoDetectGpu != id;
+    const bool forced = force && std::string(force) == "1";
+    if (!first && !changed && !forced) {
+        if (p.autoDetectGpu.empty() && !hardware_.gpuName.empty()) { p.autoDetectGpu = id; p.save(); }
+        return false;
+    }
+    applyRecommendedGraphics(forced ? "forced (WFC_AUTODETECT=1)" : first ? "first launch" : "gpu changed");
+    return true;
+}
+
 BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector<std::string>& args) {
     // HmInterfacePCSettings (SettingsMenu_GFX WIN branch) [call names CONFIRMED AS2; native bodies not in the dump:
     // semantics HIGH from the movie's use]. Graphics -> Commit Changes calls SetResolution(w, h, fullscreen),

@@ -110,7 +110,12 @@ private:
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
     struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; };
     std::vector<PendingCall> pendingCalls_;   // movieCall: delivered after the movie's first frame
-    int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
+    int frameLimitShown_ = 0;
+    // Graphics -> Recommended Settings: re-apply the auto-detect preset, then leave and re-enter the page (queued
+    // Escape / Enter, frames from now) so the original rows re-read their values.
+    void recommendedSettingsPressed();
+    struct QueuedKey { int frames; int code; bool down; };
+    std::vector<QueuedKey> keyQueue_;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
     std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
     float endScoreScroll_ = 0.0f;   // the same for the end-of-match View Scores list (EndGameStats_GFX)

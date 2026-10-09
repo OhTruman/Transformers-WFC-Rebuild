@@ -934,7 +934,8 @@ namespace {
 // panelWidth, text}): the lateral selector reads its value with DataStores.ReadValue and each step writes it and calls
 // Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
-void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current) {
+void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
+                       const std::function<void()>& onRecommended) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -984,9 +985,23 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     row(up, "<PCSettings:Upscaling>", "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
     row(hd, "<PCSettings:HDTextures>", "Use high-resolution textures where available (more video memory).", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
+    {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
+        // clickFunction): re-applies the auto-detected preset.
+        gfx::avm1::Object* item = vm.newPlain();
+        vm.set(item, "text", gfx::avm1::Value(std::string("Recommended Settings")));
+        vm.set(item, "panelWidth", gfx::avm1::Value(413.0));
+        vm.set(item, "hintText", gfx::avm1::Value(std::string("Detect this PC's hardware and apply the best settings it can hold.")));
+        vm.set(item, "listMenuOverride", gfx::avm1::Value(std::string("mc_panelButton")));
+        std::function<void()> cb = onRecommended;
+        vm.set(item, "clickFunction", gfx::avm1::Value(vm.newFunction([cb](gfx::avm1::VM&, const gfx::avm1::Value&, gfx::avm1::Args&) {
+            if (cb) cb();
+            return gfx::avm1::Value();
+        }, "recommendedSettingsClick")));
+        a.o->elems.insert(a.o->elems.end() - 1, gfx::avm1::Value(item));
+    }
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
-    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures,Anisotropic Filtering"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures,Anisotropic Filtering,Recommended Settings"}, {"provenance", "PC EXTENSION"}});
 }
 }
 
@@ -1151,6 +1166,11 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     UiProfScope uiProf(g_uiUpdate);
     syncMovies(flow);
     syncPopup(flow);
+    for (size_t i = 0; i < keyQueue_.size();) {
+        if (--keyQueue_[i].frames > 0) { ++i; continue; }
+        injectKey(keyQueue_[i].code, keyQueue_[i].down);
+        keyQueue_.erase(keyQueue_.begin() + (long)i);
+    }
     if (!cursor_) {
         cursor_ = std::make_unique<GfxMovie>();
         bool ok = cursor_->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",
@@ -1222,7 +1242,9 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (Open& op : movies_) {
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)
-            p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) { addFrameLimitItem(p, linkage, init, frameLimitShown_); };
+            p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
+                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); });
+            };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
     for (const auto& iv : rt_.flow().takeUiInvokes()) deferred_.push_back({iv.first, iv.second, {}});
@@ -1297,6 +1319,15 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
     gl_.end();
+}
+
+void GfxPresenter::recommendedSettingsPressed() {
+    rt_.applyRecommendedGraphics("recommended");
+    rt_.applyDisplaySettings();
+    frameLimitShown_ = rt_.flow().profile().display.frameLimit;
+    // Back out of the Graphics page and open it again (the menu's own navigation rebuilds it with the new values).
+    keyQueue_ = {{2, 27, true}, {3, 27, false}, {10, 13, true}, {11, 13, false}};
+    frontend::FlowTrace::emit("settings.recommendedPressed", {{"provenance", "PC EXTENSION"}});
 }
 
 void GfxPresenter::injectKey(int code, bool down) {

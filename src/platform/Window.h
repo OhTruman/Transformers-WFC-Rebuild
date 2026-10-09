@@ -37,6 +37,8 @@ public:
     // windowed / alt-tab / exit), and VSync (swap interval).
     struct Mode { int width, height; };
     virtual std::vector<Mode> displayModes() const = 0;
+    // The window's monitor at its desktop (registry) mode - native size and refresh, unaffected by a fullscreen mode switch.
+    virtual bool desktopMode(int& w, int& h, int& hz) const { (void)w; (void)h; (void)hz; return false; }
     virtual void setDisplayMode(int width, int height, bool fullscreen) = 0;
     virtual bool fullscreen() const = 0;
     virtual void setVSync(bool on) = 0;

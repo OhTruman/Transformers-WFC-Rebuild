@@ -16,6 +16,7 @@
 
 #include "frontend/Catalog.h"
 #include "frontend/DataStores.h"
+#include "frontend/GraphicsAutoDetect.h"
 #include "frontend/Characters.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/Hud.h"
@@ -136,6 +137,18 @@ public:
         std::function<void(bool)> vsync;
     };
     void setDisplayHooks(DisplayHooks h) { display_ = std::move(h); }
+    // Graphics auto-detect (PC EXTENSION): the boot-time hardware facts, kept for Graphics -> Recommended Settings.
+    void setHardwareFacts(const HardwareFacts& f) { hardware_ = f; hardwareKnown_ = true; }
+    // Picks the preset for the known facts and writes it into the profile (saved); why: "first launch", "gpu changed",
+    // "recommended" (the menu action). The caller applies the display mode / renderer settings (profile apply).
+    GraphicsPreset applyRecommendedGraphics(const char* why);
+    // At boot: first launch (no saved PC settings) or a different GPU than the one stored -> applyRecommendedGraphics.
+    // Returns true when it changed the settings. Scripted runs (WFC_FRONTEND_SCRIPT) skip it unless WFC_AUTODETECT=1;
+    // WFC_AUTODETECT=0 disables it.
+    bool autoDetectGraphicsAtBoot();
+    // The profile's display settings to their owners now (window mode / VSync like Commit Changes, then the profile
+    // apply: frame limit, upscaling / HD textures / anisotropy).
+    void applyDisplaySettings();
     // The live level under the menus (Rendering draws it; without a renderer the menus sit on black).
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
@@ -230,6 +243,10 @@ private:
     std::map<std::string, bool> emblemOn_;   // scene.emblem trace state (actor.param -> above the midpoint)   // the chassis each preview controller shows (last UpdatePreviewCharacter)
     BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;
+    HardwareFacts hardware_;
+    bool hardwareKnown_ = false;
+    GraphicsPresetTable presets_;
+    bool presetsLoaded_ = false;
     BridgeValue account(const std::string& fn, const std::vector<std::string>& args);
     BridgeValue commitCharacter(const std::vector<std::string>& args);
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);

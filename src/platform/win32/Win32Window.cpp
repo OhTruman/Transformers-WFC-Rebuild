@@ -184,6 +184,18 @@ public:
 
     void setOsCursorHidden(bool hidden) override { cursorHidden_ = hidden; }
 
+    bool desktopMode(int& w, int& h, int& hz) const override {
+        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        if (!GetMonitorInfoW(mon, &mi)) return false;
+        DEVMODEW dm{};
+        dm.dmSize = sizeof(dm);
+        if (!EnumDisplaySettingsW(mi.szDevice, ENUM_REGISTRY_SETTINGS, &dm) && !EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) return false;
+        w = (int)dm.dmPelsWidth; h = (int)dm.dmPelsHeight; hz = (int)dm.dmDisplayFrequency;
+        return w > 0 && h > 0;
+    }
+
     std::vector<Mode> displayModes() const override {
         std::vector<Mode> out;
         DEVMODEW dm{};
