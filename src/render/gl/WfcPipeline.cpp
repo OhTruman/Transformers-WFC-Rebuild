@@ -706,6 +706,8 @@ void Pipeline::release() {
         delTex(velTex_);
         for (GLuint* p : {&velCameraProg_, &velViewProg_, &velObjProg_, &velRigidProg_}) delProg(*p);
         delTex(skinPrevTex_);
+        for (GLuint* f : {&opaqueCopyFbo_, &reactiveFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
+        delTex(opaqueCopyTex_); delTex(reactiveTex_); delProg(reactiveProg_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
@@ -5289,9 +5291,24 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
-    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProj_; motionDraws_.clear(); motionRigid_.clear(); }
-    viewProj_ = cam.proj() * cam.view();
-    camProj_ = cam.proj();
+    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProjNoJitter_; motionDraws_.clear(); motionRigid_.clear(); }
+    {
+        core::Mat4 proj = cam.proj();
+        viewProjNoJitter_ = proj * cam.view();
+        jitterPx_[0] = jitterPx_[1] = 0.0f;
+        if (temporalActive()) {                        // Halton(2,3) sub-pixel jitter, FSR's phase count 8 x scale^2
+            auto halton = [](int i, int b) { float f = 1.0f, r = 0.0f; while (i > 0) { f /= (float)b; r += f * (float)(i % b); i /= b; } return r; };
+            const float ratio = winW_ > 0 ? (float)winW_ / (float)std::max(vpW_, 1) : 1.0f;
+            const int phases = std::max(8, (int)std::ceil(8.0f * ratio * ratio));
+            jitterIndex_ = jitterIndex_ % phases + 1;
+            jitterPx_[0] = halton(jitterIndex_, 2) - 0.5f;
+            jitterPx_[1] = halton(jitterIndex_, 3) - 0.5f;
+            proj.m[8] += jitterPx_[0] * 2.0f / (float)std::max(vpW_, 1);   // clip-space offset (column 2: x / w, y / w)
+            proj.m[9] += jitterPx_[1] * 2.0f / (float)std::max(vpH_, 1);
+        }
+        viewProj_ = proj * cam.view();
+        camProj_ = proj;
+    }
     camView_ = cam.view();
     updateMovers();
     if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));

@@ -434,7 +434,17 @@ private:
     bool fsrActive() const;
     // optional motion vectors (WfcMotion.cpp; OFF by default)
     bool motionOn_ = false, havePrevVP_ = false;
-    core::Mat4 prevViewProj_;
+    core::Mat4 prevViewProj_;                          // previous frame, unjittered (motion vectors exclude jitter)
+    // temporal upscaling support (A3; OFF by default): sub-pixel projection jitter (Halton 2,3) and a reactive mask
+    bool temporalOn_ = false;
+    core::Mat4 viewProjNoJitter_;                      // this frame's view-projection without the jitter
+    float jitterPx_[2] = {0.0f, 0.0f};                 // this frame's jitter in render pixels (for the upscaler)
+    int jitterIndex_ = 0;
+    GLuint opaqueCopyFbo_ = 0, opaqueCopyTex_ = 0, reactiveFbo_ = 0, reactiveTex_ = 0, reactiveProg_ = 0;
+    int reactiveW_ = 0, reactiveH_ = 0;
+    bool temporalActive() const;
+    void reactiveBegin();                              // before translucency: keep the opaque colour
+    void reactiveEnd();                                // after translucency: reactive = how much translucency changed
     GLuint velFbo_ = 0, velTex_ = 0, velCameraProg_ = 0, velViewProg_ = 0;
     int velW_ = 0, velH_ = 0, velValidFrame_ = -1;
     bool motionVectorsOn() const;
