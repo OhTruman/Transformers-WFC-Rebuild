@@ -200,12 +200,20 @@ struct ScopeVars {
     template <size_t N>
     Value get(const char (&n)[N]) { return getA(n, litAtom(n)); }
     Value get(const std::string& n) { return getA(n, atomFind(n)); }
+    // An own data property of a plain object / clip found directly is what has() + get() return (one lookup instead of
+    // two: get() reads own properties first); getters, arrays, boxed / super objects and misses take the general path.
+    static const Property* ownData(Object* s, uint32_t a) {
+        if (!a || s->zombie || (s->kind != ObjKind::Plain && s->kind != ObjKind::Clip)) return nullptr;
+        const Property* p = s->findOwnA(a);
+        return p && !p->getter ? p : nullptr;
+    }
     Value getA(const std::string& n, uint32_t a) {   // a: n's atom (0: never interned - the lookups fall back to the name)
         checkAlive();
         for (auto it = fn->scope.rbegin(); it != fn->scope.rend(); ++it) {
             Object* s = *it;
             if (!s) continue;
             if (s == vm.global) break;
+            if (n != "__proto__") if (const Property* p = ownData(s, a)) return p->v;
             if (vm.has(s, n, a)) return vm.get(s, n, a);
         }
         if (vm.has(vm.global, n, a)) return vm.get(vm.global, n, a);
