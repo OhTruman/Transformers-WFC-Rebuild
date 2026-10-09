@@ -1,4 +1,5 @@
 #include "core/FrontendSceneGL.h"
+#include "platform/FileCompression.h"
 #include "core/FrameProfile.h"
 
 #include <chrono>
@@ -220,7 +221,7 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
         return false;
     }
     const std::string mapDir = assetRoot() + "/Maps/" + family + "/";
-    if (!std::ifstream(mapDir + "world.glb").good()) { family_ = family; mesh_ = render::kInvalidMesh; return false; }
+    if (platform::dataFileSize(mapDir + "world.glb") < 0)   /* [integration 09c] plain or .xpr twin */ { family_ = family; mesh_ = render::kInvalidMesh; return false; }
     if (!censusActive_) { census_.begin(); censusActive_ = true; }
     family_ = family;
     bool shaders = r_->loadMapRenderData(family);   // original-material path when Rendering's data covers the family

@@ -1,5 +1,6 @@
 // Clean-room reconstruction — per-chassis character definition loader (see ChassisDef.h).
 #include "game/ChassisDef.h"
+#include "platform/FileCompression.h"
 #include "assets/Json.h"
 #include "core/Log.h"
 #include <cmath>
@@ -180,8 +181,8 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
             if (!r.name.empty() && !r.source.empty()) d.robotAnims.push_back(r);
         }
     }
-    if (d.robotGlb.empty() || !fileExists(extRoot + d.robotGlb)) { d.loadError = "robot.glb missing for " + id; return false; }
-    if (d.vehicleGlb.empty() || !fileExists(extRoot + d.vehicleGlb)) { d.loadError = "vehicle.glb missing for " + id; return false; }
+    if (d.robotGlb.empty() || platform::dataFileSize(extRoot + d.robotGlb) < 0) { d.loadError = "robot.glb missing for " + id; return false; }
+    if (d.vehicleGlb.empty() || platform::dataFileSize(extRoot + d.vehicleGlb) < 0) { d.loadError = "vehicle.glb missing for " + id; return false; }
 
     const assets::Json& arm = c["robot"]["arm_blueprint"];
     if (arm.isObject()) {

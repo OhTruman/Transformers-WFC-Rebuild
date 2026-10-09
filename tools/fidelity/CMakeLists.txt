@@ -21,7 +21,7 @@ add_executable(wfc_fidelity
 # Product sources some trees add to the harness link (Systems pass 5/6: the controller and character
 # reference the mixer and pickup presentation). Added only when the tree has them, so one harness
 # builds against every branch.
-foreach(_opt src/game/SoundMixer.cpp src/game/PickupPresentation.cpp src/game/ChassisDef.cpp)
+foreach(_opt src/game/SoundMixer.cpp src/game/PickupPresentation.cpp src/game/ChassisDef.cpp src/platform/win32/Win32FileCompression.cpp)
     if(EXISTS "${CMAKE_SOURCE_DIR}/${_opt}")
         target_sources(wfc_fidelity PRIVATE "${CMAKE_SOURCE_DIR}/${_opt}")
     endif()
