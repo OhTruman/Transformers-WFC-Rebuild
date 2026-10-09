@@ -82,6 +82,9 @@ function GrewCheck([string]$dir, [string]$tag) {
         $count = @{}; $tot = @{}   # tot: the site's live total each time it grew (only reported on growth)
         foreach ($d in $later) { foreach ($k in $d.sites.Keys) { $count[$k] = 1 + [int]$count[$k]; if (-not $tot.ContainsKey($k)) { $tot[$k] = New-Object System.Collections.Generic.List[double] }; $tot[$k].Add($d.sites[$k][1]) } }
         foreach ($k in $count.Keys) {
+            # GlCensus probes: created through glx (traced), deleted through raw pointers (untraced) - trace noise, not leaks (Rendering
+            # 2026-10-09, src/ui/gl/GlCensus.cpp begin()); the symbol only shows after gltrace_sym, so match the raw offset too
+            if ($k -match 'GlCensus' -or $k -eq 'exe+0x501136') { continue }
             $t = @($tot[$k]); $th = if ($t.Count -ge 4) { @($t | Select-Object -Skip ([int][Math]::Floor($t.Count / 2))) } else { $t }
             $rising = $t.Count -ge 3 -and (Slope $th) -gt 0.5 -and ($th[-1] - $th[0]) -gt 1.5
             $txt = "{0} {1}: grew in {2} of the last {3} dumps; site live total at those dumps {4}" -f $type, $k, $count[$k], $later.Count, $(if ($t.Count -le 10) { $t -join "," } else { (($t | Select-Object -First 4) -join ",") + " ... " + (($t | Select-Object -Last 4) -join ",") })
