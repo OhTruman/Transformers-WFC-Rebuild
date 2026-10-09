@@ -13,6 +13,28 @@ namespace platform {
 bool fsbDecodeAvailable();
 bool decodeFsb(const std::string& path, std::vector<int16_t>& pcm, int& channels, int& rate);
 
+// The same decode, block by block (decodeFsb is built on it, so both are covered by the gate): a long bank can be played
+// while the rest of it is still decoding (progressive load). frames() is the one-pass length known at open.
+class FsbStream {
+public:
+    FsbStream() = default;
+    FsbStream(const FsbStream&) = delete;
+    FsbStream& operator=(const FsbStream&) = delete;
+    ~FsbStream();
+    bool open(const std::string& path);
+    int channels() const { return channels_; }
+    int rate() const { return rate_; }
+    long long frames() const { return frames_; }
+    // The next decoded block (interleaved PCM16, valid until the next call): its frame count, 0 when done, < 0 on error.
+    int next(const int16_t*& pcm);
+private:
+    void* lib_ = nullptr;   // libvgmstream_t
+    void* sf_ = nullptr;    // libstreamfile_t
+    int channels_ = 0, rate_ = 0;
+    long long frames_ = 0;
+    bool done_ = false;
+};
+
 // Where audio comes from: WFC_AUDIO_SOURCE=wav (WAVs only), fsb (banks first, WAV fallback), auto (default: the WAV when it
 // exists, else the bank - a package without WAVs plays the banks).
 enum class AudioSource { Auto, Wav, Fsb };

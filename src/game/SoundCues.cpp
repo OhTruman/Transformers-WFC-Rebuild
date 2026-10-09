@@ -502,6 +502,28 @@ bool SoundCues::isWarming(size_t c) const {
     return false;
 }
 
+void SoundCues::adoptEarly() {
+    // A long bank is published after its first second of decode (progressive load): a cue waiting on such a warm-up can start
+    // as soon as every one of its waves is published, instead of when the whole decode is done. cached() never decodes.
+    if (!audio_) return;
+    for (const Warm& w : warming_) {
+        const size_t c = w.cue;
+        if (c >= cues_.size() || (c < resident_.size() && resident_[c])) continue;
+        bool waiting = false;
+        for (const Instance& in : live_) if (in.waiting && (size_t)in.cue == c) { waiting = true; break; }
+        if (!waiting) continue;
+        bool all = true;
+        for (size_t ei = 0; ei < cues_[c].events.size() && all; ++ei)
+            for (size_t wi = 0; wi < cues_[c].events[ei].waves.size() && all; ++wi) {
+                if (!wanted(c, ei, wi)) continue;
+                const std::string& f = cues_[c].events[ei].waves[wi];
+                const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+                all = audio_->cached(abs ? f : contentRoot_ + f) != audio::kInvalidSound;
+            }
+        if (all) loadWaves(c, contentRoot_);           // cached handles only (resident now; the warm entry ends normally)
+    }
+}
+
 bool SoundCues::adoptBankWarm() {
     bool any = false;
     for (size_t i = 0; i < bankWarm_.size();) {
@@ -1079,7 +1101,7 @@ void SoundCues::stop(int id, float fade) {
 }
 
 void SoundCues::tick(float dt) {
-    if (!warming_.empty()) adoptWarm(false);
+    if (!warming_.empty()) { adoptWarm(false); adoptEarly(); }
     if (!bankWarm_.empty()) adoptBankWarm();
     processOrphans();                                  // this table's and any other (unticked) table's orphaned decodes
     for (size_t i = 0; i < live_.size(); ++i) {

@@ -29,9 +29,15 @@ AudioSource audioSource() {
 #if defined(WFC_VGMSTREAM) && WFC_VGMSTREAM
 bool fsbDecodeAvailable() { return true; }
 
-bool decodeFsb(const std::string& path, std::vector<int16_t>& pcm, int& channels, int& rate) {
+FsbStream::~FsbStream() {
+    if (lib_) libvgmstream_free((libvgmstream_t*)lib_);
+    if (sf_) libstreamfile_close((libstreamfile_t*)sf_);
+}
+
+bool FsbStream::open(const std::string& path) {
     libstreamfile_t* sf = libstreamfile_open_from_stdio(path.c_str());
     if (!sf) return false;
+    sf_ = sf;
     libvgmstream_config_t cfg{};
     cfg.ignore_loop = true;                          // one pass of the stream: the game loops it itself
     cfg.force_sfmt = LIBVGMSTREAM_SFMT_PCM16;
@@ -48,26 +54,42 @@ bool decodeFsb(const std::string& path, std::vector<int16_t>& pcm, int& channels
         lib = libvgmstream_create(sf, 0, &cfg);
         if (lib) warmed.store(true, std::memory_order_release);
     }
-    bool ok = false;
-    if (lib) {
-        channels = lib->format->channels;
-        rate = lib->format->sample_rate;
-        pcm.clear();
-        if (lib->format->play_samples > 0) pcm.reserve((size_t)lib->format->play_samples * (size_t)channels);
-        ok = true;
-        while (!lib->decoder->done) {
-            if (libvgmstream_render(lib) < 0) { ok = false; break; }
-            const int16_t* b = (const int16_t*)lib->decoder->buf;
-            pcm.insert(pcm.end(), b, b + lib->decoder->buf_bytes / 2);
-        }
-        libvgmstream_free(lib);
+    if (!lib) return false;
+    lib_ = lib;
+    channels_ = lib->format->channels;
+    rate_ = lib->format->sample_rate;
+    frames_ = lib->format->play_samples > 0 ? lib->format->play_samples : 0;
+    return channels_ > 0 && rate_ > 0;
+}
+
+int FsbStream::next(const int16_t*& pcm) {
+    auto* lib = (libvgmstream_t*)lib_;
+    if (!lib || done_) return 0;
+    if (lib->decoder->done) { done_ = true; return 0; }
+    if (libvgmstream_render(lib) < 0) { done_ = true; return -1; }
+    pcm = (const int16_t*)lib->decoder->buf;
+    return lib->decoder->buf_bytes / (2 * channels_);
+}
+
+bool decodeFsb(const std::string& path, std::vector<int16_t>& pcm, int& channels, int& rate) {
+    FsbStream st;
+    if (!st.open(path)) return false;
+    channels = st.channels(); rate = st.rate();
+    pcm.clear();
+    if (st.frames() > 0) pcm.reserve((size_t)st.frames() * (size_t)channels);
+    const int16_t* b = nullptr;
+    for (int n; (n = st.next(b)) != 0;) {
+        if (n < 0) return false;
+        pcm.insert(pcm.end(), b, b + (size_t)n * (size_t)channels);
     }
-    libstreamfile_close(sf);
-    return ok && channels > 0 && rate > 0 && !pcm.empty();
+    return !pcm.empty();
 }
 #else
 bool fsbDecodeAvailable() { return false; }
 bool decodeFsb(const std::string&, std::vector<int16_t>&, int&, int&) { return false; }
+FsbStream::~FsbStream() {}
+bool FsbStream::open(const std::string&) { return false; }
+int FsbStream::next(const int16_t*&) { return 0; }
 #endif
 
 }   // namespace platform
