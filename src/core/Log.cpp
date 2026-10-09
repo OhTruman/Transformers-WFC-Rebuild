@@ -5,6 +5,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -81,6 +82,9 @@ Writer& Writer::writer() { static Writer* w = new Writer; return *w; }   // neve
 
 void logFlush() { Writer::writer().drain(); }
 
+namespace { char gLastLine[160]; }
+const char* logLastLine() { return gLastLine; }
+
 bool logTryFlush() {
     // Crash-filter safe: never blocks (try_lock only - the faulting thread may hold either mutex), never allocates, bypasses
     // stdio's own locks (raw WriteFile on the OS handles). Every completed write was already fflush'ed, so the CRT buffers
@@ -140,6 +144,12 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         longLine.back() = '\n';
         text = longLine.data();
         len = longLine.size();
+    }
+    {   // dev-tool context (WFC_ALLOCPROF reports): a plain copy, racy by design
+        const size_t k = len < sizeof gLastLine - 1 ? len : sizeof gLastLine - 1;
+        std::memcpy(gLastLine, text, k);
+        gLastLine[k] = 0;
+        if (k && gLastLine[k - 1] == '\n') gLastLine[k - 1] = 0;
     }
     Writer& w = Writer::writer();
     if (w.sync) {                                           // WFC_LOG_SYNC: the old per-line write + flush

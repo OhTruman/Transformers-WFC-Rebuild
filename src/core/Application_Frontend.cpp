@@ -32,6 +32,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <psapi.h>
+#include "core/HeapTrim.h"
 #endif
 
 // Systems audio seam (agents/systems game::FrontendAudioRuntime + the World level-audio contract). Compiled in once
@@ -928,6 +929,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     gameMode_.begin(world_);
     core::setLoadYield(nullptr);
     const core::LoadYieldStats ys = core::loadYieldStats();
+    core::trimHeap("match loaded");   // [Systems] load-time garbage back to the OS, still under the loading screen
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
                                                {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()},
                                                {"loadingFrames", std::to_string(ys.frames)},
@@ -1361,6 +1363,7 @@ void Application::unloadMatch() {
     escWasDown_ = false;
     window_->setMouseCaptured(false);
     mouseCaptured_ = false;
+    core::trimHeap("match unloaded");   // [Systems] the freed match world's pages back to the OS
     frontend::FlowTrace::emit("match.unloaded", {{"privateMB", processMemoryMB()}});
 }
 

@@ -19,6 +19,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include "core/HeapTrim.h"
+#include "core/Log.h"
+#include <malloc.h>
 #if defined(WFC_MIMALLOC) && WFC_MIMALLOC
 #include <mimalloc.h>
 #define WFC_RAW_ALLOC(n) mi_malloc(n)
@@ -36,6 +39,7 @@ struct Prof {
     struct Slot { unsigned hash; long long count; void* frames[kDepth]; int depth; };
     bool on = false;
     int every = 16;
+    double reportEveryS = 10.0;                                // WFC_ALLOCPROF_EVERY_S
     DWORD mainTid = 0;
     std::atomic<long long> mainAllocs{0}, otherAllocs{0}, mainBytes{0};
     long long sampleTick = 0;                                  // main thread only
@@ -48,6 +52,7 @@ struct Prof {
             on = true;
             const int n = std::atoi(e);
             if (n > 0) every = n;
+            if (const char* r = std::getenv("WFC_ALLOCPROF_EVERY_S")) { const double v = std::atof(r); if (v > 0.1) reportEveryS = v; }
             mainTid = GetCurrentThreadId();                    // static initialisation runs on the main thread
         }
     }
@@ -220,6 +225,7 @@ void report(Prof& p, double t) {
     if (!f) return;
     const long long m = p.mainAllocs.load(), o = p.otherAllocs.load();
     const double dt = p.lastReport > 0.0 ? t - p.lastReport : 0.0;
+    std::fprintf(f, "== context: %s\n", core::logLastLine());
     std::fprintf(f, "== t %.1f s: main-thread allocations %lld (%.0f /s), other threads %lld (%.0f /s), main bytes %lld\n", t,
                  m, dt > 0 ? (m - p.lastMain) / dt : 0.0, o, dt > 0 ? (o - p.lastOther) / dt : 0.0, p.mainBytes.load());
     p.lastMain = m; p.lastOther = o; p.lastReport = t;
@@ -273,7 +279,7 @@ void record(std::size_t n) {
         }
         const double t = nowS();
         if (p.lastReport == 0.0) p.lastReport = t;
-        else if (t - p.lastReport >= 10.0) report(p, t);
+        else if (t - p.lastReport >= p.reportEveryS) report(p, t);
     }
     tInside = false;
 }
@@ -317,3 +323,28 @@ void operator delete(void* q, std::size_t) noexcept { wfcFree(q); }
 void operator delete[](void* q, std::size_t) noexcept { wfcFree(q); }
 void operator delete(void* q, const std::nothrow_t&) noexcept { wfcFree(q); }
 void operator delete[](void* q, const std::nothrow_t&) noexcept { wfcFree(q); }
+
+namespace core {
+void trimHeap(const char* why) {
+    static const bool off = std::getenv("WFC_NOHEAPTRIM") != nullptr;   // A/B
+    if (off) return;
+    using GetPmi = BOOL(WINAPI*)(HANDLE, PPROCESS_MEMORY_COUNTERS, DWORD);
+    static const auto getPmi = (GetPmi)(void*)GetProcAddress(GetModuleHandleA("kernel32.dll"), "K32GetProcessMemoryInfo");
+    auto privMB = [] {
+        PROCESS_MEMORY_COUNTERS_EX pmc{}; pmc.cb = sizeof pmc;
+        return getPmi && getPmi(GetCurrentProcess(), (PPROCESS_MEMORY_COUNTERS)&pmc, sizeof pmc) ? pmc.PrivateUsage / 1048576.0 : 0.0;
+    };
+    const double before = privMB();
+    LARGE_INTEGER f, t0, t1;
+    QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t0);
+#if defined(WFC_MIMALLOC) && WFC_MIMALLOC
+    mi_collect(true);
+#else
+    _heapmin();
+#endif
+    QueryPerformanceCounter(&t1);
+    const double after = privMB();
+    LOG_INFO("heap trim (%s): private %.0f -> %.0f MB (released %.0f MB) in %.1f ms", why ? why : "", before, after, before - after,
+             (double)(t1.QuadPart - t0.QuadPart) * 1000.0 / (double)f.QuadPart);
+}
+}   // namespace core

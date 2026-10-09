@@ -542,3 +542,20 @@ A/B (09c baa1d0d, Release, uncapped, seeded, steady match state, 2 cams), sim st
 (regeneration: 3 maps x 10 v 10 / 32 v 32 live TDM + the frontend flow, seeded), `tools/pgo/wfc.profdata` (trained on 09c 23eb534).
 A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-match only, 2 passes, 2 cams): sim step 20p
 -6 %, 64p -2 %; 64p player cam 394 -> 409 fps, p99 4.70 -> 4.48 ms; fixed cam +1 %; 20p frames within noise.
+
+## Memory: heap trim at load boundaries, persistent decode lanes, audio slot reuse (leak hunt)
+
+- `core::trimHeap(why)` (src/core/HeapTrim.h, in AllocProf.cpp): mi_collect(true) (CRT build: _heapmin), logs the private bytes
+  released and its own time. Load boundaries only, never in a match. `WFC_NOHEAPTRIM=1` turns it off (A/B). Call sites are in
+  Application_Frontend.cpp (integration-owned): `docs/handoff/SYSTEMS_HEAPTRIM_callsite.patch` (after the match world loads,
+  before `match.loaded`; after the match world is released, before `match.unloaded`); applies cleanly to 09c 66a2bce.
+  A/B (09c 66a2bce + these changes, Release + PGO, 5 x TDM 10 v 10 on map 508 via the frontend, same exe):
+  private after each unload 3755 / 3799 / 3791 / 3808 / 3799 MB with the trim vs 4500 / 4499 / 4518 / 4541 / 4552 without
+  (-750..-800 MB); the unload trim releases 785-838 MB in 36-42 ms, the load trim 6-45 MB in 1-3 ms (both under the loading screen).
+  Startup (same build, no matches): game lobby ~1.87 GB private (operator new 343 MB, mimalloc arenas ~683 MB, Windows heaps
+  ~292 MB, image 167 MB, ~890 MB driver / GL); MIMALLOC_PURGE_DELAY=0 gives ~1.57 GB but purges in-match too (not adopted).
+- SoundCues worker decodes run on two persistent lanes (selection warm-ups, level banks) instead of a new std::async thread per
+  warm-up / bank: exited threads left their mimalloc segments abandoned, and PCM later freed there stayed committed.
+- Win32Audio: a released sample's slot is reused by the next load (it used to append a slot per wave per level load forever).
+  Sound handles carry a slot generation (index | gen << 20); a stale handle no longer resolves (play / setLoopPoints / release
+  are no-ops). Suite: 5 new checks (stale handle, slot reuse, 50 release / reload cycles in one slot, double release).
