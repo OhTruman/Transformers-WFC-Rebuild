@@ -20,13 +20,9 @@ struct Glb {
 };
 uint32_t rd32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
+// [integration 09c] Through assets::readDataFile: the plain file, else its lossless .xpr twin (slim packages).
 bool readAll(const std::string& path, std::vector<uint8_t>& out) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) return false;
-    std::streamoff n = f.tellg();
-    if (n <= 0) return false;
-    out.resize((size_t)n); f.seekg(0); f.read((char*)out.data(), n);
-    return true;
+    return readDataFile(path, out) && !out.empty();
 }
 
 bool openGlb(const std::string& path, Glb& g) {
@@ -43,11 +39,7 @@ bool openGlb(const std::string& path, Glb& g) {
         }
         return true;
     }
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) return false;
-    std::streamoff n = f.tellg();
-    if (n <= 12) return false;
-    g.file.resize((size_t)n); f.seekg(0); f.read((char*)g.file.data(), n);
+    if (!readAll(path, g.file) || g.file.size() <= 12) return false;   // [integration 09c] .xpr twin aware
     const uint8_t* d = g.file.data();
     if (rd32(d) != 0x46546C67u) return false;
     size_t total = std::min<size_t>(rd32(d + 8), g.file.size()), off = 12;

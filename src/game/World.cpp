@@ -6367,14 +6367,22 @@ static bool glbTopLevelArray(const std::string& js, const char* key, std::string
 }
 
 static bool glbMaterialsOnly(const std::string& path, std::vector<render::Material>& mats) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return false;
     uint32_t hdr[3] = {0, 0, 0}, ch[2] = {0, 0};
-    f.read((char*)hdr, 12); f.read((char*)ch, 8);
-    if (!f || hdr[0] != 0x46546C67u || ch[1] != 0x4E4F534Au) return false;   // 'glTF', chunk 'JSON'
-    std::string js(ch[0], '\0');
-    f.read(&js[0], (std::streamsize)ch[0]);
-    if (!f) return false;
+    std::string js;
+    std::ifstream f(path, std::ios::binary);
+    if (f) {   // plain file: read only the header + JSON chunk
+        f.read((char*)hdr, 12); f.read((char*)ch, 8);
+        if (!f || hdr[0] != 0x46546C67u || ch[1] != 0x4E4F534Au) return false;   // 'glTF', chunk 'JSON'
+        js.assign(ch[0], '\0');
+        f.read(&js[0], (std::streamsize)ch[0]);
+        if (!f) return false;
+    } else {   // [integration 09c] slim package: the lossless .xpr twin, read whole
+        std::vector<uint8_t> buf;
+        if (!assets::readDataFile(path, buf) || buf.size() < 20) return false;
+        std::memcpy(hdr, buf.data(), 12); std::memcpy(ch, buf.data() + 12, 8);
+        if (hdr[0] != 0x46546C67u || ch[1] != 0x4E4F534Au || 20 + (size_t)ch[0] > buf.size()) return false;
+        js.assign((const char*)buf.data() + 20, ch[0]);
+    }
     std::string m, t, im;
     if (!glbTopLevelArray(js, "materials", m)) return false;
     glbTopLevelArray(js, "textures", t); glbTopLevelArray(js, "images", im);
