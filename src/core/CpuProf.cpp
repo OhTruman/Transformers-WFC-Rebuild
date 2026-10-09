@@ -1,10 +1,11 @@
 // DEV TOOL (WFC_CPUPROF=<interval ms, default 1>): a sampling profiler of the main (game / render-submit) thread, for
 // function-level splits of the frame. A sampler thread suspends the main thread every interval, records its instruction
-// pointer plus an unwound stack (RtlVirtualUnwind over the exe's .pdata, up to 8 frames), resumes it, and every
+// pointer plus an unwound stack (RtlVirtualUnwind over every module's .pdata, up to 32 frames), resumes it, and every
 // WFC_CPUPROF_EVERY_S seconds (default 10) writes the top stacks and the top functions (self, by leaf address) to
 // wfc_cpuprof.txt as exe-relative offsets with the last log line as context. Symbolise offline against wfc_rebuild.map
 // (tools/systems/cpuprof_sym.py). Self-installing (a static initializer on the main thread); with the variable unset
-// nothing runs. A suspend costs the main thread a few microseconds per sample (~0.5 % at 1 ms).
+// nothing runs. Suspending the main thread while it is inside the GL driver can disturb the driver's submission: A/B the frame
+// time with and without the profiler, and prefer a coarse interval (WFC_CPUPROF=5) for in-match work.
 #ifdef _WIN32
 #include <windows.h>
 #include <atomic>
@@ -16,8 +17,8 @@
 
 namespace {
 
-constexpr int kDepth = 8;
-constexpr int kSlots = 1 << 15;                 // open-addressing table of distinct stacks (no allocation in the sampler)
+constexpr int kDepth = 32;                      // deep enough to unwind through GL driver frames to the game's callers
+constexpr int kSlots = 1 << 14;                 // open-addressing table of distinct stacks (no allocation in the sampler)
 struct Slot { unsigned long long pc[kDepth]; int depth; long count; };
 
 struct CpuProf {
