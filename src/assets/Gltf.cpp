@@ -9,15 +9,13 @@
 #include <vector>
 
 namespace assets {
+
 namespace {
-
-struct Glb {
-    std::vector<uint8_t> file;
-    const uint8_t* json = nullptr; size_t jsonLen = 0;
-    const uint8_t* bin = nullptr;  size_t binLen = 0;
-};
-
-bool readFile(const std::string& path, std::vector<uint8_t>& out) {
+FileReadHook gFileReadHook = nullptr;
+}  // namespace
+void setFileReadHook(FileReadHook h) { gFileReadHook = h; }
+bool readDataFile(const std::string& path, std::vector<uint8_t>& out) {
+    if (gFileReadHook) return gFileReadHook(path, out);
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return false;
     std::streamoff n = f.tellg();
@@ -27,6 +25,16 @@ bool readFile(const std::string& path, std::vector<uint8_t>& out) {
     f.read(reinterpret_cast<char*>(out.data()), n);
     return (bool)f;
 }
+
+namespace {
+
+struct Glb {
+    std::vector<uint8_t> file;
+    const uint8_t* json = nullptr; size_t jsonLen = 0;
+    const uint8_t* bin = nullptr;  size_t binLen = 0;
+};
+
+bool readFile(const std::string& path, std::vector<uint8_t>& out) { return readDataFile(path, out); }
 
 uint32_t rd32(const uint8_t* p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
