@@ -702,6 +702,10 @@ void Pipeline::release() {
         if (touchFbo_) { DeleteFramebuffers(1, &touchFbo_); touchFbo_ = 0; }
         for (GLuint* f : {&fsrInFbo_, &fsrMidFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(fsrInTex_); delTex(fsrMidTex_);
+        if (velFbo_) { DeleteFramebuffers(1, &velFbo_); velFbo_ = 0; }
+        delTex(velTex_);
+        for (GLuint* p : {&velCameraProg_, &velViewProg_, &velObjProg_}) delProg(*p);
+        delTex(skinPrevTex_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
@@ -3741,6 +3745,21 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         skinDraw_ = nullptr;
         return true;
     }
+    // motion vectors (optional): the palette row this instance displayed last frame, kept before it is overwritten
+    int motionPrevSrc = 0;
+    const bool motion = motionVectorsOn() && si.motionFrame != frameNo_;
+    const bool drawnLastFrame = motion && si.motionFrame == frameNo_ - 1;
+    if (motion && drawnLastFrame && (si.serial != serial || si.prev != usePrev) && CopyImageSubData) {
+        if (!skinPrevTex_) {
+            glGenTextures(1, &skinPrevTex_);
+            glBindTexture(GL_TEXTURE_2D, skinPrevTex_);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1024, kSkinRows, 0, GL_RGBA, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        }
+        CopyImageSubData(skinTex_, GL_TEXTURE_2D, 0, 0, si.row, 0, skinPrevTex_, GL_TEXTURE_2D, 0, 0, si.row, 0, 1024, 1, 1);
+        motionPrevSrc = 1;
+    }
     if (si.serial != serial || si.prev != usePrev) {
         const auto tb = std::chrono::steady_clock::now();
         struct BTimer { std::chrono::steady_clock::time_point t; ~BTimer() { gStats.skinBoundsMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinUploads; } } bt{tb};
@@ -3762,6 +3781,12 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
     skinDraw_ = &d;
     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
+    if (motion) {
+        MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
+                      skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};
+        motionDraws_.push_back(md);
+        si.motionFrame = frameNo_; si.lastModel = model; si.lastMode = skinMode_; si.lastAlpha = skinAlpha_;
+    }
     drawDynamic(bind, model);
     skinDraw_ = nullptr;
     skinMode_ = 0;
@@ -5166,6 +5191,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
+    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProj_; motionDraws_.clear(); }
     viewProj_ = cam.proj() * cam.view();
     camProj_ = cam.proj();
     camView_ = cam.view();
@@ -5382,6 +5408,7 @@ void Pipeline::endFrame() {
     Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
     glDrawArrays(GL_TRIANGLES, 0, 3);
     if (fsr) runFsr(vpW_, vpH_, outW, outH);           // EASU (+ RCAS) into the window
+    motionDebugView(outW, outH);                       // WFC_MOTIONVIEW (diagnostics)
     BindVertexArray(0);
     UseProgram(0);
     drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)

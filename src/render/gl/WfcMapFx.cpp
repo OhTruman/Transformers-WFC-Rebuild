@@ -2098,6 +2098,8 @@ void Pipeline::drawMapPresentation() {
         for (double& v : secMs) v = 0; secFrames = 0;
     }
     glx::gpuMark(glx::kPassMapFx);
+    motionCameraPass();                                // optional motion vectors: static geometry (opaque depth)
+    motionObjectPass();                                // ... and the characters' own motion over it
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     glx::gpuMark(glx::kPassTranslucent);
     {
