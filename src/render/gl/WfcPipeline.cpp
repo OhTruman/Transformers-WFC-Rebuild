@@ -4165,6 +4165,27 @@ void Pipeline::drawMdi(GpuMesh& g) {
     BindVertexArray(g.vao);                                    // drawSubs continues with this VAO
 }
 
+void Pipeline::releaseMeshCaches(const MeshData* m) {
+    auto sm = skinModels_.find(m);
+    if (sm != skinModels_.end()) {
+        if (sm->second.vao) DeleteVertexArrays(1, &sm->second.vao);
+        for (GLuint* b : {&sm->second.vbo, &sm->second.jwVbo, &sm->second.ibo}) if (*b) DeleteBuffers(1, b);
+        skinModels_.erase(sm);
+    }
+    auto ds = dynSubs_.find(m);
+    if (ds != dynSubs_.end()) {
+        for (auto it = weaponShadow_.begin(); it != weaponShadow_.end();)   // records point into this draw list
+            it = it->second.g == &ds->second.g ? weaponShadow_.erase(it) : std::next(it);
+        dynSubs_.erase(ds);
+    }
+    auto pb = posed_.find(m);
+    if (pb != posed_.end()) {
+        if (pb->second.vao) DeleteVertexArrays(1, &pb->second.vao);
+        for (GLuint* b : {&pb->second.vbo, &pb->second.ibo, &pb->second.prevVbo}) if (*b) DeleteBuffers(1, b);
+        posed_.erase(pb);
+    }
+}
+
 void Pipeline::evictSkin(bool all) {
     for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
         if (all || frameNo_ - it->second.lastFrame > 600) {

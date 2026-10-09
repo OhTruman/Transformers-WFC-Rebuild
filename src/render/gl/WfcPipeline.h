@@ -745,6 +745,7 @@ public:
     bool setFxTarget(int id, const float target[3]);   // segment end (beam target), UE units
     void stopFx(int id);
     void markFxPooled(int id);                 // EmitterPool effect (see IRenderer::setParticleEffectPooled)
+    void releaseMeshCaches(const MeshData* m); // IRenderer::releaseMeshCaches
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
     bool setFxParam(int id, const std::string& name, const float v[4]);
