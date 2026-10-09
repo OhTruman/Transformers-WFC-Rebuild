@@ -148,6 +148,9 @@ public:
     // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
     // originals); stored until that root exists.
     virtual void setHdTextures(bool on) { (void)on; }
+    // True when the optional HD texture pack is installed and valid (its index parses); auto-detect turns HD
+    // Textures on only then. WFC_HD_ROOT overrides the pack root (default <ExtractedAssets>/../AssetTools/out/hd).
+    virtual bool hdTexturesAvailable() { return false; }
     // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
     // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
     virtual void setAnisotropy(int level) { (void)level; }

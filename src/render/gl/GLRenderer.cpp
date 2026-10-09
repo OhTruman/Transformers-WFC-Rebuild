@@ -1546,6 +1546,7 @@ public:
                  mode == 2 ? "FSR 1 Balanced" : "FSR 1 Performance");
     }
     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
+    bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
     GpuFacts gpuFacts() override {
         if (!gpuFactsRead_) { gpuFacts_ = readGpuFacts(); gpuFactsRead_ = true; }
         return gpuFacts_;
