@@ -5,7 +5,7 @@
 #
 #   .\tools\fidelity\filelog-pass.ps1 -Root work\ab\<target> -OutDir <dir> [-Maps 501,502,...] [-TimeLimit 45]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir,
-      [int[]]$Maps = @(501, 502, 503, 504, 507, 508, 509, 510), [int]$TimeLimit = 45,
+      [string[]]$Maps = @("501", "502", "503", "504", "507", "508", "509", "510"), [int]$TimeLimit = 45,
       # -Exe: run a packaged exe (e.g. the slim playtest package) instead of <Root>\build-release; -ExtraEnv "K=V;K=V" (package roots)
       [string]$Exe = "", [string]$ExtraEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
@@ -15,6 +15,8 @@ $exe = if ($Exe) { (Resolve-Path $Exe).Path } else { Join-Path $Root "build-rele
 $extra = @{}; foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $extra[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "filelog.$id" $status $null $note $owner }
 if (-not $H.Contains("WFC_FILELOG")) { Res "hook" "SKIP" "build has no WFC_FILELOG (Systems 37bafe7, 09c-next)" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
+# -Maps 508,509 through powershell -File arrives as ONE string: split
+$Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
 foreach ($map in $Maps) {
     $d = Join-Path $OutDir "run_$map"; New-Item -ItemType Directory -Force $d | Out-Null
