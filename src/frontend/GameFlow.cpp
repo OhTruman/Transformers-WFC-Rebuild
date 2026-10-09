@@ -494,7 +494,7 @@ GameFlow::BotRows GameFlow::botRows() const {
 }
 
 int GameFlow::botMax(const std::string& field) const {
-    if (field == "difficulty") return 2;   // EASY / MEDIUM / HARD (an Expert value would raise this to 3)
+    if (field == "difficulty") return 3;   // EASY / MEDIUM / HARD / EXPERT (PC EXTENSION: Expert, user decision)
     if (field == "ai") return 1;           // Classic / Smart
     if (field == "extended") return 1;
     const bool ext = profile_.bots.extended;

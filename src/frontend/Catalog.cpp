@@ -21,6 +21,9 @@ bool readJson(const std::string& path, assets::Json& out) {
 }
 
 bool fileExists(const std::string& path) { std::ifstream f(path, std::ios::binary); return (bool)f; }
+// Runtime data may ship compressed: <file> or its ".xpr" twin (platform::kCompressedSuffix, read through
+// platform::readFileMaybeCompressed; Rendering 523fc62).
+bool runtimeFileExists(const std::string& path) { return fileExists(path) || fileExists(path + ".xpr"); }
 
 std::string lower(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
@@ -154,9 +157,9 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         // written only for a map that passed the generic pipeline and its structure audit; the renderer reads it through
         // tools/render/build_render_index.py). The uncooked registry maps (Fortress / Havoc / Tranquillity) stay
         // disabled by `cooked`.
-        mi.hasRequiredAssets = mi.cooked && fileExists(runtimeMapRoot + "/" + dir + "/world.glb")
-                               && (fileExists(runtimeMapRoot + "/" + dir + "/render_index.json")
-                                   || fileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json"));
+        mi.hasRequiredAssets = mi.cooked && runtimeFileExists(runtimeMapRoot + "/" + dir + "/world.glb")
+                               && (runtimeFileExists(runtimeMapRoot + "/" + dir + "/render_index.json")
+                                   || runtimeFileExists(manifestRoot + "/maps/" + dir + "/render_index_generic.json"));
         maps_.push_back(mi);
     }
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
