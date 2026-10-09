@@ -4193,6 +4193,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
 }
 
 void Pipeline::releaseMeshCaches(const MeshData* m) {
+    for (const Material& mt : m->mats) dynProgMemo_.erase(&mt);   // memo keyed by these materials' addresses
     auto sm = skinModels_.find(m);
     if (sm != skinModels_.end()) {
         if (sm->second.vao) DeleteVertexArrays(1, &sm->second.vao);
