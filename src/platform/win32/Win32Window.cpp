@@ -8,6 +8,7 @@
 #include <xinput.h>
 
 #include "platform/Window.h"
+#include "platform/PresentHook.h"
 #include "core/Log.h"
 
 namespace platform {
@@ -109,7 +110,11 @@ public:
         return true;
     }
 
-    void present() override { SwapBuffers(hdc_); }
+    void present() override {
+        if (platform::PresentOverride o = platform::presentOverride())   // another API presents (D3D12 path)
+            if (o()) return;
+        SwapBuffers(hdc_);
+    }
     int width() const override { return width_; }
     int height() const override { return height_; }
     bool focused() const override { return focused_; }
