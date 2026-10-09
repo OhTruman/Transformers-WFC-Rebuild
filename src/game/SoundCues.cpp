@@ -908,6 +908,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
     if (cd.rootLoop && cd.loopEnd > cd.loopStart) in.looping = true;   // the timeline wraps forever
     in.waiting = deferred;
+    if (deferred) in.requested = std::chrono::steady_clock::now();
     live_.push_back(in);
     const int id = in.id;
     if (!deferred) startInstance(live_.back());
@@ -1085,6 +1086,10 @@ void SoundCues::tick(float dt) {
         Instance& in = live_[i];
         if (!in.waiting || (size_t)in.cue >= resident_.size() || !resident_[(size_t)in.cue]) continue;
         in.waiting = false; in.age = 0.0f;                       // its timeline starts now
+        {
+            const double lateMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - in.requested).count();
+            if (lateMs > 50.0) LOG_INFO("sound cues: %s started %.0f ms after it was played (waited for its decode)", cues_[(size_t)in.cue].name.c_str(), lateMs);
+        }
         resolve(in);
         startInstance(in);
     }
