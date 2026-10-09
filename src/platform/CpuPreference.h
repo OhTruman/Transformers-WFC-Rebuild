@@ -8,4 +8,7 @@
 
 namespace platform {
 std::string applyCachePreference();
+// The calling thread runs below normal priority: bulk background work (audio bank decodes under a load) that must not take
+// cores from the game / loading threads; it still uses every idle core.
+void lowerCurrentThreadPriority();
 }

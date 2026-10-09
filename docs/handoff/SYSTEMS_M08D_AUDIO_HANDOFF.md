@@ -576,3 +576,35 @@ A/B on 09c 17275ac (mimalloc vs mimalloc + PGO; true 20 / 64 participants, in-ma
   set (until release) and launch picks among all waves again. A looping voice keeps its wave across wraps (as the original:
   the pick is per instance).
   Suite: a check that only one wave per event of DM_FINALSTRETCH_LP is decoded (741 pass; the 42 FAKE_TEST_MAP data fails as before).
+
+## Original sound banks (FSB) played in-process: libvgmstream r2117 (package ~8.4 GB of WAV -> 0.64 GB of banks)
+
+- third_party/vgmstream (README.WFC.txt: tag r2117 / commit 71e2361, tarball sha256, licences): libvgmstream source,
+  FFmpeg headers, and the four r2117 FFmpeg DLLs (md5-identical to the ones beside AssetTools' vgmstream-cli) with .def files.
+  CMake: `docs/handoff/SYSTEMS_FSB_cmake.patch` (integration-owned file; option WFC_VGMSTREAM, default ON): static library
+  (FFmpeg codec only), import libs from the .def files (llvm-dlltool), DLLs + licence files copied next to the exe
+  (bin/licenses/vgmstream). Without the patch everything builds and plays WAVs as before.
+- platform::decodeFsb (src/platform/FsbDecode.h, win32/FsbDecode.cpp): one pass of the stream (ignore_loop), PCM16.
+  Stream opens are serialised until the first one succeeds (FFmpeg 5 builds its WMA Pro / XMA tables on the first open,
+  not thread-safely), then run in parallel.
+- Win32Audio: X.wav if present, else X.fsb beside it (WFC_AUDIO_SOURCE=auto); `fsb` decodes banks first (WAV fallback), `wav`
+  never decodes banks. IAudio::loadIsCostly(path) tells callers a load would decode a bank. Counters: decodes / PCM / time and
+  main-thread decodes (first 50 logged with path and ms, then every 100th; summary at shutdown).
+- SoundCues: a first play that would decode a bank never decodes on the main thread (worker, start when ready: Integration
+  decision (a)). Bulk decodes (cue set at load, map bank via addCues, level banks, selection warm-ups) fan out over a pool of
+  persistent lanes at below-normal priority (platform::lowerCurrentThreadPriority), so the loading threads keep their cores.
+- Gate (tools/systems/fsb_gate.cpp; Integration-approved rule: the one-pass decode equals the WAV's PCM bit for bit from sample 0
+  for its full length, same channels / rate; a WAV may be longer only for loop-flagged banks, listed): 27,800 / 27,800 PASS
+  (content + _LOC), 251 loop-flagged with a longer WAV (vgmstream-cli's default render: 2 loops + a 10 s fade). Banks 636.8 MB,
+  WAVs 8373.2 MB, one-pass PCM 5716.1 MB. Run 3 times (12 / 12 / 16 threads, the last two with parallel opens): identical.
+- Behaviour changes (Integration-approved, both original behaviour): a non-looping play of a loop-flagged bank plays one pass
+  (not the CLI's 2 loops + fade); looping cues on loop-flagged banks loop the stream, not 2 loops + the 10 s fade (9 cues:
+  BL_LVL_MP_MX.{DM, COP, CONQUEST, BOMB, POWER_STRUGGLE}_FINALSTRETCH_LP, BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01/02_BED_LP,
+  MP_LOBBY_AMB_BED, BL_LVL_MP_IAC_BERTH.AMB_AUTOBOT_FLAG_ROOM). The 7 explicit FSB loop regions are whole-sample on one-pass
+  banks: unchanged. Less memory for those banks (one pass instead of ~2.1x).
+- Measured (09c 2d7f06d + this, Release + PGO, same exe, WAV vs FSB arms alternated, frontend -> Streets TDM 10 v 10 -> lobby):
+  match load 7.12 / 7.42 s (WAV) vs 7.29 / 7.48 s (FSB); boot -> frontend -> quit 2.41 / 2.66 / 2.34 s vs 3.90 (first, cold
+  disk cache) / 2.33 / 2.35 s; 0 bank decodes on the main thread (1213 / 1217 decodes, ~500 MB PCM, ~9.2 s CPU on the pool).
+  Audio suite 742 pass in both WFC_AUDIO_SOURCE=wav and =fsb (the 42 FAKE_TEST_MAP data fails as before).
+- Dropping WAVs from the package is the packaging step (AssetTools / Integration): every content/**/*.wav has its .fsb beside it
+  and passes the gate.

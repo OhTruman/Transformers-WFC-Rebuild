@@ -4,6 +4,7 @@
 #include <set>
 #include "assets/Json.h"
 #include "core/Log.h"
+#include "platform/CpuPreference.h"
 
 #include <algorithm>
 #include <chrono>
@@ -15,6 +16,8 @@
 #include <condition_variable>
 #include <deque>
 #include <thread>
+#include <atomic>
+#include <memory>
 
 namespace game {
 using namespace cuedata;
@@ -30,6 +33,7 @@ double ticksToMs(LARGE_INTEGER_T t) { return (double)t / 1e6; }
 // bank loads while a selection warm-up decodes. Tasks run in submission order per lane.
 class DecodeLane {
 public:
+    bool background = false;                         // run below normal priority (the bulk-decode pool)
     std::future<void> submit(std::function<void()> fn) {
         std::packaged_task<void()> task(std::move(fn));
         std::future<void> f = task.get_future();
@@ -43,6 +47,7 @@ public:
     }
 private:
     void run() {
+        if (background) platform::lowerCurrentThreadPriority();
         for (;;) {
             std::packaged_task<void()> task;
             {
@@ -62,6 +67,23 @@ private:
 // Leaked on purpose: detached lanes may still wait on them during static destruction at exit.
 DecodeLane& warmLane() { static DecodeLane* l = new DecodeLane; return *l; }
 DecodeLane& levelLane() { static DecodeLane* l = new DecodeLane; return *l; }
+
+// Bulk decodes (a cue set at load, a level bank, a selection warm-up) fan out over a small pool of persistent lanes: the
+// original banks decode at ~8 ms per MB of PCM, so one thread would add seconds to a load. Blocks until all are loaded
+// (load() caches by path). Never called on the main thread during play.
+void parallelLoad(audio::IAudio* a, const std::vector<std::string>& paths) {
+    static const int kLanes = [] { const unsigned h = std::thread::hardware_concurrency(); return (int)std::max(2u, std::min(8u, h / 2)); }();
+    static DecodeLane* pool = [] { auto* p = new DecodeLane[(size_t)kLanes]; for (int l = 0; l < kLanes; ++l) p[l].background = true; return p; }();
+    if (paths.size() < 4) { for (const std::string& p : paths) a->load(p); return; }
+    auto next = std::make_shared<std::atomic<size_t>>(0);
+    const auto list = std::make_shared<std::vector<std::string>>(paths);
+    std::vector<std::future<void>> done;
+    for (int l = 0; l < kLanes; ++l)
+        done.push_back(pool[l].submit([a, next, list] {
+            for (size_t i; (i = next->fetch_add(1)) < list->size();) a->load((*list)[i]);
+        }));
+    for (std::future<void>& f : done) f.wait();
+}
 
 const CueDef kCues[] = {
 #include "game/SoundCues.inc"
@@ -188,6 +210,18 @@ void SoundCues::ensurePick(size_t c) {
         pick_[c].push_back(e.waves.size() > 1 ? std::rand() % (int)e.waves.size() : -1);   // launch's choice, made now
 }
 
+bool SoundCues::costlyLoad(size_t c) const {
+    if (!audio_ || c >= cues_.size()) return false;
+    for (size_t ei = 0; ei < cues_[c].events.size(); ++ei)
+        for (size_t wi = 0; wi < cues_[c].events[ei].waves.size(); ++wi) {
+            if (!wanted(c, ei, wi)) continue;
+            const std::string& f = cues_[c].events[ei].waves[wi];
+            const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+            if (audio_->loadIsCostly(abs ? f : contentRoot_ + f)) return true;
+        }
+    return false;
+}
+
 bool SoundCues::wanted(size_t c, size_t e, size_t w) const {
     if (c >= pick_.size() || e >= pick_[c].size() || pick_[c][e] < 0) return true;
     return (int)w == pick_[c][e];
@@ -225,6 +259,18 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
     int ok = 0, total = 0;
     resident_.assign(cues_.size(), 0);
     waves_.assign(cues_.size(), {});
+    if (a->threadSafeLoad()) {   // decode the resident set in parallel first; the loop below then takes cached handles
+        std::vector<std::string> paths;
+        for (const CueDef& cd : cues_) {
+            if (cd.streamed) continue;
+            for (const EventDef& e : cd.events)
+                for (const std::string& f : e.waves) {
+                    const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+                    paths.push_back(abs ? f : contentRoot + f);
+                }
+        }
+        parallelLoad(a, paths);
+    }
     for (size_t c = 0; c < cues_.size(); ++c) {
         if (cues_[c].streamed) { waves_[c].assign(cues_[c].events.size(), {}); continue; }   // decoded on first play
         loadWaves(c, contentRoot);
@@ -283,6 +329,7 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
 
 int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot) {
     int added = 0;
+    std::vector<size_t> toLoad;                     // resident (non-streamed) cues: waves loaded after the parse
     for (const auto& kv : cues.obj) {
         const assets::Json& root = kv.second["tree"];
         if (root["class"].asString() != "SoundNodeRoot" || findCue(kv.first.c_str()) >= 0) continue;
@@ -353,9 +400,20 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             if (waves_.size() < cues_.size()) waves_.resize(cues_.size());
             if (resident_.size() < cues_.size()) resident_.resize(cues_.size(), 0);
             waves_.back().assign(d.events.size(), {});
-        } else loadWaves(cues_.size() - 1, contentRoot);
+        } else toLoad.push_back(cues_.size() - 1);
         ++added;
     }
+    if (audio_ && audio_->threadSafeLoad()) {   // a map bank: decode its resident waves in parallel, then take cached handles
+        std::vector<std::string> paths;
+        for (size_t c : toLoad)
+            for (const EventDef& e : cues_[c].events)
+                for (const std::string& f : e.waves) {
+                    const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+                    paths.push_back(abs ? f : contentRoot + f);
+                }
+        parallelLoad(audio_, paths);
+    }
+    for (size_t c : toLoad) loadWaves(c, contentRoot);
     return added;
 }
 
@@ -417,8 +475,13 @@ long long SoundCues::waveBytes(size_t c) {
         for (const std::string& f : e.waves) {
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
             std::error_code ec;
-            const auto sz = std::filesystem::file_size(abs ? f : contentRoot_ + f, ec);
+            const std::string p = abs ? f : contentRoot_ + f;
+            const auto sz = std::filesystem::file_size(p, ec);
             if (!ec) n += (long long)sz;
+            else if (p.size() > 4) {                                     // no WAV in the package: the original bank (~16:1)
+                const auto bs = std::filesystem::file_size(p.substr(0, p.size() - 4) + ".fsb", ec);
+                if (!ec) n += (long long)bs * 16;
+            }
         }
     return waveBytes_[c] = n;
 }
@@ -442,6 +505,10 @@ bool SoundCues::startWarm(size_t c) {
             std::error_code ec;
             const auto sz = std::filesystem::file_size(paths.back(), ec);
             if (!ec) bytes += (long long)sz;
+            else {
+                const auto bs = std::filesystem::file_size(paths.back().substr(0, paths.back().size() - 4) + ".fsb", ec);
+                if (!ec) bytes += (long long)bs * 16;
+            }
         }
     if (paths.empty()) return false;
     audio::IAudio* a = audio_;
@@ -449,10 +516,10 @@ bool SoundCues::startWarm(size_t c) {
     w.cue = c; w.paths = paths; w.name = cues_[c].name; w.bytes = bytes; w.start = std::chrono::steady_clock::now();
     // One worker decode at a time (decodeMutex): a match's final-stretch + end music (up to ~250 MB of waves each) must not
     // decode concurrently - peak memory, and the device lock they share.
-    w.done = warmLane().submit([a, paths] {
+    w.done = warmLane().submit([a, paths] {   // the lane serialises warm-ups; each fans out over the pool
         static std::mutex decodeMutex;
         std::lock_guard<std::mutex> lk(decodeMutex);
-        for (const std::string& p : paths) a->load(p);
+        parallelLoad(a, paths);
     });
     LOG_INFO("sound cues: worker decode of %s started (%.1f MB of waves)", w.name.c_str(), w.bytes / 1048576.0);
     warming_.push_back(std::move(w));
@@ -546,7 +613,7 @@ int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& content
     if (paths.empty()) return 0;
     audio::IAudio* a = audio_;
     const int n = (int)paths.size();
-    levelWarm_.push_back({tag, paths, levelLane().submit([a, paths] { for (const std::string& p : paths) a->load(p); })});
+    levelWarm_.push_back({tag, paths, levelLane().submit([a, paths] { parallelLoad(a, paths); })});
     return n;
 }
 
@@ -742,7 +809,10 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
         // Not resident (no prefetch, or still decoding): on a thread-safe backend decode on the worker and start the
         // instance when the waves are adopted (a short start delay instead of a 150-700 ms main-thread stall - the match
         // final-stretch music); otherwise decode now.
-        if (isWarming((size_t)c) || (waveBytes((size_t)c) > kDeferDecodeBytes && startWarm((size_t)c))) deferred = true;
+        // An original bank to decode (no WAV, or WFC_AUDIO_SOURCE=fsb) never decodes here on the main thread: worker, start when
+        // ready (a few ms) - the original streamed these from disk.
+        if (isWarming((size_t)c) || ((waveBytes((size_t)c) > kDeferDecodeBytes || costlyLoad((size_t)c)) && startWarm((size_t)c)))
+            deferred = true;
         else {
             LARGE_INTEGER_T s0 = nowTicks();
             loadWaves((size_t)c, contentRoot_);

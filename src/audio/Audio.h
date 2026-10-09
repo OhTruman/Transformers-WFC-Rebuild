@@ -90,6 +90,9 @@ public:
     virtual bool threadSafeLoad() const { return false; }
     // The handle of an already-decoded file, WITHOUT decoding it (kInvalidSound if not resident).
     virtual Sound cached(const std::string& path) const { (void)path; return kInvalidSound; }
+    // load(path) would decode an original bank (not a plain WAV read) and it is not resident yet: callers keep that off the
+    // main thread during play (worker decode, start when ready).
+    virtual bool loadIsCostly(const std::string& path) const { (void)path; return false; }
     // Lifecycle (map unload / frontend transitions). release: forget a loaded sample (its voices stop; the
     // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
     // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).

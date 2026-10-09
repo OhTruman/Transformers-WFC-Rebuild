@@ -8,9 +8,11 @@
 
 #include "audio/Audio.h"
 #include "core/Log.h"
+#include "platform/FsbDecode.h"
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -35,9 +37,67 @@ uint32_t rd32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((u
 uint16_t rd16(const uint8_t* p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
 // Decode a PCM WAV and resample/rechannel to kRate/kChannels int16 interleaved.
+// Nearest-neighbour resample to kRate, duplicate / take the first two channels to kChannels.
+void toOutput(const int16_t* src, size_t srcFrames, int ch, int rate, std::vector<int16_t>& out) {
+    size_t outFrames = (size_t)((double)srcFrames * kRate / rate);
+    out.resize(outFrames * kChannels);
+    for (size_t i = 0; i < outFrames; ++i) {
+        size_t sf = (size_t)((double)i * rate / kRate);
+        if (sf >= srcFrames) sf = srcFrames - 1;
+        int16_t l = src[sf * ch];
+        int16_t r = ch > 1 ? src[sf * ch + 1] : l;
+        out[i * kChannels] = l;
+        out[i * kChannels + 1] = r;
+    }
+}
+
+std::string bankOf(const std::string& wav) {
+    return wav.size() > 4 && (wav.compare(wav.size() - 4, 4, ".wav") == 0 || wav.compare(wav.size() - 4, 4, ".WAV") == 0)
+               ? wav.substr(0, wav.size() - 4) + ".fsb" : std::string();
+}
+
+bool fileExists(const std::string& p) {
+    const DWORD a = GetFileAttributesA(p.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+// The original bank beside the WAV decodes instead (platform::audioSource: fsb first, or auto when the WAV is not there).
+bool bankFirst(const std::string& path) {
+    if (!platform::fsbDecodeAvailable()) return false;
+    const platform::AudioSource s = platform::audioSource();
+    if (s == platform::AudioSource::Wav) return false;
+    const std::string bank = bankOf(path);
+    if (bank.empty() || !fileExists(bank)) return false;
+    return s == platform::AudioSource::Fsb || !fileExists(path);
+}
+
+std::thread::id gMainThread;   // the thread that created the device (the game thread)
+
+bool loadBank(const std::string& path, std::vector<int16_t>& out, int* srcRate) {
+    const auto t0 = std::chrono::steady_clock::now();
+    std::vector<int16_t> pcm;
+    int ch = 0, rate = 0;
+    if (!platform::decodeFsb(bankOf(path), pcm, ch, rate)) { LOG_WARN("audio: bank decode failed: %s", bankOf(path).c_str()); return false; }
+    if (srcRate) *srcRate = rate;
+    toOutput(pcm.data(), pcm.size() / (size_t)ch, ch, rate, out);
+    const long long us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0).count();
+    platform::FsbStats& st = platform::fsbStats();
+    ++st.decodes; st.microseconds += us; st.pcmBytes += (long long)(pcm.size() * 2);
+    if (std::this_thread::get_id() == gMainThread) {
+        ++st.mainThreadDecodes; st.mainThreadMicroseconds += us;
+        const long long n = st.mainThreadDecodes.load();
+        if (n <= 50)
+            LOG_WARN("audio: bank decoded on the main thread (%.2f ms, %.0f KB): %s", us / 1000.0, pcm.size() * 2 / 1024.0, path.c_str());
+        else if (n % 100 == 0)
+            LOG_WARN("audio: %lld banks decoded on the main thread so far (%.0f ms in total)", n, st.mainThreadMicroseconds.load() / 1000.0);
+    }
+    return true;
+}
+
 bool loadWav(const std::string& path, std::vector<int16_t>& out, int* srcRate = nullptr) {
+    if (bankFirst(path)) return loadBank(path, out, srcRate);
     std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) return false;
+    if (!f) return bankOf(path).size() && platform::fsbDecodeAvailable() && fileExists(bankOf(path)) && loadBank(path, out, srcRate);
     std::streamoff n = f.tellg();
     if (n < 44) return false;
     std::vector<uint8_t> buf((size_t)n);
@@ -62,19 +122,7 @@ bool loadWav(const std::string& path, std::vector<int16_t>& out, int* srcRate = 
     if (srcRate) *srcRate = rate;
     if (fmt != 1 || bits != 16) { LOG_WARN("wav: unsupported fmt=%d bits=%d %s", fmt, bits, path.c_str()); return false; }
 
-    const int16_t* src = reinterpret_cast<const int16_t*>(data);
-    size_t srcFrames = dataLen / (size_t)(ch * 2);
-    // Nearest-neighbour resample to kRate, duplicate/mix channels to kChannels.
-    size_t outFrames = (size_t)((double)srcFrames * kRate / rate);
-    out.resize(outFrames * kChannels);
-    for (size_t i = 0; i < outFrames; ++i) {
-        size_t sf = (size_t)((double)i * rate / kRate);
-        if (sf >= srcFrames) sf = srcFrames - 1;
-        int16_t l = src[sf * ch];
-        int16_t r = ch > 1 ? src[sf * ch + 1] : l;
-        out[i * kChannels] = l;
-        out[i * kChannels + 1] = r;
-    }
+    toOutput(reinterpret_cast<const int16_t*>(data), dataLen / (size_t)(ch * 2), ch, rate, out);
     return true;
 }
 
@@ -278,6 +326,7 @@ struct Voice {
 class Win32Audio final : public IAudio {
 public:
     bool init() {
+        gMainThread = std::this_thread::get_id();
         WAVEFORMATEX wf{};
         wf.wFormatTag = WAVE_FORMAT_PCM;
         wf.nChannels = kChannels;
@@ -311,7 +360,12 @@ public:
     }
 
     // A wave referenced by several cues / events is decoded once.
-    bool threadSafeLoad() const override { return true; }   // decode outside the lock; deque storage
+    bool threadSafeLoad() const override { return true; }
+    bool loadIsCostly(const std::string& path) const override {
+        if (!bankFirst(path) && fileExists(path)) return false;     // a plain WAV read
+        std::lock_guard<std::mutex> lk(mx_);
+        return loaded_.find(path) == loaded_.end();
+    }   // decode outside the lock; deque storage
     Sound cached(const std::string& path) const override {
         std::lock_guard<std::mutex> lk(mx_);
         auto it = loaded_.find(path);
@@ -595,6 +649,11 @@ public:
     }
 
     ~Win32Audio() override {
+        const platform::FsbStats& st = platform::fsbStats();
+        if (st.decodes > 0)
+            LOG_INFO("audio: %lld banks decoded (%.0f MB PCM, %.0f ms), %lld of them on the main thread (%.0f ms)", st.decodes.load(),
+                     st.pcmBytes.load() / 1048576.0, st.microseconds.load() / 1000.0, st.mainThreadDecodes.load(),
+                     st.mainThreadMicroseconds.load() / 1000.0);
         run_ = false;
         if (thread_.joinable()) thread_.join();
         if (ok_) {
