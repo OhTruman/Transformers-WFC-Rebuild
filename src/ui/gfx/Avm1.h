@@ -88,6 +88,7 @@ bool nativeLibraryOverride(VM& vm, const std::string& name, Value& v);
 uint64_t canonicalFunctionHash(const ScriptCode& sc, const std::vector<std::string>* pool);
 uint32_t atomIntern(const std::string& s);
 uint32_t atomFind(const std::string& s);
+size_t atomCount();   // interned property names (diagnostics: WFC_GFXMEM)
 
 class Object {
 public:
@@ -183,7 +184,11 @@ public:
                               const std::shared_ptr<ConstPool>& pool, gfx::DisplayObject* target);
     Object* newClipObject(gfx::DisplayObject* d, Object* proto);
     size_t heapSize() const { return heap_.size(); }
-    void collect(const std::vector<Object*>& extraRoots);   // mark-sweep from globals + extra roots
+    void collect(const std::vector<Object*>& extraRoots) { collect(extraRoots, nullptr); }   // mark-sweep from globals + extra roots
+    // extend (between mark and sweep): marks more (markExtra) and returns true while it did; called until false.
+    void collect(const std::vector<Object*>& extraRoots, const std::function<bool(VM&)>& extend);
+    void markExtra(Object* o) { if (o && !o->marked) mark(o); }
+    template <class F> void forEachObject(F&& f) { for (auto& o : heap_) f(o.get()); }
 
     // ---- conversions ----
     double toNumber(const Value& v);

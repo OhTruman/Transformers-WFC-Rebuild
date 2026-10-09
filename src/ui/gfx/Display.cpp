@@ -4,6 +4,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -1298,16 +1299,56 @@ void Player::advance(float dt) {
         std::vector<MovieClip*> all;
         collectEnterFrame(root_, all);
         for (MovieClip* mc : all) if (mc->script) roots.push_back(mc->script);
-        // Removed instances and everything under them: their script objects stay valid while scripts still refer to
-        // them (a removed clip's children were collected before and crashed a later stale access).
-        std::function<void(DisplayObject*)> keep = [&](DisplayObject* d) {
-            if (d->script) roots.push_back(d->script);
-            if (d->kind == DisplayObject::Kind::Clip)
-                for (auto& [dd, ch] : static_cast<MovieClip*>(d)->children) keep(ch.get());
+        // Removed instances (the graveyard): an entry - a removed subtree - is kept whole, with every script object in
+        // it, while anything can still reach a node of it: a live script object bound to it (display), a live function
+        // defined on its timeline (defTarget), the player's pointer state (hover / pressed / text focus / pending loads
+        // / current target), or a kept entry's parent chain (_parent of a removed clip). Entries nothing reaches are
+        // freed after the collection (they were roots before, so a long-lived movie - the HUD all match - kept every
+        // kill-feed line / marker it ever removed). With frame actions still queued (they hold clip pointers) all stay.
+        static const bool keepAll = std::getenv("WFC_GFX_KEEP_GRAVEYARD") != nullptr;   // diagnostics: the old behaviour
+        const bool prune = actionQueue_.empty() && !keepAll;
+        std::vector<char> keptEntry(graveyard.size(), prune ? 0 : 1);
+        std::function<void(DisplayObject*, const std::function<void(DisplayObject*)>&)> walk =
+            [&](DisplayObject* d, const std::function<void(DisplayObject*)>& f) {
+                f(d);
+                if (d->kind == DisplayObject::Kind::Clip)
+                    for (auto& [dd, ch] : static_cast<MovieClip*>(d)->children) walk(ch.get(), f);
+            };
+        auto extend = [&](avm1::VM& vm) {
+            std::unordered_set<const DisplayObject*> ref;
+            vm.forEachObject([&](Object* o) {
+                if (!o->marked) return;
+                if (o->display) ref.insert(o->display);
+                if (o->kind == avm1::ObjKind::Function && o->defTarget) ref.insert(o->defTarget);
+            });
+            for (const DisplayObject* d : {(const DisplayObject*)hover_, (const DisplayObject*)pressed_, (const DisplayObject*)focusText_,
+                                           (const DisplayObject*)vm.currentTarget}) if (d) ref.insert(d);
+            for (auto& l : loads_) if (l.target) ref.insert(l.target);
+            const auto masks = [&](DisplayObject* d) { if (d->maskedBy) ref.insert(d->maskedBy); };   // setMask targets
+            if (root_) walk(root_, masks);
+            for (size_t i = 0; i < graveyard.size(); ++i)   // a kept entry keeps its parent chain and its masks
+                if (keptEntry[i]) {
+                    for (const DisplayObject* p = graveyard[i]->parent; p; p = p->parent) ref.insert(p);
+                    walk(graveyard[i].get(), masks);
+                }
+            bool changed = false;
+            for (size_t i = 0; i < graveyard.size(); ++i) {
+                bool hit = keptEntry[i] != 0;
+                if (!hit) walk(graveyard[i].get(), [&](DisplayObject* d) { if (ref.count(d)) hit = true; });
+                if (!hit) continue;
+                if (!keptEntry[i]) { keptEntry[i] = 1; changed = true; }
+                walk(graveyard[i].get(), [&](DisplayObject* d) { if (d->script && !d->script->marked) { vm.markExtra(d->script); changed = true; } });
+            }
+            return changed;
         };
-        for (auto& g : graveyard) keep(g.get());
         core::prof::Scope p6("gfx.gc");
-        vm_->collect(roots);
+        vm_->collect(roots, extend);
+        if (prune) {
+            size_t w = 0;
+            for (size_t i = 0; i < graveyard.size(); ++i)
+                if (keptEntry[i]) { if (w != i) graveyard[w] = std::move(graveyard[i]); ++w; }
+            graveyard.resize(w);
+        }
     }
 }
 
