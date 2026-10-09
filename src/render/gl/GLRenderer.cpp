@@ -1544,6 +1544,7 @@ public:
         LOG_INFO("renderer: upscaling mode %d (%s)", mode, mode <= 0 || mode > 3 ? "off" : mode == 1 ? "FSR 1 Quality" :
                  mode == 2 ? "FSR 1 Balanced" : "FSR 1 Performance");
     }
+    void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
     void setHdTextures(bool on) override { hdTextures_ = on; LOG_INFO("renderer: HD textures %s (no HD root yet: originals)", on ? "on" : "off"); }
     bool hdTextures_ = false;
     void prewarmDynamicMesh(const MeshData& m) override {
