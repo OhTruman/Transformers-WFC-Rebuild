@@ -34,8 +34,9 @@ foreach ($map in $Maps) {
     }
     if (-not (Test-Path $lg)) { Res "$map" "UNKNOWN" "not run" "Experimental"; continue }
     $t = Get-Content -Raw $lg
-    $lvl = [regex]::Match($t, 'FLOW gamelobby\.startLevel url=(\S+)'); $cm = [regex]::Match($t, 'nav\.check label=cac \S+ \S+ openMovie=(\S+)'); $cac = $cm.Success -and $cm.Groups[1].Value -notmatch 'PartyLobby'
-    $cacNote = if ($cm.Success) { $cm.Groups[1].Value } else { "no nav.check" }
+    $lvl = [regex]::Match($t, 'FLOW gamelobby\.startLevel url=(\S+)'); # CaC opens INSIDE the party-lobby movie (openMovie stays PartyLobby): judge by the CaC preview (nav.check preview=a/b/c/meshes/bodies)
+    $cm = [regex]::Match($t, 'nav\.check label=cac .*?preview=(\d+)/(\d+)/(\d+)/(\d+)/(\d+)'); $cac = $cm.Success -and [int]$cm.Groups[5].Value -gt 0
+    $cacNote = if ($cm.Success) { "preview bodies $($cm.Groups[5].Value)" } else { "no nav.check" }
     $ended = $t -match 'to=GameEnded'; $back = [regex]::Matches($t, 'level=GameLobby|to=GameLobby').Count -ge 2
     $n = if (Test-Path $fl) { @(Get-Content $fl | Where-Object { $_.Trim() }).Count } else { 0 }
     $ok = $n -gt 0 -and $lvl.Success -and $ended -and $back -and $cac
