@@ -315,7 +315,7 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     lod.randomImageTime = L["random_image_time"].asFloat(0.0f);
                 }
                 if (L.has("mesh") && L["mesh"].isObject()) {
-                    lod.meshGltf = L["mesh"]["gltf"].asString();
+                    lod.meshGltf = relocateDataPath(L["mesh"]["gltf"].asString());   // (build-machine absolute)
                     lod.overrideMaterial = L["mesh"]["override_material"].asBool(false);
                 }
                 const assets::Json& ms = L["modules"];
