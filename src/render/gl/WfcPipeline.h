@@ -444,6 +444,12 @@ private:
     struct MotionDraw { GLuint vao; GLsizei count; core::Mat4 model, prevModel; int row, mode, bones; float alpha;
                         int prevSrc, prevMode; float prevAlpha; };   // prevSrc 0: same row, 1: skinPrevTex_ row
     std::vector<MotionDraw> motionDraws_;
+    // rigid motion (movers, mover-posed props, spinning pickups): sub ranges with this and last frame's transform
+    struct MotionRigid { GLuint vao; uint32_t first, count; core::Mat4 model, prevModel; };
+    std::vector<MotionRigid> motionRigid_;
+    std::unordered_map<std::string, core::Mat4> prevMoverDelta_;
+    GLuint velRigidProg_ = 0;
+    void motionRecordMesh(int id, const core::Mat4& model, const core::Mat4& prevModel);   // opaque subs of a mesh
     GLuint skinPrevTex_ = 0, velObjProg_ = 0;
     void motionObjectPass();
     bool ensureFsr(int inW, int inH, int outW, int outH);
@@ -926,6 +932,7 @@ private:
         std::string owner, gltf, mesh; float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};
         float off[3] = {0, 0, 0};                     // component Translation (flag / bomb rest mesh +150 Z)
         float yawRate = 0.0f, cullDistance = 0.0f; int meshId = -1;
+        core::Mat4 prevModel; int prevFrame = -1;     // motion vectors (optional): last drawn transform
     };
     std::map<std::string, float> pickupSpin_;         // factory (lower) -> accumulated yaw (UU) while available
     std::vector<PickupMeshRT> pickupMeshes_;

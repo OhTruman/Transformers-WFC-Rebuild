@@ -226,6 +226,7 @@ core::Mat4 Pipeline::moverDelta(const MoverRT& m, float t) const {
 
 void Pipeline::updateMovers() {
     static const bool frozen = std::getenv("WFC_NOMOVERS") != nullptr;
+    if (motionVectorsOn()) prevMoverDelta_ = moverDelta_;   // motion vectors: last frame's mover poses
     moverDelta_.clear();
     if (frozen) return;
     for (const MoverRT& m : movers_) moverDelta_[m.actor] = moverDelta(m, mapTime());   // Gameplay's map clock
