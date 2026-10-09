@@ -660,6 +660,8 @@ public:
     // The robot rig (aim-offset bake, masks, clip indices) is model data: built once per model and shared by every pawn with that
     // body (15 bots spawning baked it 15x in one frame). World clears it when the models it points to are released.
     static void clearRigCache();
+    static void forgetRig(const assets::SkinnedModel& m);   // the model is being freed (World::evictUnusedAssets)
+    const assets::SkinnedModel* bodyModel() const { return bodySkinModel_; }   // tests
 private:
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 

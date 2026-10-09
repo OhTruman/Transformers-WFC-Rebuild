@@ -71,6 +71,7 @@ private:
     void runScaleTest();
     void runRayBench();
     void runBarrierWalkTest();
+    void runEvictTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

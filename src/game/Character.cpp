@@ -82,6 +82,7 @@ void Character::beginTransform() {
 namespace { std::map<const assets::SkinnedModel*, std::shared_ptr<void>>& rigCache() { static std::map<const assets::SkinnedModel*, std::shared_ptr<void>> c; return c; }
             std::mutex& rigCacheMutex() { static std::mutex m; return m; } }   // rigs are built lazily from the animation workers
 void Character::clearRigCache() { std::lock_guard<std::mutex> lk(rigCacheMutex()); rigCache().clear(); }
+void Character::forgetRig(const assets::SkinnedModel& m) { std::lock_guard<std::mutex> lk(rigCacheMutex()); rigCache().erase(&m); }
 
 void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
