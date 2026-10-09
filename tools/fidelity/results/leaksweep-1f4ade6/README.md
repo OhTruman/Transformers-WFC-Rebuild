@@ -11,3 +11,9 @@ of the site's live total over the later half of the dumps; GlCensus probe sites 
 
 Note: ~400 MB of process-heap (CRT / driver) memory accumulates per distinct map visited and is retained (bounded; consistent with
 the driver holding the program cache's compiled shaders).
+
+## Watch item closed - maps x 4 passes (32 matches, 1f4ade6)
+C++ heap (operator new live) at settled lobby samples: 398.0 -> 400.2 -> 404.7 -> 404.0 -> 404.1 -> 402.3 -> 404.7 -> 405.3 ->
+406.3 -> 407.2 MB - max 407 (< Systems' 410 MB bar), ~0.2 MB/match over passes 3-4 = flat. Process heap (CRT) committed /
+allocated: 739/665 -> 745/669 -> 769/672 -> 769/673 -> ... -> 781/674 -> 782/674 - ALLOCATED flat from pass 2 on, only committed
+creeps (fragmentation). Settled private later-half slope 7.4 MB/match tracks the committed creep. **No leak.**
