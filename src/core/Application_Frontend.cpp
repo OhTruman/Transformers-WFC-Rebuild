@@ -591,6 +591,9 @@ template <class W> struct HasQaBotLabels<W, std::void_t<decltype(std::declval<co
 template <class Rn, class = void> struct HasRenderCamera : std::false_type {};
 template <class Rn> struct HasRenderCamera<Rn, std::void_t<decltype(std::declval<const Rn&>().renderDiagnostics().viewProj[0]),
                                                             decltype(std::declval<const Rn&>().renderDiagnostics().viewport[0])>> : std::true_type {};
+// QaBotLabel::team when Gameplay provides it (team colours); detected.
+template <class L, class = void> struct HasLabelTeam : std::false_type {};
+template <class L> struct HasLabelTeam<L, std::void_t<decltype(std::declval<const L&>().team)>> : std::true_type {};
 template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W& w, const Rn* r) {
     std::vector<frontend::WorldLabel> out;
     if constexpr (HasQaBotLabels<W>::value && HasRenderCamera<Rn>::value) {
@@ -607,8 +610,13 @@ template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W&
             if (cw <= 0.1f) continue;   // behind the camera
             const float sx = (cx / cw * 0.5f + 0.5f) * vw + (float)d.viewport[0], sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * vh;
             if (sx < -200 || sy < -50 || sx > vw + 50 || sy > vh + 50) continue;
-            out.push_back({sx, sy, l.text});
+            frontend::WorldLabel wl{sx, sy, l.text, cw, -1};
+            if constexpr (HasLabelTeam<std::decay_t<decltype(l)>>::value) wl.team = (int)l.team;
+            out.push_back(wl);
         }
+        // Playtest overlay readability: the 20 nearest bots only (each label is a HUD clip).
+        std::sort(out.begin(), out.end(), [](const frontend::WorldLabel& a, const frontend::WorldLabel& b) { return a.depth < b.depth; });
+        if (out.size() > 20) out.resize(20);
     } else { (void)w; (void)r; }
     return out;
 }
@@ -627,6 +635,17 @@ template <class Rn> std::optional<frontend::HudFrame::LockOnMarker> lockOnMarker
         mk.y = 1.0f - (cy * iw * 0.5f + 0.5f);
         return mk;
     } else { (void)r; (void)p; return std::nullopt; }
+}
+
+// Playtest bot overlay (PC EXTENSION playtest tool, not a QA-panel feature): F9 or WFC_BOTOVERLAY=1. Gameplay's
+// World::setBotOverlay(bool) turns its qaBotLabels on outside QA mode (detected; without it the QA toggle is used,
+// which shows labels only with WFC_QA).
+template <class W, class = void> struct HasSetBotOverlay : std::false_type {};
+template <class W> struct HasSetBotOverlay<W, std::void_t<decltype(std::declval<W&>().setBotOverlay(true))>> : std::true_type {};
+template <class W> const char* applyBotOverlay(W& w, bool on) {
+    if constexpr (HasSetBotOverlay<W>::value) { w.setBotOverlay(on); return "gameplay"; }
+    else if constexpr (HasQaBotTools<W>::value) { if (w.qaBotOverlay() != on) w.qaSetBotOverlay(on); return "qa"; }
+    else { (void)w; (void)on; return "none"; }
 }
 template <class W> std::string qaBotTool(W& w, platform::QaRequest::Kind k) {
     using K = platform::QaRequest::Kind;
@@ -658,6 +677,28 @@ template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const s
         return w.qaStatus();
     } else { (void)w; (void)k; (void)weapon; (void)startIndex; return "Gameplay QA API not in this build"; }
 }
+}
+
+// Playtest bot overlay (every build, not only dev-tool builds): F9 / WFC_BOTOVERLAY=1 toggles Gameplay's bot labels;
+// the labels (theirs, or the QA panel's when it drives the overlay) go to the HUD every frame in a match.
+void Application::playtestOverlayTick(const platform::InputFrame& in) {
+    if (!frontend_) return;
+    frontend::GameFlow& flow = frontend_->flow();
+    const bool inMatch = flow.level() == frontend::LevelKind::Match;
+    if (inMatch) {
+        static bool botOverlay = std::getenv("WFC_BOTOVERLAY") != nullptr && std::string(std::getenv("WFC_BOTOVERLAY")) != "0";
+        static bool applied = false;
+        for (uint16_t vk : in.keyPresses)
+            if (vk == 0x78) {   // F9
+                botOverlay = !botOverlay;
+                frontend::FlowTrace::emit("playtest.botOverlay", {{"on", frontend::FlowTrace::boolean(botOverlay)}, {"by", applyBotOverlay(world_, botOverlay)}});
+            }
+        // every frame while on (a new match world starts with it off); once when turned off, so the QA panel's own
+        // overlay toggle keeps working
+        if (botOverlay || applied) applyBotOverlay(world_, botOverlay);
+        applied = botOverlay;
+    }
+    frontend_->setWorldLabels(inMatch ? qaLabels(world_, renderer_) : std::vector<frontend::WorldLabel>{});
 }
 
 void Application::qaTick(const platform::InputFrame& in) {
@@ -743,8 +784,6 @@ void Application::qaTick(const platform::InputFrame& in) {
             weaponPending = false;
         }
         using K = platform::QaRequest::Kind;
-        // the bot overlay's labels (DEV TOOL), every frame in a match; nothing while the overlay is off
-        frontend_->setWorldLabels(flow.level() == frontend::LevelKind::Match ? qaLabels(world_, renderer_) : std::vector<frontend::WorldLabel>{});
         {   // the per-bot list, twice a second while the panel is open in a match
             static double nextBots = 0;
             if (qa_->visible() && nowSeconds() >= nextBots) {
@@ -844,6 +883,7 @@ void Application::runFrontend() {
             { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
             if (!pumped) { quit = true; break; }
             qaTick(input);
+            playtestOverlayTick(input);
             double now = nowSeconds();
             double dt = now - last;
             last = now;

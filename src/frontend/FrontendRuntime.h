@@ -48,7 +48,8 @@ public:
 };
 
 // DEV TOOL: a text label at a window pixel (QA bot overlay names, projected from the world).
-struct WorldLabel { float x = 0, y = 0; std::string text; };
+// depth: view-space distance (sorting / fade); team: 0 Autobots, 1 Decepticons, -1 none / unknown (colour).
+struct WorldLabel { float x = 0, y = 0; std::string text; float depth = 0; int team = -1; };
 
 class IMoviePresenter {
 public:

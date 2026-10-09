@@ -24,6 +24,26 @@ namespace {
 
 std::mt19937& rng() { static std::mt19937 r(12345); return r; }
 
+// Per-call vectors (operand stack, registers, scope chain) are recycled through free lists: a cleared vector keeps its
+// capacity, so a script call allocates none of them once the lists are warm (the 1 Hz PlayerList rebuild makes
+// thousands of calls). Pure memory reuse: a Ctx starts with empty vectors exactly as before.
+template <class T> struct VecPool {
+    std::vector<std::vector<T>> free;
+    std::vector<T> take() {
+        if (free.empty()) return {};
+        std::vector<T> v = std::move(free.back());
+        free.pop_back();
+        return v;
+    }
+    void give(std::vector<T>& v) {
+        if (v.capacity() == 0 || v.capacity() > 4096 || free.size() >= 256) return;
+        v.clear();
+        free.push_back(std::move(v));
+    }
+};
+VecPool<Value>& valuePool() { static VecPool<Value> p; return p; }
+VecPool<Object*>& objectPool() { static VecPool<Object*> p; return p; }
+
 struct Ctx {
     std::shared_ptr<std::vector<uint8_t>> keep;
     const uint8_t* code = nullptr;
@@ -39,7 +59,12 @@ struct Ctx {
     Object* superProto = nullptr;
     Object* callee = nullptr;
     std::vector<Value> stack;
-    Ctx() { stack.reserve(16); }   // one allocation per call instead of 0 -> 1 -> 2 -> 4 -> 8 -> 16 regrowths
+    Ctx() : regs(valuePool().take()), scope(objectPool().take()), stack(valuePool().take()) {
+        if (stack.capacity() < 16) stack.reserve(16);   // no 0 -> 1 -> 2 -> 4 -> 8 -> 16 regrowths
+    }
+    ~Ctx() { valuePool().give(stack); valuePool().give(regs); objectPool().give(scope); }
+    Ctx(const Ctx&) = delete;
+    Ctx& operator=(const Ctx&) = delete;
     bool returned = false;
     Value retval;
 };

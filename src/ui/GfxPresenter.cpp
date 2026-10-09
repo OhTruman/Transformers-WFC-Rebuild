@@ -877,6 +877,10 @@ void GfxPresenter::syncWorldLabels() {
     if (!box.isObject()) box = vm.callMethod(gfx::avm1::Value(root->script), "createEmptyMovieClip", {gfx::avm1::Value("__qaLabels_mc"), gfx::avm1::Value(90000)});
     if (!box.isObject()) return;
     const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
+    // Team colours of the kill feed (Autobots blue, Decepticons red; none / FFA yellow) and a distance fade (nearest
+    // 100 %, farthest kept 40 %).
+    float dmin = 1e30f, dmax = 0.0f;
+    for (const auto& l : worldLabels_) { dmin = std::min(dmin, l.depth); dmax = std::max(dmax, l.depth); }
     size_t i = 0;
     for (; i < worldLabels_.size(); ++i) {
         const std::string name = "l" + std::to_string(i);
@@ -889,9 +893,13 @@ void GfxPresenter::syncWorldLabels() {
         const gfx::Point s = inv.apply({worldLabels_[i].x, worldLabels_[i].y});
         vm.setV(c, "_x", gfx::avm1::Value((double)(s.x / 20.0f)));
         vm.setV(c, "_y", gfx::avm1::Value((double)(s.y / 20.0f)));
-        vm.setV(c, "_alpha", gfx::avm1::Value(100.0));
+        const float span = dmax - dmin;
+        const double alpha = span > 1e-3f ? 100.0 - 60.0 * (worldLabels_[i].depth - dmin) / span : 100.0;
+        vm.setV(c, "_alpha", gfx::avm1::Value(alpha));
+        const int team = worldLabels_[i].team;
+        const char* colour = team == 0 ? "#50B5D5" : team == 1 ? "#F03C3C" : "#FFFF66";
         gfx::avm1::Value txt = vm.getV(c, "message_txt");
-        if (txt.isObject()) vm.setV(txt, "htmlText", gfx::avm1::Value("<font color='#FFFF66'>" + worldLabels_[i].text + "</font>"));
+        if (txt.isObject()) vm.setV(txt, "htmlText", gfx::avm1::Value(std::string("<font color='") + colour + "'>" + worldLabels_[i].text + "</font>"));
     }
     for (;; ++i) {   // labels that went away
         gfx::avm1::Value c = vm.getV(box, "l" + std::to_string(i));
