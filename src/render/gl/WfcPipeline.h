@@ -413,7 +413,9 @@ private:
         size_t boundsPts = 0;
         int lastFrame = 0;
     };
-    struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0; };
+    struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0;
+                      // motion vectors (optional): what this instance displayed in the frame it was last drawn
+                      int motionFrame = -1, lastMode = 1; float lastAlpha = 1.0f; core::Mat4 lastModel; };
     std::map<const void*, SkinModel> skinModels_;
     int statSkinRebuilds_ = 0;                            // skinned-model (re)builds since the last 600-frame log
     std::map<const void*, SkinInst> skinInsts_;
@@ -430,6 +432,20 @@ private:
     GLuint fsrEasuProg_ = 0, fsrRcasProg_ = 0, fsrInFbo_ = 0, fsrInTex_ = 0, fsrMidFbo_ = 0, fsrMidTex_ = 0;
     int fsrInW_ = 0, fsrInH_ = 0, fsrMidW_ = 0, fsrMidH_ = 0;
     bool fsrActive() const;
+    // optional motion vectors (WfcMotion.cpp; OFF by default)
+    bool motionOn_ = false, havePrevVP_ = false;
+    core::Mat4 prevViewProj_;
+    GLuint velFbo_ = 0, velTex_ = 0, velCameraProg_ = 0, velViewProg_ = 0;
+    int velW_ = 0, velH_ = 0, velValidFrame_ = -1;
+    bool motionVectorsOn() const;
+    void motionCameraPass();
+    void motionDebugView(int outW, int outH);
+    // characters' own motion: this frame's skinned draws, with what they displayed in the previous frame
+    struct MotionDraw { GLuint vao; GLsizei count; core::Mat4 model, prevModel; int row, mode, bones; float alpha;
+                        int prevSrc, prevMode; float prevAlpha; };   // prevSrc 0: same row, 1: skinPrevTex_ row
+    std::vector<MotionDraw> motionDraws_;
+    GLuint skinPrevTex_ = 0, velObjProg_ = 0;
+    void motionObjectPass();
     bool ensureFsr(int inW, int inH, int outW, int outH);
     void runFsr(int inW, int inH, int outW, int outH);
     static void renderSizeOverride(int& w, int& h);

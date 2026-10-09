@@ -438,6 +438,29 @@ bool load() {
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
     if (ok) { installUniformCache(); installUploadCounters(); gltrace::install(); }
+    {   // GL <-> Vulkan interop capability (optional Vulkan present / upscalers / ray tracing): logged once
+        static bool logged = false;
+        typedef const GLubyte*(APIENTRY* PFN_GetStringi)(GLenum, GLuint);
+        PFN_GetStringi getStringi = (PFN_GetStringi)wglGetProcAddress("glGetStringi");
+        if (!logged && getStringi) {
+            logged = true;
+            GLint n = 0;
+            glGetIntegerv(0x821D /*GL_NUM_EXTENSIONS*/, &n);
+            const char* want[] = {"GL_EXT_memory_object", "GL_EXT_memory_object_win32", "GL_EXT_semaphore",
+                                  "GL_EXT_semaphore_win32", "GL_NV_draw_vulkan_image"};
+            std::string have;
+            for (const char* w : want) {
+                bool found = false;
+                for (GLint i = 0; i < n && !found; ++i) {
+                    const char* e = (const char*)getStringi(GL_EXTENSIONS, (GLuint)i);
+                    found = e && std::strcmp(e, w) == 0;
+                }
+                have += std::string(" ") + w + (found ? "=yes" : "=no");
+            }
+            LOG_INFO("GL interop:%s (vendor %s, renderer %s)", have.c_str(), (const char*)glGetString(GL_VENDOR),
+                     (const char*)glGetString(GL_RENDERER));
+        }
+    }
     textureCacheInvalidate();
     return ok;
 }
