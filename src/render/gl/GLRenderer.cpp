@@ -53,6 +53,7 @@
 #include <vector>
 
 namespace render {
+bool probeD3D12Interop(std::string& detail);   // D3D12InteropProbe.cpp
 namespace {
 
 class GLRenderer final : public IRenderer {
@@ -235,6 +236,10 @@ public:
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
         if (WFC_ENV("WFC_GPUFACTS") && !gpuFactsRead_) gpuFacts();   // test switch: log the GPU facts at the first frame
+        if (WFC_ENV("WFC_D3D12PROBE")) {               // A3a capability probe: GL <-> D3D12 sharing (once)
+            static bool probed = false;
+            if (!probed) { probed = true; std::string d; const bool ok = probeD3D12Interop(d); LOG_INFO("D3D12 INTEROP PROBE: %s - %s", ok ? "PASS" : "FAIL", d.c_str()); }
+        }
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         slowFrameGpu();
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
