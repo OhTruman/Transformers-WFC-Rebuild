@@ -683,6 +683,7 @@ public:
     void preloadHeldWeaponsOfPawns();
     std::vector<const WeaponDef*> preloadedDefs_;   // weapon defs whose model is cached (sorted; a pointer search, not the string map)
     void ensureAbilityModels();
+    void debugForceStreak();         // WFC_FORCESTREAK (diagnostic)
     void clearMatchActors();   // a new match starts with no projectiles / ability actors / weapon views of the previous one
     bool barrierOverlaps(const BarrierState& br, const Character& c) const;
     std::vector<int> barrierIgnoreFor(int player) const;   // the pawn-world collision sets of barriers this pawn is walking out of      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one

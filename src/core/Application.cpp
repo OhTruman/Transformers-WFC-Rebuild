@@ -245,6 +245,11 @@ void Application::run() {
         double now = nowSeconds();
         double realDt = now - last;
         last = now;
+        {   // WFC_SLOWFRAME=<ms> (diagnostic): log every frame slower than that, with the match time (hitch hunting)
+            static const double slowMs = [] { const char* e = std::getenv("WFC_SLOWFRAME"); return e ? std::atof(e) : 0.0; }();
+            if (slowMs > 0.0 && frame > 30 && realDt * 1000.0 > slowMs)
+                LOG_INFO("SLOWFRAME frame %ld %.1f ms (match t %.1f s)", frame, realDt * 1000.0, world_.match().matchTime());
+        }
         if (realDt > 0.25) realDt = 0.25;
 
         if (!window_->pump(input)) break;

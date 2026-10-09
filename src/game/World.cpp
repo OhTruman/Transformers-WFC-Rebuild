@@ -1472,7 +1472,26 @@ void World::tickPrefix(float dt) {
     prefixMark(10);
     if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
     if (matchActive_) ensureAbilityModels();
+    if (matchActive_) debugForceStreak();
     prefixMark(11);
+}
+
+// WFC_FORCESTREAK=<Id>@<match s>[:<player>] (diagnostic): grants and triggers that killstreak once, for the local player by default
+// (e.g. PokeStreak@20 for a first-use hitch check under WFC_SLOWFRAME). Main thread, the step's local part.
+void World::debugForceStreak() {
+    static const char* env = std::getenv("WFC_FORCESTREAK");
+    static bool done = false;
+    if (!env || done || match_.state() != Match::State::InProgress) return;
+    const std::string spec = env;
+    const size_t at = spec.find('@'), colon = spec.find(':');
+    const std::string id = spec.substr(0, at);
+    const float when = at == std::string::npos ? 0.0f : (float)std::atof(spec.c_str() + at + 1);
+    const int who = colon == std::string::npos ? localPlayer_ : std::atoi(spec.c_str() + colon + 1);
+    if (match_.matchTime() < when || who < 0 || (size_t)who >= match_.players().size() || !participantPawn(who)) return;
+    done = true;
+    match_.playerMutable(who).acquiredKillstreaks.push_back(id);
+    const std::string fired = who == localPlayer_ ? triggerLocalKillstreak() : triggerKillstreakFor(who);
+    LOG_INFO("FORCESTREAK %s for p%d at match t %.1f s: %s", id.c_str(), who, match_.matchTime(), fired.empty() ? "deferred (transforming to robot)" : fired.c_str());
 }
 
 // The background part of a step (after the local controller): bots, participants, weapons, FX, audio glue, projectiles, actors.
@@ -1639,6 +1658,12 @@ void World::startLocalMatch(const MatchSettings& s) {
             preloadHeldWeaponModels(classPresetWeapons(specialtyName((Specialty)sp)));   // its preset weapons too
         }
     }
+    // The killstreak reward weapons (PokeStreak -> Poke, SpawnRocketTurretStreak -> HeavyRocketTurret: the only weapons granted
+    // mid-match) and the ability actors' meshes, so their first use does not load + upload + first-draw them in one frame
+    // (Experimental 4K 64p: a 97 ms frame at the first PokeStreak). weaponModelFor prewarms each. Load scheduling only.
+    for (const char* id : {"Poke", "HeavyRocketTurret"})
+        if (const WeaponDef* d = findWeaponDef(id)) weaponModelFor(*d);
+    ensureAbilityModels();
 }
 
 bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
@@ -3665,6 +3690,7 @@ void World::ensureAbilityModels() {
         if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
             assets::loadAnimationsByName(ext + "WEP_Barrier_ANIM.anim.gltf", barrierModel_);
             resolveModelTextures(barrierModel_);
+            if (renderer_) { render::MeshData md; md.subs = barrierModel_.subs; md.mats = barrierModel_.mats; fxPrewarm(*renderer_, md, 0); }
         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
     }
     if (!sentryModelTried_ && onMainThread()) {
@@ -3673,6 +3699,7 @@ void World::ensureAbilityModels() {
         if (assets::loadSkinnedGlb(ext + "WEP_SentryDeploy_SKEL.gltf", sentryModel_) && sentryModel_.valid()) {
             assets::loadAnimationsByName(ext + "WEP_DeployedTurret_ANIM.anim.gltf", sentryModel_);
             resolveModelTextures(sentryModel_);
+            if (renderer_) { render::MeshData md; md.subs = sentryModel_.subs; md.mats = sentryModel_.mats; fxPrewarm(*renderer_, md, 0); }
         } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
     }
 }
