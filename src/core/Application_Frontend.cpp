@@ -124,9 +124,12 @@ template <class R, class = void> struct HasRendererUpscaling : std::false_type {
 template <class R> struct HasRendererUpscaling<R, std::void_t<decltype(std::declval<R&>().setUpscaling(0))>> : std::true_type {};
 template <class R, class = void> struct HasRendererHdTextures : std::false_type {};
 template <class R> struct HasRendererHdTextures<R, std::void_t<decltype(std::declval<R&>().setHdTextures(true))>> : std::true_type {};
-template <class R> const char* applyGraphicsExtensions(R* r, int upscaling, bool hdTextures) {
-    if (const char* e = std::getenv("WFC_UPSCALING")) upscaling = std::clamp(std::atoi(e), 0, 3);
-    if (const char* e = std::getenv("WFC_HDTEXTURES")) hdTextures = std::atoi(e) != 0;
+// upscaling / hdTextures: in the profile values, out the values handed over (after the test overrides); envOverride
+// says whether one applied (for the trace).
+template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, bool& hdTextures, bool& envOverride) {
+    envOverride = false;
+    if (const char* e = std::getenv("WFC_UPSCALING")) { upscaling = std::clamp(std::atoi(e), 0, 3); envOverride = true; }
+    if (const char* e = std::getenv("WFC_HDTEXTURES")) { hdTextures = std::atoi(e) != 0; envOverride = true; }
     bool any = false;
     if constexpr (HasRendererUpscaling<R>::value) { if (r) { r->setUpscaling(upscaling); any = true; } }
     if constexpr (HasRendererHdTextures<R>::value) { if (r) { r->setHdTextures(hdTextures); any = true; } }
@@ -312,9 +315,12 @@ void Application::attachPresenter() {
         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
         appliedUpscaling_ = d.upscaling;
         appliedHdTextures_ = d.hdTextures;
-        const char* gx = applyGraphicsExtensions(renderer_, d.upscaling, d.hdTextures);
-        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(d.upscaling)}, {"hdTextures", frontend::FlowTrace::boolean(d.hdTextures)},
-                                                                 {"by", gx}, {"when", "boot"}, {"provenance", "PC EXTENSION"}});
+        int up = d.upscaling;
+        bool hd = d.hdTextures, env = false;
+        const char* gx = applyGraphicsExtensions(renderer_, up, hd, env);
+        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+                                                                 {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
+                                                                 {"provenance", "PC EXTENSION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -349,9 +355,11 @@ void Application::attachPresenter() {
         if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_) {
             appliedUpscaling_ = p.display.upscaling;
             appliedHdTextures_ = p.display.hdTextures;
-            const char* gx = applyGraphicsExtensions(renderer_, appliedUpscaling_, appliedHdTextures_);
-            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(appliedUpscaling_)},
-                                                                     {"hdTextures", frontend::FlowTrace::boolean(appliedHdTextures_)}, {"by", gx}, {"when", "apply"}});
+            int up = appliedUpscaling_;
+            bool hd = appliedHdTextures_, env = false;
+            const char* gx = applyGraphicsExtensions(renderer_, up, hd, env);
+            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+                                                                     {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
         }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
