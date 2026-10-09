@@ -8,20 +8,23 @@
 #   .\tools\fidelity\cam-sweep.ps1 -Root work\ab\<target> -OutDir <dir> -Map MP_IAC_Streets -FromLog <wfc.log with BOTLOG> [-Bots 8]
 #   .\tools\fidelity\cam-sweep.ps1 ... -Cams "x,y,z,yaw,pitch","x,y,z,yaw,pitch"     (explicit candidates)
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$Map,
-      [string]$FromLog = "", [string[]]$Cams = @(), [int]$Bots = 8, [double[]]$Heights = @(60, 100), [int]$Frame = 2400, [switch]$ReportOnly)
+      [string]$FromLog = "", [string[]]$Cams = @(), [int]$Bots = 8, [string[]]$Heights = @("60", "100"), [int]$Frame = 2400, [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 Add-Type -AssemblyName System.Drawing
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $exe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "camsweep.$id" $status $null $note $owner }
+# -Heights 40,100 through powershell -File arrives as ONE string "40,100" - and [double]"40,100" is 40100 (thousands separator):
+# split explicitly (2026-10-09: Seed candidates were placed 40 km up)
+$Heights = @($Heights | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ } | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) })
 $Cams = @($Cams | ForEach-Object { "$_" -split ';' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
 # yaw convention (WFC_FIXEDCAM, matches Rendering's cams): yaw = atan2(-dx, -dz) for the direction (dx, dz) toward the target;
 # y is up; pitch negative = looking down.
 function Aim($cx, $cy, $cz, $tx, $ty, $tz) {
     $dx = $tx - $cx; $dy = $ty - $cy; $dz = $tz - $cz
     $yaw = [Math]::Atan2(-$dx, -$dz) * 180 / [Math]::PI; $pitch = [Math]::Atan2($dy, [Math]::Sqrt($dx * $dx + $dz * $dz)) * 180 / [Math]::PI
-    return ("{0:N1},{1:N1},{2:N1},{3:N1},{4:N1}" -f $cx, $cy, $cz, $yaw, $pitch) -replace ' ', ''
+    return [string]::Format([Globalization.CultureInfo]::InvariantCulture, "{0:F1},{1:F1},{2:F1},{3:F1},{4:F1}", $cx, $cy, $cz, $yaw, $pitch)
 }
 if (-not $Cams.Count -and $FromLog) {
     $pts = foreach ($l in [IO.File]::ReadLines((Resolve-Path $FromLog).Path)) { $m = [regex]::Match($l, 'BOTLOG \S+ p\d+ \(([-\d.]+) ([-\d.]+) ([-\d.]+)\)'); if ($m.Success) { , @([double]$m.Groups[1].Value, [double]$m.Groups[2].Value, [double]$m.Groups[3].Value) } }
@@ -34,6 +37,7 @@ if (-not $Cams.Count -and $FromLog) {
     foreach ($h in $Heights) { foreach ($p in $edge) { $Cams += (Aim $p[0] ($g + $h) $p[1] $cx $g $cz) } }
 }
 if (-not $Cams.Count) { throw "no candidates: pass -Cams or -FromLog" }
+foreach ($c in $Cams) { if (@($c -split ',').Count -ne 5) { throw "malformed camera '$c' (want x,y,z,yaw,pitch)" } }
 $url = "{0}?GameModeTag=TDM?BotsAutobot={1}?BotsDecepticon={1}?BotDifficulty=1?ExtendedPlayers=1" -f $Map, $Bots
 Add-Type -TypeDefinition @"
 using System; using System.Drawing; using System.Drawing.Imaging; using System.Runtime.InteropServices;
