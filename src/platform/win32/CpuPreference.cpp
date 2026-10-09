@@ -85,4 +85,6 @@ std::string applyCachePreference() {
     return b;
 }
 
+void lowerCurrentThreadPriority() { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL); }
+
 } // namespace platform

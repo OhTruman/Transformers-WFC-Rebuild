@@ -304,6 +304,7 @@ private:
     std::vector<std::vector<int>> pick_;                           // [cue][event] the pre-picked wave (-1: all)
     std::vector<char> pickUsed_, pickOff_;                         // [cue] the pick was played / full set until release
     void ensurePick(size_t cue);
+    bool costlyLoad(size_t cue) const;                              // a wave would decode an original bank (see IAudio::loadIsCostly)
     bool wanted(size_t cue, size_t event, size_t wave) const;
     void startInstance(Instance& in);                 // launch the t=0 events, queue the timed ones
 };

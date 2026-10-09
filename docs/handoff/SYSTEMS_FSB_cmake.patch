@@ -1,0 +1,48 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 220d3ab..d332ab8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -80,6 +80,43 @@ if(WFC_MIMALLOC)
+     target_compile_definitions(wfc_rebuild PRIVATE WFC_MIMALLOC=1)
+ endif()
+ 
++# [Systems] The original FMOD sound banks (content/**/X.fsb, XMA2) decoded in-process by libvgmstream r2117 with its FFmpeg DLLs
++# (third_party/vgmstream/README.WFC.txt: source, versions, licences). The WAV beside a bank stays the fallback; at run time
++# WFC_AUDIO_SOURCE=auto (WAV if present, else the bank) | fsb | wav. The four DLLs and the licence files are copied next to the exe.
++option(WFC_VGMSTREAM "decode the original sound banks in-process (libvgmstream r2117)" ON)
++if(WIN32 AND WFC_VGMSTREAM)
++    enable_language(C)
++    set(WFC_VGM "${CMAKE_SOURCE_DIR}/third_party/vgmstream")
++    file(GLOB_RECURSE WFC_VGM_SOURCES CONFIGURE_DEPENDS "${WFC_VGM}/src/*.c")
++    add_library(wfc_vgmstream STATIC ${WFC_VGM_SOURCES})
++    target_include_directories(wfc_vgmstream PUBLIC "${WFC_VGM}/src" PRIVATE "${WFC_VGM}/ffmpeg_include")
++    target_compile_definitions(wfc_vgmstream PRIVATE VGM_USE_FFMPEG)
++    set_target_properties(wfc_vgmstream PROPERTIES C_STANDARD 11 C_EXTENSIONS ON)
++    target_compile_options(wfc_vgmstream PRIVATE -w)
++    get_filename_component(WFC_CC_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
++    find_program(WFC_DLLTOOL NAMES llvm-dlltool dlltool HINTS "${WFC_CC_DIR}" REQUIRED)
++    set(WFC_VGM_IMPORTS "")
++    foreach(dll avcodec-vgmstream-59 avformat-vgmstream-59 avutil-vgmstream-57 swresample-vgmstream-4)
++        set(imp "${CMAKE_BINARY_DIR}/vgmstream/lib${dll}.a")
++        add_custom_command(OUTPUT "${imp}"
++            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/vgmstream"
++            COMMAND "${WFC_DLLTOOL}" -m i386:x86-64 -d "${WFC_VGM}/ext_libs/${dll}.def" -D "${dll}.dll" -l "${imp}"
++            DEPENDS "${WFC_VGM}/ext_libs/${dll}.def" VERBATIM)
++        list(APPEND WFC_VGM_IMPORTS "${imp}")
++        add_custom_command(TARGET wfc_rebuild POST_BUILD
++            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WFC_VGM}/ext_libs/dll-x64/${dll}.dll" "$<TARGET_FILE_DIR:wfc_rebuild>")
++    endforeach()
++    add_custom_target(wfc_vgmstream_imports DEPENDS ${WFC_VGM_IMPORTS})
++    add_dependencies(wfc_rebuild wfc_vgmstream_imports)
++    target_link_libraries(wfc_rebuild PRIVATE wfc_vgmstream ${WFC_VGM_IMPORTS})
++    target_compile_definitions(wfc_rebuild PRIVATE WFC_VGMSTREAM=1)
++    add_custom_command(TARGET wfc_rebuild POST_BUILD
++        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/vgmstream"
++        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WFC_VGM}/COPYING" "${WFC_VGM}/README.WFC.txt"
++                "${WFC_VGM}/licenses/ffmpeg.COPYING.LGPLv2.1" "${WFC_VGM}/licenses/ffmpeg.COPYING.LGPLv3"
++                "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/vgmstream")
++endif()
++
+ # [Systems, 300 fps] PGO: -DWFC_PGO=gen builds the instrumented exe (training: tools/systems/pgo_train.sh); -DWFC_PGO=<path to
+ # .profdata> builds with the profile; empty = off. [integration 09c] Release defaults to tools/pgo/wfc.profdata when present (a stale
+ # profile only loses gain, never correctness). No behaviour change.
