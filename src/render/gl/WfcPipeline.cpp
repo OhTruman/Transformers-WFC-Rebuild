@@ -2195,6 +2195,9 @@ void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v, bool rawN
     // scratch reused across calls (bot counts: per-draw allocations of the tangent frames were a measurable part of
     // the character vertex build); same values as before
     static thread_local std::vector<core::Vec3> tan, bit;
+    // ...but not the world's size: after a mesh above 64 K vertices (the map, ~2 M: 2 x 24 MB that stayed allocated
+    // after the map was released - Systems' live-allocation profile) the scratch memory is returned
+    struct Trim { size_t n; ~Trim() { if (n > 65536) { std::vector<core::Vec3>().swap(tan); std::vector<core::Vec3>().swap(bit); } } } trim{n};
     const bool given = m.tangents.size() == n * 4;   // caller-supplied (skinned) tangent frames
     if (!given) { tan.assign(n, {0, 0, 0}); bit.assign(n, {0, 0, 0}); }
     bool uv = m.hasUV();
