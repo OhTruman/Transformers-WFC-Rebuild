@@ -27,7 +27,10 @@ public:
     // One step of a path: move to `pos`; `action` 1 = jump (up link) before / while going to pos, 2 = drop (walk off the edge),
     // 3 = double jump (jump at the foot, second press near the apex).
     struct Waypoint { core::Vec3 pos; int action = 0; int cell = -1; };
-    struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr; };   // avoid: cells costed x10 (a bot's blocked spots)
+    struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr;   // avoid: cells costed x10 (a bot's blocked spots)
+                   // Smart AI only (null / 0 for Classic): cell cost x (1 + costW * cost[cell]) (threat exposure), and a per-agent
+                   // seeded noise x (1 + 0.25 * hash(cell, noiseSeed)) so bots do not all take one corridor.
+                   const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; };
 
     bool load(const std::string& path);
     bool valid() const { return !cells_.empty(); }

@@ -477,9 +477,9 @@ void World::botThink(BotBody o, BotBrain& b) {
             Weapon* bag = nullptr;
             for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { bag = &w; break; }
             const float d = tp ? core::length(tp->position() - pc.position()) : 0.0f;
-            static const float kChance[3] = {0.05f, 0.09f, 0.14f};
+            static const float kChance[4] = {0.05f, 0.09f, 0.14f, 0.18f};   // EXPERT: PC EXTENSION
             if (tp && bag && bag->reserve > 0 && std::string(bag->def->id) != "HealGrenades" && d >= 8.0f && d <= 30.0f &&
-                b.frand() < kChance[std::clamp(b.difficulty, 0, 2)]) {
+                b.frand() < kChance[std::clamp(b.difficulty, 0, kMaxBotDifficulty)]) {
                 bag->reserve -= 1;
                 b.grenadeCooldown = std::max(6.0f, bag->fireInterval);
                 b.grenadeDelay = 0.4f;
@@ -496,8 +496,8 @@ void World::botThink(BotBody o, BotBrain& b) {
             const Character* tp = visible ? participantPawn(b.target) : nullptr;
             const float d = tp ? core::length(tp->position() - pc.position()) : 1e9f;
             const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
-            static const float kUse[3] = {0.25f, 0.45f, 0.7f};
-            const float use = kUse[std::clamp(b.difficulty, 0, 2)];
+            static const float kUse[4] = {0.25f, 0.45f, 0.7f, 0.85f};   // EXPERT: PC EXTENSION
+            const float use = kUse[std::clamp(b.difficulty, 0, kMaxBotDifficulty)];
             if (visible && now - b.lastDamageTime < 0.5f && b.frand() < use) botTryAbility(o, b, "Dodge");
             if (((b.goal.kind == BotGoalKind::Attack && !visible && hdist(b.goal.pos, pc.position()) > 25.0f) || (visible && hpFrac < 0.3f)) && b.frand() < use * 0.5f)
                 botTryAbility(o, b, "Cloaking");
@@ -533,8 +533,8 @@ void World::botThink(BotBody o, BotBrain& b) {
         if (visible && now >= b.rushUntil && b.meleeCooldown <= 0.0f && pc.carryingHeavy_ == 0)
             if (const Character* tp = participantPawn(b.target)) {
                 const float d = core::length(tp->position() - pc.position());
-                static const float kRush[3] = {0.08f, 0.15f, 0.22f};
-                if (d <= 20.0f && !pc.weapon().reloading() && ((pc.weapon().ammo == 0 && pc.weapon().reserve == 0) || b.frand() < kRush[std::clamp(b.difficulty, 0, 2)]))
+                static const float kRush[4] = {0.08f, 0.15f, 0.22f, 0.26f};   // EXPERT: PC EXTENSION
+                if (d <= 20.0f && !pc.weapon().reloading() && ((pc.weapon().ammo == 0 && pc.weapon().reserve == 0) || b.frand() < kRush[std::clamp(b.difficulty, 0, kMaxBotDifficulty)]))
                     { b.rushUntil = now + 3.0f; ++b.rushes; }
             }
         // Opportunistic reload out of combat.
@@ -601,6 +601,11 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
         b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
         if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
         ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;   // the search keeps the pointer: the brain outlives it
+        if (botIsSmart(b.player)) {   // Smart: routes avoid ground the enemy can see, and differ per bot (the field outlives the search)
+            const int team = match_.players()[(size_t)b.player].team;
+            if (team >= 0 && team < 2 && !smartThreat_[(size_t)team].empty()) { ag.cost = &smartThreat_[(size_t)team]; ag.costW = 0.6f; }
+            ag.noiseSeed = 0x9e37u + (unsigned)b.player * 7919u + (unsigned)(match_.matchTime() * 0.1f);
+        }
         if (botNav_.beginSearch(pos, b.goal.pos, ag)) { botSearchOwner_ = b.player; botSearchVehicle_ = vehicle; }
         else botPathFailed(b, vehicle);
     }
@@ -1126,6 +1131,7 @@ void World::smartPerceive(BotBody o, BotBrain& b, SmartBot& s) {
     // A hit: the shooter's direction (and roughly its distance, by skill).
     const float hp = pc.health().current;
     if (s.lastHealth >= 0.0f && hp < s.lastHealth) {
+        s.lastHitAt = now;
         const int by = match_.lastHitBy(b.player);
         if (enemy(by)) if (const Character* c = participantPawn(by)) {
             const float d = core::length(c->position() - pc.position());
@@ -1166,6 +1172,258 @@ void World::smartMetrics(float dt) {
     }
     LOG_INFO("AIMETRICS t %.0f: %d Smart bots, %.1f enemies known per bot; totals seen %ld heard %ld call-outs %ld hit-by %ld posted %ld; noises %zu",
              now, bots, bots ? (float)aware / bots : 0.0f, seen, heard, callouts, hitBy, posted, smartNoises_.size());
+    long hunts = 0, retreats = 0, covers = 0; double coverS = 0, engagedS = 0; int nowHunt = 0, nowRetreat = 0, nowCover = 0;
+    for (const SmartBot& s : smart_) if (s.active) {
+        hunts += s.hunts; retreats += s.retreats; covers += s.covers; coverS += s.coverSeconds; engagedS += s.engagedSeconds;
+        nowHunt += s.action == SmartBot::Hunt; nowRetreat += s.action == SmartBot::Retreat; nowCover += s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover;
+    }
+    LOG_INFO("AIMETRICS t %.0f: actions now hunt %d retreat %d cover %d; totals hunts %ld retreats %ld covers %ld; cover %.0f%% of engaged time",
+             now, nowHunt, nowRetreat, nowCover, hunts, retreats, covers, engagedS > 0.0 ? 100.0 * coverS / engagedS : 0.0);
+}
+
+// ---- Smart AI, S2: tactics (cover, exposure), threat-costed routes, hunt / retreat / cover decisions ----
+
+namespace {
+int smartDir16(float dx, float dz) {
+    float a = std::atan2(dz, dx);
+    if (a < 0.0f) a += 6.2831853f;
+    return (int)std::floor(a / 6.2831853f * 16.0f + 0.5f) & 15;
+}
+}  // namespace
+
+void World::ensureSmartTactics() {
+    if (!botNav_.valid() || !collision()) return;
+    if (smartClearMap_ == mapName_ && smartClear_.size() == botNav_.cells().size() * 32) return;
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto& cells = botNav_.cells();
+    smartClear_.assign(cells.size() * 32, 0);
+    const CollisionWorld* col = collision();
+    core::WorkerPool::get().run((int)cells.size(), [&](int i) {   // each task writes only its own cell's 32 bytes
+        const core::Vec3 c = cells[(size_t)i].centroid;
+        for (int k = 0; k < 16; ++k) {
+            const float a = 6.2831853f * (float)k / 16.0f;
+            const core::Vec3 d{std::cos(a) * 80.0f, 0.0f, std::sin(a) * 80.0f};
+            for (int h = 0; h < 2; ++h) {
+                const core::Vec3 s = c + core::Vec3{0, h ? 2.4f : 1.2f, 0};
+                float t = 1.0f;
+                if (!col->segmentHit(s, s + d, t)) t = 1.0f;
+                smartClear_[(size_t)i * 32 + (size_t)k * 2 + (size_t)h] = (uint8_t)std::min(80.0f, t * 80.0f);
+            }
+        }
+    });
+    smartClearMap_ = mapName_;
+    LOG_INFO("smart AI: tactics for %zu cells in %.0f ms", cells.size(),
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
+float World::smartClearAt(int cell, const core::Vec3& toward, bool eye) const {
+    if (cell < 0 || (size_t)cell * 32 + 31 >= smartClear_.size()) return 80.0f;
+    const core::Vec3 c = botNav_.cells()[(size_t)cell].centroid;
+    return (float)smartClear_[(size_t)cell * 32 + (size_t)smartDir16(toward.x - c.x, toward.z - c.z) * 2 + (eye ? 1 : 0)];
+}
+
+float World::smartExposure(int team, int cell) const {
+    if (team < 0 || team > 1 || cell < 0 || (size_t)cell >= smartThreat_[(size_t)team].size()) return 0.0f;
+    return smartThreat_[(size_t)team][(size_t)cell];
+}
+
+// Serial, 2 Hz: per team with Smart bots, the enemies its Smart bots know of (confidence >= 0.3; the most certain memory of each)
+// and, per cell within 60 m of one, how many of them have a clear eye-height line to it (the precomputed 16-direction table).
+void World::smartThreatField(float dt) {
+    if ((smartThreatTimer_ -= dt) > 0.0f) return;
+    smartThreatTimer_ = 0.5f;
+    if (smartClear_.empty() || !match_.settings().teamGame) { smartThreat_[0].clear(); smartThreat_[1].clear(); return; }
+    const float now = match_.matchTime();
+    const size_t n = match_.players().size(), cells = botNav_.cells().size();
+    for (int team = 0; team < 2; ++team) {
+        std::vector<float> best(n, 0.0f); std::vector<core::Vec3> where(n);
+        bool any = false;
+        for (size_t p = 0; p < smart_.size() && p < n; ++p) {
+            const SmartBot& s = smart_[p];
+            if (!s.active || match_.players()[p].team != team) continue;
+            any = true;
+            int diff = 1; for (const BotBrain& bb : bots_) if (bb.player == (int)p) diff = bb.difficulty;
+            const SmartSkill& sk = smartSkill(diff);
+            for (size_t e = 0; e < s.mem.size() && e < n; ++e) {
+                const SmartMemory& m = s.mem[e];
+                const float c = m.confidence * std::max(0.0f, 1.0f - (now - m.time) / sk.memorySeconds);
+                if (c >= 0.3f && c > best[e]) { best[e] = c; where[e] = m.pos; }
+            }
+        }
+        std::vector<float>& field = smartThreat_[(size_t)team];
+        if (!any) { field.clear(); continue; }
+        field.assign(cells, 0.0f);
+        std::vector<core::Vec3> threats;
+        for (size_t e = 0; e < n; ++e) if (best[e] > 0.0f) threats.push_back(where[e]);
+        if (threats.empty()) continue;
+        const auto& cs = botNav_.cells();
+        for (size_t i = 0; i < cells; ++i) {
+            const core::Vec3 c = cs[i].centroid;
+            float x = 0.0f;
+            for (const core::Vec3& t : threats) {
+                const float dx = t.x - c.x, dz = t.z - c.z, d2 = dx * dx + dz * dz;
+                if (d2 > 3600.0f || std::fabs(t.y - c.y) > 12.0f) continue;
+                const float d = std::sqrt(d2);
+                if ((float)smartClear_[i * 32 + (size_t)smartDir16(dx, dz) * 2 + 1] >= d - 1.0f) x += 1.0f;
+            }
+            field[i] = x;
+        }
+    }
+}
+
+// Serial, at the bot's think (after the Classic decision and Smart perception): layer a Smart action over the Classic goal.
+//   Retreat  - hurt (< 35 %) while fighting or just hit: to the nearest health pickup (60 m), else to unseen ground away from threats.
+//   Cover    - in a fight on ground two or more known enemies can see: to a nearby spot with a firing line to the target that at most
+//              one of them can see; once there, hold it (HoldCover) instead of strafing in the open.
+//   Hunt     - no target in sight but a remembered / heard / called-out enemy (confidence >= 0.35, 70 m): go where it should be.
+// Objectives (a Classic mission: carrying, escorting, capturing) keep the Classic goal; Smart never overrides those.
+void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+    Character& pc = o.pawn();
+    const float now = match_.matchTime();
+    const core::Vec3 pos = pc.position();
+    const int team = match_.players()[(size_t)b.player].team;
+    const SmartSkill& sk = smartSkill(b.difficulty);
+    const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
+    const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
+    if (visible) s.lostTargetAt = now;
+    if (s.ownMission) { b.mission = false; s.ownMission = false; }   // re-set below while the action still wants it
+    if (b.mission || mapState_.carriedBy(b.player) >= 0 || pc.moveForm() == Form::Vehicle) { s.action = SmartBot::None; return; }
+    const int myCell = botNav_.findCell(pos, 0.0f);
+    auto setGoal = [&](BotGoalKind kind, const core::Vec3& p, float radius, int target) {
+        if (!b.hasGoal || hdist(p, b.goal.pos) > 4.0f || kind != b.goal.kind) { b.wantRepath = true; b.goalTime = now; }
+        b.goal.kind = kind; b.goal.pos = p; b.goal.radius = radius; b.goal.target = target; b.hasGoal = true;
+    };
+    static const int coverLog = std::getenv("WFC_AICOVERLOG") ? std::atoi(std::getenv("WFC_AICOVERLOG")) : -1;   // a player index
+    auto dbg = [&](const char* what) { if (coverLog == b.player) LOG_INFO("AICOVER t %.2f p%d %s: action %d at (%.1f %.1f) dist %.1f vis %d myExp %.0f path %zu/%zu mission %d goal %s",
+        now, b.player, what, (int)s.action, s.actionPos.x, s.actionPos.z, hdist(pos, s.actionPos), (int)visible, smartExposure(team, myCell), b.wp, b.path.size(), (int)b.mission, botGoalName(b.goal.kind)); };
+    dbg("think");
+    auto start = [&](uint8_t a, const core::Vec3& p, int target) {
+        if (s.action != a) { s.actionSince = now; if (a == SmartBot::Hunt) ++s.hunts; if (a == SmartBot::Retreat) ++s.retreats; if (a == SmartBot::TakeCover) ++s.covers; }
+        s.action = a; s.actionPos = p; s.actionTarget = target;
+    };
+    // Retreat
+    const bool fighting = visible || now - s.lastHitAt < 3.0f;
+    if ((hpFrac < 0.35f && fighting) || (s.action == SmartBot::Retreat && hpFrac < 0.7f && now - s.actionSince < 15.0f)) {
+        core::Vec3 to = s.action == SmartBot::Retreat ? s.actionPos : pos; bool found = s.action == SmartBot::Retreat;
+        if (!found) {
+            float bd = 60.0f;
+            for (const PickupFactory* f : pickupFactories_)
+                if (f && f->kind() == PickupFactory::Kind::Health && f->available() && hdist(f->position(), pos) < bd) { bd = hdist(f->position(), pos); to = f->position(); found = true; }
+        }
+        if (!found && myCell >= 0) {   // unseen ground away from what hurts: the least exposed cell 8-25 m away, farthest from the target
+            float bestScore = 1e9f;
+            const core::Vec3 threat = b.target >= 0 && b.seen.count(b.target) ? b.seen[b.target].pos : pos;
+            for (int k = 0; k < 16; ++k) {
+                const float a = 6.2831853f * (float)k / 16.0f;
+                for (float r : {10.0f, 18.0f, 25.0f}) {
+                    const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
+                    const int c = botNav_.findCell(q, 2.0f, 4.0f);
+                    if (c < 0) continue;
+                    const float score = smartExposure(team, c) * 10.0f - hdist(botNav_.cells()[(size_t)c].centroid, threat) * 0.2f;
+                    if (score < bestScore) { bestScore = score; to = botNav_.cells()[(size_t)c].centroid; found = true; }
+                }
+            }
+        }
+        if (found) {
+            start(SmartBot::Retreat, to, -1);
+            setGoal(BotGoalKind::Roam, to, 1.5f, -1);
+            b.mission = true; s.ownMission = true;   // follow the path out even with an enemy in sight
+            return;
+        }
+    }
+    // Cover / hold cover. Reaching cover usually breaks the line of sight for a moment (that is what cover is for): the action
+    // survives 4 s without sight, holding the spot until the target shows again.
+    const bool inCover = s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover;
+    const bool coverFight = visible || (inCover && now - s.lostTargetAt < 4.0f && s.actionTarget >= 0 && participantPawn(s.actionTarget));
+    if (coverFight && match_.settings().teamGame && myCell >= 0) {
+        const int tgt = visible ? b.target : s.actionTarget;
+        const core::Vec3 tpos = visible ? b.seen[b.target].pos : (tgt < (int)s.mem.size() ? s.mem[(size_t)tgt].pos : s.actionPos);
+        if (s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover) {
+            const int pc2 = botNav_.findCell(s.actionPos, 2.0f, 4.0f);
+            const bool stillGood = smartExposure(team, pc2) <= 1.0f && smartClearAt(pc2, tpos, true) >= hdist(s.actionPos, tpos) - 1.5f;
+            if (stillGood && now - s.actionSince < 20.0f) {
+                if (s.action == SmartBot::TakeCover && hdist(pos, s.actionPos) < 1.5f) s.action = SmartBot::HoldCover;
+                if (s.action == SmartBot::TakeCover) { setGoal(BotGoalKind::Attack, s.actionPos, 1.0f, tgt); b.mission = true; s.ownMission = true; }
+                return;
+            }
+            s.action = SmartBot::None;
+        }
+        if (visible && smartExposure(team, myCell) >= 2.0f) {
+            float bestScore = 1e9f; core::Vec3 best = pos; bool found = false;
+            for (int k = 0; k < 16; ++k) {
+                const float a = 6.2831853f * (float)k / 16.0f;
+                for (float r : {5.0f, 10.0f, 15.0f}) {
+                    const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
+                    const int c = botNav_.findCell(q, 2.0f, 3.0f);
+                    if (c < 0) continue;
+                    const core::Vec3 cc = botNav_.cells()[(size_t)c].centroid;
+                    const float dT = hdist(cc, tpos);
+                    if (smartClearAt(c, tpos, true) < dT - 1.5f) continue;   // keep a firing line to the target
+                    const float ex = smartExposure(team, c);
+                    if (ex > 1.0f) continue;
+                    float wallNear = 0.0f;   // a wall within 3 m at body height: real cover against flankers
+                    for (int j = 0; j < 16; ++j) if (smartClear_[(size_t)c * 32 + (size_t)j * 2] < 3) { wallNear = 1.0f; break; }
+                    const float score = ex * 5.0f + r * 0.3f - wallNear * 2.0f + s.rand01() * 0.5f;
+                    if (score < bestScore) { bestScore = score; best = cc; found = true; }
+                }
+            }
+            if (found && s.rand01() < 0.35f + 0.3f * (float)b.difficulty) {   // harder bots use cover more often
+                start(SmartBot::TakeCover, best, b.target);
+                setGoal(BotGoalKind::Attack, best, 1.0f, b.target);
+                b.mission = true; s.ownMission = true;
+                return;
+            }
+        }
+        if (s.action != SmartBot::None) s.action = SmartBot::None;
+        return;   // a fight in the open: the Classic duel movement
+    }
+    if (s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover) s.action = SmartBot::None;
+    // Hunt
+    if (!visible && (b.goal.kind == BotGoalKind::Roam || (b.goal.kind == BotGoalKind::Attack && b.target < 0))) {
+        int bestE = -1; float bestC = 0.35f; core::Vec3 to = pos;
+        for (size_t e = 0; e < s.mem.size(); ++e) {
+            const SmartMemory& m = s.mem[e];
+            const float c = m.confidence * std::max(0.0f, 1.0f - (now - m.time) / sk.memorySeconds);
+            if (c < bestC || hdist(m.pos, pos) > 70.0f) continue;
+            if (!participantPawn((int)e)) continue;   // dead since: nothing to find
+            bestC = c; bestE = (int)e; to = m.pos + m.vel * std::min(now - m.time, 2.0f);
+        }
+        if (bestE >= 0) {
+            start(SmartBot::Hunt, to, bestE);
+            setGoal(BotGoalKind::Attack, to, 4.0f, bestE);
+            return;
+        }
+    }
+    if (s.action == SmartBot::Hunt && b.goal.kind != BotGoalKind::Attack) s.action = SmartBot::None;
+    if (s.action == SmartBot::Hunt && hdist(pos, s.actionPos) < 5.0f) s.action = SmartBot::None;   // looked there: nothing
+}
+
+// Parallel (each bot's own intent): holding cover means staying on the spot and fighting from it, not the Classic strafe.
+void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in) {
+    Character& pc = o.pawn();
+    // Engaged: in a fight (the target in sight, or seen within the last 4 s: behind cover it usually is not visible).
+    const bool engaged = (b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible) || match_.matchTime() - s.lostTargetAt < 4.0f;
+    if (engaged) s.engagedSeconds += dt;
+    if (pc.moveForm() == Form::Vehicle) return;
+    // On the way to cover, before the path there arrives (the shared search queue): the old path still leads toward the enemy, so
+    // go straight to the cover spot when the mesh says that line is walkable, else hold still (WFC_AICOVERLOG: bots drifted away).
+    if (s.action == SmartBot::TakeCover && (b.path.empty() || hdist(b.path.back().pos, s.actionPos) > 2.0f)) {
+        core::Vec3 d = s.actionPos - pc.position(); d.y = 0.0f;
+        const float dl = core::length(d);
+        BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot);
+        const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f), R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
+        if (dl > 0.5f && botNav_.directWalkable(pc.position(), s.actionPos, ag)) { const core::Vec3 m = d * (1.0f / dl); in.moveForward = core::dot(m, F); in.moveRight = core::dot(m, R); }
+        else { in.moveForward = 0.0f; in.moveRight = 0.0f; }
+        return;
+    }
+    if (s.action != SmartBot::HoldCover) return;
+    if (engaged) s.coverSeconds += dt;
+    core::Vec3 d = s.actionPos - pc.position(); d.y = 0.0f;
+    const float dl = core::length(d);
+    const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f), R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
+    if (dl > 1.2f) { const core::Vec3 m = d * (1.0f / dl); in.moveForward = core::dot(m, F); in.moveRight = core::dot(m, R); }
+    else { in.moveForward = 0.0f; in.moveRight = 0.0f; }
+    in.wantJump = false; in.wantDash = false;
 }
 
 void World::tickBots(float dt) {
@@ -1180,6 +1438,7 @@ void World::tickBots(float dt) {
     ensureBotNav();
     botPathBudget_ = 1;   // at most one new search per simulation step
     smartMetrics(dt);
+    if (anySmart_) smartThreatField(dt);
     // Waiting entries whose bot is gone (dead / despawned / removed) leave the queue, so its front is always someone who can take it.
     botSearchQueue_.erase(std::remove_if(botSearchQueue_.begin(), botSearchQueue_.end(), [&](int p) {
         if (p == localPlayer_) return !(playerBotDifficulty() >= 0 && !localDead_);
@@ -1232,8 +1491,19 @@ void World::tickBots(float dt) {
         if ((b.thinkTimer -= dt) <= 0.0f) {
             b.thinkTimer = 0.25f;
             const double tp0 = tickProfOn() ? profMsBots() : 0.0;
+            const bool smartBot = anySmart_ && botIsSmart(b.player);
+            const BotGoal smartPrevGoal = b.goal; const bool smartPrevWant = b.wantRepath; const float smartPrevGoalTime = b.goalTime;
             botThink(*o, b);
-            if (anySmart_ && botIsSmart(b.player)) smartPerceive(*o, b, smart_[(size_t)b.player]);   // Smart S1: perception / memory
+            if (smartBot) {
+                SmartBot& sb = smart_[(size_t)b.player];
+                smartPerceive(*o, b, sb);   // Smart S1: perception / memory
+                smartDecide(*o, b, sb);     // Smart S2: hunt / retreat / cover over the Classic goal
+                // The Classic think compared its own goal with Smart's last one and asked for a new path; when Smart ends up keeping its
+                // goal, no new search is due (a repath every think kept bots from ever reaching cover).
+                if (sb.action != SmartBot::None && b.goal.kind == smartPrevGoal.kind && hdist(b.goal.pos, smartPrevGoal.pos) <= 4.0f) {
+                    b.wantRepath = smartPrevWant; b.goalTime = smartPrevGoalTime;
+                }
+            }
             if (tickProfOn()) tickProfAdd(19, profMsBots() - tp0);
         }
         botPathUpkeep(*o, b, dt);
@@ -1241,7 +1511,11 @@ void World::tickBots(float dt) {
     }
     {
         const double ts0 = tickProfOn() ? profMsBots() : 0.0;
-        core::WorkerPool::get().run((int)pending.size(), [&](int i) { botSteer(*pending[(size_t)i].o, *pending[(size_t)i].b, dt, pending[(size_t)i].in); });
+        core::WorkerPool::get().run((int)pending.size(), [&](int i) {
+            botSteer(*pending[(size_t)i].o, *pending[(size_t)i].b, dt, pending[(size_t)i].in);
+            const int pl = pending[(size_t)i].b->player;
+            if (anySmart_ && botIsSmart(pl)) smartSteerPost(*pending[(size_t)i].o, *pending[(size_t)i].b, smart_[(size_t)pl], dt, pending[(size_t)i].in);
+        });
         if (tickProfOn()) tickProfAdd(20, profMsBots() - ts0);
     }
     for (PendingBot& pb : pending) {

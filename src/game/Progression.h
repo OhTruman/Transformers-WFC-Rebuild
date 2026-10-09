@@ -24,8 +24,8 @@ struct XpAward { int player = -1; int transactionId = 0; long xp = 0; std::strin
 // the bots' difficulty, rounded per award. Challenge progress counts in full (user decision). One table; WFC_ORIGINAL_XP_RULE=1
 // (Frontend profile) = the original.
 struct BotXpPolicy {
-    static constexpr float kScale[3] = {0.25f, 0.50f, 0.75f};   // EASY, MEDIUM, HARD
-    static float scale(int difficulty) { return kScale[difficulty < 0 ? 0 : (difficulty > 2 ? 2 : difficulty)]; } };
+    static constexpr float kScale[4] = {0.25f, 0.50f, 0.75f, 0.85f};   // EASY, MEDIUM, HARD, EXPERT (user decision 2026-10-09)
+    static float scale(int difficulty) { return kScale[difficulty < 0 ? 0 : (difficulty > 3 ? 3 : difficulty)]; } };
 struct StatAward { int player = -1; int statId = 0; long amount = 0; int updateType = 0; };   // ReportGameStat: 0 add, 1 match max, 2 match add
 
 class AwardProducer {

@@ -239,6 +239,8 @@ int BotNav::stepSearch(int maxExpansions) const {
             const core::Vec3 mid = (p.a + p.b) * 0.5f;
             float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
             if (a.avoid && std::find(a.avoid->begin(), a.avoid->end(), p.to) != a.avoid->end()) tight *= 10.0f;
+            if (a.cost && (size_t)p.to < a.cost->size()) tight *= 1.0f + a.costW * (*a.cost)[(size_t)p.to];
+            if (a.noiseSeed) tight *= 1.0f + 0.25f * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
             const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
             if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); push(ng + kSearchWeight * core::length(cells_[(size_t)p.to].centroid - S.goalC), p.to); }
         }
@@ -246,8 +248,9 @@ int BotNav::stepSearch(int maxExpansions) const {
             const Link& l = links_[(size_t)li];
             if (isClosed(l.to) || (a.vehicle ? !l.vehicle : !l.robot)) continue;
             if (!usable(l.to, a) && l.to != g) continue;
-            const float ng = gsAt(c) + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
-                             core::length(cells_[(size_t)l.to].centroid - l.toPos);
+            float ng = gsAt(c) + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
+                       core::length(cells_[(size_t)l.to].centroid - l.toPos);
+            if (a.cost && (size_t)l.to < a.cost->size()) ng += (ng - gsAt(c)) * a.costW * (*a.cost)[(size_t)l.to];
             if (ng < gsAt(l.to)) { setNode(l.to, ng, c, li); push(ng + kSearchWeight * core::length(cells_[(size_t)l.to].centroid - S.goalC), l.to); }
         }
     }

@@ -16,7 +16,7 @@ struct BotLaunch {
     int friendly = 0, enemy = 0;
     int autobot = -1, decepticon = -1;   // per-faction counts (-1 = not given); converted to friendly / enemy by the human's team
     int difficultyAutobot = -1, difficultyDecepticon = -1;   // optional per-faction difficulty (tests / custom games; -1 = difficulty)
-    int difficulty = 1;            // 0 EASY, 1 MEDIUM, 2 HARD (labels borrowed from the campaign; PC ADAPTATION)
+    int difficulty = 1;            // 0 EASY, 1 MEDIUM, 2 HARD (labels borrowed from the campaign; PC ADAPTATION), 3 EXPERT (PC EXTENSION)
     bool extended = false;         // ?ExtendedPlayers=1: CUSTOM-GAME EXTENSION slots (16 bots per team), see MatchSettings
     int ai = -1;                   // ?BotAI=Smart|Classic (lobby "Bot AI"; -1 = the default, Classic until Smart passes its gates)
     int aiAutobot = -1, aiDecepticon = -1;   // ?BotAIAutobot / ?BotAIDecepticon: per faction (Smart-vs-Classic duels)

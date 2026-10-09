@@ -22,7 +22,7 @@ constexpr int kNameCount = (int)(sizeof(kBotNames) / sizeof(kBotNames[0]));
 unsigned mix(unsigned x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 }
 
-const char* botDifficultyName(int d) { return d <= 0 ? "EASY" : (d >= 2 ? "HARD" : "MEDIUM"); }
+const char* botDifficultyName(int d) { return d <= 0 ? "EASY" : d == 1 ? "MEDIUM" : d == 2 ? "HARD" : "EXPERT"; }
 
 std::vector<BotIdentity> makeBotIdentities(const BotLaunch& b, bool teamGame, int humanTeam, int maxPerTeam, int maxBotsPerTeam, int maxPlayers,
                                            int humans, const std::vector<std::string>& taken, unsigned seed) {
