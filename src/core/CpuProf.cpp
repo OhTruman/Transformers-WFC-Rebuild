@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstddef>
+#include <mutex>
 #include <thread>
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -223,6 +224,8 @@ void refreshThreads(CpuProf& p, double windowS) {
     CloseHandle(snap);
 }
 
+void drainHitches(CpuProf& p);   // below: writes the queued hitch dumps (sampler thread)
+
 void run() {
     CpuProf& p = prof();
     if (p.busyThreads) refreshThreads(p, 1.0);
@@ -251,6 +254,7 @@ void run() {
                 if (d2 > 0) { record(p, pc2, d2, t.tid); ++t.samples; pushRecent(p, pc2, d2, t.tid); }
             }
         }
+        drainHitches(p);                                       // queued hitch dumps (file IO here, never on the game thread)
         if (SuspendThread(p.mainThread) == (DWORD)-1) break;   // the main thread is gone
         CONTEXT ctx{}; ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         unsigned long long pc[kDepth]; int depth = 0;
@@ -300,8 +304,14 @@ struct Installer {
 }   // namespace
 
 namespace {
-// The log line hook (core::setLogLineHook): a "SLOWFRAME f<n> interval <ms> ms" line at or above the hitch threshold dumps the
-// samples of that interval (the frame just finished) to wfc_cpuprof_hitch.txt.
+// The log line hook (core::setLogLineHook): a "SLOWFRAME f<n> interval <ms> ms" line at or above the hitch threshold queues a
+// dump of the samples of that interval (the frame just finished); the sampler thread writes it to wfc_cpuprof_hitch.txt. The hook
+// runs on the thread that logged (the game's): it only parses and queues, no file IO (that cost ~0.9 ms per line and made the
+// following frames slow).
+struct HitchReq { double tNow, ms; char ctx[160]; };
+std::mutex gHitchMx;
+std::vector<HitchReq> gHitchQ;   // pending dumps (bounded: at most 256 queued, the rest dropped and counted)
+long gHitchDropped = 0;
 void onLogLine(const char* line) {
     CpuProf& p = prof();
     if (!p.recent || !line) return;
@@ -312,14 +322,23 @@ void onLogLine(const char* line) {
     const double ms = std::atof(iv + 9);
     if (ms < p.hitchMs) return;
     LARGE_INTEGER now; QueryPerformanceCounter(&now);
-    const double tNow = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
+    HitchReq r;
+    r.tNow = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
+    r.ms = ms;
+    std::snprintf(r.ctx, sizeof r.ctx, "%.150s", s);
+    std::lock_guard<std::mutex> lk(gHitchMx);
+    if (gHitchQ.size() < 256) gHitchQ.push_back(r); else ++gHitchDropped;
+}
+void dumpHitch(CpuProf& p, const HitchReq& q) {
+    const double ms = q.ms, tNow = q.tNow;
     FILE* f = std::fopen("wfc_cpuprof_hitch.txt", "a");
     if (!f) return;
-    std::fprintf(f, "== hitch %.2f ms at t %.3f s: %.150s\n", ms, tNow / 1000.0, s);
+    std::fprintf(f, "== hitch %.2f ms at t %.3f s: %s\n", ms, tNow / 1000.0, q.ctx);
     const long head = p.recentHead.load(std::memory_order_acquire);
     int n = 0;
     for (long i = head - 1; i >= 0 && i >= head - kRecent; --i) {
         const Recent& r = p.recent[i % kRecent];
+        if (r.t > tNow) continue;                    // taken after the request (the dump is written later)
         if (r.t < tNow - ms - 5.0) break;           // the frame's interval (+ 5 ms slack for the log's delay)
         if (p.busyThreads) std::fprintf(f, "%.3f ms ago [tid %u%s]:", tNow - r.t, r.tid, r.tid == p.mainTid ? " main" : "");
         else std::fprintf(f, "%.3f ms ago:", tNow - r.t);
@@ -329,6 +348,11 @@ void onLogLine(const char* line) {
     }
     std::fprintf(f, "== %d samples\n", n);
     std::fclose(f);
+}
+void drainHitches(CpuProf& p) {
+    std::vector<HitchReq> q;
+    { std::lock_guard<std::mutex> lk(gHitchMx); if (gHitchQ.empty()) return; q.swap(gHitchQ); }
+    for (const HitchReq& r : q) dumpHitch(p, r);
 }
 struct HookInstaller { HookInstaller() { if (prof().recent) core::setLogLineHook(onLogLine); } } gHookInstaller;   // after gInstaller
 }   // namespace
