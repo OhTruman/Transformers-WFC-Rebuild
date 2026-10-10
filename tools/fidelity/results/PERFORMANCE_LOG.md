@@ -549,3 +549,21 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 501 | 1920x1080 | - | 64 | 368.6 | 2.7 | 3.56 | 3.88 | 6.14 | 8.14 | 138.5 | 128.3 | 0 / 0 | 0 | 83.5 % |  |  |  |  |  | 5709 |
+
+## 2026-10-10 06:34 - ? - cam overview - FFA 64 345b8cc Streets overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 429.4 | 2.32 | 2.65 | 2.73 | 2.9 | 8.83 | 314 | 235.4 | 0 / 0 | 0 | 99.8 % |  |  |  |  |  | 4976 |
+
+## 2026-10-10 06:38 - ? - 3D at 3840x2160 - cam overview - FFA 64 345b8cc Streets overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 419.9 | 2.38 | 2.62 | 2.7 | 2.84 | 6.15 | 328.7 | 259.2 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 4979 |
+
+## 2026-10-10 06:45 - ? - real play: PLAYERBOT 1, follow cam - FFA 64 345b8cc Streets real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 557.2 | 1.55 | 2.86 | 3.25 | 4.03 | 7.97 | 236 | 206.6 | 0 / 0 | 0 | 95.6 % |  |  |  |  |  | 4674 |

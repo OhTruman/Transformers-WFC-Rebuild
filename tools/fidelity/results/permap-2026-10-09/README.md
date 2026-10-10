@@ -50,3 +50,17 @@ data of 37eec59 by junction - tools/render differences between them are packagin
 - cam-sweep: `-Heights 40,100` through `powershell -File` parsed as 40100 and N1 formatting added a sixth camera field (5ef943b);
   heaviest-view rule refined to "most structure within 5 % of the heaviest" (6b7576f).
 - 64ebdf0 "wfc_fidelity link error" was my harness CMake overlay, not the product (8d65304).
+
+## 2026-10-10 follow-ups (c17eee7 occlusion cull, c969c84 prepack + adaptive cull)
+- c17eee7 occlusion cull (2 reps): Seed MET every row (overview 4K 3.05 / 3.21, real play 4K 3.29 / 3.24); Gorge overview 4K
+  3.40 vs 3.35 off; Gorge real play 4K on 3.46 / 3.53 vs off 3.17 / 3.11 (cull path +0.4 ms); Rust ~flat. OCCSTATS (ea63917,
+  maps verified): the cull removes 59 % (Rust overview) / 26 % (Gorge overview) / ~48 % / ~21 % (real play) of frustum-visible
+  triangles - without a timing gain on Rust's overview, so Rust is not bound by those world triangles. CPUPROF: Rust overview
+  main thread 93 % in present / SwapBuffers (GPU-bound queue wait).
+- c969c84 (prepack + adaptive cull) REGRESSION: prepack no gain on Rust; the cull path blocks the CPU in drawMdi (culled-count
+  readback): world-pass CPU 0.54-0.62 -> 2.9-3.05 ms per slow frame. Rust real play 4K at 150 s: c17eee7 3.72 / 3.72 vs c969c84
+  5.06 / 5.29; Gorge real play 4K cull on 5.3-5.9 vs off 3.45-3.72; Seed real play 4K 4.46 (was MET). Rendering restores
+  c17eee7's cull as the default (readback opt-in) - re-time pending.
+- FFA 64 (345b8cc, Streets): 64 / 64 spawns, results screen x 2, second match, p90 2.62-2.86 MET; open defect: bots stranded off
+  the nav mesh (cell -1, no-path to 535) - capacity-stress now has an `offmesh` check.
+- Retractions this day: lane-build OCCSTATS (loaded Streets - hook missing), "overview cams cull nothing" (draws are pre-cull).
