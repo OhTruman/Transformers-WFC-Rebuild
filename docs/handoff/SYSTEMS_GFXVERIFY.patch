@@ -1,6 +1,6 @@
 --- a/src/ui/gl/GfxRendererGL.h
 +++ b/src/ui/gl/GfxRendererGL.h
-@@ -94,6 +94,16 @@
+@@ -94,6 +94,20 @@
          unsigned op[2][3] = {{~0u, ~0u, ~0u}, {~0u, ~0u, ~0u}};   // [front, back][sfail, dpfail, dppass]
      } gs_;
      void invalidateGlShadow() { gs_ = GlShadow{}; }
@@ -12,6 +12,10 @@
 +    struct Recorded { std::vector<gfx::Player::RenderItem> items; float alpha; };
 +    std::vector<Recorded> recorded_;
 +    std::vector<unsigned char> verifyA_, verifyB_;
++    // History-exact verification: the text-shadow targets' texels carry over between draws (the blur reads outside the text box),
++    // so a verified frame snapshots them before pass 1 and restores them before pass 2 (glCopyImageSubData, exact).
++    unsigned shBak_[2] = {0, 0}; int shBakW_ = 0, shBakH_ = 0; bool shSnap_ = false;
++    void shadowTargetsCopy(bool save);
 +    void beginTarget(int width, int height);   // begin()'s per-frame target setup (clear, state, backdrop): reused by the verifier
 +    void verifyImage();
      void sColorMask(bool on);
@@ -30,12 +34,14 @@
  
  void GfxRendererGL::begin(int width, int height) {
      w_ = width; h_ = height;
-@@ -363,6 +367,12 @@
+@@ -363,6 +367,14 @@
      }
      glBindTexture(GL_TEXTURE_2D, backdropTex_);
      glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
 +    recorded_.clear();
 +    recording_ = gfxImgVerifyEvery() > 0 && frame_ % (unsigned)gfxImgVerifyEvery() == 0;
++    shSnap_ = false;
++    if (recording_) shadowTargetsCopy(true);   // pass 1 and pass 2 start from the same shadow-target texels
 +    beginTarget(width, height);
 +}
 +
@@ -43,7 +49,7 @@
      glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
      glViewport(0, 0, width, height);
      glClearColor(0, 0, 0, 0);
-@@ -434,7 +444,8 @@
+@@ -434,7 +446,8 @@
  }
  
  namespace {
@@ -53,7 +59,7 @@
  // WFC_GFXSTATESHADOW_VERIFY=1: every skipped call is checked against glGet (the real context state); a mismatch would mean the
  // shadow is wrong (some write bypassed it) and the image could differ. Diagnostics only (the glGets stall the pipeline).
  bool glShadowVerify() { static const bool v = std::getenv("WFC_GFXSTATESHADOW_VERIFY") != nullptr; return v; }
-@@ -458,7 +469,7 @@
+@@ -458,7 +471,7 @@
  #define GL_STENCIL_BACK_WRITEMASK 0x8CA5
  #endif
  void GfxRendererGL::sColorMask(bool on) {
@@ -62,7 +68,7 @@
          if (glShadowVerify()) {
              ++gVerifySkips;
              GLboolean cm[4] = {0, 0, 0, 0}; glGetBooleanv(GL_COLOR_WRITEMASK, cm);
-@@ -471,7 +482,7 @@
+@@ -471,7 +484,7 @@
      gs_.colorMask = on ? 1 : 0;
  }
  void GfxRendererGL::sStencilFunc(unsigned func, int ref, unsigned mask) {
@@ -71,7 +77,7 @@
          if (glShadowVerify()) {
              ++gVerifySkips;
              if ((unsigned)getI(GL_STENCIL_FUNC) != func || getI(GL_STENCIL_REF) != ref || (unsigned)getI(GL_STENCIL_VALUE_MASK) != mask ||
-@@ -484,7 +495,7 @@
+@@ -484,7 +497,7 @@
      gs_.func = func; gs_.ref = (unsigned)ref; gs_.valueMask = mask;
  }
  void GfxRendererGL::sStencilMask(unsigned mask) {
@@ -80,7 +86,7 @@
          if (glShadowVerify()) {
              ++gVerifySkips;
              if ((unsigned)getI(GL_STENCIL_WRITEMASK) != mask || (unsigned)getI(GL_STENCIL_BACK_WRITEMASK) != mask)
-@@ -497,7 +508,7 @@
+@@ -497,7 +510,7 @@
  }
  void GfxRendererGL::sStencilOp(unsigned sfail, unsigned dpfail, unsigned dppass) {
      const unsigned v[3] = {sfail, dpfail, dppass};
@@ -89,7 +95,7 @@
          if (glShadowVerify()) {
              ++gVerifySkips;
              const unsigned r[6] = {(unsigned)getI(GL_STENCIL_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_PASS),
-@@ -512,7 +523,7 @@
+@@ -512,7 +525,7 @@
  void GfxRendererGL::sStencilOpSeparate(unsigned face, unsigned sfail, unsigned dpfail, unsigned dppass) {
      const unsigned v[3] = {sfail, dpfail, dppass};
      const int f = face == GL_BACK ? 1 : 0;
@@ -98,7 +104,7 @@
          if (glShadowVerify()) {
              ++gVerifySkips;
              const unsigned r[3] = {(unsigned)getI(f ? GL_STENCIL_BACK_FAIL : GL_STENCIL_FAIL),
-@@ -558,6 +569,7 @@
+@@ -558,6 +571,7 @@
                   u.items / f, u.glyphItems / f, u.direct / f, u.stencil / f, u.mergeable / f, u.runs / f, u.strokes / f, u.bitmaps / f);
          u = UiDrawCounts{};
      }
@@ -106,10 +112,33 @@
      glDisable(GL_STENCIL_TEST);
      glx::BindFramebuffer(GL_READ_FRAMEBUFFER, msFbo_);
      glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, resFbo_);
-@@ -587,6 +599,40 @@
+@@ -587,6 +601,64 @@
      restoreGlState();
  }
  
++void GfxRendererGL::shadowTargetsCopy(bool save) {
++    if (!glx::CopyImageSubData || !shTex_[0] || shW_ <= 0 || shH_ <= 0) return;
++    if (save) {
++        if (!shBak_[0] || shBakW_ != shW_ || shBakH_ != shH_) {
++            if (shBak_[0]) glDeleteTextures(2, shBak_);
++            glGenTextures(2, shBak_);
++            for (int k = 0; k < 2; ++k) {
++                glBindTexture(GL_TEXTURE_2D, shBak_[k]);
++                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, shW_, shH_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
++                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++            }
++            shBakW_ = shW_; shBakH_ = shH_;
++        }
++        for (int k = 0; k < 2; ++k)
++            glx::CopyImageSubData(shTex_[k], GL_TEXTURE_2D, 0, 0, 0, 0, shBak_[k], GL_TEXTURE_2D, 0, 0, 0, 0, shW_, shH_, 1);
++        shSnap_ = true;
++    } else if (shBakW_ == shW_ && shBakH_ == shH_) {
++        for (int k = 0; k < 2; ++k)
++            glx::CopyImageSubData(shBak_[k], GL_TEXTURE_2D, 0, 0, 0, 0, shTex_[k], GL_TEXTURE_2D, 0, 0, 0, 0, shW_, shH_, 1);
++    }
++}
++
 +void GfxRendererGL::verifyImage() {
 +    recording_ = false;
 +    const size_t n = (size_t)w_ * (size_t)h_ * 4;
@@ -124,6 +153,7 @@
 +        glReadPixels(0, 0, w_, h_, GL_RGBA, GL_UNSIGNED_BYTE, out.data());
 +    };
 +    readBack(verifyB_);
++    if (shSnap_) shadowTargetsCopy(false);
 +    refMode_ = true;
 +    invalidateGlShadow();
 +    inMask_ = false;
@@ -147,7 +177,7 @@
  const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
      core::prof::Scope prof("gfx.shapeCache");
      auto key = std::make_pair(s, glyph);
-@@ -848,6 +894,7 @@
+@@ -848,6 +920,7 @@
  
  void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial) {
      if (!ok_ || !rgba || w <= 0 || h <= 0) return;
@@ -155,7 +185,7 @@
      if (!video_.id || video_.w != w || video_.h != h) {
          if (!video_.id) glGenTextures(1, &video_.id);
          glBindTexture(GL_TEXTURE_2D, video_.id);
-@@ -902,7 +949,8 @@
+@@ -902,7 +975,8 @@
  }
  
  void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, float alpha) {
