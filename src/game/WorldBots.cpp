@@ -109,7 +109,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
         applyMatchDamage(hitPlayer, instigator, w.damageAt(dist), false, w.damageType ? w.damageType : "");
         for (BotBrain& b : bots_) {
             if (b.player == hitPlayer) { b.lastDamageTime = match_.matchTime(); b.lastAttacker = instigator; }
-            if (b.player == instigator) ++b.hits;
+            if (b.player == instigator) { ++b.hits; if (b.shotBin >= 0) ++b.rangeHits[(size_t)b.shotBin]; }
         }
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -136,8 +136,11 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
         if (w.projHoming && b.target >= 0) projectiles_.back().target = b.target;   // AI fires homing weapons at its enemy
         participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {
+        const float rng = core::length(aimPoint - eye);
+        b.shotBin = rng < 10.0f ? 0 : rng < 25.0f ? 1 : rng < 50.0f ? 2 : 3;
+        b.rangeShots[(size_t)b.shotBin] += std::max(1, w.shots);
         for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(o.matchPlayer(), pc, w, eye, d); }
-        pellet_ = 0;
+        pellet_ = 0; b.shotBin = -1;
         b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }
@@ -1346,14 +1349,15 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
         now, b.player, what, (int)s.action, s.actionPos.x, s.actionPos.z, hdist(pos, s.actionPos), (int)visible, smartExposure(team, myCell), b.wp, b.path.size(), (int)b.mission, botGoalName(b.goal.kind)); };
     dbg("think");
     auto start = [&](uint8_t a, const core::Vec3& p, int target) {
-        if (s.action != a) { s.actionSince = now; if (a == SmartBot::Hunt) ++s.hunts; if (a == SmartBot::Retreat) ++s.retreats; if (a == SmartBot::TakeCover) ++s.covers; }
+        if (s.action != a) { s.actionSince = now; s.coverBadSince = -1.0f; if (a == SmartBot::Hunt) ++s.hunts; if (a == SmartBot::Retreat) ++s.retreats; if (a == SmartBot::TakeCover) ++s.covers; }
         s.action = a; s.actionPos = p; s.actionTarget = target;
     };
     // WFC_SMARTOFF=focus,retreat,cover,hunt,routes (tuning: turn single Smart behaviours off to measure each one in WFC_AIDUEL).
     static const std::string smartOff = std::getenv("WFC_SMARTOFF") ? std::getenv("WFC_SMARTOFF") : "";
     auto off = [&](const char* k) { return smartOff.find(k) != std::string::npos; };
     // Focus fire: among the enemies in sight, the one teammates are already shooting, the most hurt, whoever is shooting this bot,
-    // the closest; the current target keeps a bonus (no flicking). A switch between targets already in sight takes half a reaction.
+    // the closest; the current target keeps a bonus (no flicking). A switch takes the Classic reaction (0.8-1.25 x the skill's): same
+    // aim (user gate "Smarter, same aim"; it was half a reaction, a faster trigger than Classic's).
     if (!off("focus")) {
         int best = -1; float bestScore = 1e9f;
         for (const auto& kv : b.seen) {
@@ -1370,7 +1374,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             if (score < bestScore) { bestScore = score; best = kv.first; }
         }
         if (best >= 0 && best != b.target) {
-            b.target = best; b.reactionLeft = botSkill(b.difficulty).reaction * 0.5f; b.targetVisibleFor = 0.0f; b.burstLeft = 0; b.burstPause = 0.0f;
+            b.target = best; b.reactionLeft = botSkill(b.difficulty).reaction * (0.8f + 0.45f * s.rand01()); b.targetVisibleFor = 0.0f; b.burstLeft = 0; b.burstPause = 0.0f;
         }
     }
     // Segment break: health regenerates only up to the top of the current segment, after 2 s without damage. In a fight with the
@@ -1484,12 +1488,17 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
         const core::Vec3 tpos = visible ? b.seen[b.target].pos : (tgt < (int)s.mem.size() ? s.mem[(size_t)tgt].pos : s.actionPos);
         if (s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover) {
             const int pc2 = botNav_.findCell(s.actionPos, 2.0f, 4.0f);
-            const bool stillGood = smartExposure(team, pc2) <= 1.0f && smartClearAt(pc2, tpos, true) >= hdist(s.actionPos, tpos) - 1.5f;
+            // A spot that stops qualifying (more enemies see it, or the target moved out of its firing line) is kept for 1.5 s: a
+            // moving enemy breaks the line for a moment all the time (WFC_AIDUEL: 380 of 733 cover moves were dropped on the way).
+            const bool good = smartExposure(team, pc2) <= smartTune().coverMaxExposure && smartClearAt(pc2, tpos, true) >= hdist(s.actionPos, tpos) - 1.5f;
+            if (good) s.coverBadSince = -1.0f; else if (s.coverBadSince < 0.0f) s.coverBadSince = now;
+            const bool stillGood = good || now - s.coverBadSince < 1.5f;
             if (stillGood && now - s.actionSince < 20.0f) {
-                if (s.action == SmartBot::TakeCover && hdist(pos, s.actionPos) < 1.5f) s.action = SmartBot::HoldCover;
+                if (s.action == SmartBot::TakeCover && hdist(pos, s.actionPos) < 1.5f) { s.action = SmartBot::HoldCover; ++s.coverReached; }
                 if (s.action == SmartBot::TakeCover) { setGoal(BotGoalKind::Attack, s.actionPos, 1.0f, tgt); b.mission = true; s.ownMission = true; }
                 return;
             }
+            if (s.action == SmartBot::TakeCover) ++s.coverSpoiled; else ++s.coverHeldSpoiled;
             s.action = SmartBot::None;
         }
         if (visible && smartExposure(team, myCell) >= smartTune().coverExposure) {
@@ -1521,6 +1530,8 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
         if (s.action != SmartBot::None) s.action = SmartBot::None;
         return;   // a fight in the open: the Classic duel movement
     }
+    if (s.action == SmartBot::TakeCover) ++s.coverNoFight;
+    if (s.action == SmartBot::HoldCover) ++s.coverHeldEnded;
     if (s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover) s.action = SmartBot::None;
     // Squads: Smart bots of a team in groups of squadSize (player order); the first one alive leads. A member not in a fight takes
     // its leader's target (when the leader has one in sight or is hunting) or its leader's goal, so a squad moves and fights together
@@ -1539,6 +1550,31 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
             if (r++ / (int)smartTune().squadSize != squad) continue;
             if (participantPawn((int)q)) { leader = (int)q; break; }
+        }
+        // Help the nearest squad mate in a fight within 50 m (any member, the leader too): members respawn far from their leader
+        // (WFC_AIDUEL: 44 % of squad samples within 15 s of a respawn, 54 % over 40 m off), so the leader alone gathered few.
+        {
+            int helpT = -1; float helpD = 50.0f; core::Vec3 helpP = pos; int r3 = 0;
+            for (size_t q = 0; q < smart_.size(); ++q) {
+                if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
+                if (r3++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
+                const Character* mc = participantPawn((int)q);
+                if (!mc) continue;
+                const float md = hdist(mc->position(), pos);
+                if (md >= helpD) continue;
+                for (const BotBrain& bb : bots_) {
+                    if (bb.player != (int)q) continue;
+                    if (bb.target >= 0 && participantPawn(bb.target) && bb.seen.count(bb.target) && bb.seen.at(bb.target).visible) {
+                        helpD = md; helpT = bb.target; helpP = bb.seen.at(bb.target).pos;
+                    }
+                    break;
+                }
+            }
+            if (helpT >= 0 && smartTune().squadHelp > 0.0f) {
+                start(SmartBot::Hunt, helpP, helpT);
+                setGoal(BotGoalKind::Attack, helpP, 4.0f, helpT);
+                return;
+            }
         }
         if (leader == b.player) {   // the leader waits (not fighting) while its squad is strung out, so the squad arrives together
             double sum = 0.0; int n = 0; int r2 = 0;
@@ -1559,7 +1595,12 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             const BotBrain* lb = nullptr;
             for (const BotBrain& bb : bots_) if (bb.player == leader) { lb = &bb; break; }
             const Character* lp = participantPawn(leader);
-            if (lp) { s.cohesionSum += hdist(lp->position(), pos); ++s.cohesionN; }
+            if (lp) {
+                const float cd = hdist(lp->position(), pos);
+                s.cohesionSum += cd; ++s.cohesionN; ++s.cohesionBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2];
+                if (b.life < 15.0f) ++s.cohesionFresh;
+                else { ++s.cohesionSettledBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2]; s.cohesionSettledSum += cd; }
+            }
             if (lb && lp) {
                 const bool leaderFights = lb->target >= 0 && lb->seen.count(lb->target) && lb->seen.at(lb->target).visible;
                 const int ltgt = leaderFights ? lb->target : (smart_[(size_t)leader].action == SmartBot::Hunt ? smart_[(size_t)leader].actionTarget : -1);
@@ -1669,13 +1710,15 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
     if (pc.moveForm() == Form::Vehicle) return;
     // On the way to cover, before the path there arrives (the shared search queue): the old path still leads toward the enemy, so
     // go straight to the cover spot when the mesh says that line is walkable, else hold still (WFC_AICOVERLOG: bots drifted away).
-    if (s.action == SmartBot::TakeCover && (b.path.empty() || hdist(b.path.back().pos, s.actionPos) > 2.0f)) {
+    // The last 4 m likewise: the Classic combat strafe on top of the corridor kept bots circling outside the 1.5 m arrival radius.
+    const bool pathThere = !b.path.empty() && hdist(b.path.back().pos, s.actionPos) <= 2.0f;
+    if (s.action == SmartBot::TakeCover && (!pathThere || hdist(pc.position(), s.actionPos) < 4.0f)) {
         core::Vec3 d = s.actionPos - pc.position(); d.y = 0.0f;
         const float dl = core::length(d);
         BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot);
         const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f), R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
         if (dl > 0.5f && botNav_.directWalkable(pc.position(), s.actionPos, ag)) { const core::Vec3 m = d * (1.0f / dl); in.moveForward = core::dot(m, F); in.moveRight = core::dot(m, R); }
-        else { in.moveForward = 0.0f; in.moveRight = 0.0f; }
+        else if (!pathThere) { in.moveForward = 0.0f; in.moveRight = 0.0f; }   // (near, no straight line: the corridor there)
         return;
     }
     if (s.action != SmartBot::HoldCover) return;
@@ -1734,7 +1777,9 @@ void World::tickBots(float dt) {
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
+            const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
             b = BotBrain{};
+            b.rangeShots = rs; b.rangeHits = rh;
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;

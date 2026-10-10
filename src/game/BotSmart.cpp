@@ -38,7 +38,7 @@ const SmartTune& smartTune() {
             {"coverExposure", &v.coverExposure}, {"coverMaxExposure", &v.coverMaxExposure}, {"coverChance", &v.coverChance},
             {"coverChancePerDiff", &v.coverChancePerDiff}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
             {"routeExposureW", &v.routeExposureW}, {"focusHurtW", &v.focusHurtW}, {"focusMatesW", &v.focusMatesW},
-            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}};
+            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}};
         std::string s = e;
         size_t i = 0;
         while (i < s.size()) {

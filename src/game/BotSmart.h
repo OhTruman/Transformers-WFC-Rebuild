@@ -42,6 +42,7 @@ struct SmartTune {
     float focusMatesW = 6.0f;       // target score: metres per teammate already on that target (up to 3)
     float squadSize = 4.0f;         // Smart bots of a team form squads of this many (by player order); 0 / 1 = no squads
     float squadFollow = 1.0f;
+    float squadHelp = 0.0f;         // help the nearest squad mate in a fight within 50 m (0: off; on after its duel check)
     float squadRegroupM = 15.0f;    // a member farther than this from its leader regroups on it
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
@@ -77,6 +78,7 @@ struct SmartBot {
     core::Vec3 actionPos{0, 0, 0};
     int actionTarget = -1;
     float actionSince = 0.0f, lastHitAt = -1e9f, lostTargetAt = -1e9f;
+    float coverBadSince = -1.0f;   // the cover spot stopped qualifying at (-1: it qualifies)
     bool ownMission = false;
     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
@@ -85,6 +87,9 @@ struct SmartBot {
     int seen = 0, heard = 0, callouts = 0, hitBy = 0, posted = 0;
     int hunts = 0, retreats = 0, covers = 0, flanks = 0, huntsHeard = 0, pickupTrips = 0, regenBreaks = 0;
     double cohesionSum = 0.0; long cohesionN = 0;   // squad members: distance to the leader, sampled each think
+    long cohesionBins[3] = {0, 0, 0}, cohesionFresh = 0;   // samples < 15 / 15-40 / > 40 m; of them, within 15 s of a respawn
+    long cohesionSettledBins[3] = {0, 0, 0}; double cohesionSettledSum = 0.0;   // the same, samples 15 s or more after a respawn
+    int coverReached = 0, coverSpoiled = 0, coverHeldSpoiled = 0, coverNoFight = 0, coverHeldEnded = 0;   // how TakeCover / HoldCover end (diagnostics)
     float coverSeconds = 0.0f, engagedSeconds = 0.0f;
     float rand01() { rng = rng * 1664525U + 1013904223U; return (float)(rng >> 8) * (1.0f / 16777216.0f); }
 };
