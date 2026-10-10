@@ -1018,6 +1018,7 @@ private:
     AwardProducer awards_;
     size_t xpLogged_ = 0;
     std::vector<BotBrain> bots_;
+    bool botOverlay_ = false;
     // Smart AI (BotSmart.h): per match player; Classic bots have active == false and never reach the Smart code.
     std::vector<SmartBot> smart_;
     bool anySmart_ = false;
@@ -1036,13 +1037,19 @@ private:
     std::string smartClearMap_;
     std::array<std::vector<float>, 2> smartThreat_;
     float smartThreatTimer_ = 0.0f;
+    std::array<std::vector<core::Vec3>, 2> smartThreatSnap_;   // the current snapshot of known enemies per team
+    size_t smartThreatCursor_ = 0;
     void ensureSmartTactics();
     void smartThreatField(float dt);
     float smartClearAt(int cell, const core::Vec3& toward, bool eye) const;
     float smartExposure(int team, int cell) const;
     void smartDecide(BotBody o, BotBrain& b, SmartBot& s);
     void smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in);
+    void smartAimPost(BotBody o, BotBrain& b, SmartBot& s, float yaw0, float pitch0, float dt);
 public:
+    // Kills by AI (bots; [0] Smart, [1] Classic) and how many of them hit a victim facing away (> 90 degrees) - WFC_AIDUEL metrics.
+    long aiKills_[2] = {0, 0}, aiBackKills_[2] = {0, 0};
+    void resetAiKillStats() { aiKills_[0] = aiKills_[1] = aiBackKills_[0] = aiBackKills_[1] = 0; }
     bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
     const SmartBot* smartBot(int player) const { return botIsSmart(player) ? &smart_[(size_t)player] : nullptr; }
 private:
@@ -1197,8 +1204,13 @@ public:
     void qaSetBotOverlay(bool on);                                           // per-bot debug draw (target line, nav path, waypoint)
     bool qaBotOverlay() const { return qaBotOverlay_; }
     void qaTeleportToAim();                                                  // the local pawn to the point under the crosshair
-    struct QaBotLabel { core::Vec3 pos; std::string text; int player; };     // overlay labels (world position; the panel projects them)
+    // targetPos: where the bot is shooting / about to (valid when hasTarget); actionPos: its Smart action's spot (cover, flank, retreat,
+    // hunt; valid when action > 0: 1 hunt, 2 retreat, 3 to cover, 4 in cover).
+    struct QaBotLabel { core::Vec3 pos; std::string text; int player; int team = -1; bool hasTarget = false; core::Vec3 targetPos{0, 0, 0};
+                        int action = 0; core::Vec3 actionPos{0, 0, 0}; };   // overlay labels (world position; the panel projects them); team: 0 / 1, -1 FFA
     std::vector<QaBotLabel> qaBotLabels() const;
+    // Playtest bot overlay (Frontend: F9 / WFC_BOTOVERLAY): qaBotLabels() outside QA mode while on. A new World starts off.
+    void setBotOverlay(bool on) { botOverlay_ = on; }
     void drawQaBotOverlay(render::IRenderer& r) const;
     // A vehicle weapon shot left this socket (PlayerController; reported in HudState for the flash / tracer).
     void noteVehicleShot(int socket, const core::Vec3& muzzle) { ++vehicleShotSerial_; vehicleShotSocket_ = socket; vehicleShotMuzzle_ = muzzle; }
@@ -1275,6 +1287,7 @@ public:
 private:
     int chassisLoads_ = 0, weaponLoads_ = 0;
     void releaseModelGpu(const assets::SkinnedModel& m);
+    void prewarmSkin(const assets::SkinnedModel& m);   // GPU-skin model build at load (Rendering's prewarmSkinnedMesh)
     int texLoaded_ = 0, texFailed_ = 0;
     render::TextureHandle resolveTexture(const std::string& uri);
     void resolveModelTextures(assets::SkinnedModel& m);

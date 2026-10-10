@@ -222,7 +222,8 @@ bool Application::init() {
     if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }
     if (std::getenv("WFC_RAYBENCH")) { runRayBench(); return false; }
     if (std::getenv("WFC_BARRIERWALKTEST")) { runBarrierWalkTest(); return false; }
-    if (std::getenv("WFC_EVICTTEST")) { runEvictTest(); return false; }            // per-phase step cost vs participant count
+    if (std::getenv("WFC_EVICTTEST")) { runEvictTest(); return false; }
+    if (std::getenv("WFC_AIDUEL")) { runAiDuel(); return false; }            // per-phase step cost vs participant count
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -6294,6 +6295,68 @@ void Application::runEvictTest() {
     }
     check(maxCached <= firstBig + 8, "the chassis cache stays bounded (max " + std::to_string(maxCached) + ")");
     LOG_INFO("EVICT SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_AIDUEL=<per team>:<goal>:<first seed>:<last seed>[:<difficulty>[:<mode>]] (Smart AI gate): Smart on one faction, Classic on the
+// other, every seed played from both sides (the idle local player's team cancels out), simulated without drawing (as fast as the CPU
+// allows). One AIDUEL line per match, then the totals: Smart's win rate and its share of the kills.
+void Application::runAiDuel() {
+    int per = 8, goal = 40, s0 = 1, s1 = 4, diff = 2; char mode[8] = "TDM";
+    std::sscanf(std::getenv("WFC_AIDUEL"), "%d:%d:%d:%d:%d:%7s", &per, &goal, &s0, &s1, &diff, mode);
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    int wins = 0, losses = 0, ties = 0; long smartKills = 0, classicKills = 0;
+    long st[2][8] = {{0}};
+    long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
+    double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
+    for (int seed = s0; seed <= s1; ++seed) {
+        for (int smartTeam = 0; smartTeam < 2; ++smartTeam) {
+            char sd[16]; std::snprintf(sd, sizeof sd, "%d", seed);
+            _putenv_s("WFC_SEED", sd);
+            char url[512];
+            std::snprintf(url, sizeof url, "_BASE_m?GameModeTag=%s?BotsAutobot=%d?BotsDecepticon=%d?BotAIAutobot=%s?BotAIDecepticon=%s?BotDifficulty=%d?ExtendedPlayers=%d?TimeLimit=300?PointsToWin=%d",
+                          mode, per, per, smartTeam == 0 ? "Smart" : "Classic", smartTeam == 0 ? "Classic" : "Smart", diff, per > 5 ? 1 : 0, goal);
+            game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + url, L);
+            if (!world_.launchMatch(L)) { LOG_ERROR("AIDUEL launch failed"); return; }
+            world_.resetAiKillStats();
+            const auto t0 = std::chrono::steady_clock::now();
+            int steps = 0;
+            for (; steps < 60 * 420 && world_.match().state() != game::Match::State::MatchOver; ++steps) { world_.handleInput(idle, dt); world_.tick(dt); }
+            const int a = world_.match().teamScore(0), d = world_.match().teamScore(1);
+            const int sk = smartTeam == 0 ? a : d, ck = smartTeam == 0 ? d : a;
+            smartKills += sk; classicKills += ck;
+            for (int k = 0; k < 2; ++k) { beh[k][0] += world_.aiKills_[k]; beh[k][1] += world_.aiBackKills_[k]; }
+            for (const game::BotBrain& bb : world_.botBrains()) {
+                if (const game::SmartBot* sb = world_.smartBot(bb.player)) {
+                    beh[0][2] += sb->covers; beh[0][3] += sb->flanks; beh[0][4] += sb->hunts; beh[0][5] += sb->huntsHeard;
+                    beh[0][6] += sb->retreats; beh[0][7] += sb->pickupTrips; beh[0][8] += sb->regenBreaks;
+                    cohSum += sb->cohesionSum; cohN += sb->cohesionN; covS += sb->coverSeconds; engS += sb->engagedSeconds;
+                }
+            }
+            for (const game::BotBrain& bb : world_.botBrains()) {
+                const int side = world_.botIsSmart(bb.player) ? 0 : 1;
+                st[side][0] += bb.shots; st[side][1] += bb.hits; st[side][2] += bb.vehicleShots; st[side][3] += bb.grenades;
+                st[side][4] += bb.melees; st[side][5] += bb.abilities; st[side][7] += bb.stucks;
+                if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
+            }
+            const int w = world_.match().winnerTeam();
+            if (w == smartTeam) ++wins; else if (w == 1 - smartTeam) ++losses; else ++ties;
+            LOG_INFO("AIDUEL seed %d Smart=%s: Smart %d - Classic %d (%s, %.0f s simulated in %.0f s)", seed, smartTeam == 0 ? "Autobot" : "Decepticon", sk, ck,
+                     w == smartTeam ? "WIN" : w == 1 - smartTeam ? "LOSS" : "TIE", steps * dt,
+                     std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
+        }
+    }
+    for (int side = 0; side < 2; ++side)
+        LOG_INFO("AIDUEL %s: shots %ld hits %ld (%.1f %%), vehicle shots %ld, grenades %ld, melees %ld, abilities %ld, deaths %ld, stucks %ld", side ? "Classic" : "Smart  ",
+                 st[side][0], st[side][1], st[side][0] ? 100.0 * st[side][1] / st[side][0] : 0.0, st[side][2], st[side][3], st[side][4], st[side][5], st[side][6], st[side][7]);
+    LOG_INFO("AIDUEL behaviour: kills from behind Smart %ld / %ld (%.1f %%) vs Classic %ld / %ld (%.1f %%); Smart per match: covers %.1f, flanks %.1f, hunts %.1f (from sound %.1f), retreats %.1f, pickup trips %.1f, regen breaks %.1f; in cover %.0f %% of engaged time; squad distance to leader %.1f m",
+             beh[0][1], beh[0][0], beh[0][0] ? 100.0 * beh[0][1] / beh[0][0] : 0.0, beh[1][1], beh[1][0], beh[1][0] ? 100.0 * beh[1][1] / beh[1][0] : 0.0,
+             beh[0][2] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][3] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][4] / (double)std::max(1, 2 * (s1 - s0 + 1)),
+             beh[0][5] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][6] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][7] / (double)std::max(1, 2 * (s1 - s0 + 1)),
+             beh[0][8] / (double)std::max(1, 2 * (s1 - s0 + 1)), engS > 0.0 ? 100.0 * covS / engS : 0.0, cohN ? cohSum / (double)cohN : 0.0);
+    LOG_INFO("AIDUEL SUMMARY: Smart %d wins / %d losses / %d ties (%.0f %% of decided); kills Smart %ld vs Classic %ld (%.0f %%)", wins, losses, ties,
+             wins + losses ? 100.0 * wins / (wins + losses) : 0.0, smartKills, classicKills,
+             smartKills + classicKills ? 100.0 * smartKills / (double)(smartKills + classicKills) : 0.0);
 }
 
 } // namespace core

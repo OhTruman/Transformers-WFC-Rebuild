@@ -121,6 +121,7 @@ private:
     void runRayBench();
     void runBarrierWalkTest();
     void runEvictTest();
+    void runAiDuel();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
