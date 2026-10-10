@@ -723,7 +723,8 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
     for (int i = 0; i < 24; ++i) refine[i] = kRefiningSampleOffsets[i] * k;
     beginShadowMask();
     if (useRect) { glEnable(GL_SCISSOR_TEST); glScissor(mr[0], mr[1], mr[2] - mr[0], mr[3] - mr[1]); }
-    fillMaskDepth();
+    static const bool rectFill = std::getenv("WFC_SHADOWRECTFILL") != nullptr;   // A/B: per-subject rect fills
+    if (!shared || rectFill) fillMaskDepth();             // (shared: the flush filled the whole mask depth once)
     shadowGpuStamp();                                        // (after the mask depth fill)
     core::Mat4 invVP = inverse4(viewProj_);
     UseProgram(shadowProjProg_);
