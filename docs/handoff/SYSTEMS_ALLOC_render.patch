@@ -1,0 +1,70 @@
+diff --git a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
+index 06d2a47..2955be0 100644
+--- a/src/render/gl/WfcMapFx.cpp
++++ b/src/render/gl/WfcMapFx.cpp
+@@ -63,6 +63,10 @@ void evalDist(const Pipeline::FxModule& m, const char* name, float t, uint32_t&
+         }
+     }
+     out[0] = out[1] = out[2] = 0.0f;
++    // [Systems, allocations] warn once per module / curve: a pointer pair is checked first, so the key string (the same
++    // text-keyed set as before) is only built the first time a module asks for a missing curve, not per particle per frame.
++    static std::set<std::pair<const void*, const char*>> seen;
++    if (!seen.insert({&m, name}).second) return;
+     static std::set<std::string> logged;
+     std::string key = m.name + "." + name;
+     if (logged.insert(key).second) LOG_WARN("map fx: %s has no decoded %s (0 used)", m.name.c_str(), name);
+@@ -1536,6 +1540,10 @@ void Pipeline::drawMapPresentation() {
+                 // target with that particle's width / colour; a trail on a moving source draws one ribbon through its
+                 // recent path, fading with age, at the newest particle's width / colour.
+                 std::vector<Sprite> sp;
++                {   // [Systems, allocations] the command slot's buffer, as the sprite path below (WFC_NOMAPFXREUSE=1: fresh)
++                    static const bool noReuseB = std::getenv("WFC_NOMAPFXREUSE") != nullptr;
++                    if (!noReuseB && out.used < out.cmds.size()) { sp.swap(out.cmds[out.used].sp); sp.clear(); }
++                }
+                 // M65 BillboardSettings: a fixed side axis (component LocalToWorld row, normalized, or a world axis)
+                 // instead of cross(view, dir); offset = (2V - 1) x Size x sideScale x axis (RE s13 addendum 3, HIGH).
+                 // fixedSide = the V0 direction (our corners put V1 at p - side); scales applied per side
+@@ -1588,7 +1596,9 @@ void Pipeline::drawMapPresentation() {
+                 auto strip = [&](const std::vector<SP>& v) {
+                     const size_t n = v.size();
+                     if (n < 2) return;
+-                    std::vector<core::Vec3> side(n);
++                    static thread_local std::vector<core::Vec3> sideScratch;   // [Systems, allocations] reused per thread
++                    sideScratch.assign(n, core::Vec3{});
++                    std::vector<core::Vec3>& side = sideScratch;
+                     for (size_t i = 0; i < n; ++i) {
+                         if (fixedAxis) { side[i] = fixedSide; continue; }
+                         core::Vec3 d = v[std::min(i + 1, n - 1)].p - v[i == 0 ? 0 : i - 1].p;
+@@ -1668,7 +1678,9 @@ void Pipeline::drawMapPresentation() {
+                         float w = q.size[0] * sizeScale[0] * 0.01f;
+                         if (shaped) {
+                             struct BP { core::Vec3 p; float r; };
+-                            std::vector<BP> pts;
++                            static thread_local std::vector<BP> ptsScratch;   // [Systems, allocations] reused per thread
++                            ptsScratch.clear();
++                            std::vector<BP>& pts = ptsScratch;
+                             const bool noisy = L.noise.on && q.noiseCount > 0;
+                             if (noisy) {
+                                 const int n = q.noiseCount, T = L.noise.tessellation;
+@@ -1745,7 +1757,9 @@ void Pipeline::drawMapPresentation() {
+                                 L.taperScale.eval(r, trng, s);
+                                 return f[0] * s[0];
+                             };
+-                            std::vector<SP> sv;
++                            static thread_local std::vector<SP> svScratch;     // [Systems, allocations] reused per thread
++                            svScratch.clear();
++                            std::vector<SP>& sv = svScratch;
+                             for (const BP& bp : pts)
+                                 sv.push_back({bp.p, w * taperAt(bp.r), {q.color[0], q.color[1], q.color[2], q.color[3]}, bp.r});
+                             tile = 1.0f;     // the beam fill never applies TextureTile: U = r, 0 .. 1 (RE s13, CONFIRMED)
+@@ -2030,7 +2044,9 @@ void Pipeline::drawMapPresentation() {
+                     // Triangulated as a fan (0, k, k + 1): identical to the native index lists for these convex shapes.
+                     static const float kOct[8][2] = {{0.2929f, 0}, {0.7071f, 0}, {1, 0.2929f}, {1, 0.7071f},
+                                                      {0.7071f, 1}, {0.2929f, 1}, {0, 0.7071f}, {0, 0.2929f}};
+-                    std::vector<std::array<float, 2>> poly;
++                    static thread_local std::vector<std::array<float, 2>> polyScratch;   // [Systems, allocations] per particle before
++                    polyScratch.clear();
++                    std::vector<std::array<float, 2>>& poly = polyScratch;
+                     if (EM.renderMode == 1) { for (const auto& k8 : kOct) poly.push_back({k8[0], k8[1]}); }
+                     else {
+                         const float age = q.oneOverLife > 0.0f ? q.relTime / q.oneOverLife : 0.0f;
