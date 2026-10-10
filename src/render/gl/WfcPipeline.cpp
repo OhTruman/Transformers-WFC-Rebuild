@@ -715,7 +715,8 @@ void Pipeline::release() {
     if (occCntQ_[0] && DeleteQueries) { DeleteQueries(4, occCntQ_); for (GLuint& q : occCntQ_) q = 0; }
     for (int& f : occCntFrame_) f = -1;
     if (hzbTex_) { glDeleteTextures(1, &hzbTex_); hzbTex_ = 0; }
-    for (GLuint* p : {&occSelectProg_, &occTestProg_, &hzbProg_}) if (*p) { DeleteProgram(*p); *p = 0; }
+    for (GLuint* p : {&occSelectProg_, &occTestProg_, &hzbProg_, &hzb5Prog_}) if (*p) { DeleteProgram(*p); *p = 0; }
+    occCmdCap_ = 0;
     for (GLuint* b : {&mdiVlmBo_, &bspMdi_.vlmBo}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     bspMdi_ = MdiSlot{};
     progTouchQueue_.clear();
@@ -4616,6 +4617,52 @@ void main() {
     imageStore(uDst, o, vec4(m));
 }
 )";
+        // Up to 5 levels per dispatch: a 16x16 group makes a 16x16 tile of level b (each texel the 2x2 max of its source
+        // texels, edge-clamped exactly as the one-level program), then levels b+1.. b+4 from shared memory (8x8 .. 1x1).
+        // Texels outside a level hold 0 in shared memory and are never written; a max is unchanged by them (every
+        // in-range child is >= 0, and a level's out-of-range children only occur where the clamped program re-read
+        // an in-range one), so every level is bit-identical to the one-level-per-dispatch chain.
+        static const char* kHzb5 = R"(#version 430
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(r32f, binding = 0) writeonly uniform image2D uL0;
+layout(r32f, binding = 1) writeonly uniform image2D uL1;
+layout(r32f, binding = 2) writeonly uniform image2D uL2;
+layout(r32f, binding = 3) writeonly uniform image2D uL3;
+layout(r32f, binding = 4) writeonly uniform image2D uL4;
+uniform sampler2D uSrc;
+uniform int uSrcLevel, uCount;
+uniform ivec2 uSrcSize, uDstSize;
+shared float s[16][16];
+void put(int k, ivec2 p, float v) {
+    if (k == 0) imageStore(uL0, p, vec4(v)); else if (k == 1) imageStore(uL1, p, vec4(v));
+    else if (k == 2) imageStore(uL2, p, vec4(v)); else if (k == 3) imageStore(uL3, p, vec4(v));
+    else imageStore(uL4, p, vec4(v));
+}
+void main() {
+    ivec2 l = ivec2(gl_LocalInvocationID.xy), g = ivec2(gl_WorkGroupID.xy);
+    ivec2 o = g * 16 + l, sz = uDstSize;
+    float m = 0.0;
+    if (o.x < sz.x && o.y < sz.y) {
+        ivec2 sp = o * 2;
+        for (int dy = 0; dy < 2; ++dy)
+            for (int dx = 0; dx < 2; ++dx) m = max(m, texelFetch(uSrc, min(sp + ivec2(dx, dy), uSrcSize - 1), uSrcLevel).r);
+        put(0, o, m);
+    }
+    s[l.y][l.x] = m;
+    for (int k = 1; k < uCount; ++k) {
+        memoryBarrierShared(); barrier();
+        int n = 16 >> k;
+        bool act = l.x < n && l.y < n;
+        float v = 0.0;
+        if (act) v = max(max(s[2 * l.y][2 * l.x], s[2 * l.y][2 * l.x + 1]), max(s[2 * l.y + 1][2 * l.x], s[2 * l.y + 1][2 * l.x + 1]));
+        memoryBarrierShared(); barrier();
+        sz = max(sz / 2, ivec2(1));
+        ivec2 q = g * n + l;
+        if (act) { s[l.y][l.x] = v; if (q.x < sz.x && q.y < sz.y) put(k, q, v); }
+    }
+}
+)";
+        hzb5Prog_ = linkCompute(kHzb5, "hzb5.cs");          // (optional: without it the one-level chain is used)
         occSelectProg_ = linkCompute(kSel, "occ_select.cs");
         occTestProg_ = linkCompute(kTest, "occ_test.cs");
         hzbProg_ = linkCompute(kHzb, "hzb.cs");
@@ -4660,6 +4707,28 @@ void Pipeline::buildHzb() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, lv);
         hzbW_ = w0; hzbH_ = h0; hzbLevels_ = lv + 1;
+    }
+    static const bool oldChain = std::getenv("WFC_OCCHZBOLD") != nullptr;
+    if (hzb5Prog_ && !oldChain) {                        // 5 levels per dispatch (4K: 12 levels in 3 dispatches)
+        UseProgram(hzb5Prog_);
+        Uniform1i(cachedUniformLocation(hzb5Prog_, "uSrc"), 23);
+        int sw = vpW_, sh = vpH_, dw = w0, dh = h0;
+        for (int b = 0; b < hzbLevels_; b += 5) {
+            const int n = std::min(5, hzbLevels_ - b);
+            ActiveTexture(GL_TEXTURE0 + 23);
+            glBindTexture(GL_TEXTURE_2D, b == 0 ? depthTex_ : hzbTex_);
+            Uniform1i(cachedUniformLocation(hzb5Prog_, "uSrcLevel"), b == 0 ? 0 : b - 1);
+            Uniform1i(cachedUniformLocation(hzb5Prog_, "uCount"), n);
+            Uniform2i(cachedUniformLocation(hzb5Prog_, "uSrcSize"), sw, sh);
+            Uniform2i(cachedUniformLocation(hzb5Prog_, "uDstSize"), dw, dh);
+            for (int k = 0; k < 5; ++k)
+                BindImageTexture((GLuint)k, hzbTex_, std::min(b + k, hzbLevels_ - 1), GL_FALSE, 0, 0x88B9 /*GL_WRITE_ONLY*/, 0x822E);
+            DispatchCompute((GLuint)((dw + 15) / 16), (GLuint)((dh + 15) / 16), 1);
+            MemoryBarrier(0x00000008 /*TEXTURE_FETCH*/ | 0x00000020 /*SHADER_IMAGE_ACCESS*/);
+            for (int k = 0; k < n; ++k) { sw = dw; sh = dh; dw = std::max(1, dw / 2); dh = std::max(1, dh / 2); }
+        }
+        ActiveTexture(GL_TEXTURE0);
+        return;
     }
     UseProgram(hzbProg_);
     Uniform1i(cachedUniformLocation(hzbProg_, "uSrc"), 23);
@@ -4846,9 +4915,17 @@ void Pipeline::drawMdi(GpuMesh& g) {
             if (occGpuFrame) QueryCounter(occGpuQ_[0], 0x8E28);
             const GLuint nCmd = (GLuint)cmds.size();
             if (occ) {                                     // prepass A: the commands of last frame's visible subs
-                BindBuffer(0x90D2, occCmdA_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
-                BindBuffer(0x90D2, occCmdB_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
-                BindBuffer(0x90D2, 0);
+                // The pass A / B command buffers are GPU-only (written by the compute programs, read by the indirect
+                // draws, in command order), so they are allocated once, at the set's full row count, not orphaned
+                // every frame. WFC_OCCORPHAN=1: a fresh store per frame, as before.
+                static const bool orphan = std::getenv("WFC_OCCORPHAN") != nullptr;
+                if (orphan || cmds.size() > occCmdCap_) {
+                    const size_t cap = orphan ? cmds.size() : std::max(cmds.size(), (size_t)(mdiRows_.size() / (kMdiW * 4)));
+                    BindBuffer(0x90D2, occCmdA_); BufferData(0x90D2, (GLsizeiptr)(cap * sizeof(Cmd)), nullptr, orphan ? GL_STREAM_DRAW : 0x88EA /*GL_DYNAMIC_COPY*/);
+                    BindBuffer(0x90D2, occCmdB_); BufferData(0x90D2, (GLsizeiptr)(cap * sizeof(Cmd)), nullptr, orphan ? GL_STREAM_DRAW : 0x88EA);
+                    BindBuffer(0x90D2, 0);
+                    occCmdCap_ = orphan ? 0 : cap;
+                }
                 UseProgram(occSelectProg_);
                 Uniform1ui(cachedUniformLocation(occSelectProg_, "uN"), nCmd);
                 BindBufferBase(0x90D2, 0, mdiCmdBuf_); BindBufferBase(0x90D2, 1, occCmdA_); BindBufferBase(0x90D2, 2, mdiOccVis_);
@@ -4862,6 +4939,29 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 if (!occNoBarrier) MemoryBarrier(0xFFFFFFFF);
                 if (occGpuFrame) QueryCounter(occGpuQ_[1], 0x8E28);
                 buildHzb();
+                // WFC_HZBDUMP=1 (diagnostics; a synchronous readback): every 100th frame, an FNV-1a hash of every Hi-Z
+                // level's texels, to byte-compare the pyramid between builds / paths (WFC_OCCHZBOLD=1)
+                static const bool hzbDump = std::getenv("WFC_HZBDUMP") != nullptr;
+                if (hzbDump && frameNo_ % 100 == 0) {
+                    MemoryBarrier(0x00000100 /*TEXTURE_UPDATE*/ | 0x00000020 /*SHADER_IMAGE_ACCESS*/);
+                    glBindTexture(GL_TEXTURE_2D, hzbTex_);
+                    std::string line;
+                    for (int lv = 0; lv < hzbLevels_; ++lv) {
+                        GLint w = 0, h = 0;
+                        glGetTexLevelParameteriv(GL_TEXTURE_2D, lv, GL_TEXTURE_WIDTH, &w);
+                        glGetTexLevelParameteriv(GL_TEXTURE_2D, lv, GL_TEXTURE_HEIGHT, &h);
+                        std::vector<float> px((size_t)w * (size_t)h);
+                        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+                        glGetTexImage(GL_TEXTURE_2D, lv, GL_RED, GL_FLOAT, px.data());
+                        uint64_t fnv = 1469598103934665603ull;
+                        const unsigned char* b = (const unsigned char*)px.data();
+                        for (size_t i = 0; i < px.size() * sizeof(float); ++i) { fnv ^= b[i]; fnv *= 1099511628211ull; }
+                        char buf[64]; std::snprintf(buf, sizeof buf, " L%d %dx%d %016llx", lv, w, h, (unsigned long long)fnv);
+                        line += buf;
+                    }
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                    LOG_INFO("HZBDUMP frame %d (render %dx%d):%s", frameNo_, vpW_, vpH_, line.c_str());
+                }
                 if (occGpuFrame) QueryCounter(occGpuQ_[2], 0x8E28);
                 UseProgram(occTestProg_);
                 Uniform1ui(cachedUniformLocation(occTestProg_, "uN"), nCmd);
