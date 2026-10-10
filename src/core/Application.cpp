@@ -5759,7 +5759,8 @@ void Application::runAiDuel() {
     int wins = 0, losses = 0, ties = 0; long smartKills = 0, classicKills = 0;
     long st[2][8] = {{0}};
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
-    double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
+    double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
+    long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
     for (int seed = s0; seed <= s1; ++seed) {
         for (int smartTeam = 0; smartTeam < 2; ++smartTeam) {
             char sd[16]; std::snprintf(sd, sizeof sd, "%d", seed);
@@ -5782,17 +5783,23 @@ void Application::runAiDuel() {
                     beh[0][2] += sb->covers; beh[0][3] += sb->flanks; beh[0][4] += sb->hunts; beh[0][5] += sb->huntsHeard;
                     beh[0][6] += sb->retreats; beh[0][7] += sb->pickupTrips; beh[0][8] += sb->regenBreaks;
                     cohSum += sb->cohesionSum; cohN += sb->cohesionN; covS += sb->coverSeconds; engS += sb->engagedSeconds;
+                    for (int k = 0; k < 3; ++k) cohBin[k] += sb->cohesionBins[k];
+                    cohBin[3] += sb->cohesionFresh;
+                    for (int k = 0; k < 3; ++k) cohSet[k] += sb->cohesionSettledBins[k];
+                    cohSetSum += sb->cohesionSettledSum;
+                    cov[0] += sb->coverReached; cov[1] += sb->coverSpoiled; cov[2] += sb->coverNoFight; cov[3] += sb->coverHeldSpoiled; cov[4] += sb->coverHeldEnded;
                 }
             }
             for (const game::BotBrain& bb : world_.botBrains()) {
                 const int side = world_.botIsSmart(bb.player) ? 0 : 1;
                 st[side][0] += bb.shots; st[side][1] += bb.hits; st[side][2] += bb.vehicleShots; st[side][3] += bb.grenades;
                 st[side][4] += bb.melees; st[side][5] += bb.abilities; st[side][7] += bb.stucks;
+                for (int k = 0; k < 4; ++k) { rngS[side][k] += bb.rangeShots[(size_t)k]; rngH[side][k] += bb.rangeHits[(size_t)k]; }
                 if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
             }
             const int w = world_.match().winnerTeam();
             if (w == smartTeam) ++wins; else if (w == 1 - smartTeam) ++losses; else ++ties;
-            LOG_INFO("AIDUEL seed %d Smart=%s: Smart %d - Classic %d (%s, %.0f s simulated in %.0f s)", seed, smartTeam == 0 ? "Autobot" : "Decepticon", sk, ck,
+            LOG_INFO("AIDUEL seed %d map %s Smart=%s: Smart %d - Classic %d (%s, %.0f s simulated in %.0f s)", seed, world_.mapName().c_str(), smartTeam == 0 ? "Autobot" : "Decepticon", sk, ck,
                      w == smartTeam ? "WIN" : w == 1 - smartTeam ? "LOSS" : "TIE", steps * dt,
                      std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count());
         }
@@ -5805,6 +5812,23 @@ void Application::runAiDuel() {
              beh[0][2] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][3] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][4] / (double)std::max(1, 2 * (s1 - s0 + 1)),
              beh[0][5] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][6] / (double)std::max(1, 2 * (s1 - s0 + 1)), beh[0][7] / (double)std::max(1, 2 * (s1 - s0 + 1)),
              beh[0][8] / (double)std::max(1, 2 * (s1 - s0 + 1)), engS > 0.0 ? 100.0 * covS / engS : 0.0, cohN ? cohSum / (double)cohN : 0.0);
+    for (int side = 0; side < 2; ++side) {
+        auto pc = [&](int k) { return rngS[side][k] ? 100.0 * rngH[side][k] / rngS[side][k] : 0.0; };
+        const long all = rngS[side][0] + rngS[side][1] + rngS[side][2] + rngS[side][3];
+        auto sh = [&](int k) { return all ? 100.0 * rngS[side][k] / all : 0.0; };
+        LOG_INFO("AIDUEL range %s: hitscan hit %% (share of traces) < 10 m %.1f (%.0f %%), 10-25 m %.1f (%.0f %%), 25-50 m %.1f (%.0f %%), > 50 m %.1f (%.0f %%)",
+                 side ? "Classic" : "Smart  ", pc(0), sh(0), pc(1), sh(1), pc(2), sh(2), pc(3), sh(3));
+    }
+    {
+        const long n = cohBin[0] + cohBin[1] + cohBin[2];
+        LOG_INFO("AIDUEL squad: distance to leader < 15 m %.0f %%, 15-40 m %.0f %%, > 40 m %.0f %%; samples within 15 s of a respawn %.0f %%",
+                 n ? 100.0 * cohBin[0] / n : 0.0, n ? 100.0 * cohBin[1] / n : 0.0, n ? 100.0 * cohBin[2] / n : 0.0, n ? 100.0 * cohBin[3] / n : 0.0);
+        const long m = cohSet[0] + cohSet[1] + cohSet[2];
+        LOG_INFO("AIDUEL squad (15 s+ after a respawn): mean %.1f m; < 15 m %.0f %%, 15-40 m %.0f %%, > 40 m %.0f %%", m ? cohSetSum / m : 0.0,
+                 m ? 100.0 * cohSet[0] / m : 0.0, m ? 100.0 * cohSet[1] / m : 0.0, m ? 100.0 * cohSet[2] / m : 0.0);
+    }
+    LOG_INFO("AIDUEL cover: take-cover %ld reached / %ld spot spoiled on the way / %ld fight over on the way; held cover ended: %ld spot spoiled, %ld fight over",
+             cov[0], cov[1], cov[2], cov[3], cov[4]);
     LOG_INFO("AIDUEL SUMMARY: Smart %d wins / %d losses / %d ties (%.0f %% of decided); kills Smart %ld vs Classic %ld (%.0f %%)", wins, losses, ties,
              wins + losses ? 100.0 * wins / (wins + losses) : 0.0, smartKills, classicKills,
              smartKills + classicKills ? 100.0 * smartKills / (double)(smartKills + classicKills) : 0.0);
