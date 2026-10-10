@@ -83,6 +83,22 @@ private:
     int backdropW_ = 0, backdropH_ = 0;
     int curBlend_ = -1;
     void applyBlend(int mode);
+    // Stencil / colour-mask state shadow (Systems; CPU cost: each GL state call is AMD driver work, issued 4-5 times per HUD mesh):
+    // a call is skipped only when the context already holds exactly that value, so the GL state and the image are unchanged.
+    // Every write of these states in this renderer goes through the setters below; the shadow is invalidated in begin() (other
+    // renderers ran since the last HUD draw) and restoreGlState(). WFC_NOGFXSTATESHADOW=1: every call is issued (A/B, byte check).
+    struct GlShadow {
+        int colorMask = -1;                                   // -1 unknown, 0 all false, 1 all true (the only masks used here)
+        unsigned func = ~0u, ref = ~0u, valueMask = ~0u;      // glStencilFunc (both faces)
+        unsigned writeMask = ~0u; bool writeMaskKnown = false;
+        unsigned op[2][3] = {{~0u, ~0u, ~0u}, {~0u, ~0u, ~0u}};   // [front, back][sfail, dpfail, dppass]
+    } gs_;
+    void invalidateGlShadow() { gs_ = GlShadow{}; }
+    void sColorMask(bool on);
+    void sStencilFunc(unsigned func, int ref, unsigned mask);
+    void sStencilMask(unsigned mask);
+    void sStencilOp(unsigned sfail, unsigned dpfail, unsigned dppass);                    // both faces
+    void sStencilOpSeparate(unsigned face, unsigned sfail, unsigned dpfail, unsigned dppass);   // GL_FRONT / GL_BACK
     static int effectiveBlend(const gfx::DisplayObject* d);
     int samples_ = 8;
     int level_ = 0;          // mask nesting level
