@@ -4802,6 +4802,25 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 BindBuffer(0x8F3F, occCmdB_);
                 prepassDraws();
                 BindBuffer(0x8F3F, mdiCmdBuf_);           // the shading pass: the test's culled commands
+                // WFC_OCCSTATS=1 (diagnostics; a synchronous readback, so that frame stalls): every 300th frame, how many
+                // frustum-visible world sub-meshes the cull dropped from the shading pass, and pass A / B sizes
+                static const bool occStats = std::getenv("WFC_OCCSTATS") != nullptr && GetBufferSubData;
+                if (occStats && frameNo_ % 300 == 1 && nCmd) {
+                    std::vector<Cmd> sh(nCmd), ca(nCmd), cb(nCmd);
+                    GetBufferSubData(0x8F3F, 0, (GLsizeiptr)(nCmd * sizeof(Cmd)), sh.data());
+                    BindBuffer(0x8F3F, occCmdA_); GetBufferSubData(0x8F3F, 0, (GLsizeiptr)(nCmd * sizeof(Cmd)), ca.data());
+                    BindBuffer(0x8F3F, occCmdB_); GetBufferSubData(0x8F3F, 0, (GLsizeiptr)(nCmd * sizeof(Cmd)), cb.data());
+                    BindBuffer(0x8F3F, mdiCmdBuf_);
+                    size_t culled = 0, inA = 0, inB = 0; uint64_t tri = 0, triCulled = 0;
+                    for (GLuint i = 0; i < nCmd; ++i) {
+                        tri += sh[i].count / 3;
+                        if (!sh[i].instances) { ++culled; triCulled += sh[i].count / 3; }
+                        inA += ca[i].instances ? 1 : 0; inB += cb[i].instances ? 1 : 0;
+                    }
+                    LOG_INFO("OCCSTATS frame %d: %zu of %u frustum-visible world subs culled (%llu of %llu triangles, %.0f %%); "
+                             "prepass A %zu, B (newly visible) %zu", frameNo_, culled, nCmd, (unsigned long long)triCulled,
+                             (unsigned long long)tri, tri ? 100.0 * (double)triCulled / (double)tri : 0.0, inA, inB);
+                }
             }
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             glx::uniformCacheForgetCurrent();
