@@ -204,8 +204,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             if ($fz -ge 20) { $broken++ } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
         # Rendering's WFC_SLOWFRAME lines: "SLOWFRAME f<n> interval <ms>: render <ms> (world, chars, fx, transl, post), outside <ms>;
         # gpu <ms>|n/a (...); draws <n> (dyn, fx), program binds <n>, buffer upload <KB>, new textures <n>, shader compiles <n>, map FX cpu <ms> (sim <ms>)"
-        $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "buffer upload spike > 2 MB" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
-        $sfN = 0
+        $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
+        $sfN = 0; $sfUp = 0   # frames with > 2 MB buffer upload: a FLAG, not a cause (Rendering 2026-10-09: the particle sprite stream is one
+                              # upload per frame; > 2 MB marks heavy-combat frames, its cost is in transl / the bucket that dominates)
         # in-play SLOWFRAME lines only (the renderer's frame numbers also count front-end frames)
         $sfIn = $false; $sfLines = New-Object System.Collections.Generic.List[string]
         foreach ($sl in $segL) { if ($sl.Contains('to=InGame')) { $sfIn = $true; continue }; if ($sl.Contains('to=GameEnded')) { $sfIn = $false }; if ($sfIn -and $sl.Contains('SLOWFRAME f')) { $sfLines.Add($sl) } }
@@ -217,9 +218,9 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             $gpu = if ($g[9].Success) { [double]$g[9].Value } else { -1.0 }
             $sfSum.interval += [double]$g[1].Value; $sfSum.render += $rnd; $sfSum.world += $parts[0]; $sfSum.chars += $parts[1]; $sfSum.fx += $parts[2]; $sfSum.transl += $parts[3]; $sfSum.outside += $outside
             if ($gpu -ge 0) { $sfSum.gpu += $gpu; $sfSum.gpuN++ }; $sfSum.draws += [double]$g[15].Value; $sfSum.upKB += [double]$g[19].Value
+            if ([double]$g[19].Value -gt 2048) { $sfUp++ }
             if ([int]$g[21].Value -gt 0) { $sfBins["shader compile"]++ }
             elseif ([int]$g[20].Value -gt 0) { $sfBins["new textures"]++ }
-            elseif ([double]$g[19].Value -gt 2048) { $sfBins["buffer upload spike > 2 MB"]++ }   # steady frames upload ~1.5 MB (Rendering): only the tail is a cause
             elseif ($gpu -gt $rnd) { $sfBins["GPU-bound"]++ }
             elseif ($outside -gt $rnd) { $sfBins["outside render (sim / UI / present)"]++ }
             else { $names = @("world", "chars", "fx", "transl", "post"); $mi = 0; for ($q = 1; $q -lt 5; $q++) { if ($parts[$q] -gt $parts[$mi]) { $mi = $q } }; $sfBins["render: $($names[$mi])"]++ }
@@ -264,7 +265,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # the original 96-channel FMOD rule (Systems): steals / refusals at 64 participants are by design; MORE than 96 heard
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
-        if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}" -f $sfN, $row.slowframe_bins, $sfAvg) "Rendering" }
+        if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}; {2}; {3} of them with a buffer upload > 2 MB (heavy-combat flag, not a cause)" -f $sfN, $row.slowframe_bins, $sfAvg, $sfUp) "Rendering" }
         if ($k -eq 1) {   # the size actually rendered vs requested (2026-10-08: a 3840x2160 window on a 2560x1440 desktop may be clamped)
             $rm = [regex]::Match(($segL -join "`n"), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)')
             if (-not $rm.Success) { $rm = [regex]::Match([IO.File]::ReadAllText($lg), 'warm-up draw of the world: \d+ draws at (\d+)x(\d+)') }
