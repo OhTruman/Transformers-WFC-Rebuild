@@ -94,6 +94,20 @@ private:
         unsigned op[2][3] = {{~0u, ~0u, ~0u}, {~0u, ~0u, ~0u}};   // [front, back][sfail, dpfail, dppass]
     } gs_;
     void invalidateGlShadow() { gs_ = GlShadow{}; }
+    // Image verifier (WFC_GFXVERIFY_IMAGE=<N>, diagnostics): every N-th HUD frame is drawn twice from the same backdrop and render
+    // lists - the normal path, then refMode_ (the original per-call path: no state shadow, no CPU-side batching / buffer packing)
+    // - both resolved, read back and byte-compared; mismatches are logged. Proves CPU-side optimisations leave the image identical.
+    bool refMode_ = false;
+    bool recording_ = false;
+    struct Recorded { std::vector<gfx::Player::RenderItem> items; float alpha; };
+    std::vector<Recorded> recorded_;
+    std::vector<unsigned char> verifyA_, verifyB_;
+    // History-exact verification: the text-shadow targets' texels carry over between draws (the blur reads outside the text box),
+    // so a verified frame snapshots them before pass 1 and restores them before pass 2 (glCopyImageSubData, exact).
+    unsigned shBak_[2] = {0, 0}; int shBakW_ = 0, shBakH_ = 0; bool shSnap_ = false;
+    void shadowTargetsCopy(bool save);
+    void beginTarget(int width, int height);   // begin()'s per-frame target setup (clear, state, backdrop): reused by the verifier
+    void verifyImage();
     void sColorMask(bool on);
     void sStencilFunc(unsigned func, int ref, unsigned mask);
     void sStencilMask(unsigned mask);
