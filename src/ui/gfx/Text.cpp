@@ -432,6 +432,7 @@ void TextField::layout() {
     }
     if (border || background) {
         boxShape = std::make_shared<ShapeDef>();
+        boxShape->dynamic = true;
         boxShape->bounds = bounds;
         boxShape->fillSets.emplace_back();
         boxShape->lineSets.emplace_back();

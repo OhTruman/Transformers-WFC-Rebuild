@@ -1484,6 +1484,7 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
         if (tf == textFocus() && std::fmod(timeMs_, 1060.0) < 530.0) {
             if (!caretShape_) {
                 caretShape_ = std::make_shared<ShapeDef>();
+                caretShape_->dynamic = true;
                 caretShape_->bounds = Rect{0, 0, 1, 1};
                 caretShape_->fillSets.emplace_back();
                 caretShape_->lineSets.emplace_back();

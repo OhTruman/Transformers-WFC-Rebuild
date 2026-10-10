@@ -592,6 +592,10 @@ template <class Rn, class = void> struct HasRenderCamera : std::false_type {};
 template <class Rn> struct HasRenderCamera<Rn, std::void_t<decltype(std::declval<const Rn&>().renderDiagnostics().viewProj[0]),
                                                             decltype(std::declval<const Rn&>().renderDiagnostics().viewport[0])>> : std::true_type {};
 // QaBotLabel::team when Gameplay provides it (team colours); detected.
+template <class L, class = void> struct HasLabelTarget : std::false_type {};
+template <class L> struct HasLabelTarget<L, std::void_t<decltype(std::declval<const L&>().targetPos), decltype(std::declval<const L&>().hasTarget)>> : std::true_type {};
+template <class L, class = void> struct HasLabelAction : std::false_type {};
+template <class L> struct HasLabelAction<L, std::void_t<decltype(std::declval<const L&>().actionPos), decltype(std::declval<const L&>().action)>> : std::true_type {};
 template <class L, class = void> struct HasLabelTeam : std::false_type {};
 template <class L> struct HasLabelTeam<L, std::void_t<decltype(std::declval<const L&>().team)>> : std::true_type {};
 template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W& w, const Rn* r) {
@@ -610,8 +614,22 @@ template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W&
             if (cw <= 0.1f) continue;   // behind the camera
             const float sx = (cx / cw * 0.5f + 0.5f) * vw + (float)d.viewport[0], sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * vh;
             if (sx < -200 || sy < -50 || sx > vw + 50 || sy > vh + 50) continue;
-            frontend::WorldLabel wl{sx, sy, l.text, cw, -1};
-            if constexpr (HasLabelTeam<std::decay_t<decltype(l)>>::value) wl.team = (int)l.team;
+            frontend::WorldLabel wl;
+            wl.x = sx; wl.y = sy; wl.text = l.text; wl.depth = cw;
+            using LT = std::decay_t<decltype(l)>;
+            if constexpr (HasLabelTeam<LT>::value) wl.team = (int)l.team;
+            // a world point -> screen (false when behind the camera)
+            auto project = [&](const auto& p, float& ox, float& oy) {
+                const float px = p.x, py = p.y, pz = p.z;
+                const float qx = m[0] * px + m[4] * py + m[8] * pz + m[12], qy = m[1] * px + m[5] * py + m[9] * pz + m[13];
+                const float qw = m[3] * px + m[7] * py + m[11] * pz + m[15];
+                if (qw <= 0.1f) return false;
+                ox = (qx / qw * 0.5f + 0.5f) * vw + (float)d.viewport[0];
+                oy = (1.0f - (qy / qw * 0.5f + 0.5f)) * vh;
+                return true;
+            };
+            if constexpr (HasLabelTarget<LT>::value) { if (l.hasTarget) wl.hasTarget = project(l.targetPos, wl.tx, wl.ty); }
+            if constexpr (HasLabelAction<LT>::value) { if (l.action > 0 && project(l.actionPos, wl.ax, wl.ay)) wl.action = (int)l.action; }
             out.push_back(wl);
         }
         // Playtest overlay readability: the 20 nearest bots only (each label is a HUD clip).

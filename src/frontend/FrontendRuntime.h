@@ -49,7 +49,13 @@ public:
 
 // DEV TOOL: a text label at a window pixel (QA bot overlay names, projected from the world).
 // depth: view-space distance (sorting / fade); team: 0 Autobots, 1 Decepticons, -1 none / unknown (colour).
-struct WorldLabel { float x = 0, y = 0; std::string text; float depth = 0; int team = -1; };
+// target / action: projected screen points when Gameplay provides them (Smart AI overlay: line to the target, a marker at
+// the action point; action 1 hunt, 2 retreat, 3 moving to cover, 4 holding cover).
+struct WorldLabel {
+    float x = 0, y = 0; std::string text; float depth = 0; int team = -1;
+    bool hasTarget = false; float tx = 0, ty = 0;
+    int action = 0; float ax = 0, ay = 0;
+};
 
 class IMoviePresenter {
 public:

@@ -44,6 +44,7 @@ struct ShapeDef {
     std::vector<std::vector<FillStyle>> fillSets;
     std::vector<std::vector<LineStyle>> lineSets;
     std::vector<ShapePath> paths;
+    bool dynamic = false;   // owned by a display object (drawing API, text box, caret), not by a (never freed) MovieDef
 };
 
 // ---- fonts / text ----

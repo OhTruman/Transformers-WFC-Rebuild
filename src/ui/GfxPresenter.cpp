@@ -906,6 +906,66 @@ void GfxPresenter::syncWorldLabels() {
         if (!c.isObject()) break;
         vm.callMethod(c, "removeMovieClip", {});
     }
+    // Smart AI overlay geometry (playtest): a thin team-coloured line from each label to its target and a marker at its
+    // action point - hold cover: filled square; to cover: square outline + line; hunt: "?" ring + dashed line; retreat:
+    // arrow. Drawn with the movie's drawing API in one clip, cleared and redrawn every frame (screen-space, stage units).
+    {
+        gfx::avm1::Value g = vm.getV(box, "geom_mc");
+        if (!g.isObject()) g = vm.callMethod(box, "createEmptyMovieClip", {gfx::avm1::Value("geom_mc"), gfx::avm1::Value(0)});
+        if (g.isObject()) {
+            using V = gfx::avm1::Value;
+            vm.callMethod(g, "clear", {});
+            auto toStage = [&](float x, float y, double& ox, double& oy) {
+                const gfx::Point s = inv.apply({x, y}); ox = s.x / 20.0; oy = s.y / 20.0;
+            };
+            for (const auto& l : worldLabels_) {
+                const double colour = l.team == 0 ? 0x50B5D5 : l.team == 1 ? 0xF03C3C : 0xFFFF66;
+                double lx, ly; toStage(l.x, l.y, lx, ly);
+                if (l.hasTarget) {
+                    double tx, ty; toStage(l.tx, l.ty, tx, ty);
+                    vm.callMethod(g, "lineStyle", {V(1.0), V(colour), V(70.0)});
+                    vm.callMethod(g, "moveTo", {V(lx), V(ly)});
+                    vm.callMethod(g, "lineTo", {V(tx), V(ty)});
+                }
+                if (l.action > 0) {
+                    double ax, ay; toStage(l.ax, l.ay, ax, ay);
+                    const double r = 6.0;
+                    if (l.action == 4) {   // holding cover: filled square
+                        vm.callMethod(g, "lineStyle", {V(1.0), V(colour), V(100.0)});
+                        vm.callMethod(g, "beginFill", {V(colour), V(60.0)});
+                        vm.callMethod(g, "moveTo", {V(ax - r), V(ay - r)});
+                        vm.callMethod(g, "lineTo", {V(ax + r), V(ay - r)}); vm.callMethod(g, "lineTo", {V(ax + r), V(ay + r)});
+                        vm.callMethod(g, "lineTo", {V(ax - r), V(ay + r)}); vm.callMethod(g, "lineTo", {V(ax - r), V(ay - r)});
+                        vm.callMethod(g, "endFill", {});
+                    } else if (l.action == 3) {   // moving to cover: square outline + the path line
+                        vm.callMethod(g, "lineStyle", {V(1.0), V(colour), V(90.0)});
+                        vm.callMethod(g, "moveTo", {V(lx), V(ly)}); vm.callMethod(g, "lineTo", {V(ax), V(ay)});
+                        vm.callMethod(g, "moveTo", {V(ax - r), V(ay - r)});
+                        vm.callMethod(g, "lineTo", {V(ax + r), V(ay - r)}); vm.callMethod(g, "lineTo", {V(ax + r), V(ay + r)});
+                        vm.callMethod(g, "lineTo", {V(ax - r), V(ay + r)}); vm.callMethod(g, "lineTo", {V(ax - r), V(ay - r)});
+                    } else if (l.action == 1) {   // hunt: dashed line to the search point, diamond there
+                        vm.callMethod(g, "lineStyle", {V(1.0), V(colour), V(80.0)});
+                        const double dx = ax - lx, dy = ay - ly, len = std::sqrt(dx * dx + dy * dy);
+                        for (double t = 0; t < len; t += 12.0) {
+                            const double t1 = std::min(len, t + 6.0);
+                            vm.callMethod(g, "moveTo", {V(lx + dx * t / len), V(ly + dy * t / len)});
+                            vm.callMethod(g, "lineTo", {V(lx + dx * t1 / len), V(ly + dy * t1 / len)});
+                        }
+                        vm.callMethod(g, "moveTo", {V(ax), V(ay - r)});
+                        vm.callMethod(g, "lineTo", {V(ax + r), V(ay)}); vm.callMethod(g, "lineTo", {V(ax), V(ay + r)});
+                        vm.callMethod(g, "lineTo", {V(ax - r), V(ay)}); vm.callMethod(g, "lineTo", {V(ax), V(ay - r)});
+                    } else if (l.action == 2) {   // retreat: arrow from the bot to the retreat point
+                        vm.callMethod(g, "lineStyle", {V(2.0), V(colour), V(90.0)});
+                        vm.callMethod(g, "moveTo", {V(lx), V(ly)}); vm.callMethod(g, "lineTo", {V(ax), V(ay)});
+                        const double dx = ax - lx, dy = ay - ly, len = std::max(1e-3, std::sqrt(dx * dx + dy * dy));
+                        const double ux = dx / len, uy = dy / len;
+                        vm.callMethod(g, "moveTo", {V(ax), V(ay)}); vm.callMethod(g, "lineTo", {V(ax - ux * 9 + uy * 5), V(ay - uy * 9 - ux * 5)});
+                        vm.callMethod(g, "moveTo", {V(ax), V(ay)}); vm.callMethod(g, "lineTo", {V(ax - ux * 9 - uy * 5), V(ay - uy * 9 + ux * 5)});
+                    }
+                }
+            }
+        }
+    }
 }
 
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {

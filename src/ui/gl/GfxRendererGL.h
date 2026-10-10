@@ -41,7 +41,7 @@ private:
     // solid fill can be drawn straight, without the stencil winding pass and the cover quad (same pixels).
     struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0; };
     struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; };
-    struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; };
+    struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; bool dynamic = false; unsigned lastUsed = 0; };
     const Cached& cache(const gfx::ShapeDef* s, bool glyph);
     unsigned texture(const std::string& path, int& w, int& h);
     unsigned gradientTexture(const gfx::FillStyle& fs);
@@ -94,6 +94,7 @@ private:
     void ensureShadowTargets(int w, int h);
     bool inMask_ = false;
     std::map<std::pair<const gfx::ShapeDef*, bool>, Cached> shapes_;
+    unsigned frame_ = 0;   // begin() count: display-object shapes (drawing API redrawn per frame) are dropped when unused
     struct Tex { unsigned id = 0; int w = 0, h = 0; };
     Tex video_;
     uint64_t videoSerial_ = 0;
