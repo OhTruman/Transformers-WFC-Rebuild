@@ -613,10 +613,10 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     if (sg) shadowGpuStamp();
     depthPrepass(g, model);
     if (sg) shadowGpuStamp();
-    static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;
+    static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;   // (projectSubjectShadow stamps 4 more)
     static const bool rectCheck = std::getenv("WFC_SHADOWRECTCHECK") != nullptr;
     projectSubjectShadow(p, rq, fullPasses);
-    if (sg) { shadowGpuStamp(); if (sgN_ - sg0 == 4) ++sgSubjects_; else sgN_ = sg0; }
+    if (sg) { if (sgN_ - sg0 == kSgStamps) ++sgSubjects_; else sgN_ = sg0; }
     if (rectCheck && !fullPasses) shadowRectCheck(g, model, p, rq);
 }
 
@@ -699,6 +699,7 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
         if (x1 > x0 && y1 > y0) BlitFramebuffer(x0, y0, x1, y1, x0, y0, x1, y1, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
         BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     }
+    shadowGpuStamp();                                        // (WFC_SHADOWGPU: after the scene-depth copy)
     const int Res = shadowDepthResolution(kMaxShadowResolution);
     const float k = kShadowFilterRadius / (float)Res;
     float edge[8], refine[24];
@@ -707,6 +708,7 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
     beginShadowMask();
     if (useRect) { glEnable(GL_SCISSOR_TEST); glScissor(mr[0], mr[1], mr[2] - mr[0], mr[3] - mr[1]); }
     fillMaskDepth();
+    shadowGpuStamp();                                        // (after the mask depth fill)
     core::Mat4 invVP = inverse4(viewProj_);
     UseProgram(shadowProjProg_);
     auto U = [&](const char* nm) { return cachedUniformLocation(shadowProjProg_, nm); };
@@ -742,10 +744,12 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
     }
     drawShadowVolume(corners, viewProj_, shadowProjProg_);   // (its stencil clear honours the scissor)
     glDisable(GL_SCISSOR_TEST);
+    shadowGpuStamp();                                        // (after the stencil volume + PCF projection)
     ActiveTexture(GL_TEXTURE0);
     // FinishRenderingShadowMask (resolve) + BlurShadowMask: the blurred mask is rebuilt from the full
     // product of this frame's projections each time one is added (only where it can have changed)
     blurShadowMask(useRect && !firstThisFrame ? mr : nullptr);
+    shadowGpuStamp();                                        // (after the blur)
     UseProgram(0);
     maskDrawnFrame_ = frameNo_;
     if (!shadowRefPass_) {
@@ -926,7 +930,7 @@ bool Pipeline::shadowGpuFrame() {
     static const bool on = std::getenv("WFC_SHADOWGPU") != nullptr && QueryCounter && GetQueryObjectui64v;
     if (!on || frameNo_ % 240 != 0) return false;
     if (sgFrame_ != frameNo_) { sgFrame_ = frameNo_; sgN_ = 0; sgSubjects_ = 0; }
-    if (sgQ_.size() < sgN_ + 4) {                            // grown in blocks (a subject takes 4 stamps)
+    if (sgQ_.size() < sgN_ + kSgStamps) {                    // grown in blocks (a subject takes kSgStamps stamps)
         const size_t old = sgQ_.size();
         sgQ_.resize(old + 256);
         GenQueries(256, &sgQ_[old]);
@@ -936,14 +940,15 @@ bool Pipeline::shadowGpuFrame() {
 
 void Pipeline::shadowGpuReport() {
     if (sgFrame_ != frameNo_ || sgSubjects_ == 0) return;
-    double st[3] = {0, 0, 0};
-    for (size_t i = 0; i + 3 < sgN_; i += 4) {
-        unsigned long long t[4];
-        for (int k = 0; k < 4; ++k) GetQueryObjectui64v(sgQ_[i + (size_t)k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
-        for (int k = 0; k < 3; ++k) st[k] += (double)(t[k + 1] - t[k]) / 1.0e6;
+    double st[kSgStamps - 1] = {};
+    for (size_t i = 0; i + kSgStamps - 1 < sgN_; i += kSgStamps) {
+        unsigned long long t[kSgStamps];
+        for (size_t k = 0; k < kSgStamps; ++k) GetQueryObjectui64v(sgQ_[i + k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
+        for (size_t k = 0; k + 1 < kSgStamps; ++k) st[k] += (double)(t[k + 1] - t[k]) / 1.0e6;
     }
-    LOG_INFO("SHADOWGPU frame %d: %d projected shadows: shadow depth %.3f ms, receiver depth prepass %.3f ms, mask "
-             "projection %.3f ms (GPU, summed)", frameNo_, sgSubjects_, st[0], st[1], st[2]);
+    LOG_INFO("SHADOWGPU frame %d: %d projected shadows (GPU ms, summed): shadow depth %.3f, receiver prepass %.3f, "
+             "scene-depth copy %.3f, mask depth fill %.3f, volume + projection %.3f, blur %.3f", frameNo_, sgSubjects_,
+             st[0], st[1], st[2], st[3], st[4], st[5]);
     sgSubjects_ = 0; sgN_ = 0;
 }
 
