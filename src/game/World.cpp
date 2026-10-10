@@ -3430,12 +3430,16 @@ void World::draw(render::IRenderer& r) const {
     // player). [integration 09a] No customization paint and no energon override: participants carry none, so the chassis
     // material defaults draw (energon is never team-tinted, RE b0d9b22). The local pawn stays owner 0. [integration 09c] The
     // owner comes from a per-frame actor -> player map (it was a scan of opponents_ per actor: quadratic at 64).
-    std::unordered_map<const void*, int> partOwner; partOwner.reserve(opponents_.size());
-    for (const MatchOpponent* o : opponents_) partOwner.emplace(static_cast<const void*>(o), o->matchPlayer());
+    // A reused sorted vector (capacity kept across frames): no per-frame allocation; same lookups as the map it replaced.
+    partOwner_.clear();
+    for (const MatchOpponent* o : opponents_) partOwner_.emplace_back(static_cast<const void*>(o), o->matchPlayer());
+    std::sort(partOwner_.begin(), partOwner_.end());
     for (const auto& a : actors_) {
         if (!a->alive()) continue;
-        const auto it = partOwner.find(static_cast<const void*>(a.get()));
-        const int owner = it != partOwner.end() ? 100 + it->second : 0;
+        const void* key = static_cast<const void*>(a.get());
+        const auto it = std::lower_bound(partOwner_.begin(), partOwner_.end(), key,
+                                         [](const std::pair<const void*, int>& e, const void* k) { return std::less<const void*>()(e.first, k); });
+        const int owner = it != partOwner_.end() && it->first == key ? 100 + it->second : 0;
         if (owner) { r.setDrawOwner(owner); r.setCharacterColors(render::CharacterColors{}); }
         a->draw(r);
         if (owner) r.setDrawOwner(0);

@@ -1089,7 +1089,8 @@ private:
     bool botLineOfSight(const core::Vec3& from, const core::Vec3& to) const;
     void fireHitscanAs(int instigator, const Character& shooter, const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);
     mutable int pushedRulesMode_ = -1;
-    mutable int pushedPoolCap_ = -1;     // [integration 09c] last setEmitterPoolCap pushed
+    mutable int pushedPoolCap_ = -1;
+    mutable std::vector<std::pair<const void*, int>> partOwner_;   // [integration 09c] World::draw scratch: actor -> match player, sorted (no per-frame allocation)     // [integration 09c] last setEmitterPoolCap pushed
     bool fxSpawnPooled_ = false;
     std::unordered_map<int, float> squibAccum_;   // [integration 09c] per-shooter ImpactSquibPercentage accumulator (extended lobbies)         // [integration 09c] the next generic spawnAt is an EmitterPool spawn (impact squib)
     // [integration 09c] syncMapPresentation's per-frame keys, built once per factory / objective set (no string building per frame).
