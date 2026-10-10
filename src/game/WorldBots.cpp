@@ -726,6 +726,36 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                 } else b.stuckLevel = 0;
                 b.stuckT = 0.0f; b.stuckPos = pos;
             }
+        } else if (!vehicle && b.path.empty() && b.noPaths > 0 && collision() && botNav_.findCell(pos, 0.0f) < 0) {
+            // Stranded off the mesh with no path (every search from here fails): a roof a jet flew onto, a prop top (Experimental FFA 64
+            // Streets: jets transformed on rooftops ~48 m above the mesh, no-path counts in the hundreds). Walk to the nearest point toward the
+            // mesh reachable in a clear line, drops up to 60 m allowed (no fall damage in the rebuild; walking off the edge brings it down),
+            // then ask for a path again [PC ADAPTATION: rebuild nav coverage; no teleport].
+            if (!b.hasRejoin || match_.matchTime() > b.rejoinUntil) {
+                b.hasRejoin = false;
+                const core::Vec3 c0 = pos + core::Vec3{0, 1.0f, 0};
+                float th;
+                for (float r : {3.0f, 6.0f, 10.0f, 15.0f, 20.0f, 30.0f}) {
+                    float bestScore = 1e9f;
+                    for (int k = 0; k < 16; ++k) {
+                        const float a = 6.2831853f * (float)k / 16.0f;
+                        const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
+                        if (collision()->segmentHit(c0, q + core::Vec3{0, 1.0f, 0}, th)) continue;
+                        const int cell = botNav_.findCell(q, 3.0f, 60.0f);
+                        if (cell < 0) continue;
+                        const float score = hdist(botNav_.cells()[(size_t)cell].centroid, q);
+                        if (score < bestScore) { bestScore = score; b.rejoin = q; b.hasRejoin = true; }
+                    }
+                    if (b.hasRejoin) break;
+                }
+                b.rejoinUntil = match_.matchTime() + 4.0f;
+                LOG_INFO("bots: p%d stranded off the mesh at t %.2f: %s", b.player, match_.matchTime(), b.hasRejoin ? "walking to the mesh" : "no way found");
+            }
+            if (b.hasRejoin) {
+                core::Vec3 rd = b.rejoin - pos; rd.y = 0.0f;
+                const float rl = core::length(rd);
+                if (rl > 0.8f) moveDir = rd * (1.0f / rl); else { b.hasRejoin = false; b.wantRepath = true; }
+            }
         } else if (b.goal.kind != BotGoalKind::Attack) {
             b.hasGoal = b.hasGoal && hdist(b.goal.pos, pos) > b.goal.radius;   // arrived: the next think picks a new goal
         }
@@ -1767,6 +1797,13 @@ void World::tickBots(float dt) {
                 float gy; core::Vec3 gn; core::Vec3 feet = a, spot;
                 if (collision_.groundHeight(a.x, a.z, a.y, 4.0f, gy, gn)) feet.y = gy; else feet.y = a.y - pc.meshToActor(Form::Vehicle);
                 ok = PlayerController::findRobotSpot(collision(), feet, spot, &pc);
+                // A jet lands (transforms) only where the robot stands on the bot mesh: over a rooftop / prop top it keeps flying its corridor
+                // and tries again after the cooldown (FFA 64 Streets: jets transformed on roofs ~48 m above the mesh and were stranded)
+                // [PC ADAPTATION: rebuild nav coverage].
+                if (ok && pc.vehicleParams().form == VehicleFormType::Jet && botNav_.valid() && botNav_.findCell(spot, 0.0f) < 0) {
+                    ok = false;
+                    LOG_INFO("bots: p%d jet landing deferred at t %.2f (robot spot off the mesh)", b.player, match_.matchTime());
+                }
                 if (ok) { const core::Vec3 shift{spot.x - feet.x, 0.0f, spot.z - feet.z}; if (core::length(shift) > 1e-3f) { pc.setPosition(pc.position() + shift); pc.addTransformShift(shift * -1.0f); } }
             }
             if (ok) { pc.beginTransform(); ++b.transforms; b.wantRepath = true; }
