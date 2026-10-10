@@ -3,7 +3,10 @@
 // pointer plus an unwound stack (RtlVirtualUnwind over every module's .pdata, up to 32 frames), resumes it, and every
 // WFC_CPUPROF_EVERY_S seconds (default 10) writes the top stacks and the top functions (self, by leaf address) to
 // wfc_cpuprof.txt as exe-relative offsets with the last log line as context. Symbolise offline against wfc_rebuild.map
-// (tools/systems/cpuprof_sym.py). Self-installing (a static initializer on the main thread); with the variable unset
+// (tools/systems/cpuprof_sym.py). Hitches: the last ~2 s of samples are also kept with their times; when a "SLOWFRAME ...
+// interval N ms" log line (WFC_SLOWFRAME, Rendering) reports N >= WFC_CPUPROF_HITCH_MS (default 12), the samples taken during
+// that frame are appended to wfc_cpuprof_hitch.txt (one block per hitch) - one-off spikes that a 10 s window averages away.
+// Self-installing (a static initializer on the main thread); with the variable unset
 // nothing runs. Suspending the main thread while it is inside the GL driver can disturb the driver's submission: A/B the frame
 // time with and without the profiler, and prefer a coarse interval (WFC_CPUPROF=5) for in-match work.
 #ifdef _WIN32
@@ -21,8 +24,14 @@ constexpr int kDepth = 32;                      // deep enough to unwind through
 constexpr int kSlots = 1 << 14;                 // open-addressing table of distinct stacks (no allocation in the sampler)
 struct Slot { unsigned long long pc[kDepth]; int depth; long count; };
 
+struct Recent { double t; int depth; unsigned long long pc[kDepth]; };
+constexpr int kRecent = 4096;                   // ~4 s at 1 ms, ~20 s at 5 ms
 struct CpuProf {
     HANDLE mainThread = nullptr;
+    Recent* recent = nullptr;
+    std::atomic<long> recentHead{0};            // next write index (the sampler is the only writer)
+    double hitchMs = 12.0;
+    LARGE_INTEGER freq{}, start{};
     int intervalMs = 1;
     double everyS = 10.0;
     Slot* slots = nullptr;
@@ -98,8 +107,8 @@ void report(CpuProf& p, double t) {
 
 void run() {
     CpuProf& p = prof();
-    LARGE_INTEGER freq, start, last;
-    QueryPerformanceFrequency(&freq); QueryPerformanceCounter(&start); last = start;
+    LARGE_INTEGER last = p.start;
+    const LARGE_INTEGER freq = p.freq, start = p.start;
     timeBeginPeriod(1);
     while (!p.quit.load()) {
         Sleep((DWORD)p.intervalMs);
@@ -108,7 +117,16 @@ void run() {
         unsigned long long pc[kDepth]; int depth = 0;
         if (GetThreadContext(p.mainThread, &ctx)) depth = walk(ctx, pc);
         ResumeThread(p.mainThread);
-        if (depth > 0) { record(p, pc, depth); ++p.samples; }
+        if (depth > 0) {
+            record(p, pc, depth); ++p.samples;
+            LARGE_INTEGER now; QueryPerformanceCounter(&now);
+            const long h = p.recentHead.load(std::memory_order_relaxed);
+            Recent& r = p.recent[h % kRecent];
+            r.t = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
+            r.depth = depth;
+            std::memcpy(r.pc, pc, sizeof(unsigned long long) * (size_t)depth);
+            p.recentHead.store(h + 1, std::memory_order_release);
+        }
         LARGE_INTEGER now; QueryPerformanceCounter(&now);
         if ((double)(now.QuadPart - last.QuadPart) / (double)freq.QuadPart >= p.everyS) {
             last = now;
@@ -131,12 +149,52 @@ struct Installer {
         auto* nt = (IMAGE_NT_HEADERS*)((unsigned char*)dos + dos->e_lfanew);
         p.base = (unsigned long long)dos; p.end = p.base + nt->OptionalHeader.SizeOfImage;
         p.slots = (Slot*)VirtualAlloc(nullptr, sizeof(Slot) * kSlots, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        if (!p.slots) return;
+        p.recent = (Recent*)VirtualAlloc(nullptr, sizeof(Recent) * kRecent, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        if (!p.slots || !p.recent) return;
+        if (const char* h = std::getenv("WFC_CPUPROF_HITCH_MS")) { const double v = std::atof(h); if (v > 1.0) p.hitchMs = v; }
+        QueryPerformanceFrequency(&p.freq); QueryPerformanceCounter(&p.start);
+        if (FILE* f = std::fopen("wfc_cpuprof_hitch.txt", "w")) std::fclose(f);
         if (FILE* f = std::fopen("wfc_cpuprof.txt", "w")) std::fclose(f);
         p.t = std::thread(run);
         p.t.detach();
     }
 } gInstaller;
 
+}   // namespace
+
+namespace {
+// The log line hook (core::setLogLineHook): a "SLOWFRAME f<n> interval <ms> ms" line at or above the hitch threshold dumps the
+// samples of that interval (the frame just finished) to wfc_cpuprof_hitch.txt.
+void onLogLine(const char* line) {
+    CpuProf& p = prof();
+    if (!p.recent || !line) return;
+    const char* s = std::strstr(line, "SLOWFRAME f");
+    if (!s) return;
+    const char* iv = std::strstr(s, "interval ");
+    if (!iv) return;
+    const double ms = std::atof(iv + 9);
+    if (ms < p.hitchMs) return;
+    LARGE_INTEGER now; QueryPerformanceCounter(&now);
+    const double tNow = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
+    FILE* f = std::fopen("wfc_cpuprof_hitch.txt", "a");
+    if (!f) return;
+    std::fprintf(f, "== hitch %.2f ms at t %.3f s: %.150s\n", ms, tNow / 1000.0, s);
+    const long head = p.recentHead.load(std::memory_order_acquire);
+    int n = 0;
+    for (long i = head - 1; i >= 0 && i >= head - kRecent; --i) {
+        const Recent& r = p.recent[i % kRecent];
+        if (r.t < tNow - ms - 5.0) break;           // the frame's interval (+ 5 ms slack for the log's delay)
+        std::fprintf(f, "%.3f ms ago:", tNow - r.t);
+        for (int d = 0; d < r.depth; ++d) {
+            if (r.pc[d] >= p.base && r.pc[d] < p.end) std::fprintf(f, " +0x%llx", r.pc[d] - p.base);
+            else std::fprintf(f, " ext");
+        }
+        std::fprintf(f, "\n");
+        ++n;
+    }
+    std::fprintf(f, "== %d samples\n", n);
+    std::fclose(f);
+}
+struct HookInstaller { HookInstaller() { if (prof().recent) core::setLogLineHook(onLogLine); } } gHookInstaller;   // after gInstaller
 }   // namespace
 #endif

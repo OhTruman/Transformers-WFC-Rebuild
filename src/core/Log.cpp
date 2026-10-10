@@ -82,7 +82,8 @@ Writer& Writer::writer() { static Writer* w = new Writer; return *w; }   // neve
 
 void logFlush() { Writer::writer().drain(); }
 
-namespace { char gLastLine[160]; }
+namespace { char gLastLine[160]; std::atomic<void (*)(const char*)> gLineHook{nullptr}; }
+void setLogLineHook(void (*hook)(const char* line)) { gLineHook.store(hook, std::memory_order_release); }
 const char* logLastLine() { return gLastLine; }
 
 bool logTryFlush() {
@@ -153,6 +154,7 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         const size_t k = len < sizeof gLastLine - 1 ? len : sizeof gLastLine - 1;
         std::memcpy(gLastLine, text, k);
         gLastLine[k] = 0;
+        if (void (*hook)(const char*) = gLineHook.load(std::memory_order_acquire)) hook(gLastLine);
         if (k && gLastLine[k - 1] == '\n') gLastLine[k - 1] = 0;
     }
     Writer& w = Writer::writer();

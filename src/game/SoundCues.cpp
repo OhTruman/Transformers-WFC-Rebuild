@@ -309,7 +309,11 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
     if (twin == "INT") twin = "int";
     const char* locRoot = std::getenv("WFC_LOC_ROOT");
     const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
-    if (std::FILE* fp = std::fopen((alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt).c_str(), "rb")) {
+    const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
+    // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
+    std::FILE* fp = std::fopen(altPath.c_str(), "rb");
+    if (!fp && altPath.size() > 4) fp = std::fopen((altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), "rb");
+    if (fp) {
         std::fclose(fp);
         if (account) ++locStats().twin;
         return alt;

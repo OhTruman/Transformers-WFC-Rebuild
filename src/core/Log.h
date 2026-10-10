@@ -15,6 +15,9 @@ void logFlush();
 bool logTryFlush();
 // The most recent log line (first ~150 chars; diagnostics only - racy by design, never blocks): dev tools use it as context.
 const char* logLastLine();
+// Dev tools that react to log lines (WFC_CPUPROF's hitch capture on "SLOWFRAME" lines): set once at startup, called with each
+// line (first ~150 chars) on the logging thread; null = nothing.
+void setLogLineHook(void (*hook)(const char* line));
 
 } // namespace core
 
