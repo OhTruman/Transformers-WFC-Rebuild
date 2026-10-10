@@ -707,6 +707,8 @@ void Pipeline::release() {
     mdiBuckets_.clear(); mdiMesh_ = -1;
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
+    for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
+    for (GLuint* b : {&mdiVlmBo_, &bspMdi_.vlmBo}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     bspMdi_ = MdiSlot{};
     progTouchQueue_.clear();
     // GL objects created lazily per pipeline that the reset below (*this = Pipeline()) would otherwise orphan at every
@@ -1910,6 +1912,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             std::string vs = kVS;
             bool ok = vs.find("uniform vec4 uLMCoord;") != std::string::npos && vs.find("void main() {") != std::string::npos;
             replaceAll(vs, "uniform vec4 uLMCoord;", "vec4 uLMCoord;");
+            ok = ok && vs.find("uniform int uVertexLM;") != std::string::npos && vs.find("uniform int uVLMBase;") != std::string::npos &&
+                 vs.find("uniform sampler2D uVLM;") != std::string::npos;
+            replaceAll(vs, "uniform int uVertexLM;", "int uVertexLM;");
+            replaceAll(vs, "uniform int uVLMBase;", "int uVLMBase;");
+            replaceAll(vs, "uniform sampler2D uVLM;", "uniform sampler2D uVLM;\nuniform samplerBuffer uVLMBuf;\nint wfcVLMOff, wfcVLMCnt;\n"
+                       "vec4 wfcVLM(int vi, int r) { return texelFetch(uVLMBuf, wfcVLMOff + r * wfcVLMCnt + vi); }");
+            for (int k = 0; k < 3; ++k)
+                replaceAll(vs, "texelFetch(uVLM, ivec2(vi, " + std::to_string(k) + "), 0)", "wfcVLM(vi, " + std::to_string(k) + ")");
             replaceAll(vs, "void main() {", "void wfcVSBody() {");
             {   // the world depth prepass links this VS too: identical depth (declared before any use)
                 const size_t nl = vs.find('\n');
@@ -1917,6 +1927,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             }
             vs += "layout(location=11) in float aDrawRow;\nuniform sampler2D uRowTex;\nflat out int vRow;\n"
                   "void main() {\n    vRow = int(aDrawRow + 0.5);\n    uLMCoord = texelFetch(uRowTex, ivec2(0, vRow), 0);\n"
+                  "    vec4 vl = texelFetch(uRowTex, ivec2(23, vRow), 0);\n"
+                  "    uVertexLM = int(vl.x + 0.5); uVLMBase = int(vl.y + (vl.y < 0.0 ? -0.5 : 0.5));\n"
+                  "    wfcVLMOff = int(vl.z + 0.5); wfcVLMCnt = int(vl.w + 0.5);\n"
                   "    wfcVSBody();\n}\n";
             vsMdi = ok ? compile(GL_VERTEX_SHADER, vs, "world_mdi.vs") : 0;
             vsMdiShared_ = vsMdi;
@@ -1925,6 +1938,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (!vsMdi || fs.find("void main()") == std::string::npos) return -1;
         vsUse = vsMdi;
         const bool hasLMS = fs.find("uniform vec3 uLMScale[3];") != std::string::npos;
+        const bool hasVLM = fs.find("uniform int uVertexLM;") != std::string::npos;
+        if (hasVLM) replaceAll(fs, "uniform int uVertexLM;", "int uVertexLM;");
         const bool hasEnv = fs.find("uniform vec3 uAmb[6];") != std::string::npos;
         if (hasLMS) replaceAll(fs, "uniform vec3 uLMScale[3];", "vec3 uLMScale[3];");
         if (hasEnv) {
@@ -1952,6 +1967,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         std::string ld = "flat in int vRow;\nuniform sampler2D uRowTex;\n"
                          "vec4 wfcR(int k) { return texelFetch(uRowTex, ivec2(k, vRow), 0); }\nvoid main() {\n";
         if (hasLMS) ld += "    for (int i = 0; i < 3; ++i) uLMScale[i] = wfcR(1 + i).xyz;\n";
+        if (hasVLM) ld += "    uVertexLM = int(wfcR(23).x + 0.5);\n";
         if (hasLMArr) ld += "    for (int i = 0; i < 3; ++i) wfcLMLayer[i] = wfcR(1 + i).w;\n";
         if (hasEnv) ld += "    for (int i = 0; i < 6; ++i) uAmb[i] = wfcR(4 + i).xyz;\n    uNumLights = int(wfcR(10).x + 0.5);\n"
                           "    for (int i = 0; i < 3; ++i) { uLPos[i] = wfcR(11 + i); uLDir[i] = wfcR(14 + i); uLCol[i] = wfcR(17 + i); uLSpot[i] = wfcR(20 + i); }\n";
@@ -2018,6 +2034,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uSceneDepth"), 12);
     Uniform1i(U("uSceneColor"), 16);
     Uniform1i(U("uVLM"), 11);
+    Uniform1i(U("uVLMBuf"), 22);                         // (MDI variants: the set's vertex-lightmap sample buffer)
     Uniform1i(U("uShadowMask"), 10);
     if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
     if (mdiBuild_) Uniform1i(U("uRowTex"), 20);
@@ -3678,6 +3695,17 @@ void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const st
              bind.mats.empty() ? "?" : bind.mats[0].wfcName.c_str(), n, sm.joints, sm.boundsPts, sm.blended.size());
 }
 
+void Pipeline::prewarmSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights) {
+    static const bool off = std::getenv("WFC_NOSKINPREWARM") != nullptr;   // A/B: first-sight builds as before
+    if (off || bind.empty()) return;
+    static const std::vector<core::Mat4> idPalette(1, core::Mat4::identity());   // (the model build reads no palette values)
+    skinPrewarmOnly_ = true;
+    drawSkinned(bind, joints, weights, idPalette, nullptr, 1.0f, core::Mat4::identity(), nullptr, 0);
+    auto pm = skinModels_.find(&bind);
+    if (pm != skinModels_.end()) pm->second.pinned = true;
+    skinPrewarmOnly_ = false;
+}
+
 bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
                            const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
                            const core::Mat4& model, const void* key, uint64_t serial) {
@@ -3740,8 +3768,9 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         BindVertexArray(0);
         sm.verts = n; sm.idx = bind.indices.size();
         buildSkinBoundsSets(sm, bind, joints, weights);
-        ++statSkinRebuilds_;
+        if (skinPrewarmOnly_) ++statSkinPrewarmed_; else ++statSkinRebuilds_;
     }
+    if (skinPrewarmOnly_) return true;                   // (prewarmSkinned: the model only, no instance / draw)
     // ---- the instance: its palettes in a texture row (uploaded when the serial changes), bounds from the palette
     if (!skinTex_) {
         glGenTextures(1, &skinTex_);
@@ -4096,14 +4125,20 @@ void Pipeline::buildMdi(int meshId) {
     if (!lmArray_) buildLmArray();                      // (a second set reuses the array and its layer table)
     size_t arrayed = 0;
     uint32_t row = 0;
-    size_t whyNot[6] = {0, 0, 0, 0, 0, 0};   // drawn singly: no MDI program / translucent / actor / vertex LM / dyn channel / decal
+    size_t whyNot[6] = {0, 0, 0, 0, 0, 0};
+    std::vector<float> vlmSamples;                       // all VLM subs' samples, sub after sub (rows 0..2 each)
+    size_t vlmSubs = 0;
+    int vlmRun = 0, vlmRunProg = -1;   // drawn singly: no MDI program / translucent / actor / vertex LM / dyn channel / decal
     for (size_t si = 0; si < g.subs.size(); ++si) {
         Sub& s = g.subs[si];
         s.mdiRow = -1;
         if (s.prog < 0) continue;
         const Program& P = progs_[(size_t)s.prog];
-        if (P.mdiProg < 0 || P.blend >= 2 || !s.actor.empty() || s.vlmTex || s.dynChannel || g.decal) {
-            ++whyNot[P.mdiProg < 0 ? 0 : P.blend >= 2 ? 1 : !s.actor.empty() ? 2 : s.vlmTex ? 3 : s.dynChannel ? 4 : 5];
+        // vertex-lightmapped subs join through the set's sample buffer (WFC_NOVLMMDI=1: drawn singly as before)
+        static const bool noVlmMdi = std::getenv("WFC_NOVLMMDI") != nullptr || !TexBuffer;
+        const bool vlmOut = s.vlmTex && noVlmMdi;
+        if (P.mdiProg < 0 || P.blend >= 2 || !s.actor.empty() || vlmOut || s.dynChannel || g.decal) {
+            ++whyNot[P.mdiProg < 0 ? 0 : P.blend >= 2 ? 1 : !s.actor.empty() ? 2 : vlmOut ? 3 : s.dynChannel ? 4 : 5];
             continue;
         }
         s.mdiRow = (int)row++;
@@ -4113,6 +4148,18 @@ void Pipeline::buildMdi(int meshId) {
             std::memcpy(rw, s.lmCoord, sizeof s.lmCoord);
             for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) rw[(1 + i) * 4 + c] = s.lmScale[i][c];
         } else { rw[0] = 1; rw[1] = 1; rw[2] = 0; rw[3] = 0; }
+        if (s.vlmTex) {                                  // drawSubs: uLMCoord (1, 1, 0, 0), uLMScale, uVertexLM 1, uVLMBase
+            for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) rw[(1 + i) * 4 + c] = s.lmScale[i][c];
+            GLint w = 0;                                 // the sub's (count x 3) RGB32F samples, read back once at load
+            glBindTexture(GL_TEXTURE_2D, s.vlmTex);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+            const size_t off = vlmSamples.size() / 3;
+            vlmSamples.resize(vlmSamples.size() + (size_t)w * 3 * 3);
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, &vlmSamples[off * 3]);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            rw[23 * 4] = 1.0f; rw[23 * 4 + 1] = (float)s.vlmBase; rw[23 * 4 + 2] = (float)off; rw[23 * 4 + 3] = (float)w;
+            ++vlmSubs;
+        }
         // all three pages in the shared array, and the MDI program samples it: bucket by program alone
         bool inArray = s.lmTex[0] >= 0 && lmArray_ && ULOC(progs_[(size_t)P.mdiProg], "uLMUseArr") >= 0;
         for (int i = 0; i < 3 && inArray; ++i)
@@ -4120,14 +4167,35 @@ void Pipeline::buildMdi(int meshId) {
         for (int i = 0; i < 3; ++i) rw[(1 + i) * 4 + 3] = inArray ? (float)lmLayer_[(size_t)s.lmTex[i]] : -1.0f;
         arrayed += inArray ? 1 : 0;
         // light environments (lit, non-lightmapped): filled the first time the sub is drawn, as drawSubs does
-        mdiEnvFilled_.push_back(P.lit && s.lmTex[0] < 0 ? 0 : 1);
-        const int k0 = inArray ? -2 : s.lmTex[0], k1 = inArray ? -2 : s.lmTex[1], k2 = inArray ? -2 : s.lmTex[2];
+        mdiEnvFilled_.push_back(P.lit && s.lmTex[0] < 0 && !s.vlmTex ? 0 : 1);   // (the lightmapped main reads no env)
+        int k0 = inArray ? -2 : s.lmTex[0], k1 = inArray ? -2 : s.lmTex[1], k2 = inArray ? -2 : s.lmTex[2];
+        // VLM subs keep the single-draw order (they were drawn after every bucket, in sub order, depth writes on, so they
+        // won LEQUAL ties on coplanar overlaps): own buckets, one per consecutive run of a program in sub order, moved
+        // after all other buckets below and not depth-prepassed
+        if (s.vlmTex) {
+            if (s.prog != vlmRunProg) { ++vlmRun; vlmRunProg = s.prog; }
+            k0 = -3; k1 = vlmRun; k2 = -3;
+        }
         const auto key = std::make_tuple(s.prog, k0, k1, k2);
         auto it = idx.find(key);
         if (it == idx.end()) { it = idx.emplace(key, mdiBuckets_.size()).first; mdiBuckets_.push_back({s.prog, {k0, k1, k2}, {}}); }
         mdiBuckets_[it->second].subs.push_back((uint32_t)si);
     }
     if (row == 0) return;
+    // the VLM runs after every other bucket, in run order (their order of insertion)
+    std::stable_partition(mdiBuckets_.begin(), mdiBuckets_.end(), [](const MdiBucket& b) { return b.lm[0] != -3; });
+    if (vlmSubs) {
+        glGenTextures(1, &mdiVlmTex_);
+        GenBuffers(1, &mdiVlmBo_);
+        BindBuffer(0x8C2A /*GL_TEXTURE_BUFFER*/, mdiVlmBo_);
+        BufferData(0x8C2A, (GLsizeiptr)(vlmSamples.size() * sizeof(float)), vlmSamples.data(), GL_STATIC_DRAW);
+        BindBuffer(0x8C2A, 0);
+        glBindTexture(0x8C2A, mdiVlmTex_);
+        TexBuffer(0x8C2A, 0x8815 /*GL_RGB32F*/, mdiVlmBo_);
+        glBindTexture(0x8C2A, 0);
+        LOG_INFO("wfc: %s MDI: %zu vertex-lightmapped subs via the sample buffer (%zu samples, %.1f MB)",
+                 meshId == bspMesh_ ? "level BSP" : "world", vlmSubs, vlmSamples.size() / 9, vlmSamples.size() * 4.0 / 1048576.0);
+    }
     glGenTextures(1, &mdiRowTex_);
     glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, kMdiW, (GLsizei)row, 0, GL_RGBA, GL_FLOAT, mdiRows_.data());
@@ -4311,6 +4379,8 @@ void Pipeline::drawMdi(GpuMesh& g) {
             Uniform1i(cachedUniformLocation(zPreProg_, "uVertexLM"), 0);
             Uniform4f(cachedUniformLocation(zPreProg_, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
             Uniform1i(cachedUniformLocation(zPreProg_, "uRowTex"), 20);
+            Uniform1i(cachedUniformLocation(zPreProg_, "uVLM"), 11);       // (distinct units: sampler types must not share one)
+            Uniform1i(cachedUniformLocation(zPreProg_, "uVLMBuf"), 22);
             ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
             ActiveTexture(GL_TEXTURE0);
             glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -4320,7 +4390,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
             for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
                 const size_t n = ranges[bi].second - ranges[bi].first;
                 const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
-                if (!n || M.blend != 0) continue;
+                if (!n || M.blend != 0 || mdiBuckets_[bi].lm[0] == -3) continue;   // (VLM runs: not prepassed, as before)
                 ++preBuckets; preDraws += n;
                 if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
                 MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
@@ -4349,7 +4419,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         for (int i = 0; i < 3; ++i) if (M.uRTSet[i] >= 0) Uniform1i(M.uRTSet[i], 0);   // static: no character colours
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
         if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
-        glDisable(GL_BLEND); glDepthMask(prepassed && M.blend == 0 ? GL_FALSE : GL_TRUE);   // (depth already written)
+        glDisable(GL_BLEND); glDepthMask(prepassed && M.blend == 0 && b.lm[0] != -3 ? GL_FALSE : GL_TRUE);   // (depth already written)
         Uniform1i(ULOC(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
         if (b.lm[0] >= 0) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
@@ -4359,6 +4429,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
             }
         }
         if (lmArray_) { ActiveTexture(GL_TEXTURE0 + 21); glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArray_); }
+        if (mdiVlmTex_) { ActiveTexture(GL_TEXTURE0 + 22); glBindTexture(0x8C2A /*GL_TEXTURE_BUFFER*/, mdiVlmTex_); }
         ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
         ActiveTexture(GL_TEXTURE0);
         MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
@@ -4446,7 +4517,7 @@ void Pipeline::evictSkin(bool all) {
     for (auto it = skinModels_.begin(); it != skinModels_.end();) {
         // models (static buffers + bounds sets per bind mesh) are kept ~60 s at 300 fps: a body that is dead for its
         // respawn delay must not be rebuilt (vertex build + upload + per-joint hulls) when it spawns again
-        if (all || frameNo_ - it->second.lastFrame > 18000) {
+        if (all || (!it->second.pinned && frameNo_ - it->second.lastFrame > 18000)) {
             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
             for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
             it = skinModels_.erase(it);
@@ -5334,6 +5405,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
     if (frameNo_ % 3600 == 0) logMemStats("in frame");
+    if (statSkinPrewarmed_ && frameNo_ % 600 == 0) {
+        LOG_INFO("wfc gpu skin: %d models prewarmed at load", statSkinPrewarmed_);
+        statSkinPrewarmed_ = 0;
+    }
     if (frameNo_ % 600 == 0 && statSkinRebuilds_) {   // skinned-model builds (expected: first sight / respawns only)
         LOG_INFO("wfc gpu skin: %d model builds in the last 600 frames (%zu models, %zu instances live)", statSkinRebuilds_,
                  skinModels_.size(), skinInsts_.size());

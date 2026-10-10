@@ -250,6 +250,9 @@ public:
     void draw(int id, const core::Mat4& model);
     // cacheKey / serial (drawDynamicMeshPosed): a persistent vertex buffer per key, rebuilt only when the serial changes
     // GPU skinning (IRenderer::drawSkinnedMesh): false when unsupported (too many joints) - the caller CPU-skins
+    void prewarmSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights);
+    bool skinPrewarmOnly_ = false;                        // drawSkinned returns after the model build (prewarmSkinned)
+    int statSkinPrewarmed_ = 0;
     bool drawSkinned(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
                      const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
                      const core::Mat4& model, const void* key, uint64_t serial);
@@ -412,6 +415,7 @@ private:
         // different mesh allocated at a freed one's address (next match, same sizes) rebuilds instead of drawing stale data
         const float* posData = nullptr; float fp[6] = {0, 0, 0, 0, 0, 0};
         int joints = 0;                                   // highest influencing joint + 1
+        bool pinned = false;                              // prewarmed at load: kept until the map unloads (not aged out)
         std::vector<core::Vec3> jc; std::vector<float> jr;   // per joint: bind-space centre / radius of its vertices
         // exact bounds, reduced: per joint the rigid (single influence, weight 1) vertices that can be extreme under a
         // rigid transform (hull candidates), plus every blended vertex (evaluated with the full skinPose sum)
@@ -512,6 +516,7 @@ private:
     std::vector<MdiBucket> mdiBuckets_;
     long mdiMesh_ = -1;
     GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
+    GLuint mdiVlmTex_ = 0, mdiVlmBo_ = 0;                  // vertex-lightmap samples of the set's VLM subs (RGB32F texture buffer)
     GLuint zPreProg_ = 0;                              // world depth prepass (MDI VS + empty FS)
     static inline GLuint vsMdiShared_ = 0;             // the MDI vertex shader (shared by every MDI program)
     // Lightmap pages of the common size share one GL_TEXTURE_2D_ARRAY (unit 21); each page's 2D texture becomes a
@@ -524,7 +529,7 @@ private:
     // A second multi-draw set for the level BSP mesh (Seed: 985 BSP subs were drawn singly). The active set lives in
     // the mdi* members above; swapMdiSlot exchanges them with the saved BSP set around its build / draw.
     struct MdiSlot {
-        std::vector<MdiBucket> buckets; long mesh = -1; GLuint rowTex = 0, rowVbo = 0, cmdBuf = 0;
+        std::vector<MdiBucket> buckets; long mesh = -1; GLuint rowTex = 0, rowVbo = 0, cmdBuf = 0, vlmTex = 0, vlmBo = 0;
         std::vector<float> rows; std::vector<char> envFilled;
     };
     MdiSlot bspMdi_;
@@ -532,6 +537,7 @@ private:
         std::swap(mdiBuckets_, s.buckets); std::swap(mdiMesh_, s.mesh); std::swap(mdiRowTex_, s.rowTex);
         std::swap(mdiRowVbo_, s.rowVbo); std::swap(mdiCmdBuf_, s.cmdBuf); std::swap(mdiRows_, s.rows);
         std::swap(mdiEnvFilled_, s.envFilled);
+        std::swap(mdiVlmTex_, s.vlmTex); std::swap(mdiVlmBo_, s.vlmBo);
     }
     bool mdiWanted_ = false, mdiBuild_ = false;
     static constexpr int kMdiW = 24;

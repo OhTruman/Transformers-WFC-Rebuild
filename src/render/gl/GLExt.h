@@ -140,6 +140,7 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, MultiDrawElementsIndirect, (GLenum, GLenum, const void*, GLsizei, GLsizei)) \
     X(void, VertexAttribDivisor, (GLuint, GLuint)) \
     X(void, TexStorage3D, (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei)) \
+    X(void, TexBuffer, (GLenum, GLenum, GLuint)) \
     X(void, CopyImageSubData, (GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) \
     X(void, TextureView, (GLuint, GLenum, GLuint, GLenum, GLuint, GLuint, GLuint, GLuint)) \
     X(void, CompressedTexImage2D, (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*)) \
@@ -217,6 +218,9 @@ GLint cachedUniformLocation(GLuint program, const char* literalName);
 void uploadProfDump(long frames);                  // WFC_UPLOADPROF: top buffer-upload callers since the last dump
 bool locCheckOn();                                 // WFC_LOCCHECK: cached uniform locations compared with the driver
 void locCheckCount(bool same);
+unsigned long long firstProgramBinds();             // programs bound for the first time since their link (stall trace)
+unsigned long long bufferAllocs();                  // BufferData calls (new storage) and their bytes
+unsigned long long bufferAllocBytes();
 } // namespace glx
 
 #ifndef WFC_NO_TEXCACHE_MACROS
