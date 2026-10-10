@@ -731,7 +731,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             // Streets: jets transformed on rooftops ~48 m above the mesh, no-path counts in the hundreds). Walk to the nearest point toward the
             // mesh reachable in a clear line, drops up to 60 m allowed (no fall damage in the rebuild; walking off the edge brings it down),
             // then ask for a path again [PC ADAPTATION: rebuild nav coverage; no teleport].
-            if (!b.hasRejoin || match_.matchTime() > b.rejoinUntil) {
+            if (match_.matchTime() > b.rejoinUntil) {   // every 4 s (no way found: not every step)
                 b.hasRejoin = false;
                 const core::Vec3 c0 = pos + core::Vec3{0, 1.0f, 0};
                 float th;
