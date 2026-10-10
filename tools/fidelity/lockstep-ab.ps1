@@ -5,7 +5,7 @@
 #
 # Validity (per arm vs the first arm): the per-step SIMHASH sequence over the measured range must be identical (= the same match,
 # frame for frame); and the standing parity check (Integration 2026-10-10): mean draws (total / dyn / fx) and chars must agree
-# within 3 %, else the row is UNKNOWN - a renderer A/B must not change the workload.
+# within 3 %, else the row is UNKNOWN (counts: draws / dyn / fx / program binds; chars CPU is reported, not gated) - a renderer A/B must not change the workload.
 # Lockstep caveat: the sim cost per frame is a fixed step, not free-running play - use it for A/Bs, not for the absolute verdict.
 #
 #   .\tools\fidelity\lockstep-ab.ps1 -OutDir <dir> -Map 510 -Arms "new|work\ab\m9c_47726bc|","old|work\ab\m9c_47726bc|WFC_NOLMARRAYS=1"
@@ -69,7 +69,8 @@ foreach ($r in $rows) {
     $ref = @($rows | Where-Object { $_.rep -eq $r.rep })[0]
     $sameMatch = $r.steps -gt 0 -and $r.hashes -eq $ref.hashes
     $par = { param($a, $b) if (-not $b -or [double]::IsNaN($a) -or [double]::IsNaN($b)) { $true } else { [Math]::Abs($a - $b) / [Math]::Max(1e-6, [Math]::Abs($b)) -le 0.03 } }
-    $parity = (& $par $r.draws $ref.draws) -and (& $par $r.draws_dyn $ref.draws_dyn) -and (& $par $r.cpu_chars $ref.cpu_chars)
+    # workload COUNTS only (2026-10-10 validation: chars CPU is a time, it varies with machine noise; counts are the workload)
+    $parity = (& $par $r.draws $ref.draws) -and (& $par $r.draws_dyn $ref.draws_dyn) -and (& $par $r.draws_fx $ref.draws_fx) -and (& $par $r.binds $ref.binds)
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
     $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity) { "UNKNOWN" } else { "PASS" }
     if ($contam) { Res "$($r.arm).r$($r.rep).contaminated" "UNKNOWN" ("foreign process during the row - rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
