@@ -210,7 +210,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # in-play SLOWFRAME lines only (the renderer's frame numbers also count front-end frames)
         $sfIn = $false; $sfLines = New-Object System.Collections.Generic.List[string]
         foreach ($sl in $segL) { if ($sl.Contains('to=InGame')) { $sfIn = $true; continue }; if ($sl.Contains('to=GameEnded')) { $sfIn = $false }; if ($sfIn -and $sl.Contains('SLOWFRAME f')) { $sfLines.Add($sl) } }
-        $sfRe = 'interval ([\d.]+) ms: render ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\), outside ([-\d.]+); (?:gpu ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\)|gpu n/a); draws (\d+) \(dyn (\d+), fx (\d+)\), program binds (\d+), buffer upload (\d+) KB, new textures (\d+), shader compiles (\d+), map FX cpu ([\d.]+) \(sim ([\d.]+)\)'
+        $sfRe = 'interval ([\d.]+) ms: render ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)\), outside ([-\d.]+); (?:gpu ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+), fx ([-\d.]+), transl ([-\d.]+), post ([-\d.]+)(?:; [^)]*)?\)|gpu n/a); draws (\d+) \(dyn (\d+), fx (\d+)\), program binds (\d+), buffer upload (\d+) KB, new textures (\d+), shader compiles (\d+), map FX cpu ([\d.]+) \(sim ([\d.]+)\)'
         $sfSum = @{ interval = 0.0; render = 0.0; world = 0.0; chars = 0.0; fx = 0.0; transl = 0.0; outside = 0.0; gpu = 0.0; gpuN = 0; draws = 0.0; upKB = 0.0 }
         foreach ($sl in $sfLines) {
             $mm = [regex]::Match($sl, $sfRe); if (-not $mm.Success) { continue }; $sfN++
