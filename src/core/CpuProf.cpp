@@ -11,6 +11,9 @@
 // thread runs ~1 ms per 16.7 ms step (~6 %): use WFC_CPUPROF_BUSY_PCT=3 to include it. Frames outside the exe print as
 // "<module>+0x<offset>" (e.g. the GL driver's DLL, ntdll), resolved when the report is written, never in the sampler. With busy
 // threads on, the hitch ring holds every sampled thread too, so a stall shows what the driver's own threads were doing.
+// No lock is taken while a thread is suspended: the unwind entries come from the sampler's own copy of each module's .pdata
+// (refreshed once a second between samples), not RtlLookupFunctionEntry, whose function-table lock a thread suspended inside a
+// DLL load can hold (that deadlocked the sampler and left the main thread suspended at startup).
 // Self-installing (a static initializer on the main thread); with the variable unset
 // nothing runs. Suspending the main thread while it is inside the GL driver can disturb the driver's submission: A/B the frame
 // time with and without the profiler, and prefer a coarse interval (WFC_CPUPROF=5) for in-match work.
@@ -24,6 +27,7 @@
 #include <cstddef>
 #include <thread>
 #include <tlhelp32.h>
+#include <psapi.h>
 #include <vector>
 #include "core/Log.h"
 
@@ -86,12 +90,58 @@ void pushRecent(CpuProf& p, const unsigned long long* pc, int depth, unsigned ti
     p.recentHead.store(h + 1, std::memory_order_release);
 }
 
+// The sampler's copy of every loaded module's exception directory (.pdata), sorted by base: looked up while a thread is suspended
+// without any lock. Refreshed by the sampler thread between samples (no thread suspended then).
+struct ModTab { unsigned long long base, end; const RUNTIME_FUNCTION* fn; DWORD n; };
+std::vector<ModTab> gMods;
+void refreshModules() {
+    HMODULE mods[1024]; DWORD need = 0;
+    if (!EnumProcessModulesEx(GetCurrentProcess(), mods, sizeof mods, &need, LIST_MODULES_ALL)) return;
+    const DWORD cnt = (std::min)((DWORD)(sizeof mods / sizeof mods[0]), need / (DWORD)sizeof(HMODULE));
+    std::vector<ModTab> t;
+    t.reserve(cnt);
+    for (DWORD i = 0; i < cnt; ++i) {
+        auto* b = (const unsigned char*)mods[i];
+        const auto* dos = (const IMAGE_DOS_HEADER*)b;
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) continue;
+        const auto* nt = (const IMAGE_NT_HEADERS*)(b + dos->e_lfanew);
+        const IMAGE_DATA_DIRECTORY& ex = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+        if (!ex.VirtualAddress || ex.Size < sizeof(RUNTIME_FUNCTION)) continue;
+        t.push_back({(unsigned long long)b, (unsigned long long)b + nt->OptionalHeader.SizeOfImage, (const RUNTIME_FUNCTION*)(b + ex.VirtualAddress),
+                     ex.Size / (DWORD)sizeof(RUNTIME_FUNCTION)});
+    }
+    std::sort(t.begin(), t.end(), [](const ModTab& a, const ModTab& c) { return a.base < c.base; });
+    gMods.swap(t);
+}
+// RtlLookupFunctionEntry without its lock: binary search of the module, then of its (sorted) RUNTIME_FUNCTION array.
+// found = the pc lies in a known module (nullptr + found: a leaf without unwind data); !found: unknown memory, stop.
+PRUNTIME_FUNCTION lookupFn(unsigned long long pc, DWORD64& imageBase, bool& found) {
+    found = false;
+    size_t lo = 0, hi = gMods.size();
+    while (lo < hi) { const size_t m = (lo + hi) / 2; if (gMods[m].base <= pc) lo = m + 1; else hi = m; }
+    if (lo == 0) return nullptr;
+    const ModTab& md = gMods[lo - 1];
+    if (pc >= md.end) return nullptr;
+    found = true; imageBase = md.base;
+    const DWORD rva = (DWORD)(pc - md.base);
+    size_t a = 0, z = md.n;
+    while (a < z) {
+        const size_t m = (a + z) / 2;
+        if (md.fn[m].EndAddress <= rva) a = m + 1;
+        else if (md.fn[m].BeginAddress > rva) z = m;
+        else return (PRUNTIME_FUNCTION)&md.fn[m];
+    }
+    return nullptr;
+}
+
 int walk(CONTEXT ctx, unsigned long long* out) {
     int n = 0;
     for (; n < kDepth && ctx.Rip; ++n) {
         out[n] = ctx.Rip;
         DWORD64 imageBase = 0;
-        PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(ctx.Rip, &imageBase, nullptr);
+        bool known = false;
+        PRUNTIME_FUNCTION fn = lookupFn(ctx.Rip, imageBase, known);
+        if (!known) { ++n; break; }              // unknown memory (JIT / a module loaded since the last refresh): end the walk
         if (!fn) {                               // a leaf without unwind data: return address at [rsp]
             if (!ctx.Rsp) break;
             ctx.Rip = *(DWORD64*)ctx.Rsp;
@@ -176,12 +226,17 @@ void refreshThreads(CpuProf& p, double windowS) {
 void run() {
     CpuProf& p = prof();
     if (p.busyThreads) refreshThreads(p, 1.0);
-    LARGE_INTEGER lastRefresh = p.start;
+    refreshModules();
+    LARGE_INTEGER lastRefresh = p.start, lastMods = p.start;
     LARGE_INTEGER last = p.start;
     const LARGE_INTEGER freq = p.freq, start = p.start;
     timeBeginPeriod(1);
     while (!p.quit.load()) {
         Sleep((DWORD)p.intervalMs);
+        {   // the module / .pdata copy: once a second, while no thread is suspended (EnumProcessModules takes the loader lock)
+            LARGE_INTEGER n1; QueryPerformanceCounter(&n1);
+            if ((double)(n1.QuadPart - lastMods.QuadPart) / (double)freq.QuadPart >= 1.0) { refreshModules(); lastMods = n1; }
+        }
         if (p.busyThreads) {                               // the other busy threads (the main thread is sampled below)
             LARGE_INTEGER n0; QueryPerformanceCounter(&n0);
             const double since = (double)(n0.QuadPart - lastRefresh.QuadPart) / (double)freq.QuadPart;
