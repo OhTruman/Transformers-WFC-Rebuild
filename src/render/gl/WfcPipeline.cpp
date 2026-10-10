@@ -4089,12 +4089,16 @@ void Pipeline::buildMdi(int meshId) {
     if (!lmArray_) buildLmArray();                      // (a second set reuses the array and its layer table)
     size_t arrayed = 0;
     uint32_t row = 0;
+    size_t whyNot[6] = {0, 0, 0, 0, 0, 0};   // drawn singly: no MDI program / translucent / actor / vertex LM / dyn channel / decal
     for (size_t si = 0; si < g.subs.size(); ++si) {
         Sub& s = g.subs[si];
         s.mdiRow = -1;
         if (s.prog < 0) continue;
         const Program& P = progs_[(size_t)s.prog];
-        if (P.mdiProg < 0 || P.blend >= 2 || !s.actor.empty() || s.vlmTex || s.dynChannel || g.decal) continue;
+        if (P.mdiProg < 0 || P.blend >= 2 || !s.actor.empty() || s.vlmTex || s.dynChannel || g.decal) {
+            ++whyNot[P.mdiProg < 0 ? 0 : P.blend >= 2 ? 1 : !s.actor.empty() ? 2 : s.vlmTex ? 3 : s.dynChannel ? 4 : 5];
+            continue;
+        }
         s.mdiRow = (int)row++;
         mdiRows_.resize((size_t)row * kMdiW * 4, 0.0f);
         float* rw = &mdiRows_[(size_t)s.mdiRow * kMdiW * 4];
@@ -4134,6 +4138,9 @@ void Pipeline::buildMdi(int meshId) {
     mdiMesh_ = meshId;
     LOG_INFO("wfc: %s MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)",
              meshId == bspMesh_ ? "level BSP" : "world", row, mdiBuckets_.size(), arrayed);
+    LOG_INFO("wfc: %s subs drawn singly: %zu without an MDI program, %zu translucent, %zu actor-owned, %zu vertex-lightmapped, "
+             "%zu dynamic-channel, %zu decal", meshId == bspMesh_ ? "level BSP" : "world", whyNot[0], whyNot[1], whyNot[2],
+             whyNot[3], whyNot[4], whyNot[5]);
 }
 
 void Pipeline::buildLmArray() {

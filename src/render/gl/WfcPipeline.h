@@ -808,7 +808,10 @@ private:
     size_t sgN_ = 0;
     int sgFrame_ = -1, sgSubjects_ = 0;
     bool shadowGpuFrame();
-    void shadowGpuStamp() { if (sgFrame_ == frameNo_ && sgN_ < sgQ_.size()) glx::QueryCounter(sgQ_[sgN_++], 0x8E28); }
+    static constexpr size_t kSgStamps = 7;
+    void shadowGpuStamp() {
+        if (sgFrame_ == frameNo_ && !shadowRefPass_ && sgN_ < sgQ_.size()) glx::QueryCounter(sgQ_[sgN_++], 0x8E28);
+    }
     void shadowGpuReport();
     bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
