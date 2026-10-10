@@ -16,14 +16,14 @@ Full rows (20 / 64 players, both builds, slow-frame causes): `per-map-tables.md`
 
 | map | overview 1080 | overview 2160 | real play 1080 | real play 2160 | limiter where it misses |
 |---|---|---|---|---|---|
-| 501 Seed | **3.03 MET** (2d6a027) | **3.28 MET** (2d6a027) | 2.74 MET (2a7bfc0) | 4.02 (2a7bfc0) | GPU (shadow passes fixed; rest GPU) |
+| 501 Seed | **3.03 MET** (2d6a027) | **3.28 MET** (2d6a027) | 2.74 MET (2a7bfc0) | 3.56 (345b8cc; p99 6.14) | GPU (shadow passes fixed; rest GPU) |
 | 502 Berth | 2.87 MET (f662513) | 2.87 MET (2a7bfc0) / 3.04 MET (072cee3) | 2.26 MET | 3.41 (f662513, before the shadow scissor) | GPU |
-| 503 Complex | 2.94 MET (072cee3) | 3.34-3.47 (c7bd3e9) | 2.38 MET | 3.39 (072cee3) | GPU |
+| 503 Complex | 2.94 MET (072cee3) | **3.21 MET** (345b8cc) | 2.38 MET | **3.06 MET** (345b8cc) | GPU |
 | 504 Rust | 4.34 (a19dc53) | 4.29 (a19dc53) | 3.72 (b898c75) | 3.92 (b898c75) | GPU - world geometry volume (2.1 M verts); occlusion cull planned |
 | 507 Debris | 2.89 MET | 2.78 MET | 2.62 MET | 2.75 MET | - |
 | 508 Streets | 2.58 MET | 2.87 MET | 2.40 MET | 2.95 MET | - |
-| 509 Molten | 2.62 MET | 3.16 MET | 2.49 MET | 3.63 (a19dc53) | GPU - eye-level translucency (0.85 ms) |
-| 510 Gorge | 3.55 (a19dc53) | 3.90 | 3.15 MET | 3.85 | GPU at 4K; 1080 overview GPU 48 % / chars 45 % |
+| 509 Molten | 2.62 MET | 3.16 MET | 2.49 MET | 3.56 (345b8cc) | GPU - eye-level translucency (0.85 ms) |
+| 510 Gorge | 3.55 (a19dc53) | **3.32 MET** (345b8cc) | 3.15 MET | 3.63 (345b8cc) | GPU at 4K; 1080 overview GPU 48 % / chars 45 % |
 
 37eec59 for contrast (64 players overview 1080 / 2160): Seed 5.10 / 7.23, Berth 2.75 / 4.06, Complex 4.56 / 5.73, Rust
 6.57 / 6.82, Debris 2.83 / 2.94, Streets 3.29 / 3.34, Molten 6.40 / 6.06, Gorge 3.98 / 7.06.

@@ -513,3 +513,39 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 510 | 1920x1080 | - | 64 | 301.8 | 3.3 | 3.85 | 4.05 | 4.44 | 17.02 | 204.6 | 142 | 1 / 0 | 0 | 53.9 % |  |  |  |  |  | 5396 |
+
+## 2026-10-10 05:32 - ? - 3D at 3840x2160 - cam overview - re-time 345b8cc map 510 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 336.2 | 3 | 3.32 | 3.41 | 3.64 | 7.56 | 253.7 | 199.6 | 0 / 0 | 0 | 91 % |  |  |  |  |  | 5556 |
+
+## 2026-10-10 05:39 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - re-time 345b8cc map 510 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 332.6 | 3.01 | 3.63 | 3.89 | 4.37 | 8.61 | 214.1 | 175.4 | 0 / 0 | 0 | 77.5 % |  |  |  |  |  | 5228 |
+
+## 2026-10-10 05:43 - ? - 3D at 3840x2160 - cam overview - re-time 345b8cc map 503 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 350.2 | 2.86 | 3.21 | 3.33 | 3.51 | 6.85 | 272.2 | 235.3 | 0 / 0 | 0 | 95.3 % |  |  |  |  |  | 5328 |
+
+## 2026-10-10 05:50 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - re-time 345b8cc map 503 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 409.8 | 2.4 | 3.06 | 3.26 | 3.62 | 9.96 | 257.2 | 197.9 | 0 / 0 | 0 | 96.3 % |  |  |  |  |  | 5200 |
+
+## 2026-10-10 05:58 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - re-time 345b8cc map 509 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 363.5 | 2.76 | 3.56 | 3.76 | 4.05 | 12.07 | 236.1 | 206.9 | 1 / 1 | 1 | 81.2 % |  |  |  |  |  | 5536 |
+
+## 2026-10-10 06:05 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - re-time 345b8cc map 501 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 368.6 | 2.7 | 3.56 | 3.88 | 6.14 | 8.14 | 138.5 | 128.3 | 0 / 0 | 0 | 83.5 % |  |  |  |  |  | 5709 |
