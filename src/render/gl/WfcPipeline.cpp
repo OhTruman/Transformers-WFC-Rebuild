@@ -709,6 +709,9 @@ void Pipeline::release() {
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
     for (GLuint* b : {&mdiOccBox_, &mdiOccVis_, &bspMdi_.occBox, &bspMdi_.occVis, &occCmdA_, &occCmdB_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+    for (GLuint& b : occCnt_) if (b) { DeleteBuffers(1, &b); b = 0; }
+    if (occCntQ_[0] && DeleteQueries) { DeleteQueries(4, occCntQ_); for (GLuint& q : occCntQ_) q = 0; }
+    for (int& f : occCntFrame_) f = -1;
     if (hzbTex_) { glDeleteTextures(1, &hzbTex_); hzbTex_ = 0; }
     for (GLuint* p : {&occSelectProg_, &occTestProg_, &hzbProg_}) if (*p) { DeleteProgram(*p); *p = 0; }
     for (GLuint* b : {&mdiVlmBo_, &bspMdi_.vlmBo}) if (*b) { DeleteBuffers(1, b); *b = 0; }
@@ -4548,6 +4551,7 @@ layout(std430, binding = 0) buffer C { Cmd cmd[]; };
 layout(std430, binding = 1) writeonly buffer B { Cmd cmdB[]; };
 layout(std430, binding = 2) buffer V { uint vis[]; };
 layout(std430, binding = 3) readonly buffer X { vec4 box[]; };
+layout(std430, binding = 4) buffer N { uint culledN[]; };
 uniform uint uN;
 uniform mat4 uVP;
 uniform ivec2 uDepthSize;
@@ -4586,6 +4590,7 @@ void main() {
         // fragments could pass LEQUAL
         if (zmin > m + 1e-6) visible = false;
     }
+    if (!visible) atomicAdd(culledN[0], 1u);
     Cmd b = c;
     b.instances = (visible && vis[row] == 0u) ? c.instances : 0u;   // newly visible: prepass B
     cmdB[i] = b;
@@ -4618,6 +4623,12 @@ void main() {
             return false;
         }
         GenBuffers(1, &occCmdA_); GenBuffers(1, &occCmdB_);
+        for (GLuint& b : occCnt_) {
+            const uint32_t z = 0;
+            GenBuffers(1, &b); BindBuffer(0x90D2, b); BufferData(0x90D2, sizeof z, &z, 0x88E9 /*GL_DYNAMIC_READ*/);
+        }
+        BindBuffer(0x90D2, 0);
+        if (GenQueries) GenQueries(4, occCntQ_);
         LOG_INFO("wfc: world occlusion culling on (exact two-pass Hi-Z; WFC_NOOCCCULL=1 off)");
     }
     return true;
@@ -4672,9 +4683,22 @@ void Pipeline::drawMdi(GpuMesh& g) {
     struct Cmd { uint32_t count, instances, first, baseVertex, baseInstance; };
     static std::vector<Cmd> cmds;
     static std::vector<std::pair<size_t, size_t>> ranges;     // per bucket: [begin, end) in cmds
-    cmds.clear(); ranges.clear();
+    cmds.clear(); ranges.assign(mdiBuckets_.size(), {0, 0});
+    // The buckets' commands are laid out by prepass class - prepassed one-sided, prepassed two-sided, the rest - so
+    // the depth prepass is one multi-draw per class (depth is the nearest of all fragments: draw order cannot change
+    // it). The shading pass still walks the buckets in their own order, each at its own offset. WFC_NOPREPACK=1: one
+    // prepass multi-draw per bucket, as before.
+    static const bool noPrepack = std::getenv("WFC_NOPREPACK") != nullptr;
+    auto prepassClass = [&](const MdiBucket& b) {
+        const Program& M = progs_[(size_t)progs_[(size_t)b.prog].mdiProg];
+        return M.blend != 0 || b.lm[0] == -3 ? 2 : M.twoSided ? 1 : 0;
+    };
+    size_t classEnd[3] = {0, 0, 0};
     bool rowsDirty = false;
-    for (const MdiBucket& b : mdiBuckets_) {
+    for (int pc = 0; pc < (noPrepack ? 1 : 3); ++pc) {
+    for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
+        const MdiBucket& b = mdiBuckets_[bi];
+        if (!noPrepack && prepassClass(b) != pc) continue;
         const size_t begin = cmds.size();
         for (uint32_t si : b.subs) {
             Sub& s = g.subs[si];
@@ -4710,7 +4734,9 @@ void Pipeline::drawMdi(GpuMesh& g) {
             }
             if (matSeenFrame_[(size_t)s.matKey] != frameNo_) { matSeenFrame_[(size_t)s.matKey] = frameNo_; ++frameMatCount_; }
         }
-        ranges.push_back({begin, cmds.size()});
+        ranges[bi] = {begin, cmds.size()};
+    }
+    classEnd[pc] = cmds.size();
     }
     if (rowsDirty) {
         glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
@@ -4764,6 +4790,16 @@ void Pipeline::drawMdi(GpuMesh& g) {
             static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
             size_t preBuckets = 0, preDraws = 0;
             auto prepassDraws = [&]() {
+                if (!noPrepack) {                          // one multi-draw per prepass class (see the layout above)
+                    for (int pc = 0; pc < 2; ++pc) {
+                        const size_t b0 = pc ? classEnd[0] : 0, n = classEnd[pc] - b0;
+                        if (!n) continue;
+                        ++preBuckets; preDraws += n;
+                        if (pc || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+                        MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(b0 * sizeof(Cmd)), (GLsizei)n, 0);
+                    }
+                    return;
+                }
                 for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
                     const size_t n = ranges[bi].second - ranges[bi].first;
                     const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
@@ -4773,7 +4809,29 @@ void Pipeline::drawMdi(GpuMesh& g) {
                     MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
                 }
             };
-            const bool occ = occCullReady();
+            bool occ = occCullReady();
+            // Adaptive (exact either way: a frame without the cull draws every frustum-visible sub, and a stale
+            // visibility set only moves subs from prepass A to B): the test counts the subs it culls into one of four
+            // small buffers, read once the GPU is past it (its timestamp query's result is available - never waited
+            // for). After 60 frames in which nothing was culled the cull runs only every 15th frame, as a probe.
+            // WFC_OCCALWAYS=1: every frame.
+            static const bool occAlways = std::getenv("WFC_OCCALWAYS") != nullptr;
+            int occSlot = -1;
+            if (occ && occCntQ_[0] && GetQueryObjectiv && QueryCounter && GetBufferSubData) {
+                for (int k = 0; k < 4; ++k) {
+                    if (occCntFrame_[k] < 0) continue;
+                    GLint avail = 0;
+                    GetQueryObjectiv(occCntQ_[k], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
+                    if (!avail) continue;
+                    uint32_t n = 0;
+                    BindBuffer(0x90D2, occCnt_[k]); GetBufferSubData(0x90D2, 0, sizeof n, &n);
+                    if (n) occLastHit_ = std::max(occLastHit_, occCntFrame_[k]);
+                    occCntFrame_[k] = -1;
+                }
+                BindBuffer(0x90D2, 0);
+                if (!occAlways && frameNo_ - occLastHit_ > 60 && frameNo_ % 15 != 0) occ = false;
+                for (int k = 0; k < 4 && occ && occSlot < 0; ++k) if (occCntFrame_[k] < 0) occSlot = k;
+            }
             const GLuint nCmd = (GLuint)cmds.size();
             if (occ) {                                     // prepass A: the commands of last frame's visible subs
                 BindBuffer(0x90D2, occCmdA_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
@@ -4789,7 +4847,8 @@ void Pipeline::drawMdi(GpuMesh& g) {
             }
             prepassDraws();
             if (occ) {                                     // Hi-Z of pass A's depth, the test, then prepass B
-                MemoryBarrier(0xFFFFFFFF);
+                // (no barrier: pass A's depth is a framebuffer write, ordered before later texture fetches by GL itself;
+                // the select's SSBO writes were made visible to the indirect fetch above)
                 buildHzb();
                 UseProgram(occTestProg_);
                 Uniform1ui(cachedUniformLocation(occTestProg_, "uN"), nCmd);
@@ -4800,8 +4859,15 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 ActiveTexture(GL_TEXTURE0 + 23); glBindTexture(GL_TEXTURE_2D, hzbTex_); ActiveTexture(GL_TEXTURE0);
                 BindBufferBase(0x90D2, 0, mdiCmdBuf_); BindBufferBase(0x90D2, 1, occCmdB_);
                 BindBufferBase(0x90D2, 2, mdiOccVis_); BindBufferBase(0x90D2, 3, mdiOccBox_);
+                {
+                    const uint32_t z = 0;
+                    const GLuint cb = occCnt_[occSlot >= 0 ? occSlot : 4];
+                    BindBuffer(0x90D2, cb); BufferSubData(0x90D2, 0, sizeof z, &z); BindBuffer(0x90D2, 0);
+                    BindBufferBase(0x90D2, 4, cb);
+                }
                 DispatchCompute((nCmd + 63) / 64, 1, 1);
-                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/);
+                if (occSlot >= 0) { QueryCounter(occCntQ_[occSlot], 0x8E28 /*GL_TIMESTAMP*/); occCntFrame_[occSlot] = frameNo_; }
+                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/ | 0x00000200 /*BUFFER_UPDATE*/);
                 UseProgram(zPreProg_);
                 glx::uniformCacheForgetCurrent();
                 ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_); ActiveTexture(GL_TEXTURE0);
@@ -4809,10 +4875,11 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 BindBuffer(0x8F3F, occCmdB_);
                 prepassDraws();
                 BindBuffer(0x8F3F, mdiCmdBuf_);           // the shading pass: the test's culled commands
-                // WFC_OCCSTATS=1 (diagnostics; a synchronous readback, so that frame stalls): every 300th frame, how many
-                // frustum-visible world sub-meshes the cull dropped from the shading pass, and pass A / B sizes
+                // WFC_OCCSTATS=1 (diagnostics; a synchronous readback, so that frame stalls): every 300th frame (a probe
+                // frame: the adaptive cull always runs on it), how many frustum-visible world sub-meshes the cull dropped
+                // from the shading pass, and pass A / B sizes
                 static const bool occStats = std::getenv("WFC_OCCSTATS") != nullptr && GetBufferSubData;
-                if (occStats && frameNo_ % 300 == 1 && nCmd) {
+                if (occStats && frameNo_ % 300 == 0 && nCmd) {
                     std::vector<Cmd> sh(nCmd), ca(nCmd), cb(nCmd);
                     GetBufferSubData(0x8F3F, 0, (GLsizeiptr)(nCmd * sizeof(Cmd)), sh.data());
                     BindBuffer(0x8F3F, occCmdA_); GetBufferSubData(0x8F3F, 0, (GLsizeiptr)(nCmd * sizeof(Cmd)), ca.data());
@@ -4833,7 +4900,8 @@ void Pipeline::drawMdi(GpuMesh& g) {
             glx::uniformCacheForgetCurrent();
             prepassed = true;
             if (frameNo_ % 600 == 1)                       // evidence for A/B harnesses (WFC_NOZPREPASS=1: no such line)
-                LOG_INFO("wfc: world depth prepass on: %zu buckets, %zu draws this frame%s", preBuckets, preDraws,
+                LOG_INFO("wfc: world depth prepass on: %zu %s, %zu draws this frame%s", preBuckets,
+                         noPrepack ? "buckets" : "multi-draws", preDraws,
                          WFC_ENV("WFC_ZPREPASS_TEST") ? " (WFC_ZPREPASS_TEST: opaque world shading skipped)" : "");
             depthDirty_ = true;
         }
