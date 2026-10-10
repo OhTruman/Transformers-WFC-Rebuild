@@ -408,6 +408,7 @@ public:
         float lineHeight = 0;
     };
     std::map<std::string, CanvasFont> fonts_;
+    std::map<int, ScreenBatch> canvasTextPages_;           // drawCanvasText scratch (see there)
     CanvasFont& font(const std::string& name) {
         auto it = fonts_.find(name);
         if (it != fonts_.end()) return it->second;
@@ -467,7 +468,10 @@ public:
                         float scale) override {
         CanvasFont& f = font(name);
         if (!f.ok) return false;
-        std::map<int, ScreenBatch> perPage;
+        // per-page batches kept across calls (HUD markers draw text every frame): vertex lists cleared, capacity kept;
+        // pages this call leaves empty are skipped below, so the draws and their order match a fresh map
+        std::map<int, ScreenBatch>& perPage = canvasTextPages_;
+        for (auto& kv : perPage) kv.second.verts.clear();
         float cx = x;
         for (uint32_t cp : utf8Decode(utf8)) {
             const auto* g = glyph(f, cp);
@@ -488,7 +492,7 @@ public:
             }
             cx += c[2] * scale;
         }
-        for (auto& kv : perPage) drawScreenTriangles(kv.second);
+        for (auto& kv : perPage) if (!kv.second.verts.empty()) drawScreenTriangles(kv.second);
         return true;
     }
 
