@@ -605,12 +605,18 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     if (const char* ov = WFC_ENV("WFC_SUBJECTRELEVANCE")) rel = (uint32_t)std::strtoul(ov, nullptr, 16);   // gate tests
     if ((rel & 7u) == 0) { ++statShadowGated_; return; }               // neither relevant nor visible
     ShadowRequest rq;
-    if (!renderShadowDepth(g, model, p, rq)) return;
-    if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }   // World DPG pass
+    const bool sg = shadowGpuFrame();
+    const size_t sg0 = sgN_;
+    if (sg) shadowGpuStamp();
+    if (!renderShadowDepth(g, model, p, rq)) { sgN_ = sg0; return; }
+    if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; sgN_ = sg0; return; }   // World DPG pass
+    if (sg) shadowGpuStamp();
     depthPrepass(g, model);
+    if (sg) shadowGpuStamp();
     static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;
     static const bool rectCheck = std::getenv("WFC_SHADOWRECTCHECK") != nullptr;
     projectSubjectShadow(p, rq, fullPasses);
+    if (sg) { shadowGpuStamp(); if (sgN_ - sg0 == 4) ++sgSubjects_; else sgN_ = sg0; }
     if (rectCheck && !fullPasses) shadowRectCheck(g, model, p, rq);
 }
 
@@ -913,3 +919,32 @@ void Pipeline::runShadowMaskSelfTest() {
 
 } // namespace wfc
 } // namespace render
+
+namespace render::wfc {
+
+bool Pipeline::shadowGpuFrame() {
+    static const bool on = std::getenv("WFC_SHADOWGPU") != nullptr && QueryCounter && GetQueryObjectui64v;
+    if (!on || frameNo_ % 240 != 0) return false;
+    if (sgFrame_ != frameNo_) { sgFrame_ = frameNo_; sgN_ = 0; sgSubjects_ = 0; }
+    if (sgQ_.size() < sgN_ + 4) {                            // grown in blocks (a subject takes 4 stamps)
+        const size_t old = sgQ_.size();
+        sgQ_.resize(old + 256);
+        GenQueries(256, &sgQ_[old]);
+    }
+    return true;
+}
+
+void Pipeline::shadowGpuReport() {
+    if (sgFrame_ != frameNo_ || sgSubjects_ == 0) return;
+    double st[3] = {0, 0, 0};
+    for (size_t i = 0; i + 3 < sgN_; i += 4) {
+        unsigned long long t[4];
+        for (int k = 0; k < 4; ++k) GetQueryObjectui64v(sgQ_[i + (size_t)k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
+        for (int k = 0; k < 3; ++k) st[k] += (double)(t[k + 1] - t[k]) / 1.0e6;
+    }
+    LOG_INFO("SHADOWGPU frame %d: %d projected shadows: shadow depth %.3f ms, receiver depth prepass %.3f ms, mask "
+             "projection %.3f ms (GPU, summed)", frameNo_, sgSubjects_, st[0], st[1], st[2]);
+    sgSubjects_ = 0; sgN_ = 0;
+}
+
+}  // namespace render::wfc

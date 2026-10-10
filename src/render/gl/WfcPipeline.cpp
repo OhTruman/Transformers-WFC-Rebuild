@@ -5440,6 +5440,7 @@ void Pipeline::drawCanvasTiles() {
 }
 
 void Pipeline::endFrame() {
+    shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
     {
         counts_.materials = frameMatCount_;
