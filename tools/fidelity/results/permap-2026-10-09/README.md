@@ -64,3 +64,6 @@ data of 37eec59 by junction - tools/render differences between them are packagin
 - FFA 64 (345b8cc, Streets): 64 / 64 spawns, results screen x 2, second match, p90 2.62-2.86 MET; open defect: bots stranded off
   the nav mesh (cell -1, no-path to 535) - capacity-stress now has an `offmesh` check.
 - Retractions this day: lane-build OCCSTATS (loaded Streets - hook missing), "overview cams cull nothing" (draws are pre-cull).
+- 2040e9a (Rendering 6cf1a53: c17eee7's cull restored as default, readback opt-in, prepack kept) vs c17eee7, real play 64p 4K at
+  150 s, 2 reps: Rust 3.55 / 3.43 vs 3.55 / 3.45; Seed 3.02 / 3.30 MET vs 3.32 / 3.06; Gorge 3.62 / 3.17 vs 3.56 / 3.49;
+  world-pass CPU 0.40-0.60 ms on both - the c969c84 regression is fixed.
