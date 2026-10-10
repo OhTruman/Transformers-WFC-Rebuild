@@ -191,6 +191,14 @@ GLenum pollResetStatus();
 // whole frame; a frame whose GPU time exceeds 250 ms is logged (Windows resets the driver on ~2 s of GPU work).
 void gpuTimerBegin();
 void gpuTimerEnd();
+// GPU timestamps at the 3D frame's end (gpuTimerEnd) and right before present (gpuPrePresent, from a SwapBuffers
+// import hook: installPrePresentStamp), read with the frame's other queries: lastGpuAfter3dMs = GPU time from the 3D end to
+// the present (HUD / 2D / canvas draws, including GPU waits for their submission); lastGpuPeriodMs = GPU-timeline time
+// from this frame's start stamp to the next frame's (the GPU's real frame period: present, idle and all). -1 = n/a.
+void gpuPrePresent();
+void installPrePresentStamp();          // hooks the exe's SwapBuffers import to call gpuPrePresent first (diagnostics)
+double lastGpuAfter3dMs();
+double lastGpuPeriodMs();
 double lastGpuFrameMs();
 long gpuFrameReads();
 // Per-pass GPU timestamps (GL_TIMESTAMP) in the same 3-frame ring: mark k (1..5) at a pass boundary of the current

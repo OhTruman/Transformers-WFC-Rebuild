@@ -104,6 +104,10 @@ long gGpuReads = 0;            // readbacks so far (a new value of lastGpuFrameM
 GLuint gTs[3][6] = {};
 bool gTsSet[3][6] = {};
 double gPassMs[6] = {-1, -1, -1, -1, -1, -1};      // the CPU span of the frame gLastGpuMs belongs to
+GLuint gTsEnd[3] = {}, gTsPre[3] = {};               // 3D end / pre-present stamps per slot
+bool gTsEndSet[3] = {}, gTsPreSet[3] = {};
+double gAfter3dMs = -1.0, gPeriodMs = -1.0;
+unsigned long long gPrevStartTs = 0; long gPrevStartIdx = -2;
 // CPU time between the query's begin and end of the same frame: TIME_ELAPSED is GPU-timeline time between the two
 // markers, so it includes the GPU waiting for commands the CPU had not submitted yet (driver work inside the frame).
 // gpu ~ cpu span => a CPU-side stall inside the frame, not GPU load (no TDR risk); gpu >> cpu => real GPU work.
@@ -147,6 +151,17 @@ void gpuTimerBegin() {
             if (prev >= 0) gPassMs[k] = (double)(t[k] - t[prev]) / 1.0e6;
             prev = k;
         }
+        gAfter3dMs = -1.0; gPeriodMs = -1.0;
+        {
+            unsigned long long te = 0, tp = 0; GLint r1 = 0, r2 = 0;
+            if (gTsEndSet[slot]) { GetQueryObjectiv(gTsEnd[slot], kResultAvailable, &r1); if (r1) GetQueryObjectui64v(gTsEnd[slot], kResult, &te); }
+            if (gTsPreSet[slot]) { GetQueryObjectiv(gTsPre[slot], kResultAvailable, &r2); if (r2) GetQueryObjectui64v(gTsPre[slot], kResult, &tp); }
+            if (r1 && r2 && tp >= te) gAfter3dMs = (double)(tp - te) / 1.0e6;
+            gTsEndSet[slot] = gTsPreSet[slot] = false;
+            // the previous measured frame's start to this one's: the GPU-timeline frame period of the previous frame
+            if (have[0] && gPrevStartIdx == gQFrame[slot] - 1 && t[0] > gPrevStartTs) gPeriodMs = (double)(t[0] - gPrevStartTs) / 1.0e6;
+            gPrevStartTs = have[0] ? t[0] : 0; gPrevStartIdx = have[0] ? gQFrame[slot] : -2;
+        }
         gLastCpuMs = gQCpuMs[slot];
         gLastGpuIdx = gQFrame[slot];
         gQActive[slot] = false;
@@ -172,6 +187,10 @@ void gpuTimerEnd() {
     if (EndQuery && gBegun) {
         EndQuery(0x88BF);
         const int slot = gQi % 3;
+        if (QueryCounter && gTs[0][0]) {
+            if (!gTsEnd[0]) { GenQueries(3, gTsEnd); GenQueries(3, gTsPre); }
+            QueryCounter(gTsEnd[slot], 0x8E28); gTsEndSet[slot] = true;
+        }
         gQCpuMs[slot] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gQBegin[slot]).count();
     }
     gBegun = false;
@@ -179,6 +198,14 @@ void gpuTimerEnd() {
 }
 
 double lastGpuFrameMs() { return gLastGpuMs; }
+void gpuPrePresent() {
+    if (!QueryCounter || !gTsPre[0]) return;
+    const int slot = (int)((gQi + 2) % 3);          // the frame gpuTimerEnd just closed (gQi was incremented there)
+    if (!gTsEndSet[slot] || gTsPreSet[slot]) return;
+    QueryCounter(gTsPre[slot], 0x8E28); gTsPreSet[slot] = true;
+}
+double lastGpuAfter3dMs() { return gAfter3dMs; }
+double lastGpuPeriodMs() { return gPeriodMs; }
 double lastGpuFrameCpuMs() { return gLastCpuMs; }
 void gpuMark(int k) {
     if (k > 0 && k < 6 && gCpuMark[k] < 0.0)
@@ -618,6 +645,18 @@ void install() {
     if (MultiDrawElementsIndirect && MultiDrawElementsIndirect != tMDEI) { rMDEI = MultiDrawElementsIndirect; MultiDrawElementsIndirect = tMDEI; }
 }
 }  // namespace drawcombo
+
+namespace {
+drawcombo::PFN_Swap gSwapNext = nullptr;
+BOOL WINAPI tSwapStamp(HDC dc) { gpuPrePresent(); return gSwapNext(dc); }
+}
+void installPrePresentStamp() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    const int n = drawcombo::patchImport("SwapBuffers", (drawcombo::PFN_Swap)tSwapStamp, gSwapNext);
+    LOG_INFO("WFC_SLOWFRAME: pre-present GPU stamp %s", n ? "on (SwapBuffers import hooked)" : "unavailable");
+}
 
 bool load() {
     bool ok = true;
