@@ -790,7 +790,7 @@ private:
     void fillMaskDepth();
     void drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& vp, GLuint prog);
     void castCharacterShadow(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p);
-    void projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses);
+    void projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses, bool shared = false);
     // WFC_SHADOWRECTCHECK=1: every scissored projection is repeated with the full-screen passes into a second mask set
     // (swapped in) and the two blurred masks compared texel by texel (logged); diagnostics only
     struct MaskSet {
@@ -808,6 +808,29 @@ private:
     }
     void shadowRectCheck(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, const ShadowRequest& rq);
     bool forceFullShadowClear_ = false;                   // (WFC_SHADOWRECTCHECK's reference pass)
+    // Projected shadows in the original's order (FIDELITY.md ShadowMask rows, CONFIRMED ORIGINAL: the mask is cleared once,
+    // every projected shadow multiplies into it, one resolve + BlurShadowMask, then the characters' base pass reads it).
+    // GPU-skinned shadow-casting dynamic draws are queued in call order and flushed (flushDynQueue) at the next pass
+    // boundary: all receivers' depth, one scene-depth copy, every projection, one blur, then the draws in order.
+    // WFC_SHADOWINCREMENTAL=1: the queue replays the previous per-robot order (cast + blur + draw per record);
+    // WFC_CHARDEFER=0: no queue (immediate, the previous code path).
+    struct DynDraw {
+        GpuMesh* g = nullptr; GLuint vao = 0; core::Mat4 model; SkinDraw sk{};
+        int skinMode = 0, skinRow = 0, skinBones = 0; float skinAlpha = 1.0f;
+        int poseBlend = 0; float poseAlpha = 1.0f;
+        const std::vector<core::Vec3>* envSamples = nullptr; int envForm = -1; core::Vec3 envC, envE;
+        int owner = 0; bool hasParams = false; std::vector<std::pair<std::string, std::array<float, 4>>> params;
+        float fxColor[4] = {1, 1, 1, 1}, dynParam[4] = {1, 1, 1, 1};
+        bool occluded = false;
+    };
+    std::vector<DynDraw> dynQueue_;
+    bool flushingDyn_ = false;
+    int shadowPhase_ = 0;                                 // 0 cast fully, 1 receiver depth only, 2 shadow depth + projection
+    bool shadowMathOnly_ = false;                         // renderShadowDepth: the request only (no render)
+    bool phaseProjected_ = false;
+    bool charDeferOn() const;
+    void restoreDynDraw(const DynDraw& d);
+    void flushDynQueue();
     // WFC_SHADOWGPU=1 (diagnostics): every 240th frame, GPU timestamps around each projected shadow's stages (shadow
     // depth render / receiver depth prepass / mask projection), summed and logged at the frame's end (that frame stalls)
     std::vector<GLuint> sgQ_;
