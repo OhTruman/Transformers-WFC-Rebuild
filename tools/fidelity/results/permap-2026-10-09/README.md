@@ -16,7 +16,7 @@ Full rows (20 / 64 players, both builds, slow-frame causes): `per-map-tables.md`
 
 | map | overview 1080 | overview 2160 | real play 1080 | real play 2160 | limiter where it misses |
 |---|---|---|---|---|---|
-| 501 Seed | 3.25-3.35 (c7bd3e9, 2 reps) | 3.55-3.75 (c7bd3e9) | 2.74 MET (2a7bfc0) | 4.02 (2a7bfc0) | GPU (shadow passes fixed; rest GPU) |
+| 501 Seed | **3.03 MET** (2d6a027) | **3.28 MET** (2d6a027) | 2.74 MET (2a7bfc0) | 4.02 (2a7bfc0) | GPU (shadow passes fixed; rest GPU) |
 | 502 Berth | 2.87 MET (f662513) | 2.87 MET (2a7bfc0) / 3.04 MET (072cee3) | 2.26 MET | 3.41 (f662513, before the shadow scissor) | GPU |
 | 503 Complex | 2.94 MET (072cee3) | 3.34-3.47 (c7bd3e9) | 2.38 MET | 3.39 (072cee3) | GPU |
 | 504 Rust | 4.34 (a19dc53) | 4.29 (a19dc53) | 3.72 (b898c75) | 3.92 (b898c75) | GPU - world geometry volume (2.1 M verts); occlusion cull planned |
@@ -37,6 +37,7 @@ Full rows (20 / 64 players, both builds, slow-frame causes): `per-map-tables.md`
 | skinned-palette trim (072cee3) | WFC_SKINFULLROW, 2 reps | no 4K regression (GPU per slow frame identical); 1080 slightly better; the single-run 4K 4.07 was noise |
 | uniform location cache + partial shadow clear (c7bd3e9) | vs 072cee3 / 2a7bfc0 | Seed 1080 3.25-3.35, chars CPU 1.61 -> 1.06 ms |
 | depth prepass (Rust) | WFC_NOZPREPASS | no-prepass -0.2 ms GPU at 1080, +0.2 at 4K (vertex vs fill) -> per-bucket prepass |
+| original-order projected shadows (2d6a027) | Seed 64, WFC_SHADOWINCREMENTAL | 4K p90 3.64 -> 3.28 MET, 1080 3.38 -> 3.03 MET (GPU 2.56 -> 2.28 / 2.26 -> 1.79) |
 | vertex-lightmapped draws batched (a19dc53) | Rust 64, WFC_NOVLMMDI | p90 4.63 -> 4.34 (1080), 4.90 -> 4.29 (4K) |
 | Rust GPU buckets | WFC_GPUBUCKETS | world MDI 0.64 / 0.99 ms of ~2.7-2.9 ms GPU; top buckets = big decal / trim materials |
 
