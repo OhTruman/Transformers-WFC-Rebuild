@@ -799,6 +799,14 @@ private:
     }
     void shadowRectCheck(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, const ShadowRequest& rq);
     bool forceFullShadowClear_ = false;                   // (WFC_SHADOWRECTCHECK's reference pass)
+    // WFC_SHADOWGPU=1 (diagnostics): every 240th frame, GPU timestamps around each projected shadow's stages (shadow
+    // depth render / receiver depth prepass / mask projection), summed and logged at the frame's end (that frame stalls)
+    std::vector<GLuint> sgQ_;
+    size_t sgN_ = 0;
+    int sgFrame_ = -1, sgSubjects_ = 0;
+    bool shadowGpuFrame();
+    void shadowGpuStamp() { if (sgFrame_ == frameNo_ && sgN_ < sgQ_.size()) glx::QueryCounter(sgQ_[sgN_++], 0x8E28); }
+    void shadowGpuReport();
     bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
     void runShadowMaskSelfTest();

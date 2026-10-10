@@ -1906,6 +1906,10 @@ void Pipeline::drawMapPresentation() {
                 }
             } else {                                          // sprites
                 std::vector<Sprite> sp;
+                // (Frontend, for Rendering) the buffer comes from the command slot it is emitted into below, so a warm
+                // frame allocates no per-emitter sprite vector; WFC_NOMAPFXREUSE=1 = the previous fresh vector (A/B).
+                static const bool noReuse = std::getenv("WFC_NOMAPFXREUSE") != nullptr;
+                if (!noReuse && out.used < out.cmds.size()) { sp.swap(out.cmds[out.used].sp); sp.clear(); }
                 sp.reserve(rt.parts.size());
                 // a particle whose quad (any orientation: inside the sphere of radius |(w, h)| / 2 about its centre;
                 // octagon / best-fit polygons stay inside the quad) is wholly outside the view frustum draws nothing:
@@ -1934,8 +1938,10 @@ void Pipeline::drawMapPresentation() {
                     core::Vec3 ax, ay;
                     bool aligned = false;
                     // Our quad: U grows along ax, V grows along -ay (c0 = c - hx - hy has UV (0, 1)).
-                    const core::Vec3 toCam = core::normalize(camPos_ - c);
+                    // toCam only on the paths that use it (the plain billboard does not): same value, no sqrt per sprite.
+                    auto toCamAt = [&]() { return core::normalize(camPos_ - c); };
                     if (L.velocityAligned) {
+                        const core::Vec3 toCam = toCamAt();
                         // PSA_Velocity (RE pass 5 s15; CPU CONFIRMED, shader HIGH): D = normalize(Pos - OldPos), world;
                         // length Size.y along D with V = 0 the LEADING edge, width Size.x along cross(camera - particle, D);
                         // rotation ignored; no speed stretch. A stationary particle collapses (invisible), as the original.
@@ -1978,6 +1984,7 @@ void Pipeline::drawMapPresentation() {
                             // ROTATE_*_U: U and V swapped with A negated. Rotation ignored.
                             const bool swapUV = la >= 10;
                             core::Vec3 A = axis((la - 7) % 3) * (swapUV ? -1.0f : 1.0f);
+                            const core::Vec3 toCam = toCamAt();
                             core::Vec3 Pv = core::cross(toCam, A);
                             float pl = core::length(Pv);
                             if (pl <= 1e-6f) continue;                  // viewed straight down the axis: zero width
