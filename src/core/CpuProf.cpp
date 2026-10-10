@@ -8,7 +8,9 @@
 // that frame are appended to wfc_cpuprof_hitch.txt (one block per hitch) - one-off spikes that a 10 s window averages away.
 // WFC_CPUPROF_THREADS=busy: every thread of the process that used more than WFC_CPUPROF_BUSY_PCT % of a core (default 15) in the
 // last second is sampled too, each stack tagged with its thread id ("[tid N]"); default: the main thread only. The async sim step
-// thread runs ~1 ms per 16.7 ms step (~6 %): use WFC_CPUPROF_BUSY_PCT=3 to include it (the GL driver's threads show as "ext").
+// thread runs ~1 ms per 16.7 ms step (~6 %): use WFC_CPUPROF_BUSY_PCT=3 to include it. Frames outside the exe print as
+// "<module>+0x<offset>" (e.g. the GL driver's DLL, ntdll), resolved when the report is written, never in the sampler. With busy
+// threads on, the hitch ring holds every sampled thread too, so a stall shows what the driver's own threads were doing.
 // Self-installing (a static initializer on the main thread); with the variable unset
 // nothing runs. Suspending the main thread while it is inside the GL driver can disturb the driver's submission: A/B the frame
 // time with and without the profiler, and prefer a coarse interval (WFC_CPUPROF=5) for in-match work.
@@ -29,7 +31,7 @@ constexpr int kDepth = 32;                      // deep enough to unwind through
 constexpr int kSlots = 1 << 14;                 // open-addressing table of distinct stacks (no allocation in the sampler)
 struct Slot { unsigned long long pc[kDepth]; int depth; long count; unsigned tid; };
 
-struct Recent { double t; int depth; unsigned long long pc[kDepth]; };
+struct Recent { double t; int depth; unsigned tid; unsigned long long pc[kDepth]; };
 constexpr int kRecent = 4096;                   // ~4 s at 1 ms, ~20 s at 5 ms
 struct CpuProf {
     HANDLE mainThread = nullptr;
@@ -52,6 +54,35 @@ struct CpuProf {
 };
 
 CpuProf& prof() { static CpuProf* p = new CpuProf; return *p; }   // leaked: the sampler may outlive static destruction
+
+// "<module>+0x<off>" for a pc outside the exe (report / hitch dump time only: GetModuleHandleEx takes the loader lock).
+void printPc(FILE* f, const CpuProf& p, unsigned long long pc) {
+    if (pc >= p.base && pc < p.end) { std::fprintf(f, " +0x%llx", pc - p.base); return; }
+    HMODULE m = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)pc, &m) || !m) {
+        std::fprintf(f, " ext");
+        return;
+    }
+    char path[MAX_PATH] = {};
+    GetModuleFileNameA(m, path, MAX_PATH);
+    const char* name = path;
+    for (const char* c = path; *c; ++c) if (*c == '\\' || *c == '/') name = c + 1;
+    char shortName[40] = {};
+    int i = 0;
+    for (; name[i] && name[i] != '.' && i < 39; ++i) shortName[i] = name[i];
+    std::fprintf(f, " %s+0x%llx", shortName[0] ? shortName : "ext", pc - (unsigned long long)m);
+}
+
+void pushRecent(CpuProf& p, const unsigned long long* pc, int depth, unsigned tid) {   // sampler thread only
+    LARGE_INTEGER now; QueryPerformanceCounter(&now);
+    const long h = p.recentHead.load(std::memory_order_relaxed);
+    Recent& r = p.recent[h % kRecent];
+    r.t = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
+    r.depth = depth;
+    r.tid = tid;
+    std::memcpy(r.pc, pc, sizeof(unsigned long long) * (size_t)depth);
+    p.recentHead.store(h + 1, std::memory_order_release);
+}
 
 int walk(CONTEXT ctx, unsigned long long* out) {
     int n = 0;
@@ -105,10 +136,7 @@ void report(CpuProf& p, double t) {
         const Slot& s = p.slots[top[k]];
         if (p.busyThreads) std::fprintf(f, "%ld samples [tid %u%s]:", s.count, s.tid, s.tid == p.mainTid ? " main" : "");
         else std::fprintf(f, "%ld samples:", s.count);
-        for (int i = 0; i < s.depth; ++i) {
-            if (s.pc[i] >= p.base && s.pc[i] < p.end) std::fprintf(f, " +0x%llx", s.pc[i] - p.base);
-            else std::fprintf(f, " ext");
-        }
+        for (int i = 0; i < s.depth; ++i) printPc(f, p, s.pc[i]);
         std::fprintf(f, "\n");
     }
     if (p.busyThreads) {
@@ -168,7 +196,7 @@ void run() {
                 unsigned long long pc2[kDepth]; int d2 = 0;
                 if (GetThreadContext(t.h, &c2)) d2 = walk(c2, pc2);
                 ResumeThread(t.h);
-                if (d2 > 0) { record(p, pc2, d2, t.tid); ++t.samples; }
+                if (d2 > 0) { record(p, pc2, d2, t.tid); ++t.samples; pushRecent(p, pc2, d2, t.tid); }
             }
         }
         if (SuspendThread(p.mainThread) == (DWORD)-1) break;   // the main thread is gone
@@ -179,13 +207,7 @@ void run() {
         if (depth > 0) {
             record(p, pc, depth, p.mainTid); ++p.samples;
             if (p.busyThreads) for (CpuProf::Thr& t : p.thr) if (t.tid == p.mainTid) { ++t.samples; break; }
-            LARGE_INTEGER now; QueryPerformanceCounter(&now);
-            const long h = p.recentHead.load(std::memory_order_relaxed);
-            Recent& r = p.recent[h % kRecent];
-            r.t = (double)(now.QuadPart - p.start.QuadPart) * 1000.0 / (double)p.freq.QuadPart;
-            r.depth = depth;
-            std::memcpy(r.pc, pc, sizeof(unsigned long long) * (size_t)depth);
-            p.recentHead.store(h + 1, std::memory_order_release);
+            pushRecent(p, pc, depth, p.mainTid);
         }
         LARGE_INTEGER now; QueryPerformanceCounter(&now);
         if ((double)(now.QuadPart - last.QuadPart) / (double)freq.QuadPart >= p.everyS) {
@@ -247,11 +269,9 @@ void onLogLine(const char* line) {
     for (long i = head - 1; i >= 0 && i >= head - kRecent; --i) {
         const Recent& r = p.recent[i % kRecent];
         if (r.t < tNow - ms - 5.0) break;           // the frame's interval (+ 5 ms slack for the log's delay)
-        std::fprintf(f, "%.3f ms ago:", tNow - r.t);
-        for (int d = 0; d < r.depth; ++d) {
-            if (r.pc[d] >= p.base && r.pc[d] < p.end) std::fprintf(f, " +0x%llx", r.pc[d] - p.base);
-            else std::fprintf(f, " ext");
-        }
+        if (p.busyThreads) std::fprintf(f, "%.3f ms ago [tid %u%s]:", tNow - r.t, r.tid, r.tid == p.mainTid ? " main" : "");
+        else std::fprintf(f, "%.3f ms ago:", tNow - r.t);
+        for (int d = 0; d < r.depth; ++d) printPc(f, p, r.pc[d]);
         std::fprintf(f, "\n");
         ++n;
     }

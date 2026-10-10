@@ -71,10 +71,9 @@ void dump(const Rec& stall) {
     for (long i = head - kRing; i < head; ++i) {
         if (i < 0) continue;
         const Rec& r = ring[i % kRing];
-        std::fprintf(f, "%8.3f %10.2f %8.2f %9.2f %9.2f %8d %10d %10d %9d %11lu %7.1f %10llu %11llu\n", r.t / 1000.0, r.interval, r.swapMs,
-                     r.inputMs, r.inputMaxMs, r.inputCalls, r.vboFree, r.texFree, r.rbFree, r.pageFaults, r.wsMB, r.dwmMissed, r.dwmDropped);
-        std::fseek(f, -1, SEEK_CUR);   // (replace the newline: the system memory columns follow)
-        std::fprintf(f, " %8u %9u %7.1f\n", r.availMB, r.commitMB, r.privMB);
+        std::fprintf(f, "%8.3f %10.2f %8.2f %9.2f %9.2f %8d %10d %10d %9d %11lu %7.1f %10llu %11llu %8u %9u %7.1f\n", r.t / 1000.0,
+                     r.interval, r.swapMs, r.inputMs, r.inputMaxMs, r.inputCalls, r.vboFree, r.texFree, r.rbFree, r.pageFaults, r.wsMB,
+                     r.dwmMissed, r.dwmDropped, r.availMB, r.commitMB, r.privMB);
     }
     std::fclose(f);
 }
