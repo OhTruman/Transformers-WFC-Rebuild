@@ -4,14 +4,17 @@
 #   2) run this script with BUILD=build/pgo-gen (from the repo root): it plays the training scenarios, then merges
 #      the raw profiles into tools/pgo/wfc.profdata
 #   3) build the optimised exe with -DWFC_PGO=${repo}/tools/pgo/wfc.profdata
-# Scenarios: three maps x {10 v 10, 32 v 32} TDM (live match only: high PointsToWin, WFC_MATCH_SECONDS), and the frontend flow
-# (boot -> menus -> lobby -> match). Re-run whenever hot code changes a lot (stale profiles only lose the gain, never correctness).
+# Scenarios (2026-10-09, Integration: 300+ on every map): every MP map with render data at 32 v 32 (64 participants), one
+# 10 v 10 match (small-match paths), TDM live match only (high PointsToWin, WFC_MATCH_SECONDS), and the frontend flow
+# (boot -> menus -> lobby -> match). MAPS / SECS override. Re-run whenever hot code changes a lot (stale profiles only lose the
+# gain, never correctness). Recorded run: BUILD=build/pgo-gen SECS=60 bash tools/systems/pgo_train.sh (09c 5e51386).
 set -u
 BUILD=${BUILD:-build/pgo-gen}
 EXE="$BUILD/bin/wfc_rebuild.exe"
 PROFDATA=${LLVM_PROFDATA:-llvm-profdata}
 RAW="$BUILD/pgo-raw"
-SECS=${SECS:-90}
+SECS=${SECS:-60}
+MAPS=${MAPS:-"MP_IAC_Streets MP_IAC_Rust MP_IAC_Seed MP_IAC_Berth MP_KON_Molten MP_ORB_Debris MP_UND_Complex MP_UND_Gorge MP_ESC_BrokenHope MP_ESC_Remnant"}
 [ -x "$EXE" ] || { echo "no instrumented exe at $EXE"; exit 1; }
 rm -rf "$RAW"; mkdir -p "$RAW"
 export LLVM_PROFILE_FILE="$RAW/wfc-%p.profraw"
@@ -22,8 +25,8 @@ run_match() {   # map, bots url
         WFC_MATCH_URL="$1?GameModeTag=TDM?$2?ExtendedPlayers=1?PointsToWin=1000?BotDifficulty=1" \
         timeout 900 "$EXE" > "$RAW/$1_${2//[?=]/_}.log" 2>&1
 }
-for map in MP_IAC_Streets MP_IAC_Rust MP_KON_Molten; do
-    run_match "$map" "BotsFriendly=9?BotsEnemy=10"
+run_match MP_IAC_Streets "BotsFriendly=9?BotsEnemy=10"
+for map in $MAPS; do
     run_match "$map" "BotsFriendly=31?BotsEnemy=32"
 done
 echo "PGO training: frontend flow"
