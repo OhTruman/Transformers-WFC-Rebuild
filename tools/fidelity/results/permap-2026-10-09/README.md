@@ -71,3 +71,6 @@ data of 37eec59 by junction - tools/render differences between them are packagin
   old 3.88 / 3.92 (GPU 2.19-2.24 vs 2.54-2.62, half the slow frames); Rust real play 4K 3.36 / 3.62 vs 3.38 / 3.84; Gorge real play
   4K 3.44 / 3.33 vs 2.95* / 3.39 (*anomalously quiet match, 29 slow frames); cheaper cull no measurable p90 effect (3.33 vs 3.34);
   HUD state shadow 1 rep inconclusive (3.78 on vs 3.51 off). SLOWFRAME parser fixed for the extended gpu field (85a6032).
+- Gorge bucket isolation (47726bc, real play 4K, 150 s, 2 reps): default 3.44 / 3.33; NOVLMMERGE only 3.50 / 3.43; NOLMARRAYS only
+  3.28 / 2.64 (GPU world 0.73-0.76 vs 0.83-0.85, ~250 fewer program binds, 300-500 fewer draws) - on Gorge the lightmap-array half
+  of the bucket cut costs; on Rust's overview it was a win -> per-map / per-bucket decision suggested to Rendering.
