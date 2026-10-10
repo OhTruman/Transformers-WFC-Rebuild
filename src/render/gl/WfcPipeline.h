@@ -370,7 +370,10 @@ private:
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
     // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
-    struct FrameRec { int frame = -1; int sprites = 0, draws = 0; double coverage = 0; std::map<std::string, double> matCov; };
+    // matCov persists across frames (entries stamped with the frame they were last touched: no per-frame node / string
+    // allocation per material); readers take only entries of fr.frame
+    struct CovEntry { double cov = 0; int frame = -1; };
+    struct FrameRec { int frame = -1; int sprites = 0, draws = 0; double coverage = 0; std::map<std::string, CovEntry, std::less<>> matCov; };
     FrameRec frameRecs_[4];
 public:
     std::string frameRecordText(int frame) const;
@@ -1038,7 +1041,7 @@ private:
     float fxColor_[4] = {1, 1, 1, 1};
     GLuint spriteVao_ = 0, spriteVbo_ = 0, spriteCbo_ = 0, spriteIbo_ = 0;
     GLuint spriteSubBo_ = 0;          // M67 sprite second SubUV cell + blend
-    std::map<std::string, int> spriteProg_;
+    std::map<std::string, int, std::less<>> spriteProg_;   // (transparent: looked up by const char* without a temporary)
     std::string resolveName(const std::string& name) const;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};
     int bloomW_ = 1, bloomH_ = 1;

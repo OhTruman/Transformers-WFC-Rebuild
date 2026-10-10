@@ -3300,7 +3300,7 @@ std::string Pipeline::frameRecordText(int frame) const {
     const FrameRec& fr = frameRecs_[frame & 3];
     if (fr.frame != frame) return "no record";
     std::vector<std::pair<double, std::string>> top;
-    for (const auto& kv : fr.matCov) top.push_back({kv.second, kv.first});
+    for (const auto& kv : fr.matCov) if (kv.second.frame == fr.frame) top.push_back({kv.second.cov, kv.first});
     std::sort(top.rbegin(), top.rend());
     char buf[160];
     std::snprintf(buf, sizeof buf, "%d sprites in %d draws covering %.1f screens", fr.sprites, fr.draws, fr.coverage);
@@ -5070,7 +5070,7 @@ void Pipeline::prewarmPlacedFx() {
 void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) {
     // GPU-spike evidence: screen coverage of this batch (sum of projected quad areas, in screens)
         FrameRec& fr = frameRecs_[frameNo_ & 3];
-        if (fr.frame != frameNo_) fr = FrameRec{}, fr.frame = frameNo_;
+        if (fr.frame != frameNo_) { fr.sprites = 0; fr.draws = 0; fr.coverage = 0; fr.frame = frameNo_; }
         double cov = 0;
         // at most 32 sprites per batch are projected and the sum scaled to n (an estimate for the spike report only)
         const size_t stride = std::max<size_t>(1, n / 32);
@@ -5092,7 +5092,11 @@ void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) 
             cov += a / 4.0;                              // NDC square area 4 = one screen
         }
         if (sampled) cov *= (double)n / (double)sampled;
-        fr.sprites += (int)n; ++fr.draws; fr.coverage += cov; fr.matCov[material] += cov;
+        fr.sprites += (int)n; ++fr.draws; fr.coverage += cov;
+        auto mc = fr.matCov.find(material);
+        if (mc == fr.matCov.end()) mc = fr.matCov.emplace(material, CovEntry{}).first;
+        if (mc->second.frame != frameNo_) { mc->second.cov = 0; mc->second.frame = frameNo_; }
+        mc->second.cov += cov;
 }
 
 // Appends n sprites' vertices (the drawSprites layout: 14 floats per vertex, colour, second SubUV + blend).
@@ -5143,7 +5147,8 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     if (!material || !sp || n == 0) return false;   // (corners are finite here: the guard above checked every one)
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
-        if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
+        auto spk = spriteProg_.find(material);                           // (no temporary string per call)
+        if (spk != spriteProg_.end() && spk->second < 0) return false;   // known fallback material
         core::Vec3 c{0, 0, 0};
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         c = c * (1.0f / (float)n);
