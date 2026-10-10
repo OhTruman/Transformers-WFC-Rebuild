@@ -1,5 +1,7 @@
 #define WFC_NO_TEXCACHE_MACROS   // this file implements the cache over the real entry points
 #include "render/gl/GLExt.h"
+#include <algorithm>
+#include <unordered_map>
 #include <string>
 #include "core/Log.h"
 
@@ -241,8 +243,17 @@ unsigned long long gProgBinds = 0, gBufBytes = 0;
 void APIENTRY cUseProgram(GLuint p) { gUCur = p; gUCurKnown = true; ++gProgBinds; realUseProgram(p); }
 PFN_BufferData realBufferData = nullptr;
 PFN_BufferSubData realBufferSubData = nullptr;
-void APIENTRY cBufferData(GLenum t, GLsizeiptr n, const void* d, GLenum u) { if (d && n > 0) gBufBytes += (unsigned long long)n; realBufferData(t, n, d, u); }
-void APIENTRY cBufferSubData(GLenum t, GLintptr o, GLsizeiptr n, const void* d) { if (n > 0) gBufBytes += (unsigned long long)n; realBufferSubData(t, o, n, d); }
+// WFC_UPLOADPROF=1: buffer upload bytes by calling code address (logged as exe+0x..., tools/render/gltrace_sym.py)
+const bool gUpProf = std::getenv("WFC_UPLOADPROF") != nullptr;
+std::unordered_map<void*, unsigned long long> gUpBytes;
+void APIENTRY cBufferData(GLenum t, GLsizeiptr n, const void* d, GLenum u) {
+    if (d && n > 0) { gBufBytes += (unsigned long long)n; if (gUpProf) gUpBytes[__builtin_return_address(0)] += (unsigned long long)n; }
+    realBufferData(t, n, d, u);
+}
+void APIENTRY cBufferSubData(GLenum t, GLintptr o, GLsizeiptr n, const void* d) {
+    if (n > 0) { gBufBytes += (unsigned long long)n; if (gUpProf) gUpBytes[__builtin_return_address(0)] += (unsigned long long)n; }
+    realBufferSubData(t, o, n, d);
+}
 // ---- texture-bind cache ----
 constexpr int kTexUnits = 32;
 GLuint gTexBound[kTexUnits][3] = {};
@@ -265,8 +276,14 @@ void installUploadCounters() {                      // two adds per call; always
     realBufferSubData = BufferSubData; BufferSubData = cBufferSubData;
     if (ActiveTexture != cActiveTexture) { realActiveTexture = ActiveTexture; ActiveTexture = cActiveTexture; }
 }
-void APIENTRY cLinkProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); realLinkProgram(p); }
-void APIENTRY cDeleteProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
+// uniform locations by program + literal name (cachedUniformLocation): forgotten with the program's uniform values
+std::vector<std::vector<std::pair<const char*, GLint>>> gLocCache;
+void forgetProgram(GLuint p) {
+    if (p < gUCache.size()) gUCache[p].clear();
+    if (p < gLocCache.size()) gLocCache[p].clear();
+}
+void APIENTRY cLinkProgram(GLuint p) { forgetProgram(p); realLinkProgram(p); }
+void APIENTRY cDeleteProgram(GLuint p) { forgetProgram(p); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
 void APIENTRY cUniform1i(GLint l, GLint v) { if (!uSame(l, &v, 1)) realUniform1i(l, v); }
 void APIENTRY cUniform1f(GLint l, GLfloat v) { if (!uSame(l, &v, 1)) realUniform1f(l, v); }
 void APIENTRY cUniform2f(GLint l, GLfloat a, GLfloat b) { const GLfloat v[2] = {a, b}; if (!uSame(l, v, 2)) realUniform2f(l, a, b); }
@@ -328,10 +345,12 @@ void install() {
 
 void installUniformCache() {
     static const bool off = std::getenv("WFC_NOUNICACHE") != nullptr;
+    if (LinkProgram != cLinkProgram) {                // always: the location cache must forget relinked / deleted programs
+        realLinkProgram = LinkProgram; LinkProgram = cLinkProgram;
+        realDeleteProgram = DeleteProgram; DeleteProgram = cDeleteProgram;
+    }
     if (off || UseProgram == cUseProgram) return;   // disabled, or already wrapped (load() runs per renderer init)
     realUseProgram = UseProgram; UseProgram = cUseProgram;
-    realLinkProgram = LinkProgram; LinkProgram = cLinkProgram;
-    realDeleteProgram = DeleteProgram; DeleteProgram = cDeleteProgram;
     realUniform1i = Uniform1i; Uniform1i = cUniform1i;
     realUniform1f = Uniform1f; Uniform1f = cUniform1f;
     realUniform2f = Uniform2f; Uniform2f = cUniform2f;
@@ -345,6 +364,42 @@ void installUniformCache() {
     LOG_INFO("GL uniform cache: on (redundant uniform calls skipped; WFC_NOUNICACHE=1 disables)");
 }
 }  // namespace
+
+// A uniform location by program and a NAME WITH STATIC STORAGE (string literal: the pointer is the key), cached until the
+// program is relinked or deleted: per-frame / per-robot passes looked names up in the driver every time
+// (~35 per projected shadow). WFC_NOLOCCACHE=1 = the driver every time (A/B).
+void uploadProfDump(long frames) {
+    if (!gUpProf || frames <= 0) return;
+    static const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
+    std::vector<std::pair<unsigned long long, void*>> v;
+    unsigned long long total = 0;
+    for (const auto& kv : gUpBytes) { v.push_back({kv.second, kv.first}); total += kv.second; }
+    std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    LOG_INFO("UPLOADPROF %ld frames: %.1f KB / frame buffer uploads, top callers:", frames, (double)total / frames / 1024.0);
+    for (size_t i = 0; i < v.size() && i < 12; ++i)
+        LOG_INFO("UPLOADPROF   %8.1f KB / frame  exe+0x%llx", (double)v[i].first / frames / 1024.0,
+                 (unsigned long long)((uintptr_t)v[i].second - base));
+    gUpBytes.clear();
+}
+
+bool locCheckOn() { static const bool on = std::getenv("WFC_LOCCHECK") != nullptr; return on; }
+long gLocChecks = 0, gLocMismatch = 0;
+void locCheckCount(bool same) { ++gLocChecks; if (!same) ++gLocMismatch;
+    if ((gLocChecks & 0xFFFFF) == 0) LOG_INFO("LOCCHECK %ld cached uniform locations checked against the driver: %ld different", gLocChecks, gLocMismatch); }
+
+GLint cachedUniformLocation(GLuint p, const char* name) {
+    static const bool off = std::getenv("WFC_NOLOCCACHE") != nullptr;
+    if (off || LinkProgram != cLinkProgram) return GetUniformLocation(p, name);
+    if (p >= gLocCache.size()) gLocCache.resize((size_t)p + 64);
+    std::vector<std::pair<const char*, GLint>>& v = gLocCache[p];
+    for (const auto& e : v) if (e.first == name) {
+        if (locCheckOn()) locCheckCount(GetUniformLocation(p, name) == e.second);
+        return e.second;
+    }
+    const GLint l = GetUniformLocation(p, name);
+    v.emplace_back(name, l);
+    return l;
+}
 
 void uniformCacheForgetCurrent() { gUCurKnown = false; }
 unsigned long long programBinds() { return gProgBinds; }
