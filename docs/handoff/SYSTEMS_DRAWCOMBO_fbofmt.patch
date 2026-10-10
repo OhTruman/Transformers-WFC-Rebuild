@@ -1,0 +1,83 @@
+--- a/src/render/gl/GLExt.cpp
++++ b/src/render/gl/GLExt.cpp
+@@ -496,7 +496,9 @@
+ 
+ // ---- WFC_DRAWCOMBO=1 (DEV TOOL, Systems): every draw is keyed by program x the fixed-function state the driver may compile into
+ // it (blend enable / funcs / equation, depth test / mask / func, cull / face, stencil, polygon offset, alpha-to-coverage, the
+-// bound draw framebuffer, primitive, index type, entry point); a combination never seen before is logged once with the present
++// bound draw framebuffer's FORMAT - colour 0 / 1 and depth attachments' component type and bit sizes, sample count - not its
++// id, so a warm-up into a scratch target of the same format counts as the same combination - primitive, index type, entry
++// point); a combination never seen before is logged once with the present
+ // count (SwapBuffers calls since start; SLOWFRAME counts match frames only), the time and the call site (module-relative return address: symbolise with llvm-symbolizer or wfc_rebuild.map).
+ // Drivers compile shader variants for new state combinations lazily at the first draw, and SwapBuffers waits on them: a stall
+ // frame's "draw combo" lines name what to prewarm. The GL 1.1 draws (glDrawElements / glDrawArrays, OPENGL32 imports) are
+@@ -505,7 +507,8 @@
+ namespace drawcombo {
+ bool on() { static const bool v = std::getenv("WFC_DRAWCOMBO") != nullptr; return v; }
+ struct Key {
+-    GLint prog, blend, bsrc, bdst, bsrcA, bdstA, beq, depth, dmask, dfunc, cull, cface, stencil, poffset, a2c, fbo;
++    GLint prog, blend, bsrc, bdst, bsrcA, bdstA, beq, depth, dmask, dfunc, cull, cface, stencil, poffset, a2c;
++    GLint fmt[7];   // colour 0: component type, RGBA bits; colour 1: same; depth + stencil bits; samples (see fboFormat)
+     GLenum mode, type; int entry;
+     bool operator==(const Key& o) const { return std::memcmp(this, &o, sizeof(Key)) == 0; }
+ };
+@@ -521,6 +524,27 @@
+ std::chrono::steady_clock::time_point t0;
+ const char* kEntry[] = {"DrawElements", "DrawArrays", "DrawElementsInstanced", "MultiDrawElementsIndirect"};
+ GLint geti(GLenum e) { GLint v = 0; glGetIntegerv(e, &v); return v; }
++typedef void(APIENTRY* PFN_GetFbAttachParam)(GLenum, GLenum, GLenum, GLint*);
++PFN_GetFbAttachParam getFbAttach = nullptr;
++// The bound draw framebuffer's format: per attachment (GL_FRAMEBUFFER_ATTACHMENT_* queries need no binding change) the
++// component type and the packed R / G / B / A (or depth / stencil) bit sizes; GL_NONE attachments are 0. The default
++// framebuffer uses GL_BACK_LEFT / GL_DEPTH / GL_STENCIL.
++void fboFormat(GLint fbo, GLint* out) {
++    if (!getFbAttach) return;
++    const GLenum target = 0x8CA9;                                               // GL_DRAW_FRAMEBUFFER
++    const GLenum col[2] = {fbo ? 0x8CE0u : 0x0402u, fbo ? 0x8CE1u : 0u};        // COLOR_ATTACHMENT0 / 1, or BACK_LEFT
++    const GLenum dep = fbo ? 0x8D00u : 0x1801u, sten = fbo ? 0x8D20u : 0x1802u; // DEPTH_ / STENCIL_ATTACHMENT, or DEPTH / STENCIL
++    auto q = [&](GLenum att, GLenum pname) { GLint v = 0; getFbAttach(target, att, pname, &v); return v; };
++    for (int i = 0; i < 2; ++i) {
++        if (!col[i] || q(col[i], 0x8CD0) == 0) continue;                        // GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE: GL_NONE
++        out[i * 2] = q(col[i], 0x8211);                                         // _COMPONENT_TYPE
++        out[i * 2 + 1] = q(col[i], 0x8212) | q(col[i], 0x8213) << 8 | q(col[i], 0x8214) << 16 | q(col[i], 0x8215) << 24;
++    }
++    if (q(dep, 0x8CD0) != 0) out[4] = q(dep, 0x8216);                           // _DEPTH_SIZE
++    if (q(sten, 0x8CD0) != 0) out[4] |= q(sten, 0x8217) << 8;                   // _STENCIL_SIZE
++    out[5] = geti(0x80A9);                                                      // GL_SAMPLES of the bound draw framebuffer
++    out[6] = 0;
++}
+ void note(int entry, GLenum mode, GLenum type, void* ra) {
+     Key k;
+     std::memset(&k, 0, sizeof k);   // padding too: the key is hashed / compared bytewise
+@@ -531,7 +555,8 @@
+     k.dmask = geti(0x0B72); k.dfunc = k.depth ? geti(0x0B74) : 0;               // GL_DEPTH_WRITEMASK, GL_DEPTH_FUNC
+     k.cull = glIsEnabled(GL_CULL_FACE); k.cface = k.cull ? geti(0x0B45) : 0;    // GL_CULL_FACE_MODE
+     k.stencil = glIsEnabled(0x0B90); k.poffset = glIsEnabled(0x8037); k.a2c = glIsEnabled(0x809E);
+-    k.fbo = geti(0x8CA6);                                                        // GL_DRAW_FRAMEBUFFER_BINDING
++    const GLint fbo = geti(0x8CA6);                                              // GL_DRAW_FRAMEBUFFER_BINDING (logged, not keyed)
++    fboFormat(fbo, k.fmt);
+     k.mode = mode; k.type = type; k.entry = entry;
+     if (!seen) seen = new std::unordered_map<Key, int, KeyHash>();
+     if (!seen->emplace(k, 1).second) return;
+@@ -539,9 +564,10 @@
+     static const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
+     const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+     LOG_INFO("draw combo #%ld present %ld t %.3f: %s prog %d blend %d (%x %x %x %x eq %x) depth %d mask %d func %x cull %d (%x) "
+-             "stencil %d poffset %d a2c %d fbo %d mode %x type %x at +0x%llx", combos, frame, t, kEntry[entry], k.prog, k.blend,
+-             k.bsrc, k.bdst, k.bsrcA, k.bdstA, k.beq, k.depth, k.dmask, k.dfunc, k.cull, k.cface, k.stencil, k.poffset, k.a2c, k.fbo,
+-             mode, type, (unsigned long long)((uintptr_t)ra - base));
++             "stencil %d poffset %d a2c %d fbo %d [c0 %x/%08x c1 %x/%08x ds %04x samples %d] mode %x type %x at +0x%llx", combos, frame,
++             t, kEntry[entry], k.prog, k.blend, k.bsrc, k.bdst, k.bsrcA, k.bdstA, k.beq, k.depth, k.dmask, k.dfunc, k.cull, k.cface,
++             k.stencil, k.poffset, k.a2c, fbo, k.fmt[0], k.fmt[1], k.fmt[2], k.fmt[3], k.fmt[4], k.fmt[5], mode, type,
++             (unsigned long long)((uintptr_t)ra - base));
+ }
+ typedef void(APIENTRY* PFN_DE)(GLenum, GLsizei, GLenum, const void*);
+ typedef void(APIENTRY* PFN_DA)(GLenum, GLint, GLsizei);
+@@ -583,6 +609,7 @@
+     if (!imports) {
+         imports = true;
+         t0 = std::chrono::steady_clock::now();
++        getFbAttach = (PFN_GetFbAttachParam)wglGetProcAddress("glGetFramebufferAttachmentParameteriv");
+         const int a = patchImport("glDrawElements", (PFN_DE)tDE, rDE), b = patchImport("glDrawArrays", (PFN_DA)tDA, rDA);
+         patchImport("SwapBuffers", (PFN_Swap)tSwap, rSwap);
+         LOG_INFO("WFC_DRAWCOMBO: on (import hooks glDrawElements %d, glDrawArrays %d)", a, b);
