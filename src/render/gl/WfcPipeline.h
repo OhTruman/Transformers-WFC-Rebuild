@@ -520,6 +520,8 @@ private:
     GLuint mdiOccBox_ = 0, mdiOccVis_ = 0;                 // occlusion culling: per-row world boxes, last frame's visibility (SSBOs)
     // Exact two-pass Hi-Z occlusion culling of the world multi-draw (WFC_NOOCCCULL=1 off; work/occlusion_cull_plan.md)
     GLuint occSelectProg_ = 0, occTestProg_ = 0, hzbProg_ = 0, occCmdA_ = 0, occCmdB_ = 0, hzbTex_ = 0;
+    GLuint occCnt_[5] = {0, 0, 0, 0, 0}, occCntQ_[4] = {0, 0, 0, 0};   // culled-count buffers (4 in flight + scratch)
+    int occCntFrame_[4] = {-1, -1, -1, -1}, occLastHit_ = 0;            // frame each is pending for; last frame that culled
     int hzbW_ = 0, hzbH_ = 0, hzbLevels_ = 0;
     bool occCullReady();
     void buildHzb();
