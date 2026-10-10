@@ -149,6 +149,7 @@ public:
         long idx = -1; int frame = 0; bool open = false, slow = false, done = false, gpuHave = false;
         std::chrono::steady_clock::time_point t0;
         double interval = 0, render = 0, mark[6] = {-1, -1, -1, -1, -1, -1}, gpu = 0, gpuPass[6] = {-1, -1, -1, -1, -1, -1};
+        double gpuAfter3d = -1, gpuPeriodPrev = -1;
         int draws = 0, dyn = 0, fxDraws = 0, age = 0;
         unsigned long long binds0 = 0, bytes0 = 0, binds = 0, bytes = 0;
         unsigned long long firstBinds0 = 0, allocs0 = 0, allocBytes0 = 0, firstBinds = 0, allocs = 0; double allocBytes = 0;
@@ -168,8 +169,9 @@ public:
             return -1.0;
         };
         char gpu[160];
-        if (s.gpuHave) std::snprintf(gpu, sizeof gpu, "gpu %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f)", s.gpu,
-                                     s.gpuPass[1], s.gpuPass[2], s.gpuPass[3], s.gpuPass[4], s.gpuPass[5]);
+        if (s.gpuHave) std::snprintf(gpu, sizeof gpu, "gpu %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f; "
+                                     "after 3D %.2f, prev period %.2f)", s.gpu, s.gpuPass[1], s.gpuPass[2], s.gpuPass[3],
+                                     s.gpuPass[4], s.gpuPass[5], s.gpuAfter3d, s.gpuPeriodPrev);
         else std::snprintf(gpu, sizeof gpu, "gpu n/a%s", gpuMissing ? "" : "");
         LOG_INFO("SLOWFRAME f%d interval %.2f ms: render %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f), "
                  "outside %.2f; %s; draws %d (dyn %d, fx %d), program binds %llu, buffer upload %.0f KB, new textures %lu, "
@@ -181,6 +183,8 @@ public:
     }
     void slowFrameBegin() {
         if (slowThr() <= 0.0) return;
+        static const bool hooked = [] { glx::installPrePresentStamp(); return true; }();
+        (void)hooked;
         const auto now = std::chrono::steady_clock::now();
         if (slowCur_ >= 0) {
             SlowRec& p = slowRing_[slowCur_];
@@ -218,6 +222,7 @@ public:
             s.gpuHave = true;
             s.gpu = glx::lastGpuFrameMs();
             for (int k = 0; k < 6; ++k) s.gpuPass[k] = glx::lastGpuPassMs(k);
+            s.gpuAfter3d = glx::lastGpuAfter3dMs(); s.gpuPeriodPrev = glx::lastGpuPeriodMs();
             if (s.slow && !s.done) slowFramePrint(s, false);
         }
     }
