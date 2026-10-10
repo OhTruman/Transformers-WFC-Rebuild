@@ -16,10 +16,12 @@
 // time with and without the profiler, and prefer a coarse interval (WFC_CPUPROF=5) for in-match work.
 #ifdef _WIN32
 #include <windows.h>
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstddef>
 #include <thread>
 #include <tlhelp32.h>
 #include <vector>
@@ -119,19 +121,14 @@ void report(CpuProf& p, double t) {
     std::fprintf(f, "== context: %s\n", core::logLastLine());
     std::fprintf(f, "== t %.1f s: %ld main-thread samples (every %d ms), %ld dropped; offsets relative to the exe image\n", t, p.samples,
                  p.intervalMs, p.dropped);
-    // top stacks
-    int top[60]; int nTop = 0;
-    for (int k = 0; k < 60; ++k) {
-        int best = -1;
-        for (int i = 0; i < kSlots; ++i) {
-            if (p.slots[i].count <= 0) continue;
-            bool used = false;
-            for (int j = 0; j < nTop; ++j) if (top[j] == i) { used = true; break; }
-            if (!used && (best < 0 || p.slots[i].count > p.slots[best].count)) best = i;
-        }
-        if (best < 0) break;
-        top[nTop++] = best;
-    }
+    // top stacks: the 60 largest (WFC_CPUPROF_TOP=<n>: more, e.g. 100000 = every distinct stack, for attribution surveys)
+    static const int maxTop = std::getenv("WFC_CPUPROF_TOP") ? (std::max)(1, std::atoi(std::getenv("WFC_CPUPROF_TOP"))) : 60;
+    std::vector<int> top;
+    for (int i = 0; i < kSlots; ++i) if (p.slots[i].count > 0) top.push_back(i);
+    const size_t nKeep = (std::min)(top.size(), (size_t)maxTop);
+    std::partial_sort(top.begin(), top.begin() + (std::ptrdiff_t)nKeep, top.end(),
+                      [&](int a, int b) { return p.slots[a].count > p.slots[b].count || (p.slots[a].count == p.slots[b].count && a < b); });
+    const int nTop = (int)nKeep;
     for (int k = 0; k < nTop; ++k) {
         const Slot& s = p.slots[top[k]];
         if (p.busyThreads) std::fprintf(f, "%ld samples [tid %u%s]:", s.count, s.tid, s.tid == p.mainTid ? " main" : "");
