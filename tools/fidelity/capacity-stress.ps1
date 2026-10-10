@@ -259,6 +259,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             foreach ($b in @($g.Group)) { if ($b.cell -lt 0) { $run++; if ($run -gt $best) { $best = $run; $last = $b } } else { $run = 0 } }
             if ($best -ge 20) { "p{0} {1} samples at ({2:N1}, {3:N1}) nopath {4}" -f $g.Name, $best, $last.x, $last.z, $last.nopath } })
         Res "$mt.offmesh" $(if ($strand.Count) { "FAIL" } else { "PASS" }) $(if ($strand.Count) { "stranded off the nav mesh (cell -1, >= 20 samples): " + ($strand -join "; ") } else { "no participant stranded off the nav mesh" }) "Gameplay"
+        $cm = Join-Path $d "CONTAMINATED.txt"
+        if ((Test-Path $cm) -and $k -eq 0) { Res "$tag.contaminated" "UNKNOWN" ("foreign process during the timing run - its numbers are not valid, rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
         Res "$mt.bots" $(if ($broken) { "FAIL" } elseif ($strug -gt [Math]::Max(1, [int]($P.want * 0.1))) { "PARTIAL" } else { "PASS" }) ("broken {0}, struggling {1}, max no-path {2}, off-mesh samples {3}" -f $broken, $strug, $row.nopath_max, $row.off_mesh) "Gameplay"
         Res "$mt.frame" "INFO" ("frame p50 {0} / p95 {1} / p99 {2} / max {3} ms over {4} frames; > 33 ms: {5}, > 50 ms: {6}; sim p50 {7} / p99 {8} ms; AI {9}" -f $row.p50_ms, $row.p95_ms, $row.p99_ms, $row.max_ms, $row.frames, $row.over33, $row.over50, $row.sim_p50_ms, $row.sim_p99_ms, $(if ($ai.Count) { "avg $($row.ai_avg_ms) / max $($row.ai_max_ms) ms" } else { "not logged by this build (WFC_BOTPERF)" })) "Gameplay/Rendering"
         if ($k -eq 1) {   # every population, the original 5 v 5 first (Integration: it should be the first to clear 300)

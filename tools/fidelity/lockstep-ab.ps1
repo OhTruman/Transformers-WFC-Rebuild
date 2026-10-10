@@ -70,7 +70,9 @@ foreach ($r in $rows) {
     $sameMatch = $r.steps -gt 0 -and $r.hashes -eq $ref.hashes
     $par = { param($a, $b) if (-not $b -or [double]::IsNaN($a) -or [double]::IsNaN($b)) { $true } else { [Math]::Abs($a - $b) / [Math]::Max(1e-6, [Math]::Abs($b)) -le 0.03 } }
     $parity = (& $par $r.draws $ref.draws) -and (& $par $r.draws_dyn $ref.draws_dyn) -and (& $par $r.cpu_chars $ref.cpu_chars)
-    $st = if (-not $r.steps) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity) { "UNKNOWN" } else { "PASS" }
+    $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
+    $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity) { "UNKNOWN" } else { "PASS" }
+    if ($contam) { Res "$($r.arm).r$($r.rep).contaminated" "UNKNOWN" ("foreign process during the row - rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
     Res "$($r.arm).r$($r.rep)" $st ("{0}: steps {1} ({2}-{3}), same match as '{4}' {5}, workload parity {6}; frame p50 / p90 / p99 {7} / {8} / {9} ms over {10} frames; slow frames {11}: GPU {12} (world {13}, fx {14}, transl {15}, post {16}), CPU render {17}, outside {19}; all frames: chars CPU {18}, draws {20} (dyn {21}, fx {22}), binds {23}" -f `
         $r.arm, $r.steps, $From, $Steps, $ref.arm, $sameMatch, $parity, $r.p50, $r.p90, $r.p99, $r.frames, $r.slow, $r.gpu, $r.gpu_world, $r.gpu_fx, $r.gpu_transl, $r.gpu_post, $r.cpu_render, $r.cpu_chars, $r.outside, $r.draws, $r.draws_dyn, $r.draws_fx, $r.binds) "Experimental"
 }

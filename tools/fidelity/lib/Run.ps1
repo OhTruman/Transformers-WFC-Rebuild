@@ -13,9 +13,21 @@ function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log
         $p = Start-Process -FilePath $Exe -WorkingDirectory $Dir -NoNewWindow -PassThru `
              -RedirectStandardOutput (Join-Path $Dir $Log) -RedirectStandardError (Join-Path $Dir "$Log.err")
         $null = $p.Handle   # PS 5.1: ExitCode is only kept when the handle was opened before exit
-        if ($TimeoutSec -gt 0) {
-            if (-not $p.WaitForExit($TimeoutSec * 1000)) { $p.Kill(); $p.WaitForExit(); return -999 }
-        } else { $p.WaitForExit() }
+        # contamination watchdog (2026-10-10: a foreign exe started between another lane's reps, after the start gate had passed):
+        # while the row runs, poll every second for any OTHER game exe (any wfc_rebuild*.exe not this process) or a python
+        # process outside this worktree; the first sighting is written to <Dir>\CONTAMINATED.txt - harnesses report such a row
+        # as UNKNOWN (rerun). WFC_NO_WATCHDOG=1 disables it (e.g. for runs that are themselves shared by design).
+        $watch = -not $env:WFC_NO_WATCHDOG; $mark = Join-Path $Dir "CONTAMINATED.txt"; $t0 = Get-Date
+        while (-not $p.HasExited) {
+            if ($TimeoutSec -gt 0 -and ((Get-Date) - $t0).TotalSeconds -gt $TimeoutSec) { $p.Kill(); $p.WaitForExit(); return -999 }
+            if ($watch -and -not (Test-Path $mark)) {
+                $other = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe' OR Name = 'python.exe'" -ErrorAction SilentlyContinue | Where-Object {
+                    $_.ProcessId -ne $p.Id -and ($_.Name -ne 'python.exe' -or "$($_.CommandLine)" -notlike '*Rebuild-Experimental*') })
+                if ($other.Count) { ($other | ForEach-Object { "{0:HH:mm:ss} foreign process {1} {2} (started {3:HH:mm:ss}): {4}" -f (Get-Date), $_.ProcessId, $_.Name, $_.CreationDate, "$($_.ExecutablePath)" }) | Set-Content -Encoding UTF8 $mark }
+            }
+            Start-Sleep -Milliseconds 1000
+        }
+        $p.WaitForExit()
         return $p.ExitCode
     } finally {
         foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], "Process") }
