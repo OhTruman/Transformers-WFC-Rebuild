@@ -517,6 +517,12 @@ private:
     long mdiMesh_ = -1;
     GLuint mdiRowTex_ = 0, mdiRowVbo_ = 0, mdiCmdBuf_ = 0;
     GLuint mdiVlmTex_ = 0, mdiVlmBo_ = 0;                  // vertex-lightmap samples of the set's VLM subs (RGB32F texture buffer)
+    GLuint mdiOccBox_ = 0, mdiOccVis_ = 0;                 // occlusion culling: per-row world boxes, last frame's visibility (SSBOs)
+    // Exact two-pass Hi-Z occlusion culling of the world multi-draw (WFC_NOOCCCULL=1 off; work/occlusion_cull_plan.md)
+    GLuint occSelectProg_ = 0, occTestProg_ = 0, hzbProg_ = 0, occCmdA_ = 0, occCmdB_ = 0, hzbTex_ = 0;
+    int hzbW_ = 0, hzbH_ = 0, hzbLevels_ = 0;
+    bool occCullReady();
+    void buildHzb();
     GLuint zPreProg_ = 0;                              // world depth prepass (MDI VS + empty FS)
     static inline GLuint vsMdiShared_ = 0;             // the MDI vertex shader (shared by every MDI program)
     // Lightmap pages of the common size share one GL_TEXTURE_2D_ARRAY (unit 21); each page's 2D texture becomes a
@@ -529,7 +535,7 @@ private:
     // A second multi-draw set for the level BSP mesh (Seed: 985 BSP subs were drawn singly). The active set lives in
     // the mdi* members above; swapMdiSlot exchanges them with the saved BSP set around its build / draw.
     struct MdiSlot {
-        std::vector<MdiBucket> buckets; long mesh = -1; GLuint rowTex = 0, rowVbo = 0, cmdBuf = 0, vlmTex = 0, vlmBo = 0;
+        std::vector<MdiBucket> buckets; long mesh = -1; GLuint rowTex = 0, rowVbo = 0, cmdBuf = 0, vlmTex = 0, vlmBo = 0, occBox = 0, occVis = 0;
         std::vector<float> rows; std::vector<char> envFilled;
     };
     MdiSlot bspMdi_;
@@ -538,6 +544,7 @@ private:
         std::swap(mdiRowVbo_, s.rowVbo); std::swap(mdiCmdBuf_, s.cmdBuf); std::swap(mdiRows_, s.rows);
         std::swap(mdiEnvFilled_, s.envFilled);
         std::swap(mdiVlmTex_, s.vlmTex); std::swap(mdiVlmBo_, s.vlmBo);
+        std::swap(mdiOccBox_, s.occBox); std::swap(mdiOccVis_, s.occVis);
     }
     bool mdiWanted_ = false, mdiBuild_ = false;
     static constexpr int kMdiW = 24;
@@ -817,7 +824,8 @@ private:
     // program warm-up targets (1 x 1, the formats of the scene / distortion / shadow-depth targets) and their release
     GLuint warmSceneFbo_ = 0, warmSceneTex_ = 0, warmSceneDepth_ = 0, warmDistFbo_ = 0, warmDistTex_ = 0, warmDistDepth_ = 0;
     GLuint warmShadowFbo_ = 0, warmShadowDepth_ = 0;
-    GLuint warmVao_[3] = {0, 0, 0}, warmVbo_[3] = {0, 0, 0}, warmIbo_[3] = {0, 0, 0}, warmExtra_[3] = {0, 0, 0};   // static / skinned / MDI
+    GLuint warmVao_[4] = {0, 0, 0, 0}, warmVbo_[4] = {0, 0, 0, 0}, warmIbo_[4] = {0, 0, 0, 0}, warmExtra_[4] = {0, 0, 0, 0};   // static / skinned / MDI / sprite
+    GLuint warmExtra2_ = 0, warmIndirect_ = 0;            // (the sprite layout's sub-UV stream; a 1-command indirect buffer)
     void warmPrograms(const std::vector<int>& queue);
     void releaseWarmTargets();
     // Projected shadows in the original's order (FIDELITY.md ShadowMask rows, CONFIRMED ORIGINAL: the mask is cleared once,
@@ -840,6 +848,9 @@ private:
     int shadowPhase_ = 0;                                 // 0 cast fully, 1 receiver depth only, 2 shadow depth + projection
     bool shadowMathOnly_ = false;                         // renderShadowDepth: the request only (no render)
     bool phaseProjected_ = false;
+    // WFC_SHADOWGPU in the original order: GPU timestamps per flush phase, and per subject in phase 2 (depth / projection)
+    std::vector<GLuint> fpQ_; int fpN_ = 0; double fpDepth_ = 0, fpProj_ = 0; int fpSubjects_ = 0;
+    void fpStamp() { if (fpN_ < (int)fpQ_.size()) glx::QueryCounter(fpQ_[(size_t)fpN_++], 0x8E28); }
     bool charDeferOn() const;
     void restoreDynDraw(const DynDraw& d);
     void flushDynQueue();

@@ -708,6 +708,9 @@ void Pipeline::release() {
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
+    for (GLuint* b : {&mdiOccBox_, &mdiOccVis_, &bspMdi_.occBox, &bspMdi_.occVis, &occCmdA_, &occCmdB_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+    if (hzbTex_) { glDeleteTextures(1, &hzbTex_); hzbTex_ = 0; }
+    for (GLuint* p : {&occSelectProg_, &occTestProg_, &hzbProg_}) if (*p) { DeleteProgram(*p); *p = 0; }
     for (GLuint* b : {&mdiVlmBo_, &bspMdi_.vlmBo}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     bspMdi_ = MdiSlot{};
     progTouchQueue_.clear();
@@ -1722,10 +1725,11 @@ void Pipeline::releaseWarmTargets() {
     for (GLuint* f : {&warmSceneFbo_, &warmDistFbo_, &warmShadowFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
     for (GLuint* t : {&warmSceneTex_, &warmSceneDepth_, &warmDistTex_, &warmDistDepth_, &warmShadowDepth_})
         if (*t) { glDeleteTextures(1, t); *t = 0; }
-    for (int k = 0; k < 3; ++k) {
+    for (int k = 0; k < 4; ++k) {
         if (warmVao_[k]) { DeleteVertexArrays(1, &warmVao_[k]); warmVao_[k] = 0; }
         for (GLuint* b : {&warmVbo_[k], &warmIbo_[k], &warmExtra_[k]}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     }
+    for (GLuint* b : {&warmExtra2_, &warmIndirect_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
 }
 
 void Pipeline::warmPrograms(const std::vector<int>& queue) {
@@ -1762,7 +1766,7 @@ void Pipeline::warmPrograms(const std::vector<int>& queue) {
     if (!warmVao_[0]) {
         const std::vector<float> zeros(3 * 14, 0.0f);
         const uint32_t idx[3] = {0, 1, 2};
-        for (int k = 0; k < 3; ++k) {
+        for (int k = 0; k < 4; ++k) {
             GenVertexArrays(1, &warmVao_[k]); GenBuffers(1, &warmVbo_[k]); GenBuffers(1, &warmIbo_[k]);
             BindVertexArray(warmVao_[k]);
             BindBuffer(GL_ARRAY_BUFFER, warmVbo_[k]);
@@ -1782,11 +1786,26 @@ void Pipeline::warmPrograms(const std::vector<int>& queue) {
                 BufferData(GL_ARRAY_BUFFER, sizeof row0, &row0, GL_STATIC_DRAW);
                 EnableVertexAttribArray(11); VertexAttribPointer(11, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
                 VertexAttribDivisor(11, 1);
+            } else if (k == 3) {                          // the sprite stream: + colour (5, vec4) + sub-UV (6, vec3)
+                const std::vector<float> col(3 * 4, 0.0f), sub(3 * 3, 0.0f);
+                GenBuffers(1, &warmExtra_[k]); BindBuffer(GL_ARRAY_BUFFER, warmExtra_[k]);
+                BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(col.size() * sizeof(float)), col.data(), GL_STATIC_DRAW);
+                EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
+                GenBuffers(1, &warmExtra2_); BindBuffer(GL_ARRAY_BUFFER, warmExtra2_);
+                BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sub.size() * sizeof(float)), sub.data(), GL_STATIC_DRAW);
+                EnableVertexAttribArray(6); VertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
             }
             BindVertexArray(0);
         }
     }
-    const GLuint vaoStatic = warmVao_[0], vaoSkin = warmVao_[1], vaoMdi = warmVao_[2];
+    const GLuint vaoStatic = warmVao_[0], vaoSkin = warmVao_[1], vaoMdi = warmVao_[2], vaoSprite = warmVao_[3];
+    if (!warmIndirect_ && MultiDrawElementsIndirect) {   // one command: 3 indices, 1 instance, base 0
+        const uint32_t cmd[5] = {3, 1, 0, 0, 0};
+        GenBuffers(1, &warmIndirect_); BindBuffer(0x8F3F, warmIndirect_);
+        BufferData(0x8F3F, sizeof cmd, cmd, GL_STATIC_DRAW); BindBuffer(0x8F3F, 0);
+    }
+    std::vector<char> isSprite(progs_.size(), 0);         // sprite / canvas-tile programs (drawSprites)
+    for (const auto& kv : spriteProg_) if (kv.second >= 0 && (size_t)kv.second < isSprite.size()) isSprite[(size_t)kv.second] = 1;
     GLint prevFbo = 0, prevProg = 0, vp[4];
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
     glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
@@ -1821,7 +1840,18 @@ void Pipeline::warmPrograms(const std::vector<int>& queue) {
         if (Pg.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         switch (k) {
-            case kMdi: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoMdi, false); break;
+            case kMdi:
+                blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoMdi, false);
+                if (warmIndirect_) {                       // as drawMdi: indirect, depth writes off (prepassed) and on
+                    BindBuffer(0x8F3F, warmIndirect_);
+                    for (int dm = 0; dm < 2; ++dm) {
+                        if (Pg.blend >= 2) break;
+                        glDepthMask(dm ? GL_TRUE : GL_FALSE);
+                        MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0, 1, 0);
+                    }
+                    BindBuffer(0x8F3F, 0);
+                }
+                break;
             case kInst: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoSkin, true); break;
             case kDist: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE);
                         drawWith(warmDistFbo_, vaoStatic, false); drawWith(warmDistFbo_, vaoSkin, false); break;
@@ -1830,7 +1860,18 @@ void Pipeline::warmPrograms(const std::vector<int>& queue) {
                           glEnable(GL_POLYGON_OFFSET_FILL); glPolygonOffset(1.0f, 1.0f);
                           drawWith(warmSceneFbo_, vaoSkin, false);                        // the receiver depth prepass
                           glDisable(GL_POLYGON_OFFSET_FILL); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); break;
-            default: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoStatic, false); drawWith(warmSceneFbo_, vaoSkin, false); break;
+            default:
+                blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoStatic, false); drawWith(warmSceneFbo_, vaoSkin, false);
+                if (isSprite[(size_t)pi]) {
+                    drawWith(warmSceneFbo_, vaoSprite, false);                     // particles in the translucency pass
+                    BindFramebuffer(GL_FRAMEBUFFER, 0);                            // canvas tiles over the final frame:
+                    glEnable(GL_SCISSOR_TEST); glScissor(0, 0, 1, 1);              // one pixel the next frame overwrites
+                    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+                    BindVertexArray(vaoSprite);
+                    glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*)0);
+                    glDisable(GL_SCISSOR_TEST); glEnable(GL_DEPTH_TEST);
+                }
+                break;
         }
         ++touchedPrograms_; ++drawn;
         if (loading) glFinish();                           // the driver compiles on its own thread: wait here, inside the slice
@@ -4345,6 +4386,21 @@ void Pipeline::buildMdi(int meshId) {
         mdiBuckets_[it->second].subs.push_back((uint32_t)si);
     }
     if (row == 0) return;
+    static const bool noOcc = std::getenv("WFC_NOOCCCULL") != nullptr;
+    if (!noOcc && meshId != bspMesh_ && DispatchCompute && BindBufferBase && BindImageTexture && MemoryBarrier) {
+        std::vector<float> box((size_t)row * 8, 0.0f);   // row: (min.xyz, 0), (max.xyz, 0): the CPU frustum cull's boxes
+        for (const Sub& s : g.subs) {
+            if (s.mdiRow < 0) continue;
+            float* b = &box[(size_t)s.mdiRow * 8];
+            b[0] = s.bmin.x; b[1] = s.bmin.y; b[2] = s.bmin.z; b[4] = s.bmax.x; b[5] = s.bmax.y; b[6] = s.bmax.z;
+        }
+        const std::vector<uint32_t> vis(row, 1u);        // first frame: everything in prepass A
+        GenBuffers(1, &mdiOccBox_); BindBuffer(0x90D2 /*GL_SHADER_STORAGE_BUFFER*/, mdiOccBox_);
+        BufferData(0x90D2, (GLsizeiptr)(box.size() * sizeof(float)), box.data(), GL_STATIC_DRAW);
+        GenBuffers(1, &mdiOccVis_); BindBuffer(0x90D2, mdiOccVis_);
+        BufferData(0x90D2, (GLsizeiptr)(vis.size() * sizeof(uint32_t)), vis.data(), 0x88E8 /*GL_DYNAMIC_DRAW*/);
+        BindBuffer(0x90D2, 0);
+    }
     // the VLM runs after every other bucket, in run order (their order of insertion)
     std::stable_partition(mdiBuckets_.begin(), mdiBuckets_.end(), [](const MdiBucket& b) { return b.lm[0] != -3; });
     if (vlmSubs) {
@@ -4455,6 +4511,156 @@ void Pipeline::buildLmArray() {
              lmTextures_.size(), kSize, kSize, kLevels, refFmt);
 }
 
+static GLuint linkCompute(const char* src, const char* tag) {
+    GLuint sh = CreateShader(0x91B9 /*GL_COMPUTE_SHADER*/);
+    ShaderSource(sh, 1, &src, nullptr);
+    CompileShader(sh);
+    GLint ok = 0; GetShaderiv(sh, GL_COMPILE_STATUS, &ok);
+    if (!ok) { char log[2048] = {}; GetShaderInfoLog(sh, sizeof log, nullptr, log); LOG_WARN("wfc: %s compile failed: %s", tag, log); DeleteShader(sh); return 0; }
+    GLuint p = CreateProgram(); AttachShader(p, sh); LinkProgram(p); DeleteShader(sh);
+    GetProgramiv(p, GL_LINK_STATUS, &ok);
+    if (!ok) { char log[2048] = {}; GetProgramInfoLog(p, sizeof log, nullptr, log); LOG_WARN("wfc: %s link failed: %s", tag, log); DeleteProgram(p); return 0; }
+    return p;
+}
+
+bool Pipeline::occCullReady() {
+    if (!mdiOccBox_ || !mdiOccVis_ || !DispatchCompute) return false;
+    if (!occSelectProg_) {
+        static const char* kSel = R"(#version 430
+layout(local_size_x = 64) in;
+struct Cmd { uint count, instances, first, baseVertex, baseInstance; };
+layout(std430, binding = 0) readonly buffer C { Cmd cmd[]; };
+layout(std430, binding = 1) writeonly buffer A { Cmd cmdA[]; };
+layout(std430, binding = 2) readonly buffer V { uint vis[]; };
+uniform uint uN;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uN) return;
+    Cmd c = cmd[i];
+    c.instances = vis[c.baseInstance] != 0u ? c.instances : 0u;   // prepass A: last frame's visible set
+    cmdA[i] = c;
+}
+)";
+        static const char* kTest = R"(#version 430
+layout(local_size_x = 64) in;
+struct Cmd { uint count, instances, first, baseVertex, baseInstance; };
+layout(std430, binding = 0) buffer C { Cmd cmd[]; };
+layout(std430, binding = 1) writeonly buffer B { Cmd cmdB[]; };
+layout(std430, binding = 2) buffer V { uint vis[]; };
+layout(std430, binding = 3) readonly buffer X { vec4 box[]; };
+uniform uint uN;
+uniform mat4 uVP;
+uniform ivec2 uDepthSize;
+uniform int uLevels;
+uniform sampler2D uHzb;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uN) return;
+    Cmd c = cmd[i];
+    uint row = c.baseInstance;
+    vec3 mn = box[2u * row].xyz, mx = box[2u * row + 1u].xyz;
+    bool visible = true;
+    vec2 lo = vec2(1e30), hi = vec2(-1e30);
+    float zmin = 1e30;
+    bool behind = false;
+    for (int k = 0; k < 8; ++k) {
+        vec3 p = vec3((k & 1) != 0 ? mx.x : mn.x, (k & 2) != 0 ? mx.y : mn.y, (k & 4) != 0 ? mx.z : mn.z);
+        vec4 q = uVP * vec4(p, 1.0);
+        if (!(q.w > 1e-5)) { behind = true; break; }    // a corner at / behind the eye: visible
+        vec3 n = q.xyz / q.w;
+        lo = min(lo, n.xy); hi = max(hi, n.xy);
+        zmin = min(zmin, n.z * 0.5 + 0.5);              // window depth (default depth range); the box's nearest is a corner
+    }
+    if (!behind) {
+        vec2 sz = vec2(uDepthSize);
+        ivec2 p0 = ivec2(floor(clamp((lo * 0.5 + 0.5) * sz, vec2(0.0), sz - 1.0)));
+        ivec2 p1 = ivec2(floor(clamp((hi * 0.5 + 0.5) * sz, vec2(0.0), sz - 1.0)));
+        int span = max(p1.x - p0.x, p1.y - p0.y) + 1;
+        int lv = 0;
+        while ((2 << lv) < span && lv < uLevels - 1) ++lv; // level lv: one texel = 2^(lv+1) depth pixels
+        ivec2 t0 = p0 >> (lv + 1), t1 = p1 >> (lv + 1);
+        float m = 0.0;
+        for (int y = t0.y; y <= t1.y; ++y)
+            for (int x = t0.x; x <= t1.x; ++x) m = max(m, texelFetch(uHzb, ivec2(x, y), lv).r);
+        // strictly behind every occluder depth in its rect, by more than the 24-bit depth rounding: none of the box's
+        // fragments could pass LEQUAL
+        if (zmin > m + 1e-6) visible = false;
+    }
+    Cmd b = c;
+    b.instances = (visible && vis[row] == 0u) ? c.instances : 0u;   // newly visible: prepass B
+    cmdB[i] = b;
+    cmd[i].instances = visible ? c.instances : 0u;                   // the shading pass
+    vis[row] = visible ? 1u : 0u;
+}
+)";
+        static const char* kHzb = R"(#version 430
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(r32f, binding = 0) writeonly uniform image2D uDst;
+uniform sampler2D uSrc;
+uniform int uSrcLevel;
+uniform ivec2 uSrcSize, uDstSize;
+void main() {
+    ivec2 o = ivec2(gl_GlobalInvocationID.xy);
+    if (o.x >= uDstSize.x || o.y >= uDstSize.y) return;
+    ivec2 s = o * 2;
+    float m = 0.0;
+    for (int dy = 0; dy < 2; ++dy)
+        for (int dx = 0; dx < 2; ++dx) m = max(m, texelFetch(uSrc, min(s + ivec2(dx, dy), uSrcSize - 1), uSrcLevel).r);
+    imageStore(uDst, o, vec4(m));
+}
+)";
+        occSelectProg_ = linkCompute(kSel, "occ_select.cs");
+        occTestProg_ = linkCompute(kTest, "occ_test.cs");
+        hzbProg_ = linkCompute(kHzb, "hzb.cs");
+        if (!occSelectProg_ || !occTestProg_ || !hzbProg_) {
+            LOG_WARN("wfc: occlusion culling unavailable (compute programs)");
+            for (GLuint* b : {&mdiOccBox_, &mdiOccVis_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+            return false;
+        }
+        GenBuffers(1, &occCmdA_); GenBuffers(1, &occCmdB_);
+        LOG_INFO("wfc: world occlusion culling on (exact two-pass Hi-Z; WFC_NOOCCCULL=1 off)");
+    }
+    return true;
+}
+
+// Hi-Z: level 0 = 2x2 max of the scene depth (render size), each next level 2x2 max of the previous, so every texel of
+// level k covers the 2^(k+1) square of depth pixels it stands for. Level 0 is a power of two in each axis (>= half the
+// render size; texels past the screen edge repeat its edge pixels and are never the only ones a test reads): a GL mip
+// chain must halve exactly (rounded down) or the texture is incomplete and every fetch returns 0.
+void Pipeline::buildHzb() {
+    auto pow2 = [](int v) { int p = 1; while (p < v) p <<= 1; return p; };
+    const int w0 = pow2(std::max(1, (vpW_ + 1) / 2)), h0 = pow2(std::max(1, (vpH_ + 1) / 2));
+    if (!hzbTex_ || hzbW_ != w0 || hzbH_ != h0) {
+        if (hzbTex_) glDeleteTextures(1, &hzbTex_);
+        glGenTextures(1, &hzbTex_); glBindTexture(GL_TEXTURE_2D, hzbTex_);
+        int w = w0, h = h0, lv = 0;
+        for (;; ++lv) {
+            glTexImage2D(GL_TEXTURE_2D, lv, 0x822E /*GL_R32F*/, w, h, 0, GL_RED, GL_FLOAT, nullptr);
+            if (w == 1 && h == 1) break;
+            w = std::max(1, w / 2); h = std::max(1, h / 2);
+        }
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, lv);
+        hzbW_ = w0; hzbH_ = h0; hzbLevels_ = lv + 1;
+    }
+    UseProgram(hzbProg_);
+    Uniform1i(cachedUniformLocation(hzbProg_, "uSrc"), 23);
+    int sw = vpW_, sh = vpH_, dw = w0, dh = h0;
+    for (int lv = 0; lv < hzbLevels_; ++lv) {
+        ActiveTexture(GL_TEXTURE0 + 23);
+        glBindTexture(GL_TEXTURE_2D, lv == 0 ? depthTex_ : hzbTex_);
+        Uniform1i(cachedUniformLocation(hzbProg_, "uSrcLevel"), lv == 0 ? 0 : lv - 1);
+        Uniform2i(cachedUniformLocation(hzbProg_, "uSrcSize"), sw, sh);
+        Uniform2i(cachedUniformLocation(hzbProg_, "uDstSize"), dw, dh);
+        BindImageTexture(0, hzbTex_, lv, GL_FALSE, 0, 0x88B9 /*GL_WRITE_ONLY*/, 0x822E /*GL_R32F*/);
+        DispatchCompute((GLuint)((dw + 7) / 8), (GLuint)((dh + 7) / 8), 1);
+        MemoryBarrier(0x00000008 /*TEXTURE_FETCH*/ | 0x00000020 /*SHADER_IMAGE_ACCESS*/);
+        sw = dw; sh = dh; dw = std::max(1, dw / 2); dh = std::max(1, dh / 2);
+    }
+    ActiveTexture(GL_TEXTURE0);
+}
+
 void Pipeline::drawMdi(GpuMesh& g) {
     // WFC_OCCEST=1 (diagnostics, the occlusion-culling estimate): every 600th frame (+300), each frustum-visible world
     // sub's box is queried (any samples passed) against the finished world depth; the hidden subs' triangles are summed
@@ -4557,13 +4763,52 @@ void Pipeline::drawMdi(GpuMesh& g) {
             glDisable(GL_BLEND); glDepthMask(GL_TRUE);
             static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
             size_t preBuckets = 0, preDraws = 0;
-            for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
-                const size_t n = ranges[bi].second - ranges[bi].first;
-                const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
-                if (!n || M.blend != 0 || mdiBuckets_[bi].lm[0] == -3) continue;   // (VLM runs: not prepassed, as before)
-                ++preBuckets; preDraws += n;
-                if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
-                MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
+            auto prepassDraws = [&]() {
+                for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
+                    const size_t n = ranges[bi].second - ranges[bi].first;
+                    const Program& M = progs_[(size_t)progs_[(size_t)mdiBuckets_[bi].prog].mdiProg];
+                    if (!n || M.blend != 0 || mdiBuckets_[bi].lm[0] == -3) continue;   // (VLM runs: not prepassed, as before)
+                    ++preBuckets; preDraws += n;
+                    if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+                    MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
+                }
+            };
+            const bool occ = occCullReady();
+            const GLuint nCmd = (GLuint)cmds.size();
+            if (occ) {                                     // prepass A: the commands of last frame's visible subs
+                BindBuffer(0x90D2, occCmdA_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
+                BindBuffer(0x90D2, occCmdB_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
+                BindBuffer(0x90D2, 0);
+                UseProgram(occSelectProg_);
+                Uniform1ui(cachedUniformLocation(occSelectProg_, "uN"), nCmd);
+                BindBufferBase(0x90D2, 0, mdiCmdBuf_); BindBufferBase(0x90D2, 1, occCmdA_); BindBufferBase(0x90D2, 2, mdiOccVis_);
+                DispatchCompute((nCmd + 63) / 64, 1, 1);
+                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/);
+                UseProgram(zPreProg_);
+                BindBuffer(0x8F3F, occCmdA_);
+            }
+            prepassDraws();
+            if (occ) {                                     // Hi-Z of pass A's depth, the test, then prepass B
+                MemoryBarrier(0xFFFFFFFF);
+                buildHzb();
+                UseProgram(occTestProg_);
+                Uniform1ui(cachedUniformLocation(occTestProg_, "uN"), nCmd);
+                UniformMatrix4fv(cachedUniformLocation(occTestProg_, "uVP"), 1, GL_FALSE, viewProj_.m);
+                Uniform2i(cachedUniformLocation(occTestProg_, "uDepthSize"), vpW_, vpH_);
+                Uniform1i(cachedUniformLocation(occTestProg_, "uLevels"), hzbLevels_);
+                Uniform1i(cachedUniformLocation(occTestProg_, "uHzb"), 23);
+                ActiveTexture(GL_TEXTURE0 + 23); glBindTexture(GL_TEXTURE_2D, hzbTex_); ActiveTexture(GL_TEXTURE0);
+                BindBufferBase(0x90D2, 0, mdiCmdBuf_); BindBufferBase(0x90D2, 1, occCmdB_);
+                BindBufferBase(0x90D2, 2, mdiOccVis_); BindBufferBase(0x90D2, 3, mdiOccBox_);
+                DispatchCompute((nCmd + 63) / 64, 1, 1);
+                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/);
+                UseProgram(zPreProg_);
+                glx::uniformCacheForgetCurrent();
+                ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_); ActiveTexture(GL_TEXTURE0);
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); glDepthMask(GL_TRUE); glDisable(GL_BLEND);
+                BindBuffer(0x8F3F, occCmdB_);
+                prepassDraws();
+                BindBuffer(0x8F3F, mdiCmdBuf_);           // the shading pass: the test's culled commands
             }
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
             glx::uniformCacheForgetCurrent();
@@ -5214,9 +5459,13 @@ void Pipeline::flushDynQueue() {
     if (incremental) {                                   // the previous order: cast (with its blur) then draw, per record
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 0; cast(d); draw(d); }
     } else {
+        const bool prof = shadowGpuFrame() && GetQueryObjectui64v;
+        if (prof) { if (fpQ_.size() < 8) { fpQ_.resize(8); GenQueries(8, fpQ_.data()); } fpN_ = 0; fpDepth_ = fpProj_ = 0; fpSubjects_ = 0; fpStamp(); }
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 1; cast(d); }   // every receiver's depth
+        if (prof) fpStamp();
         shadowPhase_ = 0;
         ensureSceneDepth();                              // one scene-depth copy
+        if (prof) fpStamp();
         // one mask-depth fill: every projection of this flush reads the same scene depth, and the stencil volumes never
         // write depth, so a single full fill gives each subject the values its own rect fill gave
         if (!std::getenv("WFC_SHADOWRECTFILL") && ensureShadowPrograms()) {
@@ -5225,9 +5474,11 @@ void Pipeline::flushDynQueue() {
             BindFramebuffer(GL_FRAMEBUFFER, fbo_);
             glViewport(0, 0, vpW_, vpH_);
         }
+        if (prof) fpStamp();
         phaseProjected_ = false;
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
         shadowPhase_ = 0;
+        if (prof) fpStamp();
         if (phaseProjected_) {                           // one resolve + blur (only if anything was drawn), as the original
             blurShadowMask(nullptr);
             UseProgram(0);
@@ -5235,8 +5486,20 @@ void Pipeline::flushDynQueue() {
             glViewport(0, 0, vpW_, vpH_);
             glDepthFunc(GL_LEQUAL);
         }
+        if (prof) fpStamp();
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }
+        if (prof) {
+            flushInstances();
+            fpStamp();
+            unsigned long long t[8] = {};
+            for (int k = 0; k < fpN_; ++k) GetQueryObjectui64v(fpQ_[(size_t)k], 0x8866, &t[k]);
+            auto ms = [&](int a, int b) { return fpN_ > b ? (double)(t[b] - t[a]) / 1.0e6 : -1.0; };
+            LOG_INFO("SHADOWGPU frame %d (original order, %zu queued, %d projected; GPU ms): receivers %.3f, depth copy %.3f, mask "
+                     "depth fill %.3f, projections %.3f (shadow depth %.3f + projection %.3f), blur %.3f, character draws %.3f",
+                     frameNo_, dynQueue_.size(), fpSubjects_, ms(0, 1), ms(1, 2), ms(2, 3), ms(3, 4), fpDepth_, fpProj_, ms(4, 5), ms(5, 6));
+            fpN_ = 0;
+        }
     }
     };
     // WFC_SHADOWORDERSHOT=<frame> (A/B pictures): that frame's characters are drawn in both orders from the same saved
