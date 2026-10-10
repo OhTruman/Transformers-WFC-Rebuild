@@ -1,0 +1,138 @@
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -51,6 +51,11 @@
+ 
+ namespace core {
+ 
++namespace {   // WFC_BRAWLTEST state (dev tool, main thread only): the arena, the pinned eye, active while the test window runs
++core::Vec3 gBrawlArena{0, 0, 0}, gBrawlEye{0, 0, 0};
++bool gBrawlActive = false;
++}  // namespace
++
+ bool Application::init() {
+     LOG_INFO("WFC Rebuild starting (clean-room skeleton)");
+     // [integration 09c] Systems 846dc11 (PC ADAPTATION, 300 fps): prefer the largest-L3 cores (X3D V-cache CCD) process-wide, before
+@@ -620,6 +625,112 @@
+                 LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at frame %ld (step-identical end point)", (int)world_.match().elapsedTime(), frame);
+                 break;
+             }
++        // DEV TOOL WFC_BRAWLTEST=<seconds>[,<start s>] (Systems; worst-case translucency / FX repro, not original behaviour): <start>
++        // seconds (default 5) after the match goes InProgress, an arena is fixed WFC_BRAWLTEST_DIST metres (default 8) ahead of the
++        // local player (WFC_BRAWLTEST_AT=x,y,z overrides, glTF metres; its height snaps to the navmesh cell under x / z) and the
++        // camera is pinned at the player's eye (WFC_BRAWLTEST_EYE=x,y,z overrides) looking at it for the test. E.g. Seed's map-placed
++        // Smoke_Pillar_red_FX (Emitter_2381, glTF -7.2 6.6 -12.0): AT at the pillar, EYE a few metres off it = the smoke / steam
++        // translucency worst case (Experimental's TRANSPROF of a Seed real-play burst: SmokeThick + Steam 3.6-4.5 ms at 4K). Every 0.25 s, every spawned bot farther than 8 m from the arena is moved onto a slot 1.5-7 m around it (a
++        // 1.5 m grid of points inside navmesh cells, at the cell's height; slot = player index mod the slots, nearest first): both
++        // teams fight there, so their weapons, abilities and explosions
++        // stack in front of the camera. The bots' AI, weapons and FX run unchanged. The frame intervals of the window after its first
++        // 2 s (the mass move's first draws) are logged at the end (BRAWLTEST p50 / p90 / p99 / max); WFC_BRAWLTEST_QUIT=1 then
++        // ends the run. WFC_BRAWLTEST_WALL=1: the local player keeps its Barrier up for the whole window (the real ability actor,
++        // World::requestBarrier: 10 m ahead, facing the arena; re-requested whenever it is gone), and the arena defaults to 14 m, so
++        // a full-screen translucent wall stands between the camera and the fight. Main thread, between steps (no step running),
++        // like playerBotInput.
++        if (const char* bt = WFC_ENV("WFC_BRAWLTEST")) {
++            static double brawlStart = -1.0, brawlLen = 0.0, brawlT = 0.0, brawlNextPull = 0.0, brawlNextLog = 0.0;
++            static bool brawlDone = false;
++            static int brawlPulled = 0;
++            static std::vector<double> brawlFrames;
++            static std::vector<core::Vec3> brawlCells;
++            const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
++            if (!brawlDone && inProgress && !world_.stepRunning()) {
++                const double delay = std::strchr(bt, ',') ? std::atof(std::strchr(bt, ',') + 1) : 5.0;
++                if (brawlStart < 0.0 && world_.match().elapsedTime() >= (float)delay && !world_.localPlayerDead() && world_.ensureBotNav()) {
++                    brawlLen = (std::max)(1.0, std::atof(bt));
++                    brawlStart = world_.match().elapsedTime();
++                    const float dist = WFC_ENV("WFC_BRAWLTEST_DIST") ? (float)std::atof(WFC_ENV("WFC_BRAWLTEST_DIST")) : WFC_ENV("WFC_BRAWLTEST_WALL") ? 14.0f : 8.0f;
++                    const core::Vec3 pp = world_.player().pawn().position();
++                    const core::Vec3 fw = core::forwardFromYawPitch(camera_.yaw, 0.0f);
++                    gBrawlArena = pp + fw * dist;
++                    gBrawlEye = pp + core::Vec3{0, 2.2f, 0};
++                    if (const char* ey = WFC_ENV("WFC_BRAWLTEST_EYE")) std::sscanf(ey, "%f,%f,%f", &gBrawlEye.x, &gBrawlEye.y, &gBrawlEye.z);
++                    std::vector<std::pair<float, core::Vec3>> cand;
++                    auto inside = [](const std::vector<core::Vec3>& poly, float x, float z) {   // convex polygon, either winding
++                        int pos = 0, neg = 0;
++                        for (size_t i = 0; i < poly.size(); ++i) {
++                            const core::Vec3& a = poly[i]; const core::Vec3& b = poly[(i + 1) % poly.size()];
++                            const float c = (b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x);
++                            pos += c > 0.0f; neg += c < 0.0f;
++                        }
++                        return pos == 0 || neg == 0;
++                    };
++                    if (const char* at = WFC_ENV("WFC_BRAWLTEST_AT")) {
++                        std::sscanf(at, "%f,%f,%f", &gBrawlArena.x, &gBrawlArena.y, &gBrawlArena.z);
++                        float best = 1e9f, snapY = gBrawlArena.y;
++                        for (const auto& c : world_.botNav().cells())
++                            if (gBrawlArena.x >= c.bmin.x && gBrawlArena.x <= c.bmax.x && gBrawlArena.z >= c.bmin.z && gBrawlArena.z <= c.bmax.z &&
++                                inside(c.poly, gBrawlArena.x, gBrawlArena.z) && std::fabs(c.centroid.y - gBrawlArena.y) < best) {
++                                best = std::fabs(c.centroid.y - gBrawlArena.y); snapY = c.centroid.y;
++                            }
++                        gBrawlArena.y = snapY;
++                    }
++                    for (int gx = -4; gx <= 4; ++gx)
++                        for (int gz = -4; gz <= 4; ++gz) {
++                            const float x = gBrawlArena.x + 1.5f * (float)gx, z = gBrawlArena.z + 1.5f * (float)gz;
++                            const float d = std::sqrt((x - gBrawlArena.x) * (x - gBrawlArena.x) + (z - gBrawlArena.z) * (z - gBrawlArena.z));
++                            if (d < 1.5f || d > 7.0f) continue;
++                            for (const auto& c : world_.botNav().cells()) {
++                                if (std::fabs(c.centroid.y - gBrawlArena.y) > 3.0f) continue;   // every cell is robot-walkable (vehicle = vehicle-capable)
++                                if (x < c.bmin.x || x > c.bmax.x || z < c.bmin.z || z > c.bmax.z || !inside(c.poly, x, z)) continue;
++                                cand.push_back({d, core::Vec3{x, c.centroid.y, z}});
++                                break;
++                            }
++                        }
++                    std::sort(cand.begin(), cand.end(), [](const auto& a, const auto& b) { return a.first < b.first || (a.first == b.first && a.second.x < b.second.x); });
++                    for (const auto& n : cand) brawlCells.push_back(n.second);
++                    if (brawlCells.empty()) brawlCells.push_back(gBrawlArena);
++                    gBrawlActive = true;
++                    LOG_INFO("BRAWLTEST start at match %.1f s for %.0f s: arena (%.1f %.1f %.1f) %.0f m ahead, eye (%.1f %.1f %.1f), %zu arena slots", brawlStart,
++                             brawlLen, gBrawlArena.x, gBrawlArena.y, gBrawlArena.z, dist, gBrawlEye.x, gBrawlEye.y, gBrawlEye.z, brawlCells.size());
++                }
++                if (gBrawlActive) {
++                    brawlT = world_.match().elapsedTime() - brawlStart;
++                    if (brawlT >= 2.0) brawlFrames.push_back(realDt * 1000.0);
++                    if (brawlT >= brawlNextPull) {
++                        brawlNextPull = brawlT + 0.25;
++                        for (game::MatchOpponent* o : world_.matchOpponents()) {
++                            if (!o->spawned() || core::length(o->pawn().position() - gBrawlArena) <= 8.0f) continue;
++                            const core::Vec3& c = brawlCells[(size_t)o->matchPlayer() % brawlCells.size()];
++                            o->setPosition(c + core::Vec3{0, 0.3f, 0});
++                            ++brawlPulled;
++                        }
++                    }
++                    if (WFC_ENV("WFC_BRAWLTEST_WALL") && world_.localMatchPlayer() >= 0 && !world_.localPlayerDead()) {
++                        bool up = false;
++                        for (const auto& b : world_.barriers()) up = up || (b.owner == world_.localMatchPlayer() && (b.alive || b.delay >= 0.0f));
++                        if (!up) { world_.requestBarrier(world_.localMatchPlayer()); LOG_INFO("BRAWLTEST t %.1f s: local barrier requested", brawlT); }
++                    }
++                    if (brawlT >= brawlNextLog) {
++                        brawlNextLog = brawlT + 1.0;
++                        int in8 = 0;
++                        for (const game::MatchOpponent* o : world_.matchOpponents()) in8 += o->spawned() && core::length(o->pawn().position() - gBrawlArena) <= 8.0f;
++                        LOG_INFO("BRAWLTEST t %.0f s: %d bots within 8 m, %d pulled in so far", brawlT, in8, brawlPulled);
++                    }
++                    if (brawlT >= brawlLen) {
++                        gBrawlActive = false; brawlDone = true;
++                        std::vector<double> v = brawlFrames;
++                        std::sort(v.begin(), v.end());
++                        auto pct = [&](double q) { return v.empty() ? 0.0 : v[(std::min)(v.size() - 1, (size_t)(q * (double)v.size()))]; };
++                        LOG_INFO("BRAWLTEST done: %zu frames over %.0f s (after the first 2 s): interval p50 %.2f p90 %.2f p99 %.2f max %.2f ms (avg fps %.0f)",
++                                 v.size(), brawlLen - 2.0, pct(0.5), pct(0.9), pct(0.99), v.empty() ? 0.0 : v.back(), (double)v.size() / (std::max)(1.0, brawlLen - 2.0));
++                        if (WFC_ENV("WFC_BRAWLTEST_QUIT")) break;
++                    }
++                }
++            }
++        }
+         world_.playerBotInput(input, (float)realDt);   // WFC_PLAYERBOT: the bot brain plays the local player through its input
+         // Per-frame input (camera orientation, buffered movement intent).
+         world_.handleInput(input, (float)realDt);
+@@ -705,6 +816,10 @@
+         static const bool noInterp = std::getenv("WFC_NOINTERP") != nullptr;   // A/B diagnostic
+         world_.setRenderAlpha(noInterp ? 1.0f : clock_.alpha());
+         world_.player().controller().updateCamera(camera_);
++        if (gBrawlActive) {   // WFC_BRAWLTEST: the camera pinned at the start eye, looking at the arena (1 m up)
++            const core::Vec3 d = core::normalize(gBrawlArena + core::Vec3{0, 1.0f, 0} - gBrawlEye);
++            camera_.pos = gBrawlEye; camera_.yaw = std::atan2(-d.x, -d.z); camera_.pitch = std::asin((std::max)(-1.0f, (std::min)(1.0f, d.y)));
++        }
+         if (WFC_ENV("WFC_CAMLOG")) {   // diagnostics: pawn screen position per rendered frame (frame pacing)
+             core::Vec3 pp = world_.player().pawn().position() + core::Vec3{0, 2.0f, 0};
+             core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
