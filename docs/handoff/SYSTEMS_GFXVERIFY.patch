@@ -1,0 +1,167 @@
+--- a/src/ui/gl/GfxRendererGL.h
++++ b/src/ui/gl/GfxRendererGL.h
+@@ -94,6 +94,16 @@
+         unsigned op[2][3] = {{~0u, ~0u, ~0u}, {~0u, ~0u, ~0u}};   // [front, back][sfail, dpfail, dppass]
+     } gs_;
+     void invalidateGlShadow() { gs_ = GlShadow{}; }
++    // Image verifier (WFC_GFXVERIFY_IMAGE=<N>, diagnostics): every N-th HUD frame is drawn twice from the same backdrop and render
++    // lists - the normal path, then refMode_ (the original per-call path: no state shadow, no CPU-side batching / buffer packing)
++    // - both resolved, read back and byte-compared; mismatches are logged. Proves CPU-side optimisations leave the image identical.
++    bool refMode_ = false;
++    bool recording_ = false;
++    struct Recorded { std::vector<gfx::Player::RenderItem> items; float alpha; };
++    std::vector<Recorded> recorded_;
++    std::vector<unsigned char> verifyA_, verifyB_;
++    void beginTarget(int width, int height);   // begin()'s per-frame target setup (clear, state, backdrop): reused by the verifier
++    void verifyImage();
+     void sColorMask(bool on);
+     void sStencilFunc(unsigned func, int ref, unsigned mask);
+     void sStencilMask(unsigned mask);
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -303,6 +303,10 @@
+ }
+ 
+ static void gfxShadowVerifyFrame();   // below, with the shadow setters
++static int gfxImgVerifyEvery() {   // WFC_GFXVERIFY_IMAGE=<N>: every N-th HUD frame is verified (0 = off)
++    static const int n = std::getenv("WFC_GFXVERIFY_IMAGE") ? std::max(1, std::atoi(std::getenv("WFC_GFXVERIFY_IMAGE"))) : 0;
++    return n;
++}
+ 
+ void GfxRendererGL::begin(int width, int height) {
+     w_ = width; h_ = height;
+@@ -363,6 +367,12 @@
+     }
+     glBindTexture(GL_TEXTURE_2D, backdropTex_);
+     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
++    recorded_.clear();
++    recording_ = gfxImgVerifyEvery() > 0 && frame_ % (unsigned)gfxImgVerifyEvery() == 0;
++    beginTarget(width, height);
++}
++
++void GfxRendererGL::beginTarget(int width, int height) {
+     glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
+     glViewport(0, 0, width, height);
+     glClearColor(0, 0, 0, 0);
+@@ -434,7 +444,8 @@
+ }
+ 
+ namespace {
+-bool glShadowOff() { static const bool off = std::getenv("WFC_NOGFXSTATESHADOW") != nullptr; return off; }
++bool glShadowOffEnv() { static const bool off = std::getenv("WFC_NOGFXSTATESHADOW") != nullptr; return off; }
++long gImgFrames = 0, gImgBad = 0;
+ // WFC_GFXSTATESHADOW_VERIFY=1: every skipped call is checked against glGet (the real context state); a mismatch would mean the
+ // shadow is wrong (some write bypassed it) and the image could differ. Diagnostics only (the glGets stall the pipeline).
+ bool glShadowVerify() { static const bool v = std::getenv("WFC_GFXSTATESHADOW_VERIFY") != nullptr; return v; }
+@@ -458,7 +469,7 @@
+ #define GL_STENCIL_BACK_WRITEMASK 0x8CA5
+ #endif
+ void GfxRendererGL::sColorMask(bool on) {
+-    if (!glShadowOff() && gs_.colorMask == (on ? 1 : 0)) {
++    if (!(glShadowOffEnv() || refMode_) && gs_.colorMask == (on ? 1 : 0)) {
+         if (glShadowVerify()) {
+             ++gVerifySkips;
+             GLboolean cm[4] = {0, 0, 0, 0}; glGetBooleanv(GL_COLOR_WRITEMASK, cm);
+@@ -471,7 +482,7 @@
+     gs_.colorMask = on ? 1 : 0;
+ }
+ void GfxRendererGL::sStencilFunc(unsigned func, int ref, unsigned mask) {
+-    if (!glShadowOff() && gs_.func == func && gs_.ref == (unsigned)ref && gs_.valueMask == mask) {
++    if (!(glShadowOffEnv() || refMode_) && gs_.func == func && gs_.ref == (unsigned)ref && gs_.valueMask == mask) {
+         if (glShadowVerify()) {
+             ++gVerifySkips;
+             if ((unsigned)getI(GL_STENCIL_FUNC) != func || getI(GL_STENCIL_REF) != ref || (unsigned)getI(GL_STENCIL_VALUE_MASK) != mask ||
+@@ -484,7 +495,7 @@
+     gs_.func = func; gs_.ref = (unsigned)ref; gs_.valueMask = mask;
+ }
+ void GfxRendererGL::sStencilMask(unsigned mask) {
+-    if (!glShadowOff() && gs_.writeMaskKnown && gs_.writeMask == mask) {
++    if (!(glShadowOffEnv() || refMode_) && gs_.writeMaskKnown && gs_.writeMask == mask) {
+         if (glShadowVerify()) {
+             ++gVerifySkips;
+             if ((unsigned)getI(GL_STENCIL_WRITEMASK) != mask || (unsigned)getI(GL_STENCIL_BACK_WRITEMASK) != mask)
+@@ -497,7 +508,7 @@
+ }
+ void GfxRendererGL::sStencilOp(unsigned sfail, unsigned dpfail, unsigned dppass) {
+     const unsigned v[3] = {sfail, dpfail, dppass};
+-    if (!glShadowOff() && std::equal(v, v + 3, gs_.op[0]) && std::equal(v, v + 3, gs_.op[1])) {
++    if (!(glShadowOffEnv() || refMode_) && std::equal(v, v + 3, gs_.op[0]) && std::equal(v, v + 3, gs_.op[1])) {
+         if (glShadowVerify()) {
+             ++gVerifySkips;
+             const unsigned r[6] = {(unsigned)getI(GL_STENCIL_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_PASS),
+@@ -512,7 +523,7 @@
+ void GfxRendererGL::sStencilOpSeparate(unsigned face, unsigned sfail, unsigned dpfail, unsigned dppass) {
+     const unsigned v[3] = {sfail, dpfail, dppass};
+     const int f = face == GL_BACK ? 1 : 0;
+-    if (!glShadowOff() && std::equal(v, v + 3, gs_.op[f])) {
++    if (!(glShadowOffEnv() || refMode_) && std::equal(v, v + 3, gs_.op[f])) {
+         if (glShadowVerify()) {
+             ++gVerifySkips;
+             const unsigned r[3] = {(unsigned)getI(f ? GL_STENCIL_BACK_FAIL : GL_STENCIL_FAIL),
+@@ -558,6 +569,7 @@
+                  u.items / f, u.glyphItems / f, u.direct / f, u.stencil / f, u.mergeable / f, u.runs / f, u.strokes / f, u.bitmaps / f);
+         u = UiDrawCounts{};
+     }
++    if (recording_) verifyImage();
+     glDisable(GL_STENCIL_TEST);
+     glx::BindFramebuffer(GL_READ_FRAMEBUFFER, msFbo_);
+     glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, resFbo_);
+@@ -587,6 +599,40 @@
+     restoreGlState();
+ }
+ 
++void GfxRendererGL::verifyImage() {
++    recording_ = false;
++    const size_t n = (size_t)w_ * (size_t)h_ * 4;
++    auto readBack = [&](std::vector<unsigned char>& out) {   // resolve the movie target and read it (MSAA targets cannot be read)
++        glDisable(GL_STENCIL_TEST);
++        glx::BindFramebuffer(GL_READ_FRAMEBUFFER, msFbo_);
++        glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, resFbo_);
++        glx::BlitFramebuffer(0, 0, w_, h_, 0, 0, w_, h_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
++        glx::BindFramebuffer(GL_READ_FRAMEBUFFER, resFbo_);
++        out.resize(n);
++        glPixelStorei(GL_PACK_ALIGNMENT, 1);
++        glReadPixels(0, 0, w_, h_, GL_RGBA, GL_UNSIGNED_BYTE, out.data());
++    };
++    readBack(verifyB_);
++    refMode_ = true;
++    invalidateGlShadow();
++    inMask_ = false;
++    beginTarget(w_, h_);
++    for (const Recorded& r : recorded_) draw(r.items, r.alpha);
++    refMode_ = false;
++    readBack(verifyA_);
++    invalidateGlShadow();
++    size_t diff = 0, first = n;
++    for (size_t i = 0; i < n; ++i) if (verifyA_[i] != verifyB_[i]) { if (!diff) first = i; ++diff; }
++    ++gImgFrames;
++    if (diff) {
++        ++gImgBad;
++        if (gImgBad <= 20) LOG_ERROR("GFXVERIFY image mismatch (HUD frame %u): %zu of %zu bytes differ, first at pixel (%zu, %zu)", frame_, diff, n,
++                                    (first / 4) % (size_t)w_, (first / 4) / (size_t)w_);
++    }
++    if (gImgFrames % 100 == 0) LOG_INFO("GFXVERIFY %ld HUD frames compared, %ld mismatched", gImgFrames, gImgBad);
++    recorded_.clear();
++}
++
+ const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
+     core::prof::Scope prof("gfx.shapeCache");
+     auto key = std::make_pair(s, glyph);
+@@ -848,6 +894,7 @@
+ 
+ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial) {
+     if (!ok_ || !rgba || w <= 0 || h <= 0) return;
++    recording_ = false; recorded_.clear();   // the image verifier redraws render lists only: skip frames with a video
+     if (!video_.id || video_.w != w || video_.h != h) {
+         if (!video_.id) glGenTextures(1, &video_.id);
+         glBindTexture(GL_TEXTURE_2D, video_.id);
+@@ -902,7 +949,8 @@
+ }
+ 
+ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, float alpha) {
+-    if (uiCountsOn()) { g_uiCounts.items += (long)items.size(); for (const auto& it : items) g_uiCounts.glyphItems += it.type == gfx::Player::RenderItem::Glyph; }
++    if (recording_ && !refMode_) recorded_.push_back({items, alpha});
++    if (uiCountsOn() && !refMode_) { g_uiCounts.items += (long)items.size(); for (const auto& it : items) g_uiCounts.glyphItems += it.type == gfx::Player::RenderItem::Glyph; }
+     if (!ok_) return;
+     using RI = gfx::Player::RenderItem;
+     for (size_t idx = 0; idx < items.size(); ++idx) {
