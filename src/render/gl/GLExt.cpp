@@ -240,7 +240,16 @@ bool uSame(GLint loc, const void* data, uint32_t words) {
     return false;
 }
 unsigned long long gProgBinds = 0, gBufBytes = 0;
-void APIENTRY cUseProgram(GLuint p) { gUCur = p; gUCurKnown = true; ++gProgBinds; realUseProgram(p); }
+std::vector<char> gProgBound;                         // program bound since its last link (first-bind counter)
+unsigned long long gFirstBinds = 0, gBufAllocs = 0, gBufAllocBytes = 0;
+void APIENTRY cUseProgram(GLuint p) {
+    gUCur = p; gUCurKnown = true; ++gProgBinds;
+    if (p) {
+        if (p >= gProgBound.size()) gProgBound.resize((size_t)p + 256, 0);
+        if (!gProgBound[p]) { gProgBound[p] = 1; ++gFirstBinds; }
+    }
+    realUseProgram(p);
+}
 PFN_BufferData realBufferData = nullptr;
 PFN_BufferSubData realBufferSubData = nullptr;
 // WFC_UPLOADPROF=1: buffer upload bytes by calling code address (logged as exe+0x..., tools/render/gltrace_sym.py)
@@ -248,6 +257,7 @@ const bool gUpProf = std::getenv("WFC_UPLOADPROF") != nullptr;
 std::unordered_map<void*, unsigned long long> gUpBytes;
 void APIENTRY cBufferData(GLenum t, GLsizeiptr n, const void* d, GLenum u) {
     if (d && n > 0) { gBufBytes += (unsigned long long)n; if (gUpProf) gUpBytes[__builtin_return_address(0)] += (unsigned long long)n; }
+    if (n > 0) { ++gBufAllocs; gBufAllocBytes += (unsigned long long)n; }   // (new storage for the buffer)
     realBufferData(t, n, d, u);
 }
 void APIENTRY cBufferSubData(GLenum t, GLintptr o, GLsizeiptr n, const void* d) {
@@ -281,6 +291,7 @@ std::vector<std::vector<std::pair<const char*, GLint>>> gLocCache;
 void forgetProgram(GLuint p) {
     if (p < gUCache.size()) gUCache[p].clear();
     if (p < gLocCache.size()) gLocCache[p].clear();
+    if (p < gProgBound.size()) gProgBound[p] = 0;
 }
 void APIENTRY cLinkProgram(GLuint p) { forgetProgram(p); realLinkProgram(p); }
 void APIENTRY cDeleteProgram(GLuint p) { forgetProgram(p); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
@@ -468,6 +479,9 @@ void textureCacheInvalidate() {
 }
 void textureCacheStats(unsigned long long& issued, unsigned long long& skipped) { issued = gTexIssued; skipped = gTexSkipped; }
 unsigned long long bufferUploadBytes() { return gBufBytes; }
+unsigned long long firstProgramBinds() { return gFirstBinds; }
+unsigned long long bufferAllocs() { return gBufAllocs; }
+unsigned long long bufferAllocBytes() { return gBufAllocBytes; }
 bool uniformCacheActive() { return UseProgram == cUseProgram; }
 int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words) {
     if (!uniformCacheActive() || loc < 0) return -1;

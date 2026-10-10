@@ -111,6 +111,12 @@ public:
     // palette changes; paletteKey identifies the character instance (its palette storage). Same result as skinPose +
     // drawDynamicMeshBlended: linear blend skinning, normals / tangents renormalised, prev + (cur - prev) * alpha.
     // Returns false when unsupported (the caller CPU-skins as before); the default renderer does not support it.
+    // Builds the GPU-skinned model of a bind mesh ahead of its first draw (vertex buffers + exact-bounds hull sets: 5-25 ms of
+    // CPU per robot / vehicle model, which first-sight builds spent in the first seconds of a match). Call at load for every
+    // chassis form / weapon a match will draw, with the same MeshData objects drawSkinnedMesh will get. Draws nothing.
+    virtual void prewarmSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights) {
+        (void)bind; (void)joints; (void)weights;
+    }
     virtual bool drawSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
                                  const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette,
                                  float alpha, const core::Mat4& model, const core::Vec3& color, const void* paletteKey,

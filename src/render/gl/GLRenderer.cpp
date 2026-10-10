@@ -151,6 +151,7 @@ public:
         double interval = 0, render = 0, mark[6] = {-1, -1, -1, -1, -1, -1}, gpu = 0, gpuPass[6] = {-1, -1, -1, -1, -1, -1};
         int draws = 0, dyn = 0, fxDraws = 0, age = 0;
         unsigned long long binds0 = 0, bytes0 = 0, binds = 0, bytes = 0;
+        unsigned long long firstBinds0 = 0, allocs0 = 0, allocBytes0 = 0, firstBinds = 0, allocs = 0; double allocBytes = 0;
         unsigned long tex0 = 0, sh0 = 0, tex = 0, sh = 0;
         double fx0 = 0, fxSim0 = 0, fx = 0, fxSim = 0;
     };
@@ -172,9 +173,10 @@ public:
         else std::snprintf(gpu, sizeof gpu, "gpu n/a%s", gpuMissing ? "" : "");
         LOG_INFO("SLOWFRAME f%d interval %.2f ms: render %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f), "
                  "outside %.2f; %s; draws %d (dyn %d, fx %d), program binds %llu, buffer upload %.0f KB, new textures %lu, "
-                 "shader compiles %lu, map FX cpu %.2f (sim %.2f)",
+                 "shader compiles %lu, map FX cpu %.2f (sim %.2f), first program binds %llu, buffer allocs %llu (%.0f KB)",
                  s.frame, s.interval, s.render, seg(1), seg(2), seg(3), seg(4), seg(5), s.interval - s.render, gpu, s.draws,
-                 s.dyn, s.fxDraws, s.binds, s.bytes / 1024.0, s.tex, s.sh, s.fx, s.fxSim);
+                 s.dyn, s.fxDraws, s.binds, s.bytes / 1024.0, s.tex, s.sh, s.fx, s.fxSim, s.firstBinds, s.allocs,
+                 s.allocBytes / 1024.0);
         s.done = true;
     }
     void slowFrameBegin() {
@@ -200,6 +202,7 @@ public:
         c.open = true;
         c.t0 = now;
         c.binds0 = glx::programBinds(); c.bytes0 = glx::bufferUploadBytes();
+        c.firstBinds0 = glx::firstProgramBinds(); c.allocs0 = glx::bufferAllocs(); c.allocBytes0 = glx::bufferAllocBytes();
         c.tex0 = wfc::gTexCreates; c.sh0 = wfc::gShaderCompiles;
         c.fx0 = wfc_.fxMsTotal(); c.fxSim0 = wfc_.fxSimMsTotal();
     }
@@ -227,6 +230,8 @@ public:
         const auto& fc = wfc_.lastFrameCounts();
         c.draws = fc.draws; c.dyn = fc.dynamicDraws; c.fxDraws = fc.fxDraws;
         c.binds = glx::programBinds() - c.binds0; c.bytes = glx::bufferUploadBytes() - c.bytes0;
+        c.firstBinds = glx::firstProgramBinds() - c.firstBinds0; c.allocs = glx::bufferAllocs() - c.allocs0;
+        c.allocBytes = (double)(glx::bufferAllocBytes() - c.allocBytes0);
         c.tex = wfc::gTexCreates - c.tex0; c.sh = wfc::gShaderCompiles - c.sh0;
         c.fx = wfc_.fxMsTotal() - c.fx0; c.fxSim = wfc_.fxSimMsTotal() - c.fxSim0;
     }
@@ -1594,6 +1599,9 @@ public:
         drawMeshArrays(m, model, color);
     }
 
+    void prewarmSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights) override {
+        if (wfc_.active()) wfc_.prewarmSkinned(bind, joints, weights);
+    }
     bool drawSkinnedMesh(const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights,
                          const std::vector<core::Mat4>& palette, const std::vector<core::Mat4>* prevPalette, float alpha,
                          const core::Mat4& model, const core::Vec3& color, const void* key, uint64_t serial) override {
