@@ -615,10 +615,21 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
         return;
     }
     if (shadowPhase_ == 2) {                              // shadow depth + projection into the shared mask
+        static GLuint sq[3] = {0, 0, 0};
+        const bool prof = fpQ_.size() > 0 && fpN_ > 0;    // (a profiled flush: WFC_SHADOWGPU frame)
+        if (prof && !sq[0]) GenQueries(3, sq);
+        if (prof) glx::QueryCounter(sq[0], 0x8E28);
         if (!renderShadowDepth(g, model, p, rq)) return;
         if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }
+        if (prof) glx::QueryCounter(sq[1], 0x8E28);
         projectSubjectShadow(p, rq, fullPasses, true);
         phaseProjected_ = true;
+        if (prof) {
+            glx::QueryCounter(sq[2], 0x8E28);
+            unsigned long long t[3];
+            for (int k = 0; k < 3; ++k) GetQueryObjectui64v(sq[k], 0x8866, &t[k]);
+            fpDepth_ += (double)(t[1] - t[0]) / 1.0e6; fpProj_ += (double)(t[2] - t[1]) / 1.0e6; ++fpSubjects_;
+        }
         return;
     }
     const bool sg = shadowGpuFrame();

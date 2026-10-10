@@ -70,6 +70,9 @@ typedef ptrdiff_t GLintptr;
 
 namespace glx {
 
+#ifdef MemoryBarrier            // winnt.h's MemoryBarrier macro (_mm_mfence) would rename glMemoryBarrier below
+#undef MemoryBarrier
+#endif
 #define WFC_GL_FUNCS(X) \
     X(GLuint, CreateShader, (GLenum)) \
     X(void, ShaderSource, (GLuint, GLsizei, const GLchar* const*, const GLint*)) \
@@ -141,6 +144,12 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, VertexAttribDivisor, (GLuint, GLuint)) \
     X(void, TexStorage3D, (GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLsizei)) \
     X(void, TexBuffer, (GLenum, GLenum, GLuint)) \
+    X(void, DispatchCompute, (GLuint, GLuint, GLuint)) \
+    X(void, MemoryBarrier, (GLbitfield)) \
+    X(void, BindBufferBase, (GLenum, GLuint, GLuint)) \
+    X(void, BindImageTexture, (GLuint, GLuint, GLint, GLboolean, GLint, GLenum, GLenum)) \
+    X(void, Uniform1ui, (GLint, GLuint)) \
+    X(void, Uniform2i, (GLint, GLint, GLint)) \
     X(void, CopyImageSubData, (GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) \
     X(void, TextureView, (GLuint, GLenum, GLuint, GLenum, GLuint, GLuint, GLuint, GLuint)) \
     X(void, CompressedTexImage2D, (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*)) \
