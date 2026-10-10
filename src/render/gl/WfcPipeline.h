@@ -535,7 +535,12 @@ private:
     // texture view of its layer (same storage, exact texels / mips), so MDI buckets key on the program alone for them.
     GLuint lmArray_ = 0;
     std::vector<int> lmLayer_;                 // lmTextures_ index -> array layer, -1 = separate texture
+    // Further arrays, one per other (size, format, levels, sampler state) kind with 2+ pages (WFC_NOLMARRAYS=1: none):
+    // lmArrays_[0] = lmArray_; lmArrOf_: lmTextures_ index -> its array, -1 = separate texture
+    std::vector<GLuint> lmArrays_;
+    std::vector<int> lmArrOf_;
     void buildLmArray();
+    void buildLmArraysMore();
     std::vector<float> mdiRows_;                           // CPU copy (light environments filled at first sight)
     std::vector<char> mdiEnvFilled_;
     // A second multi-draw set for the level BSP mesh (Seed: 985 BSP subs were drawn singly). The active set lives in

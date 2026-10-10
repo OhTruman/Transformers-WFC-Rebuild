@@ -702,6 +702,8 @@ void Pipeline::release() {
     touchQueue_.clear();                               // its textures are deleted with the map
     if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
     if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
+    for (size_t a = 1; a < lmArrays_.size(); ++a) if (lmArrays_[a]) glDeleteTextures(1, &lmArrays_[a]);
+    lmArrays_.clear(); lmArrOf_.clear();
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
@@ -4366,12 +4368,16 @@ void Pipeline::buildMdi(int meshId) {
         // all three pages in the shared array, and the MDI program samples it: bucket by program alone
         bool inArray = s.lmTex[0] >= 0 && lmArray_ && ULOC(progs_[(size_t)P.mdiProg], "uLMUseArr") >= 0;
         for (int i = 0; i < 3 && inArray; ++i)
-            inArray = (size_t)s.lmTex[i] < lmLayer_.size() && lmLayer_[(size_t)s.lmTex[i]] >= 0;
+            inArray = (size_t)s.lmTex[i] < lmLayer_.size() && lmLayer_[(size_t)s.lmTex[i]] >= 0 &&
+                      lmArrOf_[(size_t)s.lmTex[i]] == lmArrOf_[(size_t)s.lmTex[0]];
+        const int arr = inArray ? lmArrOf_[(size_t)s.lmTex[0]] : -1;
+        // (the first array: bucket by program, as before; a further array: by page, as before - merged below)
         for (int i = 0; i < 3; ++i) rw[(1 + i) * 4 + 3] = inArray ? (float)lmLayer_[(size_t)s.lmTex[i]] : -1.0f;
         arrayed += inArray ? 1 : 0;
         // light environments (lit, non-lightmapped): filled the first time the sub is drawn, as drawSubs does
         mdiEnvFilled_.push_back(P.lit && s.lmTex[0] < 0 && !s.vlmTex ? 0 : 1);   // (the lightmapped main reads no env)
-        int k0 = inArray ? -2 : s.lmTex[0], k1 = inArray ? -2 : s.lmTex[1], k2 = inArray ? -2 : s.lmTex[2];
+        const bool byProg = inArray && arr == 0;
+        int k0 = byProg ? -2 : s.lmTex[0], k1 = byProg ? -2 : s.lmTex[1], k2 = byProg ? -2 : s.lmTex[2];
         // VLM subs keep the single-draw order (they were drawn after every bucket, in sub order, depth writes on, so they
         // won LEQUAL ties on coplanar overlaps): own buckets, one per consecutive run of a program in sub order, moved
         // after all other buckets below and not depth-prepassed
@@ -4402,6 +4408,91 @@ void Pipeline::buildMdi(int meshId) {
     }
     // the VLM runs after every other bucket, in run order (their order of insertion)
     std::stable_partition(mdiBuckets_.begin(), mdiBuckets_.end(), [](const MdiBucket& b) { return b.lm[0] != -3; });
+    // Order-safe merging. The world's opaque / masked buckets are depth-tested LEQUAL, so swapping two subs' draws
+    // changes a pixel only where both reach it at the same depth - impossible when their bounds (padded) are disjoint.
+    // A unit (a VLM sub; a page bucket of a further lightmap array) joins the last bucket of its merge key when it is
+    // disjoint from every sub of the buckets after that one (the subs it moves ahead of); otherwise it stays a bucket
+    // of its own, in place. Byte-identical by construction (and checked: work/lm_check*.sh).
+    auto padded = [&g](uint32_t si) {
+        const Sub& s = g.subs[si];
+        const float m = 0.01f + 1e-4f * std::max({std::fabs(s.bmin.x), std::fabs(s.bmin.y), std::fabs(s.bmin.z),
+                                                  std::fabs(s.bmax.x), std::fabs(s.bmax.y), std::fabs(s.bmax.z)});
+        return std::make_pair(core::Vec3{s.bmin.x - m, s.bmin.y - m, s.bmin.z - m}, core::Vec3{s.bmax.x + m, s.bmax.y + m, s.bmax.z + m});
+    };
+    // units: (merge key or -1 = never merged, bucket key lm, subs) in draw order -> merged buckets
+    struct Unit { long key; int prog; int lm[3]; std::vector<uint32_t> subs; };
+    auto mergeOrdered = [&padded](const std::vector<Unit>& units) {
+        std::vector<MdiBucket> out;
+        std::vector<long> keys;
+        std::vector<std::vector<std::pair<core::Vec3, core::Vec3>>> boxes;   // per bucket, its subs' padded bounds
+        for (const Unit& u : units) {
+            std::vector<std::pair<core::Vec3, core::Vec3>> ub;
+            for (uint32_t si : u.subs) ub.push_back(padded(si));
+            int j = -1;
+            if (u.key >= 0) {
+                j = (int)out.size() - 1;
+                while (j >= 0 && keys[(size_t)j] != u.key) --j;
+                for (size_t k = (size_t)j + 1; j >= 0 && k < out.size(); ++k)
+                    for (const auto& bx : boxes[k]) {
+                        for (const auto& a : ub)
+                            if (a.first.x <= bx.second.x && bx.first.x <= a.second.x && a.first.y <= bx.second.y &&
+                                bx.first.y <= a.second.y && a.first.z <= bx.second.z && bx.first.z <= a.second.z) { j = -1; break; }
+                        if (j < 0) break;
+                    }
+            }
+            if (j < 0) {
+                out.push_back({u.prog, {u.lm[0], u.lm[1], u.lm[2]}, {}}); keys.push_back(u.key); boxes.emplace_back();
+                j = (int)out.size() - 1;
+            }
+            out[(size_t)j].subs.insert(out[(size_t)j].subs.end(), u.subs.begin(), u.subs.end());
+            boxes[(size_t)j].insert(boxes[(size_t)j].end(), ub.begin(), ub.end());
+        }
+        return out;
+    };
+    const size_t vlmFirst = (size_t)(std::find_if(mdiBuckets_.begin(), mdiBuckets_.end(),
+                                                  [](const MdiBucket& b) { return b.lm[0] == -3; }) - mdiBuckets_.begin());
+    // the page buckets of a further array (all three pages in it; its program samples the array): key (program, array)
+    // WFC_NOLMARRAYS=1: no further arrays, so nothing merges here
+    {
+        std::vector<Unit> units;
+        size_t merged = 0;
+        for (size_t bi = 0; bi < vlmFirst; ++bi) {
+            const MdiBucket& b = mdiBuckets_[bi];
+            int arr = -1;
+            if (b.lm[0] >= 0 && (size_t)b.lm[0] < lmArrOf_.size() && lmArrOf_[(size_t)b.lm[0]] > 0 &&
+                lmArrOf_[(size_t)b.lm[1]] == lmArrOf_[(size_t)b.lm[0]] && lmArrOf_[(size_t)b.lm[2]] == lmArrOf_[(size_t)b.lm[0]] &&
+                ULOC(progs_[(size_t)progs_[(size_t)b.prog].mdiProg], "uLMUseArr") >= 0)
+                arr = lmArrOf_[(size_t)b.lm[0]];
+            if (arr > 0) units.push_back({(long)b.prog * 4096 + arr, b.prog, {-2, arr, -2}, b.subs});
+            else units.push_back({-1, b.prog, {b.lm[0], b.lm[1], b.lm[2]}, b.subs});
+            merged += arr > 0 ? 1 : 0;
+        }
+        if (merged) {
+            std::vector<MdiBucket> out = mergeOrdered(units);
+            LOG_INFO("wfc: %s MDI: %zu buckets -> %zu (further lightmap arrays' page buckets merged where order-safe)",
+                     meshId == bspMesh_ ? "level BSP" : "world", vlmFirst, out.size());
+            std::vector<MdiBucket> vlm(mdiBuckets_.begin() + (long)vlmFirst, mdiBuckets_.end());
+            mdiBuckets_ = std::move(out);
+            mdiBuckets_.insert(mdiBuckets_.end(), vlm.begin(), vlm.end());
+        }
+    }
+    // the VLM runs, sub by sub: key (program). WFC_NOVLMMERGE=1: one run per consecutive program, as before
+    static const bool noVlmMerge = std::getenv("WFC_NOVLMMERGE") != nullptr;
+    const size_t vlmFirst2 = (size_t)(std::find_if(mdiBuckets_.begin(), mdiBuckets_.end(),
+                                                   [](const MdiBucket& b) { return b.lm[0] == -3; }) - mdiBuckets_.begin());
+    const size_t vlmRunsBefore = mdiBuckets_.size() - vlmFirst2;
+    if (!noVlmMerge && vlmRunsBefore > 1) {
+        std::vector<Unit> units;
+        int run = 0;
+        for (size_t bi = vlmFirst2; bi < mdiBuckets_.size(); ++bi)
+            for (uint32_t si : mdiBuckets_[bi].subs)
+                units.push_back({(long)mdiBuckets_[bi].prog, mdiBuckets_[bi].prog, {-3, ++run, -3}, {si}});
+        std::vector<MdiBucket> runs = mergeOrdered(units);
+        mdiBuckets_.resize(vlmFirst2);
+        mdiBuckets_.insert(mdiBuckets_.end(), runs.begin(), runs.end());
+        LOG_INFO("wfc: %s MDI: %zu VLM runs merged to %zu (disjoint bounds)", meshId == bspMesh_ ? "level BSP" : "world",
+                 vlmRunsBefore, runs.size());
+    }
     if (vlmSubs) {
         glGenTextures(1, &mdiVlmTex_);
         GenBuffers(1, &mdiVlmBo_);
@@ -4438,6 +4529,8 @@ void Pipeline::buildMdi(int meshId) {
 
 void Pipeline::buildLmArray() {
     lmLayer_.assign(lmTextures_.size(), -1);
+    lmArrOf_.assign(lmTextures_.size(), -1);
+    lmArrays_.clear();
     if (lmArray_ || !TexStorage3D || !CopyImageSubData || !TextureView || std::getenv("WFC_NOLMARRAY")) return;
     constexpr GLenum kArr = 0x8C1A;                            // GL_TEXTURE_2D_ARRAY
     // the common page size; the most common (format, level count) among the eligible pages (9 levels = the full chain
@@ -4472,6 +4565,7 @@ void Pipeline::buildLmArray() {
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     if (layers < 2) { lmLayer_.assign(lmTextures_.size(), -1); return; }
+    for (size_t k = 0; k < lmTextures_.size(); ++k) if (lmLayer_[k] >= 0) lmArrOf_[k] = 0;
     glGenTextures(1, &lmArray_);
     glBindTexture(kArr, lmArray_);
     TexStorage3D(kArr, kLevels, (GLenum)refFmt, kSize, kSize, layers);
@@ -4508,6 +4602,123 @@ void Pipeline::buildLmArray() {
     }
     LOG_INFO("wfc: lightmap array: %d of %zu pages (%dx%d, %d levels, format 0x%x) as views of one texture array", layers,
              lmTextures_.size(), kSize, kSize, kLevels, refFmt);
+    lmArrays_.push_back(lmArray_);
+    buildLmArraysMore();
+}
+
+// The pages left out of the first array, grouped by everything a texture view of an array layer must share with the
+// page for texture() to return the same value: size, internal format, level count (the full chain present), and the
+// page's own sampler state (filters, wraps, anisotropy, base / max level, LOD bias / range). Each kind with 2+ pages
+// becomes one more array, its layers exact texel copies of every level, each page's 2D name a view of its layer.
+// Compressed pages stay separate. WFC_NOLMARRAYS=1: no further arrays (the first array alone, as before).
+void Pipeline::buildLmArraysMore() {
+    if (std::getenv("WFC_NOLMARRAYS")) return;
+    constexpr GLenum kArr = 0x8C1A;
+    using Kind = std::vector<GLint>;                         // w, h, format, levels, then the sampler state's bits
+    std::map<Kind, std::vector<size_t>> kinds;
+    std::map<std::string, int> census;                       // left-out pages by size / format (log)
+    for (size_t k = 0; k < lmTextures_.size(); ++k) {
+        if (!lmTextures_[k] || lmLayer_[k] >= 0) continue;
+        glBindTexture(GL_TEXTURE_2D, lmTextures_[k]);
+        GLint w = 0, h = 0, fmt = 0, comp = 0, base = 0, maxL = 1000;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x1003 /*GL_TEXTURE_INTERNAL_FORMAT*/, &fmt);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x86A1 /*GL_TEXTURE_COMPRESSED*/, &comp);
+        glGetTexParameteriv(GL_TEXTURE_2D, 0x813C /*GL_TEXTURE_BASE_LEVEL*/, &base);
+        glGetTexParameteriv(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, &maxL);
+        int full = 1;
+        while ((std::max(w, h) >> full) > 0) ++full;           // levels of a full chain
+        GLint levels = 0;                                       // the levels actually present, up to max level
+        for (GLint l = 0; l < full && l <= maxL; ++l) {
+            GLint lw = 0, lh = 0;
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, l, GL_TEXTURE_WIDTH, &lw);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, l, GL_TEXTURE_HEIGHT, &lh);
+            if (lw != std::max(1, w >> l) || lh != std::max(1, h >> l)) break;
+            levels = l + 1;
+        }
+        char cb[64]; std::snprintf(cb, sizeof cb, "%dx%d 0x%x%s L%d", w, h, fmt, comp ? " compressed" : "", levels);
+        ++census[cb];
+        if (comp || w <= 0 || h <= 0 || base != 0 || levels < 1) continue;
+        // a texture that is not mipmap-complete samples differently from a view whose chain is: only full chains, or a
+        // chain cut by max level (the view's level count = the levels present; max level clamps the same in both)
+        if (levels < full && maxL >= levels) continue;
+        GLint mn = 0, mg = 0, ws = 0, wt = 0, cmpm = 0, sw[4] = {0, 0, 0, 0};
+        GLfloat an = 0, bias = 0, minLod = 0, maxLod = 0;
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &mn);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &mg);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, &ws);
+        glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, &wt);
+        glGetTexParameteriv(GL_TEXTURE_2D, 0x884C /*GL_TEXTURE_COMPARE_MODE*/, &cmpm);
+        glGetTexParameteriv(GL_TEXTURE_2D, 0x8E46 /*GL_TEXTURE_SWIZZLE_RGBA*/, sw);
+        glGetTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, &an);
+        glGetTexParameterfv(GL_TEXTURE_2D, 0x8501 /*GL_TEXTURE_LOD_BIAS*/, &bias);
+        glGetTexParameterfv(GL_TEXTURE_2D, 0x813A /*GL_TEXTURE_MIN_LOD*/, &minLod);
+        glGetTexParameterfv(GL_TEXTURE_2D, 0x813B /*GL_TEXTURE_MAX_LOD*/, &maxLod);
+        auto bits = [](GLfloat f) { GLint i; std::memcpy(&i, &f, sizeof i); return i; };
+        Kind kd = {w, h, fmt, levels, std::min<GLint>(maxL, levels - 1), mn, mg, ws, wt, cmpm, sw[0], sw[1], sw[2], sw[3],
+                   bits(an), bits(bias), bits(minLod), bits(maxLod)};
+        kinds[kd].push_back(k);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    std::string cs;
+    for (const auto& kv : census) { char b[96]; std::snprintf(b, sizeof b, "%s%s x%d", cs.empty() ? "" : ", ", kv.first.c_str(), kv.second); cs += b; }
+    if (!cs.empty()) LOG_INFO("wfc: lightmap pages outside the first array: %s", cs.c_str());
+    std::map<GLuint, GLuint> viewOf;
+    int made = 0, pages = 0;
+    for (const auto& kv : kinds) {
+        const Kind& kd = kv.first;
+        if (kv.second.size() < 2) continue;
+        const GLint w = kd[0], h = kd[1], fmt = kd[2], levels = kd[3];
+        const int a = (int)lmArrays_.size();
+        GLuint arr = 0;
+        glGenTextures(1, &arr);
+        glBindTexture(kArr, arr);
+        TexStorage3D(kArr, levels, (GLenum)fmt, w, h, (GLsizei)kv.second.size());
+        auto params = [&kd, levels](GLenum target, bool view) {
+            glTexParameteri(target, GL_TEXTURE_MIN_FILTER, kd[5]);
+            glTexParameteri(target, GL_TEXTURE_MAG_FILTER, kd[6]);
+            glTexParameteri(target, GL_TEXTURE_WRAP_S, kd[7]);
+            glTexParameteri(target, GL_TEXTURE_WRAP_T, kd[8]);
+            glTexParameteri(target, 0x884C, kd[9]);
+            const GLint sw[4] = {kd[10], kd[11], kd[12], kd[13]};
+            glTexParameteriv(target, 0x8E46, sw);
+            GLfloat f[4];
+            for (int i = 0; i < 4; ++i) std::memcpy(&f[i], &kd[(size_t)(14 + i)], sizeof f[i]);
+            glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, f[0]);
+            glTexParameterf(target, 0x8501, f[1]);
+            glTexParameterf(target, 0x813A, f[2]);
+            glTexParameterf(target, 0x813B, f[3]);
+            glTexParameteri(target, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, view ? kd[4] : levels - 1);
+        };
+        params(kArr, false);
+        glBindTexture(kArr, 0);
+        int layer = 0;
+        for (size_t k : kv.second) {
+            for (GLint l = 0; l < levels; ++l)
+                CopyImageSubData(lmTextures_[k], GL_TEXTURE_2D, l, 0, 0, 0, arr, kArr, l, 0, 0, layer,
+                                 std::max(1, w >> l), std::max(1, h >> l), 1);
+            GLuint v = 0;
+            glGenTextures(1, &v);
+            TextureView(v, GL_TEXTURE_2D, arr, (GLenum)fmt, 0, (GLuint)levels, (GLuint)layer, 1);
+            glBindTexture(GL_TEXTURE_2D, v);
+            params(GL_TEXTURE_2D, true);
+            viewOf[lmTextures_[k]] = v;
+            lmLayer_[k] = layer++;
+            lmArrOf_[k] = a;
+        }
+        lmArrays_.push_back(arr);
+        ++made; pages += layer;
+        LOG_INFO("wfc: lightmap array %d: %d pages (%dx%d, %d levels, format 0x%x)", a, layer, w, h, levels, fmt);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    for (auto& kv : texCache_) { auto it = viewOf.find(kv.second); if (it != viewOf.end()) kv.second = it->second; }
+    for (auto& t : touchQueue_) { auto it = viewOf.find(t.first); if (it != viewOf.end()) t.first = it->second; }
+    for (const auto& kv : viewOf) {
+        for (GLuint& t : lmTextures_) if (t == kv.first) t = kv.second;
+        glDeleteTextures(1, &kv.first);
+    }
+    if (made) LOG_INFO("wfc: lightmap arrays: %d more (%d pages)", made, pages);
 }
 
 static GLuint linkCompute(const char* src, const char* tag) {
@@ -5047,7 +5258,10 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)b.lm[i]] ? lmTextures_[(size_t)b.lm[i]] : blackTex_);
             }
         }
-        if (lmArray_) { ActiveTexture(GL_TEXTURE0 + 21); glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArray_); }
+        if (lmArray_) {
+            ActiveTexture(GL_TEXTURE0 + 21);
+            glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, b.lm[0] == -2 && b.lm[1] > 0 ? lmArrays_[(size_t)b.lm[1]] : lmArray_);
+        }
         if (mdiVlmTex_) { ActiveTexture(GL_TEXTURE0 + 22); glBindTexture(0x8C2A /*GL_TEXTURE_BUFFER*/, mdiVlmTex_); }
         ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
         ActiveTexture(GL_TEXTURE0);
@@ -5154,8 +5368,9 @@ void Pipeline::setAnisotropy(int level) {
     }
     for (GLuint t : lmTextures_)
         if (t && done.insert(t).second) { glBindTexture(GL_TEXTURE_2D, t); glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)a); }
-    if (lmArray_) {
-        glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArray_);
+    for (size_t i = 0; i < lmArrays_.size(); ++i) {
+        if (!lmArrays_[i]) continue;
+        glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArrays_[i]);
         glTexParameterf(0x8C1A, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)a);
         glBindTexture(0x8C1A, 0);
     }
