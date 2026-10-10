@@ -1801,7 +1801,7 @@ void Pipeline::touchNewTextures() {
     ActiveTexture(GL_TEXTURE0);
     for (int pass = 0; pass < 2; ++pass) {
         UseProgram(pass ? touchProgCube_ : touchProg2D_);
-        Uniform1i(GetUniformLocation(pass ? touchProgCube_ : touchProg2D_, "uT"), 0);
+        Uniform1i(cachedUniformLocation(pass ? touchProgCube_ : touchProg2D_, "uT"), 0);
         for (const auto& t : touchQueue_) {
             if (t.second != (pass == 1)) continue;
             glBindTexture(t.second ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D, t.first);
@@ -2616,6 +2616,18 @@ static GLint uloc(const Program& P, const char* name) {
     P.locCache.emplace_back(name, l);
     return l;
 }
+// ULOC(P, "name"): the same location, cached per call site (each expansion gets its own slot index): one vector index
+// per lookup instead of a scan of the program's cache (~10 lookups per draw x ~3400 draws at 64 players)
+constexpr GLint kUlocUnset = -2147483647 - 1;
+static int gUlocSites = 0;
+static GLint ulocSite(const Program& P, const char* name, int site) {
+    if ((size_t)site >= P.siteLoc.size()) P.siteLoc.resize((size_t)gUlocSites + 16, kUlocUnset);
+    GLint& l = P.siteLoc[(size_t)site];
+    if (l == kUlocUnset) l = uloc(P, name);
+    else if (glx::locCheckOn()) glx::locCheckCount(GetUniformLocation(P.id, name) == l);
+    return l;
+}
+#define ULOC(P, name) ulocSite((P), (name), [] { static const int s = gUlocSites++; return s; }())
 
 void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     UseProgram(P.id);
@@ -2642,34 +2654,34 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
         Uniform1f(P.uClip, P.clip);
         Uniform1i(P.uLit, P.lit ? 1 : 0);
-        Uniform1i(uloc(P, "uBlend"), P.blend);
-        Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
-        Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
-        Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
-        Uniform1f(uloc(P, "uDSLS"), dsls);
-        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
-        Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
-        Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
-        Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
-        Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
-        Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
-        Uniform1i(uloc(P, "uDebug"), dbg);
+        Uniform1i(ULOC(P, "uBlend"), P.blend);
+        Uniform4f(ULOC(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
+        Uniform1i(ULOC(P, "uPoseBlend"), poseBlend_);
+        Uniform1f(ULOC(P, "uPoseAlpha"), poseAlpha_);
+        Uniform1f(ULOC(P, "uDSLS"), dsls);
+        Uniform2f(ULOC(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
+        Uniform2f(ULOC(P, "uNearFar"), znear_, zfar_);
+        Uniform2f(ULOC(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+        Uniform1i(ULOC(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+        Uniform1f(ULOC(P, "uCanvasInvGamma"), canvasInvGamma_);
+        Uniform1i(ULOC(P, "uLegacyTrans"), legacyTrans);
+        Uniform1i(ULOC(P, "uDebug"), dbg);
         Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
         Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
     }
-    Uniform1i(uloc(P, "uVertexLM"), 0);
-    Uniform4f(uloc(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
-    Uniform1i(uloc(P, "uSkin"), skinMode_);
+    Uniform1i(ULOC(P, "uVertexLM"), 0);
+    Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    Uniform1i(ULOC(P, "uSkin"), skinMode_);
     if (skinMode_) {
-        Uniform1i(uloc(P, "uSkinRow"), skinRow_);
-        Uniform1i(uloc(P, "uSkinBones"), skinBones_);
-        Uniform1f(uloc(P, "uSkinAlpha"), skinAlpha_);
-        Uniform1i(uloc(P, "uBoneTex"), 18);
+        Uniform1i(ULOC(P, "uSkinRow"), skinRow_);
+        Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
+        Uniform1f(ULOC(P, "uSkinAlpha"), skinAlpha_);
+        Uniform1i(ULOC(P, "uBoneTex"), 18);
     }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
-        Uniform3f(uloc(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
+        Uniform3f(ULOC(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
     }
@@ -2948,7 +2960,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (out) { ++counts_.culled; continue; }
             }
             bindCommon(P, subModel);
-            Uniform1i(uloc(P, "uDecalClip"), g.decal ? 1 : 0);
+            Uniform1i(ULOC(P, "uDecalClip"), g.decal ? 1 : 0);
             {
                 // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
                 const CharacterColors& cc = charColorsBy_[drawOwner_];
@@ -2971,8 +2983,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (s.vlmTex) {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
-                Uniform1i(uloc(P, "uVertexLM"), 1);
-                Uniform1i(uloc(P, "uVLMBase"), s.vlmBase);
+                Uniform1i(ULOC(P, "uVertexLM"), 1);
+                Uniform1i(ULOC(P, "uVLMBase"), s.vlmBase);
                 ActiveTexture(GL_TEXTURE0 + 11);
                 glBindTexture(GL_TEXTURE_2D, s.vlmTex);
             } else if (s.lmTex[0] >= 0) {
@@ -3062,8 +3074,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform4fv(P.uLCol, 3, &env->col[0][0]);
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
                 static const char* dlacOverride = std::getenv("WFC_DLAC");   // test override only
-                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(uloc(P, "uDLAC"), v, v, v); }
-                else Uniform3f(uloc(P, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
+                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(ULOC(P, "uDLAC"), v, v, v); }
+                else Uniform3f(ULOC(P, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
             }
             const bool queued = dynamicObject && skinMode_ != 0 && P.instProg >= 0 && !trans && P.distProg < 0 && !g.decal &&
                                 !frameFx_ && !reportFrame && s.vlmTex == 0 && s.lmTex[0] < 0 && dynamicMaskDraw_ &&
@@ -3948,9 +3960,9 @@ bool Pipeline::queueInstance(const Program& P, uint32_t first, uint32_t count, G
     float amb[18], lpos[12], ldir[12], lcol[12], lspot[12], dlac[3], dyn[4], nl[1], sk[4];
     if (!get(P.uModel, &row[0], 16, false) || !get(P.uAmb, amb, 18, false) || !get(P.uNumLights, nl, 1, true) ||
         !get(P.uLPos, lpos, 12, false) || !get(P.uLDir, ldir, 12, false) || !get(P.uLCol, lcol, 12, false) ||
-        !get(P.uLSpot, lspot, 12, false) || !get(uloc(P, "uDLAC"), dlac, 3, false) || !get(uloc(P, "uDynParam"), dyn, 4, false) ||
-        !get(uloc(P, "uSkin"), &sk[0], 1, true) || !get(uloc(P, "uSkinRow"), &sk[1], 1, true) ||
-        !get(uloc(P, "uSkinAlpha"), &sk[2], 1, false) || !get(uloc(P, "uSkinBones"), &sk[3], 1, true))
+        !get(P.uLSpot, lspot, 12, false) || !get(ULOC(P, "uDLAC"), dlac, 3, false) || !get(ULOC(P, "uDynParam"), dyn, 4, false) ||
+        !get(ULOC(P, "uSkin"), &sk[0], 1, true) || !get(ULOC(P, "uSkinRow"), &sk[1], 1, true) ||
+        !get(ULOC(P, "uSkinAlpha"), &sk[2], 1, false) || !get(ULOC(P, "uSkinBones"), &sk[3], 1, true))
         return false;
     std::memcpy(&row[4 * 4], sk, sizeof sk);
     for (int i = 0; i < 6; ++i) { row[(5 + i) * 4] = amb[i * 3]; row[(5 + i) * 4 + 1] = amb[i * 3 + 1]; row[(5 + i) * 4 + 2] = amb[i * 3 + 2]; }
@@ -4038,9 +4050,9 @@ void Pipeline::flushInstances() {
         bindCommon(I, core::Mat4::identity());
         UniformMatrix4fv(I.uViewProj, 1, GL_FALSE, gr.viewProj);
         Uniform3f(I.uCamPos, gr.camPos[0], gr.camPos[1], gr.camPos[2]);
-        Uniform1i(uloc(I, "uInstBase"), base);
+        Uniform1i(ULOC(I, "uInstBase"), base);
         Uniform4f(I.uLMCoord, 1, 1, 0, 0);                     // drawSubs' lit dynamic value
-        Uniform1i(uloc(I, "uDecalClip"), 0);
+        Uniform1i(ULOC(I, "uDecalClip"), 0);
         ActiveTexture(GL_TEXTURE0 + 19); glBindTexture(GL_TEXTURE_2D, instTex_);
         ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_);
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
@@ -4098,7 +4110,7 @@ void Pipeline::buildMdi(int meshId) {
             for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) rw[(1 + i) * 4 + c] = s.lmScale[i][c];
         } else { rw[0] = 1; rw[1] = 1; rw[2] = 0; rw[3] = 0; }
         // all three pages in the shared array, and the MDI program samples it: bucket by program alone
-        bool inArray = s.lmTex[0] >= 0 && lmArray_ && uloc(progs_[(size_t)P.mdiProg], "uLMUseArr") >= 0;
+        bool inArray = s.lmTex[0] >= 0 && lmArray_ && ULOC(progs_[(size_t)P.mdiProg], "uLMUseArr") >= 0;
         for (int i = 0; i < 3 && inArray; ++i)
             inArray = (size_t)s.lmTex[i] < lmLayer_.size() && lmLayer_[(size_t)s.lmTex[i]] >= 0;
         for (int i = 0; i < 3; ++i) rw[(1 + i) * 4 + 3] = inArray ? (float)lmLayer_[(size_t)s.lmTex[i]] : -1.0f;
@@ -4285,13 +4297,13 @@ void Pipeline::drawMdi(GpuMesh& g) {
         if (zPreProg_) {
             UseProgram(zPreProg_);
             glx::uniformCacheForgetCurrent();
-            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uViewProj"), 1, GL_FALSE, viewProj_.m);
-            UniformMatrix4fv(GetUniformLocation(zPreProg_, "uModel"), 1, GL_FALSE, core::Mat4::identity().m);
-            Uniform1i(GetUniformLocation(zPreProg_, "uSkin"), 0);
-            Uniform1i(GetUniformLocation(zPreProg_, "uPoseBlend"), 0);
-            Uniform1i(GetUniformLocation(zPreProg_, "uVertexLM"), 0);
-            Uniform4f(GetUniformLocation(zPreProg_, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
-            Uniform1i(GetUniformLocation(zPreProg_, "uRowTex"), 20);
+            UniformMatrix4fv(cachedUniformLocation(zPreProg_, "uViewProj"), 1, GL_FALSE, viewProj_.m);
+            UniformMatrix4fv(cachedUniformLocation(zPreProg_, "uModel"), 1, GL_FALSE, core::Mat4::identity().m);
+            Uniform1i(cachedUniformLocation(zPreProg_, "uSkin"), 0);
+            Uniform1i(cachedUniformLocation(zPreProg_, "uPoseBlend"), 0);
+            Uniform1i(cachedUniformLocation(zPreProg_, "uVertexLM"), 0);
+            Uniform4f(cachedUniformLocation(zPreProg_, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+            Uniform1i(cachedUniformLocation(zPreProg_, "uRowTex"), 20);
             ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
             ActiveTexture(GL_TEXTURE0);
             glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -4326,12 +4338,12 @@ void Pipeline::drawMdi(GpuMesh& g) {
         const MdiBucket& b = mdiBuckets_[bi];
         const Program& M = progs_[(size_t)progs_[(size_t)b.prog].mdiProg];
         bindCommon(M, core::Mat4::identity());
-        Uniform1i(uloc(M, "uDecalClip"), 0);
+        Uniform1i(ULOC(M, "uDecalClip"), 0);
         for (int i = 0; i < 3; ++i) if (M.uRTSet[i] >= 0) Uniform1i(M.uRTSet[i], 0);   // static: no character colours
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
         if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         glDisable(GL_BLEND); glDepthMask(prepassed && M.blend == 0 ? GL_FALSE : GL_TRUE);   // (depth already written)
-        Uniform1i(uloc(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
+        Uniform1i(ULOC(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
         if (b.lm[0] >= 0) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
             for (int i = 0; i < 3; ++i) {
@@ -4496,7 +4508,7 @@ void Pipeline::ensurePawnOcclusionProgram() {
         GLuint v = compile(GL_VERTEX_SHADER, vs, "pawnocc.vs"), f = compile(GL_FRAGMENT_SHADER, fs, "pawnocc.fs");
         if (v && f) occProg_ = link(v, f, "pawnocc");
         if (!occProg_) return;
-        occUVP_ = GetUniformLocation(occProg_, "uVP"); occUMin_ = GetUniformLocation(occProg_, "uMin"); occUMax_ = GetUniformLocation(occProg_, "uMax");
+        occUVP_ = cachedUniformLocation(occProg_, "uVP"); occUMin_ = cachedUniformLocation(occProg_, "uMin"); occUMax_ = cachedUniformLocation(occProg_, "uMax");
         const float cube[8][3] = {{0,0,0},{1,0,0},{0,1,0},{1,1,0},{0,0,1},{1,0,1},{0,1,1},{1,1,1}};
         const uint32_t idx[36] = {0,1,3, 0,3,2, 4,6,7, 4,7,5, 0,4,5, 0,5,1, 2,3,7, 2,7,6, 0,2,6, 0,6,4, 1,5,7, 1,7,3};
         GenVertexArrays(1, &occVao_); GenBuffers(1, &occVbo_); GenBuffers(1, &occIbo_);
@@ -4879,8 +4891,8 @@ void Pipeline::applyDistortion() {
     UseProgram(distApplyProg_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, distTex_);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
-    Uniform1i(GetUniformLocation(distApplyProg_, "uScene"), 0);
-    Uniform1i(GetUniformLocation(distApplyProg_, "uAcc"), 1);
+    Uniform1i(cachedUniformLocation(distApplyProg_, "uScene"), 0);
+    Uniform1i(cachedUniformLocation(distApplyProg_, "uAcc"), 1);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -5315,6 +5327,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
                  skinModels_.size(), skinInsts_.size());
         statSkinRebuilds_ = 0;
     }
+    if (frameNo_ % 600 == 0) glx::uploadProfDump(600);
     if (frameNo_ % 600 == 0 && statSkinBoundsReused_) {
         LOG_INFO("wfc gpu skin: previous-pose bounds reused %ld times in the last 600 frames", statSkinBoundsReused_);
         statSkinBoundsReused_ = 0;
@@ -5545,11 +5558,11 @@ void Pipeline::endFrame() {
         Uniform2f(G("uNearFar"), znear_, zfar_);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         UseProgram(blurProg_);
-        Uniform1i(GetUniformLocation(blurProg_, "uSrc"), 0);
+        Uniform1i(cachedUniformLocation(blurProg_, "uSrc"), 0);
         for (int pass = 0; pass < 2; ++pass) {
             BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[1 - pass]);
             glBindTexture(GL_TEXTURE_2D, bloomTex_[pass]);
-            Uniform2f(GetUniformLocation(blurProg_, "uStep"), pass == 0 ? 1.0f / (float)bloomW_ : 0.0f,
+            Uniform2f(cachedUniformLocation(blurProg_, "uStep"), pass == 0 ? 1.0f / (float)bloomW_ : 0.0f,
                       pass == 0 ? 0.0f : 1.0f / (float)bloomH_);
             glDrawArrays(GL_TRIANGLES, 0, 3);
         }

@@ -196,8 +196,8 @@ void Pipeline::reactiveEnd() {
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, opaqueCopyTex_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, colorTex_);
     ActiveTexture(GL_TEXTURE0);
-    Uniform1i(GetUniformLocation(reactiveProg_, "uOpaque"), 0);
-    Uniform1i(GetUniformLocation(reactiveProg_, "uFinal"), 1);
+    Uniform1i(cachedUniformLocation(reactiveProg_, "uOpaque"), 0);
+    Uniform1i(cachedUniformLocation(reactiveProg_, "uFinal"), 1);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -244,12 +244,12 @@ void Pipeline::motionCameraPass() {
     glViewport(0, 0, vpW_, vpH_);
     UseProgram(velCameraProg_);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
-    Uniform1i(GetUniformLocation(velCameraProg_, "uDepth"), 0);
-    UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uInvVP"), 1, GL_FALSE, inv);
-    UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uCurVP"), 1, GL_FALSE, viewProjNoJitter_.m);
+    Uniform1i(cachedUniformLocation(velCameraProg_, "uDepth"), 0);
+    UniformMatrix4fv(cachedUniformLocation(velCameraProg_, "uInvVP"), 1, GL_FALSE, inv);
+    UniformMatrix4fv(cachedUniformLocation(velCameraProg_, "uCurVP"), 1, GL_FALSE, viewProjNoJitter_.m);
     const core::Mat4& pvp = havePrevVP_ ? prevViewProj_ : viewProjNoJitter_;   // first frame: zero velocity
-    UniformMatrix4fv(GetUniformLocation(velCameraProg_, "uPrevVP"), 1, GL_FALSE, pvp.m);
-    Uniform2f(GetUniformLocation(velCameraProg_, "uSize"), (float)vpW_, (float)vpH_);
+    UniformMatrix4fv(cachedUniformLocation(velCameraProg_, "uPrevVP"), 1, GL_FALSE, pvp.m);
+    Uniform2f(cachedUniformLocation(velCameraProg_, "uSize"), (float)vpW_, (float)vpH_);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -296,7 +296,7 @@ void Pipeline::motionObjectPass() {
     glEnable(GL_POLYGON_OFFSET_FILL); glPolygonOffset(-1.0f, -4.0f);
     if (velObjProg_ && !motionDraws_.empty()) {
     UseProgram(velObjProg_);
-    auto U = [&](const char* n) { return GetUniformLocation(velObjProg_, n); };
+    auto U = [&](const char* n) { return cachedUniformLocation(velObjProg_, n); };
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, skinTex_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, skinPrevTex_ ? skinPrevTex_ : skinTex_);
     ActiveTexture(GL_TEXTURE0);
@@ -317,7 +317,7 @@ void Pipeline::motionObjectPass() {
     }
     if (velRigidProg_ && !motionRigid_.empty()) {
         UseProgram(velRigidProg_);
-        auto R = [&](const char* n) { return GetUniformLocation(velRigidProg_, n); };
+        auto R = [&](const char* n) { return cachedUniformLocation(velRigidProg_, n); };
         UniformMatrix4fv(R("uVP"), 1, GL_FALSE, viewProj_.m);
         UniformMatrix4fv(R("uVPNJ"), 1, GL_FALSE, viewProjNoJitter_.m);
         UniformMatrix4fv(R("uPrevVP"), 1, GL_FALSE, (havePrevVP_ ? prevViewProj_ : viewProjNoJitter_).m);
@@ -352,8 +352,8 @@ void Pipeline::motionDebugView(int outW, int outH) {
     glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND);
     UseProgram(velViewProg_);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, velTex_);
-    Uniform1i(GetUniformLocation(velViewProg_, "uVel"), 0);
-    Uniform2f(GetUniformLocation(velViewProg_, "uSize"), (float)outW, (float)outH);
+    Uniform1i(cachedUniformLocation(velViewProg_, "uVel"), 0);
+    Uniform2f(cachedUniformLocation(velViewProg_, "uSize"), (float)outW, (float)outH);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }

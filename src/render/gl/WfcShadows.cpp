@@ -339,8 +339,8 @@ void Pipeline::beginShadowMask() {
 
 void Pipeline::fillMaskDepth() {
     UseProgram(maskDepthProg_);
-    Uniform1i(GetUniformLocation(maskDepthProg_, "uSceneDepth"), 0);
-    Uniform2f(GetUniformLocation(maskDepthProg_, "uMaskSize"), (float)maskW_, (float)maskH_);
+    Uniform1i(cachedUniformLocation(maskDepthProg_, "uSceneDepth"), 0);
+    Uniform2f(cachedUniformLocation(maskDepthProg_, "uMaskSize"), (float)maskW_, (float)maskH_);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_ALWAYS); glDepthMask(GL_TRUE);
@@ -357,9 +357,9 @@ void Pipeline::blurShadowMask(const int* rect) {
     static const int tie = std::getenv("WFC_BLURTIE") ? 1 : 0;
     if (rect) { glEnable(GL_SCISSOR_TEST); glScissor(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]); }
     UseProgram(maskBlurProg_);
-    Uniform1i(GetUniformLocation(maskBlurProg_, "uMask"), 0);
-    Uniform2f(GetUniformLocation(maskBlurProg_, "uMaskSize"), (float)maskW_, (float)maskH_);
-    Uniform1i(GetUniformLocation(maskBlurProg_, "uTie"), tie);
+    Uniform1i(cachedUniformLocation(maskBlurProg_, "uMask"), 0);
+    Uniform2f(cachedUniformLocation(maskBlurProg_, "uMaskSize"), (float)maskW_, (float)maskH_);
+    Uniform1i(cachedUniformLocation(maskBlurProg_, "uTie"), tie);
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
     glDisable(GL_STENCIL_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -368,11 +368,11 @@ void Pipeline::blurShadowMask(const int* rect) {
     ActiveTexture(GL_TEXTURE0);
     BindFramebuffer(GL_FRAMEBUFFER, maskTmpFbo_);                  // pass 0 (horizontal)
     glBindTexture(GL_TEXTURE_2D, maskTex_);
-    Uniform4f(GetUniformLocation(maskBlurProg_, "uOffsets"), 0.5f / (float)maskW_, 0.0f, 1.5f / (float)maskW_, 0.0f);
+    Uniform4f(cachedUniformLocation(maskBlurProg_, "uOffsets"), 0.5f / (float)maskW_, 0.0f, 1.5f / (float)maskW_, 0.0f);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindFramebuffer(GL_FRAMEBUFFER, maskBlurFbo_);                 // pass 1 (vertical)
     glBindTexture(GL_TEXTURE_2D, maskTmpTex_);
-    Uniform4f(GetUniformLocation(maskBlurProg_, "uOffsets"), 0.0f, 0.5f / (float)maskH_, 0.0f, 1.5f / (float)maskH_);
+    Uniform4f(cachedUniformLocation(maskBlurProg_, "uOffsets"), 0.0f, 0.5f / (float)maskH_, 0.0f, 1.5f / (float)maskH_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -402,7 +402,7 @@ void Pipeline::drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& v
     BufferSubData(GL_ARRAY_BUFFER, 0, sizeof(tri), tri);
     glEnable(GL_DEPTH_CLAMP);
     UseProgram(constProg_);
-    UniformMatrix4fv(GetUniformLocation(constProg_, "uVolViewProj"), 1, GL_FALSE, vp.m);
+    UniformMatrix4fv(cachedUniformLocation(constProg_, "uVolViewProj"), 1, GL_FALSE, vp.m);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDepthMask(GL_FALSE);
     glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
@@ -420,7 +420,7 @@ void Pipeline::drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& v
     glEnable(GL_BLEND);
     BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
     UseProgram(prog);
-    UniformMatrix4fv(GetUniformLocation(prog, "uVolViewProj"), 1, GL_FALSE, vp.m);
+    UniformMatrix4fv(cachedUniformLocation(prog, "uVolViewProj"), 1, GL_FALSE, vp.m);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     BindVertexArray(0);
     glClearStencil(0);
@@ -501,7 +501,16 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
     BindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
     glViewport(0, 0, Res, Res);
     glDepthMask(GL_TRUE);
+    // Only the corner the projection can read is cleared: its base UV lies in [5, 5 + res] texels (the subject inside
+    // the frustum), the PCF taps reach <= 6 texels further (|offset| <= 1 x FilterRadius 6 / Res), nearest filtering,
+    // clamp to edge: texels [0, res + 12]; cleared [0, res + 21]. The rest of the 1024^2 map is never sampled for this
+    // subject (it was a full 4 MB clear per robot). WFC_SHADOWFULLCLEAR=1 = the whole map.
+    static const bool fullClear = std::getenv("WFC_SHADOWFULLCLEAR") != nullptr;
+    const int clearN = std::min(Res, rq.res + 5 + 16);
+    const bool partial = !fullClear && !forceFullShadowClear_ && clearN < Res;
+    if (partial) { glEnable(GL_SCISSOR_TEST); glScissor(0, 0, clearN, clearN); }
     glClearDepth(1.0); glClear(GL_DEPTH_BUFFER_BIT);
+    if (partial) glDisable(GL_SCISSOR_TEST);
     glViewport(5, 5, rq.res, rq.res);             // 10-texel border (5 per side)
     glEnable(GL_DEPTH_TEST); glDisable(GL_BLEND);
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -512,11 +521,11 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
         if (s.prog < 0 || progs_[(size_t)s.prog].shadowProg < 0) continue;
         const Program& S = progs_[(size_t)progs_[(size_t)s.prog].shadowProg];
         bindCommon(S, model);
-        Uniform4f(GetUniformLocation(S.id, "uShadowDepth"), 1.0f, rq.invMaxSubjectDepth, rq.depthBias, 0.0f);
-        Uniform4f(GetUniformLocation(S.id, "uShadowZ"), rq.zRow[0], rq.zRow[1], rq.zRow[2], rq.zRow[3]);
+        Uniform4f(cachedUniformLocation(S.id, "uShadowDepth"), 1.0f, rq.invMaxSubjectDepth, rq.depthBias, 0.0f);
+        Uniform4f(cachedUniformLocation(S.id, "uShadowZ"), rq.zRow[0], rq.zRow[1], rq.zRow[2], rq.zRow[3]);
         if (S.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
-        Uniform4f(GetUniformLocation(S.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+        Uniform4f(cachedUniformLocation(S.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     }
     if (wsr && wsr->g->vao) {                     // the weapon into the same depth, with its own skinning state
         const int sm0 = skinMode_, sr0 = skinRow_, sb0 = skinBones_; const float sa0 = skinAlpha_;
@@ -526,11 +535,11 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
             if (s.prog < 0 || progs_[(size_t)s.prog].shadowProg < 0) continue;
             const Program& WS = progs_[(size_t)progs_[(size_t)s.prog].shadowProg];
             bindCommon(WS, wsr->model);
-            Uniform4f(GetUniformLocation(WS.id, "uShadowDepth"), 1.0f, rq.invMaxSubjectDepth, rq.depthBias, 0.0f);
-            Uniform4f(GetUniformLocation(WS.id, "uShadowZ"), rq.zRow[0], rq.zRow[1], rq.zRow[2], rq.zRow[3]);
+            Uniform4f(cachedUniformLocation(WS.id, "uShadowDepth"), 1.0f, rq.invMaxSubjectDepth, rq.depthBias, 0.0f);
+            Uniform4f(cachedUniformLocation(WS.id, "uShadowZ"), rq.zRow[0], rq.zRow[1], rq.zRow[2], rq.zRow[3]);
             if (WS.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
-            Uniform4f(GetUniformLocation(WS.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+            Uniform4f(cachedUniformLocation(WS.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
         }
         skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;
     }
@@ -602,16 +611,22 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;
     static const bool rectCheck = std::getenv("WFC_SHADOWRECTCHECK") != nullptr;
     projectSubjectShadow(p, rq, fullPasses);
-    if (rectCheck && !fullPasses) shadowRectCheck(p, rq);
+    if (rectCheck && !fullPasses) shadowRectCheck(g, model, p, rq);
 }
 
-void Pipeline::shadowRectCheck(const ShadowProjector& p, const ShadowRequest& rq) {
+void Pipeline::shadowRectCheck(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, const ShadowRequest& rq) {
     std::vector<uint8_t> a((size_t)maskW_ * maskH_ * 4), b(a.size());
     glBindTexture(GL_TEXTURE_2D, maskBlurTex_);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, a.data());
+    // reference: the subject's shadow depth re-rendered with the whole-map clear, then the full-screen passes
+    ShadowRequest rq2;
+    forceFullShadowClear_ = true;
+    const bool again = renderShadowDepth(g, model, p, rq2);
+    forceFullShadowClear_ = false;
+    if (!again) return;
     swapMaskSet(refMask_);
     shadowRefPass_ = true;
-    projectSubjectShadow(p, rq, true);
+    projectSubjectShadow(p, rq2, true);
     shadowRefPass_ = false;
     glBindTexture(GL_TEXTURE_2D, maskBlurTex_);
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, b.data());
@@ -688,7 +703,7 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
     fillMaskDepth();
     core::Mat4 invVP = inverse4(viewProj_);
     UseProgram(shadowProjProg_);
-    auto U = [&](const char* nm) { return GetUniformLocation(shadowProjProg_, nm); };
+    auto U = [&](const char* nm) { return cachedUniformLocation(shadowProjProg_, nm); };
     Uniform1i(U("uSceneDepth"), 0); Uniform1i(U("uShadowMap"), 1); Uniform1i(U("uRandomAngles"), 2);
     Uniform2f(U("uMaskSize"), (float)maskW_, (float)maskH_);
     UniformMatrix4fv(U("uInvViewProj"), 1, GL_FALSE, invVP.m);
@@ -824,7 +839,7 @@ void Pipeline::runShadowMaskSelfTest() {
     box(0.0f, 0.4f, -0.5f, 0.5f, -0.2f, 0.6f, Bx);
     box(0.5f, 0.9f, -0.5f, 0.5f, -0.9f, -0.5f, C);
     UseProgram(constProg_);
-    Uniform4f(GetUniformLocation(constProg_, "uColor"), 0.5f, 0.5f, 0.5f, 0.0f);
+    Uniform4f(cachedUniformLocation(constProg_, "uColor"), 0.5f, 0.5f, 0.5f, 0.0f);
     drawShadowVolume(A, I, constProg_);
     UseProgram(constProg_);
     drawShadowVolume(Bx, I, constProg_);

@@ -212,6 +212,11 @@ void textureCacheStats(unsigned long long& issued, unsigned long long& skipped);
 void tracedGenTextures(GLsizei n, GLuint* textures, const char* file, int line);
 void textureTraceDump(const char* tag);
 
+// a uniform location for a string-literal name, cached per program until relink / delete (see GLExt.cpp)
+GLint cachedUniformLocation(GLuint program, const char* literalName);
+void uploadProfDump(long frames);                  // WFC_UPLOADPROF: top buffer-upload callers since the last dump
+bool locCheckOn();                                 // WFC_LOCCHECK: cached uniform locations compared with the driver
+void locCheckCount(bool same);
 } // namespace glx
 
 #ifndef WFC_NO_TEXCACHE_MACROS

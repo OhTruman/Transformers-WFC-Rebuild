@@ -124,6 +124,7 @@ struct Program {
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
     // per-draw uniform locations by literal name (looked up once per program; key = the literal's address)
     mutable std::vector<std::pair<const char*, GLint>> locCache;
+    mutable std::vector<GLint> siteLoc;                  // ULOC: location per call site (kUlocUnset = not looked up)
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -796,7 +797,8 @@ private:
         std::swap(maskBlurTex_, m.blurTex); std::swap(maskForW_, m.forW); std::swap(maskForH_, m.forH);
         std::swap(maskClearedFrame_, m.cleared); std::swap(maskDrawnFrame_, m.drawn);
     }
-    void shadowRectCheck(const ShadowProjector& p, const ShadowRequest& rq);
+    void shadowRectCheck(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, const ShadowRequest& rq);
+    bool forceFullShadowClear_ = false;                   // (WFC_SHADOWRECTCHECK's reference pass)
     bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
     void runShadowMaskSelfTest();

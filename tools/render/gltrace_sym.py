@@ -1,7 +1,7 @@
 """Symbolise WFC_GLTRACE / WFC_TEXTRACE lines: replaces every "exe+0x<rva>" in a log with the function that contains
 it, using the linker map written next to the exe (wfc_rebuild.map, -Wl,-Map).
 
-usage: gltrace_sym.py <wfc_rebuild.map> <log>   (prints the GLTRACE / TEXTRACE lines, symbolised)
+usage: gltrace_sym.py <wfc_rebuild.map> <log>   (prints the GLTRACE / TEXTRACE / UPLOADPROF lines, symbolised)
 """
 import bisect
 import re
@@ -26,5 +26,5 @@ def name(rva):
 
 
 for line in open(logf, encoding='utf-8', errors='replace'):
-    if 'GLTRACE' in line or 'TEXTRACE' in line:
+    if 'GLTRACE' in line or 'TEXTRACE' in line or 'UPLOADPROF' in line:
         print(re.sub(r'exe\+0x([0-9a-f]+)', lambda m: '[%s]' % name(int(m.group(1), 16)), line.rstrip()))
