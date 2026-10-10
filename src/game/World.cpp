@@ -1,6 +1,7 @@
 #include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
+#include "game/GpuSkin.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
 #include "render/Camera.h"
@@ -955,7 +956,7 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
     if (ok) {
         if (d.animGltf && *d.animGltf) assets::loadAnimationsByName(ext + d.animGltf, *m);
         resolveModelTextures(*m);
-        if (renderer_) { render::MeshData md; md.subs = m->subs; md.mats = m->mats; fxPrewarm(*renderer_, md, 0); }
+        if (renderer_) { render::MeshData md; md.subs = m->subs; md.mats = m->mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(*m); }
     } else LOG_ERROR("weapon %s: mesh %s unavailable", d.id, d.meshGltf ? d.meshGltf : "-");
     const assets::SkinnedModel* raw = ok ? m.get() : nullptr;
     ++weaponLoads_;
@@ -2152,6 +2153,15 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (kp && kp->refillOnKillRemain_ > 0.0f) kp->health().heal(Health::HealType::AddAllSegments, 1.0f);   // TnBuffRefillHealthOnKill
     }
     if (h->isDead()) {
+        if (anySmart_ && instigator >= 0 && instigator != victim && (size_t)instigator < match_.players().size() &&
+            match_.players()[(size_t)instigator].kind == ParticipantKind::Bot)
+            if (const Character* vp = participantPawn(victim)) if (const Character* kp2 = participantPawn(instigator)) {
+                const int side = botIsSmart(instigator) ? 0 : 1;
+                core::Vec3 d = kp2->position() - vp->position(); d.y = 0.0f;
+                const core::Vec3 f = core::forwardFromYawPitch(vp->yaw(), 0.0f);
+                ++aiKills_[side];
+                if (core::length(d) > 1e-3f && core::dot(core::normalize(d), f) < 0.0f) ++aiBackKills_[side];
+            }
         const Match::KillContext kc = killContext(instigator, victim, damageType);
         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType, &kc);
         else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
@@ -2191,7 +2201,11 @@ void World::clearMatchActors() {
 }
 
 void World::removeBots() {
+    // Every piece of Smart match state starts fresh with the match (DETERMINISMTEST runs two matches in one process: a threat-field
+    // timer phase or last match's field carried over made the second run diverge).
     smart_.clear(); anySmart_ = false; smartNoises_.clear(); smartBlasts_.clear();
+    smartThreatTimer_ = 0.0f; smartThreat_[0].clear(); smartThreat_[1].clear(); smartLocalShot_ = 0;
+    smartThreatSnap_[0].clear(); smartThreatSnap_[1].clear(); smartThreatCursor_ = 0;
     for (auto& board : smartBoard_) board.clear();
     size_t first = match_.players().size();
     for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }
@@ -2831,6 +2845,21 @@ void World::evictUnusedAssets() {
              nc, nw, na, nt, chassisCache_.size(), weaponModels_.size(), animFiles_.size(), texCache_.size());
 }
 
+// Rendering's IRenderer::prewarmSkinnedMesh (agents/rendering): builds the GPU-skin model (vertex buffers, per-joint bounds hulls) for
+// the bind mesh Character later draws, during the match load instead of at first sight (5-25 ms each). Compile-time detected; the
+// same MeshData object (SkinnedModel::gpuBind via bindMeshOf), so the renderer's cache key matches. WFC_NOSKINPREWARM=1: off (A/B).
+template <class R> auto rmSkinPrewarm(R& r, const render::MeshData& md, const std::vector<uint16_t>& j, const std::vector<float>& w, int)
+    -> decltype(r.prewarmSkinnedMesh(md, j, w), void()) { r.prewarmSkinnedMesh(md, j, w); }
+template <class R> void rmSkinPrewarm(R&, const render::MeshData&, const std::vector<uint16_t>&, const std::vector<float>&, long) {}
+
+void World::prewarmSkin(const assets::SkinnedModel& m) {
+    static const bool off = std::getenv("WFC_NOSKINPREWARM") != nullptr;
+    if (off || !renderer_ || !onMainThread() || !m.valid() || m.joints.empty() || m.weights.empty()) return;
+    render::MeshData& bind = bindMeshOf(m);
+    syncMats(bind.mats, m.mats);   // resolved texture handles, as the draw passes them
+    rmSkinPrewarm(*renderer_, bind, m.joints, m.weights, 0);
+}
+
 render::TextureHandle World::resolveTexture(const std::string& uri) {
     if (uri.empty() || !renderer_) return render::kInvalidTexture;
     auto it = texCache_.find(uri);
@@ -2897,6 +2926,7 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
             if (!m || !m->valid()) continue;
             render::MeshData md; md.subs = m->subs; md.mats = m->mats;
             fxPrewarm(*renderer_, md, 0);
+            prewarmSkin(*m);   // the GPU-skin model too (robot, vehicle form, arm): no build at first sight / first transform
         }
     }
     if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, textures %.0f, arm %.0f, prewarm %.0f",
@@ -3778,7 +3808,7 @@ void World::ensureAbilityModels() {
         if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
             assets::loadAnimationsByName(ext + "WEP_Barrier_ANIM.anim.gltf", barrierModel_);
             resolveModelTextures(barrierModel_);
-            if (renderer_) { render::MeshData md; md.subs = barrierModel_.subs; md.mats = barrierModel_.mats; fxPrewarm(*renderer_, md, 0); }
+            if (renderer_) { render::MeshData md; md.subs = barrierModel_.subs; md.mats = barrierModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(barrierModel_); }
         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
     }
     if (!sentryModelTried_ && onMainThread()) {
@@ -3787,7 +3817,7 @@ void World::ensureAbilityModels() {
         if (assets::loadSkinnedGlb(ext + "WEP_SentryDeploy_SKEL.gltf", sentryModel_) && sentryModel_.valid()) {
             assets::loadAnimationsByName(ext + "WEP_DeployedTurret_ANIM.anim.gltf", sentryModel_);
             resolveModelTextures(sentryModel_);
-            if (renderer_) { render::MeshData md; md.subs = sentryModel_.subs; md.mats = sentryModel_.mats; fxPrewarm(*renderer_, md, 0); }
+            if (renderer_) { render::MeshData md; md.subs = sentryModel_.subs; md.mats = sentryModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(sentryModel_); }
         } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
     }
 }
@@ -4662,14 +4692,22 @@ void World::qaTeleportToAim() {
 
 std::vector<World::QaBotLabel> World::qaBotLabels() const {
     std::vector<QaBotLabel> out;
-    if (!qaEnabled() || !qaBotOverlay_) return out;
+    if (!botOverlay_ && (!qaEnabled() || !qaBotOverlay_)) return out;
     for (const BotBrain& b : bots_) {
         const Character* c = participantPawn(b.player);
         if (!c) continue;
-        char buf[160];
-        std::snprintf(buf, sizeof buf, "%s [%s] %s tgt %d wp %zu/%zu%s", match_.players()[(size_t)b.player].name.c_str(), botDifficultyName(b.difficulty),
-                      botGoalName(b.goal.kind), b.target, b.wp, b.path.size(), b.stuckLevel > 0 ? " STUCK" : "");
-        out.push_back({c->position() + core::Vec3{0, 5.0f, 0}, buf, b.player});
+        // Smart bots show their Smart action (hunt / retreat / cover / hold) and the AI; health in percent (playtest / duel review).
+        static const char* kAction[] = {"", " HUNT", " RETREAT", " TO-COVER", " IN-COVER"};
+        const SmartBot* sb = smartBot(b.player);
+        const int hp = c->health().max > 0.0f ? (int)std::lround(100.0f * c->health().current / c->health().max) : 0;
+        char buf[200];
+        std::snprintf(buf, sizeof buf, "%s [%s %s] %s%s tgt %d hp %d%% wp %zu/%zu%s", match_.players()[(size_t)b.player].name.c_str(), sb ? "Smart" : "Classic",
+                      botDifficultyName(b.difficulty), botGoalName(b.goal.kind), sb && sb->action < 5 ? kAction[sb->action] : "", b.target, hp, b.wp, b.path.size(),
+                      b.stuckLevel > 0 ? " STUCK" : "");
+        QaBotLabel L{c->position() + core::Vec3{0, 5.0f, 0}, buf, b.player, match_.settings().teamGame ? match_.players()[(size_t)b.player].team : -1};
+        if (b.target >= 0) if (const Character* t = participantPawn(b.target)) { L.hasTarget = true; L.targetPos = t->position() + core::Vec3{0, 2.0f, 0}; }
+        if (sb && sb->action > 0) { L.action = sb->action; L.actionPos = sb->actionPos; }
+        out.push_back(L);
     }
     return out;
 }
