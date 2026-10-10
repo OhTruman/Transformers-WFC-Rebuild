@@ -3700,6 +3700,13 @@ void Pipeline::prewarmHudScreenEffects() {
     hudPrewarm_ = true;
     for (int e = 0; e < 2; ++e) { hudEffect_ = e; drawHudScreenEffect(); }
     hudPrewarm_ = false;
+    // the distortion composite too (its full-screen program's first draw came with the first on-screen distortion,
+    // Systems' WFC_DRAWCOMBO rerun): one pixel of the scene target, which every frame clears
+    if (fbo_ && sceneCopyFbo_ && distFbo_) {
+        glEnable(GL_SCISSOR_TEST); glScissor(0, 0, 1, 1);
+        applyDistortion();
+        glDisable(GL_SCISSOR_TEST);
+    }
     hudEffect_ = saved;
     sceneColorCopied_ = copied;
     BindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -4449,6 +4456,12 @@ void Pipeline::buildLmArray() {
 }
 
 void Pipeline::drawMdi(GpuMesh& g) {
+    // WFC_OCCEST=1 (diagnostics, the occlusion-culling estimate): every 600th frame (+300), each frustum-visible world
+    // sub's box is queried (any samples passed) against the finished world depth; the hidden subs' triangles are summed
+    // and logged (that frame stalls on the readback)
+    static const bool occEstOn = std::getenv("WFC_OCCEST") != nullptr && BeginQuery && GetQueryObjectiv;
+    const bool occEst = occEstOn && frameNo_ % 600 == 300 && &g == &meshes_[(size_t)mdiMesh_];
+    std::vector<uint32_t> occSubs;
     flushInstances();
     struct Cmd { uint32_t count, instances, first, baseVertex, baseInstance; };
     static std::vector<Cmd> cmds;
@@ -4466,6 +4479,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
             }
             if (out) { ++counts_.culled; continue; }
+            if (occEst) occSubs.push_back(si);
             if (!mdiEnvFilled_[(size_t)s.mdiRow]) {              // the static light environment, first sight
                 if (!s.envReady) {
                     if (s.noLights) s.env = LightEnv{};
@@ -4615,6 +4629,43 @@ void Pipeline::drawMdi(GpuMesh& g) {
                  (double)(t[qn - 1] - t[0]) / 1.0e6, profMarks.size(), top.c_str());
     }
     BindBuffer(0x8F3F, 0);
+    if (occEst && !occSubs.empty()) {
+        ensurePawnOcclusionProgram();
+        if (occProg_) {
+            static std::vector<GLuint> oq;
+            if (oq.size() < occSubs.size()) { const size_t o = oq.size(); oq.resize(occSubs.size()); GenQueries((GLsizei)(oq.size() - o), &oq[o]); }
+            UseProgram(occProg_);
+            UniformMatrix4fv(occUVP_, 1, GL_FALSE, viewProj_.m);
+            BindVertexArray(occVao_);
+            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); glDepthMask(GL_FALSE);
+            glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
+            std::vector<char> tested(occSubs.size(), 0);
+            for (size_t k = 0; k < occSubs.size(); ++k) {
+                const Sub& s = g.subs[occSubs[k]];
+                const core::Vec3 mn = s.bmin - core::Vec3{0.05f, 0.05f, 0.05f}, mx = s.bmax + core::Vec3{0.05f, 0.05f, 0.05f};
+                const float pad = znear_ * 4.0f + 0.1f;
+                if (camPos_.x > mn.x - pad && camPos_.x < mx.x + pad && camPos_.y > mn.y - pad && camPos_.y < mx.y + pad &&
+                    camPos_.z > mn.z - pad && camPos_.z < mx.z + pad) continue;   // camera at the box: visible
+                Uniform3f(occUMin_, mn.x, mn.y, mn.z); Uniform3f(occUMax_, mx.x, mx.y, mx.z);
+                BeginQuery(0x8C2F, oq[k]);
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, (void*)0);
+                EndQuery(0x8C2F);
+                tested[k] = 1;
+            }
+            size_t hidden = 0, hiddenTris = 0, totalTris = 0;
+            for (size_t k = 0; k < occSubs.size(); ++k) {
+                const size_t tris = g.subs[occSubs[k]].count / 3;
+                totalTris += tris;
+                if (!tested[k]) continue;
+                GLint any = 1;
+                GetQueryObjectiv(oq[k], 0x8866 /*GL_QUERY_RESULT*/, &any);
+                if (!any) { ++hidden; hiddenTris += tris; }
+            }
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); glDepthMask(GL_TRUE); glEnable(GL_CULL_FACE);
+            LOG_INFO("OCCEST frame %d: %zu of %zu frustum-visible world subs fully hidden by the world (%zu of %zu triangles, %.0f %%)",
+                     frameNo_, hidden, occSubs.size(), hiddenTris, totalTris, totalTris ? 100.0 * hiddenTris / totalTris : 0.0);
+        }
+    }
     BindVertexArray(g.vao);                                    // drawSubs continues with this VAO
 }
 
@@ -5166,6 +5217,14 @@ void Pipeline::flushDynQueue() {
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 1; cast(d); }   // every receiver's depth
         shadowPhase_ = 0;
         ensureSceneDepth();                              // one scene-depth copy
+        // one mask-depth fill: every projection of this flush reads the same scene depth, and the stencil volumes never
+        // write depth, so a single full fill gives each subject the values its own rect fill gave
+        if (!std::getenv("WFC_SHADOWRECTFILL") && ensureShadowPrograms()) {
+            beginShadowMask();
+            fillMaskDepth();
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            glViewport(0, 0, vpW_, vpH_);
+        }
         phaseProjected_ = false;
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
         shadowPhase_ = 0;
