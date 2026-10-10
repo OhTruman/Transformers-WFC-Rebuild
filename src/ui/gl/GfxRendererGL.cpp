@@ -304,6 +304,20 @@ void GfxRendererGL::restoreGlState() {
 void GfxRendererGL::begin(int width, int height) {
     w_ = width; h_ = height;
     if (!ok_) return;
+    // Display-object shapes (drawing API, text boxes, caret) get a new ShapeDef when they are rebuilt - a drawing redrawn
+    // every frame (the playtest bot overlay) would add a cache entry per frame until some movie closes. Entries of such
+    // shapes not drawn for a couple of frames are dropped (a shape drawn again is re-tessellated identically).
+    if (++frame_ % 120 == 0) {
+        bool freed = false;
+        for (auto it = shapes_.begin(); it != shapes_.end();) {
+            if (!it->second.dynamic || frame_ - it->second.lastUsed <= 2) { ++it; continue; }
+            for (const Mesh& m : it->second.fills) if (m.vbo) glx::DeleteBuffers(1, &m.vbo);
+            for (const Stroke& st : it->second.strokes) if (st.vbo) glx::DeleteBuffers(1, &st.vbo);
+            it = shapes_.erase(it);
+            freed = true;
+        }
+        if (freed) boundBuf_ = ~0u;
+    }
     saveGlState();
     ensureShadowTargets(width, height);
     if (width != fbw_ || height != fbh_) {
@@ -414,8 +428,38 @@ void GfxRendererGL::applyBlend(int mode) {
     if (glBlendEq) glBlendEq(eq);
 }
 
+namespace {
+// Diagnostics (WFC_UIPROF): UI draw composition per frame, to size draw-call batching. "Mergeable" = stencil + cover
+// meshes that would join a run of consecutive same-colour solid meshes with pairwise-disjoint screen bounds (Integration:
+// such runs could share one stencil draw and one cover draw with identical pixels).
+struct UiDrawCounts {
+    long frames = 0, items = 0, glyphItems = 0, direct = 0, stencil = 0, strokes = 0, bitmaps = 0, mergeable = 0, runs = 0;
+    struct Box { float x0, y0, x1, y1; };
+    std::vector<Box> run;
+    uint32_t runColour = 0;
+    bool runSolid = false;
+    void endRun() { if (run.size() >= 2) { mergeable += (long)run.size(); ++runs; } run.clear(); }
+    void stencilMesh(const Box& b, uint32_t colour, bool solid) {
+        bool joins = solid && runSolid && colour == runColour && !run.empty();
+        if (joins) for (const Box& o : run) if (!(b.x1 < o.x0 || o.x1 < b.x0 || b.y1 < o.y0 || o.y1 < b.y0)) { joins = false; break; }
+        if (!joins) { endRun(); runColour = colour; runSolid = solid; }
+        run.push_back(b);
+    }
+};
+UiDrawCounts g_uiCounts;
+bool uiCountsOn() { static const bool on = std::getenv("WFC_UIPROF") != nullptr; return on; }
+}
+
 void GfxRendererGL::end() {
     if (!ok_) return;
+    if (uiCountsOn() && ++g_uiCounts.frames >= 300) {
+        UiDrawCounts& u = g_uiCounts;
+        const double f = (double)u.frames;
+        u.endRun();
+        LOG_INFO("uidraw per frame: items %.0f glyph items %.0f meshes direct %.0f stencil %.0f (mergeable %.0f in %.1f runs) strokes %.0f bitmaps %.0f",
+                 u.items / f, u.glyphItems / f, u.direct / f, u.stencil / f, u.mergeable / f, u.runs / f, u.strokes / f, u.bitmaps / f);
+        u = UiDrawCounts{};
+    }
     glDisable(GL_STENCIL_TEST);
     glx::BindFramebuffer(GL_READ_FRAMEBUFFER, msFbo_);
     glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, resFbo_);
@@ -449,7 +493,7 @@ const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool g
     core::prof::Scope prof("gfx.shapeCache");
     auto key = std::make_pair(s, glyph);
     auto it = shapes_.find(key);
-    if (it != shapes_.end()) return it->second;
+    if (it != shapes_.end()) { it->second.lastUsed = frame_; return it->second; }
     Cached c;
     // Fill edges per (style set, style): fill1 forward, fill0 reversed -> consistent winding.
     std::map<std::pair<int, int>, std::vector<Seg>> edges;
@@ -514,6 +558,8 @@ const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool g
         }
         c.fills.push_back(std::move(m));
     }
+    c.dynamic = s->dynamic;
+    c.lastUsed = frame_;
     return shapes_[key] = std::move(c);
 }
 
@@ -540,9 +586,15 @@ unsigned GfxRendererGL::texture(const std::string& path, int& w, int& h) {
 }
 
 unsigned GfxRendererGL::gradientTexture(const gfx::FillStyle& fs) {
+    // The cache key: spread + (ratio, r, g, b, a) per stop as raw bytes (it was hex-formatted with snprintf per stop on
+    // every gradient fill of every frame - visible in the HUD draw profile).
     std::string key;
+    key.reserve(1 + fs.grad.size() * 5);
     key += (char)fs.spread;
-    for (const gfx::GradStop& g : fs.grad) { char b[16]; std::snprintf(b, sizeof b, "%02x%02x%02x%02x%02x", g.ratio, g.color.r, g.color.g, g.color.b, g.color.a); key += b; }
+    for (const gfx::GradStop& g : fs.grad) {
+        const char b[5] = {(char)g.ratio, (char)g.color.r, (char)g.color.g, (char)g.color.b, (char)g.color.a};
+        key.append(b, 5);
+    }
     auto it = gradients_.find(key);
     if (it != gradients_.end()) return it->second;
     uint8_t px[256 * 4];
@@ -752,6 +804,7 @@ void GfxRendererGL::fullscreen() {
 }
 
 void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, float alpha) {
+    if (uiCountsOn()) { g_uiCounts.items += (long)items.size(); for (const auto& it : items) g_uiCounts.glyphItems += it.type == gfx::Player::RenderItem::Glyph; }
     if (!ok_) return;
     using RI = gfx::Player::RenderItem;
     for (size_t idx = 0; idx < items.size(); ++idx) {
@@ -836,10 +889,27 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, rep ? GL_REPEAT : GL_CLAMP_TO_EDGE);
                 glx::Uniform2f(uTexSize_, (float)tw, (float)th);
             }
+            if (uiCountsOn()) {
+                const bool solid = fs.type == gfx::FillStyle::Solid;
+                if (fs.isBitmap()) ++g_uiCounts.bitmaps;
+                if (solid && !inMask_ && m.direct) { ++g_uiCounts.direct; g_uiCounts.endRun(); }
+                else {
+                    ++g_uiCounts.stencil;
+                    // the mesh bounds in screen space (twips -> pixels through the item matrix), padded 1 px for AA
+                    float xs[4], ys[4];
+                    const float bx[4] = {m.bx0, m.bx1, m.bx1, m.bx0}, by[4] = {m.by0, m.by0, m.by1, m.by1};
+                    for (int k = 0; k < 4; ++k) { const gfx::Point q = it.m.apply({bx[k], by[k]}); xs[k] = q.x; ys[k] = q.y; }
+                    UiDrawCounts::Box b{*std::min_element(xs, xs + 4) - 1, *std::min_element(ys, ys + 4) - 1,
+                                        *std::max_element(xs, xs + 4) + 1, *std::max_element(ys, ys + 4) + 1};
+                    const uint32_t col = ((uint32_t)fs.color.r << 24) | ((uint32_t)fs.color.g << 16) | ((uint32_t)fs.color.b << 8) | fs.color.a;
+                    g_uiCounts.stencilMesh(b, col, solid && !inMask_);
+                }
+            }
             drawMesh(m, inMask_, fs.type == gfx::FillStyle::Solid);
         }
         if (!inMask_) {
             for (const Stroke& s : c.strokes) {
+                if (uiCountsOn()) { ++g_uiCounts.strokes; g_uiCounts.endRun(); }
                 if ((size_t)s.set >= it.shape->lineSets.size() || (size_t)(s.style - 1) >= it.shape->lineSets[(size_t)s.set].size()) continue;
                 gfx::FillStyle fs;
                 fs.color = it.shape->lineSets[(size_t)s.set][(size_t)(s.style - 1)].color;

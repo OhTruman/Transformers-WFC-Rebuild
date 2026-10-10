@@ -462,7 +462,7 @@ void VM::installDisplayBuiltins() {
         return Value::undef();
     });
     auto ensureDrawing = [](gfx::MovieClip* mc) -> gfx::ShapeDef& {
-        if (!mc->drawing) { mc->drawing = std::make_shared<gfx::ShapeDef>(); mc->drawing->fillSets.emplace_back(); mc->drawing->lineSets.emplace_back(); }
+        if (!mc->drawing) { mc->drawing = std::make_shared<gfx::ShapeDef>(); mc->drawing->dynamic = true; mc->drawing->fillSets.emplace_back(); mc->drawing->lineSets.emplace_back(); }
         return *mc->drawing;
     };
     method(vm, P, "beginFill", [ensureDrawing](VM& vm, const Value& self, Args& a) -> Value {
