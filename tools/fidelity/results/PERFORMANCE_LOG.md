@@ -261,3 +261,255 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 502 | 1920x1080 | - | 64 | 410.3 | 2.34 | 3.41 | 3.75 | 4.2 | 8.93 | 222.7 | 184.6 | 0 / 0 | 0 | 88.6 % |  |  |  |  |  | 5152 |
+
+## 2026-10-09 19:17 - ? - cam overview - per-map v2 2a7bfc0 map 501 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 334.5 | 2.94 | 3.53 | 3.83 | 4.58 | 7.97 | 200.3 | 164 | 0 / 0 | 0 | 82.6 % |  |  |  |  |  | 5999 |
+
+## 2026-10-09 19:24 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 2a7bfc0 map 501 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 572.4 | 1.6 | 2.74 | 3.05 | 3.64 | 43.48 | 239.1 | 173.6 | 2 / 2 | 1 | 97.7 % |  |  |  |  |  | 5525 |
+
+## 2026-10-09 19:28 - ? - 3D at 3840x2160 - cam overview - per-map v2 2a7bfc0 map 501 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 304.9 | 3.3 | 3.66 | 3.77 | 3.97 | 12.2 | 232.4 | 167.1 | 0 / 0 | 0 | 54.3 % |  |  |  |  |  | 5743 |
+
+## 2026-10-09 19:35 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 2a7bfc0 map 501 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 358.7 | 2.59 | 4.02 | 4.29 | 4.74 | 13.91 | 196.8 | 151.8 | 2 / 2 | 2 | 68 % |  |  |  |  |  | 5780 |
+
+## 2026-10-09 21:17 - 37eec59 - cam overview - per-map v2 37eec59 map 503 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 20 | 359.6 | 2.79 | 3.12 | 3.23 | 3.48 | 6.94 | 270.5 | 230.1 | 0 / 0 | 0 | 97.7 % |  |  |  |  |  | 5087 |
+| 503 | 1920x1080 | - | 64 | 274.7 | 3.54 | 4.56 | 5.09 | 5.78 | 9.33 | 156.5 | 131.4 | 0 / 0 | 0 | 33.7 % |  |  |  |  |  | 5115 |
+
+## 2026-10-09 21:21 - ? - cam overview - per-map v2 072cee3 map 503 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 399.5 | 2.5 | 2.94 | 3.05 | 3.31 | 21.85 | 270.6 | 171.1 | 2 / 0 | 0 | 99.2 % |  |  |  |  |  | 5306 |
+
+## 2026-10-09 21:28 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 072cee3 map 503 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 556.6 | 1.76 | 2.38 | 2.58 | 2.92 | 46.22 | 298.9 | 174.5 | 3 / 3 | 1 | 99.8 % |  |  |  |  |  | 5303 |
+
+## 2026-10-09 21:36 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 503 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 20 | 342.3 | 2.91 | 3.33 | 3.46 | 3.75 | 7.23 | 254.1 | 228.1 | 0 / 0 | 0 | 90.3 % |  |  |  |  |  | 5277 |
+| 503 | 1920x1080 | - | 64 | 211.7 | 4.76 | 5.73 | 5.96 | 6.25 | 11.27 | 155.1 | 140.3 | 0 / 0 | 0 | 5.4 % |  |  |  |  |  | 5248 |
+
+## 2026-10-09 21:40 - ? - 3D at 3840x2160 - cam overview - per-map v2 072cee3 map 503 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 334.4 | 2.97 | 3.38 | 3.47 | 3.66 | 9.22 | 259.9 | 209.7 | 0 / 0 | 0 | 86.3 % |  |  |  |  |  | 5248 |
+
+## 2026-10-09 21:47 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 072cee3 map 503 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 381.4 | 2.62 | 3.39 | 3.58 | 3.96 | 8.34 | 235.5 | 189.2 | 0 / 0 | 0 | 88.3 % |  |  |  |  |  | 5459 |
+
+## 2026-10-09 23:19 - 37eec59 - cam overview - per-map v2 37eec59 map 504 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 20 | 307.9 | 3.26 | 3.49 | 3.57 | 3.79 | 10.46 | 229.9 | 177.3 | 0 / 0 | 0 | 65.1 % |  |  |  |  |  | 5644 |
+| 504 | 1920x1080 | - | 64 | 222.2 | 4.3 | 6.57 | 7 | 8.21 | 11.26 | 108.7 | 92.1 | 0 / 0 | 0 | 21.8 % |  |  |  |  |  | 5586 |
+
+## 2026-10-09 23:23 - ? - cam overview - per-map v2 b898c75 map 504 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 259.4 | 3.9 | 4.4 | 4.53 | 4.81 | 10.54 | 183.4 | 132.3 | 0 / 0 | 0 | 13.9 % |  |  |  |  |  | 6137 |
+
+## 2026-10-09 23:30 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 504 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 449.9 | 2.02 | 3.72 | 4.04 | 4.45 | 43.35 | 206.8 | 146.2 | 2 / 1 | 0 | 84 % |  |  |  |  |  | 5747 |
+
+## 2026-10-09 23:38 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 504 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 20 | 309.2 | 3.25 | 3.61 | 3.7 | 3.88 | 7.12 | 249.9 | 222.7 | 0 / 0 | 0 | 61.5 % |  |  |  |  |  | 5861 |
+| 504 | 1920x1080 | - | 64 | 179.3 | 5.96 | 6.82 | 7.02 | 7.33 | 8.92 | 133.9 | 128.9 | 0 / 0 | 0 | 3.9 % |  |  |  |  |  | 5856 |
+
+## 2026-10-09 23:42 - ? - 3D at 3840x2160 - cam overview - per-map v2 b898c75 map 504 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 250.4 | 3.99 | 4.78 | 5.04 | 5.86 | 9.24 | 159.2 | 133.4 | 0 / 0 | 0 | 15.1 % |  |  |  |  |  | 5933 |
+
+## 2026-10-09 23:49 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 504 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 347 | 2.98 | 3.92 | 4.2 | 4.67 | 25.19 | 200.6 | 155 | 1 / 0 | 0 | 70.4 % |  |  |  |  |  | 5964 |
+
+## 2026-10-10 00:29 - 37eec59 - cam overview - per-map v2 37eec59 map 507 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 20 | 788.2 | 1.23 | 1.64 | 1.72 | 1.84 | 6.43 | 506.8 | 383.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5259 |
+| 507 | 1920x1080 | - | 64 | 441.1 | 2.25 | 2.83 | 3.04 | 3.31 | 7.27 | 285.3 | 234.4 | 0 / 0 | 0 | 99.2 % |  |  |  |  |  | 5299 |
+
+## 2026-10-10 00:33 - ? - cam overview - per-map v2 b898c75 map 507 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 432.5 | 2.32 | 2.89 | 3.05 | 3.3 | 6.92 | 283.7 | 219.6 | 0 / 0 | 0 | 99.2 % |  |  |  |  |  | 5741 |
+
+## 2026-10-10 00:40 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 507 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 469.6 | 2.07 | 2.62 | 2.78 | 3.1 | 14.72 | 290.2 | 195.9 | 0 / 0 | 0 | 99.7 % |  |  |  |  |  | 5344 |
+
+## 2026-10-10 00:48 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 507 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 20 | 562.1 | 1.77 | 2.18 | 2.25 | 2.36 | 8.98 | 380.6 | 228.5 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5438 |
+| 507 | 1920x1080 | - | 64 | 415.1 | 2.39 | 2.94 | 3.07 | 3.36 | 8.72 | 259.2 | 160.3 | 0 / 0 | 0 | 98.9 % |  |  |  |  |  | 5474 |
+
+## 2026-10-10 00:52 - ? - 3D at 3840x2160 - cam overview - per-map v2 b898c75 map 507 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 419.8 | 2.37 | 2.78 | 2.89 | 3.18 | 14.61 | 265.2 | 154.2 | 0 / 0 | 0 | 99.4 % |  |  |  |  |  | 5602 |
+
+## 2026-10-10 00:59 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 507 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 438.7 | 2.25 | 2.75 | 2.92 | 3.28 | 8.4 | 273.6 | 191.6 | 2 / 2 | 2 | 99.2 % |  |  |  |  |  | 5596 |
+
+## 2026-10-10 02:00 - 37eec59 - cam overview - per-map v2 37eec59 map 508 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 20 | 479.8 | 2.12 | 2.43 | 2.5 | 2.67 | 7.35 | 335.8 | 229.2 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5148 |
+| 508 | 1920x1080 | - | 64 | 339.9 | 2.96 | 3.29 | 3.44 | 4 | 13.7 | 213.7 | 132.8 | 2 / 2 | 2 | 91.9 % |  |  |  |  |  | 5154 |
+
+## 2026-10-10 02:04 - ? - cam overview - per-map v2 b898c75 map 508 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 443.9 | 2.25 | 2.58 | 2.67 | 2.9 | 14.87 | 282 | 154.8 | 0 / 0 | 0 | 99.7 % |  |  |  |  |  | 5466 |
+
+## 2026-10-10 02:12 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 508 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 571.5 | 1.69 | 2.4 | 2.63 | 3.04 | 12.48 | 294.8 | 226.1 | 0 / 0 | 0 | 99.6 % |  |  |  |  |  | 5284 |
+
+## 2026-10-10 02:19 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 508 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 20 | 473.1 | 2.1 | 2.47 | 2.59 | 2.83 | 6.45 | 337.7 | 290 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5353 |
+| 508 | 1920x1080 | - | 64 | 339.7 | 2.94 | 3.34 | 3.49 | 3.77 | 7.56 | 248 | 198.3 | 0 / 0 | 0 | 89.6 % |  |  |  |  |  | 5374 |
+
+## 2026-10-10 02:23 - ? - 3D at 3840x2160 - cam overview - per-map v2 b898c75 map 508 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 411.6 | 2.42 | 2.87 | 2.96 | 3.08 | 7.04 | 309.3 | 251 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5432 |
+
+## 2026-10-10 02:30 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 b898c75 map 508 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 421.5 | 2.35 | 2.95 | 3.15 | 3.6 | 29.69 | 245.6 | 160.2 | 2 / 0 | 0 | 97.5 % |  |  |  |  |  | 5535 |
+
+## 2026-10-10 03:14 - 37eec59 - cam overview - per-map v2 37eec59 map 509 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 20 | 296.3 | 3.38 | 3.62 | 3.7 | 3.9 | 46.93 | 216.6 | 114.5 | 1 / 1 | 0 | 41.2 % |  |  |  |  |  | 5316 |
+| 509 | 1920x1080 | - | 64 | 230.9 | 4.07 | 6.4 | 6.91 | 7.93 | 12.88 | 115 | 97 | 0 / 0 | 0 | 25.8 % |  |  |  |  |  | 5225 |
+
+## 2026-10-10 03:18 - ? - cam overview - per-map v2 a19dc53 map 509 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 431.7 | 2.3 | 2.62 | 2.72 | 3.08 | 20.82 | 267.8 | 145.4 | 1 / 0 | 0 | 99.5 % |  |  |  |  |  | 5697 |
+
+## 2026-10-10 03:26 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 a19dc53 map 509 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 549.9 | 1.75 | 2.49 | 2.68 | 3.05 | 48.14 | 271.1 | 141.5 | 2 / 1 | 0 | 99.6 % |  |  |  |  |  | 5411 |
+
+## 2026-10-10 03:33 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 509 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 20 | 290.5 | 3.43 | 3.86 | 4.01 | 4.33 | 8.18 | 217.4 | 173.2 | 0 / 0 | 0 | 37.7 % |  |  |  |  |  | 5424 |
+| 509 | 1920x1080 | - | 64 | 228.7 | 4.16 | 6.06 | 6.4 | 7.31 | 16.44 | 122.8 | 91.1 | 0 / 0 | 0 | 18.9 % |  |  |  |  |  | 5411 |
+
+## 2026-10-10 03:37 - ? - 3D at 3840x2160 - cam overview - per-map v2 a19dc53 map 509 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 355.5 | 2.77 | 3.16 | 3.24 | 3.4 | 14.96 | 239 | 127.1 | 0 / 0 | 0 | 98.3 % |  |  |  |  |  | 5578 |
+
+## 2026-10-10 03:44 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 a19dc53 map 509 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 340.4 | 2.9 | 3.63 | 3.86 | 4.3 | 8.69 | 219.3 | 187.8 | 0 / 0 | 0 | 78.7 % |  |  |  |  |  | 5579 |
+
+## 2026-10-10 04:16 - 37eec59 - cam overview - per-map v2 37eec59 map 510 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 20 | 458.4 | 2.2 | 2.64 | 2.75 | 2.92 | 6.46 | 326.5 | 280.1 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5106 |
+| 510 | 1920x1080 | - | 64 | 288.2 | 3.47 | 3.98 | 4.17 | 4.98 | 9.63 | 176.9 | 137.5 | 2 / 2 | 2 | 36 % |  |  |  |  |  | 5088 |
+
+## 2026-10-10 04:20 - ? - cam overview - per-map v2 a19dc53 map 510 overview 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 338.3 | 2.95 | 3.55 | 3.72 | 4.02 | 7.56 | 232.7 | 187 | 0 / 0 | 0 | 79.8 % |  |  |  |  |  | 5392 |
+
+## 2026-10-10 04:27 - ? - real play: PLAYERBOT 1, follow cam - per-map v2 a19dc53 map 510 real play 1080
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 433.3 | 2.22 | 3.15 | 3.47 | 3.92 | 11.36 | 237.1 | 182.4 | 0 / 0 | 0 | 93.2 % |  |  |  |  |  | 5230 |
+
+## 2026-10-10 04:35 - 37eec59 - 3D at 3840x2160 - cam overview - per-map v2 37eec59 map 510 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 20 | 298.3 | 3.37 | 3.76 | 3.88 | 4.08 | 6.84 | 237.5 | 209.8 | 0 / 0 | 0 | 45.3 % |  |  |  |  |  | 5316 |
+| 510 | 1920x1080 | - | 64 | 161.4 | 6.15 | 7.06 | 7.37 | 7.91 | 9.02 | 123.2 | 117.9 | 0 / 0 | 0 | 0.8 % |  |  |  |  |  | 5247 |
+
+## 2026-10-10 04:38 - ? - 3D at 3840x2160 - cam overview - per-map v2 a19dc53 map 510 overview 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 285.2 | 3.54 | 3.9 | 3.99 | 4.15 | 8.48 | 230.1 | 184.3 | 0 / 0 | 0 | 26.1 % |  |  |  |  |  | 5361 |
+
+## 2026-10-10 04:46 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - per-map v2 a19dc53 map 510 real play 2160
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 301.8 | 3.3 | 3.85 | 4.05 | 4.44 | 17.02 | 204.6 | 142 | 1 / 0 | 0 | 53.9 % |  |  |  |  |  | 5396 |
