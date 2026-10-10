@@ -522,6 +522,8 @@ private:
     GLuint occSelectProg_ = 0, occTestProg_ = 0, hzbProg_ = 0, occCmdA_ = 0, occCmdB_ = 0, hzbTex_ = 0;
     GLuint occCnt_[5] = {0, 0, 0, 0, 0}, occCntQ_[4] = {0, 0, 0, 0};   // culled-count buffers (4 in flight + scratch)
     int occCntFrame_[4] = {-1, -1, -1, -1}, occLastHit_ = 0;            // frame each is pending for; last frame that culled
+    const volatile uint32_t* occCntPtr_[4] = {nullptr, nullptr, nullptr, nullptr};   // persistent coherent maps (adaptive)
+    GLuint occGpuQ_[5] = {0, 0, 0, 0, 0};                                // WFC_OCCGPU stage stamps
     int hzbW_ = 0, hzbH_ = 0, hzbLevels_ = 0;
     bool occCullReady();
     void buildHzb();

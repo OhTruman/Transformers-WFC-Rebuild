@@ -708,7 +708,9 @@ void Pipeline::release() {
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
     for (GLuint* b : {&mdiOccBox_, &mdiOccVis_, &bspMdi_.occBox, &bspMdi_.occVis, &occCmdA_, &occCmdB_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
-    for (GLuint& b : occCnt_) if (b) { DeleteBuffers(1, &b); b = 0; }
+    for (GLuint& b : occCnt_) if (b) { DeleteBuffers(1, &b); b = 0; }   // (deleting a mapped buffer unmaps it)
+    for (auto& p : occCntPtr_) p = nullptr;
+    if (occGpuQ_[0] && DeleteQueries) { DeleteQueries(5, occGpuQ_); for (GLuint& q : occGpuQ_) q = 0; }
     if (occCntQ_[0] && DeleteQueries) { DeleteQueries(4, occCntQ_); for (GLuint& q : occCntQ_) q = 0; }
     for (int& f : occCntFrame_) f = -1;
     if (hzbTex_) { glDeleteTextures(1, &hzbTex_); hzbTex_ = 0; }
@@ -4616,9 +4618,13 @@ void main() {
             return false;
         }
         GenBuffers(1, &occCmdA_); GenBuffers(1, &occCmdB_);
-        for (GLuint& b : occCnt_) {
+        for (int k = 0; k < 5; ++k) {
             const uint32_t z = 0;
-            GenBuffers(1, &b); BindBuffer(0x90D2, b); BufferData(0x90D2, sizeof z, &z, 0x88E9 /*GL_DYNAMIC_READ*/);
+            GenBuffers(1, &occCnt_[k]); BindBuffer(0x90D2, occCnt_[k]);
+            if (BufferStorage && MapBufferRange) {        // MAP_READ | PERSISTENT | COHERENT | DYNAMIC_STORAGE
+                BufferStorage(0x90D2, sizeof z, &z, 0x0001 | 0x0040 | 0x0080 | 0x0100);
+                if (k < 4) occCntPtr_[k] = (const volatile uint32_t*)MapBufferRange(0x90D2, 0, sizeof z, 0x0001 | 0x0040 | 0x0080);
+            } else BufferData(0x90D2, sizeof z, &z, 0x88E9 /*GL_DYNAMIC_READ*/);
         }
         BindBuffer(0x90D2, 0);
         if (GenQueries) GenQueries(4, occCntQ_);
@@ -4803,28 +4809,34 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 }
             };
             bool occ = occCullReady();
-            // Adaptive (exact either way: a frame without the cull draws every frustum-visible sub, and a stale
-            // visibility set only moves subs from prepass A to B): the test counts the subs it culls into one of four
-            // small buffers, read once the GPU is past it (its timestamp query's result is available - never waited
-            // for). After 60 frames in which nothing was culled the cull runs only every 15th frame, as a probe.
-            // WFC_OCCALWAYS=1: every frame.
-            static const bool occAlways = std::getenv("WFC_OCCALWAYS") != nullptr;
+            // Default: the cull every frame, as c17eee7 (the full barrier after pass A included). Opt-ins, for A/B until
+            // measured (c969c84's cull regressed by ~1 ms GPU in real play):
+            // WFC_OCCADAPTIVE=1: the test counts the subs it culls into one of four small persistently mapped buffers,
+            // read once the GPU is past it (its timestamp query's result is available - never waited for); after 60
+            // frames in which nothing was culled the cull runs only every 15th frame, as a probe (exact either way: a
+            // frame without the cull draws every frustum-visible sub; a stale visibility set only moves subs from
+            // prepass A to B). WFC_OCCNOBARRIER=1: no full barrier between pass A and the Hi-Z build.
+            static const bool occAdaptive = std::getenv("WFC_OCCADAPTIVE") != nullptr;
+            static const bool occNoBarrier = std::getenv("WFC_OCCNOBARRIER") != nullptr;
             int occSlot = -1;
-            if (occ && occCntQ_[0] && GetQueryObjectiv && QueryCounter && GetBufferSubData) {
+            if (occ && occAdaptive && occCntQ_[0] && occCntPtr_[0] && GetQueryObjectiv && QueryCounter) {
                 for (int k = 0; k < 4; ++k) {
                     if (occCntFrame_[k] < 0) continue;
                     GLint avail = 0;
                     GetQueryObjectiv(occCntQ_[k], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
                     if (!avail) continue;
-                    uint32_t n = 0;
-                    BindBuffer(0x90D2, occCnt_[k]); GetBufferSubData(0x90D2, 0, sizeof n, &n);
-                    if (n) occLastHit_ = std::max(occLastHit_, occCntFrame_[k]);
+                    if (*occCntPtr_[k]) occLastHit_ = std::max(occLastHit_, occCntFrame_[k]);
                     occCntFrame_[k] = -1;
                 }
-                BindBuffer(0x90D2, 0);
-                if (!occAlways && frameNo_ - occLastHit_ > 60 && frameNo_ % 15 != 0) occ = false;
+                if (frameNo_ - occLastHit_ > 60 && frameNo_ % 15 != 0) occ = false;
                 for (int k = 0; k < 4 && occ && occSlot < 0; ++k) if (occCntFrame_[k] < 0) occSlot = k;
             }
+            // WFC_OCCGPU=1 (diagnostics): every 240th frame, GPU timestamps around the cull's stages (read back at once:
+            // that frame stalls) - select + prepass A, Hi-Z build, test, prepass B
+            static const bool occGpu = std::getenv("WFC_OCCGPU") != nullptr && QueryCounter && GetQueryObjectui64v;
+            const bool occGpuFrame = occ && occGpu && frameNo_ % 240 == 0;
+            if (occGpuFrame && !occGpuQ_[0]) GenQueries(5, occGpuQ_);
+            if (occGpuFrame) QueryCounter(occGpuQ_[0], 0x8E28);
             const GLuint nCmd = (GLuint)cmds.size();
             if (occ) {                                     // prepass A: the commands of last frame's visible subs
                 BindBuffer(0x90D2, occCmdA_); BufferData(0x90D2, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), nullptr, GL_STREAM_DRAW);
@@ -4840,9 +4852,10 @@ void Pipeline::drawMdi(GpuMesh& g) {
             }
             prepassDraws();
             if (occ) {                                     // Hi-Z of pass A's depth, the test, then prepass B
-                // (no barrier: pass A's depth is a framebuffer write, ordered before later texture fetches by GL itself;
-                // the select's SSBO writes were made visible to the indirect fetch above)
+                if (!occNoBarrier) MemoryBarrier(0xFFFFFFFF);
+                if (occGpuFrame) QueryCounter(occGpuQ_[1], 0x8E28);
                 buildHzb();
+                if (occGpuFrame) QueryCounter(occGpuQ_[2], 0x8E28);
                 UseProgram(occTestProg_);
                 Uniform1ui(cachedUniformLocation(occTestProg_, "uN"), nCmd);
                 UniformMatrix4fv(cachedUniformLocation(occTestProg_, "uVP"), 1, GL_FALSE, viewProj_.m);
@@ -4852,15 +4865,18 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 ActiveTexture(GL_TEXTURE0 + 23); glBindTexture(GL_TEXTURE_2D, hzbTex_); ActiveTexture(GL_TEXTURE0);
                 BindBufferBase(0x90D2, 0, mdiCmdBuf_); BindBufferBase(0x90D2, 1, occCmdB_);
                 BindBufferBase(0x90D2, 2, mdiOccVis_); BindBufferBase(0x90D2, 3, mdiOccBox_);
-                {
+                if (occSlot >= 0) {                        // (otherwise the scratch counter: written, never read)
                     const uint32_t z = 0;
-                    const GLuint cb = occCnt_[occSlot >= 0 ? occSlot : 4];
-                    BindBuffer(0x90D2, cb); BufferSubData(0x90D2, 0, sizeof z, &z); BindBuffer(0x90D2, 0);
-                    BindBufferBase(0x90D2, 4, cb);
+                    BindBuffer(0x90D2, occCnt_[occSlot]); BufferSubData(0x90D2, 0, sizeof z, &z); BindBuffer(0x90D2, 0);
                 }
+                BindBufferBase(0x90D2, 4, occCnt_[occSlot >= 0 ? occSlot : 4]);
                 DispatchCompute((nCmd + 63) / 64, 1, 1);
-                if (occSlot >= 0) { QueryCounter(occCntQ_[occSlot], 0x8E28 /*GL_TIMESTAMP*/); occCntFrame_[occSlot] = frameNo_; }
-                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/ | 0x00000200 /*BUFFER_UPDATE*/);
+                if (occSlot >= 0) {
+                    MemoryBarrier(0x00004000 /*CLIENT_MAPPED_BUFFER*/);
+                    QueryCounter(occCntQ_[occSlot], 0x8E28 /*GL_TIMESTAMP*/); occCntFrame_[occSlot] = frameNo_;
+                }
+                MemoryBarrier(0x00000040 /*COMMAND*/ | 0x00002000 /*SHADER_STORAGE*/);
+                if (occGpuFrame) QueryCounter(occGpuQ_[3], 0x8E28);
                 UseProgram(zPreProg_);
                 glx::uniformCacheForgetCurrent();
                 ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_); ActiveTexture(GL_TEXTURE0);
@@ -4868,6 +4884,14 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 BindBuffer(0x8F3F, occCmdB_);
                 prepassDraws();
                 BindBuffer(0x8F3F, mdiCmdBuf_);           // the shading pass: the test's culled commands
+                if (occGpuFrame) {
+                    QueryCounter(occGpuQ_[4], 0x8E28);
+                    unsigned long long t[5] = {};
+                    for (int k = 0; k < 5; ++k) GetQueryObjectui64v(occGpuQ_[k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
+                    LOG_INFO("OCCGPU frame %d: select + prepass A %.3f ms, barrier %s, Hi-Z %.3f, test %.3f, prepass B %.3f "
+                             "(%u commands, %s)", frameNo_, (t[1] - t[0]) / 1e6, occNoBarrier ? "off" : "on", (t[2] - t[1]) / 1e6,
+                             (t[3] - t[2]) / 1e6, (t[4] - t[3]) / 1e6, nCmd, noPrepack ? "per-bucket" : "packed");
+                }
                 // WFC_OCCSTATS=1 (diagnostics; a synchronous readback, so that frame stalls): every 300th frame (a probe
                 // frame: the adaptive cull always runs on it), how many frustum-visible world sub-meshes the cull dropped
                 // from the shading pass, and pass A / B sizes
