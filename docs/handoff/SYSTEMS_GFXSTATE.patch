@@ -1,0 +1,314 @@
+--- a/src/ui/gl/GfxRendererGL.h
++++ b/src/ui/gl/GfxRendererGL.h
+@@ -83,6 +83,22 @@
+     int backdropW_ = 0, backdropH_ = 0;
+     int curBlend_ = -1;
+     void applyBlend(int mode);
++    // Stencil / colour-mask state shadow (Systems; CPU cost: each GL state call is AMD driver work, issued 4-5 times per HUD mesh):
++    // a call is skipped only when the context already holds exactly that value, so the GL state and the image are unchanged.
++    // Every write of these states in this renderer goes through the setters below; the shadow is invalidated in begin() (other
++    // renderers ran since the last HUD draw) and restoreGlState(). WFC_NOGFXSTATESHADOW=1: every call is issued (A/B, byte check).
++    struct GlShadow {
++        int colorMask = -1;                                   // -1 unknown, 0 all false, 1 all true (the only masks used here)
++        unsigned func = ~0u, ref = ~0u, valueMask = ~0u;      // glStencilFunc (both faces)
++        unsigned writeMask = ~0u; bool writeMaskKnown = false;
++        unsigned op[2][3] = {{~0u, ~0u, ~0u}, {~0u, ~0u, ~0u}};   // [front, back][sfail, dpfail, dppass]
++    } gs_;
++    void invalidateGlShadow() { gs_ = GlShadow{}; }
++    void sColorMask(bool on);
++    void sStencilFunc(unsigned func, int ref, unsigned mask);
++    void sStencilMask(unsigned mask);
++    void sStencilOp(unsigned sfail, unsigned dpfail, unsigned dppass);                    // both faces
++    void sStencilOpSeparate(unsigned face, unsigned sfail, unsigned dpfail, unsigned dppass);   // GL_FRONT / GL_BACK
+     static int effectiveBlend(const gfx::DisplayObject* d);
+     int samples_ = 8;
+     int level_ = 0;          // mask nesting level
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -285,6 +285,7 @@
+     glDepthMask(g.depthMask ? GL_TRUE : GL_FALSE);
+     glColorMask(g.colorMask[0], g.colorMask[1], g.colorMask[2], g.colorMask[3]);
+     glStencilMask((GLuint)g.stencilWriteMask);
++    invalidateGlShadow();   // the stencil / colour-mask shadow is not the outer renderer's state
+     glx::BlendFuncSeparate((GLenum)g.blendSrcRgb, (GLenum)g.blendDstRgb, (GLenum)g.blendSrcA, (GLenum)g.blendDstA);
+     if (glBlendEq) glBlendEq((GLenum)g.blendEqRgb);
+     curBlend_ = -1;
+@@ -301,6 +302,8 @@
+     glx::ActiveTexture((GLenum)g.activeTexture);
+ }
+ 
++static void gfxShadowVerifyFrame();   // below, with the shadow setters
++
+ void GfxRendererGL::begin(int width, int height) {
+     w_ = width; h_ = height;
+     if (!ok_) return;
+@@ -319,6 +322,8 @@
+         if (freed) boundBuf_ = ~0u;
+     }
+     saveGlState();
++    invalidateGlShadow();   // other renderers changed GL state since the last HUD frame
++    gfxShadowVerifyFrame();   // WFC_GFXSTATESHADOW_VERIFY summary every 600 HUD frames
+     ensureShadowTargets(width, height);
+     if (width != fbw_ || height != fbh_) {
+         if (msFbo_) { glx::DeleteFramebuffers(1, &msFbo_); glx::DeleteRenderbuffers(1, &msColor_); glx::DeleteRenderbuffers(1, &msDepth_); }
+@@ -362,8 +367,8 @@
+     glViewport(0, 0, width, height);
+     glClearColor(0, 0, 0, 0);
+     glClearStencil(0);
+-    glStencilMask(0xFF);
+-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++    sStencilMask(0xFF);
++    sColorMask(true);
+     glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+     glDisable(GL_DEPTH_TEST);
+     glDisable(GL_CULL_FACE);
+@@ -429,6 +434,99 @@
+ }
+ 
+ namespace {
++bool glShadowOff() { static const bool off = std::getenv("WFC_NOGFXSTATESHADOW") != nullptr; return off; }
++// WFC_GFXSTATESHADOW_VERIFY=1: every skipped call is checked against glGet (the real context state); a mismatch would mean the
++// shadow is wrong (some write bypassed it) and the image could differ. Diagnostics only (the glGets stall the pipeline).
++bool glShadowVerify() { static const bool v = std::getenv("WFC_GFXSTATESHADOW_VERIFY") != nullptr; return v; }
++long gVerifySkips = 0, gVerifyBad = 0, gVerifyFrames = 0;
++void verifyFail(const char* what, long got, long want) {
++    if (++gVerifyBad <= 20) LOG_ERROR("GFXSTATESHADOW VERIFY mismatch: %s real %ld, shadow %ld", what, got, want);
++}
++GLint getI(GLenum e) { GLint v = 0; glGetIntegerv(e, &v); return v; }
++}
++static void gfxShadowVerifyFrame() {
++    if (glShadowVerify() && ++gVerifyFrames % 600 == 0)
++        LOG_INFO("GFXSTATESHADOW VERIFY %ld HUD frames: %ld skipped calls checked, %ld mismatches", gVerifyFrames, gVerifySkips, gVerifyBad);
++}
++#ifndef GL_STENCIL_BACK_FUNC
++#define GL_STENCIL_BACK_FUNC 0x8800
++#define GL_STENCIL_BACK_FAIL 0x8801
++#define GL_STENCIL_BACK_PASS_DEPTH_FAIL 0x8802
++#define GL_STENCIL_BACK_PASS_DEPTH_PASS 0x8803
++#define GL_STENCIL_BACK_REF 0x8CA3
++#define GL_STENCIL_BACK_VALUE_MASK 0x8CA4
++#define GL_STENCIL_BACK_WRITEMASK 0x8CA5
++#endif
++void GfxRendererGL::sColorMask(bool on) {
++    if (!glShadowOff() && gs_.colorMask == (on ? 1 : 0)) {
++        if (glShadowVerify()) {
++            ++gVerifySkips;
++            GLboolean cm[4] = {0, 0, 0, 0}; glGetBooleanv(GL_COLOR_WRITEMASK, cm);
++            for (int i = 0; i < 4; ++i) if ((cm[i] != 0) != on) { verifyFail("colorMask", cm[i], on); break; }
++        }
++        return;
++    }
++    const GLboolean v = on ? GL_TRUE : GL_FALSE;
++    glColorMask(v, v, v, v);
++    gs_.colorMask = on ? 1 : 0;
++}
++void GfxRendererGL::sStencilFunc(unsigned func, int ref, unsigned mask) {
++    if (!glShadowOff() && gs_.func == func && gs_.ref == (unsigned)ref && gs_.valueMask == mask) {
++        if (glShadowVerify()) {
++            ++gVerifySkips;
++            if ((unsigned)getI(GL_STENCIL_FUNC) != func || getI(GL_STENCIL_REF) != ref || (unsigned)getI(GL_STENCIL_VALUE_MASK) != mask ||
++                (unsigned)getI(GL_STENCIL_BACK_FUNC) != func || getI(GL_STENCIL_BACK_REF) != ref || (unsigned)getI(GL_STENCIL_BACK_VALUE_MASK) != mask)
++                verifyFail("stencilFunc", getI(GL_STENCIL_FUNC), (long)func);
++        }
++        return;
++    }
++    glStencilFunc((GLenum)func, ref, mask);
++    gs_.func = func; gs_.ref = (unsigned)ref; gs_.valueMask = mask;
++}
++void GfxRendererGL::sStencilMask(unsigned mask) {
++    if (!glShadowOff() && gs_.writeMaskKnown && gs_.writeMask == mask) {
++        if (glShadowVerify()) {
++            ++gVerifySkips;
++            if ((unsigned)getI(GL_STENCIL_WRITEMASK) != mask || (unsigned)getI(GL_STENCIL_BACK_WRITEMASK) != mask)
++                verifyFail("stencilMask", getI(GL_STENCIL_WRITEMASK), (long)mask);
++        }
++        return;
++    }
++    glStencilMask(mask);
++    gs_.writeMask = mask; gs_.writeMaskKnown = true;
++}
++void GfxRendererGL::sStencilOp(unsigned sfail, unsigned dpfail, unsigned dppass) {
++    const unsigned v[3] = {sfail, dpfail, dppass};
++    if (!glShadowOff() && std::equal(v, v + 3, gs_.op[0]) && std::equal(v, v + 3, gs_.op[1])) {
++        if (glShadowVerify()) {
++            ++gVerifySkips;
++            const unsigned r[6] = {(unsigned)getI(GL_STENCIL_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_FAIL), (unsigned)getI(GL_STENCIL_PASS_DEPTH_PASS),
++                                   (unsigned)getI(GL_STENCIL_BACK_FAIL), (unsigned)getI(GL_STENCIL_BACK_PASS_DEPTH_FAIL), (unsigned)getI(GL_STENCIL_BACK_PASS_DEPTH_PASS)};
++            if (!std::equal(v, v + 3, r) || !std::equal(v, v + 3, r + 3)) verifyFail("stencilOp", (long)r[0], (long)v[0]);
++        }
++        return;
++    }
++    glStencilOp((GLenum)sfail, (GLenum)dpfail, (GLenum)dppass);
++    for (int f = 0; f < 2; ++f) std::copy(v, v + 3, gs_.op[f]);
++}
++void GfxRendererGL::sStencilOpSeparate(unsigned face, unsigned sfail, unsigned dpfail, unsigned dppass) {
++    const unsigned v[3] = {sfail, dpfail, dppass};
++    const int f = face == GL_BACK ? 1 : 0;
++    if (!glShadowOff() && std::equal(v, v + 3, gs_.op[f])) {
++        if (glShadowVerify()) {
++            ++gVerifySkips;
++            const unsigned r[3] = {(unsigned)getI(f ? GL_STENCIL_BACK_FAIL : GL_STENCIL_FAIL),
++                                   (unsigned)getI(f ? GL_STENCIL_BACK_PASS_DEPTH_FAIL : GL_STENCIL_PASS_DEPTH_FAIL),
++                                   (unsigned)getI(f ? GL_STENCIL_BACK_PASS_DEPTH_PASS : GL_STENCIL_PASS_DEPTH_PASS)};
++            if (!std::equal(v, v + 3, r)) verifyFail(f ? "stencilOpBack" : "stencilOpFront", (long)r[0], (long)v[0]);
++        }
++        return;
++    }
++    glx::StencilOpSeparate((GLenum)face, (GLenum)sfail, (GLenum)dpfail, (GLenum)dppass);
++    std::copy(v, v + 3, gs_.op[f]);
++}
++
++namespace {
+ // Diagnostics (WFC_UIPROF): UI draw composition per frame, to size draw-call batching. "Mergeable" = stencil + cover
+ // meshes that would join a run of consecutive same-colour solid meshes with pairwise-disjoint screen bounds (Integration:
+ // such runs could share one stencil draw and one cover draw with identical pixels).
+@@ -663,11 +761,11 @@
+ 
+ void GfxRendererGL::stencilState() {
+     // Winding count in the low nibble, only where the mask level (high nibble) equals the current level.
+-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+-    glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-    glStencilMask(0x0F);
+-    glx::StencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
+-    glx::StencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
++    sColorMask(false);
++    sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++    sStencilMask(0x0F);
++    sStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
++    sStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
+ }
+ 
+ void GfxRendererGL::stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m) {
+@@ -678,15 +776,15 @@
+ void GfxRendererGL::coverState(bool mask) {
+     if (mask) {
+         // Pixels with a nonzero winding become mask level + 1 (low nibble cleared).
+-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+-        glStencilFunc(GL_NOTEQUAL, (level_ + 1) << 4, 0x0F);
+-        glStencilMask(0xFF);
+-        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
++        sColorMask(false);
++        sStencilFunc(GL_NOTEQUAL, (level_ + 1) << 4, 0x0F);
++        sStencilMask(0xFF);
++        sStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+     } else {
+-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-        glStencilFunc(GL_NOTEQUAL, level_ << 4, 0x0F);
+-        glStencilMask(0x0F);
+-        glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
++        sColorMask(true);
++        sStencilFunc(GL_NOTEQUAL, level_ << 4, 0x0F);
++        sStencilMask(0x0F);
++        sStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
+     }
+ }
+ 
+@@ -715,9 +813,9 @@
+     static const bool noDirect = std::getenv("WFC_GFX_NODIRECT") != nullptr;   // A/B: always stencil + cover
+     if (solid && !mask && mesh.direct && !noDirect) {
+         // Inside the current mask level only, no stencil writes (the cover pass would leave the low nibble at zero).
+-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-        glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-        glStencilMask(0);
++        sColorMask(true);
++        sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++        sStencilMask(0);
+         glDrawArrays(GL_TRIANGLES, 0, nFan);
+         return;
+     }
+@@ -780,9 +878,9 @@
+     setFill(fs, id, gfx::CXForm{}, 1.0f, 4);
+     glx::Uniform2f(uTexSize_, (float)w, (float)h);
+     glBindTexture(GL_TEXTURE_2D, video_.id);
+-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-    glStencilFunc(GL_ALWAYS, 0, 0xFF);
+-    glStencilMask(0x00);
++    sColorMask(true);
++    sStencilFunc(GL_ALWAYS, 0, 0xFF);
++    sStencilMask(0x00);
+     float q[] = {ox, oy, ox + dw, oy, ox + dw, oy + dh, ox, oy, ox + dw, oy + dh, ox, oy + dh};
+     std::vector<float> v(q, q + 12);
+     // The movie is opaque: normal blending, never the blend mode the last GFx item left set (the Extras movie list
+@@ -817,16 +915,16 @@
+         case RI::MaskEnd: inMask_ = false; if (level_ < 15) ++level_; continue;
+         case RI::MaskPop: {
+             if (level_ <= 0) continue;
+-            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+-            glStencilMask(0xFF);
+-            glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-            glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
++            sColorMask(false);
++            sStencilMask(0xFF);
++            sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++            sStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
+             fullscreen();
+             --level_;
+-            glStencilFunc(GL_NOTEQUAL, level_ << 4, 0x0F);
+-            glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
++            sStencilFunc(GL_NOTEQUAL, level_ << 4, 0x0F);
++            sStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+             fullscreen();
+-            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++            sColorMask(true);
+             continue;
+         }
+         default: break;
+@@ -850,9 +948,9 @@
+             std::vector<float> fan(q, q + 12);
+             if (inMask_) { stencilWinding(fan, it.m); cover(0, 0, x1, y1, it.m, true); }
+             else {
+-                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-                glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-                glStencilMask(0);
++                sColorMask(true);
++                sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++                sStencilMask(0);
+                 drawTriangles(fan, it.m);
+             }
+             continue;
+@@ -914,15 +1012,15 @@
+                 gfx::FillStyle fs;
+                 fs.color = it.shape->lineSets[(size_t)s.set][(size_t)(s.style - 1)].color;
+                 setFill(fs, it.m, it.cx, alpha);
+-                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-                glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-                glStencilMask(0);
++                sColorMask(true);
++                sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++                sStencilMask(0);
+                 drawStroke(s);
+             }
+         }
+     }
+-    glStencilMask(0xFF);
+-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++    sStencilMask(0xFF);
++    sColorMask(true);
+ }
+ 
+ void GfxRendererGL::ensureShadowTargets(int nw, int nh) {
+@@ -1000,9 +1098,9 @@
+     glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[0]);
+     glViewport(0, 0, W, H);
+     glDisable(GL_STENCIL_TEST);
+-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++    sColorMask(true);
+     glClearColor(0, 0, 0, 0);
+-    glStencilMask(0xFF);
++    sStencilMask(0xFF);
+     glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+     glEnable(GL_STENCIL_TEST);
+     if (glBlendEq) glBlendEq(kFuncAdd);
+@@ -1041,9 +1139,9 @@
+     glEnable(GL_BLEND);
+     glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+     curBlend_ = -1;
+-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+-    glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+-    glStencilMask(0);
++    sColorMask(true);
++    sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
++    sStencilMask(0);
+     glx::UseProgram(shCompProg_);
+     glBindTexture(GL_TEXTURE_2D, shTex_[0]);
+     glx::Uniform1i(glx::GetUniformLocation(shCompProg_, "uTex"), 0);
