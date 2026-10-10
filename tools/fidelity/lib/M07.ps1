@@ -25,10 +25,11 @@ function Wait-WfcGpu([int]$Minutes = 0, [switch]$Strict) {
     $hold = Join-Path (Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent) "work\PERF_HOLD"   # lib -> fidelity -> tools -> worktree
     while ((Get-Date) -lt $deadline) {
         if ((Test-Path $hold) -and -not $env:WFC_GATE_IGNORE_HOLD) { Start-Sleep 15; continue }   # IGNORE_HOLD: this lane's own PERF run
-        $procs = @(Get-CimInstance Win32_Process -Filter "Name='wfc_rebuild.exe'" -ErrorAction SilentlyContinue)
+        # any wfc_rebuild*.exe (renamed check builds, e.g. wfc_rebuild_ov1.exe - 2026-10-10: one ran unseen into a timed window)
+        $procs = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe'" -ErrorAction SilentlyContinue)
         $mine = @($procs | Where-Object { "$($_.ExecutablePath)" -like "*Rebuild-Experimental*" }); $others = @($procs | Where-Object { "$($_.ExecutablePath)" -notlike "*Rebuild-Experimental*" })
         if (-not $mine.Count) {
-            if (-not $others.Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return $true } }
+            if (-not $others.Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild* -ErrorAction SilentlyContinue).Count) { return $true } }
             elseif (-not $Strict -and $others.Count -le $maxOthers -and ((Get-Date) - $t0).TotalMinutes -ge $grace) { $script:GpuShared += ("{0:HH:mm} shared with {1}" -f (Get-Date), (($others | ForEach-Object { Split-Path (Split-Path (Split-Path $_.ExecutablePath)) -Leaf }) -join ",")); return $true }
         }
         Start-Sleep 10
