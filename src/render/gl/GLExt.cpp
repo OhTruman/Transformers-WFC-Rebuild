@@ -494,6 +494,104 @@ int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words) {
 }
 void uniformCacheStats(unsigned long long& sent, unsigned long long& skipped) { sent = gUSent; skipped = gUSkipped; gUSent = gUSkipped = 0; }
 
+// ---- WFC_DRAWCOMBO=1 (DEV TOOL, Systems): every draw is keyed by program x the fixed-function state the driver may compile into
+// it (blend enable / funcs / equation, depth test / mask / func, cull / face, stencil, polygon offset, alpha-to-coverage, the
+// bound draw framebuffer, primitive, index type, entry point); a combination never seen before is logged once with the present
+// count (SwapBuffers calls since start; SLOWFRAME counts match frames only), the time and the call site (module-relative return address: symbolise with llvm-symbolizer or wfc_rebuild.map).
+// Drivers compile shader variants for new state combinations lazily at the first draw, and SwapBuffers waits on them: a stall
+// frame's "draw combo" lines name what to prewarm. The GL 1.1 draws (glDrawElements / glDrawArrays, OPENGL32 imports) are
+// hooked in the exe's import table, the extension draws through the function pointers; SwapBuffers is hooked to count frames.
+// Off: nothing installed. On: ~15 glGet* per draw (a diagnostics build, not for timing).
+namespace drawcombo {
+bool on() { static const bool v = std::getenv("WFC_DRAWCOMBO") != nullptr; return v; }
+struct Key {
+    GLint prog, blend, bsrc, bdst, bsrcA, bdstA, beq, depth, dmask, dfunc, cull, cface, stencil, poffset, a2c, fbo;
+    GLenum mode, type; int entry;
+    bool operator==(const Key& o) const { return std::memcmp(this, &o, sizeof(Key)) == 0; }
+};
+struct KeyHash {
+    size_t operator()(const Key& k) const {
+        const unsigned char* p = (const unsigned char*)&k; size_t h = 1469598103934665603ull;
+        for (size_t i = 0; i < sizeof(Key); ++i) { h ^= p[i]; h *= 1099511628211ull; }
+        return h;
+    }
+};
+std::unordered_map<Key, int, KeyHash>* seen = nullptr;
+long frame = 0, combos = 0;
+std::chrono::steady_clock::time_point t0;
+const char* kEntry[] = {"DrawElements", "DrawArrays", "DrawElementsInstanced", "MultiDrawElementsIndirect"};
+GLint geti(GLenum e) { GLint v = 0; glGetIntegerv(e, &v); return v; }
+void note(int entry, GLenum mode, GLenum type, void* ra) {
+    Key k;
+    std::memset(&k, 0, sizeof k);   // padding too: the key is hashed / compared bytewise
+    k.prog = geti(0x8B8D);                                                      // GL_CURRENT_PROGRAM
+    k.blend = glIsEnabled(GL_BLEND);
+    if (k.blend) { k.bsrc = geti(0x80C9); k.bdst = geti(0x80C8); k.bsrcA = geti(0x80CB); k.bdstA = geti(0x80CA); k.beq = geti(0x8009); }
+    k.depth = glIsEnabled(GL_DEPTH_TEST);
+    k.dmask = geti(0x0B72); k.dfunc = k.depth ? geti(0x0B74) : 0;               // GL_DEPTH_WRITEMASK, GL_DEPTH_FUNC
+    k.cull = glIsEnabled(GL_CULL_FACE); k.cface = k.cull ? geti(0x0B45) : 0;    // GL_CULL_FACE_MODE
+    k.stencil = glIsEnabled(0x0B90); k.poffset = glIsEnabled(0x8037); k.a2c = glIsEnabled(0x809E);
+    k.fbo = geti(0x8CA6);                                                        // GL_DRAW_FRAMEBUFFER_BINDING
+    k.mode = mode; k.type = type; k.entry = entry;
+    if (!seen) seen = new std::unordered_map<Key, int, KeyHash>();
+    if (!seen->emplace(k, 1).second) return;
+    ++combos;
+    static const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
+    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    LOG_INFO("draw combo #%ld present %ld t %.3f: %s prog %d blend %d (%x %x %x %x eq %x) depth %d mask %d func %x cull %d (%x) "
+             "stencil %d poffset %d a2c %d fbo %d mode %x type %x at +0x%llx", combos, frame, t, kEntry[entry], k.prog, k.blend,
+             k.bsrc, k.bdst, k.bsrcA, k.bdstA, k.beq, k.depth, k.dmask, k.dfunc, k.cull, k.cface, k.stencil, k.poffset, k.a2c, k.fbo,
+             mode, type, (unsigned long long)((uintptr_t)ra - base));
+}
+typedef void(APIENTRY* PFN_DE)(GLenum, GLsizei, GLenum, const void*);
+typedef void(APIENTRY* PFN_DA)(GLenum, GLint, GLsizei);
+typedef BOOL(WINAPI* PFN_Swap)(HDC);
+PFN_DE rDE = nullptr; PFN_DA rDA = nullptr; PFN_Swap rSwap = nullptr;
+PFN_DrawElementsInstanced rDEI = nullptr; PFN_MultiDrawElementsIndirect rMDEI = nullptr;
+void APIENTRY tDE(GLenum m, GLsizei n, GLenum t, const void* i) { note(0, m, t, __builtin_return_address(0)); rDE(m, n, t, i); }
+void APIENTRY tDA(GLenum m, GLint f, GLsizei n) { note(1, m, 0, __builtin_return_address(0)); rDA(m, f, n); }
+void APIENTRY tDEI(GLenum m, GLsizei n, GLenum t, const void* i, GLsizei c) { note(2, m, t, __builtin_return_address(0)); rDEI(m, n, t, i, c); }
+void APIENTRY tMDEI(GLenum m, GLenum t, const void* i, GLsizei c, GLsizei s) { note(3, m, t, __builtin_return_address(0)); rMDEI(m, t, i, c, s); }
+BOOL WINAPI tSwap(HDC dc) { ++frame; return rSwap(dc); }
+template <class F> int patchImport(const char* name, F hook, F& original) {   // the exe's import slots for `name`
+    auto* b = (unsigned char*)GetModuleHandleW(nullptr);
+    auto* nt = (IMAGE_NT_HEADERS*)(b + ((IMAGE_DOS_HEADER*)b)->e_lfanew);
+    const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!dir.VirtualAddress) return 0;
+    int n = 0;
+    for (auto* imp = (IMAGE_IMPORT_DESCRIPTOR*)(b + dir.VirtualAddress); imp->Name; ++imp) {
+        if (!imp->OriginalFirstThunk) continue;
+        auto* names = (IMAGE_THUNK_DATA*)(b + imp->OriginalFirstThunk);
+        auto* slots = (IMAGE_THUNK_DATA*)(b + imp->FirstThunk);
+        for (; names->u1.AddressOfData; ++names, ++slots) {
+            if (IMAGE_SNAP_BY_ORDINAL(names->u1.Ordinal)) continue;
+            if (std::strcmp((const char*)((IMAGE_IMPORT_BY_NAME*)(b + names->u1.AddressOfData))->Name, name) != 0) continue;
+            if ((void*)slots->u1.Function == (void*)hook) continue;   // already ours (load() runs per renderer init)
+            DWORD old = 0;
+            if (!VirtualProtect(&slots->u1.Function, sizeof(void*), PAGE_READWRITE, &old)) continue;
+            original = (F)(void*)slots->u1.Function;
+            slots->u1.Function = (ULONG_PTR)(void*)hook;
+            VirtualProtect(&slots->u1.Function, sizeof(void*), old, &old);
+            ++n;
+        }
+    }
+    return n;
+}
+void install() {
+    if (!on()) return;
+    static bool imports = false;
+    if (!imports) {
+        imports = true;
+        t0 = std::chrono::steady_clock::now();
+        const int a = patchImport("glDrawElements", (PFN_DE)tDE, rDE), b = patchImport("glDrawArrays", (PFN_DA)tDA, rDA);
+        patchImport("SwapBuffers", (PFN_Swap)tSwap, rSwap);
+        LOG_INFO("WFC_DRAWCOMBO: on (import hooks glDrawElements %d, glDrawArrays %d)", a, b);
+    }
+    if (DrawElementsInstanced && DrawElementsInstanced != tDEI) { rDEI = DrawElementsInstanced; DrawElementsInstanced = tDEI; }
+    if (MultiDrawElementsIndirect && MultiDrawElementsIndirect != tMDEI) { rMDEI = MultiDrawElementsIndirect; MultiDrawElementsIndirect = tMDEI; }
+}
+}  // namespace drawcombo
+
 bool load() {
     bool ok = true;
 #define WFC_GL_LOAD(ret, name, args) \
@@ -506,7 +604,7 @@ bool load() {
 #undef WFC_GL_LOAD_OPT
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
-    if (ok) { installUniformCache(); installUploadCounters(); gltrace::install(); }
+    if (ok) { installUniformCache(); installUploadCounters(); gltrace::install(); drawcombo::install(); }
     {   // GL <-> Vulkan interop capability (optional Vulkan present / upscalers / ray tracing): logged once
         static bool logged = false;
         typedef const GLubyte*(APIENTRY* PFN_GetStringi)(GLenum, GLuint);

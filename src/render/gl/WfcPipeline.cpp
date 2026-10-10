@@ -711,6 +711,7 @@ void Pipeline::release() {
     for (GLuint* b : {&mdiVlmBo_, &bspMdi_.vlmBo}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     bspMdi_ = MdiSlot{};
     progTouchQueue_.clear();
+    releaseWarmTargets();
     // GL objects created lazily per pipeline that the reset below (*this = Pipeline()) would otherwise orphan at every
     // map unload (leak audit: the first-use touch target, pawn occlusion program / box / queries, the frame sprite
     // stream, the world depth prepass and touch programs, the instance texture)
@@ -1715,61 +1716,159 @@ void Pipeline::loadStep(const char* where) {
 #endif
 }
 
+static void setupAttribs();                            // (defined with the mesh upload below)
+
+void Pipeline::releaseWarmTargets() {
+    for (GLuint* f : {&warmSceneFbo_, &warmDistFbo_, &warmShadowFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
+    for (GLuint* t : {&warmSceneTex_, &warmSceneDepth_, &warmDistTex_, &warmDistDepth_, &warmShadowDepth_})
+        if (*t) { glDeleteTextures(1, t); *t = 0; }
+    for (int k = 0; k < 3; ++k) {
+        if (warmVao_[k]) { DeleteVertexArrays(1, &warmVao_[k]); warmVao_[k] = 0; }
+        for (GLuint* b : {&warmVbo_[k], &warmIbo_[k], &warmExtra_[k]}) if (*b) { DeleteBuffers(1, b); *b = 0; }
+    }
+}
+
+void Pipeline::warmPrograms(const std::vector<int>& queue) {
+    auto tex = [&](GLuint& t, GLint ifmt, GLenum fmt, GLenum type) {
+        glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
+        glTexImage2D(GL_TEXTURE_2D, 0, ifmt, 1, 1, 0, fmt, type, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    };
+    if (!warmSceneFbo_) {                                 // scene RGBA16F + D24, distortion RGBA8 + D24, shadow D24
+        tex(warmSceneTex_, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT); tex(warmSceneDepth_, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+        tex(warmDistTex_, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE); tex(warmDistDepth_, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+        tex(warmShadowDepth_, GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        GenFramebuffers(1, &warmSceneFbo_); BindFramebuffer(GL_FRAMEBUFFER, warmSceneFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, warmSceneTex_, 0);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, warmSceneDepth_, 0);
+        GenFramebuffers(1, &warmDistFbo_); BindFramebuffer(GL_FRAMEBUFFER, warmDistFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, warmDistTex_, 0);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, warmDistDepth_, 0);
+        GenFramebuffers(1, &warmShadowFbo_); BindFramebuffer(GL_FRAMEBUFFER, warmShadowFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, warmShadowDepth_, 0);
+        glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
+    }
+    // the program's kind: a variant of some base program, or a base (drawn as a static and as a skinned mesh)
+    enum Kind { kBase, kMdi, kInst, kDist, kShadow, kScreen };
+    std::vector<char> kind(progs_.size(), kBase);
+    for (const Program& B : progs_) {
+        auto mark = [&](int v, Kind k) { if (v >= 0 && (size_t)v < kind.size()) kind[(size_t)v] = (char)k; };
+        mark(B.mdiProg, kMdi); mark(B.instProg, kInst); mark(B.distProg, kDist); mark(B.shadowProg, kShadow); mark(B.screenProg, kScreen);
+    }
+    // the game's three vertex input layouts, as tiny VAOs of their own (no dependence on what is loaded yet):
+    // static meshes (setupAttribs 0-4), GPU-skinned (+ joints / weights 9, 10), world MDI (+ draw row 11, divisor 1)
+    if (!warmVao_[0]) {
+        const std::vector<float> zeros(3 * 14, 0.0f);
+        const uint32_t idx[3] = {0, 1, 2};
+        for (int k = 0; k < 3; ++k) {
+            GenVertexArrays(1, &warmVao_[k]); GenBuffers(1, &warmVbo_[k]); GenBuffers(1, &warmIbo_[k]);
+            BindVertexArray(warmVao_[k]);
+            BindBuffer(GL_ARRAY_BUFFER, warmVbo_[k]);
+            BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(zeros.size() * sizeof(float)), zeros.data(), GL_STATIC_DRAW);
+            BindBuffer(GL_ELEMENT_ARRAY_BUFFER, warmIbo_[k]);
+            BufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof idx, idx, GL_STATIC_DRAW);
+            setupAttribs();
+            if (k == 1) {
+                const std::vector<float> jw(3 * 8, 0.0f);
+                GenBuffers(1, &warmExtra_[k]); BindBuffer(GL_ARRAY_BUFFER, warmExtra_[k]);
+                BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(jw.size() * sizeof(float)), jw.data(), GL_STATIC_DRAW);
+                EnableVertexAttribArray(9);  VertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+                EnableVertexAttribArray(10); VertexAttribPointer(10, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
+            } else if (k == 2 && VertexAttribDivisor) {
+                const float row0 = 0.0f;
+                GenBuffers(1, &warmExtra_[k]); BindBuffer(GL_ARRAY_BUFFER, warmExtra_[k]);
+                BufferData(GL_ARRAY_BUFFER, sizeof row0, &row0, GL_STATIC_DRAW);
+                EnableVertexAttribArray(11); VertexAttribPointer(11, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
+                VertexAttribDivisor(11, 1);
+            }
+            BindVertexArray(0);
+        }
+    }
+    const GLuint vaoStatic = warmVao_[0], vaoSkin = warmVao_[1], vaoMdi = warmVao_[2];
+    GLint prevFbo = 0, prevProg = 0, vp[4];
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    glGetIntegerv(GL_VIEWPORT, vp);
+    const GLboolean depth = glIsEnabled(GL_DEPTH_TEST), blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
+    const bool loading = warmup_ || queue.size() > 16;    // a load's batch (in-match stragglers are not waited on)
+    auto slice = std::chrono::steady_clock::now();
+    auto blendOf = [&](int b) {
+        switch (b) {
+            case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
+            case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
+            case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
+            default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
+        }
+    };
+    auto drawWith = [&](GLuint fbo, GLuint vao, bool instanced) {
+        if (!vao) return;
+        BindFramebuffer(GL_FRAMEBUFFER, fbo);
+        glViewport(0, 0, 1, 1);
+        BindVertexArray(vao);
+        if (instanced && DrawElementsInstanced) DrawElementsInstanced(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*)0, 1);
+        else glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*)0);
+    };
+    glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL);
+    int drawn = 0;
+    for (int pi : queue) {
+        if (pi < 0 || (size_t)pi >= progs_.size() || !progs_[(size_t)pi].id) continue;
+        const Program& Pg = progs_[(size_t)pi];
+        const Kind k = (Kind)kind[(size_t)pi];
+        if (k == kScreen) continue;                        // (HUD chains: prewarmHudScreenEffects)
+        bindCommon(Pg, core::Mat4::identity());
+        if (Pg.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        switch (k) {
+            case kMdi: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoMdi, false); break;
+            case kInst: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoSkin, true); break;
+            case kDist: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE);
+                        drawWith(warmDistFbo_, vaoStatic, false); drawWith(warmDistFbo_, vaoSkin, false); break;
+            case kShadow: glDisable(GL_BLEND); glDepthMask(GL_TRUE); glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                          drawWith(warmShadowFbo_, vaoSkin, false);                       // the caster's shadow depth
+                          glEnable(GL_POLYGON_OFFSET_FILL); glPolygonOffset(1.0f, 1.0f);
+                          drawWith(warmSceneFbo_, vaoSkin, false);                        // the receiver depth prepass
+                          glDisable(GL_POLYGON_OFFSET_FILL); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); break;
+            default: blendOf(Pg.blend); drawWith(warmSceneFbo_, vaoStatic, false); drawWith(warmSceneFbo_, vaoSkin, false); break;
+        }
+        ++touchedPrograms_; ++drawn;
+        if (loading) glFinish();                           // the driver compiles on its own thread: wait here, inside the slice
+        if (std::chrono::steady_clock::now() - slice > std::chrono::milliseconds(25)) {
+            BindVertexArray(0);
+            loadStep("Render: program warm-up");           // presents a loading frame (no-op outside a load)
+            slice = std::chrono::steady_clock::now();
+        }
+    }
+    BindVertexArray(0);
+    glDepthMask(GL_TRUE);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    UseProgram((GLuint)prevProg);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    if (depth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    glx::uniformCacheForgetCurrent();
+    if (drawn > 16) LOG_INFO("wfc: program warm-up: %d programs drawn once in their contexts", drawn);
+}
+
 void Pipeline::touchNewTextures() {
-    // opt-in (WFC_PROGWARM=1): measured on a forced-cold cache (Streets 5 v 5) it adds 3-9 s of load for no in-match
-    // gain (worst frames 39 / 44 ms with it, 40 / 42 ms without); kept for other drivers / machines
-    static const bool offP = std::getenv("WFC_PROGWARM") == nullptr;
+    // Program warm-up (default on; WFC_NOPROGWARM=1 off; WFC_PROGWARM=1 kept as a no-op alias). AMD's GL driver
+    // compiles a program's hardware shaders lazily at its first draw, keyed on the vertex input layout, the target's
+    // formats and the blend / depth state, on a worker thread SwapBuffers then waits for (Systems' traces: 30-150 ms
+    // present stalls mid-match, every one at the first draw of a program). Each new program is drawn once per context
+    // the game draws it in - one triangle through a VAO of that kind (static world / GPU-skinned), its blend state, into
+    // a 1 x 1 scratch target of the real target's formats - so the compile happens here (during the load: time-sliced
+    // with loading frames). The scratch targets are never sampled or presented: the image is unchanged.
+    // (Was opt-in: an old Streets 5v5 measurement with a cold cache saw +3-9 s of load and, before the stalls were
+    // attributed, no change in the worst frames; its single GL_POINT with no vertex arrays also missed the real key.)
+    static const bool offP = std::getenv("WFC_NOPROGWARM") != nullptr;
     if (!progTouchQueue_.empty() && (offP || !fbo_)) progTouchQueue_.clear();
     if (!progTouchQueue_.empty()) {
-        // the driver finishes a program at its first draw, for the draw's state (render-target format, blend): each
-        // new program draws one point into the scene target (same format; cleared at the frame start, never
-        // presented as drawn here) with its own blend state
-        GLint prevFbo = 0, prevProg = 0, vp[4];
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
-        glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
-        glGetIntegerv(GL_VIEWPORT, vp);
-        const GLboolean depth = glIsEnabled(GL_DEPTH_TEST), blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
-        // a cold driver cache compiles here (~7 s for a whole map on the first run after a shader change): during a
-        // load it is time-sliced, the loading screen presenting every ~25 ms (the stall watchdog fires at 5 s)
         const std::vector<int> queue = std::move(progTouchQueue_);
         progTouchQueue_.clear();
-        auto bindTarget = [&] {
-            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
-            glViewport(0, 0, 1, 1);
-            glEnable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
-            BindVertexArray(postVao_);
-        };
-        bindTarget();
-        const bool loading = warmup_ || queue.size() > 16;   // a load's batch (in-match stragglers are not waited on)
-        auto slice = std::chrono::steady_clock::now();
-        for (int pi : queue) {
-            if (pi < 0 || (size_t)pi >= progs_.size() || !progs_[(size_t)pi].id) continue;
-            const Program& Pg = progs_[(size_t)pi];
-            bindCommon(Pg, core::Mat4::identity());
-            switch (Pg.blend) {
-                case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
-                case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
-                case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
-                default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
-            }
-            glDrawArrays(GL_POINTS, 0, 1);
-            ++touchedPrograms_;
-            if (loading) glFinish();                   // the driver compiles on its own thread: wait here, inside the slice
-            if (std::chrono::steady_clock::now() - slice > std::chrono::milliseconds(25)) {
-                BindVertexArray(0);
-                loadStep("Render: program warm-up");   // presents a loading frame (no-op outside a load)
-                bindTarget();
-                slice = std::chrono::steady_clock::now();
-            }
-        }
-        BindVertexArray(0);
-        glDepthMask(GL_TRUE);
-        UseProgram((GLuint)prevProg);
-        BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
-        glViewport(vp[0], vp[1], vp[2], vp[3]);
-        if (depth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
-        if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
-        if (cull) glEnable(GL_CULL_FACE);
+        warmPrograms(queue);
     }
     if (touchQueue_.empty()) return;
     static const bool off = std::getenv("WFC_NOTEXTOUCH") != nullptr;   // A/B
@@ -3348,6 +3447,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
         LOG_INFO("wfc batch stats: in draw order, consecutive runs: same program %d, same program + lightmap page %d (depth func 0x%x)",
                  runsProg, runsTex, (unsigned)depthFunc);
     }
+    prewarmHudScreenEffects();                         // (first-use driver work of the HUD chains, see there)
     touchNewTextures();                                // anything the world draw created
     glFinish();
     viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;
@@ -3573,6 +3673,7 @@ void Pipeline::drawHudScreenEffect() {
         BindVertexArray(0);
     }
     if (!sceneCopyFbo_) return;
+    if (hudPrewarm_) { glEnable(GL_SCISSOR_TEST); glScissor(0, 0, 1, 1); }   // (prewarm: one pixel, blit included)
     // the finished frame (default framebuffer) -> the scene-colour copy the material's SceneTexture reads
     BindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
@@ -3589,6 +3690,19 @@ void Pipeline::drawHudScreenEffect() {
     BindVertexArray(0);
     viewProj_ = vp;
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
+    if (hudPrewarm_) glDisable(GL_SCISSOR_TEST);
+}
+
+void Pipeline::prewarmHudScreenEffects() {
+    if (WFC_ENV("WFC_NOHUDPREWARM") || WFC_ENV("WFC_NOHUDFX")) return;
+    const int saved = hudEffect_;
+    const bool copied = sceneColorCopied_;
+    hudPrewarm_ = true;
+    for (int e = 0; e < 2; ++e) { hudEffect_ = e; drawHudScreenEffect(); }
+    hudPrewarm_ = false;
+    hudEffect_ = saved;
+    sceneColorCopied_ = copied;
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 // Exact skinned bounds, cheaply: a rigid vertex (one influence, weight exactly 1) skins to M p, so under any palette
@@ -5045,6 +5159,7 @@ void Pipeline::flushDynQueue() {
         }
     };
     const auto ts0 = std::chrono::steady_clock::now();
+    auto run = [&](bool incremental) {
     if (incremental) {                                   // the previous order: cast (with its blur) then draw, per record
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 0; cast(d); draw(d); }
     } else {
@@ -5063,6 +5178,59 @@ void Pipeline::flushDynQueue() {
         }
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }
+    }
+    };
+    // WFC_SHADOWORDERSHOT=<frame> (A/B pictures): that frame's characters are drawn in both orders from the same saved
+    // scene colour + depth; each result (the scene buffer before post, gamma 2.2 for viewing) is written next to the exe
+    // as shadoworder_previous.bmp / shadoworder_original.bmp; the frame then continues with the original order
+    static const long abFrame = std::getenv("WFC_SHADOWORDERSHOT") ? std::atol(std::getenv("WFC_SHADOWORDERSHOT")) : -1;
+    static bool abDone = false;
+    if (abFrame >= 0 && frameNo_ >= abFrame && !abDone && fbo_ && fbW_ > 0) {
+        abDone = true;
+        GLuint sFbo = 0, sCol = 0, sDep = 0;
+        GenFramebuffers(1, &sFbo); glGenTextures(1, &sCol); glGenTextures(1, &sDep);
+        glBindTexture(GL_TEXTURE_2D, sCol); glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, fbW_, fbH_, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+        glBindTexture(GL_TEXTURE_2D, sDep);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, fbW_, fbH_, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        BindFramebuffer(GL_FRAMEBUFFER, sFbo);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sCol, 0);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, sDep, 0);
+        auto copy = [&](GLuint from, GLuint to) {
+            BindFramebuffer(GL_READ_FRAMEBUFFER, from); BindFramebuffer(GL_DRAW_FRAMEBUFFER, to);
+            BlitFramebuffer(0, 0, fbW_, fbH_, 0, 0, fbW_, fbH_, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+        };
+        auto dump = [&](const char* path) {
+            flushInstances();
+            std::vector<float> px((size_t)fbW_ * fbH_ * 4);
+            BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+            glReadPixels(0, 0, fbW_, fbH_, GL_RGBA, GL_FLOAT, px.data());
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            const int stride = (fbW_ * 3 + 3) & ~3;
+            std::vector<uint8_t> out(54 + (size_t)stride * fbH_, 0);
+            auto le = [&](size_t o, uint32_t v) { for (int k = 0; k < 4; ++k) out[o + k] = (uint8_t)(v >> (8 * k)); };
+            out[0] = 'B'; out[1] = 'M'; le(2, (uint32_t)out.size()); le(10, 54); le(14, 40); le(18, (uint32_t)fbW_); le(22, (uint32_t)fbH_);
+            out[26] = 1; out[28] = 24; le(34, (uint32_t)(stride * fbH_));
+            for (int y = 0; y < fbH_; ++y)
+                for (int x = 0; x < fbW_; ++x)
+                    for (int c = 0; c < 3; ++c) {
+                        const float v = std::pow(std::min(std::max(px[((size_t)y * fbW_ + x) * 4 + (size_t)c], 0.0f), 1.0f), 1.0f / 2.2f);
+                        out[54 + (size_t)y * stride + (size_t)x * 3 + (size_t)(2 - c)] = (uint8_t)std::lround(v * 255.0f);
+                    }
+            if (FILE* f = std::fopen(path, "wb")) { std::fwrite(out.data(), 1, out.size(), f); std::fclose(f); }
+            LOG_INFO("wfc: shadow-order A/B frame %d: %zu queued characters -> %s", frameNo_, dynQueue_.size(), path);
+        };
+        copy(fbo_, sFbo);                                // the scene before the characters
+        run(true);
+        dump("shadoworder_previous.bmp");
+        copy(sFbo, fbo_);                                // back to the same scene
+        maskClearedFrame_ = -1; maskDrawnFrame_ = -1; depthDirty_ = true;
+        run(false);
+        dump("shadoworder_original.bmp");
+        DeleteFramebuffers(1, &sFbo); glDeleteTextures(1, &sCol); glDeleteTextures(1, &sDep);
+    } else {
+        run(incremental);
     }
     dynQueue_.clear();
     skinDraw_ = sk0; skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;

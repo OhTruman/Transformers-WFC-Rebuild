@@ -808,6 +808,18 @@ private:
     }
     void shadowRectCheck(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, const ShadowRequest& rq);
     bool forceFullShadowClear_ = false;                   // (WFC_SHADOWRECTCHECK's reference pass)
+    // HUD screen-effect chains drawn once at map load, limited to pixel (0, 0) of the default framebuffer (the next frame
+    // overwrites it): their quad buffers, the scene-copy blit and the first draw of each program with its state happen
+    // during the load, not at the first LowHealth / StaticDischarge in a match (Systems' trace: a 27 ms present stall
+    // right after LowHealth first appeared). WFC_NOHUDPREWARM=1 = first use in the match.
+    bool hudPrewarm_ = false;
+    void prewarmHudScreenEffects();
+    // program warm-up targets (1 x 1, the formats of the scene / distortion / shadow-depth targets) and their release
+    GLuint warmSceneFbo_ = 0, warmSceneTex_ = 0, warmSceneDepth_ = 0, warmDistFbo_ = 0, warmDistTex_ = 0, warmDistDepth_ = 0;
+    GLuint warmShadowFbo_ = 0, warmShadowDepth_ = 0;
+    GLuint warmVao_[3] = {0, 0, 0}, warmVbo_[3] = {0, 0, 0}, warmIbo_[3] = {0, 0, 0}, warmExtra_[3] = {0, 0, 0};   // static / skinned / MDI
+    void warmPrograms(const std::vector<int>& queue);
+    void releaseWarmTargets();
     // Projected shadows in the original's order (FIDELITY.md ShadowMask rows, CONFIRMED ORIGINAL: the mask is cleared once,
     // every projected shadow multiplies into it, one resolve + BlurShadowMask, then the characters' base pass reads it).
     // GPU-skinned shadow-casting dynamic draws are queued in call order and flushed (flushDynQueue) at the next pass
