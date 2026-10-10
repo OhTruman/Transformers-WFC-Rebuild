@@ -2744,6 +2744,7 @@ float Pipeline::viewDepth(const core::Vec3& p) const {
 }
 
 void Pipeline::flushTranslucency() {
+    flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
     if (transQueue_.empty()) return;
     std::stable_sort(transQueue_.begin(), transQueue_.end(),
                      [](const TransItem& a, const TransItem& b) { return a.key > b.key; });   // far -> near
@@ -2836,7 +2837,26 @@ void Pipeline::flushTranslucency() {
         }
     }
     size_t gi = 0;
+    // WFC_TRANSPROF=1 (diagnostics): every 240th frame, a GPU timestamp before each item; the intervals are summed per
+    // material and the top ones logged (that frame stalls on the readback)
+    static const bool transProf = std::getenv("WFC_TRANSPROF") != nullptr && QueryCounter && GetQueryObjectui64v;
+    const bool tpFrame = transProf && frameNo_ % 240 == 0;
+    static std::vector<GLuint> tpQ;
+    std::vector<std::string> tpName;
+    auto tpStamp = [&](const std::string& name) {
+        if (!tpFrame) return;
+        if (tpQ.size() <= tpName.size()) { const size_t o = tpQ.size(); tpQ.resize(o + 256); GenQueries(256, &tpQ[o]); }
+        QueryCounter(tpQ[tpName.size()], 0x8E28);
+        tpName.push_back(name);
+    };
+    auto itemName = [&](size_t i) -> std::string {
+        if (const SpriteBatch* b = batchOf(i)) return "sprites " + b->mat;
+        const TransSub& t = transSubs_[(size_t)q[i].idx];
+        const GpuMesh& g = meshes_[(size_t)t.meshIdx];
+        return (size_t)t.sub < g.subs.size() ? "mesh " + g.subs[(size_t)t.sub].matName : std::string("mesh ?");
+    };
     for (size_t i = 0; i < q.size(); ++i) {
+        if (tpFrame) tpStamp(itemName(i));
         if (!noStream && batchOf(i)) {                     // a sprite group from the frame stream
             const Group& gr = groups[gi++];
             if (gr.prog >= 0 && gr.quads > 0) {
@@ -2868,6 +2888,28 @@ void Pipeline::flushTranslucency() {
         std::fill(dynParam_, dynParam_ + 4, 1.0f);
         ++statSpriteBatches_; statSpriteMerged_ += (int)(j - i - 1);
         i = j - 1;
+    }
+    if (tpFrame && !tpName.empty()) {
+        tpStamp("(end)");
+        std::map<std::string, std::pair<double, int>> agg;
+        double total = 0;
+        for (size_t k = 0; k + 1 < tpName.size(); ++k) {
+            unsigned long long a = 0, b = 0;
+            GetQueryObjectui64v(tpQ[k], 0x8866, &a); GetQueryObjectui64v(tpQ[k + 1], 0x8866, &b);
+            const double ms = (double)(b - a) / 1.0e6;
+            agg[tpName[k]].first += ms; ++agg[tpName[k]].second; total += ms;
+        }
+        std::vector<std::pair<double, std::string>> top;
+        for (const auto& kv : agg) top.push_back({kv.second.first, kv.first});
+        std::sort(top.rbegin(), top.rend());
+        std::string s;
+        for (size_t k = 0; k < top.size() && k < 10; ++k) {
+            char buf[220];
+            std::snprintf(buf, sizeof buf, "\n    %.3f ms  %3d items  %s", top[k].first, agg[top[k].second].second,
+                          top[k].second.substr(top[k].second.size() > 90 ? top[k].second.size() - 90 : 0).c_str());
+            s += buf;
+        }
+        LOG_INFO("TRANSPROF frame %d: translucency %.3f ms GPU over %zu items; top:%s", frameNo_, total, tpName.size() - 1, s.c_str());
     }
     q.clear(); transSubs_.clear(); spriteUsed_ = 0;     // capacities kept for the next frame
     flushingTrans_ = false;
@@ -4601,6 +4643,7 @@ void Pipeline::ensurePawnOcclusionProgram() {
 }
 
 void Pipeline::pawnOcclusionQueries() {
+    flushDynQueue();                                   // the queries test against the characters' depth too
     ensurePawnOcclusionProgram();
     if (!occProg_) return;
     flushInstances();
@@ -4925,6 +4968,22 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     // must not cast or depth-write its whole silhouette)
     inDynamicDraw_ = true;
     poseBlend_ = blend ? 1 : 0; poseAlpha_ = blend ? alpha : 1.0f;
+    if (charDeferOn() && !flushingDyn_ && skinDraw_ && envSamples_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS") && !warmup_) {
+        DynDraw d;                                       // cast + draw at the next pass boundary (flushDynQueue)
+        d.g = &g; d.vao = g.vao; d.model = model; d.sk = *skinDraw_;
+        d.skinMode = skinMode_; d.skinRow = skinRow_; d.skinBones = skinBones_; d.skinAlpha = skinAlpha_;
+        d.poseBlend = poseBlend_; d.poseAlpha = poseAlpha_;
+        d.envSamples = envSamples_; d.envForm = envForm_; d.envC = envBoundsCenter_; d.envE = envBoundsExtent_;
+        d.owner = drawOwner_; d.hasParams = drawParams_ != nullptr; if (drawParams_) d.params = *drawParams_;
+        std::copy(fxColor_, fxColor_ + 4, d.fxColor); std::copy(dynParam_, dynParam_ + 4, d.dynParam);
+        d.occluded = occluded;
+        dynQueue_.push_back(std::move(d));
+        poseBlend_ = 0; poseAlpha_ = 1.0f;
+        inDynamicDraw_ = false;
+        envSamples_ = nullptr;
+        envForm_ = -1;
+        return;
+    }
     if (envSamples_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         const auto ts0 = std::chrono::steady_clock::now();
@@ -4942,6 +5001,75 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     dynamicMaskDraw_ = false;
     envSamples_ = nullptr;
     envForm_ = -1;
+}
+
+bool Pipeline::charDeferOn() const {
+    static const bool on = [] { const char* e = std::getenv("WFC_CHARDEFER"); return !(e && e[0] == '0'); }();
+    return on;
+}
+
+void Pipeline::restoreDynDraw(const DynDraw& d) {
+    static thread_local SkinDraw sk;                    // (skinDraw_ pointed at drawSkinned's stack copy)
+    sk = d.sk; skinDraw_ = &sk;
+    d.g->vao = d.vao;
+    skinMode_ = d.skinMode; skinRow_ = d.skinRow; skinBones_ = d.skinBones; skinAlpha_ = d.skinAlpha;
+    poseBlend_ = d.poseBlend; poseAlpha_ = d.poseAlpha;
+    envSamples_ = d.envSamples; envForm_ = d.envForm; envBoundsCenter_ = d.envC; envBoundsExtent_ = d.envE;
+    drawOwner_ = d.owner; drawParams_ = d.hasParams ? &d.params : nullptr;
+    std::copy(d.fxColor, d.fxColor + 4, fxColor_); std::copy(d.dynParam, d.dynParam + 4, dynParam_);
+    inDynamicDraw_ = true;
+}
+
+void Pipeline::flushDynQueue() {
+    if (dynQueue_.empty() || flushingDyn_) return;
+    flushingDyn_ = true;
+    // the caller's per-draw state around the flush (the flush may run inside another draw call's setup)
+    const SkinDraw* sk0 = skinDraw_; const int sm0 = skinMode_, sr0 = skinRow_, sb0 = skinBones_; const float sa0 = skinAlpha_;
+    const int pb0 = poseBlend_; const float pa0 = poseAlpha_; const auto* es0 = envSamples_; const int ef0 = envForm_;
+    const core::Vec3 ec0 = envBoundsCenter_, ee0 = envBoundsExtent_; const int ow0 = drawOwner_; const auto* dp0 = drawParams_;
+    float fc0[4], dy0[4]; std::copy(fxColor_, fxColor_ + 4, fc0); std::copy(dynParam_, dynParam_ + 4, dy0);
+    const bool idd0 = inDynamicDraw_, dmd0 = dynamicMaskDraw_;
+    static const bool incrementalEnv = std::getenv("WFC_SHADOWINCREMENTAL") != nullptr;
+    static const bool alternate = std::getenv("WFC_SHADOWORDERALT") != nullptr;   // A/B pictures: odd frames the previous order
+    const bool incremental = incrementalEnv || (alternate && (frameNo_ & 1));
+    auto cast = [&](const DynDraw& d) {
+        ShadowProjector scratch;
+        if (const ShadowProjector* p = projectorFor(d.envForm, scratch)) castCharacterShadow(*d.g, d.model, *p);
+    };
+    auto draw = [&](const DynDraw& d) {
+        dynamicMaskDraw_ = d.envSamples != nullptr;
+        if (!d.occluded) {
+            const auto td = std::chrono::steady_clock::now();
+            drawSubs(*d.g, d.model, true);
+            gStats.dynDrawMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td).count();
+        }
+    };
+    const auto ts0 = std::chrono::steady_clock::now();
+    if (incremental) {                                   // the previous order: cast (with its blur) then draw, per record
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 0; cast(d); draw(d); }
+    } else {
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 1; cast(d); }   // every receiver's depth
+        shadowPhase_ = 0;
+        ensureSceneDepth();                              // one scene-depth copy
+        phaseProjected_ = false;
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
+        shadowPhase_ = 0;
+        if (phaseProjected_) {                           // one resolve + blur (only if anything was drawn), as the original
+            blurShadowMask(nullptr);
+            UseProgram(0);
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            glViewport(0, 0, vpW_, vpH_);
+            glDepthFunc(GL_LEQUAL);
+        }
+        gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }
+    }
+    dynQueue_.clear();
+    skinDraw_ = sk0; skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;
+    poseBlend_ = pb0; poseAlpha_ = pa0; envSamples_ = es0; envForm_ = ef0; envBoundsCenter_ = ec0; envBoundsExtent_ = ee0;
+    drawOwner_ = ow0; drawParams_ = dp0; std::copy(fc0, fc0 + 4, fxColor_); std::copy(dy0, dy0 + 4, dynParam_);
+    inDynamicDraw_ = idd0; dynamicMaskDraw_ = dmd0;
+    flushingDyn_ = false;
 }
 
 // ------------------------------------------------------------------------- effects
@@ -5379,6 +5507,7 @@ void Pipeline::ensureTargets(int w, int h) {
 }
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
+    flushDynQueue();                                   // (normally empty here)
     flushInstances();
     instCursor_ = 0;
     gInstPipeline = this;
@@ -5534,6 +5663,7 @@ void Pipeline::drawCanvasTiles() {
 }
 
 void Pipeline::endFrame() {
+    flushDynQueue();
     shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
     {

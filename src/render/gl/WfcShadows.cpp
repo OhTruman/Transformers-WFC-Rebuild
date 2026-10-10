@@ -484,6 +484,7 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
     float screenRadius = std::max(0.5f * (float)vpW_ * camProj_.m[0], 0.5f * (float)vpH_ * camProj_.m[5]) * R /
                          std::max(clipW, 1.0f * kUU);
     rq.res = shadowResolution(screenRadius, p.minRes, p.maxRes);
+    if (shadowMathOnly_) return true;                     // (castCharacterShadow phase 1: the request decides the gates)
     const int Res = shadowDepthResolution(kMaxShadowResolution);
     if (!shadowFbo_) {
         GenFramebuffers(1, &shadowFbo_);
@@ -605,6 +606,21 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     if (const char* ov = WFC_ENV("WFC_SUBJECTRELEVANCE")) rel = (uint32_t)std::strtoul(ov, nullptr, 16);   // gate tests
     if ((rel & 7u) == 0) { ++statShadowGated_; return; }               // neither relevant nor visible
     ShadowRequest rq;
+    static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;   // (projectSubjectShadow stamps 4 more)
+    if (shadowPhase_ == 1) {                              // receiver depth only (the same gates as the projection)
+        shadowMathOnly_ = true;
+        const bool ok = renderShadowDepth(g, model, p, rq);
+        shadowMathOnly_ = false;
+        if (ok && shadowProjectionAllowed(rel, 0)) depthPrepass(g, model);
+        return;
+    }
+    if (shadowPhase_ == 2) {                              // shadow depth + projection into the shared mask
+        if (!renderShadowDepth(g, model, p, rq)) return;
+        if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }
+        projectSubjectShadow(p, rq, fullPasses, true);
+        phaseProjected_ = true;
+        return;
+    }
     const bool sg = shadowGpuFrame();
     const size_t sg0 = sgN_;
     if (sg) shadowGpuStamp();
@@ -613,7 +629,6 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
     if (sg) shadowGpuStamp();
     depthPrepass(g, model);
     if (sg) shadowGpuStamp();
-    static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;   // (projectSubjectShadow stamps 4 more)
     static const bool rectCheck = std::getenv("WFC_SHADOWRECTCHECK") != nullptr;
     projectSubjectShadow(p, rq, fullPasses);
     if (sg) { if (sgN_ - sg0 == kSgStamps) ++sgSubjects_; else sgN_ = sg0; }
@@ -651,7 +666,7 @@ void Pipeline::shadowRectCheck(GpuMesh& g, const core::Mat4& model, const Shadow
                  rectChecks_, rectDiffs_, rectMaxTexels_, rectMaxAbs_);
 }
 
-void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses) {
+void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowRequest& rq, bool fullPasses, bool shared) {
     // Every per-subject pass only changes (or reads) pixels inside the shadow volume's screen rect: the scene-depth
     // copy, the mask depth fill, the stencil volume + its clear, and the blur (whose taps reach <= 4 mask texels per
     // pass: recomputed over the rect + 8). Outside it the inputs are unchanged, so the result is identical to the
@@ -689,7 +704,8 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
         }
     }
     const bool firstThisFrame = maskDrawnFrame_ != frameNo_;
-    if (!useRect) ensureSceneDepth();
+    if (shared) {}                                         // (the flush copied the scene depth once for all subjects)
+    else if (!useRect) ensureSceneDepth();
     else if (depthDirty_ && depthCopyFbo_) {                 // copy only the rect (the copy stays dirty for others)
         const int fx = (fbW_ + maskW_ - 1) / maskW_, fy = (fbH_ + maskH_ - 1) / maskH_;
         const int x0 = std::max(0, mr[0] * fx - fx), y0 = std::max(0, mr[1] * fy - fy);
@@ -748,7 +764,7 @@ void Pipeline::projectSubjectShadow(const ShadowProjector& p, const ShadowReques
     ActiveTexture(GL_TEXTURE0);
     // FinishRenderingShadowMask (resolve) + BlurShadowMask: the blurred mask is rebuilt from the full
     // product of this frame's projections each time one is added (only where it can have changed)
-    blurShadowMask(useRect && !firstThisFrame ? mr : nullptr);
+    if (!shared) blurShadowMask(useRect && !firstThisFrame ? mr : nullptr);   // (shared: one blur after all subjects)
     shadowGpuStamp();                                        // (after the blur)
     UseProgram(0);
     maskDrawnFrame_ = frameNo_;

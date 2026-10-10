@@ -1392,6 +1392,7 @@ void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
 }
 
 void Pipeline::drawMapPresentation() {
+    flushDynQueue();                                   // characters before the map presentation (pass order)
     if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
     if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
