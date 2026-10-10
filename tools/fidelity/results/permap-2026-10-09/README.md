@@ -67,3 +67,7 @@ data of 37eec59 by junction - tools/render differences between them are packagin
 - 2040e9a (Rendering 6cf1a53: c17eee7's cull restored as default, readback opt-in, prepack kept) vs c17eee7, real play 64p 4K at
   150 s, 2 reps: Rust 3.55 / 3.43 vs 3.55 / 3.45; Seed 3.02 / 3.30 MET vs 3.32 / 3.06; Gorge 3.62 / 3.17 vs 3.56 / 3.49;
   world-pass CPU 0.40-0.60 ms on both - the c969c84 regression is fixed.
+- 47726bc (bucket cut + cheaper cull + GFx state shadow), A/B by env, 64p, 2 reps: Rust overview 1080 new buckets 3.48 / 3.54 vs
+  old 3.88 / 3.92 (GPU 2.19-2.24 vs 2.54-2.62, half the slow frames); Rust real play 4K 3.36 / 3.62 vs 3.38 / 3.84; Gorge real play
+  4K 3.44 / 3.33 vs 2.95* / 3.39 (*anomalously quiet match, 29 slow frames); cheaper cull no measurable p90 effect (3.33 vs 3.34);
+  HUD state shadow 1 rep inconclusive (3.78 on vs 3.51 off). SLOWFRAME parser fixed for the extended gpu field (85a6032).
