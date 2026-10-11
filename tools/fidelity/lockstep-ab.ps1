@@ -9,10 +9,11 @@
 # Lockstep caveat: the sim cost per frame is a fixed step, not free-running play - use it for A/Bs, not for the absolute verdict.
 #
 #   .\tools\fidelity\lockstep-ab.ps1 -OutDir <dir> -Map 510 -Arms "new|work\ab\m9c_47726bc|","old|work\ab\m9c_47726bc|WFC_NOLMARRAYS=1"
-#        [-Seed 1234] [-Steps 9000] [-From 1800] [-RenderSize 3840x2160] [-PlayerBot 1] [-Reps 1]
+#        [-Seed 1234] [-Steps 9000] [-From 1800] [-RenderSize 3840x2160] [-PlayerBot 1] [-Reps 1] [-Batching: the arms after the first are a
+#        declared batching / state-sort change - a binds drop <= 10 % is excused, see below]
 param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$Map, [Parameter(Mandatory)][string[]]$Arms,
       [int]$Seed = 1234, [int]$Steps = 9000, [int]$From = 1800, [string]$RenderSize = "", [int]$PlayerBot = 1, [int]$Reps = 1,
-      [int]$Bots = 32, [switch]$ReportOnly)
+      [int]$Bots = 32, [switch]$Batching, [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -86,6 +87,17 @@ foreach ($r in $rows) {
         [Math]::Abs($r.occ_tested - $ref.occ_tested) / $ref.occ_tested -le 0.005 -and [Math]::Sign($r.draws_dyn - $ref.draws_dyn) -eq -[Math]::Sign($r.occ_skipped - $ref.occ_skipped)) {
         $parity = $true
         $occNote = " (dyn {0} vs {1} excused: pawn-occlusion skips {2} vs {3}, pawns tested {4} vs {5})" -f $r.draws_dyn, $ref.draws_dyn, $r.occ_skipped, $ref.occ_skipped, $r.occ_tested, $ref.occ_tested
+    }
+    # binds by a declared batching / state-sort commit (Integration 2026-10-11, regress 9be437d -> 9c3560e: d8c6720's skin palette batching cut
+    # binds 3-5 % on 501-503 with the scene unchanged). Only with -Batching (the caller declares the head a batching change), the same match,
+    # binds DOWN by at most 10 %, non-dyn draws and fx in parity and the same characters in view (pawns tested within 0.5 %). Dyn draws are
+    # character draws, which batching and occlusion skips both lower, so dyn may only fall. Scored PASS(excused) with the deltas printed.
+    if (-not $parity -and $Batching -and $sameMatch -and $r -ne $ref -and $r.binds -lt $ref.binds -and ($ref.binds - $r.binds) / [Math]::Max(1, $ref.binds) -le 0.10 -and
+        (& $par ($r.draws - $r.draws_dyn) ($ref.draws - $ref.draws_dyn)) -and (& $par $r.draws_fx $ref.draws_fx) -and $r.draws_dyn -le $ref.draws_dyn -and
+        $r.occ_tested -gt 0 -and $ref.occ_tested -gt 0 -and [Math]::Abs($r.occ_tested - $ref.occ_tested) / $ref.occ_tested -le 0.005) {
+        $parity = $true
+        $occNote += " PASS(excused): declared batching - binds {0} -> {1} ({2:+0.0;-0.0} %), dyn {3} -> {4}, non-dyn draws {5} vs {6}, pawns tested {7} vs {8}" -f $ref.binds, $r.binds,
+            (100.0 * ($r.binds - $ref.binds) / $ref.binds), $ref.draws_dyn, $r.draws_dyn, ($r.draws - $r.draws_dyn), ($ref.draws - $ref.draws_dyn), $r.occ_tested, $ref.occ_tested
     }
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
     $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity) { "UNKNOWN" } else { "PASS" }

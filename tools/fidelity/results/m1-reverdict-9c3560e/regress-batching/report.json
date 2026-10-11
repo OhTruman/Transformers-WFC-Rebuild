@@ -1,0 +1,63 @@
+﻿{
+    "summary":  {
+                    "pass":  8,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "regress.501",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.24 vs base 2.31 (best valid of 2 runs each; delta -0.07 ms; BLOCK above +0.15); PASS(excused) binds: head.r1 binds 873 -\u003e 831 (-4.8 %), head.r2 binds 869 -\u003e 826 (-4.9 %)"
+                    },
+                    {
+                        "id":  "regress.502",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.01 vs base 2.01 (best valid of 2 runs each; delta +0.00 ms; BLOCK above +0.15); PASS(excused) binds: head.r1 binds 624 -\u003e 600 (-3.8 %), head.r2 binds 625 -\u003e 602 (-3.7 %)"
+                    },
+                    {
+                        "id":  "regress.503",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.37 vs base 2.48 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15); PASS(excused) binds: head.r1 binds 868 -\u003e 841 (-3.1 %), head.r2 binds 868 -\u003e 841 (-3.1 %)"
+                    },
+                    {
+                        "id":  "regress.504",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.58 vs base 2.67 (best valid of 2 runs each; delta -0.09 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.507",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.38 vs base 2.29 (best valid of 2 runs each; delta +0.09 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.508",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.09 vs base 2.2 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15); PASS(excused) binds: head.r1 binds 872 -\u003e 843 (-3.3 %)"
+                    },
+                    {
+                        "id":  "regress.509",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.77 vs base 2.88 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.510",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.59 vs base 2.72 (best valid of 2 runs each; delta -0.13 ms; BLOCK above +0.15)"
+                    }
+                ]
+}

@@ -9,9 +9,10 @@
 #
 #   .\tools\fidelity\regress-8map.ps1 -Base work\ab\<baseline> -Head work\ab\<head> -OutDir <dir> [-Maps 501,...] [-Steps 9600]
 #     [-BaseEnv / -HeadEnv "K=V;K=V"]: per-arm switches, e.g. -HeadEnv WFC_NOFORCEDDIR=1 holds a known sim change out of a renderer check
+#     [-Batching]: the head is a declared batching / state-sort change - lockstep-ab excuses a binds drop <= 10 % (map shown PASS(excused))
 param([Parameter(Mandatory)][string]$Base, [Parameter(Mandatory)][string]$Head, [Parameter(Mandatory)][string]$OutDir,
       [string[]]$Maps = @("501", "502", "503", "504", "507", "508", "509", "510"), [int]$Steps = 9600, [int]$From = 600,
-      [string]$RenderSize = "3840x2160", [double]$Block = 0.15, [int]$Seed = 1234, [string]$BaseEnv = "", [string]$HeadEnv = "", [switch]$ReportOnly)
+      [string]$RenderSize = "3840x2160", [double]$Block = 0.15, [int]$Seed = 1234, [string]$BaseEnv = "", [string]$HeadEnv = "", [switch]$Batching, [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })
@@ -25,6 +26,7 @@ foreach ($m in $Maps) {
     $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ab, "-OutDir", $d, "-Map", $m, "-Arms", "base|$Base|$BaseEnv;;head|$Head|$HeadEnv",
               "-Steps", "$Steps", "-From", "$From", "-RenderSize", $RenderSize, "-PlayerBot", "1", "-Reps", "2", "-Seed", "$Seed")
     if ($ReportOnly) { $args += "-ReportOnly" }
+    if ($Batching) { $args += "-Batching" }
     & powershell @args | Set-Content -Encoding UTF8 (Join-Path $OutDir "map-$m.out")
     $rep = Join-Path $d "report.json"; $csv = Join-Path $d "lockstep.csv"
     if (-not (Test-Path $rep) -or -not (Test-Path $csv)) { Res "$m" "UNKNOWN" "no lockstep result" "Experimental"; $table.Add("| $m | - | - | - | UNKNOWN | no result |"); continue }
@@ -39,8 +41,12 @@ foreach ($m in $Maps) {
         $table.Add("| $m | $b | $h | - | UNKNOWN | $($bad -join '; ') |"); continue
     }
     $delta = [Math]::Round($h - $b, 2); $st = if ($delta -gt $Block) { "FAIL" } else { "PASS" }
-    Res "$m" $st ("head p90 {0} vs base {1} (best valid of 2 runs each; delta {2:+0.00;-0.00} ms; BLOCK above +{3}){4}" -f $h, $b, $delta, $Block, $(if ($bad.Count) { "; invalid runs: " + ($bad -join "; ") } else { "" })) "Rendering"
-    $table.Add(("| {0} | {1} | {2} | {3:+0.00;-0.00} | {4} | {5} |" -f $m, $b, $h, $delta, $(if ($st -eq "FAIL") { "**BLOCK**" } else { "PASS" }), ($bad -join '; ')))
+    # -Batching: runs whose binds drop was excused stay visible - PASS(excused) with each run's binds delta
+    $exc = @($rr | Where-Object { $_.status -eq "PASS" -and $_.id -match '^lockstep\.' -and "$($_.note)".Contains("PASS(excused)") } |
+             ForEach-Object { "$($_.id -replace '^lockstep\.', '') " + [regex]::Match("$($_.note)", 'binds \d+ -> \d+ \([^)]*\)').Value })
+    $notes = @($bad) + @($(if ($exc.Count) { "excused (declared batching): " + ($exc -join ", ") }))
+    Res "$m" $st ("head p90 {0} vs base {1} (best valid of 2 runs each; delta {2:+0.00;-0.00} ms; BLOCK above +{3}){4}{5}" -f $h, $b, $delta, $Block, $(if ($bad.Count) { "; invalid runs: " + ($bad -join "; ") } else { "" }), $(if ($exc.Count) { "; PASS(excused) binds: " + ($exc -join ", ") } else { "" })) "Rendering"
+    $table.Add(("| {0} | {1} | {2} | {3:+0.00;-0.00} | {4} | {5} |" -f $m, $b, $h, $delta, $(if ($st -eq "FAIL") { "**BLOCK**" } elseif ($exc.Count) { "PASS(excused)" } else { "PASS" }), ($notes -join '; ')))
 }
 if ($BaseEnv -or $HeadEnv) { $table.Insert(0, "Arm switches: base '$BaseEnv', head '$HeadEnv'`n") }
 $table | Set-Content -Encoding UTF8 (Join-Path $OutDir "REGRESSION.md")

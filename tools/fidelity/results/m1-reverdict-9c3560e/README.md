@@ -21,8 +21,14 @@ No CONTAMINATED rows; no leftover Experimental exes. Memory start / end: commit 
 Every row is the same match (SIMHASH identical over steps 600-9600). The UNKNOWNs are the workload-parity gate (counts within 3 %):
 d8c6720 lowers the counts by design, so a renderer change that batches cannot pass a count gate. Program binds -2.6..-4.8 %
 (501 873 -> 831, 502 624 -> 600, 503 868 -> 841, 508 872 -> 843), dyn draws -7..-10 %, total draws -0.8..-1.3 %, fx draws equal.
-The pawn-occlusion excuse covers dyn only, so it does not apply when binds move too. Raw p90 is equal or lower on all three maps. The gate is
-left as it is: whether a batching change may relax the binds check is for Integration to decide.
+The pawn-occlusion excuse covers dyn only, so it does not apply when binds move too. Raw p90 is equal or lower on all three maps.
+
+**Re-scored with the batching excuse (Integration decision, same logs, `-ReportOnly -Batching`): 8 PASS, 0 UNKNOWN** (`regress-batching/`).
+The excuse applies only when the caller declares the head a batching / state-sort change with `-Batching`. It also needs: an identical
+SIMHASH, binds down by no more than 10 %, non-dyn draws and fx within 3 %, the same characters in view (pawns tested within 0.5 %), and
+dyn draws not rising. The rows are shown as PASS(excused) with their binds delta:
+501 873 -> 831 (-4.8 %) / 869 -> 826 (-4.9 %); 502 -3.8 / -3.7 %; 503 -3.1 / -3.1 %; 508 r1 -3.3 %. Non-dyn draws matched within 1 draw
+(501 1124 vs 1123, 502 717 vs 718, 503 1235 vs 1235). Without `-Batching` the same logs still score 5 PASS / 3 UNKNOWN.
 
 ## (2) Gorge real play 4K, 300 s x3, each <= 3.33: MISS (1 of 3)
 
