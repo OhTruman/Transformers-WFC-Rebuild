@@ -1393,7 +1393,11 @@ void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
 
 void Pipeline::drawMapPresentation() {
     flushDynQueue();                                   // characters before the map presentation (pass order)
-    if (pawnOcclusionOn()) pawnOcclusionQueries();    // characters are all drawn: test their boxes against the depth
+    if (pawnOcclusionOn()) {
+        const double tp = fxSubCpuOn() ? fxSubNowMs() : 0.0;
+        pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
+        if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;
+    }
     if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
     // WFC_MAPFXPROF=1 (diagnostics): average CPU ms per frame of this function's sections, logged every 600 frames
@@ -1406,6 +1410,7 @@ void Pipeline::drawMapPresentation() {
         const double ms = std::chrono::duration<double, std::milli>(now - secT).count();
         secMs[k] += ms;
         secT = now;
+        if (fxSubCpuOn()) gFxSub.ms[k <= 1 ? FxSubCpu::MapProps : k == 2 ? FxSubCpu::MapBuild : FxSubCpu::MapReplay] += ms;
         static int spikes = 0;                         // a section over 10 ms (first-use work) is named, a few times
         if (ms > 10.0 && spikes++ < 12) {
             static const char* kName[5] = {"props", "pickups", "particle build", "replay", "?"};
@@ -2134,12 +2139,15 @@ void Pipeline::drawMapPresentation() {
         for (double& v : secMs) v = 0; secFrames = 0;
     }
     glx::gpuMark(glx::kPassMapFx);
+    const double tMotion = fxSubCpuOn() ? fxSubNowMs() : 0.0;
     motionCameraPass();                                // optional motion vectors: static geometry (opaque depth)
     motionObjectPass();                                // ... and the characters' own motion over it
     reactiveBegin();                                   // temporal upscaling: the opaque colour (reactive mask)
+    if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::MotionReactive] += fxSubNowMs() - tMotion;
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     reactiveEnd();
     glx::gpuMark(glx::kPassTranslucent);
+    if (fxSubCpuOn()) fxSubFrameEnd();
     {
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         statFxMs_ += ms; statFxMsCum_ += ms;

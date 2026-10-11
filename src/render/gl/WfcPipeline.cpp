@@ -743,8 +743,10 @@ void Pipeline::release() {
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
-        delVao(occVao_); delVao(spriteFrameVao_);
-        for (GLuint* b : {&occVbo_, &occIbo_, &spriteFrameVbo_, &spriteFrameCbo_, &spriteFrameSbo_, &spriteFrameIbo_}) delBuf(*b);
+        delVao(occVao_); delVao(spriteFrameVao_); delVao(spriteRingVao_);
+        for (GLuint* b : {&occVbo_, &occIbo_, &spriteFrameVbo_, &spriteFrameCbo_, &spriteFrameSbo_, &spriteFrameIbo_, &spriteRingBuf_}) delBuf(*b);
+        spriteRingPtr_ = nullptr; spriteRingSlotBytes_ = 0;   // (deleting the buffer unmapped it)
+        for (void*& f : spriteRingFence_) if (f) { if (DeleteSync) DeleteSync(f); f = nullptr; }
         for (auto& kv : pawnOcc_)
             for (GLuint& q : kv.second.q) if (q && DeleteQueries) { DeleteQueries(1, &q); q = 0; }
         pawnOcc_.clear();
@@ -2891,9 +2893,145 @@ float Pipeline::viewDepth(const core::Vec3& p) const {
     return -(v[2] * p.x + v[6] * p.y + v[10] * p.z + v[14]);
 }
 
+FxSubCpu gFxSub;
+bool fxSubCpuOn() { static const bool on = std::getenv("WFC_FXSUBCPU") != nullptr; return on; }
+double fxSubNowMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+void fxSubFrameEnd() {
+    static std::vector<FxSubCpu> frames;
+    gFxSub.gpuIdx = glx::gpuFrameIndex();
+    frames.push_back(gFxSub);
+    {   // the latest GPU reading belongs to an earlier frame: attach it there
+        const long li = glx::lastGpuFrameIndex();
+        const double ms = glx::lastGpuPassMs(glx::kPassTranslucent);
+        for (size_t k = frames.size(), lim = 0; k-- > 0 && lim++ < 8;)
+            if (frames[k].gpuIdx == li) { frames[k].gpuTransl = ms; break; }
+    }
+    gFxSub = FxSubCpu{};
+    if (frames.size() < 1200) return;
+    static const char* kName[FxSubCpu::kN] = {"chars: receiver casts", "depth copy + mask fill", "projections", "blur", "char draws",
+                                              "pawn occlusion", "map props + pickups", "particle build", "replay", "motion + reactive",
+                                              "transl sort + stream build", "stream upload", "transl items"};
+    static const bool ringAlt = std::getenv("WFC_SPRITERINGALT") != nullptr;
+    std::vector<size_t> ord;
+    auto order = [&](int ring) {
+        ord.clear();
+        for (size_t i = 0; i < frames.size(); ++i) if (ring < -1 || frames[i].ring == ring) ord.push_back(i);
+        std::stable_sort(ord.begin(), ord.end(), [&](size_t a, size_t b) { return frames[a].quads < frames[b].quads; });
+    };
+    order(-2);
+    auto report = [&](const char* what, size_t b, size_t e) {
+        if (e <= b) return;
+        std::vector<double> v;
+        auto med = [&](auto get) {
+            v.clear();
+            for (size_t i = b; i < e; ++i) v.push_back((double)get(frames[ord[i]]));
+            std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end());
+            return v[v.size() / 2];
+        };
+        auto medGpu = [&]() {                            // frames with a GPU reading only
+            v.clear();
+            for (size_t i = b; i < e; ++i) if (frames[ord[i]].gpuTransl >= 0) v.push_back(frames[ord[i]].gpuTransl);
+            if (v.empty()) return -1.0;
+            std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end());
+            return v[v.size() / 2];
+        };
+        double meanTot = 0;
+        for (size_t i = b; i < e; ++i) for (double x : frames[ord[i]].ms) meanTot += x;
+        meanTot /= (double)(e - b);
+        std::string s;
+        for (int k = 0; k < FxSubCpu::kN; ++k) {
+            double mean = 0;
+            for (size_t i = b; i < e; ++i) mean += frames[ord[i]].ms[k];
+            mean /= (double)(e - b);
+            char buf[96];
+            std::snprintf(buf, sizeof buf, "%s%s %.3f / %.3f", k ? ", " : "", kName[k], med([k](const FxSubCpu& f) { return f.ms[k]; }), mean);
+            s += buf;
+        }
+        LOG_INFO("FXSUBCPU %s (%zu frames; CPU ms median / mean): total mean %.3f = %s; per frame (median): char records %.0f, "
+                 "transl items %.0f (mesh subs %.0f), sprite quads %.0f, stream upload %.0f KB; GPU translucency pass %.3f ms",
+                 what, e - b, meanTot, s.c_str(),
+                 med([](const FxSubCpu& f) { return f.dynRecs; }), med([](const FxSubCpu& f) { return f.transItems; }),
+                 med([](const FxSubCpu& f) { return f.meshSubs; }), med([](const FxSubCpu& f) { return f.quads; }),
+                 med([](const FxSubCpu& f) { return f.uploadKb; }), medGpu());
+    };
+    if (ringAlt) {
+        for (int ring = 1; ring >= 0; --ring) {
+            order(ring);
+            const size_t n = ord.size();
+            report(ring ? "RING frames, most sprite quads (top quarter)" : "BUFFERDATA frames, most sprite quads (top quarter)", n - n / 4, n);
+            report(ring ? "RING frames, all" : "BUFFERDATA frames, all", 0, n);
+        }
+        frames.clear();
+        return;
+    }
+    const size_t n = frames.size();
+    report("most sprite quads (top quarter)", n - n / 4, n);
+    report("fewest sprite quads (bottom half)", 0, n / 2);
+    frames.clear();
+}
+
+bool Pipeline::spriteRingOn() const {
+    static const bool off = std::getenv("WFC_NOSPRITERING") != nullptr;
+    static const bool alt = std::getenv("WFC_SPRITERINGALT") != nullptr;   // diagnostics: the ring on odd frames only
+    if (alt && (frameNo_ & 1) == 0) return false;
+    return !off && !spriteRingBroken_ && BufferStorage && MapBufferRange && FenceSync && ClientWaitSync && DeleteSync;
+}
+
+unsigned char* Pipeline::spriteRingAcquire(size_t bytes, size_t& base) {
+    if (bytes > spriteRingSlotBytes_) {                  // (re)create: 3 slots of at least 1 MB, half again the request
+        if (spriteRingBuf_) { DeleteBuffers(1, &spriteRingBuf_); spriteRingBuf_ = 0; }   // (GL keeps it while the GPU reads it)
+        for (void*& f : spriteRingFence_) if (f) { DeleteSync(f); f = nullptr; }
+        spriteRingPtr_ = nullptr; spriteRingSlotBytes_ = 0;
+        const size_t slot = std::max<size_t>((size_t)1 << 20, (bytes + bytes / 2 + 255) & ~(size_t)255);
+        const GLbitfield fl = 0x0002 /*MAP_WRITE*/ | 0x0040 /*MAP_PERSISTENT*/ | 0x0080 /*MAP_COHERENT*/;
+        GenBuffers(1, &spriteRingBuf_);
+        BindBuffer(GL_ARRAY_BUFFER, spriteRingBuf_);
+        BufferStorage(GL_ARRAY_BUFFER, (GLsizeiptr)(slot * 3), nullptr, fl);
+        spriteRingPtr_ = (unsigned char*)MapBufferRange(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(slot * 3), fl);
+        BindBuffer(GL_ARRAY_BUFFER, 0);
+        if (!spriteRingPtr_) {
+            LOG_WARN("wfc: sprite stream ring: persistent map of %.1f MB failed; the BufferData stream is used", slot * 3 / 1048576.0);
+            DeleteBuffers(1, &spriteRingBuf_); spriteRingBuf_ = 0;
+            spriteRingBroken_ = true;
+            return nullptr;
+        }
+        spriteRingSlotBytes_ = slot;
+        LOG_INFO("wfc: sprite stream ring: 3 x %.1f MB persistent mapped (WFC_NOSPRITERING=1: BufferData)", slot / 1048576.0);
+    }
+    const int k = (spriteRingSlot_ + 1) % 3;
+    void*& f = spriteRingFence_[k];
+    if (f) {                                             // the slot's previous draws must be done before it is rewritten
+        GLenum r = ClientWaitSync(f, 0, 0);
+        if (r == 0x911B /*GL_TIMEOUT_EXPIRED*/) {
+            const auto t0 = std::chrono::steady_clock::now();
+            r = ClientWaitSync(f, 0x00000001 /*GL_SYNC_FLUSH_COMMANDS_BIT*/, 1000000000ull);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            static int logged = 0;
+            if (ms > 1.0 && logged++ < 20) LOG_WARN("wfc: sprite stream ring: waited %.2f ms for slot %d (frame %d)", ms, k, frameNo_);
+        }
+        if (r == 0x911D /*GL_WAIT_FAILED*/) {
+            LOG_WARN("wfc: sprite stream ring: fence wait failed; the BufferData stream is used");
+            spriteRingBroken_ = true;
+            return nullptr;
+        }
+        if (r == 0x911B) return nullptr;                 // still busy after 1 s: this flush uses BufferData (fence kept)
+        DeleteSync(f); f = nullptr;
+    }
+    spriteRingSlot_ = k;
+    base = (size_t)k * spriteRingSlotBytes_;
+    return spriteRingPtr_ + base;
+}
+
 void Pipeline::flushTranslucency() {
     flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
     if (transQueue_.empty()) return;
+    const bool fxOn = fxSubCpuOn();
+    double fxt = fxOn ? fxSubNowMs() : 0.0;
+    auto fxT = [&](int k) { if (!fxOn) return; const double t = fxSubNowMs(); gFxSub.ms[k] += t - fxt; fxt = t; };
+    if (fxOn) {
+        gFxSub.transItems += (int)transQueue_.size();
+        for (const TransItem& it : transQueue_) gFxSub.meshSubs += it.kind == 0;
+    }
     std::stable_sort(transQueue_.begin(), transQueue_.end(),
                      [](const TransItem& a, const TransItem& b) { return a.key > b.key; });   // far -> near
     flushingTrans_ = true;
@@ -2933,28 +3071,84 @@ void Pipeline::flushTranslucency() {
     struct Group { size_t i, j; int prog; size_t quad0, quads; };
     static std::vector<Group> groups;
     groups.clear();
+    bool ringUsed = false;
     if (!noStream) {
         spriteFrameV_.clear(); spriteFrameCol_.clear(); spriteFrameSub_.clear();
+        size_t quads = 0;
         for (size_t i = 0; i < q.size(); ++i) {
             if (!batchOf(i)) continue;
             size_t j = i + 1;
             if (!noMerge) while (j < q.size() && batchOf(j) && same(*batchOf(j), *batchOf(i))) ++j;
             SpriteBatch& b = *batchOf(i);
             const int prog = spriteProgram(b.mat);
-            Group gr{i, j, prog, spriteFrameV_.size() / 56, 0};
+            Group gr{i, j, prog, quads, 0};
             if (prog >= 0)
                 for (size_t k = i; k < j; ++k) {
                     SpriteBatch& bk = *batchOf(k);
                     spriteCoverage(b.mat.c_str(), bk.sprites.data(), bk.sprites.size());
-                    spriteAppend(bk.sprites.data(), bk.sprites.size(), b.facing, spriteFrameV_, spriteFrameCol_, spriteFrameSub_);
                     gr.quads += bk.sprites.size();
                 }
+            quads += gr.quads;
             if (prog >= 0 && j > i + 1) frameRecs_[frameNo_ & 3].draws -= (int)(j - i - 1);   // one draw per group
             groups.push_back(gr);
             i = j - 1;
         }
-        const size_t quads = spriteFrameV_.size() / 56;
-        if (quads > 0) {
+        // pass 2: every group's sprites in group order (the quad index = the group's quad0 + its running count) into the
+        // ring's three regions (positions etc. / colour / second SubUV + blend), or appended to the BufferData stream
+        const size_t vBytes = quads * 4 * 14 * sizeof(float), cBytes = quads * 4 * 4 * sizeof(float), sBytes = quads * 4 * 3 * sizeof(float);
+        const size_t cOff = (vBytes + 255) & ~(size_t)255, sOff = cOff + ((cBytes + 255) & ~(size_t)255);
+        size_t ringBase = 0;
+        unsigned char* rp = quads > 0 && spriteRingOn() ? spriteRingAcquire(sOff + sBytes, ringBase) : nullptr;
+        ringUsed = rp != nullptr;
+        if (quads > 0) gFxSub.ring = ringUsed ? 1 : 0;
+        for (const Group& gr : groups) {
+            if (gr.prog < 0) continue;
+            const core::Vec3 facing = batchOf(gr.i)->facing;
+            size_t at = gr.quad0;
+            for (size_t k = gr.i; k < gr.j; ++k) {
+                SpriteBatch& bk = *batchOf(k);
+                if (rp) spriteAppendTo(bk.sprites.data(), bk.sprites.size(), facing, (float*)rp + at * 56,
+                                       (float*)(rp + cOff) + at * 16, (float*)(rp + sOff) + at * 12);
+                else spriteAppend(bk.sprites.data(), bk.sprites.size(), facing, spriteFrameV_, spriteFrameCol_, spriteFrameSub_);
+                at += bk.sprites.size();
+            }
+        }
+        if (fxOn) {
+            fxT(FxSubCpu::TransBuild);
+            gFxSub.quads += (int)quads;
+            gFxSub.uploadKb += (double)(vBytes + cBytes + sBytes) / 1024.0;
+        }
+        auto quadIndices = [&]() {                       // (the bound VAO's element buffer) quad pattern, grown on demand
+            BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteFrameIbo_);
+            if (quads > spriteFrameIboQuads_) {
+                size_t cap = std::max<size_t>(quads, spriteFrameIboQuads_ * 2);
+                std::vector<uint32_t> idx(cap * 6);
+                for (size_t qd = 0; qd < cap; ++qd) {
+                    const uint32_t b4 = (uint32_t)(qd * 4);
+                    const uint32_t qq[6] = {b4, b4 + 1, b4 + 2, b4, b4 + 2, b4 + 3};
+                    std::copy(qq, qq + 6, &idx[qd * 6]);
+                }
+                BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STATIC_DRAW);
+                spriteFrameIboQuads_ = cap;
+            }
+        };
+        if (ringUsed) {                                  // setupAttribs' layout + colour + sub streams, at this slot's offsets
+            if (!spriteRingVao_) GenVertexArrays(1, &spriteRingVao_);
+            if (!spriteFrameIbo_) GenBuffers(1, &spriteFrameIbo_);
+            BindVertexArray(spriteRingVao_);
+            BindBuffer(GL_ARRAY_BUFFER, spriteRingBuf_);
+            const GLsizei st = 14 * sizeof(float);
+            const size_t v0 = ringBase, c0 = ringBase + cOff, s0 = ringBase + sOff;
+            EnableVertexAttribArray(0); VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, st, (void*)v0);
+            EnableVertexAttribArray(1); VertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, st, (void*)(v0 + 3 * sizeof(float)));
+            EnableVertexAttribArray(2); VertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, st, (void*)(v0 + 6 * sizeof(float)));
+            EnableVertexAttribArray(3); VertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, st, (void*)(v0 + 10 * sizeof(float)));
+            EnableVertexAttribArray(4); VertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, st, (void*)(v0 + 12 * sizeof(float)));
+            EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)c0);
+            EnableVertexAttribArray(6); VertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 0, (void*)s0);
+            quadIndices();
+            BindVertexArray(0);
+        } else if (quads > 0) {
             if (!spriteFrameVao_) {
                 GenVertexArrays(1, &spriteFrameVao_);
                 GenBuffers(1, &spriteFrameVbo_); GenBuffers(1, &spriteFrameCbo_); GenBuffers(1, &spriteFrameSbo_); GenBuffers(1, &spriteFrameIbo_);
@@ -2969,21 +3163,11 @@ void Pipeline::flushTranslucency() {
             BindBuffer(GL_ARRAY_BUFFER, spriteFrameSbo_);
             BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(spriteFrameSub_.size() * sizeof(float)), spriteFrameSub_.data(), GL_STREAM_DRAW);
             EnableVertexAttribArray(6); VertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-            BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteFrameIbo_);
-            if (quads > spriteFrameIboQuads_) {               // quad index pattern, grown on demand (static contents)
-                size_t cap = std::max<size_t>(quads, spriteFrameIboQuads_ * 2);
-                std::vector<uint32_t> idx(cap * 6);
-                for (size_t qd = 0; qd < cap; ++qd) {
-                    const uint32_t b4 = (uint32_t)(qd * 4);
-                    const uint32_t qq[6] = {b4, b4 + 1, b4 + 2, b4, b4 + 2, b4 + 3};
-                    std::copy(qq, qq + 6, &idx[qd * 6]);
-                }
-                BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STATIC_DRAW);
-                spriteFrameIboQuads_ = cap;
-            }
+            quadIndices();
             BindVertexArray(0);
         }
     }
+    if (fxOn) fxT(noStream ? FxSubCpu::TransBuild : FxSubCpu::TransUpload);
     size_t gi = 0;
     // WFC_TRANSPROF=1 (diagnostics): every 240th frame, a GPU timestamp before each item; the intervals are summed per
     // material and the top ones logged (that frame stalls on the readback)
@@ -3011,7 +3195,7 @@ void Pipeline::flushTranslucency() {
                 SpriteBatch& b = *batchOf(i);
                 std::copy(b.dyn, b.dyn + 4, dynParam_);
                 GpuMesh& g = spriteFrameMesh_;
-                g.vao = spriteFrameVao_;
+                g.vao = ringUsed ? spriteRingVao_ : spriteFrameVao_;
                 if (g.subs.empty()) g.subs.emplace_back();
                 Sub& d = g.subs[0];
                 d.first = (uint32_t)(gr.quad0 * 6); d.count = (uint32_t)(gr.quads * 6); d.prog = gr.prog;
@@ -3037,6 +3221,8 @@ void Pipeline::flushTranslucency() {
         ++statSpriteBatches_; statSpriteMerged_ += (int)(j - i - 1);
         i = j - 1;
     }
+    if (ringUsed) spriteRingFence_[spriteRingSlot_] = FenceSync(0x9117 /*GL_SYNC_GPU_COMMANDS_COMPLETE*/, 0);
+    fxT(FxSubCpu::TransItems);
     if (tpFrame && !tpName.empty()) {
         tpStamp("(end)");
         std::map<std::string, std::pair<double, int>> agg;
@@ -3511,6 +3697,11 @@ void Pipeline::warmupWorld(int id, int w, int h) {
              touchedPrograms_, touchedTextures_);
 }
 
+bool Pipeline::spriteCoverageOn() {
+    static const bool on = std::getenv("WFC_SLOWFRAME") != nullptr || std::getenv("WFC_GPUSPIKE_MS") != nullptr;
+    return on;
+}
+
 std::string Pipeline::frameRecordText(int frame) const {
     const FrameRec& fr = frameRecs_[frame & 3];
     if (fr.frame != frame) return "no record";
@@ -3518,7 +3709,8 @@ std::string Pipeline::frameRecordText(int frame) const {
     for (const auto& kv : fr.matCov) if (kv.second.frame == fr.frame) top.push_back({kv.second.cov, kv.first});
     std::sort(top.rbegin(), top.rend());
     char buf[160];
-    std::snprintf(buf, sizeof buf, "%d sprites in %d draws covering %.1f screens", fr.sprites, fr.draws, fr.coverage);
+    if (!spriteCoverageOn()) std::snprintf(buf, sizeof buf, "%d sprites in %d draws, coverage n/a (WFC_GPUSPIKE_MS unset)", fr.sprites, fr.draws);
+    else std::snprintf(buf, sizeof buf, "%d sprites in %d draws covering %.1f screens", fr.sprites, fr.draws, fr.coverage);
     std::string s = buf;
     for (size_t i = 0; i < top.size() && i < 4; ++i) {
         std::snprintf(buf, sizeof buf, "%s %s %.1f", i ? "," : "; top:", top[i].second.substr(top[i].second.rfind('.') + 1).c_str(), top[i].first);
@@ -5886,6 +6078,10 @@ void Pipeline::flushDynQueue() {
         }
     };
     const auto ts0 = std::chrono::steady_clock::now();
+    const bool fxOn = fxSubCpuOn();
+    double fxt = fxOn ? fxSubNowMs() : 0.0;
+    auto fxT = [&](int k) { if (!fxOn) return; const double t = fxSubNowMs(); gFxSub.ms[k] += t - fxt; fxt = t; };
+    if (fxOn) gFxSub.dynRecs += (int)dynQueue_.size();
     auto run = [&](bool incremental) {
     if (incremental) {                                   // the previous order: cast (with its blur) then draw, per record
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 0; cast(d); draw(d); }
@@ -5893,6 +6089,7 @@ void Pipeline::flushDynQueue() {
         const bool prof = shadowGpuFrame() && GetQueryObjectui64v;
         if (prof) { if (fpQ_.size() < 8) { fpQ_.resize(8); GenQueries(8, fpQ_.data()); } fpN_ = 0; fpDepth_ = fpProj_ = 0; fpSubjects_ = 0; fpStamp(); }
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 1; cast(d); }   // every receiver's depth
+        fxT(FxSubCpu::DynCast1);
         if (prof) fpStamp();
         shadowPhase_ = 0;
         ensureSceneDepth();                              // one scene-depth copy
@@ -5906,8 +6103,10 @@ void Pipeline::flushDynQueue() {
             glViewport(0, 0, vpW_, vpH_);
         }
         if (prof) fpStamp();
+        fxT(FxSubCpu::DynDepth);
         phaseProjected_ = false;
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
+        fxT(FxSubCpu::DynCast2);
         shadowPhase_ = 0;
         if (prof) fpStamp();
         if (phaseProjected_) {                           // one resolve + blur (only if anything was drawn), as the original
@@ -5919,7 +6118,9 @@ void Pipeline::flushDynQueue() {
         }
         if (prof) fpStamp();
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
+        fxT(FxSubCpu::DynBlur);
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }
+        fxT(FxSubCpu::DynDraw);
         if (prof) {
             flushInstances();
             fpStamp();
@@ -6205,6 +6406,9 @@ void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) 
     // GPU-spike evidence: screen coverage of this batch (sum of projected quad areas, in screens)
         FrameRec& fr = frameRecs_[frameNo_ & 3];
         if (fr.frame != frameNo_) { fr.sprites = 0; fr.draws = 0; fr.coverage = 0; fr.frame = frameNo_; }
+        // the projected-area estimate is for the dev diagnostics only (WFC_SLOWFRAME / WFC_GPUSPIKE_MS set); otherwise the
+        // spike line keeps the sprite / draw counts and says "coverage n/a" (no effect on the image)
+        if (!spriteCoverageOn()) { fr.sprites += (int)n; ++fr.draws; return; }
         double cov = 0;
         // at most 32 sprites per batch are projected and the sum scaled to n (an estimate for the spike report only)
         const size_t stride = std::max<size_t>(1, n / 32);
@@ -6236,9 +6440,14 @@ void Pipeline::spriteCoverage(const char* material, const Sprite* sp, size_t n) 
 // Appends n sprites' vertices (the drawSprites layout: 14 floats per vertex, colour, second SubUV + blend).
 void Pipeline::spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, RawFloats& vb, RawFloats& cb,
                             RawFloats& sb) {
-    float* v = vb.grow(n * 4 * 14);                   // no zero fill: every float below is written
+    float* v = vb.grow(n * 4 * 14);                   // no zero fill: every float is written
     float* col = cb.grow(n * 4 * 4);
     float* sub = sb.grow(n * 4 * 3);
+    spriteAppendTo(sp, n, facing, v, col, sub);
+}
+
+// The sprites' vertices at v / col / sub (14 / 4 / 3 floats per vertex, 4 vertices per sprite): a RawFloats tail or the ring.
+void Pipeline::spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& facing, float* v, float* col, float* sub) {
     const size_t v0 = 0, c0 = 0, s0 = 0;
     core::Vec3 N = core::normalize(facing);
     for (size_t i = 0; i < n; ++i) {
