@@ -1,0 +1,2 @@
+# Handoff patches apply byte for byte (no CRLF conversion on checkout; Integration 2026-10-11)
+*.patch -text
