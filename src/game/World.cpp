@@ -3013,7 +3013,7 @@ int World::addBots(const BotLaunch& launch) {
         {   // Bot AI: WFC_BOTAI (DEV / TEST) over the per-faction option over ?BotAI over the default
             static const char* envAi = std::getenv("WFC_BOTAI");
             const int perTeamAi = mp.team == 0 ? b.aiAutobot : (mp.team == 1 ? b.aiDecepticon : -1);
-            BotAi ai = perTeamAi >= 0 ? (BotAi)perTeamAi : (b.ai >= 0 ? (BotAi)b.ai : BotAi::Classic);
+            BotAi ai = perTeamAi >= 0 ? (BotAi)perTeamAi : (b.ai >= 0 ? (BotAi)b.ai : BotAi::Smart);   // default Smart (user, M2 close 2026-10-11)
             ai = botAiFromString(envAi, ai);
             if (smart_.size() <= (size_t)p) smart_.resize((size_t)p + 1);
             smart_[(size_t)p] = SmartBot{};
