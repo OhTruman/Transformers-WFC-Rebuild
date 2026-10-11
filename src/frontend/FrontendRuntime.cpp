@@ -1,6 +1,7 @@
 #include "frontend/FrontendRuntime.h"
 #include "assets/Json.h"
 #include "core/FrameProfile.h"
+#include "frontend/DataPaths.h"
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -242,7 +243,7 @@ bool FrontendRuntime::init() {
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
-    roster_.loadAuthored(std::string(WFC_SOURCE_DIR) + "/data/frontend/character_presets.json");
+    roster_.loadAuthored(frontendDataFile("character_presets.json"));
     // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->
     // ResetCharacterFromName) and written at once (MarkAsDirty -> the profile save); later runs load them.
     if (!std::filesystem::exists(kCharactersFile)) {
@@ -253,7 +254,7 @@ bool FrontendRuntime::init() {
     roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
     {   // PC ADAPTATION chassis XP unlocks (user decision): chassis id -> level of the chassis' own specialty
         assets::Json j;
-        std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/chassis_xp_unlocks.json");
+        std::ifstream f(frontendDataFile("chassis_xp_unlocks.json"));
         std::stringstream ss; ss << f.rdbuf();
         if (f && assets::Json::parse(ss.str(), j))
         {
@@ -296,7 +297,7 @@ bool FrontendRuntime::init() {
             }
         return -1;
     };
-    if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
+    if (!scene_.load(frontendDataFile("scenes.json"))) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
 
@@ -730,7 +731,7 @@ BridgeValue FrontendRuntime::commitCharacter(const std::vector<std::string>& arg
 GraphicsPreset FrontendRuntime::applyRecommendedGraphics(const char* why) {
     if (!presetsLoaded_) {
         presetsLoaded_ = true;
-        if (!presets_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/graphics_presets.json"))
+        if (!presets_.load(frontendDataFile("graphics_presets.json")))
             LOG_WARN("graphics auto-detect: data/frontend/graphics_presets.json missing; built-in conservative tier");
     }
     GraphicsPreset g = presets_.pick(hardware_);

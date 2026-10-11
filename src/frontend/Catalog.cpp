@@ -1,4 +1,5 @@
 #include "frontend/Catalog.h"
+#include "frontend/DataPaths.h"
 #include "assets/Json.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -273,7 +274,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
 void Catalog::loadSettingsDefaults(const std::string& manifestRoot) {
     assets::Json j;
     std::string used;
-    for (std::string path : {manifestRoot + "/frontend_game_settings.json", std::string(WFC_SOURCE_DIR) + "/data/frontend/game_settings.json"})
+    for (std::string path : {manifestRoot + "/frontend_game_settings.json", frontendDataFile("game_settings.json")})
         if (readJson(path, j)) { used = path; break; }
     if (used.empty()) { LOG_WARN("FRONTEND catalog: no game_settings.json; host options unavailable, RE-table defaults used"); return; }
     int n = 0;
