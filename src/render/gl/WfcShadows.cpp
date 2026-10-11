@@ -621,6 +621,13 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
         if (ok && shadowProjectionAllowed(rel, 0)) depthPrepass(g, model);
         return;
     }
+    if (shadowPhase_ == 3) {                              // shadow depth into its ring target; projected with the chunk
+        if (!renderShadowDepth(g, model, p, rq)) return;
+        ++shadowChunkRenders_;
+        if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }
+        shadowChunk_.push_back({p, rq, shadowFbo_, shadowDepthTex_, shadowChunkRec_});
+        return;
+    }
     if (shadowPhase_ == 2) {                              // shadow depth + projection into the shared mask
         static GLuint sq[3] = {0, 0, 0};
         const bool prof = fpQ_.size() > 0 && fpN_ > 0;    // (a profiled flush: WFC_SHADOWGPU frame)

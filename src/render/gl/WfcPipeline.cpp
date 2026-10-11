@@ -6242,7 +6242,27 @@ void Pipeline::flushDynQueue() {
         fxT(FxSubCpu::DynDepth);
         glx::gpuStamp("char shadows: projections");
         phaseProjected_ = false;
-        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
+        static const bool noChunk = std::getenv("WFC_SHADOWNOCHUNK") != nullptr || std::getenv("WFC_SHADOWDEPTHONE") != nullptr;
+        if (noChunk || prof) {
+            for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
+        } else {                                         // chunks of the depth ring: depths, then their projections
+            static const bool fullPasses = std::getenv("WFC_SHADOWFULL") != nullptr;
+            auto project = [&]() {
+                for (const ShadowChunkRec& c : shadowChunk_) {
+                    restoreDynDraw(dynQueue_[c.rec]);
+                    shadowFbo_ = c.fbo; shadowDepthTex_ = c.tex;
+                    projectSubjectShadow(c.p, c.rq, fullPasses, true);
+                    phaseProjected_ = true;
+                }
+                shadowChunk_.clear(); shadowChunkRenders_ = 0;
+            };
+            shadowChunk_.clear(); shadowChunkRenders_ = 0;
+            for (size_t i = 0; i < dynQueue_.size(); ++i) {
+                restoreDynDraw(dynQueue_[i]); shadowPhase_ = 3; shadowChunkRec_ = i; cast(dynQueue_[i]);
+                if (shadowChunkRenders_ >= kShadowRing) project();
+            }
+            project();
+        }
         fxT(FxSubCpu::DynCast2);
         glx::gpuStamp("char shadows: mask blur");
         shadowPhase_ = 0;

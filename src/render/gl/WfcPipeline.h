@@ -814,7 +814,7 @@ private:
     GLuint shadowFbo_ = 0, shadowDepthTex_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
     // the shadow depth ring (renderShadowDepth: consecutive subjects use different targets; shadowFbo_ / shadowDepthTex_
     // = the current slot's)
-    static constexpr int kShadowRing = 4;
+    static constexpr int kShadowRing = 8;
     GLuint shadowRingFbo_[kShadowRing] = {}, shadowRingTex_[kShadowRing] = {};
     int shadowRingSlot_ = 0;
     GLuint maskDepthProg_ = 0, constProg_ = 0, volVao_ = 0, volVbo_ = 0;
@@ -890,6 +890,10 @@ private:
     bool flushingWeapons_ = false;
     void flushWeaponQueue();
     int shadowPhase_ = 0;                                 // 0 cast fully, 1 receiver depth only, 2 shadow depth + projection
+                                                          // 3 shadow depth now, projection with its chunk (shadowChunk_)
+    struct ShadowChunkRec { ShadowProjector p; ShadowRequest rq; GLuint fbo = 0, tex = 0; size_t rec = 0; };
+    std::vector<ShadowChunkRec> shadowChunk_;             // (phase 3) rendered, not yet projected
+    int shadowChunkRenders_ = 0; size_t shadowChunkRec_ = 0;
     bool shadowMathOnly_ = false;                         // renderShadowDepth: the request only (no render)
     bool phaseProjected_ = false;
     // WFC_SHADOWGPU in the original order: GPU timestamps per flush phase, and per subject in phase 2 (depth / projection)
