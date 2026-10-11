@@ -7,6 +7,11 @@ function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log
     # 09c d8b7a8e+: a profile without [PCSettings] and no frontend script auto-detects graphics (fullscreen native, 16x AF ...);
     # harness runs keep their own settings unless a caller asks for auto-detect explicitly (unknown to older builds: no effect)
     if (-not $Env.ContainsKey("WFC_AUTODETECT")) { $Env = $Env.Clone(); $Env.WFC_AUTODETECT = "0" }
+    # 09c M2 close (2026-10-11): the default bot AI flips Classic -> Smart. Harness runs pin Classic so rows stay comparable with
+    # the baselines from before the flip. WFC_BOTAI wins over ?BotAI / ?BotAIAutobot / ?BotAIDecepticon and the profile's BotAI, on
+    # every launch path (direct URL and frontend lobby); builds before Smart ignore it (Classic only). A caller sets WFC_BOTAI=Smart
+    # (lockstep arm extra / capacity-stress -ExtraEnv) for Smart rows, or WFC_BOTAI= (empty) to leave the build's own default.
+    if (-not $Env.ContainsKey("WFC_BOTAI")) { $Env = $Env.Clone(); $Env.WFC_BOTAI = "Classic" }
     $saved = @{}
     foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, "Process"); [Environment]::SetEnvironmentVariable($k, [string]$Env[$k], "Process") }
     try {
