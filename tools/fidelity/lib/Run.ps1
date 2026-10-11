@@ -23,7 +23,12 @@ function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log
             if ($watch -and -not (Test-Path $mark)) {
                 $other = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe' OR Name = 'python.exe'" -ErrorAction SilentlyContinue | Where-Object {
                     $_.ProcessId -ne $p.Id -and ($_.Name -ne 'python.exe' -or "$($_.CommandLine)" -notlike '*Rebuild-Experimental*') })
-                if ($other.Count) { ($other | ForEach-Object { "{0:HH:mm:ss} foreign process {1} {2} (started {3:HH:mm:ss}): {4}" -f (Get-Date), $_.ProcessId, $_.Name, $_.CreationDate, "$($_.ExecutablePath)" }) | Set-Content -Encoding UTF8 $mark }
+                # (2026-10-11: a python.exe nobody claimed - the line also names its command line and parent, so the owner can be found)
+                if ($other.Count) { ($other | ForEach-Object {
+                    $pp = Get-CimInstance Win32_Process -Filter "ProcessId = $($_.ParentProcessId)" -ErrorAction SilentlyContinue
+                    $cl = "$($_.CommandLine)"; if ($cl.Length -gt 400) { $cl = $cl.Substring(0, 400) + "..." }
+                    "{0:HH:mm:ss} foreign process {1} {2} (started {3:HH:mm:ss}): {4} | cmd: {5} | parent {6} {7}: {8}" -f (Get-Date), $_.ProcessId, $_.Name, $_.CreationDate, "$($_.ExecutablePath)", $cl,
+                        $_.ParentProcessId, $(if ($pp) { $pp.Name } else { "(exited)" }), $(if ($pp) { $c2 = "$($pp.CommandLine)"; if ($c2.Length -gt 300) { $c2.Substring(0, 300) + "..." } else { $c2 } } else { "" }) }) | Set-Content -Encoding UTF8 $mark }
             }
             Start-Sleep -Milliseconds 1000
         }
