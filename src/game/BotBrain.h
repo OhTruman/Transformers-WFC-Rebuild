@@ -125,6 +125,8 @@ struct BotBrain {
     float grenadeCooldown = 0.0f, grenadeDelay = -1.0f;  // TnGrenadeThrower: TossDelay 0.4 s, then the release
     core::Vec3 grenadeTarget{0, 0, 0};
     float transformCooldown = 0.0f;
+    int landDeferN = 0; float landDeferFirst = 0.0f; core::Vec3 landDeferPos{0, 0, 0};   // jet landings refused in a row without moving
+    float liftUntil = 0.0f;                              // a wedged jet climbing out (hover, view pitched up)
     bool wantVehicle = false;
     float objectiveBlockedUntil = 0.0f;   // the objective goal had no path: hunt meanwhile
     bool mission = false;               // the goal is an objective errand that combat must not interrupt (carrying, defusing, ...)
