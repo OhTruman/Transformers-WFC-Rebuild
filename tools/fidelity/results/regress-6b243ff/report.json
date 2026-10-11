@@ -1,0 +1,63 @@
+﻿{
+    "summary":  {
+                    "pass":  3,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  5,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "regress.501",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.502",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.34 vs base 2.34 (best valid of 2 runs each; delta +0.00 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.503",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.47 vs base 2.47 (best valid of 2 runs each; delta +0.00 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.504",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.507",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.54 vs base 2.53 (best valid of 2 runs each; delta +0.01 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.508",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.509",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.510",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    }
+                ]
+}
