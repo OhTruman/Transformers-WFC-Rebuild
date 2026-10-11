@@ -110,6 +110,10 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
         if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "1" }   # GameFlow RNG (team pick, rotation, tips) is clock-seeded otherwise (Frontend 2026-10-07)
+        # -FixedCam rows (Integration 2026-10-11): no scripted jump - WFC_AUTOJUMP_EVERY counts RENDERED frames, so the human's jumps
+        # (and every bot reacting to them) moved with the frame rate and each rep played a different match. Overview numbers from
+        # here on are not comparable with earlier overview rows.
+        if ($FixedCam) { $e.Remove("WFC_AUTOJUMP_EVERY") }
         if ($PlayerBot -ge 0) {
             if ($H.Contains("WFC_PLAYERBOT")) { foreach ($k in "WFC_AUTOWALK", "WFC_AUTOSTRAFE", "WFC_AUTOJUMP_EVERY") { $e.Remove($k) }; $e.WFC_PLAYERBOT = "$PlayerBot"; $e.WFC_PLAYERBOTLOG = "1" }
             else { $e.WFC_AUTOTURN = "0.6"; $e.WFC_AUTOFIRE = "1" } }
@@ -136,6 +140,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                      WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_RENDERSTATS = "1"; WFC_TICKPROF = "1"; WFC_DRAWPROF = "1"; WFC_FRAMEPROF = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"
                      WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=600" }
             if ($H.Contains("WFC_CHARSELECT")) { $e2.WFC_CHARSELECT = "1" }
+            if ($FixedCam) { $e2.Remove("WFC_AUTOJUMP_EVERY") }   # as the timing run
             if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e2.WFC_FIXEDCAM = $camDefaults["$map"]
                 if ($H.Contains("WFC_SHOTMATCH")) { $e2.WFC_SHOTMATCH = "$ds,600,600,1" } }   # the measured view, captured in the untimed split run
             if ($asyncM -ne "") { $e2.WFC_ASYNCSTEP = $asyncM }
@@ -189,6 +194,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         $skipN = [Math]::Min($ft.Count, 180)
         $warm = @($ft | Select-Object -First $skipN)   # first 180 in-play frames: one-time warm-up (first uses, uploads)
         $ftv = @($ft | Select-Object -Skip $skipN); $simv = @($sim | Select-Object -Skip $skipN); $stpv = @($stp | Select-Object -Skip $skipN)
+        # the measured frame times, one per line (pooled-p90.ps1 pools them over reps; Integration 2026-10-11); -ReportOnly rewrites them
+        [IO.File]::WriteAllText((Join-Path $d "frametimes_m$($k + 1).txt"), (($ftv | ForEach-Object { $_.ToString("R", [Globalization.CultureInfo]::InvariantCulture) }) -join "`n"))
         # steady vs hitch: frames > 50 ms are hitch EVENTS (reported separately); the steady stats exclude them
         $hitch = @($ftv | Where-Object { $_ -gt 50 }); $steady = @($ftv | Where-Object { $_ -le 50 })
         $sorted = @($steady | Sort-Object -Descending)
@@ -330,7 +337,7 @@ if ($curve.Count -ge 3) {
 }
 Write-WfcCsv $rows (Join-Path $OutDir "capacity.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", "match", "spawned", "avg_fps", "avg_ms", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "worst_steady_ms", "low1_fps", "low01_fps", "over_16_7", "over_33", "hitches", "warmup_hitches", "slow_with_step_pct", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "async_join_ms", "async_join_max_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe + periodic jump scripted player. Second-match numbers are the warm-cache comparison.")
+Write-M07Matrix $rows @("commit", "async", "res", "map", "pop", "participants", "match", "spawned", "avg_fps", "avg_ms", "p50_ms", "p90_ms", "p95_ms", "p99_ms", "worst_steady_ms", "low1_fps", "low01_fps", "over_16_7", "over_33", "hitches", "warmup_hitches", "slow_with_step_pct", "pct_under_3_33", "cpu_submit_ms", "gpu_wait_ms", "sim_step_ms", "chars_ms", "fx_ms", "actors_ms", "hud_ms", "async_join_ms", "async_join_max_ms", "max_ms", "over33", "over50", "sim_p50_ms", "sim_p99_ms", "ai_avg_ms", "loaded_mb", "unloaded_mb", "voices_max", "voices_dropped", "kills", "broken_bots", "struggling_bots", "end_reason") (Join-Path $OutDir "CAPACITY.md") "Capacity stress" @("build: ``$sha`` ($Config); camera: $(if ($FixedCam -and $H.Contains('WFC_FIXEDCAM')) { 'FIXED (WFC_FIXEDCAM per map: ' + (($Maps | ForEach-Object { "$_ = $($camDefaults["$_"])" }) -join '; ') + ')' } else { 'scripted player (view-dependent)' }); TDM / DM private matches, TimeLimit $TimeLimit s, two matches per population in one process; difficulty $Difficulty; walk + strafe$(if ($FixedCam) { ' (no jump: fixed-camera rows from 2026-10-11)' } else { ' + periodic jump' }) scripted player unless a player bot drives. Second-match numbers are the warm-cache comparison.")
 if ($PerfLog) {
     $lines = New-Object System.Collections.Generic.List[string]
     if (-not (Test-Path $PerfLog)) { $lines.Add("# PERFORMANCE LOG (Experimental; user scalability brief, Integration 2026-10-07)"); $lines.Add(""); $lines.Add("Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with bots, second-match (warm) figures. Steady stats exclude hitch events (> 50 ms), which are counted separately; the first 180 in-play frames are warm-up. 1 % / 0.1 % low = fps of the slowest 1 % / 0.1 % of steady frames. Splits come from a separate profiling run (glFinish-serialised: ratios, not absolute).") }
