@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "assets/Json.h"
 #include "core/Log.h"
+#include "frontend/DataPaths.h"
 #include "frontend/FlowTrace.h"
 
 #include <cstdlib>
@@ -18,7 +19,7 @@ namespace {
 // Extras movies that unlock with them locked on a fresh profile.
 std::map<std::string, std::string> loadDefaults() {
     std::map<std::string, std::string> d;
-    std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/profile_defaults.json", std::ios::binary);
+    std::ifstream f(frontendDataFile("profile_defaults.json"), std::ios::binary);
     std::stringstream ss;
     ss << f.rdbuf();
     assets::Json j;
