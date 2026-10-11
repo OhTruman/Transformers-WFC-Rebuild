@@ -197,11 +197,12 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         $players = @($segL | Where-Object { $_ -match '\] MATCH spawn player=(\d+)' } | ForEach-Object { [regex]::Match($_, 'player=(\d+)').Groups[1].Value } | Select-Object -Unique).Count
         $endL = @($segL | Where-Object { $_ -match '\] MATCH end ' })[0]; $reason = if ($endL) { [regex]::Match($endL, 'reason=(\S+)').Groups[1].Value } else { "" }; if ($endL -and -not $reason) { $reason = "Time" }   # an EMPTY reason is the original's time-limit path (EndGame(none, ""), Gameplay 2026-10-07; printed as Time from their next push)
         $kills = @($segL | Where-Object { $_ -match '\] MATCH kill ' }).Count
-        $broken = 0; $strug = 0
-        foreach ($g in @($bl | Group-Object p)) { $gg = @($g.Group); $run = 0; $fz = 0
+        $broken = 0; $strug = 0; $brokenAt = @()
+        foreach ($g in @($bl | Group-Object p)) { $gg = @($g.Group); $run = 0; $fz = 0; $fzAt = $null
             for ($i = 1; $i -lt $gg.Count; $i++) { $mv = [Math]::Sqrt([Math]::Pow($gg[$i].x - $gg[$i - 1].x, 2) + [Math]::Pow($gg[$i].z - $gg[$i - 1].z, 2))
-                if ($mv -lt 0.1 -and $gg[$i].tgt -lt 0 -and $gg[$i].goal -match '^(Roam|Attack|Retrieve)') { $run++; $fz = [Math]::Max($fz, $run) } else { $run = 0 } }
-            if ($fz -ge 20) { $broken++ } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
+                if ($mv -lt 0.1 -and $gg[$i].tgt -lt 0 -and $gg[$i].goal -match '^(Roam|Attack|Retrieve)') { $run++; if ($run -gt $fz) { $fz = $run; $fzAt = $gg[$i] } } else { $run = 0 } }
+            # name the frozen bot and spot (2026-10-11: a 'broken' flag was mis-attributed to an off-mesh bot of the same row)
+            if ($fz -ge 20) { $broken++; $brokenAt += ("p{0} frozen {1} samples at ({2:N1}, {3:N1}) cell {4} goal {5}" -f $g.Name, $fz, $fzAt.x, $fzAt.z, $fzAt.cell, $fzAt.goal) } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
         # Rendering's WFC_SLOWFRAME lines: "SLOWFRAME f<n> interval <ms>: render <ms> (world, chars, fx, transl, post), outside <ms>;
         # gpu <ms>|n/a (...); draws <n> (dyn, fx), program binds <n>, buffer upload <KB>, new textures <n>, shader compiles <n>, map FX cpu <ms> (sim <ms>)"
         $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
@@ -261,7 +262,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         Res "$mt.offmesh" $(if ($strand.Count) { "FAIL" } else { "PASS" }) $(if ($strand.Count) { "stranded off the nav mesh (cell -1, >= 20 samples): " + ($strand -join "; ") } else { "no participant stranded off the nav mesh" }) "Gameplay"
         $cm = Join-Path $d "CONTAMINATED.txt"
         if ((Test-Path $cm) -and $k -eq 0) { Res "$tag.contaminated" "UNKNOWN" ("foreign process during the timing run - its numbers are not valid, rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
-        Res "$mt.bots" $(if ($broken) { "FAIL" } elseif ($strug -gt [Math]::Max(1, [int]($P.want * 0.1))) { "PARTIAL" } else { "PASS" }) ("broken {0}, struggling {1}, max no-path {2}, off-mesh samples {3}" -f $broken, $strug, $row.nopath_max, $row.off_mesh) "Gameplay"
+        Res "$mt.bots" $(if ($broken) { "FAIL" } elseif ($strug -gt [Math]::Max(1, [int]($P.want * 0.1))) { "PARTIAL" } else { "PASS" }) (("broken {0}, struggling {1}, max no-path {2}, off-mesh samples {3}" -f $broken, $strug, $row.nopath_max, $row.off_mesh) + $(if ($brokenAt.Count) { " - " + ($brokenAt -join "; ") } else { "" })) "Gameplay"
         Res "$mt.frame" "INFO" ("frame p50 {0} / p95 {1} / p99 {2} / max {3} ms over {4} frames; > 33 ms: {5}, > 50 ms: {6}; sim p50 {7} / p99 {8} ms; AI {9}" -f $row.p50_ms, $row.p95_ms, $row.p99_ms, $row.max_ms, $row.frames, $row.over33, $row.over50, $row.sim_p50_ms, $row.sim_p99_ms, $(if ($ai.Count) { "avg $($row.ai_avg_ms) / max $($row.ai_max_ms) ms" } else { "not logged by this build (WFC_BOTPERF)" })) "Gameplay/Rendering"
         if ($k -eq 1) {   # every population, the original 5 v 5 first (Integration: it should be the first to clear 300)
             $fpsNow = if ($row.p50_ms) { 1000.0 / $row.p50_ms } else { 60.0 }
