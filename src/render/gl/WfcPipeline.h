@@ -207,6 +207,8 @@ public:
         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
+    void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
     struct FrameCounts {
@@ -810,6 +812,11 @@ private:
     struct ShadowRequest { int light = -1; int res = 0; core::Vec3 origin{0, 0, 0}; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
                            float invMaxSubjectDepth = 1, depthBias = 0; float modColor[4] = {1, 1, 1, 1}; };
     GLuint shadowFbo_ = 0, shadowDepthTex_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
+    // the shadow depth ring (renderShadowDepth: consecutive subjects use different targets; shadowFbo_ / shadowDepthTex_
+    // = the current slot's)
+    static constexpr int kShadowRing = 4;
+    GLuint shadowRingFbo_[kShadowRing] = {}, shadowRingTex_[kShadowRing] = {};
+    int shadowRingSlot_ = 0;
     GLuint maskDepthProg_ = 0, constProg_ = 0, volVao_ = 0, volVbo_ = 0;
     GLuint maskFbo_ = 0, maskTex_ = 0, maskDepthRb_ = 0;
     int maskW_ = 0, maskH_ = 0, maskForW_ = 0, maskForH_ = 0, maskClearedFrame_ = -1, maskDrawnFrame_ = -1;
@@ -873,9 +880,15 @@ private:
         int owner = 0; bool hasParams = false; std::vector<std::pair<std::string, std::array<float, 4>>> params;
         float fxColor[4] = {1, 1, 1, 1}, dynParam[4] = {1, 1, 1, 1};
         bool occluded = false;
+        // (weapon queue) the owner's light environment + colours as of the call
+        bool hasEnv = false, envInit = false; LightEnv env; bool hasCc = false; CharacterColors cc{};
     };
     std::vector<DynDraw> dynQueue_;
     bool flushingDyn_ = false;
+    // skinned weapon draws, replayed in order before the next other GPU / queue work (flushWeaponQueue)
+    std::vector<DynDraw> weaponQueue_;
+    bool flushingWeapons_ = false;
+    void flushWeaponQueue();
     int shadowPhase_ = 0;                                 // 0 cast fully, 1 receiver depth only, 2 shadow depth + projection
     bool shadowMathOnly_ = false;                         // renderShadowDepth: the request only (no render)
     bool phaseProjected_ = false;

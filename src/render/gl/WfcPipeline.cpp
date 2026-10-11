@@ -780,6 +780,11 @@ void Pipeline::release() {
     }
     for (auto& kv : texCache_) tex(kv.second);
     for (GLuint& t : lmTextures_) tex(t);
+    for (int k = 0; k < kShadowRing; ++k) {            // the shadow depth ring (shadowFbo_ / shadowDepthTex_ alias a slot)
+        if (shadowRingFbo_[k] == shadowFbo_) shadowFbo_ = 0;
+        if (shadowRingTex_[k] == shadowDepthTex_) shadowDepthTex_ = 0;
+        fbo(shadowRingFbo_[k]); tex(shadowRingTex_[k]);
+    }
     for (GLuint* t : {&clutTex_, &neutralMaskTex_, &testMaskTex_, &whiteTex_, &blackTex_, &flatNormalTex_, &blackCube_,
                       &colorTex_, &depthTex_, &depthCopyTex_, &distTex_, &sceneCopyTex_, &shadowDepthTex_,
                       &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1]})
@@ -3288,6 +3293,7 @@ void Pipeline::flushTranslucency() {
 }
 
 void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject, int onlySub) {
+    if (!weaponQueue_.empty() && !flushingWeapons_) { const GLuint v = g.vao; flushWeaponQueue(); g.vao = v; }
     BindVertexArray(g.vao);
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
@@ -3571,6 +3577,7 @@ static void reportNonFinite(const char* what, const std::string& detail) {
 }
 
 void Pipeline::draw(int id, const core::Mat4& model) {
+    flushWeaponQueue();                                  // (queued weapons before this draw's state: decal offsets)
     if (id < 0 || (size_t)id >= meshes_.size()) return;
     if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
@@ -3922,6 +3929,7 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
 }
 
 void Pipeline::drawHudScreenEffect() {
+    flushWeaponQueue();                                  // (normally empty here: endFrame flushed)
     static const char* kMat[2] = {"UI_GFxHud_p.StaticDischargeScreenEffect_M", "UI_GFxHud_p.LowHealth.LowHealthScreenEffect_M"};
     if (hudEffect_ < 0 || WFC_ENV("WFC_NOHUDFX")) return;
     const int base = programFor(kMat[hudEffect_], nullptr, false);
@@ -4380,6 +4388,8 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         glBindTexture(GL_TEXTURE_2D, skinTex_);
         // only the texels the skinning shader reads (bones j < uSkinBones = palette size, current at 4j, previous at
         // 512 + 4j): the rest of the 1024-texel row was uploaded as zeros and never read (WFC_SKINFULLROW=1: whole row)
+        for (const DynDraw& q : weaponQueue_)
+            if (q.skinRow == si.row) { flushWeaponQueue(); break; }   // (that weapon reads this row's current texels)
         static const bool fullRow = std::getenv("WFC_SKINFULLROW") != nullptr;
         static const bool uploadEach = std::getenv("WFC_SKINUPLOADEACH") != nullptr;   // A/B: one upload per instance
         if (!fullRow && !uploadEach) {               // into the mirror; one upload before the next read (flushSkinUploads)
@@ -5939,6 +5949,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
         for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
         if (noDynCache || ds.sig != sig) {
+            for (const DynDraw& q : weaponQueue_)       // (a queued weapon draws with the list of its own call)
+                if (q.g == &ds.g) { flushWeaponQueue(); break; }
             ds.sig = sig;
             ds.g = GpuMesh{};
             ds.envKind = -1; ds.weapon = false;
@@ -6076,6 +6088,30 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         envForm_ = -1;
         return;
     }
+    static const bool weaponDirect = std::getenv("WFC_WEAPONDIRECT") != nullptr;   // A/B: weapons drawn at the call
+    if (weapon && !weaponDirect && !flushingDyn_ && !flushingWeapons_ && skinDraw_ && drawVao != dynVao_ && !warmup_) {
+        DynDraw d;                                       // drawn in order at the next other draw (flushWeaponQueue)
+        d.g = &g; d.vao = g.vao; d.model = model; d.sk = *skinDraw_;
+        d.skinMode = skinMode_; d.skinRow = skinRow_; d.skinBones = skinBones_; d.skinAlpha = skinAlpha_;
+        d.poseBlend = poseBlend_; d.poseAlpha = poseAlpha_;
+        d.envSamples = envSamples_; d.envForm = envForm_; d.envC = envBoundsCenter_; d.envE = envBoundsExtent_;
+        d.owner = drawOwner_; d.hasParams = drawParams_ != nullptr; if (drawParams_) d.params = *drawParams_;
+        std::copy(fxColor_, fxColor_ + 4, d.fxColor); std::copy(dynParam_, dynParam_ + 4, d.dynParam);
+        d.occluded = occluded;
+        if (envForm_ >= 0) {
+            auto de = dle_.find(envForm_);
+            if (de != dle_.end()) { d.hasEnv = true; d.envInit = de->second.initialized; d.env = de->second.env; }
+        }
+        if (auto cc = charColorsBy_.find(drawOwner_); cc != charColorsBy_.end()) { d.hasCc = true; d.cc = cc->second; }
+        weaponQueue_.push_back(std::move(d));
+        poseBlend_ = 0; poseAlpha_ = 1.0f;
+        inDynamicDraw_ = false;
+        dynamicMaskDraw_ = false;
+        envSamples_ = nullptr;
+        envForm_ = -1;
+        return;
+    }
+    if (!weaponQueue_.empty()) { const GLuint v = g.vao; flushWeaponQueue(); g.vao = v; }
     if (envSamples_ && !weapon && !WFC_ENV("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         const auto ts0 = std::chrono::steady_clock::now();
@@ -6112,7 +6148,46 @@ void Pipeline::restoreDynDraw(const DynDraw& d) {
     inDynamicDraw_ = true;
 }
 
+void Pipeline::flushWeaponQueue() {
+    if (weaponQueue_.empty() || flushingWeapons_) return;
+    flushingWeapons_ = true;
+    const SkinDraw* sk0 = skinDraw_; const int sm0 = skinMode_, sr0 = skinRow_, sb0 = skinBones_; const float sa0 = skinAlpha_;
+    const int pb0 = poseBlend_; const float pa0 = poseAlpha_; const auto* es0 = envSamples_; const int ef0 = envForm_;
+    const core::Vec3 ec0 = envBoundsCenter_, ee0 = envBoundsExtent_; const int ow0 = drawOwner_; const auto* dp0 = drawParams_;
+    float fc0[4], dy0[4]; std::copy(fxColor_, fxColor_ + 4, fc0); std::copy(dynParam_, dynParam_ + 4, dy0);
+    const bool idd0 = inDynamicDraw_, dmd0 = dynamicMaskDraw_, fx0 = frameFx_;
+    frameFx_ = false;                                    // (a weapon's direct draw: no FX state)
+    for (const DynDraw& d : weaponQueue_) {
+        restoreDynDraw(d);
+        dynamicMaskDraw_ = d.envSamples != nullptr;
+        if (!d.occluded) {
+            const auto td = std::chrono::steady_clock::now();
+            // the owner's environment / colours as they were at the call (later ticks / setters restored after)
+            auto de = d.envForm >= 0 ? dle_.find(d.envForm) : dle_.end();
+            DirectLightEnvState* st = de != dle_.end() ? &de->second : nullptr;   // (none at the call: read as uninitialized)
+            bool init1 = false; LightEnv env1;
+            if (st) { init1 = st->initialized; env1 = st->env; st->initialized = d.hasEnv && d.envInit; if (d.hasEnv) st->env = d.env; }
+            const auto ccIt = charColorsBy_.find(d.owner);
+            const bool hadCc = ccIt != charColorsBy_.end();
+            CharacterColors cc1{};
+            if (hadCc) cc1 = ccIt->second;
+            if (d.hasCc) charColorsBy_[d.owner] = d.cc; else if (hadCc) charColorsBy_.erase(d.owner);
+            drawSubs(*d.g, d.model, true);
+            if (hadCc) charColorsBy_[d.owner] = cc1; else charColorsBy_.erase(d.owner);
+            if (st) { st->initialized = init1; st->env = env1; }
+            gStats.dynDrawMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td).count();
+        }
+    }
+    weaponQueue_.clear();
+    skinDraw_ = sk0; skinMode_ = sm0; skinRow_ = sr0; skinBones_ = sb0; skinAlpha_ = sa0;
+    poseBlend_ = pb0; poseAlpha_ = pa0; envSamples_ = es0; envForm_ = ef0; envBoundsCenter_ = ec0; envBoundsExtent_ = ee0;
+    drawOwner_ = ow0; drawParams_ = dp0; std::copy(fc0, fc0 + 4, fxColor_); std::copy(dy0, dy0 + 4, dynParam_);
+    inDynamicDraw_ = idd0; dynamicMaskDraw_ = dmd0; frameFx_ = fx0;
+    flushingWeapons_ = false;
+}
+
 void Pipeline::flushDynQueue() {
+    flushWeaponQueue();                                  // (the weapons were drawn before the queued bodies)
     if (dynQueue_.empty() || flushingDyn_) return;
     flushingDyn_ = true;
     // the caller's per-draw state around the flush (the flush may run inside another draw call's setup)
@@ -6504,6 +6579,7 @@ std::string Pipeline::resolveName(const std::string& name) const {
 }
 
 bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
+    flushWeaponQueue();                                  // (queued weapons before the FX colour / frameFx_ state)
     if (id < 0 || (size_t)id >= meshes_.size()) return false;
     GpuMesh& g = meshes_[(size_t)id];
     for (const Sub& s : g.subs)
@@ -6650,6 +6726,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         }
     }
     if (!material || !sp || n == 0) return false;   // (corners are finite here: the guard above checked every one)
+    flushWeaponQueue();                              // (queued weapons first: translucency queue order)
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
         auto spk = spriteProg_.find(material);                           // (no temporary string per call)
@@ -6914,6 +6991,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 // Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,
 // after the post pass, in submission order. Material params arrive per tile (runtime uniforms).
 void Pipeline::drawCanvasTiles() {
+    flushWeaponQueue();                                  // (normally empty here: endFrame flushed)
     if (uiTileCount_ == 0) return;
     const size_t nTiles = uiTileCount_;
     uiTileCount_ = 0;
