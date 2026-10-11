@@ -1,0 +1,63 @@
+﻿{
+    "summary":  {
+                    "pass":  5,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  3,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "regress.501",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.502",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.503",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.504",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.58 vs base 2.67 (best valid of 2 runs each; delta -0.09 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.507",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.38 vs base 2.29 (best valid of 2 runs each; delta +0.09 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.508",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.09 vs base 2.2 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15); invalid runs: lockstep.head.r1 UNKNOWN"
+                    },
+                    {
+                        "id":  "regress.509",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.77 vs base 2.88 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.510",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.59 vs base 2.72 (best valid of 2 runs each; delta -0.13 ms; BLOCK above +0.15)"
+                    }
+                ]
+}

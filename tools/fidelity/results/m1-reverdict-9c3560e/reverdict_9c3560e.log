@@ -1,0 +1,29 @@
+window open 15:02:44
+mem start: commit 92/114 GB, nonpaged 24.12 GB, free phys 15.7 GB, C: free 17.1 GB
+REGRESSION (8 maps, lockstep): pass 5 / fail 0 / known 0 / info 0 / skip 0 / human 0 / unknown 3 / waiting 0 / partial 0
+| map | base p90 (best of 2) | head p90 (best of 2) | delta | verdict | note |
+|---|---|---|---|---|---|
+| 501 | 2.31 |  | - | UNKNOWN | lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN |
+| 502 | 2.01 |  | - | UNKNOWN | lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN |
+| 503 | 2.48 |  | - | UNKNOWN | lockstep.head.r1 UNKNOWN; lockstep.head.r2 UNKNOWN |
+| 504 | 2.67 | 2.58 | -0.09 | PASS |  |
+| 507 | 2.29 | 2.38 | +0.09 | PASS |  |
+| 508 | 2.2 | 2.09 | -0.11 | PASS | lockstep.head.r1 UNKNOWN |
+| 509 | 2.88 | 2.77 | -0.11 | PASS |  |
+| 510 | 2.72 | 2.59 | -0.13 | PASS |  |
+regress done 15:22
+mem after-regress: commit 92/114 GB, nonpaged 24.12 GB, free phys 16.0 GB, C: free 16.7 GB
+15:35 510 rp 2160 300s r1: p90 3.14 
+15:47 510 rp 2160 300s r2: p90 3.41 
+15:59 510 rp 2160 300s r3: p90 3.36 
+work/permap/m1r-9c3560e-510-rp-2160-t300-r1: 117564 frames, p90 3.14 ms (MET), under 3.333 ms 94.8 %
+work/permap/m1r-9c3560e-510-rp-2160-t300-r2: 105870 frames, p90 3.41 ms (MISS), under 3.333 ms 86.9 %
+work/permap/m1r-9c3560e-510-rp-2160-t300-r3: 105699 frames, p90 3.36 ms (MISS), under 3.333 ms 89.1 %
+POOLED over 3 reps: 329133 frames, p90 3.32 ms (MET), p50 2.75, p99 3.88, under 3.333 ms 90.4 %
+mem after-gorge-rp: commit 92/114 GB, nonpaged 24.13 GB, free phys 16.0 GB, C: free 16.7 GB
+16:07 510 ov 2160 150s r1: p90 3.08 
+16:14 504 rp 2160 150s r1: p90 2.96 
+16:21 510 ov 2160 150s r2: p90 3.09 
+16:28 504 rp 2160 150s r2: p90 3.15 
+mem end: commit 92/114 GB, nonpaged 24.14 GB, free phys 16.0 GB, C: free 16.7 GB
+window done 16:28

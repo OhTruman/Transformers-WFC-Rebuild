@@ -1,0 +1,4 @@
+work/permap/m1r-9c3560e-510-rp-2160-t300-r1: 117564 frames, p90 3.14 ms (MET), under 3.333 ms 94.8 %
+work/permap/m1r-9c3560e-510-rp-2160-t300-r2: 105870 frames, p90 3.41 ms (MISS), under 3.333 ms 86.9 %
+work/permap/m1r-9c3560e-510-rp-2160-t300-r3: 105699 frames, p90 3.36 ms (MISS), under 3.333 ms 89.1 %
+POOLED over 3 reps: 329133 frames, p90 3.32 ms (MET), p50 2.75, p99 3.88, under 3.333 ms 90.4 %

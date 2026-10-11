@@ -1,0 +1,4 @@
+pooled zone slow rate: EXTERIOR_MIDDLE_SOUTHEAST 9% (50% of time), A_UNDER_DECK 13% (38% of time), D_RAMPS 0% (7% of time), D_TALL_ROOM_WEST 6% (5% of time), DOWN_BELOW 0% (0% of time)
+m1r-9c3560e-510-rp-2160-t300-r1: p90 3.14, slow 5.2% (log 5.4%), zone-mix prediction 9.3%; enemies in range 3.2, visible 0.5; time: EXTERIOR_MIDDLE_SOUTHEAST 64%, A_UNDER_DECK 24%, D_RAMPS 7%, D_TALL_ROOM_WEST 4%, DOWN_BELOW 0%
+m1r-9c3560e-510-rp-2160-t300-r2: p90 3.41, slow 13.1% (log 13.1%), zone-mix prediction 10.2%; enemies in range 5.1, visible 0.7; time: EXTERIOR_MIDDLE_SOUTHEAST 42%, A_UNDER_DECK 47%, D_RAMPS 6%, D_TALL_ROOM_WEST 5%, DOWN_BELOW 0%
+m1r-9c3560e-510-rp-2160-t300-r3: p90 3.36, slow 10.9% (log 11.1%), zone-mix prediction 9.9%; enemies in range 3.9, visible 0.7; time: EXTERIOR_MIDDLE_SOUTHEAST 43%, A_UNDER_DECK 45%, D_RAMPS 8%, D_TALL_ROOM_WEST 5%, DOWN_BELOW 0%

@@ -747,3 +747,45 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 508 | 1920x1080 | - | 64 | 570.8 | 1.74 | 2.17 | 2.3 | 2.51 | 6.91 | 381.8 | 329.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5169 |
+
+## 2026-10-11 15:35 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 9c3560e map 510 rp 4K 300s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 392.2 | 2.58 | 3.14 | 3.35 | 3.7 | 7.42 | 258.1 | 223.7 | 0 / 0 | 0 | 94.8 % |  |  |  |  |  | 5349 |
+
+## 2026-10-11 15:47 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 9c3560e map 510 rp 4K 300s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 353.2 | 2.84 | 3.41 | 3.57 | 3.95 | 7.72 | 235.3 | 203.4 | 0 / 0 | 0 | 86.9 % |  |  |  |  |  | 5178 |
+
+## 2026-10-11 15:59 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 9c3560e map 510 rp 4K 300s rep 3
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 352.7 | 2.84 | 3.36 | 3.55 | 3.98 | 8.02 | 237.2 | 202.4 | 0 / 0 | 0 | 89.1 % |  |  |  |  |  | 5252 |
+
+## 2026-10-11 16:07 - ? - 3D at 3840x2160 - cam overview - M1 re-verdict 9c3560e map 510 ov 4K 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 345.3 | 2.92 | 3.08 | 3.13 | 3.23 | 7.01 | 304.5 | 288.8 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5187 |
+
+## 2026-10-11 16:14 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 9c3560e map 504 rp 4K 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 440.7 | 2.29 | 2.96 | 3.14 | 3.55 | 6.36 | 264.6 | 238.4 | 0 / 0 | 0 | 97.6 % |  |  |  |  |  | 5999 |
+
+## 2026-10-11 16:21 - ? - 3D at 3840x2160 - cam overview - M1 re-verdict 9c3560e map 510 ov 4K 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 345 | 2.92 | 3.09 | 3.14 | 3.23 | 6.74 | 304.9 | 292.1 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5301 |
+
+## 2026-10-11 16:28 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 9c3560e map 504 rp 4K 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 504 | 1920x1080 | - | 64 | 389.4 | 2.75 | 3.15 | 3.29 | 3.69 | 9.15 | 244 | 174.4 | 0 / 0 | 0 | 95.9 % |  |  |  |  |  | 5966 |
