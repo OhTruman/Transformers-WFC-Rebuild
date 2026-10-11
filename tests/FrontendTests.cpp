@@ -45,8 +45,13 @@ static void testProfileBotMigration() {
     frontend::LocalProfile c;
     const bool again = c.loadFrom(cur);
     check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
-    // Bot AI (PC EXTENSION): unset follows the default (Classic for now); an explicit choice persists.
+    // Bot AI (PC EXTENSION): unset follows the default (Smart, user decision); an explicit choice persists.
     check(c.bots.ai == -1 && c.bots.aiEffective() == frontend::LocalProfile::kBotAiDefault, "profile.bot_ai_unset_follows_default");
+    check(frontend::LocalProfile::kBotAiDefault == 1, "profile.bot_ai_default_smart");
+    std::istringstream classic("[PCSettings]\nBotAI=Classic\n");
+    frontend::LocalProfile cl;
+    cl.loadFrom(classic);
+    check(cl.bots.ai == 0 && cl.bots.aiEffective() == 0, "profile.bot_ai_explicit_classic_kept");
     std::istringstream smart("[PCSettings]\nBotAI=Smart\n");
     frontend::LocalProfile sm;
     sm.loadFrom(smart);
