@@ -797,8 +797,10 @@ void Pipeline::release() {
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
     for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
-                      &constProg_, &maskBlurProg_})
+                      &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
         prog(*p);
+    buf(distRectBuf_);
+    distCut_ = -1;
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
@@ -3189,6 +3191,7 @@ void Pipeline::flushTranslucency() {
     };
     for (size_t i = 0; i < q.size(); ++i) {
         if (tpFrame) tpStamp(itemName(i));
+        glx::gpuStamp(batchOf(i) ? "transl: sprites" : "transl: meshes");
         if (!noStream && batchOf(i)) {                     // a sprite group from the frame stream
             const Group& gr = groups[gi++];
             if (gr.prog >= 0 && gr.quads > 0) {
@@ -5337,10 +5340,12 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 UseProgram(zPreProg_);
                 BindBuffer(0x8F3F, occCmdA_);
             }
+            glx::gpuStamp("world: occlusion select + depth prepass A");
             prepassDraws();
             if (occ) {                                     // Hi-Z of pass A's depth, the test, then prepass B
                 if (!occNoBarrier) MemoryBarrier(0xFFFFFFFF);
                 if (occGpuFrame) QueryCounter(occGpuQ_[1], 0x8E28);
+                glx::gpuStamp("world: Hi-Z build");
                 buildHzb();
                 // WFC_HZBDUMP=1 (diagnostics; a synchronous readback): every 100th frame, an FNV-1a hash of every Hi-Z
                 // level's texels, to byte-compare the pyramid between builds / paths (WFC_OCCHZBOLD=1)
@@ -5366,6 +5371,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
                     LOG_INFO("HZBDUMP frame %d (render %dx%d):%s", frameNo_, vpW_, vpH_, line.c_str());
                 }
                 if (occGpuFrame) QueryCounter(occGpuQ_[2], 0x8E28);
+                glx::gpuStamp("world: occlusion test");
                 UseProgram(occTestProg_);
                 Uniform1ui(cachedUniformLocation(occTestProg_, "uN"), nCmd);
                 UniformMatrix4fv(cachedUniformLocation(occTestProg_, "uVP"), 1, GL_FALSE, viewProj_.m);
@@ -5392,6 +5398,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_); ActiveTexture(GL_TEXTURE0);
                 glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); glDepthMask(GL_TRUE); glDisable(GL_BLEND);
                 BindBuffer(0x8F3F, occCmdB_);
+                glx::gpuStamp("world: depth prepass B");
                 prepassDraws();
                 BindBuffer(0x8F3F, mdiCmdBuf_);           // the shading pass: the test's culled commands
                 if (occGpuFrame) {
@@ -5436,6 +5443,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
     // WFC_ZPREPASS_TEST=1 (positive control only): the prepassed buckets are not shaded, so the opaque world shows
     // the clear colour / sky - visibly wrong whenever the prepass is active
     static const bool zTest = std::getenv("WFC_ZPREPASS_TEST") != nullptr;
+    glx::gpuStamp("world: MDI shading");
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
         if (!n) continue;
@@ -5469,6 +5477,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         if (profFrame) QueryCounter(bq[qn++], 0x8E28);
     }
     glDepthMask(GL_TRUE);
+    glx::gpuStamp("world: after the MDI");
     if (profFrame && qn > 1) {
         std::vector<unsigned long long> t(qn);
         for (size_t k = 0; k < qn; ++k) GetQueryObjectui64v(bq[k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
@@ -6086,10 +6095,12 @@ void Pipeline::flushDynQueue() {
     if (incremental) {                                   // the previous order: cast (with its blur) then draw, per record
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 0; cast(d); draw(d); }
     } else {
+        glx::GpuSection gsec("char shadows: receivers' shadow depth");
         const bool prof = shadowGpuFrame() && GetQueryObjectui64v;
         if (prof) { if (fpQ_.size() < 8) { fpQ_.resize(8); GenQueries(8, fpQ_.data()); } fpN_ = 0; fpDepth_ = fpProj_ = 0; fpSubjects_ = 0; fpStamp(); }
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 1; cast(d); }   // every receiver's depth
         fxT(FxSubCpu::DynCast1);
+        glx::gpuStamp("char shadows: mask depth fill");
         if (prof) fpStamp();
         shadowPhase_ = 0;
         ensureSceneDepth();                              // one scene-depth copy
@@ -6104,9 +6115,11 @@ void Pipeline::flushDynQueue() {
         }
         if (prof) fpStamp();
         fxT(FxSubCpu::DynDepth);
+        glx::gpuStamp("char shadows: projections");
         phaseProjected_ = false;
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); shadowPhase_ = 2; cast(d); }   // into the one mask
         fxT(FxSubCpu::DynCast2);
+        glx::gpuStamp("char shadows: mask blur");
         shadowPhase_ = 0;
         if (prof) fpStamp();
         if (phaseProjected_) {                           // one resolve + blur (only if anything was drawn), as the original
@@ -6119,6 +6132,7 @@ void Pipeline::flushDynQueue() {
         if (prof) fpStamp();
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
         fxT(FxSubCpu::DynBlur);
+        glx::gpuStamp("characters: queued draws");
         for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }
         fxT(FxSubCpu::DynDraw);
         if (prof) {
@@ -6200,6 +6214,71 @@ void Pipeline::flushDynQueue() {
 // Distortion apply (Xenon microcode, engine shader with AccumulatedDistortionTexture/SceneColorTexture):
 // uv' = uv + (acc.rg - acc.ba) * (0.25, -0.25) in D3D texture space (y down) -> +0.25 in GL; out =
 // SceneColor(uv'). Applied full-screen (zero offset elsewhere reproduces the scene unchanged).
+bool Pipeline::distCutReady() {
+    if (distCut_ >= 0) return distCut_ == 1;
+    distCut_ = 0;
+    GLint vsBlocks = 0;
+    glGetIntegerv(0x90D6 /*GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS*/, &vsBlocks);
+    if (!DispatchCompute || !BindBufferBase || !MemoryBarrier || !BufferSubData || vsBlocks < 1) {
+        LOG_INFO("wfc: distortion apply: full screen (compute / vertex storage blocks unavailable)");
+        return false;
+    }
+    const char* fs = "#version 330 core\nin vec2 vUV; out vec4 oColor; uniform sampler2D uScene; uniform sampler2D uAcc;\n"
+                     "void main(){ vec4 a = texture(uAcc, vUV); if (a == vec4(0.0)) discard;"
+                     " vec2 uv = vUV + (a.rg - a.ba) * vec2(0.25, 0.25); oColor = texture(uScene, uv); }\n";
+    const char* vs = "#version 330 core\nout vec2 vUV;\nvoid main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
+                     " vUV = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }\n";
+    GLuint v = compile(GL_VERTEX_SHADER, vs, "distort_cut.vs"), f = compile(GL_FRAGMENT_SHADER, fs, "distort_cut.fs");
+    if (v && f) distApplyCutProg_ = link(v, f, "distort_cut");
+    static const char* kRect = R"(#version 430
+layout(local_size_x = 16, local_size_y = 16) in;
+uniform sampler2D uAcc;
+uniform ivec2 uSize;
+layout(std430, binding = 5) buffer R { uint r[6]; };   // x0 y0 x1 y1 (non-zero texels), largest |offset| x y in pixels
+shared uint s[6];
+void main() {
+    if (gl_LocalInvocationIndex == 0u) { s[0] = 0xFFFFFFFFu; s[1] = 0xFFFFFFFFu; s[2] = 0u; s[3] = 0u; s[4] = 0u; s[5] = 0u; }
+    barrier();
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    if (p.x < uSize.x && p.y < uSize.y) {
+        vec4 a = texelFetch(uAcc, p, 0);
+        if (a != vec4(0.0)) {
+            atomicMin(s[0], uint(p.x)); atomicMin(s[1], uint(p.y)); atomicMax(s[2], uint(p.x)); atomicMax(s[3], uint(p.y));
+            vec2 o = abs((a.rg - a.ba) * 0.25) * vec2(uSize);
+            atomicMax(s[4], uint(ceil(o.x))); atomicMax(s[5], uint(ceil(o.y)));
+        }
+    }
+    barrier();
+    if (gl_LocalInvocationIndex == 0u && s[0] != 0xFFFFFFFFu) {
+        atomicMin(r[0], s[0]); atomicMin(r[1], s[1]); atomicMax(r[2], s[2]); atomicMax(r[3], s[3]);
+        atomicMax(r[4], s[4]); atomicMax(r[5], s[5]);
+    }
+}
+)";
+    distRectProg_ = linkCompute(kRect, "distort_rect.cs");
+    // the copy: a quad over the box grown by the largest offset + 2 px (bilinear neighbours, rounding), texel-exact
+    const char* cvs = "#version 430\nlayout(std430, binding = 5) readonly buffer R { uint r[6]; };\nuniform ivec2 uSize;\n"
+                      "void main(){ const vec2 c[6] = vec2[6](vec2(0,0), vec2(1,0), vec2(1,1), vec2(0,0), vec2(1,1), vec2(0,1));"
+                      " if (r[0] > r[2] || r[1] > r[3]) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }"
+                      " int mx = int(min(r[4], 65535u)) + 2, my = int(min(r[5], 65535u)) + 2;"
+                      " vec2 lo = vec2(max(int(r[0]) - mx, 0), max(int(r[1]) - my, 0));"
+                      " vec2 hi = vec2(min(int(r[2]) + 1 + mx, uSize.x), min(int(r[3]) + 1 + my, uSize.y));"
+                      " gl_Position = vec4(mix(lo, hi, c[gl_VertexID]) / vec2(uSize) * 2.0 - 1.0, 0.0, 1.0); }\n";
+    const char* cfs = "#version 330 core\nout vec4 oColor; uniform sampler2D uScene;\n"
+                      "void main(){ oColor = texelFetch(uScene, ivec2(gl_FragCoord.xy), 0); }\n";
+    GLuint cv = compile(GL_VERTEX_SHADER, cvs, "distort_copy.vs"), cf = compile(GL_FRAGMENT_SHADER, cfs, "distort_copy.fs");
+    if (cv && cf) distCopyProg_ = link(cv, cf, "distort_copy");
+    if (!distApplyCutProg_ || !distRectProg_ || !distCopyProg_) {
+        LOG_WARN("wfc: distortion apply: limited path failed to build; full screen");
+        return false;
+    }
+    GenBuffers(1, &distRectBuf_);
+    BindBuffer(0x90D2, distRectBuf_); BufferData(0x90D2, 6 * sizeof(uint32_t), nullptr, 0x88E8 /*GL_DYNAMIC_DRAW*/); BindBuffer(0x90D2, 0);
+    distCut_ = 1;
+    LOG_INFO("wfc: distortion apply limited to the accumulation (box copy + zero-accumulation discard; WFC_DISTFULL=1: full screen)");
+    return true;
+}
+
 void Pipeline::applyDistortion() {
     if (!distApplyProg_) {
         const char* vs = "#version 330 core\nout vec2 vUV;\nvoid main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
@@ -6211,16 +6290,47 @@ void Pipeline::applyDistortion() {
         if (v && f) distApplyProg_ = link(v, f, "distort");
         if (!distApplyProg_) { distUsed_ = false; return; }
     }
-    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
-    BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
-    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    // The limited path leaves the copy outside the box stale; the only later reader of the copy in this frame is a canvas
+    // tile whose material samples the scene (bindCommon would not re-copy): such a tile, or one whose program is not
+    // resolved yet, keeps the full copy. (The HUD screen effect copies the finished frame itself.)
+    static const bool full = std::getenv("WFC_DISTFULL") != nullptr;
+    bool cut = !full && distCutReady();
+    for (size_t i = 0; cut && i < uiTileCount_ && i < uiTiles_.size(); ++i) {
+        auto it = spriteProg_.find(uiTiles_[i].material);
+        if (it == spriteProg_.end() || (it->second >= 0 && progs_[(size_t)it->second].sceneColor)) cut = false;
+    }
     glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glDepthMask(GL_FALSE);
-    UseProgram(distApplyProg_);
+    if (cut) {
+        const uint32_t init[6] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0u, 0u, 0u, 0u};
+        BindBuffer(0x90D2, distRectBuf_); BufferSubData(0x90D2, 0, sizeof init, init); BindBuffer(0x90D2, 0);
+        BindBufferBase(0x90D2, 5, distRectBuf_);
+        UseProgram(distRectProg_);
+        Uniform1i(cachedUniformLocation(distRectProg_, "uAcc"), 0);
+        Uniform2i(cachedUniformLocation(distRectProg_, "uSize"), vpW_, vpH_);
+        ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, distTex_);
+        DispatchCompute((GLuint)((vpW_ + 15) / 16), (GLuint)((vpH_ + 15) / 16), 1);
+        MemoryBarrier(0x00002000 /*SHADER_STORAGE*/);
+        BindFramebuffer(GL_FRAMEBUFFER, sceneCopyFbo_);
+        UseProgram(distCopyProg_);
+        Uniform1i(cachedUniformLocation(distCopyProg_, "uScene"), 0);
+        Uniform2i(cachedUniformLocation(distCopyProg_, "uSize"), vpW_, vpH_);
+        glBindTexture(GL_TEXTURE_2D, colorTex_);
+        BindVertexArray(postVao_);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        BindVertexArray(0);
+        BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    } else {
+        BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+        BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
+        BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    }
+    const GLuint applyProg = cut ? distApplyCutProg_ : distApplyProg_;
+    UseProgram(applyProg);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, distTex_);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
-    Uniform1i(cachedUniformLocation(distApplyProg_, "uScene"), 0);
-    Uniform1i(cachedUniformLocation(distApplyProg_, "uAcc"), 1);
+    Uniform1i(cachedUniformLocation(applyProg, "uScene"), 0);
+    Uniform1i(cachedUniformLocation(applyProg, "uAcc"), 1);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -6318,6 +6428,7 @@ GLuint Pipeline::shadowMaskTexFor(bool character) {
 // UE3 resolves scene colour once before the translucent pass; SceneTexture reads that copy (first use per frame).
 void Pipeline::ensureSceneColor() {
     if (sceneColorCopied_ || !sceneCopyFbo_) return;
+    glx::GpuSection gsec("scene colour copy");
     BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
     BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
     BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -6327,6 +6438,7 @@ void Pipeline::ensureSceneColor() {
 
 void Pipeline::ensureSceneDepth() {
     if (!depthDirty_ || !depthCopyFbo_) return;
+    glx::GpuSection gsec("scene depth copy");
     BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
     BindFramebuffer(GL_DRAW_FRAMEBUFFER, depthCopyFbo_);
     BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
@@ -6707,6 +6819,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     // Clear to the fog in-scatter colour: what an infinitely distant ray converges to.
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glx::gpuStamp("world: before the MDI");
     depthDirty_ = true;
     transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0;
     deferTrans_ = true;
@@ -6793,6 +6906,7 @@ void Pipeline::drawCanvasTiles() {
 }
 
 void Pipeline::endFrame() {
+    glx::gpuStamp("end of frame: late queues");
     flushDynQueue();
     shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
@@ -6874,7 +6988,7 @@ void Pipeline::endFrame() {
         }
     }
     if (WFC_ENV("WFC_SHADOWSELFTEST") && frameNo_ == 3) runShadowMaskSelfTest();
-    if (distUsed_) applyDistortion();
+    if (distUsed_) { glx::gpuStamp("distortion apply"); applyDistortion(); }
     if (WFC_ENV("WFC_FRAMEREPORT") && WFC_ENV("WFC_SMOKE_FRAMES") &&
         frameNo_ == (int)std::atol(WFC_ENV("WFC_SMOKE_FRAMES")))
         writeFrameReport();
@@ -6888,6 +7002,7 @@ void Pipeline::endFrame() {
     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
     bool bloom = bloomGatherProg_ && blurProg_ && ((post_.bloom && !WFC_ENV("WFC_NOBLOOM")) || dof);
+    glx::gpuStamp("post: bloom / DOF gather + blur");
     if (bloom) {
         BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[0]);
         glViewport(0, 0, bloomW_, bloomH_);
@@ -6915,6 +7030,7 @@ void Pipeline::endFrame() {
             glDrawArrays(GL_TRIANGLES, 0, 3);
         }
     }
+    glx::gpuStamp("post: tonemap into the window");
     const int outW = winW_ > 0 ? winW_ : vpW_, outH = winH_ > 0 ? winH_ : vpH_;
     const bool fsr = fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
     BindVertexArray(postVao_);
@@ -6946,11 +7062,13 @@ void Pipeline::endFrame() {
     Uniform1f(U("uDesat"), post_.desat);
     Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
     glDrawArrays(GL_TRIANGLES, 0, 3);
-    if (fsr) runFsr(vpW_, vpH_, outW, outH);           // EASU (+ RCAS) into the window
+    if (fsr) { glx::gpuStamp("post: FSR"); runFsr(vpW_, vpH_, outW, outH); }           // EASU (+ RCAS) into the window
     motionDebugView(outW, outH);                       // WFC_MOTIONVIEW (diagnostics)
     BindVertexArray(0);
     UseProgram(0);
+    glx::gpuStamp("HUD screen effect");
     drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)
+    glx::gpuStamp("canvas tiles");
     drawCanvasTiles();
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);

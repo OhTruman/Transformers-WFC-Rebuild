@@ -209,6 +209,19 @@ long gpuFrameReads();
 // frame lastGpuFrameMs belongs to (-1 if not marked that frame).
 enum GpuPass { kPassWorld = 1, kPassCaller = 2, kPassMapFx = 3, kPassTranslucent = 4, kPassPost = 5, kPassCount = 6 };
 void gpuMark(int k);
+// WFC_GPUSTAMPS=1 (diagnostics): named GPU timestamps through the frame, never waited for. gpuStamp(name) starts the
+// section `name` (it ends at the next stamp; a repeat of the current name is skipped); a GpuSection resumes the enclosing
+// section on exit. Each frame's stamps are read 6 frames later (dropped if not yet available); every 1200 read frames,
+// GPUSTAMPS lines give each section's GPU ms per frame over all of them and over the slowest tenth (by the span from the
+// frame start to the pre-present stamp), and the present-to-next-frame-start gap.
+bool gpuStampsOn();
+void gpuStamp(const char* section);
+const char* gpuStampCurrent();
+struct GpuSection {
+    const char* prev;
+    explicit GpuSection(const char* section) : prev(gpuStampCurrent()) { gpuStamp(section); }
+    ~GpuSection() { if (prev) gpuStamp(prev); }
+};
 double lastGpuPassMs(int k);           // increments with each new lastGpuFrameMs value (3 frames after the measured frame)
 double lastGpuFrameCpuMs();   // CPU time between the same markers (gpu ~ cpu: the GPU waited on submission)
 // WFC_SLOWFRAME support (no stalls): the index of the frame being recorded (gpuTimerBegin .. gpuTimerEnd) and of the

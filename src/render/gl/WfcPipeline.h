@@ -801,6 +801,9 @@ private:
     GLuint depthCopyFbo_ = 0, depthCopyTex_ = 0;   // scene depth for translucent (soft) materials
     // UE3 distortion: accumulate (RGBA8, additive, scene depth tested) then apply before post
     GLuint distFbo_ = 0, distTex_ = 0, sceneCopyFbo_ = 0, sceneCopyTex_ = 0, distApplyProg_ = 0;
+    GLuint distApplyCutProg_ = 0, distRectProg_ = 0, distCopyProg_ = 0, distRectBuf_ = 0;   // the limited apply
+    int distCut_ = -1;                                 // -1 not tried, 0 unavailable (full path), 1 ready
+    bool distCutReady();
     bool distUsed_ = false;
     const char* mainOverride_ = nullptr;
     void applyDistortion();
