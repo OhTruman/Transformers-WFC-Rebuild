@@ -297,6 +297,7 @@ void Pipeline::motionObjectPass() {
     if (velObjProg_ && !motionDraws_.empty()) {
     UseProgram(velObjProg_);
     auto U = [&](const char* n) { return cachedUniformLocation(velObjProg_, n); };
+    flushSkinUploads();                                  // (this pass reads the bone texture)
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, skinTex_);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, skinPrevTex_ ? skinPrevTex_ : skinTex_);
     ActiveTexture(GL_TEXTURE0);
