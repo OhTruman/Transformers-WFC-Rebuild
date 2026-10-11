@@ -5760,6 +5760,8 @@ void Application::runAiDuel() {
     long st[2][8] = {{0}};
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
+    long flD = 0;
+    long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
     for (int seed = s0; seed <= s1; ++seed) {
         for (int smartTeam = 0; smartTeam < 2; ++smartTeam) {
@@ -5787,6 +5789,9 @@ void Application::runAiDuel() {
                     cohBin[3] += sb->cohesionFresh;
                     for (int k = 0; k < 3; ++k) cohSet[k] += sb->cohesionSettledBins[k];
                     cohSetSum += sb->cohesionSettledSum;
+                    for (int k = 0; k < 100; ++k) cohHist[k] += sb->cohesionSettledHist[k];
+                    epi[0] += sb->flankWins; epi[1] += sb->flankLosses; epi[2] += sb->huntWins; epi[3] += sb->huntLosses;
+                    flD += sb->flanksDropped;
                     cov[0] += sb->coverReached; cov[1] += sb->coverSpoiled; cov[2] += sb->coverNoFight; cov[3] += sb->coverHeldSpoiled; cov[4] += sb->coverHeldEnded;
                 }
             }
@@ -5795,6 +5800,8 @@ void Application::runAiDuel() {
                 st[side][0] += bb.shots; st[side][1] += bb.hits; st[side][2] += bb.vehicleShots; st[side][3] += bb.grenades;
                 st[side][4] += bb.melees; st[side][5] += bb.abilities; st[side][7] += bb.stucks;
                 for (int k = 0; k < 4; ++k) { rngS[side][k] += bb.rangeShots[(size_t)k]; rngH[side][k] += bb.rangeHits[(size_t)k]; }
+                for (int k = 0; k < 36; ++k) { dfS[side][k] += bb.diffShots[(size_t)k]; dfH[side][k] += bb.diffHits[(size_t)k]; }
+                angS[side] += bb.angSum; selfS[side] += bb.selfSum;
                 if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
             }
             const int w = world_.match().winnerTeam();
@@ -5819,6 +5826,31 @@ void Application::runAiDuel() {
         LOG_INFO("AIDUEL range %s: hitscan hit %% (share of traces) < 10 m %.1f (%.0f %%), 10-25 m %.1f (%.0f %%), 25-50 m %.1f (%.0f %%), > 50 m %.1f (%.0f %%)",
                  side ? "Classic" : "Smart  ", pc(0), sh(0), pc(1), sh(1), pc(2), sh(2), pc(3), sh(3));
     }
+    {   // 25-50 m shot difficulty: same aim means equal hit % per difficulty cell; "at Classic's mix" reweights Smart's cells by Classic's shares
+        static const char* angN[3] = {"< 5", "5-15", "> 15"}; static const char* selfN[3] = {"< 1", "1-4", "> 4"};
+        for (int side = 0; side < 2; ++side) {
+            long n = 0; for (int k = 18; k < 27; ++k) n += dfS[side][k];
+            char a[256] = "", m[256] = ""; size_t ap = 0, mp = 0;
+            for (int i = 0; i < 3; ++i) {
+                long sa = 0, ha = 0, sm = 0, hm = 0;
+                for (int j = 0; j < 3; ++j) { sa += dfS[side][18 + i * 3 + j]; ha += dfH[side][18 + i * 3 + j]; sm += dfS[side][18 + j * 3 + i]; hm += dfH[side][18 + j * 3 + i]; }
+                ap += (size_t)std::snprintf(a + ap, sizeof a - ap, " %s %.1f (%.0f %%)", angN[i], sa ? 100.0 * ha / sa : 0.0, n ? 100.0 * sa / n : 0.0);
+                mp += (size_t)std::snprintf(m + mp, sizeof m - mp, " %s %.1f (%.0f %%)", selfN[i], sm ? 100.0 * hm / sm : 0.0, n ? 100.0 * sm / n : 0.0);
+            }
+            LOG_INFO("AIDUEL shot difficulty 25-50 m %s: target angular speed mean %.1f deg/s, own speed mean %.1f m/s; hit %% (share) by angular speed deg/s%s; by own speed m/s%s",
+                     side ? "Classic" : "Smart  ", n ? angS[side] / n : 0.0, n ? selfS[side] / n : 0.0, a, m);
+        }
+        static const char* bandN[4] = {"< 10 m", "10-25 m", "25-50 m", "> 50 m"};
+        char line[512] = ""; size_t lp = 0;
+        for (int band = 0; band < 4; ++band) {
+            long nc = 0, sh = 0; for (int k = band * 9; k < band * 9 + 9; ++k) { nc += dfS[1][k]; sh += dfH[1][k]; }
+            double mix = 0.0, cov9 = 0.0;
+            for (int k = band * 9; k < band * 9 + 9; ++k) if (dfS[0][k] > 0 && nc > 0) { const double w = (double)dfS[1][k] / nc; mix += w * dfH[0][k] / dfS[0][k]; cov9 += w; }
+            lp += (size_t)std::snprintf(line + lp, sizeof line - lp, "%s %s %.1f vs %.1f (%.0f %% covered)", band ? ";" : "", bandN[band],
+                                        cov9 > 0.0 ? 100.0 * mix / cov9 : 0.0, nc ? 100.0 * sh / nc : 0.0, 100.0 * cov9);
+        }
+        LOG_INFO("AIDUEL shot mix: Smart hit %% at Classic's shot mix vs Classic, by range:%s", line);
+    }
     {
         const long n = cohBin[0] + cohBin[1] + cohBin[2];
         LOG_INFO("AIDUEL squad: distance to leader < 15 m %.0f %%, 15-40 m %.0f %%, > 40 m %.0f %%; samples within 15 s of a respawn %.0f %%",
@@ -5829,6 +5861,14 @@ void Application::runAiDuel() {
     }
     LOG_INFO("AIDUEL cover: take-cover %ld reached / %ld spot spoiled on the way / %ld fight over on the way; held cover ended: %ld spot spoiled, %ld fight over",
              cov[0], cov[1], cov[2], cov[3], cov[4]);
+    LOG_INFO("AIDUEL flanks: %.1f per match dropped over the route budget", flD / (double)std::max(1, 2 * (s1 - s0 + 1)));
+    LOG_INFO("AIDUEL hunt outcomes (kill the enemy first / die first, within 15 s): flank hunts %ld / %ld, straight hunts %ld / %ld",
+             epi[0], epi[1], epi[2], epi[3]);
+    {
+        long n = 0; for (int k = 0; k < 100; ++k) n += cohHist[k];
+        long acc = 0; int med = -1; for (int k = 0; k < 100 && med < 0; ++k) { acc += cohHist[k]; if (2 * acc >= n && n > 0) med = k; }
+        LOG_INFO("AIDUEL squad settled median: %d-%d m (%ld samples)", med * 2, med * 2 + 2, n);
+    }
     LOG_INFO("AIDUEL SUMMARY: Smart %d wins / %d losses / %d ties (%.0f %% of decided); kills Smart %ld vs Classic %ld (%.0f %%)", wins, losses, ties,
              wins + losses ? 100.0 * wins / (wins + losses) : 0.0, smartKills, classicKills,
              smartKills + classicKills ? 100.0 * smartKills / (double)(smartKills + classicKills) : 0.0);
