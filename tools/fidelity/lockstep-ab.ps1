@@ -26,6 +26,10 @@ $sfRe = 'interval ([\d.]+) ms: render ([\d.]+) \(world ([-\d.]+), chars ([-\d.]+
 function Pct($a, $p) { if (-not $a.Count) { return [double]::NaN }; $s = @($a | Sort-Object); return $s[[Math]::Min($s.Count - 1, [int][Math]::Floor($p * $s.Count))] }
 function Mean($a) { if (-not $a.Count) { return [double]::NaN }; return ($a | Measure-Object -Average).Average }
 $rows = New-Object System.Collections.Generic.List[object]
+# WFC_ASYNCSTEP=0 (Systems 2026-10-10) is for lockstep IMAGE comparisons only: it serialises the sim step, so frame times are not
+# the shipped path - refuse it in this timing harness rather than report its numbers.
+$sync = @($Arms | Where-Object { $_ -match 'WFC_ASYNCSTEP\s*=\s*0' })
+if ($sync.Count) { Res "asyncstep" "FAIL" ("WFC_ASYNCSTEP=0 in an arm (" + ($sync -join "; ") + ") - image comparisons only, never timing rows; not run") "Experimental"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); "WFC_ASYNCSTEP=0 refused"; exit 1 }
 for ($rep = 1; $rep -le $Reps; $rep++) {
     foreach ($arm in $Arms) {
         $p = $arm -split '\|', 3; $label = $p[0]; $root = (Resolve-Path $p[1]).Path; $extra = if ($p.Count -gt 2) { $p[2] } else { "" }
