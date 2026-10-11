@@ -64,8 +64,9 @@ before / after sheet to the user, remake list frozen. The remake pass is a separ
 user's verdict.
 
 ## Later
-USER ORDER 2026-10-11: M1 (48/48) -> M5 frame generation + upscaling (AMD, then NVIDIA) -> HD textures worked out
-(the "push harder" visible pack; Rust pilot runs in GPU gaps meanwhile) -> M7 ray tracing last. M6 is unranked.
+USER ORDER 2026-10-11 (corrected): M1 (48/48) -> HD textures (the visible "push harder" upgraded/upscaled pack, PLUS
+the remake pass: textures that fail are remade safely with more detail where the original is missing it) -> M5 frame
+generation + upscaling (AMD, then NVIDIA) -> M7 ray tracing last. M6 is unranked.
 - M5 Upscaling + frame generation (D3D12 interop -> FSR 3 / DLSS / FG), optional, off by default.
   USER 2026-10-11: start after M3 ships; AMD first, then NVIDIA. Order (docs/handoff/SYSTEMS_M5_UPSCALING_FRAMEGEN_PLAN.md):
   1 D3D12 present stage 2 (flip-discard + tearing; also removes the +0.1 ms fullscreen GL flip gap the user hits)
