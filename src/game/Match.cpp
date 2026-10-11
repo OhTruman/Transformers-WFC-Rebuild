@@ -543,6 +543,21 @@ int Match::findPlayerStart(int p) {
             }
         return true;
     };
+    core::Vec3 anchor;
+    if (s_.teamGame && squadAnchor_ && (P.team == 0 || P.team == 1) && squadAnchor_(p, anchor)) {   // Smart: respawn near the squad
+        int bestSt = -1; float bestD = 1e9f;
+        for (size_t i = 0; i < starts_.size(); ++i) {
+            const Start& s = starts_[i];
+            if (s.generated || s.ffa || s.team != P.team) continue;
+            const float d = core::length(s.pos - anchor);
+            if (d >= bestD || !safe((int)i)) continue;
+            bool enemyNear = false;
+            for (size_t j = 0; j < players_.size() && !enemyNear; ++j)
+                if (players_[j].alive && players_[j].team != P.team && core::length(locs_[j] - s.pos) < 25.0f) enemyNear = true;
+            if (!enemyNear) { bestD = d; bestSt = (int)i; }
+        }
+        if (bestSt >= 0) return bestSt;
+    }
     if (s_.teamGame && (P.team == 0 || P.team == 1) && active_[P.team] >= 0) {
         // FindSpawnPoint: the team's active cluster, up to MaxSpawnPointsToConsider 4 round-robin picks.
         Cluster& c = clusters_[(size_t)active_[P.team]];

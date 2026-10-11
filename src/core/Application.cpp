@@ -5760,7 +5760,7 @@ void Application::runAiDuel() {
     long st[2][8] = {{0}};
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
-    long flD = 0;
+    long flD = 0, mateH = 0;
     long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}};
     long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
@@ -5792,7 +5792,7 @@ void Application::runAiDuel() {
                     cohSetSum += sb->cohesionSettledSum;
                     for (int k = 0; k < 100; ++k) cohHist[k] += sb->cohesionSettledHist[k];
                     epi[0] += sb->flankWins; epi[1] += sb->flankLosses; epi[2] += sb->huntWins; epi[3] += sb->huntLosses;
-                    flD += sb->flanksDropped;
+                    flD += sb->flanksDropped; mateH += sb->mateHolds;
                     cov[0] += sb->coverReached; cov[1] += sb->coverSpoiled; cov[2] += sb->coverNoFight; cov[3] += sb->coverHeldSpoiled; cov[4] += sb->coverHeldEnded;
                 }
             }
@@ -5860,7 +5860,10 @@ void Application::runAiDuel() {
             for (int k = 0; k < 5; ++k)
                 op += (size_t)std::snprintf(ol + op, sizeof ol - op, " %s %.1f / %.1f;", oN[k], n0 ? 100.0 * tro[0][band * 5 + k] / n0 : 0.0,
                                             n1 ? 100.0 * tro[1][band * 5 + k] / n1 : 0.0);
-            LOG_INFO("AIDUEL trace outcomes %s (Smart / Classic %%):%s", bandN[band], ol);
+            // Same aim (M2 definition): target hits per clear-line trace (every trace but the team-mate ones), within 1 point.
+            const long c0 = n0 - tro[0][band * 5 + 2], c1 = n1 - tro[1][band * 5 + 2];
+            LOG_INFO("AIDUEL trace outcomes %s (Smart / Classic %%):%s target per clear-line trace %.1f / %.1f", bandN[band], ol,
+                     c0 ? 100.0 * tro[0][band * 5] / c0 : 0.0, c1 ? 100.0 * tro[1][band * 5] / c1 : 0.0);
         }
         for (int band = 0; band < 4; ++band) {   // time on the target: per bin hit % (share) for each side, and Smart at Classic's time mix
             char tl[400] = ""; size_t tp = 0; long nS = 0, nC = 0, hC = 0;
@@ -5888,6 +5891,7 @@ void Application::runAiDuel() {
     LOG_INFO("AIDUEL cover: take-cover %ld reached / %ld spot spoiled on the way / %ld fight over on the way; held cover ended: %ld spot spoiled, %ld fight over",
              cov[0], cov[1], cov[2], cov[3], cov[4]);
     LOG_INFO("AIDUEL flanks: %.1f per match dropped over the route budget", flD / (double)std::max(1, 2 * (s1 - s0 + 1)));
+    LOG_INFO("AIDUEL team mate on the line: %.1f shots held per match", mateH / (double)std::max(1, 2 * (s1 - s0 + 1)));
     LOG_INFO("AIDUEL hunt outcomes (kill the enemy first / die first, within 15 s): flank hunts %ld / %ld, straight hunts %ld / %ld",
              epi[0], epi[1], epi[2], epi[3]);
     {

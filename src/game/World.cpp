@@ -176,7 +176,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
             std::vector<core::Vec3>* dst = nullptr;
             if (mover) { moverTris.push_back({sm.nodeName, {}}); dst = &moverTris.back().second; }
-            const bool forcedDir = sm.nodeName.rfind("TnForcedDirVolume", 0) == 0;   // a PhysicsVolume, not world collision (forcedDirPre / Post)
+            // a PhysicsVolume, not world collision (forcedDirPre / Post); WFC_NOFORCEDDIR=1 keeps the old solid brushes (regression A/B)
+            const bool forcedDir = !std::getenv("WFC_NOFORCEDDIR") && sm.nodeName.rfind("TnForcedDirVolume", 0) == 0;
             for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
                 if (forcedDir) continue;
                 if (!mover) { out.indices.push_back(in.indices[i]); continue; }
@@ -1642,6 +1643,22 @@ void World::startLocalMatch(const MatchSettings& s) {
         err = a ? a->error : std::string("unknown chassis");
         return false;
     });
+    // Smart squads (TDM): a respawning member takes the team start nearest its squad's first live member (M2: settled squad distance
+    // was respawn-driven, 38-52 m). WFC_SMARTOFF=spawnnear turns it off; Classic participants never get an anchor.
+    match_.setSquadAnchor([this](int p, core::Vec3& anchor) {
+        static const bool spawnOff = std::getenv("WFC_SMARTOFF") && std::strstr(std::getenv("WFC_SMARTOFF"), "spawnnear");
+        if (spawnOff || !anySmart_ || !botIsSmart(p) || matchMode_ != MatchMode::TDM || smartTune().squadSize <= 1.0f) return false;
+        const int size = (int)smartTune().squadSize;
+        int rank = 0;
+        for (size_t q = 0; q < (size_t)p && q < smart_.size(); ++q) if (smart_[q].active && match_.sameTeam((int)q, p)) ++rank;
+        int r = 0;
+        for (size_t q = 0; q < smart_.size(); ++q) {
+            if (!smart_[q].active || !match_.sameTeam((int)q, p)) continue;
+            if (r++ / size != rank / size || (int)q == p) continue;
+            if (const Character* c = participantPawn((int)q)) { anchor = c->position(); return true; }
+        }
+        return false;
+    });
     match_.begin(s);
     match_.setSnapshotProvider([this](int p) { return participantSnapshot(p); });
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
@@ -3007,6 +3024,7 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
 
 void World::loadForcedDirVolumes(const std::string& path) {
     forcedDirs_.clear();
+    if (std::getenv("WFC_NOFORCEDDIR")) { LOG_INFO("mapstate: TnForcedDirVolume off (WFC_NOFORCEDDIR: solid brushes, no push)"); return; }
     std::string text;
     if (!readTextFile(path, text)) return;
     assets::Json ph;
@@ -3088,8 +3106,14 @@ void World::forcedDirPre(Character& c, float dt, bool isPlayer) const {
         // TickSpecial: acc = clamp((ExitSpeed - v . Arrow) / dt, 0, 10000 UU/s^2) * Arrow.
         const float acc = std::min(100.0f, std::max(0.0f, (f.exitSpeed - core::dot(c.velocity(), f.dir)) / dt));
         if (f.blockPawns && c.moveForm() == Form::Robot) override = f.dir * acc;
-        else c.velocity() = c.velocity() + f.dir * (acc * dt);   // Mesh.AddLinearAcceleration (the vehicle body)
+        // Mesh.AddLinearAcceleration: moves a simulating body (the vehicle form); a walking robot's mesh does not simulate, so a robot
+        // in a volume without bBlockPawns is not pushed.
+        else if (c.moveForm() == Form::Vehicle) c.velocity() = c.velocity() + f.dir * (acc * dt);
     }
+    if (touch & ~c.forcedDirTouch_)   // a volume newly touched (regression attribution: the first divergent step)
+        LOG_INFO("forceddir: a pawn (%s, %s form) touches volume mask %x at (%.1f %.1f %.1f) t %.2f", isPlayer ? "player" : "participant",
+                 c.moveForm() == Form::Vehicle ? "vehicle" : "robot", touch & ~c.forcedDirTouch_, c.position().x, c.position().y, c.position().z,
+                 match_.matchTime());
     c.forcedDirTouch_ = touch;
     c.overrideAccel_ = override;   // UnTouch clears it
 }

@@ -799,6 +799,7 @@ private:
     void smartDecide(BotBody o, BotBrain& b, SmartBot& s);
     void smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in);
     void smartAimPost(BotBody o, BotBrain& b, SmartBot& s, float yaw0, float pitch0, float dt);
+    bool smartMateOnLine(int player, const core::Vec3& eye, const core::Vec3& dir, float dist) const;   // a team mate's body on the shot line
 public:
     // Kills by AI (bots; [0] Smart, [1] Classic) and how many of them hit a victim facing away (> 90 degrees) - WFC_AIDUEL metrics.
     long aiKills_[2] = {0, 0}, aiBackKills_[2] = {0, 0};

@@ -35,6 +35,10 @@ struct SmartTune {
     float coverMaxExposure = 1.0f;  // a cover spot may be seen by at most this many
     float coverChance = 0.35f;      // chance to seek cover when it applies: coverChance + coverChancePerDiff * difficulty
     float coverChancePerDiff = 0.3f;
+    float coverRangeM = 20.0f;      // ranged-fight cover: beyond this distance to the target ...
+    float coverHurtFrac = 0.6f;     // ... while reloading or below this fraction of health
+    float coverRangedChance = 0.1f; // ... or, per decision, with this chance in any ranged fight
+    float coverHoldS = 8.0f;        // held cover outlasts a lost line of sight this long while reloading or hurt
     float retreatHp = 0.25f;        // retreat below this health fraction while fighting
     float huntConfidence = 0.35f;   // hunt a remembered enemy at least this certain
     float routeExposureW = 0.6f;    // route cost x (1 + w * exposure)
@@ -44,6 +48,7 @@ struct SmartTune {
     float squadFollow = 1.0f;
     float squadHelp = 0.0f;         // help the nearest squad mate in a fight within 50 m (0: off; on after its duel check)
     float squadRegroupM = 15.0f;    // a member farther than this from its leader regroups on it
+    float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
     float outnumberMargin = 2.0f;   // fall back to the nearest ally when known enemies near >= allies near + this ...
@@ -84,6 +89,8 @@ struct SmartBot {
     bool ownMission = false;
     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
+    bool leaderSlow = false;   // squad leader slowing for its members (smartDecide -> smartSteerPost)
+    float mateBlockedAt = -1e9f; int mateHolds = 0;   // last shot held for a team mate on the line; holds (diagnostics)
     float squadGoalUntil = -1.0f; int squadGoalKind = -1, squadGoalTgt = -1; core::Vec3 squadGoalPos{0, 0, 0}; float squadGoalRad = 0.0f;   // the squad-given goal, kept until then
     float noFlankUntil = -1.0f; int flanksDropped = 0;   // a flank whose route ran over budget: straight at the enemy until then
     bool flankSet = false; core::Vec3 flankPos{0, 0, 0}, flankAnchor{0, 0, 0};   // the hunt's flanking spot and the enemy spot it was chosen for             // Smart set BotBrain::mission (follow the path while fighting): Smart clears it again

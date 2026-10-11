@@ -165,6 +165,9 @@ public:
     // fallback chassis: FindChassis failing leaves ChassisType none (a body-less pawn + log). The rebuild refuses the
     // spawn instead, keeps retrying once a second, and reports the reason (spawnError) [RECONSTRUCTION: loud failure].
     void setChassisCheck(std::function<bool(const std::string&, std::string&)> f) { chassisCheck_ = std::move(f); }
+    // Smart AI (PC EXTENSION, team games): where a respawning participant's squad is; the start of its team nearest that point with no
+    // live enemy within 25 m is taken (before the active cluster). Returns false for everyone else (Classic: the original rules).
+    void setSquadAnchor(std::function<bool(int, core::Vec3&)> f) { squadAnchor_ = std::move(f); }
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
@@ -244,6 +247,7 @@ private:
     std::vector<float> lastDamagedAt_;   // match time of each player's last recorded damage (any type; diagnostics)
     std::vector<int> lastHitBy_;         // Pawn.LastHitBy: the last other player who damaged this life's pawn (-1 none)   // per player cylinder radius (setPlayerLocation)
     std::function<bool(const std::string&, std::string&)> chassisCheck_;
+    std::function<bool(int, core::Vec3&)> squadAnchor_;
     int attackingTeam_ = 255, currentRound_ = 0;
     bool betweenRounds_ = false;
     float roundTimeLeft_ = 0.0f, betweenRoundsLeft_ = 0.0f;
