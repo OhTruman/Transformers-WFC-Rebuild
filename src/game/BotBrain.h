@@ -111,7 +111,7 @@ struct BotBrain {
     float ignoreSightingsUntil = 0.0f;                  // a team sighting proved unreachable
     // Aim / fire
     float yaw = 0.0f, pitch = 0.0f;
-    core::Vec3 aimErr{0, 0, 0}; float aimErrTimer = 0.0f;
+    core::Vec3 aimErr{0, 0, 0}; float aimErrTimer = 0.0f; float aimErrSettle = 1.0f;   // settle: the shrink factor of the current draw
     float reactionLeft = 0.0f;
     int burstLeft = 0; float burstPause = 0.0f;
     // Movement
@@ -147,6 +147,7 @@ struct BotBrain {
     std::array<int, 20> traceOut{};
     // Aim error at the moment of firing (degrees between the aim and the target's aim point) by range bin: the aim function's output.
     std::array<double, 4> aimErrSum{}; std::array<int, 4> aimErrN{};
+    std::array<double, 16> aimParts{};   // per band: noise deg, turn lag deg, raw noise deg (noise / settle), time on target s
     std::array<int, 36> diffShots{}, diffHits{}; int diffBin = -1; double angSum = 0.0, selfSum = 0.0;
     float frand() { rng = rng * 1664525U + 1013904223U; return (float)((rng >> 8) & 0xFFFFFF) / 16777216.0f; }
     float frange(float a, float b) { return a + (b - a) * frand(); }
