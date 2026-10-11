@@ -6424,7 +6424,7 @@ void Application::runAiDuel() {
     long st[2][8] = {{0}};
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
-    long flD = 0, mateH = 0, farS[5] = {0, 0, 0, 0, 0};
+    long flD = 0, mateH = 0, farS[5] = {0, 0, 0, 0, 0}; double leadS[3] = {0, 0, 0};
     long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}}, aeN[2][4] = {{0}}; double aeS[2][4] = {{0}}, aeP[2][16] = {{0}};
     long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
@@ -6456,6 +6456,7 @@ void Application::runAiDuel() {
                     cohSetSum += sb->cohesionSettledSum;
                     for (int k = 0; k < 100; ++k) cohHist[k] += sb->cohesionSettledHist[k];
                     farS[0] += sb->farN; farS[1] += sb->farLeaderMoving; farS[2] += sb->farPathless; farS[3] += sb->farVehicle; farS[4] += sb->farLeaderFights;
+                    leadS[0] += sb->leadWaitS; leadS[1] += sb->leadRefusedS; leadS[2] += sb->leadSlowS;
                     epi[0] += sb->flankWins; epi[1] += sb->flankLosses; epi[2] += sb->huntWins; epi[3] += sb->huntLosses;
                     flD += sb->flanksDropped; mateH += sb->mateHolds;
                     cov[0] += sb->coverReached; cov[1] += sb->coverSpoiled; cov[2] += sb->coverNoFight; cov[3] += sb->coverHeldSpoiled; cov[4] += sb->coverHeldEnded;
@@ -6581,6 +6582,9 @@ void Application::runAiDuel() {
         auto pf = [&](int k) { return farS[0] ? 100.0 * farS[k] / farS[0] : 0.0; };
         LOG_INFO("AIDUEL squad over 25 m (%.0f %% of settled samples): leader moving %.0f %%, member pathless %.0f %%, a vehicle form %.0f %%, leader fighting %.0f %%",
                  n ? 100.0 * farS[0] / n : 0.0, pf(1), pf(2), pf(3), pf(4));
+        const double lt = leadS[0] + leadS[1] + leadS[2];
+        LOG_INFO("AIDUEL slowed leaders: %.0f s; waiting %.0f %%, not waiting at an exposed spot %.0f %%, walking slowly %.0f %%", lt,
+                 lt > 0 ? 100.0 * leadS[0] / lt : 0.0, lt > 0 ? 100.0 * leadS[1] / lt : 0.0, lt > 0 ? 100.0 * leadS[2] / lt : 0.0);
     }
     LOG_INFO("AIDUEL SUMMARY: Smart %d wins / %d losses / %d ties (%.0f %% of decided); kills Smart %ld vs Classic %ld (%.0f %%)", wins, losses, ties,
              wins + losses ? 100.0 * wins / (wins + losses) : 0.0, smartKills, classicKills,

@@ -1863,11 +1863,24 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
     if (s.leaderSlow && !engaged) {
         const float nowS = match_.matchTime();
         bool waiting = false;
-        if (smartTune().squadLeaderStop > 0.0f && nowS >= s.leaderWaitCooldown) {
+        // squadWaitCover: wait only at a sheltered spot (Gorge lost 44.5 vs 56.5 % with leaders waiting in the open: Classic's kills from
+        // behind on Smart rose 10.0 -> 11.2 %); elsewhere keep walking slowly until one comes up on the route.
+        bool sheltered = true;
+        if (smartTune().squadWaitCover > 0.0f) {
+            const int cell = botNav_.findCell(pc.position(), 2.0f);
+            const int team = match_.players()[(size_t)b.player].team;
+            int open = 0;
+            if (cell >= 0 && (size_t)cell * 32 + 31 < smartClear_.size())
+                for (int k = 0; k < 16; ++k) open += smartClear_[(size_t)cell * 32 + (size_t)k * 2 + 1] >= smartTune().squadWaitOpenM ? 1 : 0;
+            sheltered = cell >= 0 && smartExposure(team, cell) <= 0.0f && (float)open <= smartTune().squadWaitOpenDirs;
+            if (!sheltered && s.leaderWaitSince >= 0.0f) { s.leaderWaitSince = -1.0f; }
+        }
+        if (smartTune().squadLeaderStop > 0.0f && nowS >= s.leaderWaitCooldown && sheltered) {
             if (s.leaderWaitSince < 0.0f) s.leaderWaitSince = nowS;
             if (nowS - s.leaderWaitSince <= 8.0f) waiting = true;
             else { s.leaderWaitSince = -1.0f; s.leaderWaitCooldown = nowS + 6.0f; }
         }
+        if (waiting) s.leadWaitS += dt; else if (!sheltered && nowS >= s.leaderWaitCooldown) s.leadRefusedS += dt; else s.leadSlowS += dt;
         if (waiting) {
             in.moveForward = 0.0f; in.moveRight = 0.0f; b.wantVehicle = false;
             in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting

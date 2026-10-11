@@ -49,6 +49,8 @@ struct SmartTune {
     float squadFollow = 1.0f;
     float squadHelp = 0.0f;         // help the nearest squad mate in a fight within 50 m (0: off; on after its duel check)
     float squadRegroupM = 15.0f;    // a member farther than this from its leader regroups on it
+    float squadWaitCover = 0.0f;    // 1: the leader waits only at a sheltered spot (no known enemy line, few long sightlines); else it walks on slowly
+    float squadWaitOpenM = 40.0f, squadWaitOpenDirs = 4.0f;   // sheltered: at most this many of 16 eye-height directions open beyond this range
     float squadLeaderStop = 1.0f;   // 1: a leader whose members are strung out stops (<= 8 s per wait); members over 45 m off regroup in vehicle form
     float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
@@ -103,6 +105,7 @@ struct SmartBot {
     double cohesionSum = 0.0; long cohesionN = 0;   // squad members: distance to the leader, sampled each think
     long cohesionBins[3] = {0, 0, 0}, cohesionFresh = 0;   // samples < 15 / 15-40 / > 40 m; of them, within 15 s of a respawn
     long cohesionSettledBins[3] = {0, 0, 0}; double cohesionSettledSum = 0.0;   // the same, samples 15 s or more after a respawn
+    double leadWaitS = 0.0, leadRefusedS = 0.0, leadSlowS = 0.0;   // a slowed leader: waiting / not waiting at an exposed spot / walking slowly (s)
     long farN = 0, farLeaderMoving = 0, farPathless = 0, farVehicle = 0, farLeaderFights = 0;   // settled samples over 25 m: why
     long cohesionSettledHist[100] = {};   // settled samples in 2 m bins (the last: 198 m and over), for the median
     // Hunt outcomes (diagnostics): a hunt opens an episode on its enemy for 15 s; it is won if this bot kills that enemy first, lost if
