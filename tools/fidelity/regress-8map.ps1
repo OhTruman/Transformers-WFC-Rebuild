@@ -8,9 +8,10 @@
 # free-running verdict instead) or the workload counts differ, or a row was contaminated.
 #
 #   .\tools\fidelity\regress-8map.ps1 -Base work\ab\<baseline> -Head work\ab\<head> -OutDir <dir> [-Maps 501,...] [-Steps 9600]
+#     [-BaseEnv / -HeadEnv "K=V;K=V"]: per-arm switches, e.g. -HeadEnv WFC_NOFORCEDDIR=1 holds a known sim change out of a renderer check
 param([Parameter(Mandatory)][string]$Base, [Parameter(Mandatory)][string]$Head, [Parameter(Mandatory)][string]$OutDir,
       [string[]]$Maps = @("501", "502", "503", "504", "507", "508", "509", "510"), [int]$Steps = 9600, [int]$From = 600,
-      [string]$RenderSize = "3840x2160", [double]$Block = 0.15, [int]$Seed = 1234, [switch]$ReportOnly)
+      [string]$RenderSize = "3840x2160", [double]$Block = 0.15, [int]$Seed = 1234, [string]$BaseEnv = "", [string]$HeadEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })
@@ -21,7 +22,7 @@ $table = New-Object System.Collections.Generic.List[string]
 $table.Add("| map | base p90 (best of 2) | head p90 (best of 2) | delta | verdict | note |"); $table.Add("|---|---|---|---|---|---|")
 foreach ($m in $Maps) {
     $d = Join-Path $OutDir "map-$m"
-    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ab, "-OutDir", $d, "-Map", $m, "-Arms", "base|$Base|;;head|$Head|",
+    $args = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ab, "-OutDir", $d, "-Map", $m, "-Arms", "base|$Base|$BaseEnv;;head|$Head|$HeadEnv",
               "-Steps", "$Steps", "-From", "$From", "-RenderSize", $RenderSize, "-PlayerBot", "1", "-Reps", "2", "-Seed", "$Seed")
     if ($ReportOnly) { $args += "-ReportOnly" }
     & powershell @args | Set-Content -Encoding UTF8 (Join-Path $OutDir "map-$m.out")
@@ -41,6 +42,7 @@ foreach ($m in $Maps) {
     Res "$m" $st ("head p90 {0} vs base {1} (best valid of 2 runs each; delta {2:+0.00;-0.00} ms; BLOCK above +{3}){4}" -f $h, $b, $delta, $Block, $(if ($bad.Count) { "; invalid runs: " + ($bad -join "; ") } else { "" })) "Rendering"
     $table.Add(("| {0} | {1} | {2} | {3:+0.00;-0.00} | {4} | {5} |" -f $m, $b, $h, $delta, $(if ($st -eq "FAIL") { "**BLOCK**" } else { "PASS" }), ($bad -join '; ')))
 }
+if ($BaseEnv -or $HeadEnv) { $table.Insert(0, "Arm switches: base '$BaseEnv', head '$HeadEnv'`n") }
 $table | Set-Content -Encoding UTF8 (Join-Path $OutDir "REGRESSION.md")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 "REGRESSION (8 maps, lockstep): " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
