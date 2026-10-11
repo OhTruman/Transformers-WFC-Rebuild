@@ -881,6 +881,30 @@ void GfxPresenter::syncWorldLabels() {
     // 100 %, farthest kept 40 %).
     float dmin = 1e30f, dmax = 0.0f;
     for (const auto& l : worldLabels_) { dmin = std::min(dmin, l.depth); dmax = std::max(dmax, l.depth); }
+    {   // diagnostics: the team values the labels carry (once, when the overlay first has labels)
+        static bool logged = false;
+        if (!logged && !worldLabels_.empty()) {
+            logged = true;
+            int t0 = 0, t1 = 0, tn = 0;
+            for (const auto& l : worldLabels_) (l.team == 0 ? t0 : l.team == 1 ? t1 : tn)++;
+            frontend::FlowTrace::emit("playtest.botOverlayTeams", {{"team0", std::to_string(t0)}, {"team1", std::to_string(t1)}, {"none", std::to_string(tn)}});
+        }
+    }
+    // Labels are nearest-first: each takes its projected point, moved down a line while its (estimated) text box would
+    // overlap an already placed label, so clustered bots stay readable (stage units: ~6 per character, 13 per line).
+    struct PlacedBox { double x0, y0, x1, y1; };
+    std::vector<PlacedBox> placed;
+    auto placeLabel = [&](double x, double y, size_t chars) {
+        const double w = 6.0 * (double)chars, h = 13.0;
+        for (int step = 0; step < 16; ++step) {
+            bool hit = false;
+            for (const PlacedBox& b : placed) if (x < b.x1 && b.x0 < x + w && y < b.y1 && b.y0 < y + h) { hit = true; break; }
+            if (!hit) break;
+            y += h;
+        }
+        placed.push_back({x, y, x + w, y + h});
+        return y;
+    };
     size_t i = 0;
     for (; i < worldLabels_.size(); ++i) {
         const std::string name = "l" + std::to_string(i);
@@ -892,7 +916,7 @@ void GfxPresenter::syncWorldLabels() {
         }
         const gfx::Point s = inv.apply({worldLabels_[i].x, worldLabels_[i].y});
         vm.setV(c, "_x", gfx::avm1::Value((double)(s.x / 20.0f)));
-        vm.setV(c, "_y", gfx::avm1::Value((double)(s.y / 20.0f)));
+        vm.setV(c, "_y", gfx::avm1::Value(placeLabel(s.x / 20.0, s.y / 20.0, worldLabels_[i].text.size())));
         const float span = dmax - dmin;
         const double alpha = span > 1e-3f ? 100.0 - 60.0 * (worldLabels_[i].depth - dmin) / span : 100.0;
         vm.setV(c, "_alpha", gfx::avm1::Value(alpha));
