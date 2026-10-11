@@ -3,6 +3,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 #include "frontend/Catalog.h"
+#include "frontend/OpenPath.h"
 
 #include <algorithm>
 #include <cctype>
@@ -23,7 +24,7 @@ std::string baseNoExt(const std::string& p) {
 
 bool GfxLibrary::load(const std::string& manifestRoot, const std::string& extractedRoot) {
     extracted_ = extractedRoot;
-    std::ifstream f(manifestRoot + "/frontend_gfx.json", std::ios::binary);
+    std::ifstream f(frontend::openPath(manifestRoot + "/frontend_gfx.json"), std::ios::binary);
     if (!f) { LOG_WARN("GFX library: no frontend_gfx.json under %s", manifestRoot.c_str()); return false; }
     std::stringstream ss; ss << f.rdbuf();
     assets::Json j;
@@ -43,7 +44,7 @@ bool GfxLibrary::load(const std::string& manifestRoot, const std::string& extrac
     }
     fontLib_ = byBase_.count("fonts_efigs") ? byBase_["fonts_efigs"] : "";
     // [Fonts] of TransGame GFxUI.int: HeaderFont / NormalFont / TitleFont [CONFIRMED].
-    std::ifstream g(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/GFxUI.int");
+    std::ifstream g(frontend::openPath(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/GFxUI.int"));
     std::string line, section;
     while (std::getline(g, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();

@@ -1,5 +1,6 @@
 #include "frontend/GraphicsAutoDetect.h"
 #include "assets/Json.h"
+#include "frontend/OpenPath.h"
 
 #include <cstdio>
 #include <fstream>
@@ -14,7 +15,7 @@ std::string HardwareFacts::gpuId() const {
 }
 
 bool GraphicsPresetTable::load(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     if (!f) return false;
     std::stringstream ss;
     ss << f.rdbuf();

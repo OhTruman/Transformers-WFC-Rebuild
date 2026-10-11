@@ -1,5 +1,6 @@
 // Clean-room reconstruction - see InputPrompts.h.
 #include "frontend/InputPrompts.h"
+#include "frontend/OpenPath.h"
 
 #include <cmath>
 #include <fstream>
@@ -23,7 +24,7 @@ std::string field(const std::string& line, const std::string& name) {
 // The lines of one [section] of an ini / int file.
 std::vector<std::string> sectionLines(const std::string& path, const std::string& section) {
     std::vector<std::string> out;
-    std::ifstream f(path);
+    std::ifstream f(openPath(path));
     std::string line;
     bool in = false;
     while (std::getline(f, line)) {
