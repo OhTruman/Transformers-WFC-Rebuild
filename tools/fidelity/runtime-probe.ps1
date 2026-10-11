@@ -53,6 +53,7 @@ function Run-Scenario($scn, [hashtable]$envs, [int]$frames, [switch]$Shot) {
     $bmp = Join-Path $out "$scn.bmp"
     Remove-Item -LiteralPath $log, $bmp, (Join-Path $out "$scn.png") -ErrorAction SilentlyContinue
     $all = @{ WFC_SMOKE_FRAMES = "$frames"; WFC_LOCKSTEP = "1" } + $envs   # frames = simulated 1/60 s steps
+    if (-not $all.ContainsKey("WFC_BOTAI")) { $all.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
     if ($Shot) { $all.WFC_SHOT = $bmp }
     if ($RenderData) { $all.WFC_RENDER_DATA = $RenderData }
     $saved = @{}

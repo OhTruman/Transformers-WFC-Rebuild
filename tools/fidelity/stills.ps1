@@ -31,6 +31,7 @@ function Cam([double[]]$offset, [double]$lookUp = 2.0) {
 function Shot($dir, $name, [hashtable]$envs, [int]$frames) {
     $bmp = Join-Path $dir "$name.bmp"; $log = Join-Path $dir "$name.log"
     $all = @{ WFC_SMOKE_FRAMES = "$frames"; WFC_SHOT = $bmp; WFC_LOGEVERY = "1" } + $envs
+    if (-not $all.ContainsKey("WFC_BOTAI")) { $all.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
     $saved = @{}; foreach ($k in $all.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, "Process"); [Environment]::SetEnvironmentVariable($k, [string]$all[$k], "Process") }
     try { $p = Start-Process -FilePath $Exe -WorkingDirectory $dir -NoNewWindow -Wait -PassThru -RedirectStandardOutput $log -RedirectStandardError "$log.err" }
     finally { foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], "Process") } }

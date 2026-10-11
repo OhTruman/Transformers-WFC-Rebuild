@@ -28,6 +28,7 @@ Remove-Item -LiteralPath $bmp, $png -ErrorAction SilentlyContinue
 
 $saved = @{}
 $all = @{ WFC_SMOKE_FRAMES = "$Frames"; WFC_SHOT = $bmp } + $Env
+if (-not $all.ContainsKey("WFC_BOTAI")) { $all.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
 foreach ($k in $all.Keys) {
     $saved[$k] = [Environment]::GetEnvironmentVariable($k, "Process")
     [Environment]::SetEnvironmentVariable($k, [string]$all[$k], "Process")
