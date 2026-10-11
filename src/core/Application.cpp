@@ -2211,6 +2211,12 @@ void Application::runParticipantTest() {
                         core::Vec3 p{x, gy + 2.0f, z}; float th; core::Vec3 hn;
                         const core::Vec3 launch = core::forwardFromYawPitch(world_.player().controller().camYaw(), 1.0f) * 100.0f;   // the 57 deg launch line
                         if (ww->segmentHit(p, p + core::Vec3{0, 100.0f, 0}, th, hn) || ww->segmentHit(p, p + launch, th, hn) || cw->segmentHit(p, p + core::Vec3{0, 40.0f, 0}, th)) continue;   // pawn-only ceilings (blocking volumes) sit higher
+                        // The steer check turns the missile right: clear launch lines 0.35 rad either side too (a wall beside the
+                        // straight line ended the flight before the detonate press, and that press then fired the next phase's ability).
+                        bool side = false;
+                        for (float dy : {-0.35f, 0.35f})
+                            side = side || ww->segmentHit(p, p + core::forwardFromYawPitch(world_.player().controller().camYaw() + dy, 1.0f) * 100.0f, th, hn);
+                        if (side) continue;
                         open = true; lp.setPosition(core::Vec3{x, gy + 0.1f, z});
                         LOG_INFO("PARTICIPANT missile open sky at (%.1f %.1f %.1f)", x, gy, z);
                     }
