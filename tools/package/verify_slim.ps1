@@ -103,8 +103,13 @@ if (-not $NoHd) {
                @{ Dir = Join-Path $pkgTop 'hd'; Where = '<package>\hd (needs WFC_HD_ROOT: the loader default is AssetTools\out\hd)' })
     $found = @($cands | Where-Object { Test-Path -LiteralPath (Join-Path $_.Dir 'hd_index.json') })
     $strays = @($cands | Where-Object { (Test-Path -LiteralPath $_.Dir) -and -not (Test-Path -LiteralPath (Join-Path $_.Dir 'hd_index.json')) })
-    foreach ($s in $strays) { $hd.Problems += "HD folder without hd_index.json: $($s.Dir)" }
+    foreach ($s in $strays) {
+        $dev = Test-Path -LiteralPath (Join-Path $s.Dir 'pack\hd_index.json')
+        $hd.Problems += "HD folder without hd_index.json at its root: $($s.Dir)$(if ($dev) { ' (dev layout pack\hd_index.json: the package ships the root form, indexed files only)' })"
+    }
     if ($found.Count -gt 1) { $hd.Problems += 'HD pack shipped twice (AssetTools\out\hd and <package>\hd)' }
+    # The shipped layout (Integration, 2026-10-11): the loader default with hd_index.json at its root; -Strict tests only that.
+    if ($Strict -and $found.Count -and $found[0].Dir -ne $cands[0].Dir) { $hd.Problems += '-Strict: HD pack must ship at Transformers Rebuild\AssetTools\out\hd (the loader default Play.bat resolves), not <package>\hd' }
     if ($found.Count) {
         $hd.Root = $found[0].Dir; $hd.Where = $found[0].Where
         $J = Get-Content -LiteralPath (Join-Path $hd.Root 'hd_index.json') -Raw -Encoding UTF8 | ConvertFrom-Json
