@@ -3251,13 +3251,13 @@ void World::tickMatch(float dt) {
         if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
         // The carrier holds the heavy weapon (TnWeaponFlag1Hand MWT_Flag / TnWeaponBomb MWT_Bomb, WT_Heavy) [CONF].
         { int ci = mapState_.carriedBy(localPlayer_); pc.carryingHeavy_ = ci >= 0 ? mapState_.carried()[(size_t)ci].kind + 1 : 0; }
-        // HurtRadius (bomb detonation, AOE): every match pawn within the radius.
+        // HurtRadius (bomb detonation, AOE): every match pawn within the radius in sight of the bomb (VisibleCollidingActors).
         for (const auto& rd : sc.radiusDamage) {
             LOG_INFO("match: HurtRadius %.0f within %.0f m (%s)", rd.damage, rd.radius, rd.damageType.c_str());
-            if (!localDead_ && core::length(pc.actorLocation() - rd.pos) <= rd.radius)
+            if (!localDead_ && core::length(pc.actorLocation() - rd.pos) <= rd.radius && radiusVisible(rd.pos, pc.actorLocation()))
                 applyMatchDamage(localPlayer_, rd.instigator, rd.damage, true, rd.damageType);
             for (MatchOpponent* o : opponents_)
-                if (o->spawned() && core::length(o->position() - rd.pos) <= rd.radius)
+                if (o->spawned() && core::length(o->position() - rd.pos) <= rd.radius && radiusVisible(rd.pos, o->pawn().actorLocation()))
                     applyMatchDamage(o->matchPlayer(), rd.instigator, rd.damage, true, rd.damageType);
         }
         std::vector<Match::SpawnModifier> mods;
@@ -4144,6 +4144,24 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
     projectileFxStart(projectiles_.back());
 }
 
+// Actor.HurtRadius takes its victims from VisibleCollidingActors(class'Actor', DamageRadius, HurtOrigin): a zero-extent
+// TRACE_World | TRACE_StopAtAnyHit line from HurtOrigin to the victim's Location must not hit the world [HIGH stock UE3], so a
+// blast does not reach through floors or walls. World = the static line-check geometry; movers and spawned barriers are not
+// tested [PARTIAL]. A blast that starts on a surface (an impact point, a mine on the floor) skips a hit within its first 5 cm:
+// the start surface crossed outward, which a UE3 line check does not report [PROV numerical].
+bool World::radiusVisible(const core::Vec3& origin, const core::Vec3& victimLocation) const {
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    float t;
+    if (!line || !line->segmentHit(origin, victimLocation, t)) return true;
+    const core::Vec3 d = victimLocation - origin; const float len = core::length(d);
+    const bool visible = !(len <= 0.05f || t * len >= 0.05f) && !line->segmentHit(origin + d * (0.05f / len), victimLocation, t);
+    static const bool logBlocked = std::getenv("WFC_HURTVISLOG") != nullptr;   // gate diagnostics: each victim the trace removes
+    if (!visible && logBlocked)
+        LOG_INFO("hurtradius: blocked at t %.2f from (%.1f %.1f %.1f) to (%.1f %.1f %.1f)", match_.matchTime(), origin.x, origin.y, origin.z,
+                 victimLocation.x, victimLocation.y, victimLocation.z);
+    return visible;
+}
+
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
     if (anySmart_) { std::lock_guard<std::mutex> lk(smartBlastMutex_); smartBlasts_.push_back({at, instigator, 2, match_.matchTime()}); }
     // Actor.HurtRadius -> TakeRadiusDamage: Dist = max(|Location - origin| - collision radius, 0), scale = 1 - Dist / DamageRadius
@@ -4156,31 +4174,35 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     auto colR = [](const Character& c) { return c.cylinderRadius(c.moveForm()); };
     if (matchActive_ && !localDead_) {
         float k = falloff(player_.pawn().actorLocation(), colR(player_.pawn()));
-        if (k > 0.0f) applyMatchDamage(localPlayer_, instigator, damage * k, false, type);
+        if (k > 0.0f && radiusVisible(at, player_.pawn().actorLocation())) applyMatchDamage(localPlayer_, instigator, damage * k, false, type);
     }
     for (MatchOpponent* o : opponents_) {
         if (!o->spawned()) continue;
         float k = falloff(o->pawn().actorLocation(), colR(o->pawn()));
-        if (k > 0.0f) applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type);
+        if (k > 0.0f && radiusVisible(at, o->pawn().actorLocation())) applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type);
     }
     for (Destructible* d : destructibles_)
-        if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+        if (d->state() == 0) {
+            core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c);
+            if (k > 0.0f && radiusVisible(at, d->position())) d->applyDamage(*this, damage * k);
+        }
     for (size_t ri = 0; ri < rollers_.size(); ++ri) {
         if (!rollers_[ri].alive) continue;
         float dd = std::max(0.0f, core::length(rollers_[ri].pos - at) - 1.21f);
-        if (dd < radius) damageRollerAt(ri, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
+        if (dd < radius && radiusVisible(at, rollers_[ri].pos)) damageRollerAt(ri, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
     }
     for (size_t si = 0; si < sentries_.size(); ++si) {
         if (!sentries_[si].alive) continue;
-        float dd = std::max(0.0f, core::length(sentries_[si].pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
-        if (dd < radius) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
+        const core::Vec3 sc = sentries_[si].pos + core::Vec3{0, 2.0f, 0};
+        float dd = std::max(0.0f, core::length(sc - at) - 2.0f);
+        if (dd < radius && radiusVisible(at, sc)) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
     }
     for (size_t bi = 0; bi < beacons_.size(); ++bi)
-        if (beacons_[bi].alive && core::length(beacons_[bi].pos - at) < radius)
+        if (beacons_[bi].alive && core::length(beacons_[bi].pos - at) < radius && radiusVisible(at, beacons_[bi].pos))
             damageAmmoBeaconAt(bi, damage * (1.0f - core::length(beacons_[bi].pos - at) / std::max(radius, 1e-3f)), instigator);
     for (size_t bi = 0; bi < barriers_.size(); ++bi) {
         const BarrierState& barrier_ = barriers_[bi];
-        if (!barrier_.alive) continue;
+        if (!barrier_.alive || !radiusVisible(at, barrier_.pos)) continue;
         // Distance to the wall box (clamped point), not its centre.
         core::Vec3 l = core::transformPoint(barrier_.boxInv, at);
         core::Vec3 q{std::max(-barrier_.half.x, std::min(l.x, barrier_.half.x)), std::max(-barrier_.half.y, std::min(l.y, barrier_.half.y)),
@@ -4427,7 +4449,7 @@ void World::applyShockwave(Character& pc, int self) {
     const core::Vec3 at = pc.actorLocation();
     LOG_INFO("ability Shockwave (p%d): 65 within 25 m", self);
     auto hit = [&](int victim, const Character& v) {
-        if (victim == self || core::length(v.actorLocation() - at) > 25.0f) return;
+        if (victim == self || core::length(v.actorLocation() - at) > 25.0f || !radiusVisible(at, v.actorLocation())) return;
         const core::Vec3 dir = v.actorLocation() - at;
         applyMatchDamage(victim, self, 65.0f, false, "TransGame.TnDamageTypeShockwave");
         if (core::length(dir) > 1e-4f && !(match_.settings().teamGame && match_.sameTeam(victim, self)))
@@ -4436,7 +4458,7 @@ void World::applyShockwave(Character& pc, int self) {
     for (MatchOpponent* o : opponents_) if (o->spawned()) hit(o->matchPlayer(), o->pawn());
     if (self != localPlayer_ && !localDead_) hit(localPlayer_, player_.pawn());
     for (Destructible* d : destructibles_)
-        if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
+        if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f && radiusVisible(at, d->position())) d->applyDamage(*this, 65.0f);
 }
 
 // Every participant's ability actors, at the start of the background part (after the local controller, before the bots): off the main
@@ -5065,7 +5087,6 @@ void World::tickAmmoBeacon(float dt) {
     };
     tickBuff(player_.pawn());
     for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
-    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
     for (AmmoBeacon& b : beacons_) {
         const Character* owner = participantPawn(b.owner);
         if (b.delay >= 0.0f) {
@@ -5102,8 +5123,7 @@ void World::tickAmmoBeacon(float dt) {
             if (p != b.owner && !(teamGame && match_.sameTeam(p, b.owner))) continue;
             Character* c = participantPawnMutable(p);
             if (!c || core::length(c->actorLocation() - b.pos) > 15.0f) continue;
-            float t;
-            if (line && line->segmentHit(eye, c->actorLocation(), t)) continue;   // VisibleCollidingActors
+            if (!radiusVisible(eye, c->actorLocation())) continue;   // VisibleCollidingActors
             Weapon& w = c->weapon();
             if (w.reserve < w.reserveMax) w.reserve = w.reserveMax;              // FillReserveAmmo
             c->beaconDamageBuff_ = 1.0f;                                          // AddBuff / ResetBuffTime

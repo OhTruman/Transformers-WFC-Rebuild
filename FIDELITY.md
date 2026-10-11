@@ -4182,7 +4182,8 @@ Inputs:
   - Test: Optimus with one friendly in range took 40 of 100; cooldown 59.5 s right after the buff.
 - **Shockwave** (TnAbilityShockwave, CONF):
   - after Delay 0.25 s, Blueprint[0] Damage 65 within 2500 UU (bDoFullDamage) from the PositionSocket; Cooldown 60 s;
-  - the owner is not hurt [HIGH]; the 700000 momentum knock-back is not applied [PARTIAL].
+  - the owner is not hurt [HIGH]; the 700000 momentum knock-back from the origin to the victim (see Knockback);
+  - victims in sight of the origin only (HurtRadius visibility, below) [HIGH stock].
   - Test: 65 damage to an enemy 10 m away, nothing before the delay.
 - **Cloaking:**
   - TnBuffCloak BuffTime[0] 20 s;
@@ -4499,7 +4500,8 @@ Classification:
   - neutral factory; anyone takes it; GRI.AttackingTeam = holder team;
   - plant on the ENEMY TnBombPlantPoint (ObjectiveVolume) → FuseTime 15;
   - defenders inside accumulate DefuseTime 5 (reset when none) → the bomb drops at the point (DefuseBombSpawnClass);
-  - detonation → ScoreObjective(planter, 1), HurtRadius DetonateDamage 9999 / DetonateRadius 5000 UU (AOE), bomb home,
+  - detonation → ScoreObjective(planter, 1), HurtRadius DetonateDamage 9999 / DetonateRadius 5000 UU (AOE; victims in sight
+    of the bomb, HurtRadius visibility), bomb home,
     factory WaitAfterScoreTime 5;
   - PointsToWin 3, TimeLimit 900.
   - All values come from authored TnBombPlantPointBase / TnDroppedPickupFlagBase / factory defaults [CONF].
@@ -4561,6 +4563,16 @@ Classification:
 - Flight is straight. Homing lock-on (TnProjectileDataHoming HomingForce / ClosingForce) is PARTIAL: fired straight.
 - On any hit: HurtRadius with stock UE3 linear falloff [HIGH]. Teammates are filtered; the instigator is never hit by its
   own shot in flight.
+- **HurtRadius visibility** [HIGH stock UE3 Actor.HurtRadius / VisibleCollidingActors]: a victim is hit only when a zero-extent
+  world line (TRACE_World, stop at any hit) from HurtOrigin to its Location is clear, so blasts do not reach through floors
+  or walls. One helper (World::radiusVisible) serves every HurtRadius in the rebuild: projectiles, grenades, mines, roller
+  spheres, the guided missile, Shockwave, the bomb detonation, and the victims pawns, destructibles, rollers, sentries,
+  beacons and barriers; the Ammo Beacon's pickup sight test uses it too.
+  - World = the static line-check geometry; movers and spawned barriers do not block it [PARTIAL].
+  - A blast that starts on a surface skips a hit in its first 5 cm (the start surface crossed outward) [PROV numerical].
+  - Stock Projectile.ProjectileHurtRadius (origin moved off a world surface along HitNormal) is not modelled: a TnProjectile
+    override is not checked [PROV].
+  - Before this, a Warpath's Shockwave under a spawn platform threw the bots on it ~65 m/s straight up (b45 / b46 spawn launches).
 - **Damage taken** is scaled by the victim form's DamageMultiplier (ROBODEF 1.0; VEHDEF e.g. 0.75 tank, 0.8 jet, 0.9 car)
   and, for self damage, by SelfDamageMultiplier 0.45 [CONF data; HIGH placement in TakeDamage].
 - **Vehicle form fires** its CharacterData.VehicleWeapons[0] (projectile or hitscan). Origin = the chassis' vehicle
