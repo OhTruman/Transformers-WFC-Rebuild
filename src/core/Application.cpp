@@ -5760,8 +5760,8 @@ void Application::runAiDuel() {
     long st[2][8] = {{0}};
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
-    long flD = 0, mateH = 0;
-    long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}};
+    long flD = 0, mateH = 0, farS[5] = {0, 0, 0, 0, 0};
+    long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}}, aeN[2][4] = {{0}}; double aeS[2][4] = {{0}};
     long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
     for (int seed = s0; seed <= s1; ++seed) {
@@ -5791,6 +5791,7 @@ void Application::runAiDuel() {
                     for (int k = 0; k < 3; ++k) cohSet[k] += sb->cohesionSettledBins[k];
                     cohSetSum += sb->cohesionSettledSum;
                     for (int k = 0; k < 100; ++k) cohHist[k] += sb->cohesionSettledHist[k];
+                    farS[0] += sb->farN; farS[1] += sb->farLeaderMoving; farS[2] += sb->farPathless; farS[3] += sb->farVehicle; farS[4] += sb->farLeaderFights;
                     epi[0] += sb->flankWins; epi[1] += sb->flankLosses; epi[2] += sb->huntWins; epi[3] += sb->huntLosses;
                     flD += sb->flanksDropped; mateH += sb->mateHolds;
                     cov[0] += sb->coverReached; cov[1] += sb->coverSpoiled; cov[2] += sb->coverNoFight; cov[3] += sb->coverHeldSpoiled; cov[4] += sb->coverHeldEnded;
@@ -5804,6 +5805,7 @@ void Application::runAiDuel() {
                 for (int k = 0; k < 36; ++k) { dfS[side][k] += bb.diffShots[(size_t)k]; dfH[side][k] += bb.diffHits[(size_t)k]; }
                 for (int k = 0; k < 16; ++k) { tvS[side][k] += bb.tvShots[(size_t)k]; tvH[side][k] += bb.tvHits[(size_t)k]; }
                 for (int k = 0; k < 20; ++k) tro[side][k] += bb.traceOut[(size_t)k];
+                for (int k = 0; k < 4; ++k) { aeS[side][k] += bb.aimErrSum[(size_t)k]; aeN[side][k] += bb.aimErrN[(size_t)k]; }
                 angS[side] += bb.angSum; selfS[side] += bb.selfSum;
                 if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
             }
@@ -5853,6 +5855,13 @@ void Application::runAiDuel() {
                                         cov9 > 0.0 ? 100.0 * mix / cov9 : 0.0, nc ? 100.0 * sh / nc : 0.0, 100.0 * cov9);
         }
         LOG_INFO("AIDUEL shot mix: Smart hit %% at Classic's shot mix vs Classic, by range:%s", line);
+        {
+            char al[256] = ""; size_t ap = 0;
+            for (int band = 0; band < 4; ++band)
+                ap += (size_t)std::snprintf(al + ap, sizeof al - ap, " %s %.2f / %.2f;", bandN[band], aeN[0][band] ? aeS[0][band] / aeN[0][band] : 0.0,
+                                            aeN[1][band] ? aeS[1][band] / aeN[1][band] : 0.0);
+            LOG_INFO("AIDUEL aim error at fire (deg, Smart / Classic):%s", al);
+        }
         for (int band = 0; band < 4; ++band) {   // trace outcomes (% of the band's traces), Smart / Classic
             char ol[300] = ""; size_t op = 0;
             static const char* oN[5] = {"target", "other enemy", "team mate", "world in front", "clean miss"};
@@ -5898,6 +5907,9 @@ void Application::runAiDuel() {
         long n = 0; for (int k = 0; k < 100; ++k) n += cohHist[k];
         long acc = 0; int med = -1; for (int k = 0; k < 100 && med < 0; ++k) { acc += cohHist[k]; if (2 * acc >= n && n > 0) med = k; }
         LOG_INFO("AIDUEL squad settled median: %d-%d m (%ld samples)", med * 2, med * 2 + 2, n);
+        auto pf = [&](int k) { return farS[0] ? 100.0 * farS[k] / farS[0] : 0.0; };
+        LOG_INFO("AIDUEL squad over 25 m (%.0f %% of settled samples): leader moving %.0f %%, member pathless %.0f %%, a vehicle form %.0f %%, leader fighting %.0f %%",
+                 n ? 100.0 * farS[0] / n : 0.0, pf(1), pf(2), pf(3), pf(4));
     }
     LOG_INFO("AIDUEL SUMMARY: Smart %d wins / %d losses / %d ties (%.0f %% of decided); kills Smart %ld vs Classic %ld (%.0f %%)", wins, losses, ties,
              wins + losses ? 100.0 * wins / (wins + losses) : 0.0, smartKills, classicKills,

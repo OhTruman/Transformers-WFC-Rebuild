@@ -744,6 +744,11 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
             if (b.progressWp != b.wp) { b.progressWp = b.wp; b.progressBest = dl; b.progressT = 0.0f; }
             else if (dl < b.progressBest - 0.5f) { b.progressBest = dl; b.progressT = 0.0f; }
             else if ((b.progressT += dt) >= 3.0f) { noProgress = true; b.progressT = 0.0f; b.progressBest = dl; }
+            // Smart standing still on purpose (holding cover, a squad leader waiting: smartSteerPost, last step) is not stuck: no count and
+            // no recovery (the jump / repath / new goal moved bots out of their cover; the M2 400 counted Smart stucks 1.4-3x Classic's).
+            if (anySmart_ && botIsSmart(b.player) && smart_[(size_t)b.player].holdStill) {
+                b.stuckT = 0.0f; b.stuckPos = pos; b.progressT = 0.0f; b.progressBest = dl; noProgress = false;
+            }
             if ((b.stuckT += dt) >= 1.5f || noProgress) {
                 if ((noProgress || hdist(pos, b.stuckPos) < 0.75f) && !pc.isTransforming()) {
                     if (b.stuckLevel >= 2) {   // the wedge spot: the current corner's cell and the bot's own
@@ -1044,6 +1049,10 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
             sm.mateBlockedAt = match_.matchTime(); ++sm.mateHolds;
             return;
         }
+    }
+    {   // diagnostics: the aim error of this shot (same aim: equal per band for both AIs)
+        const int bin = dist < 10.0f ? 0 : dist < 25.0f ? 1 : dist < 50.0f ? 2 : 3;
+        b.aimErrSum[(size_t)bin] += std::acos(core::clampf(core::dot(aimDir, toT), -1.0f, 1.0f)) * 57.29578; ++b.aimErrN[(size_t)bin];
     }
     // Fire along the eased aim (the error is in where the bot looks, not in a second random draw; spread applies on top).
     botFire(o, b, *w, eye + aimDir * std::max(1.0f, dist));
@@ -1382,7 +1391,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
     const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
     const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
     if (visible) s.lostTargetAt = now;
-    s.leaderSlow = false;   // re-set by the squad leader branch while it applies
+    s.leaderSlow = false; s.regroupFar = false;   // re-set by the squad branches while they apply
     if (s.ownMission) { b.mission = false; s.ownMission = false; }   // re-set below while the action still wants it
     // Vehicle form: hunting, squads, focus, retreat and pickups apply (the Classic transform logic still picks the form); cover and
     // segment breaks are robot-only. WFC_SMARTTUNE vehicle=0 restores the earlier robot-only Smart.
@@ -1561,7 +1570,10 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             float bestScore = 1e9f; core::Vec3 best = pos; bool found = false;
             for (int k = 0; k < 16; ++k) {
                 const float a = 6.2831853f * (float)k / 16.0f;
-                for (float r : {5.0f, 10.0f, 15.0f}) {
+                // coverNear: nearer spots (3 / 6 / 10 m), reached before the fight is over (WFC_AIDUEL Molten: 36 % of cover moves
+                // ended with the fight still on the way; only held cover counts as time in cover).
+                const float rs[3] = {smartTune().coverNear > 0.0f ? 3.0f : 5.0f, smartTune().coverNear > 0.0f ? 6.0f : 10.0f, smartTune().coverNear > 0.0f ? 10.0f : 15.0f};
+                for (float r : rs) {
                     const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
                     const int c = botNav_.findCell(q, 2.0f, 3.0f);
                     if (c < 0) continue;
@@ -1682,7 +1694,14 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                 const float cd = hdist(lp->position(), pos);
                 s.cohesionSum += cd; ++s.cohesionN; ++s.cohesionBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2];
                 if (b.life < 15.0f) ++s.cohesionFresh;
-                else { ++s.cohesionSettledBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2]; s.cohesionSettledSum += cd; ++s.cohesionSettledHist[std::min(99, (int)(cd * 0.5f))]; }
+                else { ++s.cohesionSettledBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2]; s.cohesionSettledSum += cd; ++s.cohesionSettledHist[std::min(99, (int)(cd * 0.5f))];
+                       if (cd > 25.0f) {   // why apart (diagnostics): leader moving / member pathless / either in vehicle form / leader fighting
+                           ++s.farN;
+                           if (std::sqrt(lp->velocity().x * lp->velocity().x + lp->velocity().z * lp->velocity().z) > 2.0f) ++s.farLeaderMoving;
+                           if (b.path.empty() || b.wp >= b.path.size()) ++s.farPathless;
+                           if (lp->moveForm() == Form::Vehicle || pc.moveForm() == Form::Vehicle) ++s.farVehicle;
+                           for (const BotBrain& lbb : bots_) if (lbb.player == leader) { if (lbb.target >= 0 && lbb.seen.count(lbb.target) && lbb.seen.at(lbb.target).visible) ++s.farLeaderFights; break; }
+                       } }
             }
             if (lb && lp) {
                 const bool leaderFights = lb->target >= 0 && lb->seen.count(lb->target) && lb->seen.at(lb->target).visible;
@@ -1694,6 +1713,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                     return;
                 }
                 if (hdist(lp->position(), pos) > smartTune().squadRegroupM) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
+                    s.regroupFar = hdist(lp->position(), pos) > 45.0f;
                     // Where the leader is going (a Roam trip), not where it is: chasing its position at the same speed kept a constant
                     // gap, and a chase under the 45 m vehicle-travel range walked while the leader drove to its far goal
                     // (WFC_AISQUADLOG Gorge: 30-90 m trails). Sharing the trip shares the travel form and the arrival point.
@@ -1827,7 +1847,23 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
     if (engaged) s.engagedSeconds += dt;
     if (pc.moveForm() == Form::Vehicle) return;
     // A squad leader slowing for its members (smartDecide): walking pace, robot form, unless in a fight.
-    if (s.leaderSlow && !engaged) { in.moveForward *= 0.4f; in.moveRight *= 0.4f; b.wantVehicle = false; }
+    // squadLeaderStop: the leader stops and looks around for up to 8 s per wait (then 6 s on the move before the next one), so members
+    // close the gap (M2 diagnosis: in 80 % of the samples with a member over 25 m off, the leader was moving faster than 2 m/s).
+    if (s.leaderSlow && !engaged) {
+        const float nowS = match_.matchTime();
+        bool waiting = false;
+        if (smartTune().squadLeaderStop > 0.0f && nowS >= s.leaderWaitCooldown) {
+            if (s.leaderWaitSince < 0.0f) s.leaderWaitSince = nowS;
+            if (nowS - s.leaderWaitSince <= 8.0f) waiting = true;
+            else { s.leaderWaitSince = -1.0f; s.leaderWaitCooldown = nowS + 6.0f; }
+        }
+        if (waiting) {
+            in.moveForward = 0.0f; in.moveRight = 0.0f; b.wantVehicle = false;
+            in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting
+        } else { in.moveForward *= 0.4f; in.moveRight *= 0.4f; b.wantVehicle = false; }
+    } else if (s.leaderWaitSince >= 0.0f) s.leaderWaitSince = -1.0f;   // the squad closed up: the next wait starts afresh
+    // A member over 45 m from its leader regroups in vehicle form (the same travel speed as a leader on a trip).
+    if (s.regroupFar && !engaged && smartTune().squadLeaderStop > 0.0f && match_.matchTime() >= b.noVehicleUntil) b.wantVehicle = true;
     // A shot held for a team mate on the line (botAimAndFire): sidestep across the line of fire for a clear shot (the side alternates
     // every 2 s, per bot), unless taking or holding cover.
     if (match_.matchTime() - s.mateBlockedAt < 0.6f && s.action != SmartBot::TakeCover && s.action != SmartBot::HoldCover) {
@@ -1904,10 +1940,10 @@ void World::tickBots(float dt) {
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
-            const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut;
+            const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut; const std::array<double, 4> aes = b.aimErrSum; const std::array<int, 4> aen = b.aimErrN;
             const std::array<int, 36> ds = b.diffShots, dh = b.diffHits; const double as = b.angSum, ss = b.selfSum;
             b = BotBrain{};
-            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.tvShots = tvs; b.tvHits = tvh; b.traceOut = tro; b.angSum = as; b.selfSum = ss;
+            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.tvShots = tvs; b.tvHits = tvh; b.traceOut = tro; b.aimErrSum = aes; b.aimErrN = aen; b.angSum = as; b.selfSum = ss;
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;
@@ -1959,6 +1995,11 @@ void World::tickBots(float dt) {
         Character& pc = o->pawn();
         MoveIntent& in = pb.in;
         if (!o->spawned()) continue;   // killed earlier in this pass
+        if (anySmart_ && botIsSmart(b.player)) {   // deliberately still this step (the stuck check skips it next step)
+            SmartBot& hs = smart_[(size_t)b.player];
+            hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f) &&
+                           in.moveForward == 0.0f && in.moveRight == 0.0f;
+        }
         if (b.suicideWish) {   // stranded 30 s with no way back (botSteer): DmgType_Suicided, no score change, the normal respawn wave
             b.suicideWish = false;
             const Match::KillContext kc = killContext(b.player, b.player, "Engine.DmgType_Suicided");
