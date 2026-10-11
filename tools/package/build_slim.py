@@ -161,6 +161,7 @@ def main():
     for n in ('Play.bat', 'README.txt'):
         t = open(os.path.join(HERE, 'slim_template', n), encoding='utf-8', newline='').read()
         t = t.replace('09c 37eec59, Release + PGO', '09c %s, Release + PGO' % head).replace('09c b898c75 slim', '09c %s slim' % head)
+        t = t.replace('\r\n', '\n').replace('\n', '\r\n')   # CRLF whatever the checkout's line endings: cmd mis-parses LF-only labels
         if head not in t:
             fails.append(('VERSION', n))
         open(os.path.join(out, n), 'w', encoding='utf-8', newline='').write(t)
