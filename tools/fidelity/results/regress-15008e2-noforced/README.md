@@ -24,3 +24,6 @@ of the 5 maps. The lockstep timing rows are production-like, and base 47726bc st
   table above supersedes it.
 
 Memory: commit 88 / 113 GB, nonpaged 22.93 GB (flat), C: 20.6 GB free (mem.txt).
+
+Explained by Integration (2026-10-11): e52e38f also revised the volumes (robots are not pushed in non-blocking volumes), so volumes-on
+matches differ from 6b243ff by design. Nothing to chase.
