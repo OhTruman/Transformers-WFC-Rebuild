@@ -1,3 +1,4 @@
+#include "core/PresRand.h"
 #include "game/WeaponFx.h"
 #include "platform/Image.h"
 #include "game/Collision.h"
@@ -189,7 +190,8 @@ constexpr float kSquibPercentage = 0.6f;     // [CONF] ImpactSquibPercentage
 constexpr int   kSquibMaxCount = 5;          // [CONF] ImpactSquibMaxCount
 constexpr float kMaxImpactDistance = 25.0f;  // [CONF] MaxImpactEffectDistance 2500 UU
 
-float frand() { return (float)std::rand() / (float)RAND_MAX; }
+thread_local unsigned gWeaponFxRand = 0x5EED0001u;   // WFC_LOCKSTEP: this file's own presentation sequence (core::presRand)
+float frand() { return (float)core::presRand(gWeaponFxRand) / (float)RAND_MAX; }
 float lerp(float a, float b, float t) { return a + (b - a) * t; }
 Vec3 lerpRand(const Vec3& a, const Vec3& b) { return {lerp(a.x, b.x, frand()), lerp(a.y, b.y, frand()), lerp(a.z, b.z, frand())}; }
 
@@ -279,7 +281,7 @@ void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, fl
         }
         p.u0 = 0; p.v0 = 0; p.u1 = 1; p.v1 = 1;
         if (d.subH > 1 || d.subV > 1) {           // random SubUV cell
-            int cx = std::rand() % d.subH, cy = std::rand() % d.subV;
+            int cx = core::presRand(gWeaponFxRand) % d.subH, cy = core::presRand(gWeaponFxRand) % d.subV;
             p.u0 = (float)cx / d.subH; p.u1 = (float)(cx + 1) / d.subH;
             p.v0 = (float)cy / d.subV; p.v1 = (float)(cy + 1) / d.subV;
         }

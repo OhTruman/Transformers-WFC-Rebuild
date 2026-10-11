@@ -5115,7 +5115,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
                     if (*occCntPtr_[k]) occLastHit_ = std::max(occLastHit_, occCntFrame_[k]);
                     occCntFrame_[k] = -1;
                 }
-                if (frameNo_ - occLastHit_ > 60 && frameNo_ % 15 != 0) occ = false;
+                if (frameNo_ - occLastHit_ > 60 && (frameNo_ - lockBase_) % 15 != 0) occ = false;
                 for (int k = 0; k < 4 && occ && occSlot < 0; ++k) if (occCntFrame_[k] < 0) occSlot = k;
             }
             // WFC_OCCGPU=1 (diagnostics): every 240th frame, GPU timestamps around the cull's stages (read back at once:
@@ -5444,9 +5444,14 @@ void Pipeline::pawnOcclusionResults() {
             if (f < 0) return false;
             const int slot = f % 4;
             if (po.qFrame[slot] != f) return false;
+            // WFC_LOCKSTEP (deterministic captures): wait for the result instead of treating "not ready yet" as visible, so the
+            // occluded state - and through drawOwnerRenderAge the weapon-FX relevance - does not depend on how far the GPU is behind.
+            static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
             GLint avail = 0;
-            GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
-            if (!avail) return false;
+            if (!lockstep) {
+                GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
+                if (!avail) return false;
+            }
             GLint any = 1;
             GetQueryObjectiv(po.q[slot], 0x8866 /*GL_QUERY_RESULT*/, &any);
             return any == 0;
@@ -6475,7 +6480,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
-    time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    time_ = lockstep ? (float)(frameNo_ - lockBase_) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
     winW_ = w; winH_ = h;

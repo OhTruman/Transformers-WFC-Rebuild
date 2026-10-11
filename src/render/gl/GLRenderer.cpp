@@ -2,6 +2,7 @@
 // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#include "core/PresRand.h"
 #include "assets/Gltf.h"
 #include "assets/SkinnedModel.h"
 #include "assets/Json.h"
@@ -813,7 +814,8 @@ public:
                 if (!G.isArray() || G.size() == 0) continue;
                 int total = 0;
                 for (size_t k = 0; k < G.size(); ++k) total += std::max(G[k][(size_t)1].asInt(1), 0);
-                int pick = total > 0 ? std::rand() % total : 0;   // weighted random pick (HIGH, RE)
+                static thread_local unsigned pickRand = 0x5EED0003u;   // WFC_LOCKSTEP: own presentation sequence (core::presRand)
+                int pick = total > 0 ? core::presRand(pickRand) % total : 0;   // weighted random pick (HIGH, RE)
                 for (size_t k = 0; k < G.size(); ++k) {
                     pick -= std::max(G[k][(size_t)1].asInt(1), 0);
                     if (pick < 0 || k + 1 == G.size()) { resolved = G[k][(size_t)0].asString(); break; }
@@ -1142,6 +1144,8 @@ public:
             animFileCache_.clear();          // M69: menu-only data, not held during a match
             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
+            static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+            if (lockstep) wfc_.lockstepRestartFrames();   // lockstep: render time / cadences relative to the match load
         }
         return ok;
     }

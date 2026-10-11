@@ -1,3 +1,4 @@
+#include "core/PresRand.h"
 #include "game/VehicleFx.h"
 #include "assets/Gltf.h"
 #include "platform/Image.h"
@@ -309,7 +310,8 @@ const std::vector<const ED*>& ramEmitters() {
     return v;
 }
 
-float frand() { return (float)std::rand() / (float)RAND_MAX; }
+thread_local unsigned gVehicleFxRand = 0x5EED0002u;   // WFC_LOCKSTEP: this file's own presentation sequence (core::presRand)
+float frand() { return (float)core::presRand(gVehicleFxRand) / (float)RAND_MAX; }
 float lerp(float a, float b, float t) { return a + (b - a) * t; }
 Vec3 lerpRand(const Vec3& a, const Vec3& b) { float t = frand(); return {lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)}; }
 Vec3 lerpRand3(const Vec3& a, const Vec3& b) { return {lerp(a.x, b.x, frand()), lerp(a.y, b.y, frand()), lerp(a.z, b.z, frand())}; }

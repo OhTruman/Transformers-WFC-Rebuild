@@ -758,6 +758,12 @@ private:
     struct CellEnv { LightEnv env; int frame = -100000; };
     std::unordered_map<uint64_t, CellEnv> cellEnv_;
     int frameNo_ = 0;
+public:
+    // WFC_LOCKSTEP (deterministic captures): mark the match map load; the lockstep time base and output-affecting frame cadences
+    // then count from it ("frames since boot" differs between runs with the frontend's wall-clock waits and load frames).
+    void lockstepRestartFrames() { lockBase_ = frameNo_; lastFxTime_ = -1.0f; }
+private:
+    int lockBase_ = 0;   // frameNo_ at the match map load under WFC_LOCKSTEP (0 otherwise)
 
     // dynamic stream
     GLuint dynVao_ = 0, dynVbo_ = 0, dynIbo_ = 0;
