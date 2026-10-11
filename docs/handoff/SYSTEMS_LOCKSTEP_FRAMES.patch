@@ -1,0 +1,144 @@
+--- a/src/render/gl/WfcPipeline.h
++++ b/src/render/gl/WfcPipeline.h
+@@ -758,6 +758,12 @@
+     struct CellEnv { LightEnv env; int frame = -100000; };
+     std::unordered_map<uint64_t, CellEnv> cellEnv_;
+     int frameNo_ = 0;
++public:
++    // WFC_LOCKSTEP (deterministic captures): mark the match map load; the lockstep time base and output-affecting frame cadences
++    // then count from it ("frames since boot" differs between runs with the frontend's wall-clock waits and load frames).
++    void lockstepRestartFrames() { lockBase_ = frameNo_; lastFxTime_ = -1.0f; }
++private:
++    int lockBase_ = 0;   // frameNo_ at the match map load under WFC_LOCKSTEP (0 otherwise)
+ 
+     // dynamic stream
+     GLuint dynVao_ = 0, dynVbo_ = 0, dynIbo_ = 0;
+--- a/src/render/gl/WfcPipeline.cpp
++++ b/src/render/gl/WfcPipeline.cpp
+@@ -5115,7 +5115,7 @@
+                     if (*occCntPtr_[k]) occLastHit_ = std::max(occLastHit_, occCntFrame_[k]);
+                     occCntFrame_[k] = -1;
+                 }
+-                if (frameNo_ - occLastHit_ > 60 && frameNo_ % 15 != 0) occ = false;
++                if (frameNo_ - occLastHit_ > 60 && (frameNo_ - lockBase_) % 15 != 0) occ = false;
+                 for (int k = 0; k < 4 && occ && occSlot < 0; ++k) if (occCntFrame_[k] < 0) occSlot = k;
+             }
+             // WFC_OCCGPU=1 (diagnostics): every 240th frame, GPU timestamps around the cull's stages (read back at once:
+@@ -5444,9 +5444,14 @@
+             if (f < 0) return false;
+             const int slot = f % 4;
+             if (po.qFrame[slot] != f) return false;
++            // WFC_LOCKSTEP (deterministic captures): wait for the result instead of treating "not ready yet" as visible, so the
++            // occluded state - and through drawOwnerRenderAge the weapon-FX relevance - does not depend on how far the GPU is behind.
++            static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+             GLint avail = 0;
+-            GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
+-            if (!avail) return false;
++            if (!lockstep) {
++                GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
++                if (!avail) return false;
++            }
+             GLint any = 1;
+             GetQueryObjectiv(po.q[slot], 0x8866 /*GL_QUERY_RESULT*/, &any);
+             return any == 0;
+@@ -6475,7 +6480,7 @@
+     gFrameStart = std::chrono::steady_clock::now();
+     static auto t0 = std::chrono::steady_clock::now();
+     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
+-    time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
++    time_ = lockstep ? (float)(frameNo_ - lockBase_) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+     // WFC_RENDERSIZE=<w>x<h> (measurement): every 3D pass renders at this internal size; the post pass scales it into
+     // the window (GPU cost of e.g. 3840x2160 on a smaller desktop; presentation scaling aside)
+     winW_ = w; winH_ = h;
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -2,6 +2,7 @@
+ // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
+ #if defined(_WIN32)
+ #define WIN32_LEAN_AND_MEAN
++#include "core/PresRand.h"
+ #include "assets/Gltf.h"
+ #include "assets/SkinnedModel.h"
+ #include "assets/Json.h"
+@@ -813,7 +814,8 @@
+                 if (!G.isArray() || G.size() == 0) continue;
+                 int total = 0;
+                 for (size_t k = 0; k < G.size(); ++k) total += std::max(G[k][(size_t)1].asInt(1), 0);
+-                int pick = total > 0 ? std::rand() % total : 0;   // weighted random pick (HIGH, RE)
++                static thread_local unsigned pickRand = 0x5EED0003u;   // WFC_LOCKSTEP: own presentation sequence (core::presRand)
++                int pick = total > 0 ? core::presRand(pickRand) % total : 0;   // weighted random pick (HIGH, RE)
+                 for (size_t k = 0; k < G.size(); ++k) {
+                     pick -= std::max(G[k][(size_t)1].asInt(1), 0);
+                     if (pick < 0 || k + 1 == G.size()) { resolved = G[k][(size_t)0].asString(); break; }
+@@ -1142,6 +1144,8 @@
+             animFileCache_.clear();          // M69: menu-only data, not held during a match
+             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
+             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
++            static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
++            if (lockstep) wfc_.lockstepRestartFrames();   // lockstep: render time / cadences relative to the match load
+         }
+         return ok;
+     }
+--- a/src/game/WeaponFx.cpp
++++ b/src/game/WeaponFx.cpp
+@@ -1,3 +1,4 @@
++#include "core/PresRand.h"
+ #include "game/WeaponFx.h"
+ #include "platform/Image.h"
+ #include "game/Collision.h"
+@@ -189,7 +190,8 @@
+ constexpr int   kSquibMaxCount = 5;          // [CONF] ImpactSquibMaxCount
+ constexpr float kMaxImpactDistance = 25.0f;  // [CONF] MaxImpactEffectDistance 2500 UU
+ 
+-float frand() { return (float)std::rand() / (float)RAND_MAX; }
++thread_local unsigned gWeaponFxRand = 0x5EED0001u;   // WFC_LOCKSTEP: this file's own presentation sequence (core::presRand)
++float frand() { return (float)core::presRand(gWeaponFxRand) / (float)RAND_MAX; }
+ float lerp(float a, float b, float t) { return a + (b - a) * t; }
+ Vec3 lerpRand(const Vec3& a, const Vec3& b) { return {lerp(a.x, b.x, frand()), lerp(a.y, b.y, frand()), lerp(a.z, b.z, frand())}; }
+ 
+@@ -279,7 +281,7 @@
+         }
+         p.u0 = 0; p.v0 = 0; p.u1 = 1; p.v1 = 1;
+         if (d.subH > 1 || d.subV > 1) {           // random SubUV cell
+-            int cx = std::rand() % d.subH, cy = std::rand() % d.subV;
++            int cx = core::presRand(gWeaponFxRand) % d.subH, cy = core::presRand(gWeaponFxRand) % d.subV;
+             p.u0 = (float)cx / d.subH; p.u1 = (float)(cx + 1) / d.subH;
+             p.v0 = (float)cy / d.subV; p.v1 = (float)(cy + 1) / d.subV;
+         }
+--- a/src/game/VehicleFx.cpp
++++ b/src/game/VehicleFx.cpp
+@@ -1,3 +1,4 @@
++#include "core/PresRand.h"
+ #include "game/VehicleFx.h"
+ #include "assets/Gltf.h"
+ #include "platform/Image.h"
+@@ -309,7 +310,8 @@
+     return v;
+ }
+ 
+-float frand() { return (float)std::rand() / (float)RAND_MAX; }
++thread_local unsigned gVehicleFxRand = 0x5EED0002u;   // WFC_LOCKSTEP: this file's own presentation sequence (core::presRand)
++float frand() { return (float)core::presRand(gVehicleFxRand) / (float)RAND_MAX; }
+ float lerp(float a, float b, float t) { return a + (b - a) * t; }
+ Vec3 lerpRand(const Vec3& a, const Vec3& b) { float t = frand(); return {lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)}; }
+ Vec3 lerpRand3(const Vec3& a, const Vec3& b) { return {lerp(a.x, b.x, frand()), lerp(a.y, b.y, frand()), lerp(a.z, b.z, frand())}; }
+--- /dev/null
++++ b/src/core/PresRand.h
+@@ -0,0 +1,17 @@
++#pragma once
++// Presentation randomness (Systems): std::rand() normally. Under WFC_LOCKSTEP (deterministic captures) each call site passes its own
++// state and gets a deterministic LCG with std::rand()'s range (0..32767): the global std::rand() sequence is also consumed by code
++// whose call count depends on timing (audio cues deferred until an async bank load completes, ...), which made lockstep frames
++// differ once FX that draw from it (muzzle flashes, impacts, vehicle FX, idle-animation picks) were on screen.
++#include <cstdlib>
++
++namespace core {
++
++inline int presRand(unsigned& state) {
++    static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
++    if (!lockstep) return std::rand();
++    state = state * 1103515245u + 12345u;
++    return (int)((state >> 16) & 0x7FFF);
++}
++
++}  // namespace core
