@@ -910,7 +910,8 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
         // Flying (TnPlaneSimulation boost; PC ADAPTATION: when): a long clear stretch (> 35 m to the next corner, clear line to the
         // point above it); back to hover within 20 m to turn the corner.
         const float dl = core::length(d);
-        if (dl > (pc.vehicleState().flying ? 20.0f : 35.0f)) {
+        if (match_.matchTime() < b.liftUntil) { in.viewPitch = 0.6f; in.moveForward = 1.0f; in.moveRight = 0.0f; }   // wedged: climb out (landing deferral)
+        else if (dl > (pc.vehicleState().flying ? 20.0f : 35.0f)) {
             float th;
             in.wantBoost = !(collision() && collision()->segmentHit(pc.actorLocation(), tgt, th));
         }
@@ -1050,9 +1051,11 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
             return;
         }
     }
-    {   // diagnostics: the aim error of this shot (same aim: equal per band for both AIs)
+    {   // diagnostics: the aim error of this shot against the target's TargetableLocation (skill tracking error + turn lag; projectile
+        // lead included, the same for both AIs) - same aim: equal per band. (toT is the noisy aim point: only the turn lag.)
         const int bin = dist < 10.0f ? 0 : dist < 25.0f ? 1 : dist < 50.0f ? 2 : 3;
-        b.aimErrSum[(size_t)bin] += std::acos(core::clampf(core::dot(aimDir, toT), -1.0f, 1.0f)) * 57.29578; ++b.aimErrN[(size_t)bin];
+        const core::Vec3 toTrue = core::normalize(targetable(*t) - eye);
+        b.aimErrSum[(size_t)bin] += std::acos(core::clampf(core::dot(aimDir, toTrue), -1.0f, 1.0f)) * 57.29578; ++b.aimErrN[(size_t)bin];
     }
     // Fire along the eased aim (the error is in where the bot looks, not in a second random draw; spread applies on top).
     botFire(o, b, *w, eye + aimDir * std::max(1.0f, dist));
@@ -2024,7 +2027,20 @@ void World::tickBots(float dt) {
                 // [PC ADAPTATION: rebuild nav coverage].
                 if (ok && pc.vehicleParams().form == VehicleFormType::Jet && botNav_.valid() && botNav_.findCell(spot, 0.0f) < 0) {
                     ok = false;
-                    LOG_INFO("bots: p%d jet landing deferred at t %.2f (robot spot off the mesh)", b.player, match_.matchTime());
+                    // Wedged on a ledge (Experimental Gorge: a jet hovered in place on cell 4486 to the match end, the deferral refusing every
+                    // landing): 3 refusals within 8 s without moving 1 m -> land if the robot spot is within 3 m of the mesh, else climb out
+                    // toward the corridor for 3 s [PC ADAPTATION: recovery from the rebuild's own deferral rule].
+                    const float nowS = match_.matchTime();
+                    if (b.landDeferN == 0 || nowS - b.landDeferFirst > 8.0f || hdist(pc.position(), b.landDeferPos) > 1.0f) {
+                        b.landDeferN = 0; b.landDeferFirst = nowS; b.landDeferPos = pc.position(); }
+                    if (++b.landDeferN >= 3) {
+                        b.landDeferN = 0;
+                        if (botNav_.findCell(spot, 3.0f) >= 0) ok = true;
+                        else b.liftUntil = nowS + 3.0f;
+                        LOG_INFO("bots: p%d jet wedged at t %.2f at (%.1f %.1f %.1f): %s", b.player, nowS, pc.position().x, pc.position().y, pc.position().z,
+                                 ok ? "landing within 3 m of the mesh" : "climbing out");
+                    } else
+                        LOG_INFO("bots: p%d jet landing deferred at t %.2f (robot spot off the mesh)", b.player, nowS);
                 }
                 if (ok) { const core::Vec3 shift{spot.x - feet.x, 0.0f, spot.z - feet.z}; if (core::length(shift) > 1e-3f) { pc.setPosition(pc.position() + shift); pc.addTransformShift(shift * -1.0f); } }
             }
