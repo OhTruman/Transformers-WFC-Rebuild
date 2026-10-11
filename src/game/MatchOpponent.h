@@ -9,6 +9,7 @@
 #include "game/Character.h"
 #include "game/CharacterMovement.h"
 #include "game/Health.h"
+#include "core/Log.h"
 #include "render/Renderer.h"
 
 namespace game {
@@ -67,8 +68,14 @@ public:
         else {
             float disc = b * b - 4.0f * a * cc;
             if (disc < 0.0f) return false;
+            if ((-b + std::sqrt(disc)) / (2.0f * a) < 0.0f) {                // the cylinder lies behind the origin (it counted as a hit at 0)
+                static const bool logBehind = std::getenv("WFC_RAYBEHINDLOG") != nullptr;   // gate diagnostics: each hit the old rule gave
+                if (logBehind && o.y >= c.y - hh && o.y <= c.y + hh)
+                    LOG_INFO("rayhit: behind the origin (%.1f %.1f %.1f), pawn at (%.1f %.1f %.1f)", o.x, o.y, o.z, c.x, c.y, c.z);
+                return false;
+            }
             tt = (-b - std::sqrt(disc)) / (2.0f * a);
-            if (tt < 0.0f) tt = 0.0f;
+            if (tt < 0.0f) tt = 0.0f;                                         // the origin inside the cylinder
         }
         if (tt > range) return false;
         float y = o.y + d.y * tt;
