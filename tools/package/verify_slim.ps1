@@ -56,13 +56,18 @@ param(
     [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
     [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
     [switch]$StaticOnly,         # file checks only (HD pack), no game runs
+    [string]$ExeBin = "",           # candidate exe tree: its *.exe / *.dll replace the package's in the run copy (the package stays as is)
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
 )
 $ErrorActionPreference = 'Stop'
 
-function Norm([string]$p) { return ($p -replace '\\', '/').TrimEnd('/').ToLowerInvariant() }
+function Norm([string]$p) {
+    # long-path opens (platform::longPath) log as \\?\F:\... or \\?\UNC\server\...: classify them by the path itself
+    if ($p.StartsWith('\\?\UNC\')) { $p = '\\' + $p.Substring(8) } elseif ($p.StartsWith('\\?\')) { $p = $p.Substring(4) }
+    return ($p -replace '\\', '/').TrimEnd('/').ToLowerInvariant()
+}
 function Under([string]$path, [string]$root) { $r = $root + '/'; return $path.StartsWith($r) -or $path -eq $root }
 
 $pkgTop = (Resolve-Path -LiteralPath $Package).Path
@@ -80,7 +85,7 @@ function RemoveSubst { if ($substMade) { $null = cmd /c subst $SubstDrive /d; $s
 $pkg = Join-Path $pkgTop 'Transformers Rebuild'
 $pkgBin = Join-Path $pkg 'Rebuild\build\release\bin'
 if (-not (Test-Path -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe'))) { RemoveSubst; throw "no package exe at $pkgBin\wfc_rebuild.exe" }
-$exeHash = (Get-FileHash -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe') -Algorithm SHA256).Hash.Substring(0, 16)   # before any subst is removed
+$exeHash = (Get-FileHash -LiteralPath (Join-Path $(if ($ExeBin) { $ExeBin } else { $pkgBin }) 'wfc_rebuild.exe') -Algorithm SHA256).Hash.Substring(0, 16)   # before any subst is removed
 $realTop = 'F:\Transformers Rebuild'
 if (-not $WorkDir) { $WorkDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) ('work\verify_slim\' + (Get-Date -Format 'yyyyMMdd_HHmmss')) }
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
@@ -190,6 +195,7 @@ try {
         $bin = Join-Path $run 'bin'
         New-Item -ItemType Directory -Force -Path $bin | Out-Null
         Copy-Item -Path (Join-Path $pkgBin '*') -Destination $bin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*', 'filelog*.txt'
+        if ($ExeBin) { Copy-Item -Path (Join-Path $ExeBin '*.exe'), (Join-Path $ExeBin '*.dll') -Destination $bin -Force }   # a candidate build over the package's bin
         $exe = Join-Path $bin 'wfc_rebuild.exe'
         $fileLog = Join-Path $run 'filelog.txt'
         $env:WFC_FILELOG = $fileLog
@@ -314,7 +320,7 @@ $overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problem
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
 $md += ''
-$md += "Package: $(if ($SubstDrive) { "$Package (run as $SubstDrive)" } else { $pkgTop }) (exe sha256 $exeHash...). Run folder: $WorkDir. $(Get-Date -Format 'yyyy-MM-dd HH:mm')."
+$md += "Package: $(if ($SubstDrive) { "$Package (run as $SubstDrive)" } else { $pkgTop })$(if ($ExeBin) { "; exe from $ExeBin" }) (exe sha256 $exeHash...). Run folder: $WorkDir. $(Get-Date -Format 'yyyy-MM-dd HH:mm')."
 $md += "Maps: $Maps; match $MatchSeconds s; intro $(if ($SkipIntro) { 'skipped' } else { 'played' }); lobby options: $(if ($LobbyOptions) { $LobbyOptions } else { 'default' })."
 $md += ''
 if ($OmitRoot.Count) { $md += "SELF-TEST: data roots left unset: $($OmitRoot -join ', ')." }
