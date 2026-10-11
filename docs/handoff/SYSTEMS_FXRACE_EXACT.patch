@@ -1,6 +1,13 @@
 --- a/src/game/World.h
 +++ b/src/game/World.h
-@@ -592,12 +592,18 @@
+@@ -1,5 +1,6 @@
+ // Clean-room reconstruction — the world: owns the level, player, and dynamic actors.
+ #pragma once
++#include <atomic>
+ #include <array>
+ #include <functional>
+ #include <deque>
+@@ -592,12 +593,18 @@
      int projectileFxSpawned_ = 0, projectileFxExplosions_ = 0;   // diagnostics (WFC_PROJFXTEST)
      // Renderer particle calls made by the step (projectile flight / explosion): World-side ids mapped to renderer handles. While a
      // background part runs they are queued and replayed in order at the join (the renderer is main-thread only); else immediate.
@@ -11,7 +18,8 @@
      std::vector<FxOp> fxOps_;
      int pellet_ = 0;
      std::map<int, int> fxReal_;
-     int fxNextVid_ = 0;
+-    int fxNextVid_ = 0;
++    std::atomic<int> fxNextVid_{0};   // virtual FX ids: fxStepSpawn* may run on the worker and (outside a remainder) the main thread
      int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
 +    // The VehicleFxDriver runtime (Systems, FX race fix): spawn / param through the same deferral (virtual ids, main-thread ops).
 +    int fxStepSpawnPlain(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
