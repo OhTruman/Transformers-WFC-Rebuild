@@ -1073,6 +1073,19 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     if (--b.burstLeft <= 0) b.burstPause = b.frange(br.minPause, br.maxPause) * sk.pauseScale;
 }
 
+// Off the mesh 30 s in a row in robot form, path or no path (Rust: a Classic bot on a ledge kept finding paths, so the no-way-found
+// suicide never armed): the same suicide. Any on-mesh sample resets; vehicles excluded (jets: the landing deferral; hover over gaps).
+void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
+    if (botNav_.valid() && collision() && pc.moveForm() == Form::Robot && !pc.isTransforming() && botNav_.findCell(pc.position(), 0.5f) < 0) {
+        static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
+        if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish) {
+            const core::Vec3 p = pc.position();
+            LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, match_.matchTime(), p.x, p.y, p.z);
+            b.suicideWish = true;
+        }
+    } else b.offMeshRun = 0.0f;
+}
+
 int World::playerBotDifficulty() {
     static const int d = [] { const char* e = std::getenv("WFC_PLAYERBOT"); return e ? std::max(0, std::min(2, std::atoi(e))) : -1; }();
     return d;
@@ -1098,6 +1111,13 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
     MoveIntent mi;
     botSteer(body, b, dt, mi);
+    botOffMeshWatch(b, pc, dt);
+    if (b.suicideWish) {   // stranded (botSteer / the off-mesh watch): the bots' suicide (harness only: a human never runs the player bot)
+        b.suicideWish = false; b.offMeshRun = 0.0f;
+        LOG_INFO("bots: p%d (player bot) stranded 30 s with no way back at t %.2f: suicide", localPlayer_, match_.matchTime());
+        killLocalPlayer(localPlayer_, true, "Engine.DmgType_Suicided");
+        return false;
+    }
     if (core::length(b.unwedge) > 0.0f) b.unwedge = {0, 0, 0};   // the local pawn is not teleported: its own movement resolves wedges
     b.fireWish = false;
     botAimAndFire(body, b, dt);   // eases b.yaw / b.pitch with the skill's turn rate and error; a shot becomes fireWish
@@ -2024,8 +2044,9 @@ void World::tickBots(float dt) {
             hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f) &&
                            in.moveForward == 0.0f && in.moveRight == 0.0f;
         }
+        botOffMeshWatch(b, pc, dt);
         if (b.suicideWish) {   // stranded 30 s with no way back (botSteer): DmgType_Suicided, no score change, the normal respawn wave
-            b.suicideWish = false;
+            b.suicideWish = false; b.offMeshRun = 0.0f;
             const Match::KillContext kc = killContext(b.player, b.player, "Engine.DmgType_Suicided");
             match_.killed(b.player, b.player, true, "Engine.DmgType_Suicided", &kc);
             o->despawn();
