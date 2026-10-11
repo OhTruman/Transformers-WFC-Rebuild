@@ -83,7 +83,7 @@ Principles:
 
 | Option | Gets the user | Cost | Notes |
 |---|---|---|---|
-| A. Driver frame generation: AMD Fluid Motion Frames 2 (AFMF 2) | FG without integration, on today's GL renderer | ~0 code: a user-side driver toggle + a test pass (S) | Verified 2026-10-11 (AMD): AFMF 2 supports OpenGL, Vulkan, DX11 and DX12 titles; Radeon RX 6000 / 7000 (and newer) / 700M / 800M; Adrenalin 25.3.1+; needs exclusive or borderless fullscreen with VSync off. So it needs neither the D3D12 present nor item 1. HUD gets interpolated (artifacts at low base fps). NVIDIA's driver-level equivalent: not verified for OpenGL; NVIDIA users get FG via D. To do: confirm the user's Radeon model, test AFMF 2 on the GL build in borderless fullscreen (does it engage, frame pacing, HUD artifacts). |
+| A. Driver frame generation: AMD Fluid Motion Frames 2 (AFMF 2) | FG without integration, on today's GL renderer | ~0 code: a user-side driver toggle + a test pass (S) | Verified 2026-10-11 (AMD): AFMF 2 supports OpenGL, Vulkan, DX11 and DX12 titles; Radeon RX 6000 / 7000 (and newer) / 700M / 800M; Adrenalin 25.3.1+; needs exclusive or borderless fullscreen with VSync off. So it needs neither the D3D12 present nor item 1. HUD gets interpolated (artifacts at low base fps). NVIDIA's driver-level equivalent: not verified for OpenGL; NVIDIA users get FG via D. The user's desktop qualifies: AMD Radeon RX 7900 XTX, driver 32.0.31021.5001 (Win32_VideoController, 2026-10-11; newer than 25.3.1). To do (M5, after M1 closes): test AFMF 2 on the GL build in borderless fullscreen (does it engage, frame pacing, HUD artifacts). |
 | B. FSR 3.1 upscaling only | better image than FSR 1 at the same cost (temporal AA included) | 1-5 (M+M+M+S) | testable on AMD and NVIDIA; no UI split needed |
 | C. B + FSR 3 frame generation | FG with a clean HUD | B + 6 + 7 (+L) | the user's AMD desktop path |
 | D. C + DLSS SR / FG | NVIDIA quality + FG | C + 8 | needs the 5090 laptop for every check |
@@ -98,8 +98,8 @@ for the later RT / modern-materials modes (M6 / M7) and for weaker PCs; temporal
 
 ## 6. Decisions needed
 
-- D1 (user): the order above, and whether option A (AFMF 2 on the current build) is wanted as the first step; it needs
-  the user's Radeon model (RX 6000 or newer) and a short test with the driver toggle on.
+- D1 (user): the order above, and whether option A (AFMF 2 on the current build) is wanted as the first step; the
+  hardware qualifies (RX 7900 XTX, current driver), so it is a short test with the driver toggle on.
 - D2 (Rendering): upscale before bloom / tonemap / CLUT (HDR input; post at display size: best quality, + post cost) or
   after (LDR, like FSR 1 today; cheaper, lower quality). Proposal: before, with the post pass at display size, measured.
 - D3 (user / Integration): licensing. FidelityFX SDK is MIT. DLSS / Streamline ship NVIDIA's runtime DLLs under the NVIDIA
