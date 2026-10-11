@@ -21,6 +21,10 @@ Status: Debris, Streets, Berth, Complex, Seed, Molten MET; Gorge on the line (3.
 Verdict 2026-10-11 on ad4e6c5 (Experimental m1-verdict-ad4e6c5): 1080 all MET, Rust overview 4K MET; MISS, all GPU-bound:
 Gorge overview 4K 3.35 / 3.32, Gorge real play 4K 3.38 / 3.53, Rust real play 4K 3.01 / 3.42. Item 3 (CPU binds) dropped;
 remaining: item 2 GPU side (Rendering, 4K per-pass GPU profile + top exact cut), then a 3-cell re-verdict.
+CLOSED 2026-10-11 by the user ("if Gorge is right under 300 fps at 4K I think it's good"). Re-verdict on 5aa2d22 (distortion
+cut fa34606, -0.12 ms GPU): Gorge ov 4K 3.20 / 3.26, Rust rp 4K 3.21 / 3.11 MET; Gorge rp 4K 3.41 / 3.21 (borderline, accepted).
+Real 2560x1440 fullscreen: Gorge rp 2.60-2.65, Streets rp 2.31-2.34 MET. GFx MSAA 8->4 measured at -0.05 ms, dropped.
+Fullscreen (flip) present gap +0.1 ms vs windowed: moved to M5 (DXGI flip-discard swapchain).
 Bounded work list (nothing else is added without Integration):
 1. HUD: settle the verifier mismatch (OFF/OFF run), then HUD batching patch 2 (Systems).
 2. Gorge combat frames: slow-frame CPU profile, then the top exact cut (Systems CPU side, Rendering GPU side).
@@ -39,6 +43,10 @@ Exit, all required:
 - User playtest says yes.
 Bounded work list: flank route budget, squad regroup fix, shot-mix check; then the 400 rerun.
 If the 400 misses after these, Integration brings the user the numbers before more tuning.
+CLOSED 2026-10-11 by the user (accepts Smart at ~60-63 % wins vs Classic; squads 26-38 m and cover 7.8 % accepted as is).
+400 on 1e9e583: 63.0 / 63.8 % wins; same aim proven by aim error at fire (f79969a); stucks <= Classic; flanks not a loss.
+Smart becomes the default (Gameplay World fallback + Frontend kBotAiDefault); Classic stays selectable and byte-identical.
+The user's playtest happens with M3.
 
 ## M3 - Playtest delivery
 Exit: build/release (the user's exe) and the slim package rebuilt from the closed M1 (+ M2 if closed) head,
