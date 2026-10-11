@@ -367,9 +367,20 @@ private:
     GLuint spriteFrameVao_ = 0, spriteFrameVbo_ = 0, spriteFrameCbo_ = 0, spriteFrameSbo_ = 0, spriteFrameIbo_ = 0;
     size_t spriteFrameIboQuads_ = 0;
     GpuMesh spriteFrameMesh_;
+    // the frame sprite stream's ring (persistent-mapped, coherent; 3 slots, each reused after its fence): the stream's floats are
+    // written straight into it (no copy into a staging vector, no orphaning BufferData). WFC_NOSPRITERING=1: BufferData.
+    GLuint spriteRingVao_ = 0, spriteRingBuf_ = 0;
+    unsigned char* spriteRingPtr_ = nullptr;
+    size_t spriteRingSlotBytes_ = 0;
+    void* spriteRingFence_[3] = {nullptr, nullptr, nullptr};
+    int spriteRingSlot_ = 0;
+    bool spriteRingBroken_ = false;
+    bool spriteRingOn() const;
+    unsigned char* spriteRingAcquire(size_t bytes, size_t& base);   // the next slot (fence waited); nullptr: use BufferData
     std::vector<Sprite>* spriteSwapSrc_ = nullptr;     // set by the FX replay: drawSprites may take this vector's buffer
     void spriteCoverage(const char* material, const Sprite* sp, size_t n);
     void spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, RawFloats& v, RawFloats& col, RawFloats& sub);
+    void spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& facing, float* v, float* col, float* sub);
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
     // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
@@ -380,6 +391,7 @@ private:
     FrameRec frameRecs_[4];
 public:
     std::string frameRecordText(int frame) const;
+    static bool spriteCoverageOn();                       // the spike report's coverage estimate (dev diagnostics env set)
 private:
     std::vector<TransItem> transQueue_;
     std::function<void()> loadYield_;
@@ -1114,5 +1126,23 @@ private:
     int fbW_ = 0, fbH_ = 0;
 };
 
+// WFC_FXSUBCPU=1 (diagnostics): CPU ms per frame of the submission after the world - the character queue flush (receiver
+// casts / depth copy + mask fill / projections / blur / draws), pawn occlusion, map FX (props + pickups / particle build /
+// replay), motion + reactive, translucency (sort + sprite stream build / stream upload / items); medians every 1200 frames
+// for the quarter of frames with the most sprite quads (combat) and the half with the fewest
+struct FxSubCpu {
+    enum { DynCast1, DynDepth, DynCast2, DynBlur, DynDraw, PawnOcc, MapProps, MapBuild, MapReplay, MotionReactive,
+           TransBuild, TransUpload, TransItems, kN };
+    double ms[kN] = {};
+    int dynRecs = 0, transItems = 0, meshSubs = 0, quads = 0;
+    double uploadKb = 0;
+    double gpuTransl = -1;                               // this frame's translucency pass GPU ms (attached when read back)
+    long gpuIdx = -1;                                    // its GPU timer frame index
+    int ring = -1;                                       // this frame's sprite stream: 1 ring, 0 BufferData (-1 none)
+};
+extern FxSubCpu gFxSub;
+bool fxSubCpuOn();
+double fxSubNowMs();
+void fxSubFrameEnd();
 } // namespace wfc
 } // namespace render
