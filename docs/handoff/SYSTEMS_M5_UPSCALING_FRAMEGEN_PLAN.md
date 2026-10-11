@@ -64,10 +64,15 @@ Principles:
    count them per movie first; any HUD movie that uses them stays composited into the frame (interpolated with it).
    HUD screen effects that read the scene (LowHealth / StaticDischarge chains) stay in the 3D frame (they're 3D-space
    post); only the 2D layer moves.
-7. Frame generation, FSR 3 FG (Rendering, L): FidelityFX frame-interpolation swapchain replaces the DXGI swapchain;
-   UI layer in; pacing; HUD-less colour in. Needs VRR or vsync on; with tearing allowed, FG pacing degrades.
-8. DLSS SR + DLSS FG via NVIDIA Streamline (Rendering, M-L, on top of 3-7): same inputs; Streamline's swapchain hooks;
-   Reflex for latency (DLSS FG requires it). Verified on the RTX 5090 laptop only.
+7. Frame generation, FSR 3 FG (Rendering, L): the FSR frame-generation swapchain (it implements IDXGISwapChain4 and
+   either wraps D3D12Presenter's existing swapchain or creates one for the HWND; it schedules interpolation and does the
+   frame pacing) replaces the plain DXGI swapchain; inputs: the HUD-less colour (HUDLessColor) and the UI layer from
+   item 6; requires Shader Model 6.2, RX 5000-class or newer (or equivalent). Pacing with tearing / VRR on vs off is a
+   test item.
+8. DLSS SR + DLSS FG via NVIDIA Streamline (Rendering, M-L, on top of 3-7): D3D12; DLSS-G needs sl.reflex integrated
+   (Reflex is required); inputs: a HUD-less colour buffer (full scene, same colour space / post / size as the
+   back buffer, no UI) and a UI buffer, either UI alpha only (cheapest) or UI colour + alpha. Item 6's layer provides
+   both. Verified on the RTX 5090 laptop only.
 9. Settings + auto-detect (Frontend + Systems, S): rows Upscaler (Off / FSR 1 (existing) / FSR 3.1 / DLSS), Quality
    mode, Sharpness, Frame generation (Off / On), Latency mode (Anti-Lag 2 / Reflex when available); auto-detect picks
    upscaling only when native misses the refresh; FG off by default.
@@ -78,13 +83,13 @@ Principles:
 
 | Option | Gets the user | Cost | Notes |
 |---|---|---|---|
-| A. Driver frame generation (AMD Fluid Motion Frames 2 / NVIDIA driver smooth motion) over the D3D12 present | FG without integration | item 1 only (M) | HUD gets interpolated (artifacts at low base fps); to verify: the drivers' API / version support for this path and whether they engage on a D3D12 flip swapchain fed by GL. Zero game code beyond stage 2. |
+| A. Driver frame generation: AMD Fluid Motion Frames 2 (AFMF 2) | FG without integration, on today's GL renderer | ~0 code: a user-side driver toggle + a test pass (S) | Verified 2026-10-11 (AMD): AFMF 2 supports OpenGL, Vulkan, DX11 and DX12 titles; Radeon RX 6000 / 7000 (and newer) / 700M / 800M; Adrenalin 25.3.1+; needs exclusive or borderless fullscreen with VSync off. So it needs neither the D3D12 present nor item 1. HUD gets interpolated (artifacts at low base fps). NVIDIA's driver-level equivalent: not verified for OpenGL; NVIDIA users get FG via D. To do: confirm the user's Radeon model, test AFMF 2 on the GL build in borderless fullscreen (does it engage, frame pacing, HUD artifacts). |
 | B. FSR 3.1 upscaling only | better image than FSR 1 at the same cost (temporal AA included) | 1-5 (M+M+M+S) | testable on AMD and NVIDIA; no UI split needed |
 | C. B + FSR 3 frame generation | FG with a clean HUD | B + 6 + 7 (+L) | the user's AMD desktop path |
 | D. C + DLSS SR / FG | NVIDIA quality + FG | C + 8 | needs the 5090 laptop for every check |
 
-Recommendation: 1 -> 2 -> B (3, 4, 5) -> 6 -> C (7) -> D (8); A as a quick experiment right after item 1 (it may give
-the user FG on the desktop for free while C is built). Items 9 and 10 travel with B and C.
+Recommendation: A first (a test pass on the current GL build: no engine work, may give the user FG on the AMD desktop
+now), then 1 -> 2 -> B (3, 4, 5) -> 6 -> C (7) -> D (8). Items 9 and 10 travel with B and C.
 
 Value check: wherever the base rate already reaches the panel's 144 Hz at 4K, FG adds nothing (measure per map at
 2160p before deciding; the M1 numbers are what to check). It matters
@@ -93,7 +98,8 @@ for the later RT / modern-materials modes (M6 / M7) and for weaker PCs; temporal
 
 ## 6. Decisions needed
 
-- D1 (user): the order above, and whether option A is wanted as a stopgap.
+- D1 (user): the order above, and whether option A (AFMF 2 on the current build) is wanted as the first step; it needs
+  the user's Radeon model (RX 6000 or newer) and a short test with the driver toggle on.
 - D2 (Rendering): upscale before bloom / tonemap / CLUT (HDR input; post at display size: best quality, + post cost) or
   after (LDR, like FSR 1 today; cheaper, lower quality). Proposal: before, with the post pass at display size, measured.
 - D3 (user / Integration): licensing. FidelityFX SDK is MIT. DLSS / Streamline ship NVIDIA's runtime DLLs under the NVIDIA
@@ -111,3 +117,12 @@ for the later RT / modern-materials modes (M6 / M7) and for weaker PCs; temporal
   latency with Anti-Lag 2 / Reflex on vs off.
 - Stability: 64p real-play soak per backend (no device-removed, no interop errors), window resize / fullscreen toggles,
   alt-tab, map travel.
+
+## 8. Sources (checked 2026-10-11)
+
+- AMD FSR SDK, Frame Generation Swapchain 3.1.7: https://gpuopen.com/manuals/fsr_sdk/techniques/frame-interpolation-swap-chain/
+- FSR 3.1 upscaling + frame generation: https://gpuopen.com/manuals/fidelityfx_sdk/techniques/super-resolution-interpolation/
+- AFMF 2 (APIs incl. OpenGL, GPUs, fullscreen / VSync off): https://hothardware.com/news/amd-afmf-2-frame-generation,
+  https://www.itechguides.com/amd-fluid-motion-frames-afmf-discussion-thread-how-afmf-2-1-works-how-to-enable-it-and-when-to-turn-it-off/
+- NVIDIA Streamline DLSS-G programming guide (HUD-less colour, UI colour / alpha, Reflex):
+  https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md
