@@ -1,0 +1,9 @@
+== A
+match 1: 5103 / 5103 steps; identical for the first 615 steps (offset 0) = 10.2 s; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=1 start=TnTeamPlayerStart_1205 pos=-66.5,6.4,202.3 chass')]
+match 2: 5108 / 5103 steps; identical for the first 616 steps (offset 0) = 10.3 s; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=0 start=TnTeamPlayerStart_3575 pos=-87.0,6.4,-212.5 chas')]
+== B
+match 1: 5103 / 5103 steps; identical for the first 5103 steps (offset 0) = 85.0 s - WHOLE MATCH IDENTICAL; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=1 start=TnTeamPlayerStart_1205 pos=-66.5,6.4,202.3 chass')]
+match 2: 5103 / 5103 steps; identical for the first 5103 steps (offset 0) = 85.0 s - WHOLE MATCH IDENTICAL; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=0 start=TnTeamPlayerStart_3575 pos=-87.0,6.4,-212.5 chas')]
+== P
+match 1: 5103 / 5103 steps; identical for the first 1000 steps (offset 0) = 16.7 s; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=1 start=TnTeamPlayerStart_1205 pos=-66.5,6.4,202.3 chass')]
+match 2: 5103 / 5103 steps; identical for the first 667 steps (offset 0) = 11.1 s; A events [(600, 'MATCH start mode=TDM t=10.02 goal=9999 time_limit=60 rounds=0'), (601, 'MATCH spawn player=0 team=0 start=TnTeamPlayerStart_3575 pos=-87.0,6.4,-212.5 chas')]
