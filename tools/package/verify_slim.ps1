@@ -37,6 +37,9 @@
 
 .EXAMPLE
   .\tools\package\verify_slim.ps1 -Package "F:\Transformers Rebuild\Rebuild\work\playtest_slim"
+.EXAMPLE
+  Self-test (must FAIL with outside reads under ExtractedAssets):
+  .\tools\package\verify_slim.ps1 -Package <pkg> -Maps 508:Streets -OmitRoot WFC_CONTENT -SkipIntro
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Package,
@@ -48,7 +51,8 @@ param(
     [string]$LobbyOptions = "",
     [string]$HoldFile = "",
     [switch]$SkipIntro,
-    [switch]$Strict
+    [switch]$Strict,
+    [string[]]$OmitRoot = @()    # self-test: leave these data-root variables unset (the check must then FAIL)
 )
 $ErrorActionPreference = 'Stop'
 
@@ -79,7 +83,9 @@ $roots = [ordered]@{
     WFC_FRONTEND_MANIFESTS   = "$pkg\AssetTools\manifests"
     WFC_ASSETTOOLS_MANIFESTS = "$pkg\AssetTools\manifests"
     WFC_DDS_ROOT             = "$pkg\AssetTools\out\dds"
+    WFC_FRONTEND_DATA        = "$pkg\Rebuild\data\frontend"    # Frontend's runtime lookup (logged "frontend data: <dir>")
 }
+foreach ($k in $OmitRoot) { if ($roots.Contains($k)) { $roots.Remove($k); Write-Warning "self-test: $k left unset" } else { throw "unknown root $k" } }
 foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Write-Warning "$k -> $($roots[$k]) does not exist in the package" } }
 
 function WaitHold {
@@ -139,6 +145,11 @@ try {
         $matchLine = ($log | Select-String -SimpleMatch 'FLOW level.begin level=Match' | Select-Object -First 1)
         $inGame = [bool]($log | Select-String -Pattern 'ui\.state from=\S+ to=InGame' | Select-Object -First 1)
         $shutdown = [bool]($log | Select-String -SimpleMatch 'Shutdown complete' | Select-Object -Last 1)
+        $feLine = $log | Select-String -Pattern 'frontend data: (.+)$' | Select-Object -First 1
+        $feDir = if ($feLine) { $feLine.Matches[0].Groups[1].Value.Trim() } else { $null }
+        $feNote = if (-not $feDir) { 'not logged (exe before the frontend-data lookup)' }
+                  elseif (Under (Norm $feDir) $nPkg -or Under (Norm $feDir) $nWork) { 'inside the package' }
+                  else { 'OUTSIDE the package' }
         $loc = $null
         $locLines = @($log | Select-String -Pattern 'localized waves \(language (\S+)\): (\d+) from the _LOC twin, (\d+) merged copy of that twin, (\d+) not played')
         if ($matchLine) { $after = @($locLines | Where-Object { $_.LineNumber -gt $matchLine.LineNumber }); if ($after.Count) { $locLines = $after } }
@@ -192,6 +203,7 @@ try {
         $failRows = @($rows | Where-Object { $_.Fail })
         $warnRows = @($rows | Where-Object { -not $_.Fail -and $_.Class -eq 'outside' -and $_.Note -like '*resolves under*' })
         if ($failRows.Count) { $reasons += "$($failRows.Count) failing opens" }
+        if ($Strict -and $feNote -ne 'inside the package') { $reasons += "frontend data dir $(if ($feDir) { $feDir } else { '-' }): $feNote" }
         if (-not $loc) { $reasons += 'no localized-waves line' }
         else {
             if ($loc.Skipped -gt 0) { $reasons += "$($loc.Skipped) localized waves not played" }
@@ -203,7 +215,7 @@ try {
             Run = @($rows | Where-Object { $_.Class -eq 'run' }).Count; System = @($rows | Where-Object { $_.Class -eq 'system' }).Count
             Outside = @($rows | Where-Object { $_.Class -eq 'outside' }).Count; Other = @($rows | Where-Object { $_.Class -eq 'other' }).Count
             Probes = @($rows | Where-Object { $_.Note -like 'optional probe*' -or $_.Note -like '*(probe)' }).Count
-            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors
+            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors; FrontendData = $(if ($feDir) { "$feDir ($feNote)" } else { $feNote })
             Twins = @($rows | Where-Object { $_.Note -like '*shipped*' }).Count; OtherRows = @($rows | Where-Object { $_.Class -eq 'other' })
         }
         Write-Host ("[{0}] {1} in {2} s: {3}" -f $name, $(if ($reasons.Count) { 'FAIL' } else { 'PASS' }), $secs, ($reasons -join '; '))
@@ -222,6 +234,7 @@ $md += ''
 $md += "Package: $pkgTop (exe sha256 $exeHash...). Run folder: $WorkDir. $(Get-Date -Format 'yyyy-MM-dd HH:mm')."
 $md += "Maps: $Maps; match $MatchSeconds s; intro $(if ($SkipIntro) { 'skipped' } else { 'played' }); lobby options: $(if ($LobbyOptions) { $LobbyOptions } else { 'default' })."
 $md += ''
+if ($OmitRoot.Count) { $md += "SELF-TEST: data roots left unset: $($OmitRoot -join ', ')." }
 $md += "Strict: $(if ($Strict) { 'on (every outside read fails)' } else { 'off (outside reads the package has, outside the data roots, are warnings)' })."
 $md += ''
 $md += '| Map | Result | Time | Opens | Package | via .xpr / .fsb | Run | System | Outside | Other | Probes | Localized (twin / merged / not played) |'
@@ -230,6 +243,8 @@ foreach ($r in $results) {
     $l = if ($r.Loc) { "$($r.Loc.Twin) / $($r.Loc.Merged) / $($r.Loc.Skipped) ($($r.Loc.Lang))" } else { '-' }
     $md += "| $($r.Map) ($($r.Id)) | $(if ($r.Pass) { 'PASS' } else { 'FAIL' }) | $($r.Seconds) s | $($r.Opens) | $($r.Package) | $($r.Twins) | $($r.Run) | $($r.System) | $($r.Outside) | $($r.Other) | $($r.Probes) | $l |"
 }
+$md += ''
+foreach ($r in $results) { $md += "- $($r.Map): frontend data dir: $($r.FrontendData)" }
 foreach ($r in $results) {
     if ($r.Pass -and -not $r.OtherRows.Count -and -not $r.WarnRows.Count) { continue }
     $md += ''
