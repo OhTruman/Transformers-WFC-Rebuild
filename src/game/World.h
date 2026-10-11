@@ -913,6 +913,7 @@ public:
     // fire, jump, boost, dash, transform): the normal controller, follow camera, weapon and HUD paths run as in play (a "real play"
     // workload for fps rows / PGO). Call once per frame before handleInput, with no step running. Returns false when inactive.
     bool playerBotInput(platform::InputFrame& in, float dt);
+    void botOffMeshWatch(BotBrain& b, const Character& pc, float dt);   // 30 s off the mesh in robot form -> suicideWish
     static int playerBotDifficulty();   // -1 = off
     static bool asyncStepEnabled();
     // Per-phase step timing (the WFC_TICKPROF slots) switched on from code, summed since the last reset (WFC_SCALETEST).

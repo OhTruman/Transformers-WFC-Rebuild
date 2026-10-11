@@ -95,6 +95,7 @@ struct BotBrain {
     core::Vec3 rejoin{0, 0, 0}; float rejoinUntil = 0.0f;
     // Stranded with no way back: since when (continuous: searches every 4 s, a gap over 6 s restarts it); 30 s -> suicide.
     float noWaySince = -1.0f, noWayLast = -1.0f; bool suicideWish = false;
+    float offMeshRun = 0.0f;   // robot form, continuously off the mesh (0.5 m tolerance), path or no path
     bool fireWish = false;
     unsigned lastShotSerial = 0;
     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
