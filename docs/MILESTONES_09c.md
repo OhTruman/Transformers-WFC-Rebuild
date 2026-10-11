@@ -55,6 +55,9 @@ CLOSED 2026-10-11 by the user (accepts Smart at ~60-63 % wins vs Classic; squads
 400 on 1e9e583: 63.0 / 63.8 % wins; same aim proven by aim error at fire (f79969a); stucks <= Classic; flanks not a loss.
 Smart becomes the default (Gameplay World fallback + Frontend kBotAiDefault); Classic stays selectable and byte-identical.
 The user's playtest happens with M3.
+Re-check 2026-10-11 after the pawnRayHit fix (5eeb3f7, untimed 104 matches/arm, Gameplay pass29/b49/M2_SKEW.md): Smart 61.5 %
+(was 72.1 % on b749a83; the bug cost Classic more via false team-mate hits). Still inside the accepted 60-63 %; M2 stays closed.
+Parked for the user's return: re-tune Smart's hold-fire-on-team-mate rule (tuned on the inflated figures).
 
 ## M3 - Playtest delivery
 Exit: build/release (the user's exe) and the slim package rebuilt from the closed M1 (+ M2 if closed) head,
