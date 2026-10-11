@@ -56,11 +56,15 @@ def main():
     with open(XPR, encoding='utf-8') as f:
         for r in csv.DictReader(f, delimiter='\t'):
             xpr_dest[r['source']] = r['dest_xpr']
-    rows, tsv_bin, drop = [], [], 0
+    rows, tsv_bin, drop, tsv_hd = [], [], 0, set()
     with open(TSV, encoding='utf-8') as f:
         for r in csv.DictReader(f, delimiter='\t'):
             if r['action'] == 'drop':
                 drop += 1
+            elif r['dest'].startswith(HD_DEST + '/'):
+                # AssetTools lists the HD pack in its dev layout (out/hd/pack/...); the package ships the root form at out/hd
+                # (Integration, 2026-10-11; verify_slim -Strict), written by the HD step below - the two must select the same files
+                tsv_hd.add(norm(os.path.join(ROOT, r['source'])))
             elif r['dest'].startswith(BIN_DEST + '/'):
                 tsv_bin.append(r['dest'][len(BIN_DEST) + 1:])
             else:
@@ -102,6 +106,11 @@ def main():
             for extra in ('CREDITS.txt',):
                 if os.path.isfile(os.path.join(hd_src, extra)):
                     hd_rows.append((os.path.join(hd_src, extra), HD_DEST + '/' + extra))
+        if tsv_hd:
+            mine = {norm(s) for s, _ in hd_rows}
+            if mine != tsv_hd:
+                problems.append('HD selection differs from slim_files.tsv: %d only here, %d only in the tsv (e.g. %s)' % (
+                    len(mine - tsv_hd), len(tsv_hd - mine), sorted(mine ^ tsv_hd)[:3]))
 
     keep_b = sum(int(r['bytes']) for r in rows if r['action'] == 'keep')
     xpr_b = sum(int(r['bytes']) for r in rows if r['action'] == 'xpr')
