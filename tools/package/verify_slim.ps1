@@ -55,7 +55,10 @@ param(
     [switch]$Strict,
     [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
     [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
-    [switch]$StaticOnly          # file checks only (HD pack), no game runs
+    [switch]$StaticOnly,         # file checks only (HD pack), no game runs
+    [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
+                                 # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
+                                 # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
 )
 $ErrorActionPreference = 'Stop'
 
@@ -63,9 +66,21 @@ function Norm([string]$p) { return ($p -replace '\\', '/').TrimEnd('/').ToLowerI
 function Under([string]$path, [string]$root) { $r = $root + '/'; return $path.StartsWith($r) -or $path -eq $root }
 
 $pkgTop = (Resolve-Path -LiteralPath $Package).Path
+$substMade = $false
+if ($SubstDrive) {
+    $SubstDrive = $SubstDrive.TrimEnd('\', ':').ToUpperInvariant() + ':'
+    if (Test-Path -LiteralPath "$SubstDrive\") { throw "drive $SubstDrive is already in use: pick a free letter" }
+    $null = cmd /c subst $SubstDrive "$pkgTop"
+    if (-not (Test-Path -LiteralPath "$SubstDrive\Transformers Rebuild")) { throw "subst $SubstDrive -> $pkgTop failed" }
+    $substMade = $true
+    Write-Host "package mapped to $SubstDrive (from $pkgTop)"
+    $pkgTop = "$SubstDrive\"
+}
+function RemoveSubst { if ($substMade) { $null = cmd /c subst $SubstDrive /d; $script:substMade = $false; Write-Host "subst $SubstDrive removed" } }
 $pkg = Join-Path $pkgTop 'Transformers Rebuild'
 $pkgBin = Join-Path $pkg 'Rebuild\build\release\bin'
-if (-not (Test-Path -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe'))) { throw "no package exe at $pkgBin\wfc_rebuild.exe" }
+if (-not (Test-Path -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe'))) { RemoveSubst; throw "no package exe at $pkgBin\wfc_rebuild.exe" }
+$exeHash = (Get-FileHash -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe') -Algorithm SHA256).Hash.Substring(0, 16)   # before any subst is removed
 $realTop = 'F:\Transformers Rebuild'
 if (-not $WorkDir) { $WorkDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) ('work\verify_slim\' + (Get-Date -Format 'yyyyMMdd_HHmmss')) }
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
@@ -291,15 +306,15 @@ try {
 } finally {
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     foreach ($k in $saved.Keys) { Set-Item -LiteralPath "env:$k" -Value $saved[$k] }
+    RemoveSubst
 }
 
 # ---- report ----
 $overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count
-$exeHash = (Get-FileHash -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe') -Algorithm SHA256).Hash.Substring(0, 16)
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
 $md += ''
-$md += "Package: $pkgTop (exe sha256 $exeHash...). Run folder: $WorkDir. $(Get-Date -Format 'yyyy-MM-dd HH:mm')."
+$md += "Package: $(if ($SubstDrive) { "$Package (run as $SubstDrive)" } else { $pkgTop }) (exe sha256 $exeHash...). Run folder: $WorkDir. $(Get-Date -Format 'yyyy-MM-dd HH:mm')."
 $md += "Maps: $Maps; match $MatchSeconds s; intro $(if ($SkipIntro) { 'skipped' } else { 'played' }); lobby options: $(if ($LobbyOptions) { $LobbyOptions } else { 'default' })."
 $md += ''
 if ($OmitRoot.Count) { $md += "SELF-TEST: data roots left unset: $($OmitRoot -join ', ')." }
