@@ -53,7 +53,9 @@ param(
     [string]$HoldFile = "",
     [switch]$SkipIntro,
     [switch]$Strict,
-    [string[]]$OmitRoot = @()    # self-test: leave these data-root variables unset (the check must then FAIL)
+    [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
+    [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
+    [switch]$StaticOnly          # file checks only (HD pack), no game runs
 )
 $ErrorActionPreference = 'Stop'
 
@@ -89,6 +91,57 @@ $roots = [ordered]@{
 foreach ($k in $OmitRoot) { if ($roots.Contains($k)) { $roots.Remove($k); Write-Warning "self-test: $k left unset" } else { throw "unknown root $k" } }
 foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Write-Warning "$k -> $($roots[$k]) does not exist in the package" } }
 
+# ---- the optional HD texture pack (M4; [PCSettings] HDTextures=1) ----
+# The loader (WfcPipeline.cpp hdIndex) reads <hd root>/hd_index.json, default <dds root>/../hd = AssetTools\out\hd (what
+# Play.bat's subst resolves), or WFC_HD_ROOT. It ignores the whole pack unless every row's file exists with its byte
+# count and a supported format. Static check: every row present (+ bytes, format), every DDS under the root indexed (the
+# pack's source dir also holds non-PASS textures that must not ship). Runtime: with a pack, the maps run with
+# WFC_HDTEXTURES=1 and the log must say "HD texture pack available: <rows> textures". -NoHd skips both.
+$hd = [pscustomobject]@{ Root = $null; Where = 'not shipped'; Rows = 0; Files = 0; Bytes = 0L; Problems = @() }
+if (-not $NoHd) {
+    $cands = @(@{ Dir = Join-Path $pkg 'AssetTools\out\hd'; Where = 'AssetTools\out\hd (loader default)' },
+               @{ Dir = Join-Path $pkgTop 'hd'; Where = '<package>\hd (needs WFC_HD_ROOT: the loader default is AssetTools\out\hd)' })
+    $found = @($cands | Where-Object { Test-Path -LiteralPath (Join-Path $_.Dir 'hd_index.json') })
+    $strays = @($cands | Where-Object { (Test-Path -LiteralPath $_.Dir) -and -not (Test-Path -LiteralPath (Join-Path $_.Dir 'hd_index.json')) })
+    foreach ($s in $strays) { $hd.Problems += "HD folder without hd_index.json: $($s.Dir)" }
+    if ($found.Count -gt 1) { $hd.Problems += 'HD pack shipped twice (AssetTools\out\hd and <package>\hd)' }
+    if ($found.Count) {
+        $hd.Root = $found[0].Dir; $hd.Where = $found[0].Where
+        $J = Get-Content -LiteralPath (Join-Path $hd.Root 'hd_index.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $rows = $null
+        foreach ($k in 'textures', 'rows', 'entries') { $v = $J.$k; if ($v -is [array] -and $v.Count) { $rows = $v; break } }   # the loader's order
+        if (-not $rows) { $hd.Problems += 'hd_index.json has no rows' }
+        else {
+            $hd.Rows = $rows.Count
+            $indexed = New-Object 'System.Collections.Generic.HashSet[string]'
+            $okFmt = @('DXT1', 'DXT3', 'DXT5', 'A8R8G8B8', 'G8')
+            $miss = 0; $size = 0; $fmt = 0; $shown = 0
+            foreach ($r in $rows) {
+                if (-not $r.key -or -not $r.dds) { continue }
+                [void]$indexed.Add((Norm (Join-Path $hd.Root $r.dds)))
+                $f = $r.format -replace '^PF_', ''
+                $f = switch ($f) { 'BC1' { 'DXT1' } 'BC2' { 'DXT3' } 'BC3' { 'DXT5' } default { $f } }
+                if ($okFmt -notcontains $f) { $fmt++; if ($shown++ -lt 10) { $hd.Problems += "unsupported format $($r.format): $($r.dds)" } }
+                $p = Join-Path $hd.Root $r.dds
+                $fi = Get-Item -LiteralPath $p -ErrorAction SilentlyContinue
+                if (-not $fi) { $miss++; if ($shown++ -lt 10) { $hd.Problems += "row file missing: $($r.dds)" } }
+                elseif ($null -ne $r.bytes -and [long]$r.bytes -ne $fi.Length) { $size++; if ($shown++ -lt 10) { $hd.Problems += "byte count $($fi.Length) != $($r.bytes): $($r.dds)" } }
+            }
+            if ($miss) { $hd.Problems += "$miss of $($rows.Count) rows missing (the loader ignores the whole pack)" }
+            if ($size) { $hd.Problems += "$size rows with a wrong byte count (the loader ignores the whole pack)" }
+            if ($fmt) { $hd.Problems += "$fmt rows in an unsupported format (the loader ignores the whole pack)" }
+            $files = @(Get-ChildItem -LiteralPath $hd.Root -Recurse -File)
+            $hd.Files = $files.Count; $hd.Bytes = ($files | Measure-Object -Property Length -Sum).Sum
+            $extra = @($files | Where-Object { $_.Name -ne 'hd_index.json' -and $_.Extension -ne '.txt' -and -not $indexed.Contains((Norm $_.FullName)) })
+            if ($extra.Count) {
+                $hd.Problems += "$($extra.Count) files in the HD folder not in the index (non-PASS textures must not ship)"
+                foreach ($x in ($extra | Select-Object -First 10)) { $hd.Problems += "unindexed: $($x.FullName.Substring($hd.Root.Length + 1))" }
+            }
+        }
+    }
+}
+Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
+
 function WaitHold {
     if (-not $HoldFile) { return }
     $said = $false
@@ -109,7 +162,7 @@ $results = @()
 $saved = @{}
 Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
 try {
-    foreach ($entry in $Maps.Split(',')) {
+    foreach ($entry in $(if ($StaticOnly) { @() } else { $Maps.Split(',') })) {
         $id, $name = $entry.Split(':')
         WaitHold
         $run = Join-Path $WorkDir $name
@@ -124,6 +177,10 @@ try {
         $env:WFC_BOOT = 'frontend'; $env:WFC_NOMOUSE = '1'; $env:WFC_LOGTIME = '1'
         if ($SkipIntro) { $env:WFC_SKIPINTRO = '1' } else { Remove-Item env:WFC_SKIPINTRO -ErrorAction SilentlyContinue }
         if ($LobbyOptions) { $env:WFC_LOBBY_OPTIONS = $LobbyOptions } else { Remove-Item env:WFC_LOBBY_OPTIONS -ErrorAction SilentlyContinue }
+        if ($hd.Root) {
+            $env:WFC_HDTEXTURES = '1'
+            if ((Norm $hd.Root) -ne (Norm (Join-Path $pkg 'AssetTools\out\hd'))) { $env:WFC_HD_ROOT = $hd.Root -replace '\\', '/' }
+        }
         $env:WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$MatchSeconds;quit"
 
         Write-Host "[$name] map ${id}: starting $exe"
@@ -146,6 +203,8 @@ try {
         $matchLine = ($log | Select-String -SimpleMatch 'FLOW level.begin level=Match' | Select-Object -First 1)
         $inGame = [bool]($log | Select-String -Pattern 'ui\.state from=\S+ to=InGame' | Select-Object -First 1)
         $shutdown = [bool]($log | Select-String -SimpleMatch 'Shutdown complete' | Select-Object -Last 1)
+        $hdLine = $log | Select-String -Pattern 'HD texture pack (available: (\d+) textures|incomplete.*|not installed.*|format .* not supported.*|index has no rows.*)' | Select-Object -First 1
+        $hdLog = if ($hdLine) { $hdLine.Matches[0].Value } else { 'no HD pack line' }
         $feLine = $log | Select-String -Pattern 'frontend data: (.+)$' | Select-Object -First 1
         $feDir = if ($feLine) { $feLine.Matches[0].Groups[1].Value.Trim() } else { $null }
         $feNote = if (-not $feDir) { 'not logged (exe before the frontend-data lookup)' }
@@ -168,7 +227,7 @@ try {
                 $n = Norm $raw
                 $cls = 'other'; $note = ''
                 if (Under $n $nWork) { $cls = 'run' }
-                elseif (Under $n $nPkg) { $cls = 'package' }
+                elseif ((Under $n $nPkg) -or ($hd.Root -and (Under $n (Norm $hd.Root)))) { $cls = 'package' }
                 elseif (Under $n $nReal) { $cls = 'outside' }
                 elseif ($n -notmatch '^[a-z]:/' -or ($systemRoots | Where-Object { Under $n $_ })) { $cls = 'system' }
                 $fail = $false
@@ -204,6 +263,9 @@ try {
         $failRows = @($rows | Where-Object { $_.Fail })
         $warnRows = @($rows | Where-Object { -not $_.Fail -and $_.Class -eq 'outside' -and $_.Note -like '*resolves under*' })
         if ($failRows.Count) { $reasons += "$($failRows.Count) failing opens" }
+        if ($hd.Root -and -not ($hdLine -and $hdLine.Matches[0].Groups[2].Success -and [int]$hdLine.Matches[0].Groups[2].Value -eq $hd.Rows)) {
+            $reasons += "HD pack not accepted by the game: $hdLog (index rows $($hd.Rows))"
+        }
         if ($Strict -and $feNote -ne 'inside the package') { $reasons += "frontend data dir $(if ($feDir) { $feDir } else { '-' }): $feNote" }
         if (-not $loc) { $reasons += 'no localized-waves line' }
         else {
@@ -216,7 +278,7 @@ try {
             Run = @($rows | Where-Object { $_.Class -eq 'run' }).Count; System = @($rows | Where-Object { $_.Class -eq 'system' }).Count
             Outside = @($rows | Where-Object { $_.Class -eq 'outside' }).Count; Other = @($rows | Where-Object { $_.Class -eq 'other' }).Count
             Probes = @($rows | Where-Object { $_.Note -like 'optional probe*' -or $_.Note -like '*(probe)' }).Count
-            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors; FrontendData = $(if ($feDir) { "$feDir ($feNote)" } else { $feNote })
+            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors; FrontendData = $(if ($feDir) { "$feDir ($feNote)" } else { $feNote }); HdLog = $hdLog
             Twins = @($rows | Where-Object { $_.Note -like '*shipped*' }).Count; OtherRows = @($rows | Where-Object { $_.Class -eq 'other' })
         }
         Write-Host ("[{0}] {1} in {2} s: {3}" -f $name, $(if ($reasons.Count) { 'FAIL' } else { 'PASS' }), $secs, ($reasons -join '; '))
@@ -227,7 +289,7 @@ try {
 }
 
 # ---- report ----
-$overall = -not ($results | Where-Object { -not $_.Pass })
+$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count
 $exeHash = (Get-FileHash -LiteralPath (Join-Path $pkgBin 'wfc_rebuild.exe') -Algorithm SHA256).Hash.Substring(0, 16)
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
@@ -245,7 +307,10 @@ foreach ($r in $results) {
     $md += "| $($r.Map) ($($r.Id)) | $(if ($r.Pass) { 'PASS' } else { 'FAIL' }) | $($r.Seconds) s | $($r.Opens) | $($r.Package) | $($r.Twins) | $($r.Run) | $($r.System) | $($r.Outside) | $($r.Other) | $($r.Probes) | $l |"
 }
 $md += ''
-foreach ($r in $results) { $md += "- $($r.Map): frontend data dir: $($r.FrontendData)" }
+foreach ($r in $results) { $md += "- $($r.Map): frontend data dir: $($r.FrontendData)$(if ($hd.Root) { "; HD: $($r.HdLog)" })" }
+$md += ''
+$md += "HD pack: $($hd.Where)$(if ($hd.Root) { " ($($hd.Root)): $($hd.Rows) index rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB; $(if ($hd.Problems.Count) { 'FAIL' } else { 'every row present with its byte count, every DDS indexed' })" })$(if ($NoHd) { ' (-NoHd: not checked)' })"
+foreach ($x in $hd.Problems) { $md += "- $x" }
 foreach ($r in $results) {
     if ($r.Pass -and -not $r.OtherRows.Count -and -not $r.WarnRows.Count) { continue }
     $md += ''
