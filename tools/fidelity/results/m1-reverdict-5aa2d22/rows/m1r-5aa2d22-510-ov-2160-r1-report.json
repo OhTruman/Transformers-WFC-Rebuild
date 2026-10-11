@@ -1,0 +1,117 @@
+﻿{
+    "summary":  {
+                    "pass":  11,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  6,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 150 s)"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.offmesh",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "no participant stranded off the nav mesh"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 35, off-mesh samples 103"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.99 / p95 3.38 / p99 3.5 / max 6.87 ms over 50093 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.1 ms; AI avg 0.118 / max 1.08 ms"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.slowframes",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "4488 in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: GPU-bound 4472 (100%); render: world 12 (0%); render: chars 4 (0%); avg slow frame 3.44 ms = render 1.70 (world 0.37, chars 0.43, fx 0.48, transl 0.37) + outside 1.74; gpu 2.24 ms; draws 1,658; buffer upload 564 KB; 0 of them with a buffer upload \u003e 2 MB (heavy-combat flag, not a cause)"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 4430, stolen 9390 (priority culling by design), mix max 0.572 ms / block"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 150 s)"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.offmesh",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "no participant stranded off the nav mesh"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 13, off-mesh samples 133"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.9 / p95 3.26 / p99 3.37 / max 74.62 ms over 51400 frames; \u003e 33 ms: 2, \u003e 50 ms: 1; sim p50 0 / p99 0.1 ms; AI avg 0.13 / max 1.09 ms"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.target_300fps",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 510 t64: p50 2.9 / p90 3.2 / p99 3.37 ms; frames under 3.33 ms 98.2 %; split: not measured; phases (split run): world/scene submit (CPU) -; characters (dynamic meshes) -; sim (per frame share) -; map FX -; actors draw -; HUD (ui.draw) -; GPU wait -; sim step  ms (top: ); BIGGEST: -. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.slowframes",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "1468 in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: GPU-bound 1463 (100%); render: world 3 (0%); render: transl 1 (0%); render: chars 1 (0%); avg slow frame 3.50 ms = render 1.62 (world 0.36, chars 0.40, fx 0.44, transl 0.36) + outside 1.89; gpu 2.19 ms; draws 1,633; buffer upload 450 KB; 0 of them with a buffer upload \u003e 2 MB (heavy-combat flag, not a cause)"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.resolution",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "rendered 3840x2160 as requested (WFC_RENDERSIZE; window 1920x1080)"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 5902, stolen 14420 (priority culling by design), mix max 0.585 ms / block"
+                    },
+                    {
+                        "id":  "capacity.510_t64_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    }
+                ]
+}

@@ -1,0 +1,63 @@
+﻿{
+    "summary":  {
+                    "pass":  5,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  3,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "regress.501",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.21 vs base 2.35 (best valid of 2 runs each; delta -0.14 ms; BLOCK above +0.15); invalid runs: lockstep.head.r2 UNKNOWN"
+                    },
+                    {
+                        "id":  "regress.502",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.15 vs base 2.26 (best valid of 2 runs each; delta -0.11 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.503",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.26 vs base 2.39 (best valid of 2 runs each; delta -0.13 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.504",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.507",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.508",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "no valid run pair (lockstep.head.r1 FAIL; lockstep.head.r2 FAIL) - sim change in the batch or contamination: use the free-running verdict"
+                    },
+                    {
+                        "id":  "regress.509",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 3.12 vs base 3.25 (best valid of 2 runs each; delta -0.13 ms; BLOCK above +0.15)"
+                    },
+                    {
+                        "id":  "regress.510",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "head p90 2.74 vs base 2.8 (best valid of 2 runs each; delta -0.06 ms; BLOCK above +0.15)"
+                    }
+                ]
+}

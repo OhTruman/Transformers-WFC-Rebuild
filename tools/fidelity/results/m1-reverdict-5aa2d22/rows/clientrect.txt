@@ -1,0 +1,4 @@
+pid 21680: client 2560x1440, window rect (0,0)-(2560,1440)
+pid 23048: client 2560x1440, window rect (0,0)-(2560,1440)
+pid 21920: client 2560x1440, window rect (0,0)-(2560,1440)
+pid 46484: client 2560x1440, window rect (0,0)-(2560,1440)

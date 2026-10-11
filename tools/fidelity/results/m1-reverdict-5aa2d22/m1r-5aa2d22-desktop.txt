@@ -1,0 +1,5 @@
+desktop before: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+07:10:17 after 510 win r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+07:24:33 after 508 win r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+07:38:49 after 510 win r2: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+07:53:04 after 508 win r2: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz

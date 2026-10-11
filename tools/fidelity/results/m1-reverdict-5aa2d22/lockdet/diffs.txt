@@ -1,0 +1,6 @@
+work/lockdet/5aa2d22/base-r1 work/lockdet/5aa2d22/base-r2 diffs 0
+work/lockdet/5aa2d22/base-r1 work/lockdet/5aa2d22/base-r3 diffs 0
+work/lockdet/5aa2d22/sync-r1 work/lockdet/5aa2d22/sync-r2 diffs 0
+work/lockdet/5aa2d22/sync-r1 work/lockdet/5aa2d22/sync-r3 diffs 0
+work/lockdet/5aa2d22/noocc-r1 work/lockdet/5aa2d22/noocc-r2 diffs 0
+work/lockdet/5aa2d22/noocc-r1 work/lockdet/5aa2d22/noocc-r3 diffs 0

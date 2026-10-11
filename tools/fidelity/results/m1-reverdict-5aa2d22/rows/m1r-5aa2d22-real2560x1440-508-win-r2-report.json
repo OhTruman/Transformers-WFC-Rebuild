@@ -1,0 +1,129 @@
+﻿{
+    "summary":  {
+                    "pass":  11,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  8,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 150 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.offmesh",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "no participant stranded off the nav mesh"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 9, off-mesh samples 78"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 1.87 / p95 2.3 / p99 2.5 / max 6.06 ms over 80397 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.1 ms; AI avg 0.146 / max 0.98 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.slowframes",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "10 in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: GPU-bound 6 (60%); outside render (sim / UI / present) 3 (30%); render: transl 1 (10%); avg slow frame 4.61 ms = render 1.40 (world 0.29, chars 0.40, fx 0.14, transl 0.54) + outside 3.20; gpu 1.06 ms; draws 1,764; buffer upload 240 KB; 0 of them with a buffer upload \u003e 2 MB (heavy-combat flag, not a cause)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.pilot",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "player bot: 258 PLAYERBOT log lines, max shots 117; last: PLAYERBOT perception: 27 enemies in sight range, 3 in FOV, 3 LOS checks, 2 visible; yaw 1.56 team 1 sight 60 m fov 130"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m1.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 15436, stolen 16746 (priority culling by design), mix max 0.529 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Time (TimeLimit 150 s)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.offmesh",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "no participant stranded off the nav mesh"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 4, off-mesh samples 36"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 1.94 / p95 2.46 / p99 2.69 / max 7.17 ms over 76874 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 0.1 ms; AI avg 0.143 / max 1 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.target_300fps",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "2560x1440 508 t64: p50 1.94 / p90 2.34 / p99 2.69 ms; frames under 3.33 ms 100 %; split: not measured; phases (split run): world/scene submit (CPU) -; characters (dynamic meshes) -; sim (per frame share) -; map FX -; actors draw -; HUD (ui.draw) -; GPU wait -; sim step  ms (top: ); BIGGEST: -. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.slowframes",
+                        "status":  "INFO",
+                        "owner":  "Rendering",
+                        "note":  "13 in-play SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: GPU-bound 10 (77%); render: transl 2 (15%); outside render (sim / UI / present) 1 (8%); avg slow frame 4.34 ms = render 1.39 (world 0.33, chars 0.27, fx 0.19, transl 0.57) + outside 2.95; gpu 1.18 ms; draws 1,915; buffer upload 215 KB; 0 of them with a buffer upload \u003e 2 MB (heavy-combat flag, not a cause)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.resolution",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "rendered 2560x1440 as requested (WFC_RENDERSIZE; window 2560x1440)"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.pilot",
+                        "status":  "INFO",
+                        "owner":  "Gameplay",
+                        "note":  "player bot: 252 PLAYERBOT log lines, max shots 8; last: PLAYERBOT perception: 12 enemies in sight range, 3 in FOV, 3 LOS checks, 3 visible; yaw -3.03 team 0 sight 60 m fov 130"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.m2.audio",
+                        "status":  "INFO",
+                        "owner":  "Systems",
+                        "note":  "voices max 96 (cap 96), dropped 28815, stolen 34452 (priority culling by design), mix max 0.557 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_t64_2560x1440.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    }
+                ]
+}

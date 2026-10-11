@@ -1,0 +1,39 @@
+﻿{
+    "summary":  {
+                    "pass":  2,
+                    "fail":  2,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "lockstep.base.r1",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "base: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 2.31 / 2.91 / 3.72 ms over 9000 frames; slow frames 251: GPU 3.36 (world 0.84, fx 0.74, transl 0.99, post 0.23), CPU render 2.16, outside 1.55; all frames: chars CPU 0.68, draws 1512 (dyn 215, fx 129), binds 1208"
+                    },
+                    {
+                        "id":  "lockstep.head.r1",
+                        "status":  "FAIL",
+                        "owner":  "Experimental",
+                        "note":  "head: steps 9000 (600-9600), same match as \u0027base\u0027 False, workload parity False; frame p50 / p90 / p99 2.07 / 2.7 / 3.21 ms over 9000 frames; slow frames 56: GPU 3.33 (world 1.06, fx 0.64, transl 0.96, post 0.18), CPU render 2.17, outside 1.58; all frames: chars CPU 0.67, draws 1286 (dyn 185, fx 108), binds 1040"
+                    },
+                    {
+                        "id":  "lockstep.base.r2",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "base: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 2.3 / 2.91 / 3.69 ms over 9000 frames; slow frames 255: GPU 3.37 (world 0.84, fx 0.73, transl 1, post 0.23), CPU render 2.21, outside 1.49; all frames: chars CPU 0.68, draws 1511 (dyn 215, fx 129), binds 1207"
+                    },
+                    {
+                        "id":  "lockstep.head.r2",
+                        "status":  "FAIL",
+                        "owner":  "Experimental",
+                        "note":  "head: steps 9000 (600-9600), same match as \u0027base\u0027 False, workload parity False; frame p50 / p90 / p99 2.04 / 2.7 / 3.21 ms over 9000 frames; slow frames 54: GPU 3.35 (world 1.08, fx 0.63, transl 0.97, post 0.18), CPU render 2.23, outside 1.53; all frames: chars CPU 0.66, draws 1283 (dyn 182, fx 108), binds 1030"
+                    }
+                ]
+}

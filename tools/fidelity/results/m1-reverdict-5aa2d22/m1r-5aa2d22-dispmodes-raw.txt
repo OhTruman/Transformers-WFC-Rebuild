@@ -1,0 +1,32 @@
+\\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+  mode 640x480 @ 60
+  mode 800x600 @ 60
+  mode 1024x768 @ 60
+  mode 1128x634 @ 60
+  mode 1280x720 @ 60
+  mode 1280x1024 @ 60
+  mode 1366x768 @ 60
+  mode 1600x900 @ 60
+  mode 1680x1050 @ 60
+  mode 1760x990 @ 60
+  mode 1920x1080 @ 60
+\\.\DISPLAY2 (AMD Radeon RX 7900 XTX): no current mode
+\\.\DISPLAY3 (AMD Radeon RX 7900 XTX): no current mode
+\\.\DISPLAY4 (AMD Radeon RX 7900 XTX): no current mode
+\\.\DISPLAY5 (AMD Radeon RX 7900 XTX): no current mode
+\\.\DISPLAY6 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY7 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY8 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY9 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY10 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY11 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY12 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY13 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY14 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY15 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY16 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY17 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY18 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY19 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY20 (Parsec Virtual Display Adapter): no current mode
+\\.\DISPLAY21 (Parsec Virtual Display Adapter): no current mode

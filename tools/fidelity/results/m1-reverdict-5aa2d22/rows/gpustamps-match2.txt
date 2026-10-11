@@ -1,0 +1,72 @@
+m1r-5aa2d22-real2560x1440-508-rs-r1 (113 reports)
+  frame start to present: all 1.375, slowest tenth 1.944
+  after the 3D renderer: GFx UI: all 0.620, slowest tenth 0.679
+  post: tonemap into the window: all 0.022, slowest tenth 0.022
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.712, slowest tenth 37.117
+  distortion apply: all 0.024, slowest tenth 0.025
+m1r-5aa2d22-real2560x1440-508-rs-r2 (114 reports)
+  frame start to present: all 1.371, slowest tenth 1.939
+  after the 3D renderer: GFx UI: all 0.624, slowest tenth 0.694
+  post: tonemap into the window: all 0.021, slowest tenth 0.022
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.000, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.719, slowest tenth 37.186
+  distortion apply: all 0.023, slowest tenth 0.025
+m1r-5aa2d22-real2560x1440-508-win-r1 (95 reports)
+  frame start to present: all 1.572, slowest tenth 2.242
+  after the 3D renderer: GFx UI: all 0.737, slowest tenth 0.797
+  post: tonemap into the window: all 0.034, slowest tenth 0.034
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.789, slowest tenth 37.885
+  distortion apply: all 0.022, slowest tenth 0.023
+m1r-5aa2d22-real2560x1440-508-win-r2 (94 reports)
+  frame start to present: all 1.566, slowest tenth 2.227
+  after the 3D renderer: GFx UI: all 0.710, slowest tenth 0.790
+  post: tonemap into the window: all 0.034, slowest tenth 0.034
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.739, slowest tenth 37.392
+  distortion apply: all 0.024, slowest tenth 0.025
+m1r-5aa2d22-real2560x1440-510-rs-r1 (95 reports)
+  frame start to present: all 1.598, slowest tenth 2.315
+  after the 3D renderer: GFx UI: all 0.590, slowest tenth 0.686
+  post: tonemap into the window: all 0.021, slowest tenth 0.021
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.009
+  (present): all 3.827, slowest tenth 38.271
+  distortion apply: all 0.032, slowest tenth 0.033
+m1r-5aa2d22-real2560x1440-510-rs-r2 (95 reports)
+  frame start to present: all 1.602, slowest tenth 2.290
+  after the 3D renderer: GFx UI: all 0.592, slowest tenth 0.677
+  post: tonemap into the window: all 0.021, slowest tenth 0.021
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.000
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.764, slowest tenth 37.644
+  distortion apply: all 0.032, slowest tenth 0.034
+m1r-5aa2d22-real2560x1440-510-win-r1 (88 reports)
+  frame start to present: all 1.681, slowest tenth 2.410
+  after the 3D renderer: GFx UI: all 0.707, slowest tenth 0.779
+  post: tonemap into the window: all 0.034, slowest tenth 0.034
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.000
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.847, slowest tenth 38.474
+  distortion apply: all 0.027, slowest tenth 0.029
+m1r-5aa2d22-real2560x1440-510-win-r2 (87 reports)
+  frame start to present: all 1.698, slowest tenth 2.475
+  after the 3D renderer: GFx UI: all 0.692, slowest tenth 0.769
+  post: tonemap into the window: all 0.034, slowest tenth 0.034
+  2D: marker, reticle, screen batches: all 0.002, slowest tenth 0.002
+  HUD screen effect: all 0.001, slowest tenth 0.001
+  canvas tiles: all 0.008, slowest tenth 0.008
+  (present): all 3.833, slowest tenth 38.330
+  distortion apply: all 0.027, slowest tenth 0.029

@@ -1,0 +1,22 @@
+base r1 vs r2: work/lockdet/5aa2d22/base-r1/occ.txt work/lockdet/5aa2d22/base-r2/occ.txt differ: char 787476, line 9963
+9963c9963
+<   9963	R 750/750 o143 bf749 r2=1 r3=0 occ=0
+---
+>   9963	R 750/750 o143 bf749 r2=0 r3=0 occ=1
+10022c10022
+<  10022	Q 750/750 o143 s2 -0x1.8412a20000000p+6 -0x1.d1021e0000000p+3 -0x1.6d2dcc0000000p+7 -0x1.2e06fe0000000p+6 0x1.100d700000000p+4 -0x1.3906460000000p+7
+base r1 vs r3: work/lockdet/5aa2d22/base-r1/occ.txt work/lockdet/5aa2d22/base-r3/occ.txt differ: char 787476, line 9963
+9963c9963
+<   9963	R 750/750 o143 bf749 r2=1 r3=0 occ=0
+---
+>   9963	R 750/750 o143 bf749 r2=0 r3=0 occ=1
+10022c10022
+<  10022	Q 750/750 o143 s2 -0x1.8412a20000000p+6 -0x1.d1021e0000000p+3 -0x1.6d2dcc0000000p+7 -0x1.2e06fe0000000p+6 0x1.100d700000000p+4 -0x1.3906460000000p+7
+sync r1 vs r2: work/lockdet/5aa2d22/sync-r1/occ.txt work/lockdet/5aa2d22/sync-r2/occ.txt differ: char 860418, line 10755
+10755c10755
+<  10755	R 756/756 o137 bf755 r2=0 r3=0 occ=1
+---
+>  10755	R 756/756 o137 bf755 r2=1 r3=0 occ=0
+10814c10814
+<  10814	Q 756/756 o137 s0 -0x1.2fac0e0000000p+6 -0x1.d828ae0000000p+3 -0x1.a4cb060000000p+6 -0x1.8d5d200000000p+5 0x1.6fc3460000000p+3 -0x1.3bcd860000000p+6
+sync r1 vs r3: 

@@ -28,6 +28,9 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       # -RenderSize WxH: Rendering's WFC_RENDERSIZE - every 3D pass renders at WxH and the post pass scales into the window
       # (-Resolutions); for 4K rows on a smaller desktop. The rendered-size check then expects WxH.
       [string]$RenderSize = "",
+      # -Fullscreen: Fullscreen=1 in the profile (borderless window over the monitor at -Resolutions; on a 4K desktop at 3840x2160 no
+      # mode switch) - real-display rows: the GFx UI and post run at the window size, not 1080p (Integration 2026-10-11)
+      [switch]$Fullscreen,
       # -Upscaling <0..3>: the PC Upscaling setting through WFC_UPSCALING (09c d5ff921: 0 Off, 1 FSR 1 Quality, 2 Balanced,
       # 3 Performance) in the timing AND the split run; the 3D then renders at (RenderSize or window) x the FSR scale and EASU / RCAS
       # upscale to it, so the rendered-size check expects the scaled size and the row checks that FSR really became active
@@ -96,7 +99,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        (Get-BotProfile 0 0 $Difficulty -Width $rw -Height $rh) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        ((Get-BotProfile 0 0 $Difficulty -Width $rw -Height $rh) -replace "Fullscreen=0", "Fullscreen=$(if ($Fullscreen) { 1 } else { 0 })") | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($P.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
         $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
         $one = "call:Online.SetSelectedMapID,$map;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=4;wait:level=GameLobby;wait:ui=InLobby;wait:t=3"
@@ -123,7 +126,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
     if (-not $NoSplit -and -not $ReportOnly -and -not (Test-Path $lgs)) {
         New-Item -ItemType Directory -Force $ds | Out-Null
         if (Wait-WfcGpu) {
-            (Get-BotProfile 0 0 $Difficulty -Width $rw -Height $rh) | Set-Content -Encoding ASCII (Join-Path $ds "wfc_profile.ini")
+            ((Get-BotProfile 0 0 $Difficulty -Width $rw -Height $rh) -replace "Fullscreen=0", "Fullscreen=$(if ($Fullscreen) { 1 } else { 0 })") | Set-Content -Encoding ASCII (Join-Path $ds "wfc_profile.ini")
             $party = if ($P.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
             $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
             $s1 = (@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
