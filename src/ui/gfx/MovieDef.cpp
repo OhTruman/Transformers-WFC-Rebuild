@@ -5,8 +5,18 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
+
+// Systems' platform::longPath (UTF-8 -> UTF-16, \\?\ near MAX_PATH; short paths open as before) where the tree has
+// it; otherwise the plain narrow path, exactly the old open.
+#if __has_include("platform/LongPath.h")
+#include "platform/LongPath.h"
+static std::filesystem::path openPath(const std::string& p) { return platform::longPath(p); }
+#else
+static std::filesystem::path openPath(const std::string& p) { return std::filesystem::path(p); }
+#endif
 
 namespace gfx {
 
@@ -712,7 +722,7 @@ bool MovieDef::load(const std::string& path) {
     base_ = s == std::string::npos ? path : path.substr(s + 1);
     size_t dot = base_.rfind('.');
     if (dot != std::string::npos) base_ = base_.substr(0, dot);
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     if (!f) { LOG_WARN("GFX cannot open %s", path.c_str()); return false; }
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     if (buf.size() < 21) return false;
