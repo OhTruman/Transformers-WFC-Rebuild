@@ -2865,6 +2865,18 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
                 ++aiKills_[side];
                 if (core::length(d) > 1e-3f && core::dot(core::normalize(d), f) < 0.0f) ++aiBackKills_[side];
             }
+        if (anySmart_) {   // Smart hunt outcomes (diagnostics): the hunter killed its enemy, or died first
+            const float nowE = match_.matchTime();
+            if (instigator >= 0 && (size_t)instigator < smart_.size()) {
+                SmartBot& ks = smart_[(size_t)instigator];
+                if (ks.active && ks.episodeTarget == victim && nowE <= ks.episodeUntil) { ++(ks.episodeFlank ? ks.flankWins : ks.huntWins); ks.episodeTarget = -1; }
+            }
+            if (victim >= 0 && (size_t)victim < smart_.size()) {
+                SmartBot& vs = smart_[(size_t)victim];
+                if (vs.active && vs.episodeTarget >= 0 && nowE <= vs.episodeUntil) { ++(vs.episodeFlank ? vs.flankLosses : vs.huntLosses); }
+                vs.episodeTarget = -1;
+            }
+        }
         const Match::KillContext kc = killContext(instigator, victim, damageType);
         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType, &kc);
         else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }

@@ -109,7 +109,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
         applyMatchDamage(hitPlayer, instigator, w.damageAt(dist), false, w.damageType ? w.damageType : "");
         for (BotBrain& b : bots_) {
             if (b.player == hitPlayer) { b.lastDamageTime = match_.matchTime(); b.lastAttacker = instigator; }
-            if (b.player == instigator) { ++b.hits; if (b.shotBin >= 0) ++b.rangeHits[(size_t)b.shotBin]; }
+            if (b.player == instigator) { ++b.hits; if (b.shotBin >= 0) ++b.rangeHits[(size_t)b.shotBin]; if (b.diffBin >= 0) ++b.diffHits[(size_t)b.diffBin]; }
         }
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -139,8 +139,20 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
         const float rng = core::length(aimPoint - eye);
         b.shotBin = rng < 10.0f ? 0 : rng < 25.0f ? 1 : rng < 50.0f ? 2 : 3;
         b.rangeShots[(size_t)b.shotBin] += std::max(1, w.shots);
+        {   // shot difficulty: the target's angular speed seen from the shooter, and the shooter's own ground speed
+            const Character* tp = b.target >= 0 ? participantPawn(b.target) : nullptr;
+            const core::Vec3 los = (aimPoint - eye) * (1.0f / std::max(rng, 0.01f));
+            core::Vec3 rv = pc.velocity() * -1.0f;
+            if (tp) rv = rv + tp->velocity();
+            const core::Vec3 lat = rv - los * (rv.x * los.x + rv.y * los.y + rv.z * los.z);
+            const float ang = core::length(lat) / std::max(rng, 0.01f) * 57.29578f;
+            const float self = std::sqrt(pc.velocity().x * pc.velocity().x + pc.velocity().z * pc.velocity().z);
+            b.diffBin = b.shotBin * 9 + (ang < 5.0f ? 0 : ang < 15.0f ? 1 : 2) * 3 + (self < 1.0f ? 0 : self < 4.0f ? 1 : 2);
+            b.diffShots[(size_t)b.diffBin] += std::max(1, w.shots);
+            if (b.shotBin == 2) { b.angSum += (double)ang * std::max(1, w.shots); b.selfSum += (double)self * std::max(1, w.shots); }
+        }
         for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(o.matchPlayer(), pc, w, eye, d); }
-        pellet_ = 0; b.shotBin = -1;
+        pellet_ = 0; b.shotBin = -1; b.diffBin = -1;
         b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }
@@ -1591,6 +1603,23 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             }
             if (s.waitSince >= 0.0f) { s.waitSince = -1.0f; s.waitCooldownUntil = now + 10.0f; }   // waited long enough: go on (BOTTEST idle)
         }
+        // WFC_AISQUADLOG=<player>: that member's squad state each think (diagnostics: why members stay far from the leader).
+        static const int squadLog = std::getenv("WFC_AISQUADLOG") ? std::atoi(std::getenv("WFC_AISQUADLOG")) : -1;
+        if (squadLog == b.player) {
+            const Character* lp0 = leader >= 0 ? participantPawn(leader) : nullptr;
+            LOG_INFO("AISQUAD t %.2f p%d leader p%d dist %.1f life %.1f action %d goal %s (%.1f %.1f) path %zu/%zu wantRepath %d",
+                     now, b.player, leader, lp0 ? hdist(lp0->position(), pos) : -1.0f, b.life, (int)s.action, botGoalName(b.goal.kind),
+                     b.goal.pos.x, b.goal.pos.z, b.wp, b.path.size(), (int)b.wantRepath);
+        }
+        // A squad-given goal of the same kind is kept 2 s, then replaced only when it moved more than max(4 m, 20 % of its distance),
+        // and re-applied meanwhile: leader-relative goals moved every think (the leader's enemy, its trip), each move re-queued the
+        // path search, and members ran stale paths or none (WFC_AISQUADLOG Gorge: 100+ m from the leader, wantRepath set for seconds).
+        auto squadGoal = [&](BotGoalKind k, const core::Vec3& p, float rad, int tgt) {
+            const bool keep = !off("goalhold") && s.squadGoalKind == (int)k &&
+                              (now < s.squadGoalUntil || hdist(s.squadGoalPos, p) <= std::max(4.0f, 0.2f * hdist(p, pos)));
+            if (!keep) { s.squadGoalKind = (int)k; s.squadGoalPos = p; s.squadGoalRad = rad; s.squadGoalTgt = tgt; s.squadGoalUntil = now + 2.0f; }
+            setGoal(k, s.squadGoalPos, s.squadGoalRad, s.squadGoalTgt);
+        };
         if (leader >= 0 && leader != b.player) {
             const BotBrain* lb = nullptr;
             for (const BotBrain& bb : bots_) if (bb.player == leader) { lb = &bb; break; }
@@ -1599,7 +1628,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                 const float cd = hdist(lp->position(), pos);
                 s.cohesionSum += cd; ++s.cohesionN; ++s.cohesionBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2];
                 if (b.life < 15.0f) ++s.cohesionFresh;
-                else { ++s.cohesionSettledBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2]; s.cohesionSettledSum += cd; }
+                else { ++s.cohesionSettledBins[cd < 15.0f ? 0 : cd < 40.0f ? 1 : 2]; s.cohesionSettledSum += cd; ++s.cohesionSettledHist[std::min(99, (int)(cd * 0.5f))]; }
             }
             if (lb && lp) {
                 const bool leaderFights = lb->target >= 0 && lb->seen.count(lb->target) && lb->seen.at(lb->target).visible;
@@ -1607,15 +1636,21 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                 if (ltgt >= 0 && participantPawn(ltgt)) {
                     const core::Vec3 tp = leaderFights ? lb->seen.at(lb->target).pos : smart_[(size_t)leader].actionPos;
                     start(SmartBot::Hunt, tp, ltgt);
-                    setGoal(BotGoalKind::Attack, tp, 4.0f, ltgt);
+                    squadGoal(BotGoalKind::Attack, tp, 4.0f, ltgt);
                     return;
                 }
                 if (hdist(lp->position(), pos) > smartTune().squadRegroupM) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
-                    setGoal(BotGoalKind::Roam, lp->position(), 6.0f, -1);
+                    // Where the leader is going (a Roam trip), not where it is: chasing its position at the same speed kept a constant
+                    // gap, and a chase under the 45 m vehicle-travel range walked while the leader drove to its far goal
+                    // (WFC_AISQUADLOG Gorge: 30-90 m trails). Sharing the trip shares the travel form and the arrival point.
+                    const bool trip = !off("leadertrip") && lb->hasGoal && lb->goal.kind == BotGoalKind::Roam &&
+                                      hdist(lb->goal.pos, lp->position()) > smartTune().squadRegroupM;
+                    if (trip) squadGoal(BotGoalKind::Roam, lb->goal.pos, lb->goal.radius + 4.0f, -1);
+                    else squadGoal(BotGoalKind::Roam, lp->position(), 6.0f, -1);
                     return;
                 }
                 if (lb->hasGoal && lb->goal.kind == BotGoalKind::Roam) {     // close by: share the leader's destination (travel together)
-                    setGoal(BotGoalKind::Roam, lb->goal.pos, lb->goal.radius + 4.0f, -1);
+                    squadGoal(BotGoalKind::Roam, lb->goal.pos, lb->goal.radius + 4.0f, -1);
                     return;
                 }
             }
@@ -1638,7 +1673,18 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             // a 160-degree cone). A standing enemy, or no such spot: straight at it. The spot is kept while the hunt goes on.
             const SmartMemory& m = s.mem[(size_t)bestE];
             const float sp = std::sqrt(m.vel.x * m.vel.x + m.vel.z * m.vel.z);
-            if (smartTune().flank > 0.0f && sp > 2.0f && !off("flank")) {
+            // Route budget (general, per fight): a flank pays only if it arrives while the fight is still on. Once the corridor to the
+            // spot is known, more than flankEtaS of running (6 m/s), or more than 1.6 x the straight distance to the enemy + 10 m, drops
+            // the flank for 5 s and goes straight (WFC_AIDUEL Gorge: 31 flanks per match, the most of any map, and Smart's worst map).
+            if (s.flankSet && s.action == SmartBot::Hunt && s.actionTarget == bestE && !b.path.empty() && b.wp < b.path.size() &&
+                hdist(b.path.back().pos, s.flankPos) < 3.0f) {
+                float len = hdist(pos, b.path[b.wp].pos);
+                for (size_t i = b.wp; i + 1 < b.path.size(); ++i) len += hdist(b.path[i].pos, b.path[i + 1].pos);
+                if (len > smartTune().flankEtaS * 6.0f || len > 1.6f * hdist(pos, to) + 10.0f) {
+                    s.flankSet = false; s.noFlankUntil = now + 5.0f; ++s.flanksDropped;
+                }
+            }
+            if (smartTune().flank > 0.0f && sp > 2.0f && !off("flank") && now >= s.noFlankUntil) {
                 if (s.action == SmartBot::Hunt && s.actionTarget == bestE && s.flankSet && hdist(s.flankAnchor, to) < 12.0f) {
                     to = s.flankPos;
                 } else {
@@ -1653,6 +1699,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                             if (c < 0) continue;
                             const core::Vec3 cc = botNav_.cells()[(size_t)c].centroid;
                             if (smartClearAt(c, to, true) < hdist(cc, to) - 1.5f) continue;   // a firing line to it
+                            if (hdist(cc, pos) > hdist(to, pos) + smartTune().flankExtraM) continue;   // no long way round
                             const float score = hdist(cc, pos) * 0.5f + smartExposure(team, c) * 3.0f + (dx * hx + dz * hz) * 5.0f;
                             if (score < bestScore) { bestScore = score; fp = cc; found = true; }
                         }
@@ -1661,6 +1708,9 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                     else s.flankSet = false;
                 }
             } else s.flankSet = false;
+            if (s.episodeTarget != bestE || now > s.episodeUntil) {   // a new hunt of this enemy: its outcome over the next 15 s (diagnostics)
+                s.episodeTarget = bestE; s.episodeUntil = now + 15.0f; s.episodeFlank = s.flankSet;
+            }
             start(SmartBot::Hunt, to, bestE);
             setGoal(BotGoalKind::Attack, to, 4.0f, bestE);
             return;
@@ -1778,8 +1828,9 @@ void World::tickBots(float dt) {
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
+            const std::array<int, 36> ds = b.diffShots, dh = b.diffHits; const double as = b.angSum, ss = b.selfSum;
             b = BotBrain{};
-            b.rangeShots = rs; b.rangeHits = rh;
+            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.angSum = as; b.selfSum = ss;
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;

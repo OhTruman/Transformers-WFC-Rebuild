@@ -54,6 +54,8 @@ struct SmartTune {
     float vehicle = 0.0f;           // 1 = Smart also decides in vehicle form (hunt / squad / focus / retreat / pickups). Off: in duels it
                                     // lost fights (55 % vs 65 % wins, more Smart deaths from behind while driving to hunts)
     float flank = 1.0f;             // hunt a moving enemy from its side / back: a firing spot 10-20 m away, > 100 deg off its heading (0 = off)
+    float flankEtaS = 6.0f;         // a flank route longer than this at run speed (6 m/s) is dropped: the fight moves on before it pays
+    float flankExtraM = 15.0f;      // a flank spot may lie at most this much farther (straight line) than the enemy itself
     float preAim = 1.0f;            // with no target in sight, look where a remembered enemy (>= 0.4 sure, <= 45 m) should appear (0 = off)
 };
 const SmartTune& smartTune();
@@ -82,6 +84,8 @@ struct SmartBot {
     bool ownMission = false;
     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
+    float squadGoalUntil = -1.0f; int squadGoalKind = -1, squadGoalTgt = -1; core::Vec3 squadGoalPos{0, 0, 0}; float squadGoalRad = 0.0f;   // the squad-given goal, kept until then
+    float noFlankUntil = -1.0f; int flanksDropped = 0;   // a flank whose route ran over budget: straight at the enemy until then
     bool flankSet = false; core::Vec3 flankPos{0, 0, 0}, flankAnchor{0, 0, 0};   // the hunt's flanking spot and the enemy spot it was chosen for             // Smart set BotBrain::mission (follow the path while fighting): Smart clears it again
     // Metrics (WFC_AIMETRICS).
     int seen = 0, heard = 0, callouts = 0, hitBy = 0, posted = 0;
@@ -89,6 +93,11 @@ struct SmartBot {
     double cohesionSum = 0.0; long cohesionN = 0;   // squad members: distance to the leader, sampled each think
     long cohesionBins[3] = {0, 0, 0}, cohesionFresh = 0;   // samples < 15 / 15-40 / > 40 m; of them, within 15 s of a respawn
     long cohesionSettledBins[3] = {0, 0, 0}; double cohesionSettledSum = 0.0;   // the same, samples 15 s or more after a respawn
+    long cohesionSettledHist[100] = {};   // settled samples in 2 m bins (the last: 198 m and over), for the median
+    // Hunt outcomes (diagnostics): a hunt opens an episode on its enemy for 15 s; it is won if this bot kills that enemy first, lost if
+    // this bot dies first. Flank hunts and straight hunts are counted apart (are flanks a net loss?).
+    int episodeTarget = -1; float episodeUntil = -1.0f; bool episodeFlank = false;
+    int flankWins = 0, flankLosses = 0, huntWins = 0, huntLosses = 0;
     int coverReached = 0, coverSpoiled = 0, coverHeldSpoiled = 0, coverNoFight = 0, coverHeldEnded = 0;   // how TakeCover / HoldCover end (diagnostics)
     float coverSeconds = 0.0f, engagedSeconds = 0.0f;
     float rand01() { rng = rng * 1664525U + 1013904223U; return (float)(rng >> 8) * (1.0f / 16777216.0f); }

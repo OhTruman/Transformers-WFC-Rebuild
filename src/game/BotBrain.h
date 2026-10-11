@@ -135,6 +135,9 @@ struct BotBrain {
     int streaks = 0, vehicleShots = 0, abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hits = 0, noPaths = 0, shots = 0, repaths = 0, stucks = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0;
     // Diagnostics (WFC_AIDUEL "same aim" check): hitscan traces and hits by the target's range when fired, < 10 / 10-25 / 25-50 / > 50 m.
     std::array<int, 4> rangeShots{}, rangeHits{}; int shotBin = -1;
+    // Hitscan shot difficulty (diagnostics): cell = range bin x 9 + target angular speed bin (< 5 / 5-15 / > 15 deg/s) x 3 + own speed
+    // bin (< 1 / 1-4 / > 4 m/s); traces and hits per cell, and the summed angular speed / own speed of the 25-50 m traces.
+    std::array<int, 36> diffShots{}, diffHits{}; int diffBin = -1; double angSum = 0.0, selfSum = 0.0;
     float frand() { rng = rng * 1664525U + 1013904223U; return (float)((rng >> 8) & 0xFFFFFF) / 16777216.0f; }
     float frange(float a, float b) { return a + (b - a) * frand(); }
 };
