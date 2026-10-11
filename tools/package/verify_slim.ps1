@@ -38,8 +38,9 @@
 .EXAMPLE
   .\tools\package\verify_slim.ps1 -Package "F:\Transformers Rebuild\Rebuild\work\playtest_slim"
 .EXAMPLE
-  Self-test (must FAIL with outside reads under ExtractedAssets):
-  .\tools\package\verify_slim.ps1 -Package <pkg> -Maps 508:Streets -OmitRoot WFC_CONTENT -SkipIntro
+  Self-test (must FAIL with outside reads under ExtractedAssets; WFC_CONTENT alone is not enough, its default derives
+  from the asset root, which still points into the package):
+  .\tools\package\verify_slim.ps1 -Package <pkg> -Maps 508:Streets -OmitRoot WFC_ASSETS,WFC_CONTENT -SkipIntro
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Package,
