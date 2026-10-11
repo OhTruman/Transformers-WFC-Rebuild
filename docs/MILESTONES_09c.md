@@ -51,6 +51,9 @@ The user's playtest happens with M3.
 ## M3 - Playtest delivery
 Exit: build/release (the user's exe) and the slim package rebuilt from the closed M1 (+ M2 if closed) head,
 package isolation check passes (0 errors on 3 maps, all English lines play), user has it.
+DONE 2026-10-11: head 38cddc8 (tag playtest/09c-m3-38cddc8). build/release refreshed (cmake --build build/release).
+Package Rebuild-Systems/work/playtest_slim, 9.69 GB (incl. optional faithful HD pack 3f410a1, 3.96 GB);
+verify_slim -Strict -SubstDrive with HD on: PASS on Streets / Gorge / Debris. User playtest pending (also M2's playtest).
 
 ## M4 - Optional HD texture pack (faithful)
 Exit: full RealPLKSR pass (colour + normals) + DAT2 pass (character / weapon) done, loader verified in game,
