@@ -773,6 +773,10 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         // movement input); EndState restores air movement with Velocity = (0, 0, base Z).
         c.rammedRemain_ -= dt;
         if (c.rammedRemain_ <= 0.0f) { c.rammedRemain_ = 0.0f; v.x = 0.0f; v.z = 0.0f; v.y = c.rammedBaseY_; }
+    } else if (c.overrideAccel_.x != 0.0f || c.overrideAccel_.y != 0.0f || c.overrideAccel_.z != 0.0f) {
+        // TnPawn.CalcVelocity: an override acceleration (TnForcedDirVolume) replaces the input acceleration [CONF script].
+        v = v + c.overrideAccel_ * dt;
+        hv = core::Vec3{v.x, 0, v.z};
     } else {
         hv = robotCalcVelocity(c, wish, hv, !wasGround, in.faceYaw, dt);
         v.x = hv.x; v.z = hv.z;

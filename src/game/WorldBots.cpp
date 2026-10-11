@@ -29,7 +29,10 @@ float hdist(const core::Vec3& a, const core::Vec3& b) { return std::sqrt((a.x - 
 bool World::ensureBotNav() {
     if (botNavTried_) return botNav_.valid();
     botNavTried_ = true;
-    const std::string path = mapDir() + "bot_nav.json";
+    // DEV / TEST: WFC_BOTNAV=<dir> loads <dir>/<map>/bot_nav.json (a regenerated nav set, before it is installed in the assets).
+    const char* navDir = std::getenv("WFC_BOTNAV");
+    const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : mapDir() + "bot_nav.json";
+    if (navDir) LOG_INFO("bots: nav override %s", path.c_str());
     if (!botNav_.load(path)) LOG_WARN("bots: no nav data at %s (AssetTools bot_nav.py); bots will hold position and fight", path.c_str());
     return botNav_.valid();
 }
@@ -91,6 +94,18 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     if (matchActive_ && !localDead_ && instigator != localPlayer_) {
         float th; if (MatchOpponent::pawnRayHit(player_.pawn(), origin, dir, range, th) && th < targetDist) { targetDist = th; hitPlayer = localPlayer_; }
     }
+    for (BotBrain& sb : bots_) {   // diagnostics: what a counted bot trace ended on
+        if (sb.player != instigator) continue;
+        if (sb.shotBin >= 0) {
+            int oc = 4;
+            if (hitPlayer >= 0) oc = hitPlayer == sb.target ? 0 : match_.sameTeam(hitPlayer, instigator) ? 2 : 1;
+            else if (const Character* tp = sb.target >= 0 ? participantPawn(sb.target) : nullptr) {
+                float th; if (MatchOpponent::pawnRayHit(*tp, origin, dir, range, th) && bestDist < th) oc = 3;
+            }
+            ++sb.traceOut[(size_t)(sb.shotBin * 5 + oc)];
+        }
+        break;
+    }
     Destructible* hitDes = nullptr;
     for (Destructible* d : destructibles_) {
         float th;
@@ -109,7 +124,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
         applyMatchDamage(hitPlayer, instigator, w.damageAt(dist), false, w.damageType ? w.damageType : "");
         for (BotBrain& b : bots_) {
             if (b.player == hitPlayer) { b.lastDamageTime = match_.matchTime(); b.lastAttacker = instigator; }
-            if (b.player == instigator) { ++b.hits; if (b.shotBin >= 0) ++b.rangeHits[(size_t)b.shotBin]; if (b.diffBin >= 0) ++b.diffHits[(size_t)b.diffBin]; }
+            if (b.player == instigator) { ++b.hits; if (b.shotBin >= 0) ++b.rangeHits[(size_t)b.shotBin]; if (b.diffBin >= 0) ++b.diffHits[(size_t)b.diffBin]; if (b.tvBin >= 0) ++b.tvHits[(size_t)b.tvBin]; }
         }
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -149,10 +164,12 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
             const float self = std::sqrt(pc.velocity().x * pc.velocity().x + pc.velocity().z * pc.velocity().z);
             b.diffBin = b.shotBin * 9 + (ang < 5.0f ? 0 : ang < 15.0f ? 1 : 2) * 3 + (self < 1.0f ? 0 : self < 4.0f ? 1 : 2);
             b.diffShots[(size_t)b.diffBin] += std::max(1, w.shots);
+            b.tvBin = b.shotBin * 4 + std::min(3, (int)(b.targetVisibleFor / 0.8f));
+            b.tvShots[(size_t)b.tvBin] += std::max(1, w.shots);
             if (b.shotBin == 2) { b.angSum += (double)ang * std::max(1, w.shots); b.selfSum += (double)self * std::max(1, w.shots); }
         }
         for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(o.matchPlayer(), pc, w, eye, d); }
-        pellet_ = 0; b.shotBin = -1; b.diffBin = -1;
+        pellet_ = 0; b.shotBin = -1; b.diffBin = -1; b.tvBin = -1;
         b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }
@@ -764,7 +781,8 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                     if (b.hasRejoin) break;
                 }
                 b.rejoinUntil = match_.matchTime() + 4.0f;
-                LOG_INFO("bots: p%d stranded off the mesh at t %.2f: %s", b.player, match_.matchTime(), b.hasRejoin ? "walking to the mesh" : "no way found");
+                LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
+                         b.hasRejoin ? "walking to the mesh" : "no way found");
             }
             if (b.hasRejoin) {
                 core::Vec3 rd = b.rejoin - pos; rd.y = 0.0f;
@@ -1828,9 +1846,10 @@ void World::tickBots(float dt) {
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
+            const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut;
             const std::array<int, 36> ds = b.diffShots, dh = b.diffHits; const double as = b.angSum, ss = b.selfSum;
             b = BotBrain{};
-            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.angSum = as; b.selfSum = ss;
+            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.tvShots = tvs; b.tvHits = tvh; b.traceOut = tro; b.angSum = as; b.selfSum = ss;
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;

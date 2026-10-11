@@ -5761,6 +5761,7 @@ void Application::runAiDuel() {
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
     long flD = 0;
+    long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}};
     long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
     for (int seed = s0; seed <= s1; ++seed) {
@@ -5801,6 +5802,8 @@ void Application::runAiDuel() {
                 st[side][4] += bb.melees; st[side][5] += bb.abilities; st[side][7] += bb.stucks;
                 for (int k = 0; k < 4; ++k) { rngS[side][k] += bb.rangeShots[(size_t)k]; rngH[side][k] += bb.rangeHits[(size_t)k]; }
                 for (int k = 0; k < 36; ++k) { dfS[side][k] += bb.diffShots[(size_t)k]; dfH[side][k] += bb.diffHits[(size_t)k]; }
+                for (int k = 0; k < 16; ++k) { tvS[side][k] += bb.tvShots[(size_t)k]; tvH[side][k] += bb.tvHits[(size_t)k]; }
+                for (int k = 0; k < 20; ++k) tro[side][k] += bb.traceOut[(size_t)k];
                 angS[side] += bb.angSum; selfS[side] += bb.selfSum;
                 if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
             }
@@ -5850,6 +5853,29 @@ void Application::runAiDuel() {
                                         cov9 > 0.0 ? 100.0 * mix / cov9 : 0.0, nc ? 100.0 * sh / nc : 0.0, 100.0 * cov9);
         }
         LOG_INFO("AIDUEL shot mix: Smart hit %% at Classic's shot mix vs Classic, by range:%s", line);
+        for (int band = 0; band < 4; ++band) {   // trace outcomes (% of the band's traces), Smart / Classic
+            char ol[300] = ""; size_t op = 0;
+            static const char* oN[5] = {"target", "other enemy", "team mate", "world in front", "clean miss"};
+            long n0 = 0, n1 = 0; for (int k = 0; k < 5; ++k) { n0 += tro[0][band * 5 + k]; n1 += tro[1][band * 5 + k]; }
+            for (int k = 0; k < 5; ++k)
+                op += (size_t)std::snprintf(ol + op, sizeof ol - op, " %s %.1f / %.1f;", oN[k], n0 ? 100.0 * tro[0][band * 5 + k] / n0 : 0.0,
+                                            n1 ? 100.0 * tro[1][band * 5 + k] / n1 : 0.0);
+            LOG_INFO("AIDUEL trace outcomes %s (Smart / Classic %%):%s", bandN[band], ol);
+        }
+        for (int band = 0; band < 4; ++band) {   // time on the target: per bin hit % (share) for each side, and Smart at Classic's time mix
+            char tl[400] = ""; size_t tp = 0; long nS = 0, nC = 0, hC = 0;
+            for (int k = 0; k < 4; ++k) { nS += tvS[0][band * 4 + k]; nC += tvS[1][band * 4 + k]; hC += tvH[1][band * 4 + k]; }
+            double mix = 0.0, cov = 0.0;
+            for (int k = 0; k < 4; ++k) {
+                const long s0 = tvS[0][band * 4 + k], s1 = tvS[1][band * 4 + k];
+                if (s0 > 0 && nC > 0) { const double wgt = (double)s1 / nC; mix += wgt * tvH[0][band * 4 + k] / s0; cov += wgt; }
+                static const char* tvN[4] = {"< 0.8 s", "0.8-1.6 s", "1.6-2.4 s", "2.4 s+"};
+                tp += (size_t)std::snprintf(tl + tp, sizeof tl - tp, " %s %.1f (%.0f %%) / %.1f (%.0f %%);", tvN[k], s0 ? 100.0 * tvH[0][band * 4 + k] / s0 : 0.0,
+                                            nS ? 100.0 * s0 / nS : 0.0, s1 ? 100.0 * tvH[1][band * 4 + k] / s1 : 0.0, nC ? 100.0 * s1 / nC : 0.0);
+            }
+            LOG_INFO("AIDUEL time on target %s: Smart / Classic hit %% (share):%s Smart at Classic's time mix %.1f vs Classic %.1f", bandN[band], tl,
+                     cov > 0.0 ? 100.0 * mix / cov : 0.0, nC ? 100.0 * hC / nC : 0.0);
+        }
     }
     {
         const long n = cohBin[0] + cohBin[1] + cohBin[2];

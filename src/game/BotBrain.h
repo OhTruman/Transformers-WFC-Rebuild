@@ -137,6 +137,10 @@ struct BotBrain {
     std::array<int, 4> rangeShots{}, rangeHits{}; int shotBin = -1;
     // Hitscan shot difficulty (diagnostics): cell = range bin x 9 + target angular speed bin (< 5 / 5-15 / > 15 deg/s) x 3 + own speed
     // bin (< 1 / 1-4 / > 4 m/s); traces and hits per cell, and the summed angular speed / own speed of the 25-50 m traces.
+    // Hitscan traces / hits by range bin x 4 + time on the target bin (< 0.8 / 0.8-1.6 / 1.6-2.4 / 2.4+ s: the aim error settles over 2.4 s).
+    std::array<int, 16> tvShots{}, tvHits{}; int tvBin = -1;
+    // Trace outcomes by range bin x 5: the target, another enemy, a team mate, the world in front of the target, a clean miss.
+    std::array<int, 20> traceOut{};
     std::array<int, 36> diffShots{}, diffHits{}; int diffBin = -1; double angSum = 0.0, selfSum = 0.0;
     float frand() { rng = rng * 1664525U + 1013904223U; return (float)((rng >> 8) & 0xFFFFFF) / 16777216.0f; }
     float frange(float a, float b) { return a + (b - a) * frand(); }

@@ -188,6 +188,9 @@ public:
     void addVelocityInVehicle(const core::Vec3& v) { velocity_ = velocity_ + v * 0.5f; }
     float rammedRemain() const { return rammedRemain_; }
     float rammedRemain_ = 0.0f;
+    // TnPawn._OverrideAcceleration (TnForcedDirVolume.TickSpecial, robot form inside a bBlockPawns volume): while non-zero it replaces
+    // the input acceleration (TnPawn.CalcVelocity: Velocity += OverrideAcceleration * dt). forcedDirTouch_: the volumes touched (bits).
+    core::Vec3 overrideAccel_{0, 0, 0}; unsigned forcedDirTouch_ = 0;
     // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
     float dodgeRemain_ = 0.0f;
     bool landedSinceDodge_ = true;
