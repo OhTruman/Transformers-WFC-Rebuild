@@ -40,7 +40,7 @@ def main():
     plan = '--plan' in sys.argv
     head = arg('--head')
     bin_dir = arg('--bin')
-    out = os.path.normpath(arg('--out', os.path.join(REPO, 'work', 'playtest_slim')))
+    out = os.path.abspath(arg('--out', os.path.join(REPO, 'work', 'playtest_slim')))
     hd_src = None if '--no-hd' in sys.argv else os.path.normpath(arg('--hd', ROOT + '/AssetTools/out/hd/pack'))
     if not head or not bin_dir:
         sys.exit('usage: build_slim.py --bin <built bin dir> --head <sha> [--out DIR] [--hd DIR | --no-hd] [--plan]')
