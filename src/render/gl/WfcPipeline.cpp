@@ -1454,27 +1454,50 @@ void decodeLevel(const std::string& fmt, const uint8_t* d, int w, int h, ImageDa
 }
 }  // namespace
 
-// The optional HD texture pack: <root>/hd_index.json (AssetTools; layout being fixed). Available = the index parses.
+// The optional HD texture pack: <root>/hd_index.json, else <root>/pack/hd_index.json (the AssetTools layout: index and
+// files under out/hd/pack); <root> = WFC_HD_ROOT, default <ExtractedAssets>/../AssetTools/out/hd (a package: its hd/ dir).
+// The row's dds paths are relative to the directory holding the index.
 std::string hdRoot() {
-    if (const char* e = std::getenv("WFC_HD_ROOT")) return std::string(e);
-    std::string d = ddsRoot();                                        // .../AssetTools/out/dds
-    const size_t s = d.find_last_of("/\\");
-    return (s == std::string::npos ? std::string(".") : d.substr(0, s)) + "/hd";
+    static const std::string r = [] {
+        std::string b;
+        if (const char* e = std::getenv("WFC_HD_ROOT")) b = e;
+        else {
+            std::string d = ddsRoot();                                // .../AssetTools/out/dds
+            const size_t s = d.find_last_of("/\\");
+            b = (s == std::string::npos ? std::string(".") : d.substr(0, s)) + "/hd";
+        }
+        if (!std::ifstream(b + "/hd_index.json") && std::ifstream(b + "/pack/hd_index.json")) b += "/pack";
+        return b;
+    }();
+    return r;
+}
+// The HD pack's index file, parsed once (null = not installed / invalid / no rows). Cheap enough for boot (one file):
+// the per-file verification (hdIndex) runs only when the setting turns the pack on.
+static const assets::Json* hdIndexRows() {
+    static assets::Json J;
+    static const assets::Json* rows = [] {
+        const std::string root = hdRoot();
+        const std::string t = readText(root + "/hd_index.json");
+        if (t.empty() || !assets::Json::parse(t, J)) { LOG_INFO("wfc: HD texture pack not installed (%s/hd_index.json)", root.c_str()); return (const assets::Json*)nullptr; }
+        for (const char* k : {"textures", "rows", "entries"}) if (J[k].arr.size()) return &J[k];
+        LOG_WARN("wfc: HD texture pack index has no rows: ignored");
+        return (const assets::Json*)nullptr;
+    }();
+    return rows;
 }
 // The HD pack's index (AssetTools: one row per texture: key = the lower-case PNG path, dds relative to the root,
 // format; optional byte count). Complete = every row's file exists (with its byte count when given); an incomplete
-// or invalid pack is ignored as a whole (the originals stay in use).
+// or invalid pack is ignored as a whole (the originals stay in use). Only these rows ever load (other DDS files in
+// the pack directory are never looked up).
 struct HdEntry { std::string dds, fmt; };
+static bool gHdVerified = false;
 const std::unordered_map<std::string, HdEntry>& hdIndex() {
     static const std::unordered_map<std::string, HdEntry> idx = [] {
         std::unordered_map<std::string, HdEntry> m;
-        assets::Json J;
+        gHdVerified = true;
         const std::string root = hdRoot();
-        const std::string t = readText(root + "/hd_index.json");
-        if (t.empty() || !assets::Json::parse(t, J)) { LOG_INFO("wfc: HD texture pack not installed (%s/hd_index.json)", root.c_str()); return m; }
-        const assets::Json* rows = nullptr;
-        for (const char* k : {"textures", "rows", "entries"}) if (J[k].arr.size()) { rows = &J[k]; break; }
-        if (!rows) { LOG_WARN("wfc: HD texture pack index has no rows: ignored"); return m; }
+        const assets::Json* rows = hdIndexRows();
+        if (!rows) return m;
         size_t missing = 0;
         for (const assets::Json& r : rows->arr) {
             std::string key = r["key"].asString(), dds = r["dds"].asString(), fmt = r["format"].asString();
@@ -1498,11 +1521,13 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
     }();
     return idx;
 }
-bool Pipeline::hdTexturesAvailable() { return !hdIndex().empty(); }
+// Available = the index parses with rows (no per-file stat at boot); once the setting has verified the files, the result
+// of that verification
+bool Pipeline::hdTexturesAvailable() { return hdIndexRows() && (!gHdVerified || !hdIndex().empty()); }
 // HD Textures setting: textures load from the pack (when available) from the next map / scene load on; a live
 // change does not reload the current map's textures (they are bound into its materials)
 void Pipeline::setHdTextures(bool on) {
-    hdTextures_ = on && hdTexturesAvailable();
+    hdTextures_ = on && hdIndexRows() && !hdIndex().empty();   // (turning on verifies the pack's files once)
     LOG_INFO("renderer: HD textures %s%s", hdTextures_ ? "on" : "off",
              on && !hdTextures_ ? " (pack not installed: originals)" : " (from the next map load)");
 }
