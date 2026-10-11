@@ -1,0 +1,150 @@
+--- a/src/ui/gl/GfxRendererGL.h
++++ b/src/ui/gl/GfxRendererGL.h
+@@ -39,8 +39,16 @@
+     // vbo: the fan followed by its 6-vertex cover quad, uploaded once (made on first draw; freed with the shape cache)
+     // direct: the fan's triangles cover every filled pixel exactly once (one star-shaped loop seen from the pivot), so a
+     // solid fill can be drawn straight, without the stencil winding pass and the cover quad (same pixels).
+-    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0; };
+-    struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; };
++    // arena / first: the mesh's vertices in a shared vertex arena (static shapes; -1 = not placed), first = its first vertex there
++    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0;
++                  mutable int arena = -1, first = 0; };
++    struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; mutable int arena = -1, first = 0; };
++    // Vertex arenas (Systems, HUD draw CPU): cached static shapes share a few large vertex buffers, so drawing consecutive meshes
++    // needs no glBindBuffer / glVertexAttribPointer each. Same vertex data, same draw calls and order -> identical image (the image
++    // verifier's reference pass uses the per-mesh buffers). Freed with the shape cache (forgetShapes). WFC_NOGFXARENA=1: off.
++    struct VArena { unsigned vbo = 0; size_t usedFloats = 0, capFloats = 0; };
++    std::vector<VArena> arenas_;
++    bool arenaPlace(const std::vector<float>& v, int& arena, int& first);
+     struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; bool dynamic = false; unsigned lastUsed = 0; };
+     const Cached& cache(const gfx::ShapeDef* s, bool glyph);
+     unsigned texture(const std::string& path, int& w, int& h);
+@@ -50,8 +58,8 @@
+     void stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m);
+     void stencilState();                    // the winding pass state (stencilWinding without the draw)
+     void coverState(bool mask);             // the cover pass state (cover without the draw)
+-    void drawMesh(const Mesh& mesh, bool mask, bool solid = false);    // stencilWinding + cover from the mesh's buffer
+-    void drawStroke(const Stroke& stroke);         // drawTriangles from the stroke's buffer
++    void drawMesh(const Mesh& mesh, bool mask, bool solid = false, bool arenaOk = false);    // stencilWinding + cover from the mesh's buffer
++    void drawStroke(const Stroke& stroke, bool arenaOk = false);         // drawTriangles from the stroke's buffer
+     void cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask);
+     void fullscreen();
+ 
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -869,9 +869,42 @@
+ 
+ // Cached shapes draw from their own buffers: the same vertices, state and draw order as stencilWinding + cover /
+ // drawTriangles, without re-uploading the geometry every frame (it was two glBufferData per fill per frame).
+-void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask, bool solid) {
++namespace {
++bool gfxArenaOff() { static const bool off = std::getenv("WFC_NOGFXARENA") != nullptr; return off; }
++constexpr size_t kArenaFloats = (size_t)1 << 20;   // 4 MB per arena (a 1080p HUD's static shapes fit in one or two)
++}
++bool GfxRendererGL::arenaPlace(const std::vector<float>& v, int& arena, int& first) {
++    if (v.empty()) return false;
++    size_t a = arenas_.size();
++    if (!arenas_.empty() && arenas_.back().capFloats - arenas_.back().usedFloats >= v.size()) a = arenas_.size() - 1;
++    if (a == arenas_.size()) {
++        VArena na;
++        na.capFloats = std::max(kArenaFloats, v.size());
++        glx::GenBuffers(1, &na.vbo);
++        bindArray(na.vbo);
++        glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(na.capFloats * sizeof(float)), nullptr, GL_STATIC_DRAW);
++        arenas_.push_back(na);
++    }
++    VArena& ar = arenas_[a];
++    bindArray(ar.vbo);
++    glx::BufferSubData(GL_ARRAY_BUFFER, (GLintptr)(ar.usedFloats * sizeof(float)), (GLsizeiptr)(v.size() * sizeof(float)), v.data());
++    arena = (int)a; first = (int)(ar.usedFloats / 2);
++    ar.usedFloats += v.size();
++    return true;
++}
++
++void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask, bool solid, bool arenaOk) {
+     if (mesh.fan.empty()) return;
+-    if (!mesh.vbo) {
++    GLint base = 0;
++    if (arenaOk && !refMode_ && !gfxArenaOff() && (mesh.arena >= 0 || [&] {
++            std::vector<float> v(mesh.fan);
++            const float q[] = {mesh.bx0, mesh.by0, mesh.bx1, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by1};
++            v.insert(v.end(), q, q + 12);
++            return arenaPlace(v, mesh.arena, mesh.first);
++        }())) {
++        bindArray(arenas_[(size_t)mesh.arena].vbo);
++        base = mesh.first;
++    } else if (!mesh.vbo) {
+         std::vector<float> v(mesh.fan);
+         const float q[] = {mesh.bx0, mesh.by0, mesh.bx1, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by1};
+         v.insert(v.end(), q, q + 12);
+@@ -881,24 +914,29 @@
+     } else {
+         bindArray(mesh.vbo);
+     }
+-    const GLsizei nFan = (GLsizei)(mesh.fan.size() / 2);
++    const GLsizei nFan = (GLsizei)(mesh.fan.size() / 2);   // base: the mesh's first vertex in its buffer (0, or its arena offset)
+     static const bool noDirect = std::getenv("WFC_GFX_NODIRECT") != nullptr;   // A/B: always stencil + cover
+     if (solid && !mask && mesh.direct && !noDirect) {
+         // Inside the current mask level only, no stencil writes (the cover pass would leave the low nibble at zero).
+         sColorMask(true);
+         sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+         sStencilMask(0);
+-        glDrawArrays(GL_TRIANGLES, 0, nFan);
++        glDrawArrays(GL_TRIANGLES, base, nFan);
+         return;
+     }
+     stencilState();
+-    glDrawArrays(GL_TRIANGLES, 0, nFan);
++    glDrawArrays(GL_TRIANGLES, base, nFan);
+     coverState(mask);
+-    glDrawArrays(GL_TRIANGLES, nFan, 6);
++    glDrawArrays(GL_TRIANGLES, base + nFan, 6);
+ }
+ 
+-void GfxRendererGL::drawStroke(const Stroke& stroke) {
++void GfxRendererGL::drawStroke(const Stroke& stroke, bool arenaOk) {
+     if (stroke.tris.empty()) return;
++    if (arenaOk && !refMode_ && !gfxArenaOff() && (stroke.arena >= 0 || arenaPlace(stroke.tris, stroke.arena, stroke.first))) {
++        bindArray(arenas_[(size_t)stroke.arena].vbo);
++        glDrawArrays(GL_TRIANGLES, stroke.first, (GLsizei)(stroke.tris.size() / 2));
++        return;
++    }
+     if (!stroke.vbo) {
+         glx::GenBuffers(1, &stroke.vbo);
+         bindArray(stroke.vbo);
+@@ -915,6 +953,8 @@
+         for (const Stroke& st : c.strokes) if (st.vbo) glx::DeleteBuffers(1, &st.vbo);
+     }
+     shapes_.clear();
++    for (const VArena& a : arenas_) if (a.vbo) glx::DeleteBuffers(1, &a.vbo);
++    arenas_.clear();
+     boundBuf_ = ~0u;
+ }
+ 
+@@ -1077,7 +1117,7 @@
+                     g_uiCounts.stencilMesh(b, col, solid && !inMask_);
+                 }
+             }
+-            drawMesh(m, inMask_, fs.type == gfx::FillStyle::Solid);
++            drawMesh(m, inMask_, fs.type == gfx::FillStyle::Solid, !c.dynamic);
+         }
+         if (!inMask_) {
+             for (const Stroke& s : c.strokes) {
+@@ -1089,7 +1129,7 @@
+                 sColorMask(true);
+                 sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+                 sStencilMask(0);
+-                drawStroke(s);
++                drawStroke(s, !c.dynamic);
+             }
+         }
+     }
+@@ -1128,7 +1168,7 @@
+     white.color = gfx::RGBA{255, 255, 255, 255};
+     for (const Mesh& mesh : c.fills) {
+         setFill(white, m, gfx::CXForm{}, 1.0f, 0);
+-        drawMesh(mesh, false);
++        drawMesh(mesh, false, false, !c.dynamic);
+     }
+ }
+ 
