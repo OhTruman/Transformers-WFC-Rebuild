@@ -32,13 +32,14 @@ int smartSkillCount();
 // sweeps (WFC_AIDUEL) without a rebuild. Keys are the member names.
 struct SmartTune {
     float coverExposure = 2.0f;     // seek cover when this many known enemies can see the bot's cell
-    float coverMaxExposure = 1.0f;  // a cover spot may be seen by at most this many
-    float coverChance = 0.35f;      // chance to seek cover when it applies: coverChance + coverChancePerDiff * difficulty
+    float coverMaxExposure = 2.0f;  // a cover spot may be seen by at most this many
+    float coverChance = 0.8f;       // chance to seek cover when it applies: coverChance + coverChancePerDiff * difficulty
     float coverChancePerDiff = 0.3f;
     float coverRangeM = 20.0f;      // ranged-fight cover: beyond this distance to the target ...
     float coverHurtFrac = 0.6f;     // ... while reloading or below this fraction of health
-    float coverRangedChance = 0.1f; // ... or, per decision, with this chance in any ranged fight
-    float coverHoldS = 8.0f;        // held cover outlasts a lost line of sight this long while reloading or hurt
+    float coverRangedChance = 0.5f; // ... or, per decision, with this chance in any ranged fight
+    float coverNear = 0.0f;         // 1: cover spots searched at 3 / 6 / 10 m (else 5 / 10 / 15 m)
+    float coverHoldS = 12.0f;       // held cover outlasts a lost line of sight this long while reloading or hurt
     float retreatHp = 0.25f;        // retreat below this health fraction while fighting
     float huntConfidence = 0.35f;   // hunt a remembered enemy at least this certain
     float routeExposureW = 0.6f;    // route cost x (1 + w * exposure)
@@ -48,6 +49,7 @@ struct SmartTune {
     float squadFollow = 1.0f;
     float squadHelp = 0.0f;         // help the nearest squad mate in a fight within 50 m (0: off; on after its duel check)
     float squadRegroupM = 15.0f;    // a member farther than this from its leader regroups on it
+    float squadLeaderStop = 1.0f;   // 1: a leader whose members are strung out stops (<= 8 s per wait); members over 45 m off regroup in vehicle form
     float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
@@ -89,7 +91,8 @@ struct SmartBot {
     bool ownMission = false;
     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
-    bool leaderSlow = false;   // squad leader slowing for its members (smartDecide -> smartSteerPost)
+    bool holdStill = false;   // deliberately still last step (cover, a waiting leader): not "stuck"
+    bool leaderSlow = false, regroupFar = false; float leaderWaitSince = -1.0f, leaderWaitCooldown = -1.0f;   // squad leader waits; member far off   // squad leader slowing for its members (smartDecide -> smartSteerPost)
     float mateBlockedAt = -1e9f; int mateHolds = 0;   // last shot held for a team mate on the line; holds (diagnostics)
     float squadGoalUntil = -1.0f; int squadGoalKind = -1, squadGoalTgt = -1; core::Vec3 squadGoalPos{0, 0, 0}; float squadGoalRad = 0.0f;   // the squad-given goal, kept until then
     float noFlankUntil = -1.0f; int flanksDropped = 0;   // a flank whose route ran over budget: straight at the enemy until then
@@ -100,6 +103,7 @@ struct SmartBot {
     double cohesionSum = 0.0; long cohesionN = 0;   // squad members: distance to the leader, sampled each think
     long cohesionBins[3] = {0, 0, 0}, cohesionFresh = 0;   // samples < 15 / 15-40 / > 40 m; of them, within 15 s of a respawn
     long cohesionSettledBins[3] = {0, 0, 0}; double cohesionSettledSum = 0.0;   // the same, samples 15 s or more after a respawn
+    long farN = 0, farLeaderMoving = 0, farPathless = 0, farVehicle = 0, farLeaderFights = 0;   // settled samples over 25 m: why
     long cohesionSettledHist[100] = {};   // settled samples in 2 m bins (the last: 198 m and over), for the median
     // Hunt outcomes (diagnostics): a hunt opens an episode on its enemy for 15 s; it is won if this bot kills that enemy first, lost if
     // this bot dies first. Flank hunts and straight hunts are counted apart (are flanks a net loss?).

@@ -36,9 +36,9 @@ const SmartTune& smartTune() {
         if (!e) return v;
         struct K { const char* k; float* p; } keys[] = {
             {"coverExposure", &v.coverExposure}, {"coverMaxExposure", &v.coverMaxExposure}, {"coverChance", &v.coverChance},
-            {"coverChancePerDiff", &v.coverChancePerDiff}, {"coverRangeM", &v.coverRangeM}, {"coverHurtFrac", &v.coverHurtFrac}, {"coverRangedChance", &v.coverRangedChance}, {"coverHoldS", &v.coverHoldS}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
+            {"coverChancePerDiff", &v.coverChancePerDiff}, {"coverRangeM", &v.coverRangeM}, {"coverHurtFrac", &v.coverHurtFrac}, {"coverRangedChance", &v.coverRangedChance}, {"coverHoldS", &v.coverHoldS}, {"coverNear", &v.coverNear}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
             {"routeExposureW", &v.routeExposureW}, {"focusHurtW", &v.focusHurtW}, {"focusMatesW", &v.focusMatesW},
-            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}};
+            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}};
         std::string s = e;
         size_t i = 0;
         while (i < s.size()) {
