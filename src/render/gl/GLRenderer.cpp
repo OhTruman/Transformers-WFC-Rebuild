@@ -247,6 +247,7 @@ public:
         glx::textureCacheInvalidate();               // ... and textures
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
+        if (glx::gpuStampsOn()) glx::installPrePresentStamp();   // WFC_GPUSTAMPS: the pre-present stamp
         if (WFC_ENV("WFC_GPUFACTS") && !gpuFactsRead_) gpuFacts();   // test switch: log the GPU facts at the first frame
         initD3D12PresentIfRequested();               // optional D3D12 presentation (WFC_D3D12PRESENT; A3a)
         if (WFC_ENV("WFC_D3D12PROBE")) {               // A3a capability probe: GL <-> D3D12 sharing (once)
@@ -367,6 +368,7 @@ public:
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         glx::gpuMark(glx::kPassWorld);       // no dynamic draw this frame: the world ends here
         glx::gpuMark(glx::kPassCaller);
+        glx::gpuStamp("map presentation");
         watchdog::phase("endFrame: map presentation");
         if (wfc_.active()) wfc_.drawMapPresentation();
         watchdog::phase("endFrame: post / composite");
@@ -374,6 +376,7 @@ public:
         glx::gpuMark(glx::kPassPost);
         slowFrameEnd();
         glx::gpuTimerEnd();
+        glx::gpuStamp("2D: marker, reticle, screen batches");
         if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
         slotWaited_ = false;
         { static int frames = 0; watchdog::frameDone(++frames);
@@ -400,6 +403,7 @@ public:
         for (const ScreenBatch& b : screenQueue_) drawScreenNow(b);   // 2D composition on top, in order
         screenQueue_.clear();
         inFrame_ = false;
+        glx::gpuStamp("after the 3D renderer: GFx UI");
         glFlush();
     }
 
@@ -1591,6 +1595,7 @@ public:
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         watchdog::phase("drawDynamicMesh");
         glx::gpuMark(glx::kPassWorld);       // first character / dynamic draw: the world before it
+        glx::gpuStamp("characters: direct draws");
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);
@@ -1599,6 +1604,7 @@ public:
     void drawDynamicMeshPosed(const MeshData& m, const core::Mat4& model, const core::Vec3& color, uint64_t serial) override {
         watchdog::phase("drawDynamicMesh");
         glx::gpuMark(glx::kPassWorld);
+        glx::gpuStamp("characters: direct draws");
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model, &m, serial); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);
@@ -1615,6 +1621,7 @@ public:
         (void)color;
         watchdog::phase("drawDynamicMesh");
         glx::gpuMark(glx::kPassWorld);
+        glx::gpuStamp("characters: direct draws");
         const bool ok = wfc_.drawSkinned(bind, joints, weights, palette, prevPalette, alpha, model, key, serial);
         glLoadMatrixf(view_.m);
         return ok;
@@ -1628,6 +1635,7 @@ public:
         }
         watchdog::phase("drawDynamicMesh");
         glx::gpuMark(glx::kPassWorld);
+        glx::gpuStamp("characters: direct draws");
         if (m.empty()) return;
         wfc_.drawDynamic(m, model, &m, serial, &prevP, &prevN, alpha);
         glLoadMatrixf(view_.m);

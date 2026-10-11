@@ -119,7 +119,109 @@ std::chrono::steady_clock::time_point gCpuT0;       // this frame's gpuTimerBegi
 double gCpuMark[6] = {-1, -1, -1, -1, -1, -1};
 }
 
+namespace {
+constexpr int kStSlots = 6, kStMax = 192;
+GLuint gStQ[kStSlots][kStMax] = {};
+const char* gStName[kStSlots][kStMax] = {};
+int gStN[kStSlots] = {};
+long gStFrameOf[kStSlots] = {};
+long gStFrame = 0;                                   // stamp frames begun
+const char* gStCur = nullptr;
+long gStDropped = 0, gStOverflow = 0;
+unsigned long long gStPrevLast = 0; long gStPrevFrame = -10;
+struct StFrame { double span = 0, gap = -1; std::vector<std::pair<int, double>> sec; };
+std::vector<StFrame> gStFrames;
+std::vector<const char*> gStNames;
+int stId(const char* n) {
+    for (size_t i = 0; i < gStNames.size(); ++i) if (gStNames[i] == n || std::strcmp(gStNames[i], n) == 0) return (int)i;
+    gStNames.push_back(n);
+    return (int)gStNames.size() - 1;
+}
+void stReport() {
+    const size_t n = gStFrames.size();
+    std::vector<size_t> ord(n);
+    for (size_t i = 0; i < n; ++i) ord[i] = i;
+    std::sort(ord.begin(), ord.end(), [](size_t a, size_t b) { return gStFrames[a].span < gStFrames[b].span; });
+    const size_t t0 = n - std::max<size_t>(n / 10, 1);
+    std::vector<double> all(gStNames.size(), 0.0), tail(gStNames.size(), 0.0);
+    double spanAll = 0, spanTail = 0, gapAll = 0, gapTail = 0;
+    size_t gapN = 0, gapNT = 0;
+    for (size_t k = 0; k < n; ++k) {
+        const StFrame& f = gStFrames[ord[k]];
+        const bool t = k >= t0;
+        spanAll += f.span; if (t) spanTail += f.span;
+        if (f.gap >= 0) { gapAll += f.gap; ++gapN; if (t) { gapTail += f.gap; ++gapNT; } }
+        for (const auto& s : f.sec) { all[(size_t)s.first] += s.second; if (t) tail[(size_t)s.first] += s.second; }
+    }
+    const double nt = (double)(n - t0);
+    LOG_INFO("GPUSTAMPS %zu frames (%ld dropped unread, %ld stamps over the cap): frame start to present %.3f ms, slowest "
+             "tenth %.3f (from %.3f); present to the next frame start %.3f, slowest tenth %.3f", n, gStDropped, gStOverflow,
+             spanAll / (double)n, spanTail / nt, gStFrames[ord[t0]].span, gapN ? gapAll / (double)gapN : -1.0,
+             gapNT ? gapTail / (double)gapNT : -1.0);
+    std::vector<size_t> ids(gStNames.size());
+    for (size_t i = 0; i < ids.size(); ++i) ids[i] = i;
+    std::sort(ids.begin(), ids.end(), [&](size_t a, size_t b) { return tail[a] > tail[b]; });
+    for (size_t i : ids)
+        if (all[i] > 0.0 || tail[i] > 0.0)
+            LOG_INFO("GPUSTAMPS   %-44s all %.3f  slowest tenth %.3f ms", gStNames[i], all[i] / (double)n, tail[i] / nt);
+    gStFrames.clear();
+    gStDropped = gStOverflow = 0;
+}
+void stRead(int slot) {
+    const int n = gStN[slot];
+    gStN[slot] = 0;
+    if (n < 4) { gStPrevFrame = -10; return; }       // (menu frames: no 3D pipeline sections)
+    GLint ready = 0;
+    GetQueryObjectiv(gStQ[slot][n - 1], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &ready);
+    if (!ready) { ++gStDropped; gStPrevFrame = -10; return; }
+    static std::vector<unsigned long long> t;
+    t.assign((size_t)n, 0);
+    for (int k = 0; k < n; ++k) GetQueryObjectui64v(gStQ[slot][k], 0x8866 /*GL_QUERY_RESULT*/, &t[(size_t)k]);
+    StFrame f;
+    f.span = t[(size_t)n - 1] > t[0] ? (double)(t[(size_t)n - 1] - t[0]) / 1.0e6 : 0.0;
+    for (int k = 0; k + 1 < n; ++k) {
+        const double ms = t[(size_t)k + 1] > t[(size_t)k] ? (double)(t[(size_t)k + 1] - t[(size_t)k]) / 1.0e6 : 0.0;
+        f.sec.push_back({stId(gStName[slot][k]), ms});
+    }
+    // the previous frame's pre-present stamp to this frame's start: its present (and any GPU idle) - the previous frame's
+    if (gStPrevFrame == gStFrameOf[slot] - 1 && !gStFrames.empty() && t[0] > gStPrevLast)
+        gStFrames.back().gap = (double)(t[0] - gStPrevLast) / 1.0e6;
+    gStPrevLast = std::strcmp(gStName[slot][n - 1], "(present)") == 0 ? t[(size_t)n - 1] : 0;
+    gStPrevFrame = gStPrevLast ? gStFrameOf[slot] : -10;
+    gStFrames.push_back(std::move(f));
+    if (gStFrames.size() >= 1200) stReport();
+}
+void stFrameBegin() {
+    if (!gpuStampsOn()) return;
+    const int slot = (int)(gStFrame % kStSlots);
+    if (gStN[slot] > 0) stRead(slot);
+    gStN[slot] = 0;
+    gStFrameOf[slot] = gStFrame;
+    ++gStFrame;
+    gStCur = nullptr;
+    gpuStamp("frame start: clears");
+}
+}
+
+bool gpuStampsOn() {
+    static const bool on = std::getenv("WFC_GPUSTAMPS") != nullptr;
+    return on && QueryCounter && GetQueryObjectui64v && GetQueryObjectiv && GenQueries;
+}
+const char* gpuStampCurrent() { return gStCur; }
+void gpuStamp(const char* name) {
+    if (!gpuStampsOn() || gStFrame == 0 || !name) return;
+    if (gStCur && (gStCur == name || std::strcmp(gStCur, name) == 0)) return;
+    const int slot = (int)((gStFrame - 1) % kStSlots);
+    int& n = gStN[slot];
+    if (n >= kStMax - 1 && (n >= kStMax || std::strcmp(name, "(present)") != 0)) { ++gStOverflow; return; }   // (the last for present)
+    if (!gStQ[slot][0]) GenQueries(kStMax, gStQ[slot]);
+    QueryCounter(gStQ[slot][n], 0x8E28 /*GL_TIMESTAMP*/);
+    gStName[slot][n++] = name;
+    gStCur = name;
+}
+
 void gpuTimerBegin() {
+    stFrameBegin();
     gBegun = false;
     gCpuT0 = std::chrono::steady_clock::now();
     for (double& m : gCpuMark) m = -1.0;
@@ -199,6 +301,7 @@ void gpuTimerEnd() {
 
 double lastGpuFrameMs() { return gLastGpuMs; }
 void gpuPrePresent() {
+    gpuStamp("(present)");
     if (!QueryCounter || !gTsPre[0]) return;
     const int slot = (int)((gQi + 2) % 3);          // the frame gpuTimerEnd just closed (gQi was incremented there)
     if (!gTsEndSet[slot] || gTsPreSet[slot]) return;

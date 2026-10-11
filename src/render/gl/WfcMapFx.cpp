@@ -1393,12 +1393,14 @@ void Pipeline::ensurePickupMesh(PickupMeshRT& pm) {
 
 void Pipeline::drawMapPresentation() {
     flushDynQueue();                                   // characters before the map presentation (pass order)
+    glx::gpuStamp("pawn occlusion queries");
     if (pawnOcclusionOn()) {
         const double tp = fxSubCpuOn() ? fxSubNowMs() : 0.0;
         pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
         if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;
     }
     if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); return; }
+    glx::gpuStamp("map props, pickups, FX meshes");
     auto t0 = std::chrono::steady_clock::now();
     // WFC_MAPFXPROF=1 (diagnostics): average CPU ms per frame of this function's sections, logged every 600 frames
     static const bool secProf = std::getenv("WFC_MAPFXPROF") != nullptr;
@@ -2140,13 +2142,16 @@ void Pipeline::drawMapPresentation() {
     }
     glx::gpuMark(glx::kPassMapFx);
     const double tMotion = fxSubCpuOn() ? fxSubNowMs() : 0.0;
+    glx::gpuStamp("motion vectors + reactive");
     motionCameraPass();                                // optional motion vectors: static geometry (opaque depth)
     motionObjectPass();                                // ... and the characters' own motion over it
     reactiveBegin();                                   // temporal upscaling: the opaque colour (reactive mask)
     if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::MotionReactive] += fxSubNowMs() - tMotion;
+    glx::gpuStamp("translucency: build / upload");
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     reactiveEnd();
     glx::gpuMark(glx::kPassTranslucent);
+    glx::gpuStamp("after translucency");
     if (fxSubCpuOn()) fxSubFrameEnd();
     {
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
