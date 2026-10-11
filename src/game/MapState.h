@@ -147,6 +147,7 @@ public:
     // The carrier's heavy weapon is tossed (TnInventoryManager.DropHeavyWeapons on Transform to vehicle; ChangedWeapon away
     // from it): TnWeaponFlagBase / Bomb DropFrom -> a dropped pickup at the carrier (AutoReturn 30, ReturnFlagTime 10) [CONF].
     bool dropCarriedBy(int player, const core::Vec3& at);
+    float killZ() const { return killZ_; }
     void setKillZ(float z) { killZ_ = z; }   // a carried objective dropped below KillZ goes home ("falling out sends it home")
     void matchStarting();                                   // MatchStarting: KOTH initial zone; CTF / EXT carried objectives
     void matchEnded();                                      // ScoreKingOfTheHill.CheckEndGame: every zone Deactivate

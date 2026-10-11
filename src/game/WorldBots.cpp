@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <cmath>
 
 namespace game {
@@ -781,6 +782,13 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                     if (b.hasRejoin) break;
                 }
                 b.rejoinUntil = match_.matchTime() + 4.0f;
+                if (!b.hasRejoin) {   // no way back: after 30 s of that the bot uses the game's suicide (a stuck human's pause-menu way out)
+                    const float nowS = match_.matchTime();
+                    if (b.noWaySince < 0.0f || nowS - b.noWayLast > 6.0f) b.noWaySince = nowS;
+                    b.noWayLast = nowS;
+                    static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;   // regression A/B against older builds
+                    if (nowS - b.noWaySince >= 30.0f && !noSuicide) b.suicideWish = true;
+                }
                 LOG_INFO("bots: p%d stranded off the mesh at t %.2f at (%.1f %.1f %.1f): %s", b.player, match_.matchTime(), pos.x, pos.y, pos.z,
                          b.hasRejoin ? "walking to the mesh" : "no way found");
             }
@@ -1027,6 +1035,16 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     const float tol = std::atan2(1.5f, std::max(1.0f, dist)) + sk.aimErrorDeg * 0.0174533f;
     if (std::acos(core::clampf(core::dot(aimDir, toT), -1.0f, 1.0f)) > tol) return;
     if (!w->canFire()) return;
+    // Smart: a team mate's body on the line to the target holds the shot (and smartSteerPost sidesteps for a clear line): WFC_AIDUEL
+    // trace outcomes, 11.7 % of Smart traces at 25-50 m hit team mates (Classic 9.8 %). WFC_SMARTOFF=mateline turns it off.
+    if (anySmart_ && botIsSmart(o.matchPlayer())) {
+        static const bool mateOff = std::getenv("WFC_SMARTOFF") && std::strstr(std::getenv("WFC_SMARTOFF"), "mateline");
+        if (!mateOff && smartMateOnLine(o.matchPlayer(), eye, aimDir, dist)) {
+            SmartBot& sm = smart_[(size_t)o.matchPlayer()];
+            sm.mateBlockedAt = match_.matchTime(); ++sm.mateHolds;
+            return;
+        }
+    }
     // Fire along the eased aim (the error is in where the bot looks, not in a second random draw; spread applies on top).
     botFire(o, b, *w, eye + aimDir * std::max(1.0f, dist));
     // WFC_PLAYERBOT: the local wish fires through the controller on a later step; the weapon stays ready meanwhile, so counting calls
@@ -1364,6 +1382,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
     const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
     const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
     if (visible) s.lostTargetAt = now;
+    s.leaderSlow = false;   // re-set by the squad leader branch while it applies
     if (s.ownMission) { b.mission = false; s.ownMission = false; }   // re-set below while the action still wants it
     // Vehicle form: hunting, squads, focus, retreat and pickups apply (the Classic transform logic still picks the form); cover and
     // segment breaks are robot-only. WFC_SMARTTUNE vehicle=0 restores the earlier robot-only Smart.
@@ -1512,7 +1531,10 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
     // Cover / hold cover. Reaching cover usually breaks the line of sight for a moment (that is what cover is for): the action
     // survives 4 s without sight, holding the spot until the target shows again.
     const bool inCover = s.action == SmartBot::TakeCover || s.action == SmartBot::HoldCover;
-    const bool coverFight = visible || (inCover && now - s.lostTargetAt < 4.0f && s.actionTarget >= 0 && participantPawn(s.actionTarget));
+    // Held cover outlasts a lost line of sight by 4 s, or by coverHoldS while reloading or hurt (reload / regenerate in cover).
+    const bool needHold = pc.weapon().reloading() || hpFrac < smartTune().coverHurtFrac;
+    const float holdS = needHold ? smartTune().coverHoldS : 4.0f;
+    const bool coverFight = visible || (inCover && now - s.lostTargetAt < holdS && s.actionTarget >= 0 && participantPawn(s.actionTarget));
     if (!off("cover") && !inVehicle && coverFight && match_.settings().teamGame && myCell >= 0) {
         const int tgt = visible ? b.target : s.actionTarget;
         const core::Vec3 tpos = visible ? b.seen[b.target].pos : (tgt < (int)s.mem.size() ? s.mem[(size_t)tgt].pos : s.actionPos);
@@ -1531,7 +1553,11 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             if (s.action == SmartBot::TakeCover) ++s.coverSpoiled; else ++s.coverHeldSpoiled;
             s.action = SmartBot::None;
         }
-        if (visible && smartExposure(team, myCell) >= smartTune().coverExposure) {
+        // Seek cover when seen by several enemies, or in a ranged fight (beyond coverRangeM, seen by one) while reloading or hurt
+        // (below coverHurtFrac of health): cover was 3-4 % of engaged time with the exposure trigger alone (M2 target 8 %).
+        const bool rangedNeed = !off("rangedcv") && hdist(pos, tpos) > smartTune().coverRangeM && smartExposure(team, myCell) >= 1.0f &&
+                                (pc.weapon().reloading() || hpFrac < smartTune().coverHurtFrac || s.rand01() < smartTune().coverRangedChance);
+        if (visible && (smartExposure(team, myCell) >= smartTune().coverExposure || rangedNeed)) {
             float bestScore = 1e9f; core::Vec3 best = pos; bool found = false;
             for (int k = 0; k < 16; ++k) {
                 const float a = 6.2831853f * (float)k / 16.0f;
@@ -1612,6 +1638,16 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                 if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
                 if (r2++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
                 if (const Character* mc = participantPawn((int)q)) { sum += hdist(mc->position(), pos); ++n; }
+            }
+            {   // Slow down (robot form, walking pace) while the members within 120 m are on average over squadSlowM away: they close
+                // the gap without the leader stopping (a member stuck or respawned far off is not waited for; smartSteerPost applies it).
+                double near = 0.0; int nn = 0; int r4 = 0;
+                for (size_t q = 0; q < smart_.size(); ++q) {
+                    if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
+                    if (r4++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
+                    if (const Character* mc = participantPawn((int)q)) { const float d = hdist(mc->position(), pos); if (d <= 120.0f) { near += d; ++nn; } }
+                }
+                s.leaderSlow = !off("leaderslow") && nn > 0 && near / nn > smartTune().squadSlowM && s.action != SmartBot::Retreat;
             }
             const bool canWait = now >= s.waitCooldownUntil && (s.waitSince < 0.0f || now - s.waitSince < 6.0f);
             if (n > 0 && sum / n > smartTune().squadWaitM && s.action != SmartBot::Retreat && canWait) {
@@ -1769,6 +1805,20 @@ void World::smartAimPost(BotBody o, BotBrain& b, SmartBot& s, float yaw0, float 
     pc.setAimPitch(b.pitch);
 }
 
+// A team mate's collision cylinder on the shot line short of the target (0.5 m margin): the trace would stop in its body.
+bool World::smartMateOnLine(int player, const core::Vec3& eye, const core::Vec3& dir, float dist) const {
+    if (!match_.settings().teamGame) return false;
+    for (const MatchOpponent* m : opponents_) {
+        const int q = m->matchPlayer();
+        if (q == player || !m->spawned() || !match_.sameTeam(q, player)) continue;
+        float th; if (MatchOpponent::pawnRayHit(m->pawn(), eye, dir, dist, th) && th < dist - 0.5f) return true;
+    }
+    if (matchActive_ && !localDead_ && localPlayer_ != player && match_.sameTeam(localPlayer_, player)) {
+        float th; if (MatchOpponent::pawnRayHit(player_.pawn(), eye, dir, dist, th) && th < dist - 0.5f) return true;
+    }
+    return false;
+}
+
 // Parallel (each bot's own intent): holding cover means staying on the spot and fighting from it, not the Classic strafe.
 void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in) {
     Character& pc = o.pawn();
@@ -1776,6 +1826,14 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
     const bool engaged = (b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible) || match_.matchTime() - s.lostTargetAt < 4.0f;
     if (engaged) s.engagedSeconds += dt;
     if (pc.moveForm() == Form::Vehicle) return;
+    // A squad leader slowing for its members (smartDecide): walking pace, robot form, unless in a fight.
+    if (s.leaderSlow && !engaged) { in.moveForward *= 0.4f; in.moveRight *= 0.4f; b.wantVehicle = false; }
+    // A shot held for a team mate on the line (botAimAndFire): sidestep across the line of fire for a clear shot (the side alternates
+    // every 2 s, per bot), unless taking or holding cover.
+    if (match_.matchTime() - s.mateBlockedAt < 0.6f && s.action != SmartBot::TakeCover && s.action != SmartBot::HoldCover) {
+        const bool left = ((b.player + (int)(match_.matchTime() * 0.5f)) & 1) != 0;
+        in.moveRight = left ? -1.0f : 1.0f;
+    }
     // On the way to cover, before the path there arrives (the shared search queue): the old path still leads toward the enemy, so
     // go straight to the cover spot when the mesh says that line is walkable, else hold still (WFC_AICOVERLOG: bots drifted away).
     // The last 4 m likewise: the Classic combat strafe on top of the corridor kept bots circling outside the 1.5 m arrival radius.
@@ -1901,6 +1959,14 @@ void World::tickBots(float dt) {
         Character& pc = o->pawn();
         MoveIntent& in = pb.in;
         if (!o->spawned()) continue;   // killed earlier in this pass
+        if (b.suicideWish) {   // stranded 30 s with no way back (botSteer): DmgType_Suicided, no score change, the normal respawn wave
+            b.suicideWish = false;
+            const Match::KillContext kc = killContext(b.player, b.player, "Engine.DmgType_Suicided");
+            match_.killed(b.player, b.player, true, "Engine.DmgType_Suicided", &kc);
+            o->despawn();
+            LOG_INFO("bots: p%d stranded 30 s with no way back at t %.2f: suicide", b.player, match_.matchTime());
+            continue;
+        }
         if (core::length(b.unwedge) > 0.0f) { pc.setPosition(pc.position() + b.unwedge); b.unwedge = {0, 0, 0}; }   // wedge recovery
         // Transform toward the wanted form (cooldown 2 s; robot spot check for vehicle -> robot as the player's).
         b.transformCooldown -= dt;
@@ -1958,6 +2024,26 @@ void World::tickBots(float dt) {
                 b.offMeshSpeed = core::length(core::Vec3{pc.velocity().x, 0.0f, pc.velocity().z});
             }
             b.watchOnMesh = onMesh;
+            {   // out of bounds: beyond the player starts' box + 50 m (any axis), or below KillZ; logged once per life
+                static std::string boundsKey; static core::Vec3 blo{0, 0, 0}, bhi{0, 0, 0};
+                const std::string key = mapName_ + "#" + std::to_string(match_.starts().size());
+                if (key != boundsKey && !match_.starts().empty()) {
+                    boundsKey = key; blo = bhi = match_.starts()[0].pos;
+                    for (const auto& st : match_.starts()) {
+                        blo = {std::min(blo.x, st.pos.x), std::min(blo.y, st.pos.y), std::min(blo.z, st.pos.z)};
+                        bhi = {std::max(bhi.x, st.pos.x), std::max(bhi.y, st.pos.y), std::max(bhi.z, st.pos.z)};
+                    }
+                }
+                const core::Vec3 p = pc.position();
+                const bool out = p.x < blo.x - 50.0f || p.x > bhi.x + 50.0f || p.z < blo.z - 50.0f || p.z > bhi.z + 50.0f ||
+                                 p.y < blo.y - 50.0f || p.y > bhi.y + 50.0f || p.y < mapState_.killZ();
+                if (out && !b.oobLogged && !boundsKey.empty()) {
+                    b.oobLogged = true;
+                    LOG_INFO("STUCKWATCH OUT OF BOUNDS p%d %s at (%.2f %.2f %.2f) form %s life %.1f s (starts box (%.0f %.0f %.0f)-(%.0f %.0f %.0f) +50 m, KillZ %.1f)",
+                             b.player, match_.players()[(size_t)b.player].name.c_str(), p.x, p.y, p.z, pc.moveForm() == Form::Vehicle ? "VEH" : "ROB", b.life,
+                             blo.x, blo.y, blo.z, bhi.x, bhi.y, bhi.z, mapState_.killZ());
+                }
+            }
             const bool shooting = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;   // has a shot: fighting, not stuck
             if (hdist(pc.position(), b.watchPos) > 1.0f || shooting) { b.watchPos = pc.position(); b.watchT = 0.0f; b.watchLogged = false; }
             else if ((b.watchT += dt) > 20.0f && !b.watchLogged) {
