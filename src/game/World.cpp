@@ -339,6 +339,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string mapDir = this->mapDir();
     mapState_.load(mapDir + "gameplay.json", matchMode_);
     mapState_.loadObjectiveVolumes(mapDir + "physics.json");
+    loadForcedDirVolumes(mapDir + "physics.json");
     auto splitMovers = [this](const render::MeshData& in, render::MeshData& out,
                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
         std::vector<std::string> names = mapState_.moverActorNames();
@@ -347,7 +348,9 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
             std::vector<core::Vec3>* dst = nullptr;
             if (mover) { moverTris.push_back({sm.nodeName, {}}); dst = &moverTris.back().second; }
+            const bool forcedDir = sm.nodeName.rfind("TnForcedDirVolume", 0) == 0;   // a PhysicsVolume, not world collision (forcedDirPre / Post)
             for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
+                if (forcedDir) continue;
                 if (!mover) { out.indices.push_back(in.indices[i]); continue; }
                 uint32_t v = in.indices[i];
                 dst->push_back({in.positions[v * 3], in.positions[v * 3 + 1], in.positions[v * 3 + 2]});
@@ -2069,7 +2072,9 @@ void World::tickPrefix(float dt) {
         sysprof::Scope sp(sysprof::Ctrl);
         const std::vector<int> walkOut = barrierIgnoreFor(localPlayer_);   // a barrier that spawned around the player: walk out
         CollisionWorld::IgnoreDynamicScope walk(walkOut.empty() ? nullptr : &walkOut);
+        forcedDirPre(player_.pawn(), dt, true);       // TnForcedDirVolume touches / pushes, then HardBlock (forcedDirPost)
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+        forcedDirPost(player_.pawn());
     }
     prefixMark(10);
     if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
@@ -2119,7 +2124,9 @@ void World::stepRemainder(float dt) {
         core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
             MatchOpponent* o = opponents_[(size_t)i];
             CollisionWorld::IgnoreDynamicScope walk(walkOut[(size_t)i].empty() ? nullptr : &walkOut[(size_t)i]);
+            forcedDirPre(o->pawn(), dt, false);
             o->simulateMovement(dt, col);
+            forcedDirPost(o->pawn());
             const double a0 = prof ? profNowMs() : 0.0;
             o->simulateAnimation(dt);
             if (prof) animMs[(size_t)i] = profNowMs() - a0;
@@ -3886,6 +3893,115 @@ bool World::teamEnergon(int team, float out[3]) const {
     if (!ok[i]) return false;
     for (int k = 0; k < 3; ++k) out[k] = tbl[i][k];
     return true;
+}
+
+void World::loadForcedDirVolumes(const std::string& path) {
+    forcedDirs_.clear();
+    std::string text;
+    if (!readTextFile(path, text)) return;
+    assets::Json ph;
+    if (!assets::Json::parse(text, ph)) return;
+    for (size_t v = 0; v < ph["volumes"].size(); ++v) {
+        const assets::Json& vol = ph["volumes"][v];
+        if (vol["class"].asString() != "TnForcedDirVolume") continue;
+        ForcedDirVolume f;
+        // CDO Default__TnForcedDirVolume [CONF RE]: Affects{Cars,Tanks,Planes} true, OnlyAffectsPlayers false, bBlockPawns false,
+        // ExitSpeed 1100, ArrowDirection (0, 0, 0); placements author the rest.
+        const assets::Json& a = vol["authored"];
+        if (a.has("bBlockPawns")) f.blockPawns = a["bBlockPawns"].asBool();
+        if (a.has("AffectsCars")) f.cars = a["AffectsCars"].asBool();
+        if (a.has("AffectsTanks")) f.tanks = a["AffectsTanks"].asBool();
+        if (a.has("AffectsPlanes")) f.planes_ = a["AffectsPlanes"].asBool();
+        if (a.has("OnlyAffectsPlayers")) f.onlyPlayers = a["OnlyAffectsPlayers"].asBool();
+        f.exitSpeed = (a.has("ExitSpeed") ? a["ExitSpeed"].asFloat() : 1100.0f) * 0.01f;   // UU/s -> m/s
+        if (a.has("ArrowDirection")) {   // UE (X, Y, Z) -> glTF (X, Z, Y)
+            const assets::Json& d = a["ArrowDirection"];
+            f.dir = {d["X"].asFloat(), d["Z"].asFloat(), d["Y"].asFloat()};
+        }
+        std::vector<std::vector<core::Vec3>> polys; core::Vec3 c{0, 0, 0}; int cn = 0;
+        for (size_t p = 0; p < vol["polygons_gltf"].size(); ++p) {
+            std::vector<core::Vec3> poly;
+            for (size_t k = 0; k < vol["polygons_gltf"][p].size(); ++k) {
+                const assets::Json& q = vol["polygons_gltf"][p][k];
+                poly.push_back({q[0].asFloat(), q[1].asFloat(), q[2].asFloat()}); c = c + poly.back(); ++cn;
+            }
+            polys.push_back(poly);
+        }
+        if (cn) c = c * (1.0f / cn);
+        for (const auto& poly : polys) {
+            if (poly.size() < 3) continue;
+            core::Vec3 nrm = core::cross(poly[1] - poly[0], poly[2] - poly[0]);
+            const float l = core::length(nrm);
+            if (l < 1e-6f) continue;
+            nrm = nrm * (1.0f / l);
+            if (core::dot(nrm, c - poly[0]) > 0.0f) nrm = nrm * -1.0f;
+            f.planes.push_back({nrm, core::dot(nrm, poly[0])});
+        }
+        if (!f.planes.empty() && forcedDirs_.size() < 32) forcedDirs_.push_back(f);
+    }
+    if (!forcedDirs_.empty()) LOG_INFO("mapstate: %zu TnForcedDirVolumes", forcedDirs_.size());
+}
+
+namespace {
+// The pawn's collision cylinder against a convex brush: centre and half extents (radius across, half height up).
+float brushPenetration(const std::vector<std::pair<core::Vec3, float>>& planes, const core::Vec3& centre, float radius, float halfH,
+                       core::Vec3* outN) {
+    float least = 1e9f;
+    for (const auto& pl : planes) {
+        const float ext = std::fabs(pl.first.y) * halfH + std::sqrt(pl.first.x * pl.first.x + pl.first.z * pl.first.z) * radius;
+        const float pen = ext - (core::dot(pl.first, centre) - pl.second);   // > 0: overlapping this plane's inner side
+        if (pen <= 0.0f) return 0.0f;
+        if (pen < least) { least = pen; if (outN) *outN = pl.first; }
+    }
+    return least;
+}
+void pawnCylinder(const Character& c, core::Vec3& centre, float& radius, float& halfH) {
+    const bool veh = c.moveForm() == Form::Vehicle;
+    radius = veh ? 2.0f : 1.0f; halfH = veh ? 1.0f : 2.0f;
+    centre = c.position() + core::Vec3{0, halfH, 0};
+}
+}
+
+void World::forcedDirPre(Character& c, float dt, bool isPlayer) const {
+    if (forcedDirs_.empty()) return;
+    core::Vec3 centre; float radius, halfH; pawnCylinder(c, centre, radius, halfH);
+    unsigned touch = 0; core::Vec3 override{0, 0, 0};
+    const VehicleFormType vt = c.vehicleParams().form;
+    for (size_t i = 0; i < forcedDirs_.size(); ++i) {
+        const ForcedDirVolume& f = forcedDirs_[i];
+        if (brushPenetration(f.planes, centre, radius, halfH, nullptr) <= 0.0f) continue;
+        touch |= 1u << i;
+        // IsAffected: VehicleType 0 / 1 (car / truck) -> AffectsCars, 2 (plane) -> AffectsPlanes, 3 (tank) -> AffectsTanks.
+        const bool affected = (!f.onlyPlayers || isPlayer) &&
+                              (vt == VehicleFormType::Jet ? f.planes_ : vt == VehicleFormType::Tank ? f.tanks : f.cars);
+        if (!affected || dt <= 0.0f) continue;
+        // TickSpecial: acc = clamp((ExitSpeed - v . Arrow) / dt, 0, 10000 UU/s^2) * Arrow.
+        const float acc = std::min(100.0f, std::max(0.0f, (f.exitSpeed - core::dot(c.velocity(), f.dir)) / dt));
+        if (f.blockPawns && c.moveForm() == Form::Robot) override = f.dir * acc;
+        else c.velocity() = c.velocity() + f.dir * (acc * dt);   // Mesh.AddLinearAcceleration (the vehicle body)
+    }
+    c.forcedDirTouch_ = touch;
+    c.overrideAccel_ = override;   // UnTouch clears it
+}
+
+void World::forcedDirPost(Character& c) const {
+    if (forcedDirs_.empty() || c.moveForm() != Form::Robot) return;
+    // HardBlock: a robot-form pawn of an affected type is blocked by a bBlockPawns volume it is not already touching. Every
+    // vehicle type is affected by the CDO default; a volume's own Affects* flags are checked like IsAffected.
+    core::Vec3 centre; float radius, halfH; pawnCylinder(c, centre, radius, halfH);
+    const VehicleFormType vt = c.vehicleParams().form;
+    for (size_t i = 0; i < forcedDirs_.size(); ++i) {
+        const ForcedDirVolume& f = forcedDirs_[i];
+        if (!f.blockPawns || (c.forcedDirTouch_ & (1u << i))) continue;
+        if (!(vt == VehicleFormType::Jet ? f.planes_ : vt == VehicleFormType::Tank ? f.tanks : f.cars)) continue;
+        core::Vec3 n;
+        const float pen = brushPenetration(f.planes, centre, radius, halfH, &n);
+        if (pen <= 0.0f) continue;
+        const core::Vec3 out = n * (pen + 0.01f);
+        c.setPosition(c.position() + out); centre = centre + out;
+        const float into = core::dot(c.velocity(), n);
+        if (into < 0.0f) c.velocity() = c.velocity() - n * into;
+    }
 }
 
 std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }

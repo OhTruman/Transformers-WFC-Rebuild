@@ -1009,6 +1009,17 @@ private:
     std::vector<SpawnPoint> spawns_;
     CollisionWorld collision_;
     CollisionWorld weaponCollision_;
+    // TnForcedDirVolume (physics.json): convex brush planes (outward), ArrowDirection (unit, glTF axes), ExitSpeed (m/s), flags.
+    struct ForcedDirVolume { std::vector<std::pair<core::Vec3, float>> planes; core::Vec3 dir{0, 0, 0}; float exitSpeed = 11.0f;
+                             bool blockPawns = false, cars = true, tanks = true, planes_ = true, onlyPlayers = false; };
+    std::vector<ForcedDirVolume> forcedDirs_;
+    void loadForcedDirVolumes(const std::string& physicsJson);
+public:
+    // Per pawn and step, around its movement: touches + pushes (TickSpecial), then the robot-form HardBlock (push back out of a
+    // bBlockPawns volume it was not already touching). Only the pawn itself is read and written (worker-pool safe).
+    void forcedDirPre(Character& c, float dt, bool isPlayer) const;
+    void forcedDirPost(Character& c) const;
+private:
     MapState mapState_;
     MatchMode matchMode_ = MatchMode::DM;
     std::string mapName_ = "MP_IAC_Streets";   // runtime directory of the loaded map (Frontend: setMapName)
