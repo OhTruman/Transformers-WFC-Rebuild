@@ -53,7 +53,7 @@ public:
     // editedSinceMap: the player changed a count since the last lobby map change (map-aware Extended counts keep it).
     // ai (PC EXTENSION, [PCSettings] BotAI=Smart|Classic, Gameplay's ?BotAI): -1 = never chosen -> kBotAiDefault, so a
     // later default change reaches players who did not pick; 0 Classic (the original behaviour), 1 Smart.
-    static constexpr int kBotAiDefault = 0;   // Classic for now (Integration flips it to Smart when Gameplay's gates pass)
+    static constexpr int kBotAiDefault = 1;   // Smart (user decision, M2 closed); a profile with BotAI=Classic keeps Classic
     struct Bots {
         int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false, editedSinceMap = false;
         int ai = -1;
