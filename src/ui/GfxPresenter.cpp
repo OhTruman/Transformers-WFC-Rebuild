@@ -914,16 +914,23 @@ void GfxPresenter::syncWorldLabels() {
             if (!c.isObject()) return;
             vm.setV(c, "fadeOut", gfx::avm1::Value(vm.newFunction([](gfx::avm1::VM&, const gfx::avm1::Value&, gfx::avm1::Args&) { return gfx::avm1::Value(); }, "fadeOut")));
         }
+        // Gameplay's ask: the full state line within 30 m (depth = view distance, metres), the bot's name only beyond it
+        // (the text before " ["), so a far cluster stays readable.
+        std::string shown = worldLabels_[i].text;
+        if (worldLabels_[i].depth > 30.0f) {
+            const size_t cut = shown.find(" [");
+            if (cut != std::string::npos) shown.resize(cut);
+        }
         const gfx::Point s = inv.apply({worldLabels_[i].x, worldLabels_[i].y});
         vm.setV(c, "_x", gfx::avm1::Value((double)(s.x / 20.0f)));
-        vm.setV(c, "_y", gfx::avm1::Value(placeLabel(s.x / 20.0, s.y / 20.0, worldLabels_[i].text.size())));
+        vm.setV(c, "_y", gfx::avm1::Value(placeLabel(s.x / 20.0, s.y / 20.0, shown.size())));
         const float span = dmax - dmin;
         const double alpha = span > 1e-3f ? 100.0 - 60.0 * (worldLabels_[i].depth - dmin) / span : 100.0;
         vm.setV(c, "_alpha", gfx::avm1::Value(alpha));
         const int team = worldLabels_[i].team;
         const char* colour = team == 0 ? "#50B5D5" : team == 1 ? "#F03C3C" : "#FFFF66";
         gfx::avm1::Value txt = vm.getV(c, "message_txt");
-        if (txt.isObject()) vm.setV(txt, "htmlText", gfx::avm1::Value(std::string("<font color='") + colour + "'>" + worldLabels_[i].text + "</font>"));
+        if (txt.isObject()) vm.setV(txt, "htmlText", gfx::avm1::Value(std::string("<font color='") + colour + "'>" + shown + "</font>"));
     }
     for (;; ++i) {   // labels that went away
         gfx::avm1::Value c = vm.getV(box, "l" + std::to_string(i));
