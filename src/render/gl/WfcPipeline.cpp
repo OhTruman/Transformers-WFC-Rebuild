@@ -2824,7 +2824,24 @@ static GLint ulocSite(const Program& P, const char* name, int site) {
 }
 #define ULOC(P, name) ulocSite((P), (name), [] { static const int s = gUlocSites++; return s; }())
 
+void Pipeline::flushSkinUploads() {
+    if (skinDirtyHi_ < 0) return;
+    if (skinTex_ && skinDirtyLo_ <= skinDirtyHi_ && skinDirtyW_ > 0) {
+        GLint unit = GL_TEXTURE0;
+        glGetIntegerv(0x84E0 /*GL_ACTIVE_TEXTURE*/, &unit);
+        ActiveTexture(GL_TEXTURE0 + 18);                 // the bone texture's own unit (bound there for every skinned draw)
+        glBindTexture(GL_TEXTURE_2D, skinTex_);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 1024);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, skinDirtyLo_, skinDirtyW_, skinDirtyHi_ - skinDirtyLo_ + 1, GL_RGBA, GL_FLOAT,
+                        &skinMirror_[(size_t)skinDirtyLo_ * 1024 * 4]);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        ActiveTexture((GLenum)unit);
+    }
+    skinDirtyLo_ = kSkinRows; skinDirtyHi_ = -1; skinDirtyW_ = 0;
+}
+
 void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
+    flushSkinUploads();                                  // (a skinned / instanced draw reads the bone texture)
     UseProgram(P.id);
     UniformMatrix4fv(P.uViewProj, 1, GL_FALSE, viewProj_.m);
     UniformMatrix4fv(P.uModel, 1, GL_FALSE, model.m);
@@ -4345,6 +4362,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         }
+        flushSkinUploads();                              // (the copy reads the texture)
         CopyImageSubData(skinTex_, GL_TEXTURE_2D, 0, 0, si.row, 0, skinPrevTex_, GL_TEXTURE_2D, 0, 0, si.row, 0, 1024, 1, 1);
         motionPrevSrc = 1;
     }
@@ -4371,7 +4389,19 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
         // only the texels the skinning shader reads (bones j < uSkinBones = palette size, current at 4j, previous at
         // 512 + 4j): the rest of the 1024-texel row was uploaded as zeros and never read (WFC_SKINFULLROW=1: whole row)
         static const bool fullRow = std::getenv("WFC_SKINFULLROW") != nullptr;
-        if (fullRow) {
+        static const bool uploadEach = std::getenv("WFC_SKINUPLOADEACH") != nullptr;   // A/B: one upload per instance
+        if (!fullRow && !uploadEach) {               // into the mirror; one upload before the next read (flushSkinUploads)
+            if (skinMirror_.empty()) skinMirror_.assign((size_t)1024 * 4 * kSkinRows, 0.0f);
+            float* dst = &skinMirror_[(size_t)si.row * 1024 * 4];
+            std::memcpy(dst, row.data(), palette.size() * 16 * sizeof(float));
+            int w = (int)palette.size() * 4;
+            if (usePrev) {
+                std::memcpy(dst + 512 * 4, row.data() + 512 * 4, prevPalette->size() * 16 * sizeof(float));
+                w = 512 + (int)prevPalette->size() * 4;
+            }
+            skinDirtyLo_ = std::min(skinDirtyLo_, si.row); skinDirtyHi_ = std::max(skinDirtyHi_, si.row);
+            skinDirtyW_ = std::max(skinDirtyW_, w);
+        } else if (fullRow) {
             for (size_t k = palette.size() * 16; k < (size_t)512 * 4; ++k) row[k] = 0.0f;
             for (size_t k = (usePrev ? 512 + prevPalette->size() * 4 : 512) * 4; k < row.size(); ++k) row[k] = 0.0f;
             if (!usePrev) std::fill(row.begin() + 512 * 4, row.end(), 0.0f);
@@ -5631,6 +5661,7 @@ void Pipeline::evictSkin(bool all) {
     if (all) {
         freeSkinRows_.clear(); skinRowsUsed_ = 0;
         if (skinTex_) { glDeleteTextures(1, &skinTex_); skinTex_ = 0; }
+        skinMirror_.clear(); skinDirtyLo_ = kSkinRows; skinDirtyHi_ = -1; skinDirtyW_ = 0;
     }
 }
 
@@ -5721,6 +5752,8 @@ void Pipeline::pawnOcclusionQueries() {
     glGetBooleanv(GL_DEPTH_WRITEMASK, &saveDepthMask);
     glGetBooleanv(GL_COLOR_WRITEMASK, saveColorMask);
     const GLboolean saveDepthTest = glIsEnabled(GL_DEPTH_TEST), saveCull = glIsEnabled(GL_CULL_FACE), saveBlend = glIsEnabled(GL_BLEND);
+    GLint saveCullMode = GL_BACK;
+    glGetIntegerv(GL_CULL_FACE_MODE, &saveCullMode);
     UseProgram(occProg_);
     UniformMatrix4fv(occUVP_, 1, GL_FALSE, viewProj_.m);
     BindVertexArray(occVao_);
@@ -5728,7 +5761,10 @@ void Pipeline::pawnOcclusionQueries() {
     glDepthMask(GL_FALSE);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
-    glDisable(GL_CULL_FACE);
+    // only the box's near faces (the cube is wound inward: they are GL back faces): the same query results, half the fill
+    static const bool bothFaces = std::getenv("WFC_OCCBOTHFACES") != nullptr;   // A/B: both faces (the previous fill)
+    if (bothFaces) glDisable(GL_CULL_FACE);
+    else { glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); }
     glDisable(GL_BLEND);
     const int slot = frameNo_ % 4;
     for (auto& kv : pawnOcc_) {
@@ -5753,6 +5789,7 @@ void Pipeline::pawnOcclusionQueries() {
     glDepthMask(saveDepthMask);
     glDepthFunc((GLenum)saveDepthFunc);
     if (saveDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    glCullFace((GLenum)saveCullMode);
     if (saveCull) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
     if (saveBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     if ((frameNo_ % 600) == 0 && statOccTested_)

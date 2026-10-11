@@ -449,6 +449,11 @@ private:
     int skinRowsUsed_ = 0;
     GLuint skinTex_ = 0;
     static constexpr int kSkinRows = 512;
+    // batched palette uploads: a CPU mirror of skinTex_ (1024 RGBA32F texels per row) + the dirty rows' rectangle,
+    // uploaded in one call before the texture's next GPU read (flushSkinUploads)
+    std::vector<float> skinMirror_;
+    int skinDirtyLo_ = kSkinRows, skinDirtyHi_ = -1, skinDirtyW_ = 0;
+    void flushSkinUploads();
     struct SkinDraw { GLuint vao; core::Vec3 mn, mx; };
     const SkinDraw* skinDraw_ = nullptr;                  // drawDynamic: a GPU-skinned draw (no vertex build / scan)
     int winW_ = 0, winH_ = 0;                          // the window size this frame (vpW_ / vpH_: the render size)
