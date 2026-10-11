@@ -1647,6 +1647,7 @@ public:
 
     void drawBox(const core::Vec3& center, const core::Vec3& size,
                  const core::Vec3& color, float yaw) override {
+        if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         core::Mat4 model = core::Mat4::translate(center) * core::Mat4::rotateY(yaw) *
                            core::Mat4::scale(size);
         core::Mat4 mv = view_ * model;
@@ -1656,6 +1657,7 @@ public:
     }
 
     void drawGroundGrid(float half, float spacing, const core::Vec3& c) override {
+        if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         glLoadMatrixf(view_.m);
         // Solid dark quad first for depth, then grid lines on top.
         glBegin(GL_QUADS);
@@ -1717,6 +1719,7 @@ public:
     }
 
     void drawLine(const core::Vec3& a, const core::Vec3& b, const core::Vec3& c) override {
+        if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         glLoadMatrixf(view_.m);
         glColor3f(c.x, c.y, c.z);
         glBegin(GL_LINES);
@@ -1726,6 +1729,7 @@ public:
     }
 
     void drawParticles(const ParticleBatch& b) override {
+        if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         watchdog::phase("drawParticles");
         if (!b.p || b.n == 0) return;
         glLoadMatrixf(view_.m);
@@ -1911,6 +1915,7 @@ public:
 
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
+        if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         // client-side vertex arrays: no buffer object may be bound (another renderer / UI pass may leave one)
         // [integration M06] the extension entry points are loaded with the WFC pipeline; on the legacy path
         // (WFC_LEGACYRENDER, no render data) they are null and nothing else binds buffers (was a crash: probe

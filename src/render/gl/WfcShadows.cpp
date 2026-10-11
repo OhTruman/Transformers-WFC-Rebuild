@@ -486,6 +486,12 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
     rq.res = shadowResolution(screenRadius, p.minRes, p.maxRes);
     if (shadowMathOnly_) return true;                     // (castCharacterShadow phase 1: the request decides the gates)
     const int Res = shadowDepthResolution(kMaxShadowResolution);
+    static const bool oneTarget = std::getenv("WFC_SHADOWDEPTHONE") != nullptr;   // A/B: the one depth target
+    if (!oneTarget) {                             // the next ring slot (the previous subject's projection reads its own)
+        shadowRingSlot_ = (shadowRingSlot_ + 1) % kShadowRing;
+        shadowFbo_ = shadowRingFbo_[shadowRingSlot_];
+        shadowDepthTex_ = shadowRingTex_[shadowRingSlot_];
+    }
     if (!shadowFbo_) {
         GenFramebuffers(1, &shadowFbo_);
         glGenTextures(1, &shadowDepthTex_);
@@ -498,6 +504,7 @@ bool Pipeline::renderShadowDepth(GpuMesh& g, const core::Mat4& model, const Shad
         BindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
         FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthTex_, 0);
         glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
+        if (!oneTarget) { shadowRingFbo_[shadowRingSlot_] = shadowFbo_; shadowRingTex_[shadowRingSlot_] = shadowDepthTex_; }
     }
     BindFramebuffer(GL_FRAMEBUFFER, shadowFbo_);
     glViewport(0, 0, Res, Res);
@@ -612,6 +619,13 @@ void Pipeline::castCharacterShadow(GpuMesh& g, const core::Mat4& model, const Sh
         const bool ok = renderShadowDepth(g, model, p, rq);
         shadowMathOnly_ = false;
         if (ok && shadowProjectionAllowed(rel, 0)) depthPrepass(g, model);
+        return;
+    }
+    if (shadowPhase_ == 3) {                              // shadow depth into its ring target; projected with the chunk
+        if (!renderShadowDepth(g, model, p, rq)) return;
+        ++shadowChunkRenders_;
+        if (!shadowProjectionAllowed(rel, 0)) { ++statShadowGated_; return; }
+        shadowChunk_.push_back({p, rq, shadowFbo_, shadowDepthTex_, shadowChunkRec_});
         return;
     }
     if (shadowPhase_ == 2) {                              // shadow depth + projection into the shared mask
