@@ -6,6 +6,7 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
   --bin   the exe tree to ship (Release + PGO of the head; its wfc_rebuild.exe and the files the previous package's bin had:
           the four *-vgmstream-* DLLs, licenses/vgmstream, the tool exes, the .map). Replaces slim_files.tsv's bin rows.
   --head  the 09c head hash: written into README.txt / Play.bat's version lines.
+  --version  README's version text (default "09c <head>, Release + PGO").
   --out   default <this worktree>/work/playtest_slim. Never Rebuild/work/playtest_slim (Integration copies the result) and never
           inside another lane's tree; an existing --out is replaced only if it carries this script's marker file.
   --hd    the HD pack source (default AssetTools/out/hd/pack): hd_index.json + ONLY the indexed files are copied to
@@ -39,7 +40,7 @@ def main():
     plan = '--plan' in sys.argv
     head = arg('--head')
     bin_dir = arg('--bin')
-    out = os.path.normpath(arg('--out', os.path.join(REPO, 'work', 'playtest_slim')))
+    out = os.path.abspath(arg('--out', os.path.join(REPO, 'work', 'playtest_slim')))
     hd_src = None if '--no-hd' in sys.argv else os.path.normpath(arg('--hd', ROOT + '/AssetTools/out/hd/pack'))
     if not head or not bin_dir:
         sys.exit('usage: build_slim.py --bin <built bin dir> --head <sha> [--out DIR] [--hd DIR | --no-hd] [--plan]')
@@ -169,7 +170,8 @@ def main():
     # README / Play.bat from the template, version lines from --head
     for n in ('Play.bat', 'README.txt'):
         t = open(os.path.join(HERE, 'slim_template', n), encoding='utf-8', newline='').read()
-        t = t.replace('09c 37eec59, Release + PGO', '09c %s, Release + PGO' % head).replace('09c b898c75 slim', '09c %s slim' % head)
+        version = arg('--version', '09c %s, Release + PGO' % head)
+        t = t.replace('09c 37eec59, Release + PGO', version).replace('09c b898c75 slim', '09c %s slim' % head)
         t = t.replace('\r\n', '\n').replace('\n', '\r\n')   # CRLF whatever the checkout's line endings: cmd mis-parses LF-only labels
         if head not in t:
             fails.append(('VERSION', n))
