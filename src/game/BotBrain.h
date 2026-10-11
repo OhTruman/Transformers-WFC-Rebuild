@@ -96,6 +96,11 @@ struct BotBrain {
     // Stranded with no way back: since when (continuous: searches every 4 s, a gap over 6 s restarts it); 30 s -> suicide.
     float noWaySince = -1.0f, noWayLast = -1.0f; bool suicideWish = false;
     float offMeshRun = 0.0f;   // robot form, continuously off the mesh (0.5 m tolerance), path or no path
+    // Off-mesh entry diagnostics (log only): how the current off-mesh run began.
+    float lastVehT = -100.0f, lastOnMeshT = -100.0f; bool lastVehJet = false; core::Vec3 lastOnMeshPos{};
+    float omEntryT = 0.0f, omEntryLife = 0.0f, omEntryVy = 0.0f, omEntrySinceVeh = 0.0f, omEntrySinceDmg = 0.0f; bool omEntryJet = false; core::Vec3 omEntryPos{};
+    bool spawnPosSet = false, spawnLaunchLogged = false; float spawnT = 0.0f; core::Vec3 spawnPos{};   // spawn-launch diagnostic (log only)
+    float rejoinDrop = 0.0f;   // height from the bot down to its chosen rejoin cell (log only)
     bool fireWish = false;
     unsigned lastShotSerial = 0;
     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
