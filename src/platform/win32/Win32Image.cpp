@@ -6,6 +6,7 @@
 #include <gdiplus.h>
 
 #include "platform/Image.h"
+#include "platform/LongPath.h"
 #include "core/Log.h"
 
 #include <cstdlib>
@@ -24,14 +25,6 @@ void ensureGdiplus() {
     });
 }
 
-std::wstring widen(const std::string& s) {
-    if (s.empty()) return std::wstring();
-    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
-    std::wstring w(n, L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], n);
-    return w;
-}
-
 } // namespace
 
 ImageFallback g_fallback = nullptr;
@@ -39,7 +32,7 @@ ImageFallback g_fallback = nullptr;
 void setImageFallback(ImageFallback f) { g_fallback = f; }
 
 bool decodeImage(const std::string& path, render::ImageData& out) {
-    std::wstring wpath = widen(path);
+    const std::wstring wpath = platform::longPath(path).wstring();   // [Systems] long / non-ASCII paths (GDI+ takes \\?\ paths)
     static const bool ddsFirst = std::getenv("WFC_DDSFIRST") != nullptr;
     static const bool pngLog = std::getenv("WFC_PNGLOG") != nullptr;
     if (g_fallback && (ddsFirst || GetFileAttributesW(wpath.c_str()) == INVALID_FILE_ATTRIBUTES) && g_fallback(path, out))

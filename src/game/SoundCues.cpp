@@ -5,6 +5,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 #include "platform/CpuPreference.h"
+#include "platform/LongPath.h"
 
 #include <algorithm>
 #include <chrono>
@@ -311,8 +312,9 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
     const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
     const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
     // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
-    std::FILE* fp = std::fopen(altPath.c_str(), "rb");
-    if (!fp && altPath.size() > 4) fp = std::fopen((altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), "rb");
+    // [Systems] long / non-ASCII paths: a real open (WFC_FILELOG logs it, as the narrow fopen it replaces), wide via longPath
+    std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
+    if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
     if (fp) {
         std::fclose(fp);
         if (account) ++locStats().twin;
@@ -490,10 +492,10 @@ long long SoundCues::waveBytes(size_t c) {
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
             std::error_code ec;
             const std::string p = abs ? f : contentRoot_ + f;
-            const auto sz = std::filesystem::file_size(p, ec);
+            const auto sz = std::filesystem::file_size(platform::longPath(p), ec);
             if (!ec) n += (long long)sz;
             else if (p.size() > 4) {                                     // no WAV in the package: the original bank (~16:1)
-                const auto bs = std::filesystem::file_size(p.substr(0, p.size() - 4) + ".fsb", ec);
+                const auto bs = std::filesystem::file_size(platform::longPath(p.substr(0, p.size() - 4) + ".fsb"), ec);
                 if (!ec) n += (long long)bs * 16;
             }
         }
@@ -553,10 +555,10 @@ bool SoundCues::startWarm(size_t c) {
             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
             paths.push_back(abs ? f : contentRoot_ + f);
             std::error_code ec;
-            const auto sz = std::filesystem::file_size(paths.back(), ec);
+            const auto sz = std::filesystem::file_size(platform::longPath(paths.back()), ec);
             if (!ec) bytes += (long long)sz;
             else {
-                const auto bs = std::filesystem::file_size(paths.back().substr(0, paths.back().size() - 4) + ".fsb", ec);
+                const auto bs = std::filesystem::file_size(platform::longPath(paths.back().substr(0, paths.back().size() - 4) + ".fsb"), ec);
                 if (!ec) bytes += (long long)bs * 16;
             }
         }

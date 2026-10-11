@@ -1,5 +1,7 @@
 // libvgmstream r2117 decode of the original FMOD banks (see platform/FsbDecode.h).
 #include "platform/FsbDecode.h"
+#include "platform/LongPath.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <atomic>
@@ -35,8 +37,12 @@ FsbStream::~FsbStream() {
 }
 
 bool FsbStream::open(const std::string& path) {
-    libstreamfile_t* sf = libstreamfile_open_from_stdio(path.c_str());
-    if (!sf) return false;
+    // [Systems] long / non-ASCII paths: the bank is opened wide (platform::longPath) and handed to vgmstream, which takes
+    // ownership (closed with the streamfile; same-name reopens duplicate the descriptor on this toolchain, USE_STDIO_FDUP)
+    std::FILE* file = _wfopen(platform::longPath(path).c_str(), L"rb");
+    if (!file) return false;
+    libstreamfile_t* sf = libstreamfile_open_from_file(file, path.c_str());
+    if (!sf) { std::fclose(file); return false; }
     sf_ = sf;
     libvgmstream_config_t cfg{};
     cfg.ignore_loop = true;                          // one pass of the stream: the game loops it itself

@@ -9,6 +9,7 @@
 #include "audio/Audio.h"
 #include "core/Log.h"
 #include "platform/FsbDecode.h"
+#include "platform/LongPath.h"
 
 #include <algorithm>
 #include <atomic>
@@ -60,7 +61,7 @@ std::string bankOf(const std::string& wav) {
 }
 
 bool fileExists(const std::string& p) {
-    const DWORD a = GetFileAttributesA(p.c_str());
+    const DWORD a = GetFileAttributesW(platform::longPath(p).c_str());   // [Systems] long / non-ASCII paths
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
@@ -107,7 +108,7 @@ bool loadBank(const std::string& path, std::vector<int16_t>& out, int* srcRate) 
 
 bool loadWav(const std::string& path, std::vector<int16_t>& out, int* srcRate = nullptr) {
     if (bankFirst(path)) return loadBank(path, out, srcRate);
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    std::ifstream f(platform::longPath(path), std::ios::binary | std::ios::ate);
     if (!f) return bankOf(path).size() && platform::fsbDecodeAvailable() && fileExists(bankOf(path)) && loadBank(path, out, srcRate);
     std::streamoff n = f.tellg();
     if (n < 44) return false;

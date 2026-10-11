@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include "platform/FileCompression.h"
+#include "platform/LongPath.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,7 +47,7 @@ const Api& api() {
 }
 
 bool readAll(const std::string& path, std::vector<uint8_t>& out) {
-    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    std::ifstream f(platform::longPath(path), std::ios::binary | std::ios::ate);   // [Systems] long / non-ASCII paths
     if (!f) return false;
     const std::streamoff n = f.tellg();
     if (n <= 0) return false;
@@ -91,7 +92,7 @@ bool decompressBuffer(const uint8_t* data, size_t n, std::vector<uint8_t>& out) 
 
 long long dataFileSize(const std::string& path) {
     for (const std::string& p : {path, path + kCompressedSuffix}) {
-        std::ifstream f(p, std::ios::binary | std::ios::ate);
+        std::ifstream f(platform::longPath(p), std::ios::binary | std::ios::ate);
         if (f) return (long long)f.tellg();
     }
     return -1;

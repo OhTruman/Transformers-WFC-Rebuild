@@ -1,4 +1,5 @@
 #include "render/gl/WfcPipeline.h"
+#include "platform/LongPath.h"
 #include "core/LoadYield.h"
 #include <tuple>
 
@@ -1505,7 +1506,7 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
             if (fmt.compare(0, 3, "PF_") == 0) fmt = fmt.substr(3);
             if (fmt == "BC1") fmt = "DXT1"; else if (fmt == "BC3") fmt = "DXT5"; else if (fmt == "BC2") fmt = "DXT3";
             if (key.empty() || dds.empty()) continue;
-            std::ifstream f(root + "/" + dds, std::ios::binary | std::ios::ate);
+            std::ifstream f(platform::longPath(root + "/" + dds), std::ios::binary | std::ios::ate);   // [Systems] long paths
             const long long want = (long long)r["bytes"].asFloat(-1.0f);
             if (!f || (want >= 0 && (long long)f.tellg() != want)) { ++missing; continue; }
             if (fmt != "DXT1" && fmt != "DXT5" && fmt != "DXT3" && fmt != "A8R8G8B8" && fmt != "G8") {
@@ -1538,7 +1539,7 @@ static bool decodeOriginalTop(const std::string& file, ImageData& out) {
     auto it = idx.find(ddsKey(file));
     if (it == idx.end()) return false;
     const DdsEntry& E = it->second;
-    std::ifstream in(ddsRoot() + "/" + E.dds, std::ios::binary);
+    std::ifstream in(platform::longPath(ddsRoot() + "/" + E.dds), std::ios::binary);   // [Systems] long paths
     std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) return false;
     uint32_t h0, w0;
@@ -1575,7 +1576,7 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     }
     const bool hdBlocks = hd && ht != hidx.end();
     if (hdBlocks) ++gMemHdTextures;
-    std::ifstream in(path, std::ios::binary);
+    std::ifstream in(platform::longPath(path), std::ios::binary);   // [Systems] long paths
     std::vector<uint8_t> f((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (f.size() < 128 || std::memcmp(f.data(), "DDS ", 4) != 0) {
         LOG_WARN("wfc: DDS missing or invalid (%s): PNG used", path.c_str());
