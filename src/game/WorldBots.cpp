@@ -712,15 +712,23 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                             const float a = 6.2831853f * (float)k / 16.0f;
                             const core::Vec3 q = pos + core::Vec3{std::cos(a) * r, 0.0f, std::sin(a) * r};
                             if (!clearLine(pos, q)) continue;   // a clear straight line (knee and chest height)
-                            const int cell = botNav_.findCell(q, 1.5f, 25.0f);   // drops allowed up to 25 m (a roof a blast threw it onto: Molten)
+                            // Drops allowed up to TnRobotForm MaxFallHeight 3400 UU = 34 m (was 25: a Molten roof a blast threw it onto; Rust: a beam
+                            // 28.5 m above the floor). No fall damage: robot MaxFallSpeed 100000 UU/s.
+                            const int cell = botNav_.findCell(q, 1.5f, 34.0f);
                             if (cell < 0) continue;
+                            // A drop must be open air below the probe point: a point on a roof over the cell (Gorge: structures ~30 m above
+                            // the deck mesh) is reached without falling, and the bot walked to it and back every step (b44).
+                            const float cellY = botNav_.cells()[(size_t)cell].centroid.y;
+                            if (pos.y - cellY > 2.0f && collision()->segmentHit(q + core::Vec3{0, 0.4f, 0}, core::Vec3{q.x, cellY + 0.5f, q.z}, th)) continue;
                             const float score = hdist(q, w.pos);   // prefer the side toward the corridor
                             // The clear probe point itself (its cell's centroid may lie behind a wall: the walk there pinned bots)
-                            if (score < bestScore) { bestScore = score; b.rejoin = q; b.hasRejoin = true; }
+                            if (score < bestScore) { bestScore = score; b.rejoin = q; b.hasRejoin = true; b.rejoinDrop = pos.y - botNav_.cells()[(size_t)cell].centroid.y; }
                         }
                         if (b.hasRejoin) break;
                     }
                     b.rejoinUntil = match_.matchTime() + 4.0f;
+                    if (b.hasRejoin && b.rejoinDrop > 25.0f)
+                        LOG_INFO("bots: p%d rejoin drop %.1f m at t %.2f from (%.1f %.1f %.1f)", b.player, b.rejoinDrop, match_.matchTime(), pos.x, pos.y, pos.z);
                 }
                 if (b.hasRejoin) {
                     core::Vec3 rd = b.rejoin - pos; rd.y = 0.0f;
@@ -1076,14 +1084,45 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
 // Off the mesh 30 s in a row in robot form, path or no path (Rust: a Classic bot on a ledge kept finding paths, so the no-way-found
 // suicide never armed): the same suicide. Any on-mesh sample resets; vehicles excluded (jets: the landing deferral; hover over gaps).
 void World::botOffMeshWatch(BotBrain& b, const Character& pc, float dt) {
+    const float now = match_.matchTime();
+    if (pc.moveForm() == Form::Vehicle) { b.lastVehT = now; b.lastVehJet = pc.vehicleParams().form == VehicleFormType::Jet; }
+    // Spawn-launch diagnostic (log only; Gorge FFA 64: bots thrown up at 30-56 m/s within ~1 s of spawning): the spawn spot, the
+    // nearest other pawn then and at the launch.
+    if (!b.spawnPosSet) { b.spawnPosSet = true; b.spawnPos = pc.position(); b.spawnT = now; }
+    if (!b.spawnLaunchLogged && now - b.spawnT < 3.0f && pc.velocity().y > 12.0f) {
+        b.spawnLaunchLogged = true;
+        float nearest = 1e9f; int who = -1;
+        for (const MatchOpponent* o : opponents_)
+            if (o->spawned() && o->matchPlayer() != b.player) {
+                const core::Vec3 d = o->pawn().position() - pc.position();
+                const float l = core::length(d); if (l < nearest) { nearest = l; who = o->matchPlayer(); }
+            }
+        if (localPlayer_ >= 0 && localPlayer_ != b.player && !localDead_) {
+            const float l = core::length(player_.pawn().position() - pc.position()); if (l < nearest) { nearest = l; who = localPlayer_; }
+        }
+        const core::Vec3 p = pc.position(), s = b.spawnPos;
+        LOG_INFO("bots: p%d spawn launch at t %.2f (%.2f s after spawn at (%.1f %.1f %.1f)): at (%.1f %.1f %.1f) vel y %.1f, nearest pawn p%d %.1f m%s",
+                 b.player, now, now - b.spawnT, s.x, s.y, s.z, p.x, p.y, p.z, pc.velocity().y, who, nearest, pc.moveForm() == Form::Vehicle ? " (vehicle)" : "");
+    }
     if (botNav_.valid() && collision() && pc.moveForm() == Form::Robot && !pc.isTransforming() && botNav_.findCell(pc.position(), 0.5f) < 0) {
+        if (b.offMeshRun == 0.0f) {   // how this run began (log only: the fire line says how the bot got there)
+            b.omEntryT = now; b.omEntryLife = b.life; b.omEntryPos = pc.position(); b.omEntryVy = pc.velocity().y;
+            b.omEntrySinceVeh = now - b.lastVehT; b.omEntryJet = b.lastVehJet; b.omEntrySinceDmg = now - b.lastDamageTime;
+        }
         static const bool noSuicide = std::getenv("WFC_NOSTRANDSUICIDE") != nullptr;
         if ((b.offMeshRun += dt) >= 30.0f && !noSuicide && !b.suicideWish) {
-            const core::Vec3 p = pc.position();
-            LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, match_.matchTime(), p.x, p.y, p.z);
+            const core::Vec3 p = pc.position(), e = b.omEntryPos;
+            LOG_INFO("bots: p%d stranded 30 s off the mesh with a path at t %.2f at (%.1f %.1f %.1f)", b.player, now, p.x, p.y, p.z);
+            LOG_INFO("bots: p%d off-mesh entry (%s): t %.2f at (%.1f %.1f %.1f), life %.1f s, vel y %.1f, %.1f s after %s form, %.1f s after damage; "
+                     "last on mesh (%.1f %.1f %.1f) %.1f s before", b.player, anySmart_ && botIsSmart(b.player) ? "Smart" : "Classic", b.omEntryT, e.x, e.y, e.z,
+                     b.omEntryLife, b.omEntryVy, b.omEntrySinceVeh, b.omEntryJet ? "jet" : "vehicle", b.omEntrySinceDmg,
+                     b.lastOnMeshPos.x, b.lastOnMeshPos.y, b.lastOnMeshPos.z, b.omEntryT - b.lastOnMeshT);
             b.suicideWish = true;
         }
-    } else b.offMeshRun = 0.0f;
+    } else {
+        b.offMeshRun = 0.0f;
+        if (pc.moveForm() == Form::Robot && !pc.isTransforming() && botNav_.valid() && collision()) { b.lastOnMeshPos = pc.position(); b.lastOnMeshT = now; }
+    }
 }
 
 int World::playerBotDifficulty() {
