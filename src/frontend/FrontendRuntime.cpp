@@ -17,6 +17,15 @@
 #include <fstream>
 #include <sstream>
 
+// Systems' platform::longPath (UTF-8 -> UTF-16, \\?\ near MAX_PATH; short paths open as before) where the tree has
+// it; otherwise the plain narrow path, exactly the old open.
+#if __has_include("platform/LongPath.h")
+#include "platform/LongPath.h"
+static std::filesystem::path openPath(const std::string& p) { return platform::longPath(p); }
+#else
+static std::filesystem::path openPath(const std::string& p) { return std::filesystem::path(p); }
+#endif
+
 namespace frontend {
 
 namespace {
@@ -522,7 +531,7 @@ GameFlow::SelectedCharacter FrontendRuntime::selectionFor(const std::string& nam
             s.vehicleGltf[f] = ci->vehicleGltf;
             std::error_code ec;
             s.bodyAvailable[f] = !ci->robotGltf.empty() &&
-                                 std::filesystem::exists(Catalog::defaultExtractedRoot() + "/" + ci->robotGltf, ec);
+                                 std::filesystem::exists(openPath(Catalog::defaultExtractedRoot() + "/" + ci->robotGltf), ec);
         }
     }
     return s;
@@ -1052,7 +1061,7 @@ namespace {
 // The extracted movies carry region / language suffixes: <name>_NA_INT, then <name>_INT, then <name>.
 std::string localizedMovie(const std::string& b) {
     for (const std::string& c : {b + "_NA_INT", b + "_INT"})
-        if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) return c;
+        if (std::ifstream(openPath(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv")).good()) return c;
     return b;
 }
 }
