@@ -39,8 +39,16 @@ private:
     // vbo: the fan followed by its 6-vertex cover quad, uploaded once (made on first draw; freed with the shape cache)
     // direct: the fan's triangles cover every filled pixel exactly once (one star-shaped loop seen from the pivot), so a
     // solid fill can be drawn straight, without the stencil winding pass and the cover quad (same pixels).
-    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0; };
-    struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; };
+    // arena / first: the mesh's vertices in a shared vertex arena (static shapes; -1 = not placed), first = its first vertex there
+    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0;
+                  mutable int arena = -1, first = 0; };
+    struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; mutable int arena = -1, first = 0; };
+    // Vertex arenas (Systems, HUD draw CPU): cached static shapes share a few large vertex buffers, so drawing consecutive meshes
+    // needs no glBindBuffer / glVertexAttribPointer each. Same vertex data, same draw calls and order -> identical image (the image
+    // verifier's reference pass uses the per-mesh buffers). Freed with the shape cache (forgetShapes). WFC_NOGFXARENA=1: off.
+    struct VArena { unsigned vbo = 0; size_t usedFloats = 0, capFloats = 0; };
+    std::vector<VArena> arenas_;
+    bool arenaPlace(const std::vector<float>& v, int& arena, int& first);
     struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; bool dynamic = false; unsigned lastUsed = 0; };
     const Cached& cache(const gfx::ShapeDef* s, bool glyph);
     unsigned texture(const std::string& path, int& w, int& h);
@@ -50,8 +58,8 @@ private:
     void stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m);
     void stencilState();                    // the winding pass state (stencilWinding without the draw)
     void coverState(bool mask);             // the cover pass state (cover without the draw)
-    void drawMesh(const Mesh& mesh, bool mask, bool solid = false);    // stencilWinding + cover from the mesh's buffer
-    void drawStroke(const Stroke& stroke);         // drawTriangles from the stroke's buffer
+    void drawMesh(const Mesh& mesh, bool mask, bool solid = false, bool arenaOk = false);    // stencilWinding + cover from the mesh's buffer
+    void drawStroke(const Stroke& stroke, bool arenaOk = false);         // drawTriangles from the stroke's buffer
     void cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask);
     void fullscreen();
 
