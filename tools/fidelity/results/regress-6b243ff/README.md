@@ -29,3 +29,10 @@ Head p90 is not comparable on the UNKNOWN maps (a different match); those maps n
 ## Memory pressure (driver pool leak; no restart)
 See mem.txt. Commit 87-88 / 113 GB and nonpaged pool 22.75 GB, flat across the window. Base absolute numbers sit at or below the
 earlier 47726bc lockstep A/A (Gorge 2.58 here vs 2.70-2.74), so no inflation was seen.
+
+## Later notes
+- 2026-10-10 23:27: the dry6 bot nav was installed in ExtractedAssets. Every build reads `<map dir>/bot_nav.json` from there,
+  so runs after 23:27 play different matches from this pass in both arms. Absolute p90s here are not comparable to later
+  passes; deltas within a pass still are.
+- Gameplay confirmed the divergence cause: TnForcedDirVolume (touch log at step 891 on Seed). With WFC_NOFORCEDDIR=1 and
+  WFC_NOSTRANDSUICIDE=1 the head is IDENTICAL to base over 3,003 steps.
