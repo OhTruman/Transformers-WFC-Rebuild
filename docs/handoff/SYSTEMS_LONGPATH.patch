@@ -1,0 +1,332 @@
+--- /dev/null
++++ b/src/platform/LongPath.h
+@@ -0,0 +1,18 @@
++// Clean-room reconstruction — long / non-ASCII data paths (PC ADAPTATION, Systems; docs/handoff/SYSTEMS_LONG_PATH_AUDIT.md).
++#pragma once
++#include <filesystem>
++#include <string>
++
++namespace platform {
++
++// A data path ready for std::ifstream / std::ofstream / std::filesystem (file_size, exists) and _wfopen:
++//   - UTF-8 -> UTF-16 (the bytes are taken as the ANSI code page instead when they are not valid UTF-8, as the narrow
++//     opens did), so non-ASCII paths open;
++//   - a path whose full form reaches MAX_PATH gets the \\?\ prefix (\\?\UNC\ for \\server\share) on its absolute,
++//     normalised form (GetFullPathNameW): Windows 10 / 11 limit even the wide APIs to MAX_PATH without it (or a
++//     longPathAware manifest plus the machine's LongPathsEnabled policy).
++// Shorter paths, relative paths that stay short, already-prefixed paths and any conversion failure come back unprefixed:
++// the same file as the narrow open of today. Other platforms: the path as given.
++std::filesystem::path longPath(const std::string& utf8);
++
++}  // namespace platform
+--- /dev/null
++++ b/src/platform/win32/LongPath.cpp
+@@ -0,0 +1,42 @@
++// Clean-room reconstruction — see platform/LongPath.h.
++#include "platform/LongPath.h"
++
++#include <windows.h>
++
++namespace platform {
++
++namespace {
++
++std::wstring widen(const std::string& s) {
++    if (s.empty()) return std::wstring();
++    for (UINT cp : {(UINT)CP_UTF8, (UINT)CP_ACP}) {
++        const DWORD flags = cp == CP_UTF8 ? MB_ERR_INVALID_CHARS : 0;
++        const int n = MultiByteToWideChar(cp, flags, s.data(), (int)s.size(), nullptr, 0);
++        if (n <= 0) continue;
++        std::wstring w((size_t)n, L'\0');
++        if (MultiByteToWideChar(cp, flags, s.data(), (int)s.size(), &w[0], n) == n) return w;
++    }
++    return std::wstring(s.begin(), s.end());
++}
++
++// The full-path length at which the prefix goes on: MAX_PATH (260) counts the terminating NUL; directories (CreateDirectory)
++// are limited to MAX_PATH - 12. Below this the plain path is returned, so short paths open exactly as before.
++constexpr size_t kPrefixAt = MAX_PATH - 12;
++
++}  // namespace
++
++std::filesystem::path longPath(const std::string& utf8) {
++    std::wstring w = widen(utf8);
++    if (w.size() >= 4 && (w.compare(0, 4, L"\\\\?\\") == 0 || w.compare(0, 4, L"\\\\.\\") == 0)) return std::filesystem::path(w);
++    DWORD n = GetFullPathNameW(w.c_str(), 0, nullptr, nullptr);
++    if (n == 0) return std::filesystem::path(w);
++    std::wstring full((size_t)n, L'\0');
++    n = GetFullPathNameW(w.c_str(), n, &full[0], nullptr);
++    if (n == 0 || n >= full.size()) return std::filesystem::path(w);
++    full.resize(n);
++    if (full.size() < kPrefixAt) return std::filesystem::path(w);   // short: unchanged (relative stays relative)
++    if (full.size() >= 2 && full[0] == L'\\' && full[1] == L'\\') return std::filesystem::path(L"\\\\?\\UNC\\" + full.substr(2));
++    return std::filesystem::path(L"\\\\?\\" + full);
++}
++
++}  // namespace platform
+--- a/src/platform/win32/Win32FileCompression.cpp
++++ b/src/platform/win32/Win32FileCompression.cpp
+@@ -5,6 +5,7 @@
+ #include <windows.h>
+ 
+ #include "platform/FileCompression.h"
++#include "platform/LongPath.h"
+ 
+ #include <cstdio>
+ #include <cstdlib>
+@@ -46,7 +47,7 @@
+ }
+ 
+ bool readAll(const std::string& path, std::vector<uint8_t>& out) {
+-    std::ifstream f(path, std::ios::binary | std::ios::ate);
++    std::ifstream f(platform::longPath(path), std::ios::binary | std::ios::ate);   // [Systems] long / non-ASCII paths
+     if (!f) return false;
+     const std::streamoff n = f.tellg();
+     if (n <= 0) return false;
+@@ -91,7 +92,7 @@
+ 
+ long long dataFileSize(const std::string& path) {
+     for (const std::string& p : {path, path + kCompressedSuffix}) {
+-        std::ifstream f(p, std::ios::binary | std::ios::ate);
++        std::ifstream f(platform::longPath(p), std::ios::binary | std::ios::ate);
+         if (f) return (long long)f.tellg();
+     }
+     return -1;
+--- a/src/platform/win32/Win32Audio.cpp
++++ b/src/platform/win32/Win32Audio.cpp
+@@ -9,6 +9,7 @@
+ #include "audio/Audio.h"
+ #include "core/Log.h"
+ #include "platform/FsbDecode.h"
++#include "platform/LongPath.h"
+ 
+ #include <algorithm>
+ #include <atomic>
+@@ -60,7 +61,7 @@
+ }
+ 
+ bool fileExists(const std::string& p) {
+-    const DWORD a = GetFileAttributesA(p.c_str());
++    const DWORD a = GetFileAttributesW(platform::longPath(p).c_str());   // [Systems] long / non-ASCII paths
+     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
+ }
+ 
+@@ -107,7 +108,7 @@
+ 
+ bool loadWav(const std::string& path, std::vector<int16_t>& out, int* srcRate = nullptr) {
+     if (bankFirst(path)) return loadBank(path, out, srcRate);
+-    std::ifstream f(path, std::ios::binary | std::ios::ate);
++    std::ifstream f(platform::longPath(path), std::ios::binary | std::ios::ate);
+     if (!f) return bankOf(path).size() && platform::fsbDecodeAvailable() && fileExists(bankOf(path)) && loadBank(path, out, srcRate);
+     std::streamoff n = f.tellg();
+     if (n < 44) return false;
+--- a/src/platform/win32/FsbDecode.cpp
++++ b/src/platform/win32/FsbDecode.cpp
+@@ -1,5 +1,7 @@
+ // libvgmstream r2117 decode of the original FMOD banks (see platform/FsbDecode.h).
+ #include "platform/FsbDecode.h"
++#include "platform/LongPath.h"
++#include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+ #include <atomic>
+@@ -35,8 +37,12 @@
+ }
+ 
+ bool FsbStream::open(const std::string& path) {
+-    libstreamfile_t* sf = libstreamfile_open_from_stdio(path.c_str());
+-    if (!sf) return false;
++    // [Systems] long / non-ASCII paths: the bank is opened wide (platform::longPath) and handed to vgmstream, which takes
++    // ownership (closed with the streamfile; same-name reopens duplicate the descriptor on this toolchain, USE_STDIO_FDUP)
++    std::FILE* file = _wfopen(platform::longPath(path).c_str(), L"rb");
++    if (!file) return false;
++    libstreamfile_t* sf = libstreamfile_open_from_file(file, path.c_str());
++    if (!sf) { std::fclose(file); return false; }
+     sf_ = sf;
+     libvgmstream_config_t cfg{};
+     cfg.ignore_loop = true;                          // one pass of the stream: the game loops it itself
+--- a/src/platform/win32/Win32Image.cpp
++++ b/src/platform/win32/Win32Image.cpp
+@@ -6,6 +6,7 @@
+ #include <gdiplus.h>
+ 
+ #include "platform/Image.h"
++#include "platform/LongPath.h"
+ #include "core/Log.h"
+ 
+ #include <cstdlib>
+@@ -24,14 +25,6 @@
+     });
+ }
+ 
+-std::wstring widen(const std::string& s) {
+-    if (s.empty()) return std::wstring();
+-    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+-    std::wstring w(n, L'\0');
+-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], n);
+-    return w;
+-}
+-
+ } // namespace
+ 
+ ImageFallback g_fallback = nullptr;
+@@ -39,7 +32,7 @@
+ void setImageFallback(ImageFallback f) { g_fallback = f; }
+ 
+ bool decodeImage(const std::string& path, render::ImageData& out) {
+-    std::wstring wpath = widen(path);
++    const std::wstring wpath = platform::longPath(path).wstring();   // [Systems] long / non-ASCII paths (GDI+ takes \\?\ paths)
+     static const bool ddsFirst = std::getenv("WFC_DDSFIRST") != nullptr;
+     static const bool pngLog = std::getenv("WFC_PNGLOG") != nullptr;
+     if (g_fallback && (ddsFirst || GetFileAttributesW(wpath.c_str()) == INVALID_FILE_ATTRIBUTES) && g_fallback(path, out))
+--- a/src/game/SoundCues.cpp
++++ b/src/game/SoundCues.cpp
+@@ -5,6 +5,7 @@
+ #include "assets/Json.h"
+ #include "core/Log.h"
+ #include "platform/CpuPreference.h"
++#include "platform/LongPath.h"
+ 
+ #include <algorithm>
+ #include <chrono>
+@@ -311,8 +312,9 @@
+     const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
+     const std::string altPath = alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt;
+     // The twin's WAV, or (a package without WAVs) its original bank beside it: the audio backend decodes X.fsb for X.wav.
+-    std::FILE* fp = std::fopen(altPath.c_str(), "rb");
+-    if (!fp && altPath.size() > 4) fp = std::fopen((altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), "rb");
++    // [Systems] long / non-ASCII paths: a real open (WFC_FILELOG logs it, as the narrow fopen it replaces), wide via longPath
++    std::FILE* fp = _wfopen(platform::longPath(altPath).c_str(), L"rb");
++    if (!fp && altPath.size() > 4) fp = _wfopen(platform::longPath(altPath.substr(0, altPath.size() - 4) + ".fsb").c_str(), L"rb");
+     if (fp) {
+         std::fclose(fp);
+         if (account) ++locStats().twin;
+@@ -490,10 +492,10 @@
+             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+             std::error_code ec;
+             const std::string p = abs ? f : contentRoot_ + f;
+-            const auto sz = std::filesystem::file_size(p, ec);
++            const auto sz = std::filesystem::file_size(platform::longPath(p), ec);
+             if (!ec) n += (long long)sz;
+             else if (p.size() > 4) {                                     // no WAV in the package: the original bank (~16:1)
+-                const auto bs = std::filesystem::file_size(p.substr(0, p.size() - 4) + ".fsb", ec);
++                const auto bs = std::filesystem::file_size(platform::longPath(p.substr(0, p.size() - 4) + ".fsb"), ec);
+                 if (!ec) n += (long long)bs * 16;
+             }
+         }
+@@ -553,10 +555,10 @@
+             const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+             paths.push_back(abs ? f : contentRoot_ + f);
+             std::error_code ec;
+-            const auto sz = std::filesystem::file_size(paths.back(), ec);
++            const auto sz = std::filesystem::file_size(platform::longPath(paths.back()), ec);
+             if (!ec) bytes += (long long)sz;
+             else {
+-                const auto bs = std::filesystem::file_size(paths.back().substr(0, paths.back().size() - 4) + ".fsb", ec);
++                const auto bs = std::filesystem::file_size(platform::longPath(paths.back().substr(0, paths.back().size() - 4) + ".fsb"), ec);
+                 if (!ec) bytes += (long long)bs * 16;
+             }
+         }
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -166,7 +166,8 @@
+ # Lossless file compression (platform/FileCompression.h): compress -> decompress byte-identical, twin reads.
+ if(WIN32)
+     add_executable(wfc_compression_tests ${CMAKE_SOURCE_DIR}/tests/CompressionTests.cpp
+-                   ${CMAKE_SOURCE_DIR}/src/platform/win32/Win32FileCompression.cpp)
++                   ${CMAKE_SOURCE_DIR}/src/platform/win32/Win32FileCompression.cpp
++                   ${CMAKE_SOURCE_DIR}/src/platform/win32/LongPath.cpp)
+     target_include_directories(wfc_compression_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+     set_target_properties(wfc_compression_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+     target_link_options(wfc_compression_tests PRIVATE -static)
+--- a/tools/fidelity/CMakeLists.txt
++++ b/tools/fidelity/CMakeLists.txt
+@@ -21,7 +21,7 @@
+ # Product sources some trees add to the harness link (Systems pass 5/6: the controller and character
+ # reference the mixer and pickup presentation). Added only when the tree has them, so one harness
+ # builds against every branch.
+-foreach(_opt src/game/SoundMixer.cpp src/game/PickupPresentation.cpp src/game/ChassisDef.cpp src/platform/win32/Win32FileCompression.cpp)
++foreach(_opt src/game/SoundMixer.cpp src/game/PickupPresentation.cpp src/game/ChassisDef.cpp src/platform/win32/Win32FileCompression.cpp src/platform/win32/LongPath.cpp)
+     if(EXISTS "${CMAKE_SOURCE_DIR}/${_opt}")
+         target_sources(wfc_fidelity PRIVATE "${CMAKE_SOURCE_DIR}/${_opt}")
+     endif()
+--- /dev/null
++++ b/tools/systems/longpath_test.cpp
+@@ -0,0 +1,77 @@
++// platform::longPath test (Systems; not part of the CMake build). Builds a > 300-char directory chain under <work dir>, then:
++// short paths come back unchanged; a long path writes / reads / sizes / exists through longPath (ifstream, ofstream,
++// std::filesystem, _wfopen, GetFileAttributesW); the narrow open of the same path fails (the bug); the .xpr-aware data
++// reader reads it; an FSB bank decodes through FsbDecode's wide FILE*; GDI+ loads a PNG through the \\?\ path (decides
++// whether Win32Image may use it).
++// Build (repo root): clang++ -std=c++17 -O1 -Isrc -DWFC_VGMSTREAM=1 -Ithird_party/vgmstream/src tools/systems/longpath_test.cpp
++//   src/platform/win32/LongPath.cpp src/platform/win32/Win32FileCompression.cpp src/platform/win32/FsbDecode.cpp
++//   <libwfc_vgmstream.a + FFmpeg import libs> -lgdiplus -lole32 -lcabinet -static -o longpath_test.exe
++// Run: longpath_test.exe <work dir> <a .fsb> <a .png>
++#include "platform/FileCompression.h"
++#include "platform/FsbDecode.h"
++#include "platform/LongPath.h"
++
++#include <windows.h>
++#include <gdiplus.h>
++
++#include <cstdio>
++#include <filesystem>
++#include <fstream>
++#include <string>
++#include <vector>
++
++static int fails = 0;
++static void check(bool ok, const char* what) { std::printf("%s  %s\n", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; }
++
++int main(int argc, char** argv) {
++    if (argc < 4) { std::printf("usage: longpath_test <work dir> <fsb> <png>\n"); return 2; }
++    namespace fs = std::filesystem;
++    const std::string base = argv[1];
++
++    // short paths: unchanged
++    check(platform::longPath("rel/dir/file.json").wstring() == L"rel/dir/file.json", "short relative path unchanged");
++    check(platform::longPath("F:/Transformers Rebuild/x.json").wstring() == L"F:/Transformers Rebuild/x.json", "short absolute path unchanged");
++    check(platform::longPath("\\\\?\\C:\\x").wstring() == L"\\\\?\\C:\\x", "prefixed path unchanged");
++
++    // a long directory chain (each level 40 chars)
++    std::string dir = base;
++    for (int i = 0; i < 7; ++i) dir += "/level_" + std::to_string(i) + "_abcdefghijklmnopqrstuvwxyz0123";
++    std::error_code ec;
++    fs::create_directories(platform::longPath(dir), ec);
++    check(!ec, "create a > 300-char directory chain through longPath");
++    const std::string file = dir + "/payload_with_a_long_name_for_the_test.bin";
++    std::printf("      path length %zu, longPath -> %ls...\n", file.size(), platform::longPath(file).wstring().substr(0, 8).c_str());
++    check(file.size() > 300, "test path is longer than MAX_PATH");
++    std::vector<char> data(4096); for (size_t i = 0; i < data.size(); ++i) data[i] = (char)(i * 7 + 3);
++    { std::ofstream o(platform::longPath(file), std::ios::binary); o.write(data.data(), (std::streamsize)data.size()); }
++    { std::ifstream in(platform::longPath(file), std::ios::binary); std::vector<char> back((std::istreambuf_iterator<char>(in)), {});
++      check(back == data, "ofstream / ifstream round trip"); }
++    check(fs::file_size(platform::longPath(file), ec) == data.size() && !ec, "std::filesystem::file_size");
++    check(fs::exists(platform::longPath(file), ec), "std::filesystem::exists");
++    check(GetFileAttributesW(platform::longPath(file).c_str()) != INVALID_FILE_ATTRIBUTES, "GetFileAttributesW");
++    if (FILE* f = _wfopen(platform::longPath(file).c_str(), L"rb")) { std::fclose(f); check(true, "_wfopen"); } else check(false, "_wfopen");
++    { std::ifstream narrow(file, std::ios::binary); check(!narrow, "narrow ifstream of the same path fails (the bug the helper fixes)"); }
++    { std::vector<uint8_t> out; check(platform::readFileMaybeCompressed(file, out) && out.size() == data.size(), "readFileMaybeCompressed (data reader)");
++      check(platform::dataFileSize(file) == (long long)data.size(), "dataFileSize"); }
++
++    // FSB through FsbDecode (wide FILE* -> libvgmstream)
++    const std::string fsb = dir + "/bank.fsb";
++    check(CopyFileW(platform::longPath(argv[2]).c_str(), platform::longPath(fsb).c_str(), FALSE) != 0, "copy an FSB into the long dir");
++    { std::vector<int16_t> a, b; int ca = 0, ra = 0, cb = 0, rb = 0;
++      const bool okShort = platform::decodeFsb(argv[2], a, ca, ra), okLong = platform::decodeFsb(fsb, b, cb, rb);
++      check(okShort && okLong && a == b && ca == cb && ra == rb, "decodeFsb: long path decodes identically to the original"); }
++
++    // GDI+ with the \\?\ path (Win32Image)
++    const std::string png = dir + "/image.png";
++    check(CopyFileW(platform::longPath(argv[3]).c_str(), platform::longPath(png).c_str(), FALSE) != 0, "copy a PNG into the long dir");
++    Gdiplus::GdiplusStartupInput gi; ULONG_PTR tok = 0; Gdiplus::GdiplusStartup(&tok, &gi, nullptr);
++    { Gdiplus::Bitmap ref(platform::longPath(argv[3]).c_str()), lng(platform::longPath(png).c_str());
++      const bool ok = ref.GetLastStatus() == Gdiplus::Ok && lng.GetLastStatus() == Gdiplus::Ok && ref.GetWidth() == lng.GetWidth();
++      std::printf("      GDI+ status short %d, long %d\n", (int)ref.GetLastStatus(), (int)lng.GetLastStatus());
++      check(ok, "GDI+ Bitmap from a \\\\?\\ path"); }
++    Gdiplus::GdiplusShutdown(tok);
++
++    fs::remove_all(platform::longPath(base + "/level_0_abcdefghijklmnopqrstuvwxyz0123"), ec);
++    std::printf("%s (%d failed)\n", fails ? "FAIL" : "PASS", fails);
++    return fails ? 1 : 0;
++}

@@ -57,11 +57,11 @@ Priority A: long data paths (asset-relative names under a data root). These are 
 | render/gl/WfcPipeline.cpp:37 (readText) | JSON under render data / HD root (+ :627, :629, :1247 probes) | Rendering |
 | assets/Gltf.cpp:19 | glTF / GLB by path (content meshes) | Rendering |
 | platform/win32/Win32FileCompression.cpp:49 (readAll), :94 | readDataFile / dataFileSize choke point: plain file then its .xpr twin (+4 chars). SkinnedModel and others go through it | Systems |
-| platform/win32/Win32Audio.cpp:110 | WAV reads | Systems |
+| platform/win32/Win32Audio.cpp:110, :63 (fileExists: GetFileAttributesA) | WAV reads, bank / WAV existence (the :63 site was missed in the first version) | Systems |
 | game/SoundCues.cpp:314-315 (fopen), :493 / :496 / :556 / :559 (filesystem::file_size) | localized-wave twin probes, FSB bank sizes | Systems |
 | platform/win32/FsbDecode.cpp:38 | libvgmstream libstreamfile_open_from_stdio(path) (a narrow fopen inside the library) | Systems |
-| platform/win32/Win32Image.cpp:42 | WIC decoder from a wide path (UTF-8 widened correctly, no \\?\) | Systems |
-| platform/win32/Win32Movie.cpp:22 | Media Foundation source from a wide path: widened byte-by-byte (not UTF-8), no \\?\ | Systems |
+| platform/win32/Win32Image.cpp:42 | GDI+ decoder (Bitmap from a wide path; UTF-8 widened correctly, no \\?\; GDI+ accepts \\?\, tested) | Systems |
+| platform/win32/Win32Movie.cpp:22, Win32MovieAudio.cpp:59 | Media Foundation source from a wide path. CORRECTION: these already widen from UTF-8 (the first version said byte-by-byte, confusing them with QaPanel's UI-text widen). Movie paths are short (~60 chars under F:) and MF URL handling of \\?\ is untested: left unchanged | Systems |
 | ui/gfx/MovieDef.cpp:715 | SWF movies | Frontend / UI |
 | frontend/FrontendRuntime.cpp:525 (filesystem::exists robot glTF), :1055 / :1068 / :1089 (movies .mkv) | content probes / movie paths | Frontend |
 
@@ -94,3 +94,22 @@ replaced by one over a FILE* opened with _wfopen(longPath) (or a custom libstrea
 3. Frontend / Gameplay: B sites when convenient (one-line changes).
 Proof: verify_slim on the M3 package in place (no -SubstDrive, the 269-char case) must PASS with "HD texture pack
 available: 2244"; package FILELOG unchanged; byte-identical frames (presentation unaffected).
+
+## 5. Done (Systems, 2026-10-11): docs/handoff/SYSTEMS_LONGPATH.patch + SYSTEMS_LONGPATH_RENDER.patch (09c 03ab786)
+
+- platform::longPath (src/platform/LongPath.h, win32/LongPath.cpp): UTF-8 -> UTF-16 (ANSI code page if not valid UTF-8), the
+  \\?\ prefix only when the full path reaches MAX_PATH - 12; shorter / relative / already-prefixed paths and failures unchanged.
+- Systems sites: Win32FileCompression readAll + dataFileSize (the readDataFile / .xpr choke point), Win32Audio (WAV read +
+  fileExists), SoundCues twin probe (_wfopen through longPath: still a real open, so WFC_FILELOG logs it as before; an
+  is_regular_file probe would have hidden ~600 probe opens from the package verification) and the four file_size calls,
+  FsbDecode (the bank opened with _wfopen and handed to libvgmstream: libstreamfile_open_from_file; same-name reopens dup
+  the descriptor on this toolchain), Win32Image (GDI+ through longPath). CMake: LongPath.cpp added to wfc_compression_tests
+  and the fidelity harness's optional sources.
+- Rendering's three long texture opens (for review): WfcPipeline HD row check, decodeOriginalTop, the DDS / HD read.
+- Proof: tools/systems/longpath_test (366-char path: write / read / size / exists / attributes / _wfopen / data reader /
+  FSB decode identical / GDI+ via \\?\; the narrow open fails) 18 / 18; verify_slim -Strict IN PLACE (no -SubstDrive, the
+  260-269-char case) with the patched exe: PASS on Streets / Gorge / Debris, "HD texture pack available: 2244", open counts
+  as before; lockstep (WFC_LOCKSTEP + EXACT) base vs patched, 64p bot, frontend flow: Rust 25 / 25 and Gorge 25 / 25 frames
+  identical, SIMHASH identical over 3002 steps, 0 [error].
+- Not changed: Media Foundation (already UTF-8; short paths), the priority-B / C sites, Rendering's other A sites
+  (readText, Gltf: theirs to convert with the helper).
