@@ -145,10 +145,19 @@ void World::load(render::IRenderer& renderer) {
         // [integration M08e] Per-chassis vehicle FX (Systems VehicleFxDriver) through Rendering's particle runtime; bound, the
         // hand-made Optimus vehicle FX turn off (nothing drawn twice). The renderer outlives this World.
         VehicleFxDriver::Runtime rt;
-        rt.spawnAt = [&renderer](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.spawnParticleEffect(t, p, f, u); };
-        rt.setTransform = [&renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.setParticleEffectTransform(h, p, f, u); };
-        rt.setParam = [&renderer](int h, const std::string& n, const float v[4]) { return renderer.setParticleEffectParam(h, n, v); };
-        rt.stop = [&renderer](int h) { renderer.stopParticleEffect(h); };
+        if (fxDirect()) {   // WFC_FXDIRECT=1: the old direct calls (the driver ticks in the async step: races with endFrame)
+            rt.spawnAt = [&renderer](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.spawnParticleEffect(t, p, f, u); };
+            rt.setTransform = [&renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.setParticleEffectTransform(h, p, f, u); };
+            rt.setParam = [&renderer](int h, const std::string& n, const float v[4]) { return renderer.setParticleEffectParam(h, n, v); };
+            rt.stop = [&renderer](int h) { renderer.stopParticleEffect(h); };
+        } else {
+            // [Systems, FX race fix] The driver ticks in the step's background part (tickVehicleBoost), which overlaps the renderer's
+            // endFrame: every call goes through the step's FX deferral (virtual ids; on the worker the ops run at the next join).
+            rt.spawnAt = [this](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return fxStepSpawnPlain(t, p, f, u); };
+            rt.setTransform = [this](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { fxStepMove(h, p, f, u); return true; };
+            rt.setParam = [this](int h, const std::string& n, const float v[4]) { fxStepParam(h, n, v); return true; };
+            rt.stop = [this](int h) { fxStepStop(h); };
+        }
         setVehicleFxRuntime(rt);
     }
     // [Systems M08e] With Rendering's runtime (agents/rendering 38c9ecf / e15862f):
@@ -307,7 +316,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             if (h >= 0) renderer.setParticleEffectPooled(h);   // tracers: pooled
             return h;
         },
-        [&renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.setParticleEffectTransform(h, p, f, u); }});
+        // [Systems, FX race fix] WeaponFx::tick (follow-the-muzzle transforms) runs in the step's background part: deferred to the join
+        [this, &renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
+            if (fxDirect()) return renderer.setParticleEffectTransform(h, p, f, u);
+            presentHook([&renderer, h, p, f, u] { renderer.setParticleEffectTransform(h, p, f, u); });
+            return true;
+        }});
     core::loadYield("World: effects");
     fx_.loadMeshes(renderer, root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
@@ -6490,6 +6504,7 @@ void World::runFxOp(const FxOp& op) {
     if (op.kind == 0) {
         const int h = fxSpawn(*renderer_, op.tmpl, op.p, op.f, op.u, 0);
         if (h < 0) return;
+        if (op.plain) { fxReal_[op.vid] = h; return; }   // vehicle FX: the driver sets its own parameters
         if (op.explosion) fxPooled(*renderer_, h, 0);   // HmProjectile ExplosionPSC via EmitterPool (flight FX: owned)
         fxTeamParam(*renderer_, h, op.team, 0);
         if (op.explosion) ++projectileFxExplosions_;
@@ -6499,7 +6514,21 @@ void World::runFxOp(const FxOp& op) {
     auto it = fxReal_.find(op.vid);
     if (it == fxReal_.end()) return;
     if (op.kind == 1) fxMove(*renderer_, it->second, op.p, op.f, op.u, 0);
+    else if (op.kind == 3) renderer_->setParticleEffectParam(it->second, op.tmpl, op.v);   // tmpl holds the parameter name
     else { fxStop(*renderer_, it->second, 0); fxReal_.erase(it); }
+}
+
+bool World::fxDirect() { static const bool on = std::getenv("WFC_FXDIRECT") != nullptr; return on; }
+int World::fxStepSpawnPlain(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
+    if (!renderer_ || !fxApi<render::IRenderer>(0)) return -1;
+    FxOp op; op.kind = 0; op.plain = true; op.vid = fxNextVid_++; op.tmpl = tmpl; op.p = p; op.f = f; op.u = u;
+    if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
+    return op.vid;
+}
+void World::fxStepParam(int vid, const std::string& name, const float v[4]) {
+    if (!renderer_ || vid < 0) return;
+    FxOp op; op.kind = 3; op.vid = vid; op.tmpl = name; std::copy(v, v + 4, op.v);
+    if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
 }
 
 void World::projectileFxStart(Projectile& p) {

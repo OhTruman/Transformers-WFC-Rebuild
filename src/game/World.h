@@ -592,12 +592,18 @@ public:
     int projectileFxSpawned_ = 0, projectileFxExplosions_ = 0;   // diagnostics (WFC_PROJFXTEST)
     // Renderer particle calls made by the step (projectile flight / explosion): World-side ids mapped to renderer handles. While a
     // background part runs they are queued and replayed in order at the join (the renderer is main-thread only); else immediate.
-    struct FxOp { int kind = 0; int vid = -1; std::string tmpl; core::Vec3 p{0, 0, 0}, f{0, 0, 0}, u{0, 0, 0}; int team = -1; bool explosion = false; };
+    // kind 0 spawn (plain: no team / pool / projectile counters - vehicle FX), 1 move, 2 stop, 3 param (name + v)
+    struct FxOp { int kind = 0; int vid = -1; std::string tmpl; core::Vec3 p{0, 0, 0}, f{0, 0, 0}, u{0, 0, 0}; int team = -1; bool explosion = false;
+                  bool plain = false; float v[4] = {0, 0, 0, 0}; };
     std::vector<FxOp> fxOps_;
     int pellet_ = 0;
     std::map<int, int> fxReal_;
     int fxNextVid_ = 0;
     int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
+    // The VehicleFxDriver runtime (Systems, FX race fix): spawn / param through the same deferral (virtual ids, main-thread ops).
+    int fxStepSpawnPlain(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
+    void fxStepParam(int vid, const std::string& name, const float v[4]);
+    static bool fxDirect();   // WFC_FXDIRECT=1: the runtimes call the renderer directly (the old, racy path; A/B only)
     void fxStepMove(int vid, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
     void fxStepStop(int vid);
     void runFxOp(const FxOp& op);

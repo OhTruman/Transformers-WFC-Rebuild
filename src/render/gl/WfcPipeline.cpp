@@ -5444,11 +5444,11 @@ void Pipeline::pawnOcclusionResults() {
             if (f < 0) return false;
             const int slot = f % 4;
             if (po.qFrame[slot] != f) return false;
-            // WFC_LOCKSTEP (deterministic captures): wait for the result instead of treating "not ready yet" as visible, so the
+            // WFC_LOCKSTEP_EXACT (frame-exact image captures, with WFC_LOCKSTEP): wait for the result instead of treating "not ready yet" as visible, so the
             // occluded state - and through drawOwnerRenderAge the weapon-FX relevance - does not depend on how far the GPU is behind.
-            static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+            static const bool exact = std::getenv("WFC_LOCKSTEP_EXACT") != nullptr;   // a GPU sync per query: not in timing rows
             GLint avail = 0;
-            if (!lockstep) {
+            if (!exact) {
                 GetQueryObjectiv(po.q[slot], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &avail);
                 if (!avail) return false;
             }
