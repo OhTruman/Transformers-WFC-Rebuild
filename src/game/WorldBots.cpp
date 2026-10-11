@@ -993,6 +993,7 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
         if ((b.aimErrTimer -= dt) <= 0.0f) {
             b.aimErrTimer = b.frange(0.35f, 0.8f);
             const float settle = std::max(0.4f, 1.0f - b.targetVisibleFor * 0.25f);
+            b.aimErrSettle = settle;
             const float r = dist * std::tan(sk.aimErrorDeg * 0.0174533f) * settle;
             b.aimErr = core::Vec3{b.frange(-1, 1), b.frange(-0.6f, 0.6f), b.frange(-1, 1)} * r;
         }
@@ -1056,6 +1057,13 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
         const int bin = dist < 10.0f ? 0 : dist < 25.0f ? 1 : dist < 50.0f ? 2 : 3;
         const core::Vec3 toTrue = core::normalize(targetable(*t) - eye);
         b.aimErrSum[(size_t)bin] += std::acos(core::clampf(core::dot(aimDir, toTrue), -1.0f, 1.0f)) * 57.29578; ++b.aimErrN[(size_t)bin];
+        // Split: noise = the skill offset (aim point vs the led target), turn lag = aim vs the aim point; raw = noise / settle (the draw
+        // itself: identical aim function -> equal for both AIs); time on target drives settle (sustained tracking shrinks the offset).
+        core::Vec3 led = targetable(*t);
+        if (w->projectile() && w->projSpeed > 1.0f) led = led + t->velocity() * (dist / w->projSpeed);
+        const float noise = std::acos(core::clampf(core::dot(toT, core::normalize(led - eye)), -1.0f, 1.0f)) * 57.29578f;
+        double* ap = &b.aimParts[(size_t)bin * 4];
+        ap[0] += noise; ap[1] += std::acos(core::clampf(core::dot(aimDir, toT), -1.0f, 1.0f)) * 57.29578; ap[2] += noise / b.aimErrSettle; ap[3] += b.targetVisibleFor;
     }
     // Fire along the eased aim (the error is in where the bot looks, not in a second random draw; spread applies on top).
     botFire(o, b, *w, eye + aimDir * std::max(1.0f, dist));
@@ -1943,10 +1951,10 @@ void World::tickBots(float dt) {
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
-            const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut; const std::array<double, 4> aes = b.aimErrSum; const std::array<int, 4> aen = b.aimErrN;
+            const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut; const std::array<double, 4> aes = b.aimErrSum; const std::array<int, 4> aen = b.aimErrN; const std::array<double, 16> apa = b.aimParts;
             const std::array<int, 36> ds = b.diffShots, dh = b.diffHits; const double as = b.angSum, ss = b.selfSum;
             b = BotBrain{};
-            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.tvShots = tvs; b.tvHits = tvh; b.traceOut = tro; b.aimErrSum = aes; b.aimErrN = aen; b.angSum = as; b.selfSum = ss;
+            b.rangeShots = rs; b.rangeHits = rh; b.diffShots = ds; b.diffHits = dh; b.tvShots = tvs; b.tvHits = tvh; b.traceOut = tro; b.aimErrSum = aes; b.aimErrN = aen; b.aimParts = apa; b.angSum = as; b.selfSum = ss;
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;

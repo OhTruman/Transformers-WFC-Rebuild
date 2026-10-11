@@ -5761,7 +5761,7 @@ void Application::runAiDuel() {
     long beh[2][9] = {{0}};   // kills, kills from behind, covers, flanks, hunts, hunts from sound, retreats, pickup trips, regen breaks
     double cohSum = 0.0, covS = 0.0, engS = 0.0; long cohN = 0;
     long flD = 0, mateH = 0, farS[5] = {0, 0, 0, 0, 0};
-    long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}}, aeN[2][4] = {{0}}; double aeS[2][4] = {{0}};
+    long tvS[2][16] = {{0}}, tvH[2][16] = {{0}}, tro[2][20] = {{0}}, aeN[2][4] = {{0}}; double aeS[2][4] = {{0}}, aeP[2][16] = {{0}};
     long dfS[2][36] = {{0}}, dfH[2][36] = {{0}}, cohHist[100] = {0}, epi[4] = {0}; double angS[2] = {0.0, 0.0}, selfS[2] = {0.0, 0.0};   // 25-50 m shot difficulty cells per side
     long rngS[2][4] = {{0}}, rngH[2][4] = {{0}}, cohBin[4] = {0}, cov[5] = {0}, cohSet[3] = {0}; double cohSetSum = 0.0;   // hitscan traces / hits by range per side; squad distance bins + fresh   // [Smart, Classic] shots, hits, vehicle shots, grenades, melees, abilities, deaths, stucks
     for (int seed = s0; seed <= s1; ++seed) {
@@ -5806,6 +5806,7 @@ void Application::runAiDuel() {
                 for (int k = 0; k < 16; ++k) { tvS[side][k] += bb.tvShots[(size_t)k]; tvH[side][k] += bb.tvHits[(size_t)k]; }
                 for (int k = 0; k < 20; ++k) tro[side][k] += bb.traceOut[(size_t)k];
                 for (int k = 0; k < 4; ++k) { aeS[side][k] += bb.aimErrSum[(size_t)k]; aeN[side][k] += bb.aimErrN[(size_t)k]; }
+                for (int k = 0; k < 16; ++k) aeP[side][k] += bb.aimParts[(size_t)k];
                 angS[side] += bb.angSum; selfS[side] += bb.selfSum;
                 if ((size_t)bb.player < world_.match().players().size()) st[side][6] += world_.match().players()[(size_t)bb.player].deaths;
             }
@@ -5861,6 +5862,12 @@ void Application::runAiDuel() {
                 ap += (size_t)std::snprintf(al + ap, sizeof al - ap, " %s %.2f / %.2f;", bandN[band], aeN[0][band] ? aeS[0][band] / aeN[0][band] : 0.0,
                                             aeN[1][band] ? aeS[1][band] / aeN[1][band] : 0.0);
             LOG_INFO("AIDUEL aim error at fire (deg, Smart / Classic):%s", al);
+            for (int band = 0; band < 4; ++band) {
+                const double n0 = aeN[0][band] ? (double)aeN[0][band] : 1.0, n1 = aeN[1][band] ? (double)aeN[1][band] : 1.0;
+                const double* p0 = &aeP[0][band * 4]; const double* p1 = &aeP[1][band * 4];
+                LOG_INFO("AIDUEL aim split %s (Smart / Classic): noise %.2f / %.2f deg, turn lag %.2f / %.2f deg, raw noise draw %.2f / %.2f deg, time on target at fire %.2f / %.2f s",
+                         bandN[band], p0[0] / n0, p1[0] / n1, p0[1] / n0, p1[1] / n1, p0[2] / n0, p1[2] / n1, p0[3] / n0, p1[3] / n1);
+            }
         }
         for (int band = 0; band < 4; ++band) {   // trace outcomes (% of the band's traces), Smart / Classic
             char ol[300] = ""; size_t op = 0;
