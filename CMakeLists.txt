@@ -135,7 +135,7 @@ endif()
 
 # Headless frontend / game-flow tests (docs/FRONTEND.md): catalog, URLs, UI controller, boot -> match -> return.
 file(GLOB FRONTEND_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp")
-add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES}
+add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES} ${CMAKE_SOURCE_DIR}/src/platform/win32/LongPath.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
 target_include_directories(wfc_frontend_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(wfc_frontend_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
@@ -155,7 +155,7 @@ endif()
 
 # GFx runtime headless dump (tools/frontend/GfxDump.cpp).
 file(GLOB GFX_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/ui/gfx/*.cpp")
-add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES}
+add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES} ${CMAKE_SOURCE_DIR}/src/platform/win32/LongPath.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/GfxHost.cpp ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
 target_include_directories(wfc_gfxdump PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(wfc_gfxdump PRIVATE -Wall -Wextra -Wno-unused-parameter)
