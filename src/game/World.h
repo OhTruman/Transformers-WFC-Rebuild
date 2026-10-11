@@ -1,6 +1,7 @@
 // Clean-room reconstruction — the world: owns the level, player, and dynamic actors.
 #pragma once
 #include <array>
+#include <atomic>
 #include <functional>
 #include <deque>
 #include <memory>
@@ -598,7 +599,7 @@ public:
     std::vector<FxOp> fxOps_;
     int pellet_ = 0;
     std::map<int, int> fxReal_;
-    int fxNextVid_ = 0;
+    std::atomic<int> fxNextVid_{0};   // virtual FX ids: fxStepSpawn* may run on the worker and (outside a remainder) the main thread
     int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
     // The VehicleFxDriver runtime (Systems, FX race fix): spawn / param through the same deferral (virtual ids, main-thread ops).
     int fxStepSpawnPlain(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
