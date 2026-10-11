@@ -1,5 +1,6 @@
 #include "frontend/DataPaths.h"
 #include "core/Log.h"
+#include "frontend/OpenPath.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -32,7 +33,7 @@ std::string resolve() {
     const std::vector<std::string> candidates = {exe + "/../../data/frontend", exe + "/../../../data/frontend", exe + "/data/frontend"};
     for (const std::string& c : candidates) {
         std::error_code ec;
-        if (std::filesystem::is_regular_file(c + "/profile_defaults.json", ec)) {
+        if (std::filesystem::is_regular_file(openPath(c + "/profile_defaults.json"), ec)) {
             const std::filesystem::path p = std::filesystem::weakly_canonical(c, ec);
             return ec ? c : p.generic_string();
         }

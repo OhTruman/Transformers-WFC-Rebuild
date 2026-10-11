@@ -5,6 +5,7 @@
 #include "core/Log.h"
 #include "frontend/DataPaths.h"
 #include "frontend/FlowTrace.h"
+#include "frontend/OpenPath.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -19,7 +20,7 @@ namespace {
 // Extras movies that unlock with them locked on a fresh profile.
 std::map<std::string, std::string> loadDefaults() {
     std::map<std::string, std::string> d;
-    std::ifstream f(frontendDataFile("profile_defaults.json"), std::ios::binary);
+    std::ifstream f(openPath(frontendDataFile("profile_defaults.json")), std::ios::binary);
     std::stringstream ss;
     ss << f.rdbuf();
     assets::Json j;

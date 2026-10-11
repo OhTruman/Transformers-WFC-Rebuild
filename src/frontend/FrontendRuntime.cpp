@@ -2,6 +2,7 @@
 #include "assets/Json.h"
 #include "core/FrameProfile.h"
 #include "frontend/DataPaths.h"
+#include "frontend/OpenPath.h"
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -16,15 +17,6 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
-
-// Systems' platform::longPath (UTF-8 -> UTF-16, \\?\ near MAX_PATH; short paths open as before) where the tree has
-// it; otherwise the plain narrow path, exactly the old open.
-#if __has_include("platform/LongPath.h")
-#include "platform/LongPath.h"
-static std::filesystem::path openPath(const std::string& p) { return platform::longPath(p); }
-#else
-static std::filesystem::path openPath(const std::string& p) { return std::filesystem::path(p); }
-#endif
 
 namespace frontend {
 
@@ -263,7 +255,7 @@ bool FrontendRuntime::init() {
     roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
     {   // PC ADAPTATION chassis XP unlocks (user decision): chassis id -> level of the chassis' own specialty
         assets::Json j;
-        std::ifstream f(frontendDataFile("chassis_xp_unlocks.json"));
+        std::ifstream f(openPath(frontendDataFile("chassis_xp_unlocks.json")));
         std::stringstream ss; ss << f.rdbuf();
         if (f && assets::Json::parse(ss.str(), j))
         {
@@ -282,7 +274,7 @@ bool FrontendRuntime::init() {
     {   // Map-aware Extended bot counts (user decision, PC ADAPTATION): AssetTools manifests/maps/recommended_players.json
         // {"maps": {"<MapId>": {"perSide", "ffa", "modes": {"<ModeTag>": {"perSide"?, "ffa"?}}}}}.
         assets::Json j;
-        std::ifstream f(Catalog::defaultManifestRoot() + "/maps/recommended_players.json");
+        std::ifstream f(openPath(Catalog::defaultManifestRoot() + "/maps/recommended_players.json"));
         std::stringstream ss; ss << f.rdbuf();
         std::map<int, GameFlow::RecommendedPlayers> rec;
         if (f && assets::Json::parse(ss.str(), j))

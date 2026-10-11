@@ -1,4 +1,5 @@
 #include "frontend/Characters.h"
+#include "frontend/OpenPath.h"
 
 #include <random>
 #include "assets/Json.h"
@@ -11,7 +12,7 @@
 namespace frontend {
 
 bool CharacterRoster::load(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     if (!f) { LOG_WARN("frontend roster: %s missing (character selection has no characters)", path.c_str()); return false; }
     std::stringstream ss;
     ss << f.rdbuf();
@@ -56,7 +57,7 @@ bool CharacterRoster::load(const std::string& path) {
 }
 
 void CharacterRoster::loadAuthored(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     std::stringstream ss;
     ss << f.rdbuf();
     assets::Json j;
@@ -170,7 +171,7 @@ bool CharacterRoster::save(const std::string& path) const {
 }
 
 void CharacterRoster::loadSaved(const std::string& path) {
-    std::ifstream f(path);
+    std::ifstream f(openPath(path));
     std::string line;
     CharacterPreset* cur = nullptr;
     while (std::getline(f, line)) {

@@ -1,6 +1,7 @@
 #include "frontend/FrontendScene.h"
 #include "assets/Json.h"
 #include "frontend/FlowTrace.h"
+#include "frontend/OpenPath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -84,7 +85,7 @@ void FrontendScene::evalCurve(const std::vector<Key>& k, double t, double out[3]
 }
 
 bool FrontendScene::load(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     if (!f) return false;
     std::stringstream ss;
     ss << f.rdbuf();

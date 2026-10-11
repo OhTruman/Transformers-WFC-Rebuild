@@ -1,5 +1,6 @@
 #include "frontend/Catalog.h"
 #include "frontend/DataPaths.h"
+#include "frontend/OpenPath.h"
 #include "assets/Json.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -15,13 +16,13 @@ namespace frontend {
 namespace {
 
 bool readJson(const std::string& path, assets::Json& out) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(openPath(path), std::ios::binary);
     if (!f) return false;
     std::stringstream ss; ss << f.rdbuf();
     return assets::Json::parse(ss.str(), out);
 }
 
-bool fileExists(const std::string& path) { std::ifstream f(path, std::ios::binary); return (bool)f; }
+bool fileExists(const std::string& path) { std::ifstream f(openPath(path), std::ios::binary); return (bool)f; }
 // Runtime data may ship compressed: <file> or its ".xpr" twin (platform::kCompressedSuffix, read through
 // platform::readFileMaybeCompressed; Rendering 523fc62).
 bool runtimeFileExists(const std::string& path) { return fileExists(path) || fileExists(path + ".xpr"); }
@@ -94,7 +95,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     // The shipped INT localization files themselves fill what the manifest does not carry (e.g. the HUD's
     // TnDamageType* DeathString templates, TnMessageTextColors-coloured kill feed, game-type messages).
     for (const char* file : {"TransGame", "UIText"}) {
-        std::ifstream f(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + ".int");
+        std::ifstream f(openPath(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + ".int"));
         std::string line, section;
         while (std::getline(f, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -109,7 +110,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     }
 
     for (const char* file : {"TransGame", "UIText", "Engine"}) {
-        std::ifstream f(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + "_360.int");
+        std::ifstream f(openPath(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + "_360.int"));
         std::string line, section;
         while (std::getline(f, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -383,7 +384,7 @@ void Catalog::loadProviders(const std::string& extractedRoot) {
     providers_.clear();
     const std::string cfg = extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/";
     for (const char* file : {"TransCustomization.ini", "TransWeapons.ini", "TransChallenges.ini"}) {
-        std::ifstream f(cfg + file);
+        std::ifstream f(openPath(cfg + file));
         std::string line;
         Provider* cur = nullptr;
         std::string curKind;
@@ -418,7 +419,7 @@ void Catalog::loadProviders(const std::string& extractedRoot) {
 
 void Catalog::loadKeyDescriptions(const std::string& extractedRoot) {
     keyDescriptions_.clear();
-    std::ifstream f(extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/Xe-TransInput.ini");
+    std::ifstream f(openPath(extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/Xe-TransInput.ini"));
     std::string line;
     // KeyDescriptions[i]=(Key="Space") in [TransGame.TnPlayerInput]; TransGame.int [TnPlayerInput] KeyDescriptions[i]=
     // (Description="Jump", Plane="Ascend").
