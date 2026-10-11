@@ -789,6 +789,9 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                         if (collision()->segmentHit(c0, q + core::Vec3{0, 1.0f, 0}, th)) continue;
                         const int cell = botNav_.findCell(q, 3.0f, 60.0f);
                         if (cell < 0) continue;
+                        // Open air below a drop, as on the path: a roof point over the cell is no way down.
+                        const float cellY = botNav_.cells()[(size_t)cell].centroid.y;
+                        if (pos.y - cellY > 2.0f && collision()->segmentHit(q + core::Vec3{0, 0.4f, 0}, core::Vec3{q.x, cellY + 0.5f, q.z}, th)) continue;
                         const float score = hdist(botNav_.cells()[(size_t)cell].centroid, q);
                         if (score < bestScore) { bestScore = score; b.rejoin = q; b.hasRejoin = true; }
                     }

@@ -815,6 +815,8 @@ private:
     bool botSearchVehicle_ = false;
     void botPathFailed(BotBrain& b, bool vehicle);
     void applyWarcry(Character& pc, int self);      // TnAbilityWarcry for any participant
+    // HurtRadius victim test: VisibleCollidingActors (radius damage, the Beacon); see World.cpp.
+    bool radiusVisible(const core::Vec3& origin, const core::Vec3& victimLocation) const;
     void applyShockwave(Character& pc, int self);   // TnAbilityShockwave.Shockwave for any participant
     bool botTryAbility(BotBody o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
