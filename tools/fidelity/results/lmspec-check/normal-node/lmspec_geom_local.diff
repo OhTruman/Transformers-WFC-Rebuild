@@ -1,0 +1,58 @@
+--- "/f/Transformers Rebuild/Rebuild-Rendering/work/re/lmspec_geom.py"	2026-10-12 08:38:10.183970200 -0500
++++ work/lmspec/geom/lmspec_geom.py	2026-10-12 12:21:26.216681000 -0500
+@@ -11,7 +11,8 @@
+ # identified in its code and driven per trial; V_t = UE3 tangent-space camera vector (B = cross(Z, X) * w), no V fit.
+ # Writes lmspec_<map>.json and prints a summary. Usage: lmspec_verify.py MAP [material-substring]
+ import sys, os, re, json, struct, collections, numpy as np
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tools', 'render'))
++sys.path.insert(0, 'F:/Transformers Rebuild/Rebuild-Rendering/tools/render')
++sys.path.insert(0, 'F:/Transformers Rebuild/Rebuild-Experimental/work/lmspec/geom')
+ H = os.path.dirname(os.path.abspath(__file__))
+ import xenos_dis as X, xemu, gl2py
+ from ue3obj import Repo, map_packages
+@@ -169,6 +170,11 @@
+     i = np.arange(n) + 0.5; phi = np.arccos(1 - 2 * i / n); th = np.pi * (1 + 5 ** 0.5) * i
+     return np.stack([np.cos(th) * np.sin(phi), np.sin(th) * np.sin(phi), np.cos(phi)], 1)
+ 
++def _subst(g):                                                      # EXPERIMENTAL: LMS_SUB='old=>new||old2=>new2' GLSL hypothesis test
++    for pr in [q for q in os.environ.get('LMS_SUB', '').split('||') if '=>' in q]:
++        o_, n_ = pr.split('=>', 1); g = g.replace(o_, n_)
++    return g
++
+ def verify(key, v, x, T=48, seed=3):
+     info = v['info']
+     s = X.Shader(blob(x), x['off'])
+@@ -324,7 +330,7 @@
+           mi = dict(base)
+           mi['cameraVector'] = gl2py.g(Vt, T)
+           mi['reflectionVector'] = gl2py.g(np.stack([-Vt[0], -Vt[1], Vt[2]]), T)
+-          o = gl2py.evaluate(v['glsl'], T, slots, mi)
++          o = gl2py.evaluate(_subst(v['glsl']), T, slots, mi)
+           D = np.asarray(getattr(o, 'DiffuseColor', gl2py.g(np.zeros(3), T)))
+           S = np.asarray(getattr(o, 'SpecularColor', gl2py.g(np.zeros(3), T)))
+           P = np.asarray(getattr(o, 'SpecularPower', gl2py.g(15.0, T)))[0]
+@@ -391,6 +397,10 @@
+           out[mode] = {'spec_resid': float(r1[0]), 'fog': float(r1[1]), 'diffuse_only_resid': float(r0[0]),
+                        'K_rms': float(np.sqrt((Kt ** 2).mean()))}
+       m = min(('raw', 'unpacked'), key=lambda k: out[k]['spec_resid'])
++      if os.environ.get('LMS_DUMP'):                                  # EXPERIMENTAL: per-trial dump for the term breakdown
++          D_, S_, P_, N_ = m1
++          np.savez(os.path.join(H, 'dump_%s_%s_%d_r%.4f_%s.npz' % (MAP, key.split('.')[-1], x['off'], out[m]['spec_resid'], ''.join(map(str, combo)))), Kt=res[m], D=D_, S=S_, P=np.broadcast_to(P_, (T,)), N=N_, Vt=Vt,
++                   lmscale=lmscale, fog=out[m]['fog'], vlm=bool(VLM), combo=str(combo), mode=m)
+       Kd, Ks = ours(None)
+       out['best_mode'] = m
+       out['spec_share'] = float(np.sqrt((Ks ** 2).sum() / max(((Kd + Ks) ** 2).sum(), 1e-30)))
+@@ -430,9 +440,13 @@
+     else the master. Its shader map must be in this map's cache (else the material is not used here)."""
+     chain = list(info.get('chain') or [key])
+     own = next((p for p in chain if has_resource(p)), None) or info.get('master')
++    if os.environ.get('LMS_OWNER'): own = os.environ['LMS_OWNER']   # EXPERIMENTAL: force the owner (MIC permutation not cooked)
+     if own and own.lower() in by_owner: return own, by_owner[own.lower()]
++    sm = SHAREMAP.get(key)                                          # EXPERIMENTAL: shared static-permutation map (equal statics)
++    if sm and sm.lower() in by_owner: return sm, by_owner[sm.lower()]
+     return own, []
+ 
++SHAREMAP = json.load(open(os.path.join(H, 'sharemap_%s.json' % MAP))) if os.environ.get('LMS_SHARE') else {}
+ results = {}
+ for key, v in sorted(mats.items()):
+     if FILT and FILT.lower() not in key.lower(): continue
