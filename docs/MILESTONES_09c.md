@@ -92,6 +92,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spins until the GPU finishes; 1440 fullscreen +1.2 ms, 1080w worker +0.43, 4K render +0.35 floor; WGL_NV_DX_interop2 worse).
   Integration decision: GL present stays the default; D3D12 present engages only while FSR / DLSS / FG is on. Fullscreen +0.5 ms
   presentation-mode check folded into the FSR work.
+  FSR 3.1 licensing (Rendering 2026-10-12): the shipped amd_fidelityfx_*_dx12.dll are under AMD's binary licence
+  (redistribution allowed with its notice, no reverse engineering): packages must carry license.md next to the DLLs;
+  the SDK is fetched by tools/render/fetch_ffx_sdk.py, never committed.
   Option A (AFMF 2 driver FG) is a user-side Adrenalin toggle: offer it to the user as a test when they're home.
   D3 licensing: read the NVIDIA RTX SDK terms before shipping D.
 - M6 Modern materials mode (optional).
