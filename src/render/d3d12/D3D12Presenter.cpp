@@ -9,6 +9,7 @@
 #include <windows.h>
 #include <d3d12.h>
 #include <dxgi1_5.h>
+#include <d3d11.h>
 #include <GL/gl.h>
 
 #include "platform/PresentHook.h"
@@ -21,7 +22,14 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
+
+namespace glx { void gpuPrePresent(); }   // GLExt.cpp: the WFC_GPUSTAMPS "(present)" stamp
 
 namespace render {
 namespace {
@@ -42,10 +50,16 @@ typedef void(APIENTRY* PFN_DeleteFramebuffers)(GLsizei, const GLuint*);
 typedef void(APIENTRY* PFN_BindFramebuffer)(GLenum, GLuint);
 typedef void(APIENTRY* PFN_FramebufferTexture2D)(GLenum, GLenum, GLenum, GLuint, GLint);
 typedef void(APIENTRY* PFN_BlitFramebuffer)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
+typedef void* GLsync_;
+typedef GLsync_(APIENTRY* PFN_FenceSync)(GLenum, GLbitfield);
+typedef void(APIENTRY* PFN_WaitSync)(GLsync_, GLbitfield, GLuint64_);
+typedef void(APIENTRY* PFN_DeleteSync)(GLsync_);
+typedef GLenum(APIENTRY* PFN_ClientWaitSync)(GLsync_, GLbitfield, GLuint64_);
+typedef HGLRC(WINAPI* PFN_CreateContextAttribsARB)(HDC, HGLRC, const int*);
 
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutTransferDst = 0x9593 /*GL_LAYOUT_TRANSFER_DST_EXT*/, kLayoutTransferSrc = 0x9592;
-constexpr UINT kBuffers = 2;
+constexpr UINT kMaxBuffers = 3;               // swapchain buffers: buffers_ (WFC_D3D12_BUFFERS, default 2)
 constexpr UINT kRing = 3;                        // shared textures: GL writes one while D3D12 reads another
 
 template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
@@ -58,6 +72,8 @@ struct GlFns {
     PFN_WaitSemaphoreEXT waitSem = nullptr; PFN_SignalSemaphoreEXT signalSem = nullptr;
     PFN_GenFramebuffers genFb = nullptr; PFN_DeleteFramebuffers deleteFb = nullptr; PFN_BindFramebuffer bindFb = nullptr;
     PFN_FramebufferTexture2D fbTex = nullptr; PFN_BlitFramebuffer blit = nullptr;
+    PFN_FenceSync fenceSync = nullptr; PFN_WaitSync waitSync = nullptr; PFN_DeleteSync deleteSync = nullptr;
+    PFN_ClientWaitSync clientWaitSync = nullptr;
     bool load() {
         auto g = [](const char* n) { return (void*)wglGetProcAddress(n); };
         createMem = (PFN_CreateMemoryObjectsEXT)g("glCreateMemoryObjectsEXT"); deleteMem = (PFN_DeleteMemoryObjectsEXT)g("glDeleteMemoryObjectsEXT");
@@ -68,7 +84,62 @@ struct GlFns {
         signalSem = (PFN_SignalSemaphoreEXT)g("glSignalSemaphoreEXT"); genFb = (PFN_GenFramebuffers)g("glGenFramebuffers");
         deleteFb = (PFN_DeleteFramebuffers)g("glDeleteFramebuffers"); bindFb = (PFN_BindFramebuffer)g("glBindFramebuffer");
         fbTex = (PFN_FramebufferTexture2D)g("glFramebufferTexture2D"); blit = (PFN_BlitFramebuffer)g("glBlitFramebuffer");
+        fenceSync = (PFN_FenceSync)g("glFenceSync"); waitSync = (PFN_WaitSync)g("glWaitSync"); deleteSync = (PFN_DeleteSync)g("glDeleteSync");
+        clientWaitSync = (PFN_ClientWaitSync)g("glClientWaitSync");
         return createMem && importMem && texStorageMem && genSem && importSem && semParam && waitSem && signalSem && genFb && bindFb && fbTex && blit;
+    }
+};
+
+// M5 item 1 diagnostics (WFC_D3D12_INTEROP2PROBE=1): the per-frame CPU cost of the WGL_NV_DX_interop2 route - a D3D11
+// texture registered with GL, locked, the GL back buffer blitted into it, unlocked - next to the external-semaphore
+// signal. Measurement only: nothing consumes the D3D11 texture.
+struct Interop2Probe {
+    typedef HANDLE(WINAPI* PFN_Open)(void*);
+    typedef HANDLE(WINAPI* PFN_Register)(HANDLE, void*, GLuint, GLenum, GLenum);
+    typedef BOOL(WINAPI* PFN_Lock)(HANDLE, GLint, HANDLE*);
+    PFN_Open open = nullptr; PFN_Register reg = nullptr; PFN_Lock lock = nullptr, unlock = nullptr;
+    ID3D11Device* dev = nullptr; ID3D11Texture2D* tex = nullptr;
+    HANDLE hDev = nullptr, hObj = nullptr; GLuint glTex = 0, fbo = 0;
+    int w = 0, h = 0; double sum = 0, mx = 0; int n = 0; bool ok = false;
+    bool init(int W, int H, const GlFns& gl) {
+        open = (PFN_Open)(void*)wglGetProcAddress("wglDXOpenDeviceNV");
+        reg = (PFN_Register)(void*)wglGetProcAddress("wglDXRegisterObjectNV");
+        lock = (PFN_Lock)(void*)wglGetProcAddress("wglDXLockObjectsNV");
+        unlock = (PFN_Lock)(void*)wglGetProcAddress("wglDXUnlockObjectsNV");
+        typedef HRESULT(WINAPI * PFN_CreateD3D11)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*, UINT, UINT,
+                                                  ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**);
+        HMODULE m = LoadLibraryW(L"d3d11.dll");
+        auto create = m ? (PFN_CreateD3D11)(void*)GetProcAddress(m, "D3D11CreateDevice") : nullptr;
+        if (!open || !reg || !lock || !unlock || !create) { LOG_WARN("interop2 probe: entry points missing"); return false; }
+        if (FAILED(create(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, nullptr))) return false;
+        D3D11_TEXTURE2D_DESC d{}; d.Width = (UINT)W; d.Height = (UINT)H; d.MipLevels = 1; d.ArraySize = 1;
+        d.Format = DXGI_FORMAT_R8G8B8A8_UNORM; d.SampleDesc.Count = 1; d.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+        if (FAILED(dev->CreateTexture2D(&d, nullptr, &tex))) return false;
+        hDev = open(dev);
+        if (!hDev) { LOG_WARN("interop2 probe: wglDXOpenDeviceNV failed"); return false; }
+        glGenTextures(1, &glTex);
+        hObj = reg(hDev, tex, glTex, GL_TEXTURE_2D, 0x0001 /*WGL_ACCESS_READ_WRITE_NV*/);
+        if (!hObj) { LOG_WARN("interop2 probe: wglDXRegisterObjectNV failed"); return false; }
+        gl.genFb(1, &fbo);
+        w = W; h = H; ok = true;
+        LOG_INFO("interop2 probe: D3D11 texture %dx%d registered with GL", W, H);
+        return true;
+    }
+    void frame(const GlFns& gl) {
+        if (!ok) return;
+        const auto t0 = std::chrono::steady_clock::now();
+        if (!lock(hDev, 1, &hObj)) { ok = false; LOG_WARN("interop2 probe: lock failed"); return; }
+        GLint prevRead = 0, prevDraw = 0;
+        glGetIntegerv(0x8CAA, &prevRead); glGetIntegerv(0x8CA6, &prevDraw);
+        gl.bindFb(0x8CA8, 0); glReadBuffer(GL_BACK);
+        gl.bindFb(0x8CA9, fbo);
+        gl.fbTex(0x8CA9, 0x8CE0, GL_TEXTURE_2D, glTex, 0);
+        gl.blit(0, 0, w, h, 0, h, w, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        gl.bindFb(0x8CA8, (GLuint)prevRead); gl.bindFb(0x8CA9, (GLuint)prevDraw);
+        unlock(hDev, 1, &hObj);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        sum += ms; mx = std::max(mx, ms);
+        if (++n == 300) { LOG_INFO("interop2 probe: lock + blit + unlock (avg / max ms over 300) %.3f / %.2f", sum / 300, mx); sum = mx = 0; n = 0; }
     }
 };
 
@@ -91,7 +162,9 @@ public:
         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
-        for (UINT i = 0; i < kBuffers; ++i)
+        if (const char* e = std::getenv("WFC_D3D12_BUFFERS")) buffers_ = (UINT)std::min(3, std::max(2, std::atoi(e)));
+        if (const char* e = std::getenv("WFC_D3D12_LATENCY")) latency_ = (UINT)std::min(3, std::max(1, std::atoi(e)));
+        for (UINT i = 0; i < buffers_; ++i)
             if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&alloc_[i]))) return false;
         if (FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc_[0], nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&list_))) return false;
         list_->Close();
@@ -101,9 +174,75 @@ public:
         gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
         RECT rc; GetClientRect(hwnd_, &rc);
         if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
-        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable, %s) over the GL renderer (%dx%d)", kBuffers, kRing,
-                 vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", w_, h_);
+        if (std::getenv("WFC_D3D12_WORKER")) startWorker();
+        {   // M5 item 1 diagnostics: is the WGL_NV_DX_interop2 path (lock / unlock instead of an external semaphore) offered?
+            typedef const char*(WINAPI * PFN_GetExtStr)(HDC);
+            auto ges = (PFN_GetExtStr)(void*)wglGetProcAddress("wglGetExtensionsStringARB");
+            const char* ext = ges ? ges(wglGetCurrentDC()) : nullptr;
+            LOG_INFO("D3D12 present: WGL_NV_DX_interop2 %s, WGL_NV_DX_interop %s", ext && std::strstr(ext, "WGL_NV_DX_interop2") ? "available" : "absent",
+                     ext && std::strstr(ext, "WGL_NV_DX_interop ") ? "available" : "absent");
+        }
+        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
+                 vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "", w_, h_);
         return true;
+    }
+    // WFC_D3D12_WORKER=1: the GL semaphore signal (~0.7 ms CPU in the AMD driver, M5 item 1) and the D3D12 copy / present
+    // run on a worker thread with a second GL context sharing the main one's objects; the main thread blits into the ring
+    // slot, fences, flushes and returns. Order: the worker's glWaitSync on the main context's fence (GPU side) before
+    // the signal. At most kRing - 1 frames on the worker (a ring slot is never rewritten before its signal was issued).
+    void startWorker() {
+        HDC dc = wglGetCurrentDC(); HGLRC mainCtx = wglGetCurrentContext();
+        auto cca = (PFN_CreateContextAttribsARB)(void*)wglGetProcAddress("wglCreateContextAttribsARB");
+        const int attrs[] = {0};
+        HGLRC ctx = cca ? cca(dc, mainCtx, attrs) : nullptr;
+        if (!ctx) { ctx = wglCreateContext(dc); if (ctx && !wglShareLists(mainCtx, ctx)) { wglDeleteContext(ctx); ctx = nullptr; } }
+        if (!ctx || !gl_.fenceSync || !gl_.waitSync) { LOG_WARN("D3D12 present: no shared GL context for the worker: in-thread present kept"); return; }
+        workerCtx_ = ctx; workerDc_ = dc;
+        std::atomic<int> ready{0};
+        worker_ = new std::thread([this, &ready] {
+            if (!wglMakeCurrent(workerDc_, workerCtx_)) { ready = -1; return; }
+            gl_.genSem(1, &workerSem_);
+            gl_.importSem(workerSem_, kHandleD3D12Fence, fenceHandle_);
+            ready = 1;
+            workerLoop();
+        });
+        while (ready == 0) std::this_thread::yield();
+        if (ready < 0) { worker_->join(); delete worker_; worker_ = nullptr; LOG_WARN("D3D12 present: worker context not current: in-thread present kept"); }
+        else worker_->detach();
+    }
+    void workerLoop() {
+        for (;;) {
+            Job j;
+            {
+                std::unique_lock<std::mutex> lk(mx_);
+                cv_.wait(lk, [this] { return !jobs_.empty(); });
+                j = jobs_.front();
+                jobs_.pop_front();
+            }
+            // AMD's glSignalSemaphoreEXT busy-spins (SwitchToThread) until the GPU finished the preceding GL work
+            // (Systems' CPU profile, 2026-10-12): wait for it here in the kernel instead, then the signal is immediate
+            if (gl_.clientWaitSync) gl_.clientWaitSync(j.sync, 0, 5000000000ull);
+            else gl_.waitSync(j.sync, 0, ~0ull /*GL_TIMEOUT_IGNORED*/);
+            gl_.deleteSync(j.sync);
+            ++value_;
+            const GLuint64_ v = value_;
+            gl_.semParam(workerSem_, kFenceValue, &v);
+            const GLenum layout = kLayoutTransferSrc;
+            gl_.signalSem(workerSem_, 0, nullptr, 1, &glTex_[j.slot], &layout);
+            glFlush();
+            const auto t1 = std::chrono::steady_clock::now();
+            d3dTail(j.slot, j.t0, t1, j.sp);
+            {
+                std::lock_guard<std::mutex> lk(mx_);
+                --inFlight_;
+            }
+            cv_.notify_all();
+        }
+    }
+    void drainWorker() {
+        if (!worker_) return;
+        std::unique_lock<std::mutex> lk(mx_);
+        cv_.wait(lk, [this] { return inFlight_ == 0; });
     }
 
     // the platform hook: copy the GL back buffer to the shared texture, D3D12 copies + presents
@@ -112,15 +251,19 @@ public:
         const clk::time_point t0 = clk::now();
         RECT rc; GetClientRect(hwnd_, &rc);
         const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
-        if (w != w_ || h != h_) { waitIdle(); if (!resize(w, h)) return false; }
-        const UINT slot = (UINT)(presented_ % kRing);
+        if (w != w_ || h != h_) { drainWorker(); waitIdle(); if (!resize(w, h)) return false; }
+        const UINT slot = (UINT)(mainFrame_++ % kRing);
+        // diagnostics: WFC_D3D12_PREFLUSH=1 submits the frame's GL work first (attribution: is the signal's cost the submission?)
+        static const bool preFlush = std::getenv("WFC_D3D12_PREFLUSH") != nullptr;
+        if (preFlush) glFlush();
         // variants (A/B): WFC_D3D12_NOGLWAIT=1 skips the GL-side semaphore wait (relies on the ring age + the CPU
         // latency wait); WFC_D3D12_NOFLUSH=1 skips glFlush after the signal
         static const bool noGlWait = std::getenv("WFC_D3D12_NOGLWAIT") != nullptr;
         static const bool noFlush = std::getenv("WFC_D3D12_NOFLUSH") != nullptr;
-        // GL waits only until D3D12 finished reading THIS ring slot (kRing frames ago: normally long done)
-        if (readDone_[slot] && !noGlWait) {
-            const GLuint64_ v = readDone_[slot];
+        // GL waits only until D3D12 finished reading THIS ring slot (kRing frames ago: normally long done, then no GL
+        // wait at all: the fence's completed value is a CPU read, and a GPU-side semaphore wait costs ~0.4 ms CPU)
+        if (readDone_[slot] && !noGlWait && fence_->GetCompletedValue() < readDone_[slot]) {
+            const GLuint64_ v = readDone_[slot].load();
             gl_.semParam(sem_, kFenceValue, &v);
             const GLenum layout = kLayoutTransferDst;
             gl_.waitSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
@@ -135,24 +278,60 @@ public:
         gl_.blit(0, 0, w_, h_, 0, h_, w_, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);   // flipped: D3D's origin is top-left
         gl_.bindFb(0x8CA8, (GLuint)prevRead);
         gl_.bindFb(0x8CA9, (GLuint)prevDraw);
+        static const bool probe2 = std::getenv("WFC_D3D12_INTEROP2PROBE") != nullptr;
+        if (probe2) {
+            if (!probe2_.ok && !probe2Tried_) { probe2Tried_ = true; probe2_.init(w_, h_, gl_); }
+            probe2_.frame(gl_);
+        }
         const clk::time_point tB = clk::now();
+        if (worker_) {                                   // hand the signal + D3D12 present to the worker
+            Job j;
+            j.slot = slot; j.t0 = t0;
+            j.sync = gl_.fenceSync(0x9117 /*GL_SYNC_GPU_COMMANDS_COMPLETE*/, 0);
+            glFlush();
+            const clk::time_point tC = clk::now();
+            j.sp[0] = std::chrono::duration<double, std::milli>(tA - t0).count();
+            j.sp[1] = std::chrono::duration<double, std::milli>(tB - tA).count();
+            j.sp[2] = std::chrono::duration<double, std::milli>(tC - tB).count();   // (fence + flush on the main thread)
+            j.sp[3] = 0.0;
+            {
+                std::unique_lock<std::mutex> lk(mx_);
+                // at most kRing - 1 frames on the worker: the slot written now is never one still waiting for its signal
+                cv_.wait(lk, [this] { return inFlight_ < (int)kRing - 1; });
+                jobs_.push_back(j); ++inFlight_;
+            }
+            const double qw = std::chrono::duration<double, std::milli>(clk::now() - tC).count();
+            qwSum_ += qw; qwMax_ = std::max(qwMax_, qw);
+            if (++qwN_ == 300) {
+                LOG_INFO("PRESENT D3D12 worker: main-thread queue wait (avg / max ms over 300) %.3f / %.2f", qwSum_ / 300, qwMax_);
+                qwSum_ = qwMax_ = 0; qwN_ = 0;
+            }
+            cv_.notify_all();
+            return true;
+        }
         ++value_;
         {
+            // variant (A/B): WFC_D3D12_SIGNALNOTEX=1 signals without the texture / layout transition (D3D12 imports keep
+            // their own state; the layout argument is the Vulkan-interop contract)
+            static const bool noTex = std::getenv("WFC_D3D12_SIGNALNOTEX") != nullptr;
             const GLuint64_ v = value_;
             gl_.semParam(sem_, kFenceValue, &v);
             const GLenum layout = kLayoutTransferSrc;
-            gl_.signalSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
+            if (noTex) gl_.signalSem(sem_, 0, nullptr, 0, nullptr, nullptr);
+            else gl_.signalSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
         }
+        glx::gpuPrePresent();                          // (WFC_GPUSTAMPS only) the GL side's present point
         const clk::time_point tC = clk::now();
         if (!noFlush) glFlush();
         const clk::time_point t1 = clk::now();
-        {
-            subSum_[0] += std::chrono::duration<double, std::milli>(tA - t0).count();
-            subSum_[1] += std::chrono::duration<double, std::milli>(tB - tA).count();
-            subSum_[2] += std::chrono::duration<double, std::milli>(tC - tB).count();
-            subSum_[3] += std::chrono::duration<double, std::milli>(t1 - tC).count();
-        }
-        // D3D12: wait for GL, copy into the back buffer, present, signal
+        const double sp[4] = {std::chrono::duration<double, std::milli>(tA - t0).count(), std::chrono::duration<double, std::milli>(tB - tA).count(),
+                              std::chrono::duration<double, std::milli>(tC - tB).count(), std::chrono::duration<double, std::milli>(t1 - tC).count()};
+        return d3dTail(slot, t0, t1, sp);
+    }
+    // D3D12: wait for GL, copy into the back buffer, present, signal (on the calling thread or the worker)
+    bool d3dTail(UINT slot, std::chrono::steady_clock::time_point t0, std::chrono::steady_clock::time_point t1, const double sp[4]) {
+        using clk = std::chrono::steady_clock;
+        for (int k = 0; k < 4; ++k) { subSum_[k] += sp[k]; subMax_[k] = std::max(subMax_[k], sp[k]); }
         if (waitable_) WaitForSingleObjectEx(waitable_, 1000, TRUE);   // frame-latency pacing (no fence spin)
         const clk::time_point t2 = clk::now();
         const UINT bi = swap_->GetCurrentBackBufferIndex();
@@ -216,9 +395,10 @@ public:
                          "throttle %.3f / %.2f, submit %.3f / %.2f, Present %.3f / %.2f",
                          phSum_[0] / 300, phMax_[0], phSum_[1] / 300, phMax_[1], phSum_[2] / 300, phMax_[2], phSum_[3] / 300, phMax_[3],
                          phSum_[4] / 300, phMax_[4]);
-                LOG_INFO("PRESENT D3D12 GL sub-phases (avg ms): resize + semaphore wait %.3f, blit %.3f, semaphore signal %.3f, glFlush %.3f",
-                         subSum_[0] / 300, subSum_[1] / 300, subSum_[2] / 300, subSum_[3] / 300);
-                for (int k = 0; k < 4; ++k) subSum_[k] = 0;
+                LOG_INFO("PRESENT D3D12 GL sub-phases (avg / max ms): resize + semaphore wait %.3f / %.2f, blit %.3f / %.2f, "
+                         "semaphore signal %.3f / %.2f, glFlush %.3f / %.2f",
+                         subSum_[0] / 300, subMax_[0], subSum_[1] / 300, subMax_[1], subSum_[2] / 300, subMax_[2], subSum_[3] / 300, subMax_[3]);
+                for (int k = 0; k < 4; ++k) { subSum_[k] = 0; subMax_[k] = 0; }
                 for (int k = 0; k < 5; ++k) { phSum_[k] = 0; phMax_[k] = 0; }
                 phN_ = 0;
             }
@@ -259,7 +439,7 @@ private:
     bool createSwapchain(int w, int h) {
         DXGI_SWAP_CHAIN_DESC1 sd{};
         sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = kBuffers; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = buffers_; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         sd.Flags = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         IDXGISwapChain1* sc1 = nullptr;
         if (FAILED(factory_->CreateSwapChainForHwnd(queue_, hwnd_, &sd, nullptr, nullptr, &sc1)) || !sc1) {
@@ -269,14 +449,21 @@ private:
         factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
         sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
         rel(sc1);
-        if (swap_) { swap_->SetMaximumFrameLatency(2); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
+        if (swap_) { swap_->SetMaximumFrameLatency(latency_); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
         return resize(w, h, false);
     }
+    bool resizeFail(const char* what, int w, int h) {   // logged once per kind: a failing resize falls back to GL each frame
+        static std::string seen;
+        if (seen.find(what) == std::string::npos) { seen += what; LOG_WARN("D3D12 present: resize to %dx%d failed at %s", w, h, what); }
+        return false;
+    }
     bool resize(int w, int h, bool resizeBuffers = true) {
+        while (glGetError() != GL_NO_ERROR) {}           // (a GL error left by earlier rendering is not this resize's)
         for (auto& b : back_) rel(b);
-        if (resizeBuffers && FAILED(swap_->ResizeBuffers(kBuffers, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM,
-                                                         (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT))) return false;
-        for (UINT i = 0; i < kBuffers; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
+        if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM,
+                                                         (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)))
+            return resizeFail("ResizeBuffers", w, h);
+        for (UINT i = 0; i < buffers_; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
         // the shared texture ring + its GL imports
         for (UINT k = 0; k < kRing; ++k) {
             if (glFbo_[k]) { gl_.deleteFb(1, &glFbo_[k]); glFbo_[k] = 0; }
@@ -294,8 +481,8 @@ private:
         const D3D12_RESOURCE_ALLOCATION_INFO ai = dev_->GetResourceAllocationInfo(0, 1, &rd);
         for (UINT k = 0; k < kRing; ++k) {
             if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
-                                                     __uuidof(ID3D12Resource), (void**)&shared_[k]))) return false;
-            if (FAILED(dev_->CreateSharedHandle(shared_[k], nullptr, GENERIC_ALL, nullptr, &sharedHandle_[k]))) return false;
+                                                     __uuidof(ID3D12Resource), (void**)&shared_[k]))) return resizeFail("CreateCommittedResource", w, h);
+            if (FAILED(dev_->CreateSharedHandle(shared_[k], nullptr, GENERIC_ALL, nullptr, &sharedHandle_[k]))) return resizeFail("CreateSharedHandle", w, h);
             gl_.createMem(1, &glMem_[k]);
             GLint dedicated = GL_TRUE;
             if (gl_.memParam) gl_.memParam(glMem_[k], kDedicated, &dedicated);
@@ -311,9 +498,11 @@ private:
         gl_.bindFb(0x8D40, 0);
         w_ = w; h_ = h;
         for (auto& v : frameValue_) v = 0;
-        return glGetError() == GL_NO_ERROR;
+        const GLenum ge = glGetError();
+        if (ge != GL_NO_ERROR) { char b[48]; std::snprintf(b, sizeof b, "GL import (error 0x%04x)", (unsigned)ge); return resizeFail(b, w, h); }
+        return true;
     }
-    void throttle(UINT bi) {                           // at most kBuffers frames in flight on the D3D12 side
+    void throttle(UINT bi) {                           // at most buffers_ frames in flight on the D3D12 side
         if (frameValue_[bi] && fence_->GetCompletedValue() < frameValue_[bi]) {
             HANDLE e = CreateEventW(nullptr, FALSE, FALSE, nullptr);
             fence_->SetEventOnCompletion(frameValue_[bi], e);
@@ -338,18 +527,26 @@ private:
     IDXGIFactory5* factory_ = nullptr;
     ID3D12Device* dev_ = nullptr;
     ID3D12CommandQueue* queue_ = nullptr;
-    ID3D12CommandAllocator* alloc_[kBuffers] = {};
+    ID3D12CommandAllocator* alloc_[kMaxBuffers] = {};
     ID3D12GraphicsCommandList* list_ = nullptr;
     IDXGISwapChain3* swap_ = nullptr;
-    ID3D12Resource* back_[kBuffers] = {};
+    ID3D12Resource* back_[kMaxBuffers] = {};
     ID3D12Resource* shared_[kRing] = {};
     HANDLE sharedHandle_[kRing] = {}, fenceHandle_ = nullptr, waitable_ = nullptr;
-    UINT64 readDone_[kRing] = {};
+    std::atomic<UINT64> readDone_[kRing] = {};
+    UINT64 mainFrame_ = 0;
+    struct Job { UINT slot = 0; GLsync_ sync = nullptr; std::chrono::steady_clock::time_point t0; double sp[4] = {}; };
+    std::thread* worker_ = nullptr;
+    HGLRC workerCtx_ = nullptr; HDC workerDc_ = nullptr; GLuint workerSem_ = 0;
+    std::mutex mx_; std::condition_variable cv_; std::deque<Job> jobs_; int inFlight_ = 0;
+    double qwSum_ = 0, qwMax_ = 0; int qwN_ = 0;
+    Interop2Probe probe2_; bool probe2Tried_ = false;
     ID3D12Fence* fence_ = nullptr;
-    UINT64 value_ = 0, frameValue_[kBuffers] = {};
+    UINT64 value_ = 0, frameValue_[kMaxBuffers] = {};
+    UINT buffers_ = 2, latency_ = 2;
     GLuint glMem_[kRing] = {}, glTex_[kRing] = {}, glFbo_[kRing] = {}, sem_ = 0;
     int w_ = 0, h_ = 0, presented_ = 0;
-    double phSum_[5] = {}, phMax_[5] = {}, subSum_[4] = {};
+    double phSum_[5] = {}, phMax_[5] = {}, subSum_[4] = {}, subMax_[4] = {};
     int phN_ = 0;
     bool tearing_ = false, vsync_ = false;
     static std::string shotFile_() { const char* e = std::getenv("WFC_D3D12SHOT"); std::string t = e ? e : ""; size_t c = t.find(','); return c == std::string::npos ? t : t.substr(c + 1); }
