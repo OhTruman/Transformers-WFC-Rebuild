@@ -2044,6 +2044,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                            const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
                            bool lightmapped, const std::vector<std::string>& rtParams) {
     std::string fs = kFSHead;
+    // MaterialExpressionNormal (matc x_Normal): the world-space (UE axes) material normal, as the original compiles it;
+    // WFC_NORMALNODE_TANGENT=1 = the earlier translation (the tangent-space normal)
+    static const bool normalNodeTangent = std::getenv("WFC_NORMALNODE_TANGENT") != nullptr;
+    fs += normalNodeTangent ? "vec3 wfcNormalNode(MatIn m) { return m.normal; }\n"
+                            : "vec3 wfcNormalNode(MatIn m) { return tangentToWorldUE(m, m.normal); }\n";
     std::string code = body;
     for (const std::string& n : rtParams) fs += "uniform vec4 uRT_" + n + "; uniform int uRTSet_" + n + ";\n";
     bool srgbFix = false;                                // a slot holds an HD sRGB S3TC map: its samples are corrected

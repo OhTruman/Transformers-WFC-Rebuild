@@ -406,8 +406,11 @@ class MatCompiler:
         return '%s(m, %s)' % (fnm, cast(x, t, 3)), 3
 
     def x_Normal(self, c, n, p, o):
-        # the material's own (tangent-space) normal, as UE3's normal-dependent expressions see it
-        self.uses.add('normal'); return 'm.normal', 3
+        # UE3 MaterialExpressionNormal is the WORLD-space (UE axes) material normal: TransformTangentVectorToWorld of the
+        # material's tangent-space normal (Experimental 81555bf: Rust Pillar01 / SideSupport / NewFloor, WEP_AssaultRifle /
+        # Shotgun exact against the original lightmapped PS only this way). wfcNormalNode is the runtime's; its
+        # WFC_NORMALNODE_TANGENT=1 off switch gives the earlier tangent-space m.normal
+        self.uses.add('normal'); self.uses.add('tbn'); return 'wfcNormalNode(m)', 3
 
     def x_MeshEmitterVertexColor(self, c, n, p, o):
         # mesh-particle emitter colour (the particle colour); static world meshes see white.
