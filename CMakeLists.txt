@@ -55,6 +55,25 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core
             "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/d3d12SDKLayers.dll" "$<TARGET_FILE_DIR:wfc_rebuild>/D3D12")
 endif()
 
+# Ray-traced D3D12 passes (M7, PC ADAPTATION, off by default): HLSL -> DXIL at build time with the pinned DXC
+# (tools/render/fetch_dxc.py, not committed), embedded as headers; nothing of DXC ships. Without DXC: no RT passes.
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
+    set(WFC_RT_SHADER_DIR "${CMAKE_BINARY_DIR}/generated/rt")
+    set(WFC_RT_SHADER_HEADERS "")
+    foreach(sh rt_depthcheck)
+        set(out "${WFC_RT_SHADER_DIR}/${sh}.h")
+        add_custom_command(OUTPUT "${out}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"
+            COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_5 -E main -O3 -Fh "${out}" -Vn g_${sh}
+                "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/${sh}.hlsl"
+            DEPENDS "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/${sh}.hlsl"
+            COMMENT "DXC ${sh}.hlsl")
+        list(APPEND WFC_RT_SHADER_HEADERS "${out}")
+    endforeach()
+    target_sources(wfc_rebuild PRIVATE ${WFC_RT_SHADER_HEADERS})
+    target_include_directories(wfc_rebuild PRIVATE "${WFC_RT_SHADER_DIR}")
+    target_compile_definitions(wfc_rebuild PRIVATE WFC_RT_SHADERS=1)
+endif()
 target_compile_options(wfc_rebuild PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 if(WIN32)

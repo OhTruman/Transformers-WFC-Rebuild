@@ -1,4 +1,5 @@
 #include "render/gl/WfcPipeline.h"
+#include "render/d3d12/D3D12RtBridge.h"
 #include "render/d3d12/D3D12FrameGen.h"   // (presentFrameStart)
 #include <tuple>
 
@@ -730,6 +731,7 @@ void Pipeline::release() {
     lmArrays_.clear(); lmArrOf_.clear();
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
+    rtBridgeClearStaticWorld();                        // (M7 stage 0: no-op unless a static world was built)
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
@@ -3709,6 +3711,12 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
     if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
+    {   // (diagnostics, M7 stage 0) WFC_RT_DUMPFRAME: the mesh draws of that frame, in order (what the depth holds)
+        static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
+        if (frameNo_ == dumpAt)
+            LOG_INFO("RT census frame %d: draw mesh %d (world %d, %zu subs, mdi %d) at (%.2f %.2f %.2f) scale %.3f", frameNo_, id,
+                     g.world ? 1 : 0, g.subs.size(), id == mdiMesh_ ? 1 : 0, model.m[12], model.m[13], model.m[14], model.m[0]);
+    }
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
@@ -4908,6 +4916,7 @@ void Pipeline::buildMdi(int meshId) {
     VertexAttribDivisor(11, 1);
     BindVertexArray(0);
     mdiMesh_ = meshId;
+    rtBuildWorld(meshId);                              // (WFC_RT_DEPTHCHECK: M7 stage 0, the prepass set as BLAS / TLAS)
     LOG_INFO("wfc: %s MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)",
              meshId == bspMesh_ ? "level BSP" : "world", row, mdiBuckets_.size(), arrayed);
     LOG_INFO("wfc: %s subs drawn singly: %zu without an MDI program, %zu translucent, %zu actor-owned, %zu vertex-lightmapped, "
@@ -5629,7 +5638,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
     // WFC_ZPREPASS_TEST=1 (positive control only): the prepassed buckets are not shaded, so the opaque world shows
     // the clear colour / sky - visibly wrong whenever the prepass is active
     static const bool zTest = std::getenv("WFC_ZPREPASS_TEST") != nullptr;
-    rtRoundTrip();                                     // (WFC_RT_ROUNDTRIP: M7 stage 0 measurement)
+    rtRoundTrip(bspMesh_ >= 0 && &g == &meshes_[(size_t)bspMesh_]);   // (WFC_RT_ROUNDTRIP / _DEPTHCHECK: M7 stage 0)
     glx::gpuStamp("world: MDI shading");
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
