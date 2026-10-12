@@ -57,6 +57,32 @@ depth prepass, or reconstructed from depth (cheaper, worse at edges); start with
 - Systems could own the data plumbing (compute skinning into shared buffers, the BLAS / TLAS feed, LOD selection) while
   Rendering owns the ray passes, denoise and composite.
 
+### Stage-0 measurement: static-world BLAS (2026-10-12, tools/systems/blas_probe.cpp, RX 7900 XTX, DXR 1.1)
+
+world.glb as the game loads it (every placed mesh baked into one world-space mesh, so no instancing: an upper bound),
+PREFER_FAST_TRACE | ALLOW_COMPACTION, opaque, built once:
+
+| Map | Triangles | BLAS compacted | Build (GPU, one BLAS / per slice) |
+|---|---|---|---|
+| Gorge | 1.22 M | 81 MB | 13.3 / 10.5 ms |
+| Berth | 1.29 M | 82 MB | 16.8 / 13.0 ms |
+| Complex | 1.64 M | 104 MB | 16.7 / 12.6 ms |
+| Debris | 1.64 M | 112 MB | 17.3 / 12.8 ms |
+| Molten | 1.70 M | 114 MB | 17.7 / 14.4 ms |
+| Rust | 1.90 M | 129 MB | 21.0 / 15.4 ms |
+| Streets | 1.98 M | 143 MB | 17.9 / 16.0 ms |
+| BrokenHope | 2.16 M | 146 MB | 27.0 / 27.5 ms |
+| Seed | 2.45 M | 161 MB | 25.1 / 20.7 ms |
+| Remnant | 2.86 M | 194 MB | 30.9 / 33.2 ms |
+
+- Compaction saves ~57 % (pre-compaction 190 - 445 MB); one BLAS per material slice (1,975 - 4,764 slices) costs < 1 % more
+  memory than one BLAS and builds as fast or faster, so the opaque / alpha-tested split is free. Scratch: one whole-world
+  BLAS needs 193 - 450 MB transient; per slice, built sequentially through one scratch buffer, <= 2.3 MB.
+- Build cost is a one-off at map load (10 - 33 ms GPU): no per-frame cost for the static world.
+- Plus positions + indices kept for hit shading: 31 - 73 MB per map (Gorge 31 MB).
+- Next for stage 0: real instancing (repeated static meshes as TLAS instances of one BLAS: needs the per-node meshes,
+  not the baked world mesh), the alpha-tested flag per slice, and the skinned-character refit cost.
+
 ## 4. Denoising (licences checked 2026-10-12)
 
 | Option | Effects | Licence | On the 7900 XTX |
