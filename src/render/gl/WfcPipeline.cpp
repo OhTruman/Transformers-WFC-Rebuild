@@ -2068,32 +2068,15 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         size_t at = mainLM.find(anchor);
         if (at != std::string::npos)
             mainLM.insert(at + anchor.size(),
-                // R in UE3's tangent frame (B = cross(TangentZ, TangentX) * w, along +dP/dv): our vertex binormal is the
-                // mirror of it (work/re/tbncheck.py: 91% of mesh triangles along -dP/dv); BSP carries no vertex
-                // tangents -> UE3's BSP frame from the texture axes = the per-pixel UV-derivative frame
-                "        vec3 Fn = tbn[2], Ft = tbn[0], Fb = -tbn[1];\n"
-                "        if (dot(vTan.xyz, vTan.xyz) < 1e-12) {\n"
-                "            float det = dux.x * duy.y - dux.y * duy.x;\n"
-                "            if (abs(det) > 1e-20) {\n"
-                "                vec3 dpdu = (duy.y * dpx - dux.y * dpy) / det, dpdv = (dux.x * dpy - duy.x * dpx) / det;\n"
-                "                vec3 t = dpdu - Fn * dot(Fn, dpdu);\n"
-                "                if (dot(t, t) > 1e-20) { Ft = normalize(t); Fb = cross(Fn, Ft); if (dot(Fb, dpdv) < 0.0) Fb = -Fb; }\n"
-                "            }\n"
-                "        }\n"
-                "        vec3 Vw = normalize(uCamPos - vPos);\n"
-                "        vec3 Vt = vec3(dot(Vw, Ft), dot(Vw, Fb), dot(Vw, Fn));\n"
-                "        vec3 R = -Vt + n * (dot(n, Vt) * 2.0);\n"
+                // R = the reflection of m.cameraVector: the runtime tangent frame is UE3's (buildVertices derives T = dP/du and
+                // w so that cross(N, T) * w runs along +dP/dv = UE3's TangentY, cooked BSP tangents: 445/445 polygons)
+                "        vec3 R = -m.cameraVector + n * (dot(n, m.cameraVector) * 2.0);\n"
                 "        float SP = o.SpecularPower;\n"
                 "        vec3 Ls = pow(max(clamp(dot(normalize(n + LMB0), R), 0.0, 1.0), 0.0001), SP) * l0 * uLMScale[0]\n"
                 "                + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SP) * l1 * uLMScale[1]\n"
                 "                + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SP) * l2 * uLMScale[2];\n"
                 "        c += o.SpecularColor * Ls;\n");
-        const std::string head = "    mat3 tbn; MatIn m = wfcBuildInput(tbn);\n";   // derivatives before any discard
-        size_t hd = mainLM.find(head);
-        if (at != std::string::npos && hd != std::string::npos)
-            mainLM.insert(hd + head.size(), "    vec3 dpx = dFdx(vPos), dpy = dFdy(vPos);\n"
-                                            "    vec2 dux = dFdx(vUV0), duy = dFdy(vUV0);\n");
-        else mainLM.clear();
+        if (at == std::string::npos) mainLM.clear();
     }
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
 
