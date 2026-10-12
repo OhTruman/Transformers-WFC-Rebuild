@@ -1,0 +1,10 @@
+17:16 39185f5 501: p90 2.7 
+17:28 9be437d 501: p90 3.62 work/permap/ovpair-39185f5/9be437d-501/501_t64_1920x1080/CONTAMINATED.txt
+17:36 39185f5 502: p90 3.29 work/permap/ovpair-39185f5/39185f5-502/502_t64_1920x1080/CONTAMINATED.txt
+17:37 9be437d 502: p90  work/permap/ovpair-39185f5/9be437d-502/502_t64_1920x1080/CONTAMINATED.txt
+17:40 paused for AssetTools HD-pilot GPU window (Integration); discarded 9be437d-501 + 39185f5-502 (contaminated by hd_push), 9be437d-502 + 39185f5-503 (killed)
+19:06 9be437d 501: p90 3.13 work/permap/ovpair-39185f5/9be437d-501/501_t64_1920x1080/CONTAMINATED.txt
+19:32 paused for M1 65e856f slot; 39185f5-502 killed + discarded
+07:43 9be437d 501: p90 2.55 work/permap/ovpair-39185f5/9be437d-501/501_t64_1920x1080/CONTAMINATED.txt
+07:50 39185f5 502: p90 3.08 work/permap/ovpair-39185f5/39185f5-502/502_t64_1920x1080/CONTAMINATED.txt
+08:41 paused for Rendering timed slot (lightmap-specular A/B); 9be437d-501 + 39185f5-502 contaminated (AssetTools py / Rendering exe) and discarded; script now reruns contaminated rows
