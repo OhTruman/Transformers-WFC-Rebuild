@@ -1,0 +1,69 @@
+--- a/src/render/d3d12/D3D12Presenter.cpp
++++ b/src/render/d3d12/D3D12Presenter.cpp
+@@ -14,6 +14,7 @@
+ 
+ #include "platform/PresentHook.h"
+ #include "render/d3d12/D3D12FrameGen.h"
++#include "render/d3d12/D3D12Adapter.h"
+ #include "core/Log.h"
+ #if defined(WFC_FFX_SDK)
+ #include "ffx_api.h"
+@@ -182,10 +183,11 @@
+         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
+         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
+-        if (!create || !cf2 || FAILED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) ||
+-            FAILED(create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_))) {
+-            LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false;
+-        }
++        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
++        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
++                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
++        if (adapter) adapter->Release();
++        if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
+         BOOL tear = FALSE;
+         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
+         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
+--- a/src/render/d3d12/D3D12Upscaler.cpp
++++ b/src/render/d3d12/D3D12Upscaler.cpp
+@@ -12,6 +12,7 @@
+ #include <windows.h>
+ #include <d3d12.h>
+ #include <dxgi1_4.h>
++#include "render/d3d12/D3D12Adapter.h"
+ #include <GL/gl.h>
+ 
+ #include "render/d3d12/D3D12Upscaler.h"
+@@ -97,7 +98,9 @@
+         d3d12SelectAgility();                        // (D3D12Agility.cpp: SM 6.6+ runtime when shipped)
+         HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+-        const HRESULT hr = create ? create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
++        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
++        const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
++        if (adapter) adapter->Release();
+         if (FAILED(hr)) { LOG_WARN("FSR3: no D3D12 device (D3D12CreateDevice 0x%08lx)", (unsigned long)hr); return false; }
+         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
+--- a/src/render/gl/D3D12InteropProbe.cpp
++++ b/src/render/gl/D3D12InteropProbe.cpp
+@@ -11,6 +11,7 @@
+ #include <GL/gl.h>
+ 
+ #include "core/Log.h"
++#include "render/d3d12/D3D12Adapter.h"
+ 
+ #include <cstdint>
+ #include <cstdlib>
+@@ -63,7 +64,10 @@
+     HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+     auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+     ID3D12Device* dev = nullptr;
+-    if (!create || FAILED(create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev)) || !dev) {
++    IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
++    const bool made = create && SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev)) && dev;
++    if (adapter) adapter->Release();
++    if (!made) {
+         detail = "no D3D12 device (feature level 12_0)";
+         return false;
+     }
