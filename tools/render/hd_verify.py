@@ -134,6 +134,22 @@ def report(a):
                 'ok' if total <= a.budget_mb else 'OVER', srgb_ok, sh))
         for hd in ('on', 'off'):
             for w in res[hd]['warn'][:3]: rows.append('|  | %s warn | %s |||||||||||' % (hd, w[:150]))
+    # information: the HD pack's size on disk (its index rows; the budget above is in-game texture memory per map)
+    import json
+    roots = set()
+    for n in names:
+        m = re.search(r'\((.+)\)\s*$', parse(os.path.join(runs, n + '_on', 'wfc.log'))['pack'])
+        if m: roots.add(m.group(1))
+    for root in sorted(roots):
+        try:
+            J = json.load(open(os.path.join(root, 'hd_index.json'), encoding='utf-8'))
+            R = next((J[k] for k in ('rows', 'textures', 'entries') if isinstance(J.get(k), list) and J[k]), [])
+            tot = sum(os.path.getsize(os.path.join(root, r['dds'])) for r in R if os.path.exists(os.path.join(root, r['dds'])))
+            if isinstance(J.get('total_bytes'), int) and J['total_bytes'] != tot:
+                rows += ['', 'HD pack index total_bytes %d differs from the files found (%d)' % (J['total_bytes'], tot)]
+            rows += ['', 'HD pack on disk (information): %s: %d textures, %.0f MB' % (root, len(R), tot / 1048576.0)]
+        except (OSError, ValueError, KeyError) as ex:
+            rows += ['', 'HD pack on disk: %s unreadable (%s)' % (root, ex)]
     open(os.path.join(out, 'report.md'), 'w', encoding='utf-8').write('\n'.join(rows) + '\n')
     print('\n'.join(rows))
 
