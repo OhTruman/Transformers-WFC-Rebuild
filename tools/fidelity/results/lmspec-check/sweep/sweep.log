@@ -1,0 +1,7 @@
+MP_IAC_Rust 11:40:21 MP_IAC_Rust {'no-original-lm-shader': 138, 'ok spec-match': 760, 'ok MISMATCH': 422, 'geometry-registers-unknown': 36, 'uniform-index': 5, "error AttributeError 'NoneType' object h": 6}
+MP_IAC_Streets 11:44:15 MP_IAC_Streets {'ok spec-match': 770, 'no-original-lm-shader': 74, 'geometry-registers-unknown': 24, 'ok MISMATCH': 355, "error AttributeError 'NoneType' object h": 6, 'uniform-index': 3}
+MP_UND_Gorge 11:50:26 MP_UND_Gorge {'no-original-lm-shader': 83, 'ok spec-match': 895, 'geometry-registers-unknown': 42, 'ok MISMATCH': 487, "error AttributeError 'NoneType' object h": 12, 'uniform-index': 3}
+MP_ORB_Debris 11:55:45 MP_ORB_Debris {'ok spec-match': 968, 'no-original-lm-shader': 38, 'ok MISMATCH': 479, 'geometry-registers-unknown': 41, 'uniform-index': 3}
+MP_IAC_Berth 11:59:58 MP_IAC_Berth {'no-original-lm-shader': 100, 'ok spec-match': 683, 'ok MISMATCH': 427, 'geometry-registers-unknown': 22, 'uniform-index': 4, "error AttributeError 'NoneType' object h": 6}
+MP_IAC_Seed 12:05:05 MP_IAC_Seed {'no-original-lm-shader': 124, 'ok spec-match': 949, 'geometry-registers-unknown': 37, 'ok MISMATCH': 436, 'uniform-index': 5, "error AttributeError 'NoneType' object h": 12}
+MP_UND_Complex 12:10:12 MP_UND_Complex {'no-original-lm-shader': 57, 'ok spec-match': 929, 'geometry-registers-unknown': 63, 'ok MISMATCH': 473, 'uniform-index': 5, "error AttributeError 'NoneType' object h": 12}

@@ -1,0 +1,17 @@
+MP_IAC_Berth {'exact': 32, 'differs': 3, 'not emulated': 93}
+MP_IAC_Rust {'exact': 56, 'differs': 7, 'not emulated': 131}
+MP_IAC_Seed {'exact': 35, 'differs': 0, 'not emulated': 122}
+MP_IAC_Streets {'exact': 59, 'differs': 1, 'not emulated': 69}
+MP_KON_Molten {'exact': 78, 'differs': 0, 'not emulated': 65}
+MP_ORB_Debris {'exact': 94, 'differs': 0, 'not emulated': 31}
+MP_UND_Complex {'exact': 67, 'differs': 0, 'not emulated': 53}
+MP_UND_Gorge {'exact': 35, 'differs': 0, 'not emulated': 73}
+
+rank | material | maps | worst resid | fitted scale | kind | spec share | policy | owner map
+1 | ENV_IAC_BLDS_2_p.Materials.Pillar01_MATINST | Berth,Rust,Streets | 0.112 | 1.00 | diffuse/normal | 0.98 | Texture | Pillar01_MATINST
+2 | ENV_IAC_Deco_1_p.Material.SideSupport_MATINST | Berth,Rust | 0.148 | 1.01 | diffuse/normal | 0.93 | InterpolatedTexture | Interior_NewFloor_MATINST
+3 | ENV_IAC_Interior_1_p.Materials.Interior_NewFloor_MATINST | Berth,Rust | 0.056 | 1.02 | diffuse/normal | 0.98 | InterpolatedTexture | Interior_NewFloor_MATINST
+4 | DES_IAC_p.Material.LiftLock_MAT_INST | Rust | 0.274 | 0.97 | diffuse/normal | 0.91 | Vertex | LiftLock_MAT_INST
+5 | ENV_IAC_CleanMaterials_p.Materials.ENV_IAC_CleanDoor_Off_MATINST | Rust | 0.198 | 1.00 | diffuse/normal | 0.97 | Vertex | LiftLock_MAT_INST
+6 | ENV_IAC_Interior_1_p.Materials.Interior_WallsCeilings_MATInstance | Rust | 0.101 | 0.99 | diffuse/normal | 0.93 | Vertex | Interior_WallsCeilings_AquaLight_MATINST
+7 | ENV_IAC_Interior_1_p.Materials.Interior_WallsCeilings_AquaLight_MATINST | Rust | 0.101 | 0.99 | diffuse/normal | 0.93 | Vertex | Interior_WallsCeilings_AquaLight_MATINST
