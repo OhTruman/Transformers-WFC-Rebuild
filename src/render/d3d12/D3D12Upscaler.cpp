@@ -22,6 +22,8 @@
 #include "ffx_upscale.h"
 #include "dx12/ffx_api_dx12.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -158,6 +160,8 @@ public:
 
     bool dispatch(const Fsr3Params& p) {
         if (!ctx_) return false;
+        using clk = std::chrono::steady_clock;
+        const clk::time_point t0 = clk::now();
         // GL: the inputs are written -> N
         const UINT64 n = ++value_;
         GLuint texs[5] = {color_.tex, depth_.tex, vel_.tex, reactive_.tex, out_.tex};
@@ -166,11 +170,13 @@ public:
         gl_.semParam(sem_, kFenceValue, &v);
         gl_.signalSem(sem_, 0, nullptr, 5, texs, lay);
         glFlush();
+        const clk::time_point t1 = clk::now();
         // D3D12: wait N, upscale, signal N + 1 (the allocator of two frames ago must be finished)
         const int a = (int)(frame_++ & 1);
         if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) {
             fence_->SetEventOnCompletion(allocDone_[a], event_); WaitForSingleObject(event_, 1000);
         }
+        const clk::time_point tW = clk::now();
         alloc_[a]->Reset();
         list_->Reset(alloc_[a], nullptr);
         auto barrier = [&](ID3D12Resource* r, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
@@ -198,7 +204,9 @@ public:
         d.enableSharpening = p.sharpness > 0.0f; d.sharpness = p.sharpness;
         d.frameTimeDelta = p.frameTimeMs; d.preExposure = 1.0f; d.reset = p.reset;
         d.cameraNear = p.nearM; d.cameraFar = p.farM; d.cameraFovAngleVertical = p.fovY; d.viewSpaceToMetersFactor = 1.0f;
+        const clk::time_point tR = clk::now();
         const ffxReturnCode_t rc = ffx_.Dispatch(&ctx_, &d.header);
+        const clk::time_point tD = clk::now();
         D3D12_RESOURCE_BARRIER post[5] = {barrier(color_.res, srv, D3D12_RESOURCE_STATE_COMMON), barrier(depth_.res, srv, D3D12_RESOURCE_STATE_COMMON),
                                           barrier(vel_.res, srv, D3D12_RESOURCE_STATE_COMMON), barrier(reactive_.res, srv, D3D12_RESOURCE_STATE_COMMON),
                                           barrier(out_.res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON)};
@@ -210,11 +218,26 @@ public:
         const UINT64 done = ++value_;
         queue_->Signal(fence_, done);
         allocDone_[a] = done;
+        const clk::time_point t2 = clk::now();
         // GL: wait N + 1 before reading the output (a GPU-side wait)
         GLuint64_ w = done;
         gl_.semParam(sem_, kFenceValue, &w);
         GLuint outTex = out_.tex; GLenum outLay = kLayoutShaderRead;
         gl_.waitSem(sem_, 0, nullptr, 1, &outTex, &outLay);
+        {   // main-thread cost per phase (avg / max over 300 dispatches; the copies before this: Pipeline::fsr3Run)
+            const clk::time_point t3 = clk::now();
+            auto ms = [](clk::time_point a_, clk::time_point b_) { return std::chrono::duration<double, std::milli>(b_ - a_).count(); };
+            const double ph[6] = {ms(t0, t1), ms(t1, tW), ms(tW, tR), ms(tR, tD), ms(tD, t2), ms(t2, t3)};
+            for (int k = 0; k < 6; ++k) { phSum_[k] += ph[k]; phMax_[k] = std::max(phMax_[k], ph[k]); }
+            if (++phN_ == 300) {
+                LOG_INFO("FSR3 phases (avg / max ms over 300): GL signal + flush %.3f / %.2f, allocator wait %.3f / %.2f, "
+                         "barriers %.3f / %.2f, ffxDispatch %.3f / %.2f, close + execute + signal %.3f / %.2f, GL wait %.3f / %.2f",
+                         phSum_[0] / 300, phMax_[0], phSum_[1] / 300, phMax_[1], phSum_[2] / 300, phMax_[2], phSum_[3] / 300, phMax_[3],
+                         phSum_[4] / 300, phMax_[4], phSum_[5] / 300, phMax_[5]);
+                for (int k = 0; k < 6; ++k) phSum_[k] = phMax_[k] = 0;
+                phN_ = 0;
+            }
+        }
         if (rc != FFX_API_RETURN_OK) {
             if (!dispatchFailLogged_) { LOG_WARN("FSR3: ffxDispatch returned %u", (unsigned)rc); dispatchFailLogged_ = true; }
             return false;
@@ -274,6 +297,7 @@ private:
     Shared color_, depth_, vel_, reactive_, out_;
     int inW_ = 0, inH_ = 0, outW_ = 0, outH_ = 0;
     bool dispatchFailLogged_ = false;
+    double phSum_[6] = {}, phMax_[6] = {}; int phN_ = 0;
 };
 
 Upscaler* g_up = nullptr;

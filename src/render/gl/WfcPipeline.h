@@ -471,6 +471,7 @@ private:
     bool fsr3Failed_ = false;
     GLuint fsr3Out_ = 0, fsr3DepthProg_ = 0, fsr3DepthFbo_ = 0;
     std::chrono::steady_clock::time_point fsr3LastFrame_{};
+    double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
     bool fsr3Mode() const;
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
