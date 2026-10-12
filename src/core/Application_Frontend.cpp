@@ -120,11 +120,14 @@ template <class R, class = void> struct HasRendererFrameLimit : std::false_type 
 template <class R>
 struct HasRendererFrameLimit<R, std::void_t<decltype(std::declval<R&>().setFrameLimit(1.0f)), decltype(std::declval<R&>().waitFrameSlot())>>
     : std::true_type {};
-template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz) {
+// fg [Systems, M5 item 10]: frames on screen per rendered frame (frame generation presents: 2, multi frame generation 3 / 4);
+// the limiter paces the RENDERED frames at hz / fg (hz keeps meaning frames on screen). fg 1: exactly the values handed over
+// before.
+template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz, int fg = 1) {
     if constexpr (HasRendererFrameLimit<R>::value) {
-        if (r) { r->setFrameLimit((float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
+        if (r) { r->setFrameLimit(fg > 1 && hz > 0 ? (float)hz / (float)fg : (float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
     }
-    if (w) w->setFrameLimit(hz);
+    if (w) w->setFrameLimit(fg > 1 && hz > 0 ? (hz + fg - 1) / fg : hz);
     return "window";
 }
 
@@ -385,7 +388,8 @@ void Application::attachPresenter() {
         // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
         int cap = d.frameLimit;
         if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
-        const char* by = applyFrameLimit(renderer_, window_, cap);
+        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
+        pacingHz_ = cap;
         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
         appliedUpscaling_ = d.upscaling;
         appliedHdTextures_ = d.hdTextures;
@@ -425,7 +429,8 @@ void Application::attachPresenter() {
 #endif
         if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
             appliedFrameLimit_ = p.display.frameLimit;
-            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
+            pacingHz_ = appliedFrameLimit_;
+            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_, pacingFg_);
             frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
         }
         if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
@@ -934,6 +939,7 @@ void Application::runFrontend() {
         // ---- frontend levels (and the loading screen up to the match load) ----
         bool quit = false;
         for (;;) {
+            pacingCheckFrameGeneration();   // [Systems, M5 item 10] as runMatch's loop (the limiter waits in endFrame here)
             bool pumped;
             { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
             if (!pumped) { quit = true; break; }
@@ -1551,6 +1557,20 @@ void Application::unloadMatch() {
 // missing API fails the build here instead of silently disabling the feature (frame limiter, bot info / capacity, QA,
 // awards / progression).
 static_assert(HasRendererFrameLimit<render::IRenderer>::value, "IRenderer::setFrameLimit / waitFrameSlot");
+
+// [Systems, M5 item 10] Called once per frame before the limiter slot: frame generation started, stopped or changed its
+// factor -> the limiter's rate follows (displayed target / factor). Nothing happens while the factor is unchanged, so
+// without frame generation (factor 1) this never touches the limiter or the flow trace.
+void core::Application::pacingCheckFrameGeneration() {
+    if (!renderer_) return;
+    const int fg = std::max(1, renderer_->frameGenerationFactor());
+    if (fg == pacingFg_) return;
+    pacingFg_ = fg;
+    const char* by = applyFrameLimit(renderer_, window_, pacingHz_, pacingFg_);
+    frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(pacingHz_)}, {"factor", std::to_string(fg)},
+                                                     {"rendered", std::to_string(pacingHz_ > 0 ? (double)pacingHz_ / fg : 0.0)},
+                                                     {"by", by}, {"when", fg > 1 ? "frameGeneration.on" : "frameGeneration.off"}});
+}
 static_assert(HasParticipantInfo<game::MatchPlayer>::value, "MatchPlayer kind / level / specialty");
 static_assert(HasMatchCapacity<game::MatchSettings>::value, "MatchSettings maxPerTeam / maxPlayers");
 static_assert(HasExtendedSlots<game::MatchSettings>::value, "MatchSettings::applyExtendedSlots (Bot Settings EXTENDED range)");

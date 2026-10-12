@@ -58,6 +58,11 @@ private:
     uint32_t selectionSentSerial_ = 0;   // GameFlow::selectionSerial() last forwarded to Gameplay (0 = none this match)
     // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
     int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
+    // [Systems, M5 item 10] the displayed-frame target (FrameLimit / WFC_FPS_LIMIT) and the frame-generation factor at the
+    // last check (frames on screen per rendered frame): the limiter gets target / factor (the rendered rate)
+    int pacingHz_ = 0;
+    int pacingFg_ = 1;
+    void pacingCheckFrameGeneration();
     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
     bool appliedHdTextures_ = false;
     int appliedAnisotropy_ = -1;
