@@ -117,3 +117,16 @@ Every row has p90 <= 3.33 ms, 64/64 spawned, ended by Time and no contamination.
 - Nonpaged pool over the night: 24.52 -> 24.90 GB (+0.38 GB in 9.7 h; the known driver leak), C: steady at 14.5 GB.
 - Integration asked for a 509 rp 4K 300 s x3 + pooled follow-up (`m509_65e856f.sh`). It started at 06:20:42 with PERF_HOLD re-armed
   (no gap visible), and M1 waits on it.
+
+## 509 rp 4K 300 s x3 + pooled (Integration follow-up, 06:20-07:05): PASS 3 / 3
+
+| rep | p90 | p50 | p99 | under 3.33 | avg fps | slow frames (GPU-bound) |
+|---|---|---|---|---|---|---|
+| warm-up r0 (150 s, discarded) | 2.87 | 2.13 | 3.69 | 96.7 % | 463 | 2372 |
+| r1 | 2.64 MET | 2.01 | 3.22 | 99.4 % | 491 | 975 |
+| r2 | 2.88 MET | 2.17 | 3.62 | 97.2 % | 455 | 3978 |
+| r3 | 2.91 MET | 2.23 | 3.50 | 98.0 % | 451 | 3043 |
+| pooled | 2.82 MET | 2.13 | 3.48 | 98.2 % | 418723 frames | |
+
+All rows 64/64, ended by Time, uncontaminated. The slot B 3.20 does not reproduce: 300 s reps land at 2.64-2.91, pooled 2.82 (0.51
+headroom). The tail is GPU-bound, the same as Gorge. PERF_HOLD was cleared at 07:05.

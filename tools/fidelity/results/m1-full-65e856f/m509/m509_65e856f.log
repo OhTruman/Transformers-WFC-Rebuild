@@ -1,0 +1,12 @@
+hold re-armed 06:20:42
+mem m509-start: commit 95/115 GB, nonpaged 24.90 GB, free phys 15.4 GB, C: free 14.5 GB
+06:27 509 rp 2160 150s r0 try 1: p90 2.87 
+06:40 509 rp 2160 300s r1 try 1: p90 2.64 
+06:52 509 rp 2160 300s r2 try 1: p90 2.88 
+07:05 509 rp 2160 300s r3 try 1: p90 2.91 
+work/permap/m1g-65e856f-509-rp-2160-t300-r1: 147127 frames, p90 2.64 ms (MET), under 3.333 ms 99.4 %
+work/permap/m1g-65e856f-509-rp-2160-t300-r2: 136397 frames, p90 2.88 ms (MET), under 3.333 ms 97.2 %
+work/permap/m1g-65e856f-509-rp-2160-t300-r3: 135199 frames, p90 2.91 ms (MET), under 3.333 ms 98 %
+POOLED over 3 reps: 418723 frames, p90 2.82 ms (MET), p50 2.13, p99 3.48, under 3.333 ms 98.2 %
+mem m509-end: commit 95/115 GB, nonpaged 24.92 GB, free phys 15.5 GB, C: free 14.5 GB
+509 rows done 07:05

@@ -1,0 +1,4 @@
+work/permap/m1g-65e856f-509-rp-2160-t300-r1: 147127 frames, p90 2.64 ms (MET), under 3.333 ms 99.4 %
+work/permap/m1g-65e856f-509-rp-2160-t300-r2: 136397 frames, p90 2.88 ms (MET), under 3.333 ms 97.2 %
+work/permap/m1g-65e856f-509-rp-2160-t300-r3: 135199 frames, p90 2.91 ms (MET), under 3.333 ms 98 %
+POOLED over 3 reps: 418723 frames, p90 2.82 ms (MET), p50 2.13, p99 3.48, under 3.333 ms 98.2 %
