@@ -5629,6 +5629,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
     // WFC_ZPREPASS_TEST=1 (positive control only): the prepassed buckets are not shaded, so the opaque world shows
     // the clear colour / sky - visibly wrong whenever the prepass is active
     static const bool zTest = std::getenv("WFC_ZPREPASS_TEST") != nullptr;
+    rtRoundTrip();                                     // (WFC_RT_ROUNDTRIP: M7 stage 0 measurement)
     glx::gpuStamp("world: MDI shading");
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
