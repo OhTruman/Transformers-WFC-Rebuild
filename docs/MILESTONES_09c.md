@@ -94,7 +94,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   presentation-mode check folded into the FSR work.
   FSR 3.1 licensing (Rendering 2026-10-12): the shipped amd_fidelityfx_*_dx12.dll are under AMD's binary licence
   (redistribution allowed with its notice, no reverse engineering): packages must carry license.md next to the DLLs;
-  the SDK is fetched by tools/render/fetch_ffx_sdk.py, never committed.
+  the SDK is fetched by tools/render/fetch_ffx_sdk.py, never committed. FSR 3.1 needs shader model 6.6, above Win10 19045's
+  in-box D3D12 (SM 6.5): the D3D12 Agility SDK (D3D12Core.dll in bin/D3D12/, Microsoft redistributable, NuGet
+  Microsoft.Direct3D.D3D12) is fetched by tools/render/fetch_d3d12_agility.py; packages carry Microsoft's redist terms.
   Option A (AFMF 2 driver FG) is a user-side Adrenalin toggle: offer it to the user as a test when they're home.
   D3 licensing: read the NVIDIA RTX SDK terms before shipping D.
 - M6 Modern materials mode (optional).
