@@ -1,6 +1,7 @@
 #include "render/gl/WfcPipeline.h"
 #include "platform/LongPath.h"
 #include "core/LoadYield.h"
+#include "render/d3d12/D3D12FrameGen.h"   // (presentFrameStart)
 #include <tuple>
 
 #include <emmintrin.h>
@@ -7176,6 +7177,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     if ((frameNo_ & 255) == 128 && (!skinInsts_.empty() || !skinModels_.empty())) evictSkin(false);
     if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();
+    presentFrameStart((long long)std::chrono::duration_cast<std::chrono::nanoseconds>(gFrameStart.time_since_epoch()).count());
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
     time_ = lockstep ? (float)(frameNo_ - lockBase_) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
@@ -7454,6 +7456,7 @@ void Pipeline::endFrame() {
     UseProgram(0);
     glx::gpuStamp("HUD screen effect");
     drawHudScreenEffect();                             // HUD post-process chain (over the frame, under canvas / GFx)
+    framegenCapture(outW, outH);                       // FSR 3 FG (optional): HUD-less frame + depth / motion inputs
     glx::gpuStamp("canvas tiles");
     drawCanvasTiles();
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);

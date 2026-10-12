@@ -13,7 +13,15 @@
 #include <GL/gl.h>
 
 #include "platform/PresentHook.h"
+#include "render/d3d12/D3D12FrameGen.h"
 #include "core/Log.h"
+#if defined(WFC_FFX_SDK)
+#include "ffx_api.h"
+#include "ffx_api_loader.h"
+#include "ffx_framegeneration.h"
+#include "dx12/ffx_api_dx12.h"
+#include "dx12/ffx_api_framegeneration_dx12.h"
+#endif
 
 #include <cstdint>
 #include <cstdlib>
@@ -60,6 +68,7 @@ typedef HGLRC(WINAPI* PFN_CreateContextAttribsARB)(HDC, HGLRC, const int*);
 
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutTransferDst = 0x9593 /*GL_LAYOUT_TRANSFER_DST_EXT*/, kLayoutTransferSrc = 0x9592;
+constexpr GLenum kLayoutShaderRead = 0x958F /*GL_LAYOUT_SHADER_READ_ONLY_EXT*/;
 constexpr UINT kMaxBuffers = 3;               // swapchain buffers: buffers_ (WFC_D3D12_BUFFERS, default 2)
 constexpr UINT kRing = 3;                        // shared textures: GL writes one while D3D12 reads another
 
@@ -162,6 +171,13 @@ public:
         BOOL tear = FALSE;
         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
+#if defined(WFC_FFX_SDK)
+        if (std::getenv("WFC_FRAMEGEN")) {             // FSR 3 frame generation (M5 C): the FG swapchain + context
+            ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
+            if (ffxDll_) { ffxLoadFunctions(&ffx_, ffxDll_); fg_ = ffx_.CreateContext && ffx_.Configure && ffx_.Dispatch && ffx_.DestroyContext; }
+            if (!fg_) LOG_WARN("FRAMEGEN: amd_fidelityfx_loader_dx12.dll / entry points missing: plain D3D12 present");
+        }
+#endif
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
         if (const char* e = std::getenv("WFC_D3D12_BUFFERS")) buffers_ = (UINT)std::min(3, std::max(2, std::atoi(e)));
@@ -184,8 +200,9 @@ public:
             LOG_INFO("D3D12 present: WGL_NV_DX_interop2 %s, WGL_NV_DX_interop %s", ext && std::strstr(ext, "WGL_NV_DX_interop2") ? "available" : "absent",
                      ext && std::strstr(ext, "WGL_NV_DX_interop ") ? "available" : "absent");
         }
-        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
-                 vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "", w_, h_);
+        LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
+                 vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "",
+                 fg_ ? ", FSR 3 frame generation" : "", w_, h_);
         return true;
     }
     // WFC_D3D12_WORKER=1: the GL semaphore signal (~0.7 ms CPU in the AMD driver, M5 item 1) and the D3D12 copy / present
@@ -229,8 +246,9 @@ public:
             ++value_;
             const GLuint64_ v = value_;
             gl_.semParam(workerSem_, kFenceValue, &v);
-            const GLenum layout = kLayoutTransferSrc;
-            gl_.signalSem(workerSem_, 0, nullptr, 1, &glTex_[j.slot], &layout);
+            GLuint texs[4] = {glTex_[j.slot], 0, 0, 0}; GLenum lays[4] = {kLayoutTransferSrc, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
+            const GLuint nTex = fgTextures(j.slot, texs + 1) + 1;
+            gl_.signalSem(workerSem_, 0, nullptr, nTex, texs, lays);
             glFlush();
             const auto t1 = std::chrono::steady_clock::now();
             d3dTail(j.slot, j.t0, t1, j.sp);
@@ -318,9 +336,10 @@ public:
             static const bool noTex = std::getenv("WFC_D3D12_SIGNALNOTEX") != nullptr;
             const GLuint64_ v = value_;
             gl_.semParam(sem_, kFenceValue, &v);
-            const GLenum layout = kLayoutTransferSrc;
+            GLuint texs[4] = {glTex_[slot], 0, 0, 0}; GLenum lays[4] = {kLayoutTransferSrc, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
+            const GLuint nTex = fgTextures(slot, texs + 1) + 1;
             if (noTex) gl_.signalSem(sem_, 0, nullptr, 0, nullptr, nullptr);
-            else gl_.signalSem(sem_, 0, nullptr, 1, &glTex_[slot], &layout);
+            else gl_.signalSem(sem_, 0, nullptr, nTex, texs, lays);
         }
         glx::gpuPrePresent();                          // (WFC_GPUSTAMPS only) the GL side's present point
         const clk::time_point tC = clk::now();
@@ -346,6 +365,7 @@ public:
         b[0].Transition.pResource = shared_[slot]; b[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON; b[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         b[1].Transition.pResource = back_[bi]; b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; b[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
         list_->ResourceBarrier(2, b);
+        fgRecord(slot);                                  // FSR 3 FG: configure + prepare (depth / motion / camera) for this frame
         list_->CopyResource(back_[bi], shared_[slot]);
         // WFC_D3D12SHOT=<frame>,<file.bmp> (verification): the presented image read back from the D3D12 side
         static int shotFrame = -1; static std::string shotFile;
@@ -406,6 +426,17 @@ public:
             }
         }
         if (FAILED(hr)) { LOG_WARN("D3D12 present: Present failed (0x%08lx)", (unsigned long)hr); }
+        {   // frame start -> Present returned (CPU-side latency proxy) and FG resets, per 300 frames
+            const long long fs = frameStartNs_[slot];
+            if (fs) { const double ms = (std::chrono::duration_cast<std::chrono::nanoseconds>(clk::now().time_since_epoch()).count() - fs) / 1e6;
+                      latSum_ += ms; latMax_ = std::max(latMax_, ms); ++latN_; }
+            if (latN_ >= 300) {
+                LOG_INFO("PRESENT latency proxy (frame start -> Present returned, avg / max ms over %d): %.3f / %.2f%s; FG resets %d",
+                         latN_, latSum_ / latN_, latMax_, fg_ ? " (FG)" : "", fgResets_);
+                latSum_ = latMax_ = 0; latN_ = 0; fgResets_ = 0;
+            }
+        }
+        fgCount(t0);
         if (readback) {                                // wait, then write a top-down 32-bit BMP of the presented image
             waitIdle();
             uint8_t* p = nullptr;
@@ -437,21 +468,194 @@ public:
         return true;
     }
 
+    // ---------------------------------------------------------------- FSR 3 frame generation (M5 C)
+    bool fgOn() const { return fg_ && fgCtx_; }
+    // the slot the next present() uses: wait (GPU side) for D3D12's last reads of it, (re)create the inputs at this size
+    bool fgInputs(int rw, int rh, FgInputs* out) {
+        if (!fgOn() || rw <= 0 || rh <= 0) return false;
+        const UINT slot = (UINT)(mainFrame_ % kRing);
+        if (readDone_[slot] && fence_->GetCompletedValue() < readDone_[slot]) {
+            const GLuint64_ v = readDone_[slot].load();
+            gl_.semParam(sem_, kFenceValue, &v);
+            GLuint t[3] = {fgIn_[slot][0].tex, fgIn_[slot][1].tex, fgIn_[slot][2].tex};
+            GLenum l[3] = {kLayoutTransferDst, kLayoutTransferDst, kLayoutTransferDst};
+            gl_.waitSem(sem_, 0, nullptr, t[0] ? 3 : 0, t, l);
+        }
+        if (fgIn_[slot][0].w != w_ || fgIn_[slot][0].h != h_ || fgIn_[slot][1].w != rw || fgIn_[slot][1].h != rh) {
+            for (auto& x : fgIn_[slot]) freeShared(x);
+            if (!makeShared(fgIn_[slot][0], w_, h_, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
+                !makeShared(fgIn_[slot][1], rw, rh, DXGI_FORMAT_R32_FLOAT, 0x822E /*GL_R32F*/) ||
+                !makeShared(fgIn_[slot][2], rw, rh, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/)) {
+                LOG_WARN("FRAMEGEN: input textures failed"); for (auto& x : fgIn_[slot]) freeShared(x); return false;
+            }
+        }
+        out->hudless = fgIn_[slot][0].tex; out->depth = fgIn_[slot][1].tex; out->velocity = fgIn_[slot][2].tex;
+        fgHave_[slot] = true;
+        return true;
+    }
+    void fgSetParams(const FgParams& p) { fgParams_[(UINT)(mainFrame_ % kRing)] = p; }
+    void setFrameStart(long long ns) { frameStartNs_[(UINT)(mainFrame_ % kRing)] = ns; }
+    GLuint fgTextures(UINT slot, GLuint* out) const {   // the slot's FG inputs written this frame (for the GL signal)
+        if (!fgOn() || !fgHave_[slot]) return 0;
+        for (int k = 0; k < 3; ++k) out[k] = fgIn_[slot][k].tex;
+        return 3;
+    }
+    void fgRecord(UINT slot) {
+#if defined(WFC_FFX_SDK)
+        if (!fgOn()) return;
+        const bool have = fgHave_[slot];
+        fgHave_[slot] = false;
+        const FgParams& p = fgParams_[slot];
+        if (have && p.reset) ++fgResets_;
+        const uint64_t id = ++fgFrameId_;
+        ffxConfigureDescFrameGeneration c{};
+        c.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+        c.swapChain = swap_;
+        c.frameGenerationCallback = [](ffxDispatchDescFrameGeneration* params, void* ctx) -> ffxReturnCode_t {
+            D3D12Presenter* self = (D3D12Presenter*)ctx;
+            return self->ffx_.Dispatch(&self->fgCtx_, &params->header);
+        };
+        c.frameGenerationCallbackUserContext = this;
+        c.frameGenerationEnabled = have;                 // menus / frames without inputs: real frames only
+        c.allowAsyncWorkloads = false;
+        c.HUDLessColor = have ? ffxApiGetResourceDX12(fgIn_[slot][0].res, FFX_API_RESOURCE_STATE_COMMON) : FfxApiResource{};
+        c.flags = std::getenv("WFC_FRAMEGEN_DEBUG") ? (FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES | FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_RESET_INDICATORS) : 0;
+        c.onlyPresentGenerated = std::getenv("WFC_FRAMEGEN_ONLYGEN") != nullptr;   // (verification: show generated frames only)
+        c.generationRect = {0, 0, w_, h_};
+        c.frameID = id;
+        if (ffx_.Configure(&fgCtx_, &c.header) != FFX_API_RETURN_OK && !fgCfgFailLogged_) { LOG_WARN("FRAMEGEN: configure failed"); fgCfgFailLogged_ = true; }
+        if (!have) return;
+        D3D12_RESOURCE_BARRIER t[2]{};
+        for (int k = 0; k < 2; ++k) {
+            t[k].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; t[k].Transition.pResource = fgIn_[slot][1 + k].res;
+            t[k].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            t[k].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+            t[k].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        }
+        list_->ResourceBarrier(2, t);
+        ffxDispatchDescFrameGenerationPrepareV2 d{};
+        d.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2;
+        d.frameID = id; d.flags = c.flags; d.commandList = list_;
+        d.renderSize = {(uint32_t)p.renderW, (uint32_t)p.renderH};
+        d.jitterOffset = {p.jitterX, p.jitterY};
+        d.motionVectorScale = {(float)p.renderW, (float)p.renderH};
+        d.frameTimeDelta = p.frameTimeMs; d.reset = p.reset;
+        d.cameraNear = p.nearM; d.cameraFar = p.farM; d.cameraFovAngleVertical = p.fovY; d.viewSpaceToMetersFactor = 1.0f;
+        d.depth = ffxApiGetResourceDX12(fgIn_[slot][1].res, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        d.motionVectors = ffxApiGetResourceDX12(fgIn_[slot][2].res, FFX_API_RESOURCE_STATE_PIXEL_COMPUTE_READ);
+        for (int k = 0; k < 3; ++k) { d.cameraPosition[k] = p.camPos[k]; d.cameraUp[k] = p.camUp[k]; d.cameraRight[k] = p.camRight[k]; d.cameraForward[k] = p.camFwd[k]; }
+        if (ffx_.Dispatch(&fgCtx_, &d.header) != FFX_API_RETURN_OK && !fgPrepFailLogged_) { LOG_WARN("FRAMEGEN: prepare failed"); fgPrepFailLogged_ = true; }
+        for (auto& x : t) std::swap(x.Transition.StateBefore, x.Transition.StateAfter);
+        list_->ResourceBarrier(2, t);
+#else
+        (void)slot;
+#endif
+    }
+    // presented frames (real + generated) from the swapchain's statistics vs real frames, per 300 real frames
+    void fgCount(std::chrono::steady_clock::time_point t0) {
+        if (!fg_) return;
+        if (fgCountN_ == 0) {
+            fgCountT0_ = t0; DXGI_FRAME_STATISTICS st{};
+            fgCountP0_ = SUCCEEDED(swap_->GetFrameStatistics(&st)) ? st.PresentCount : 0;
+            UINT pc = 0; fgLast0_ = SUCCEEDED(swap_->GetLastPresentCount(&pc)) ? pc : 0;
+        }
+        if (++fgCountN_ < 300) return;
+        const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - fgCountT0_).count();
+        DXGI_FRAME_STATISTICS st{}; UINT pc = 0;
+        const bool okStats = SUCCEEDED(swap_->GetFrameStatistics(&st));
+        const bool okLast = SUCCEEDED(swap_->GetLastPresentCount(&pc));
+        LOG_INFO("FRAMEGEN: %d real frames in %.3f s (%.1f fps); swapchain presents %s %.1f / s (frame statistics), %s %.1f / s (last present count)",
+                 fgCountN_, s, fgCountN_ / s, okStats ? "" : "(n/a)", okStats ? (st.PresentCount - fgCountP0_) / s : 0.0,
+                 okLast ? "" : "(n/a)", okLast ? (pc - fgLast0_) / s : 0.0);
+        fgCountN_ = 0;
+    }
+#if defined(WFC_FFX_SDK)
+    bool createFgContext(int w, int h) {
+        if (fgCtx_) { ffx_.DestroyContext(&fgCtx_, nullptr); fgCtx_ = nullptr; }
+        ffxCreateBackendDX12Desc be{}; be.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12; be.device = dev_;
+        ffxCreateContextDescFrameGenerationHudless hl{}; hl.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
+        hl.hudlessBackBufferFormat = FFX_API_SURFACE_FORMAT_R8G8B8A8_UNORM;
+        ffxCreateContextDescFrameGeneration c{}; c.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
+        c.flags = std::getenv("WFC_FRAMEGEN_DEBUG") ? FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING : 0;
+        c.displaySize = {(uint32_t)w, (uint32_t)h}; c.maxRenderSize = {(uint32_t)w, (uint32_t)h};
+        c.backBufferFormat = FFX_API_SURFACE_FORMAT_R8G8B8A8_UNORM;
+        c.header.pNext = &be.header; be.header.pNext = &hl.header;
+        if (ffx_.CreateContext(&fgCtx_, &c.header, nullptr) != FFX_API_RETURN_OK) { fgCtx_ = nullptr; return false; }
+        LOG_INFO("FRAMEGEN: context %dx%d (HUD-less UI extraction)", w, h);
+        return true;
+    }
+#endif
+    struct FgShared { ID3D12Resource* res = nullptr; HANDLE handle = nullptr; GLuint mem = 0, tex = 0; int w = 0, h = 0; };
+    bool makeShared(FgShared& x, int w, int h, DXGI_FORMAT fmt, GLenum glFmt) {
+        D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)w; rd.Height = (UINT)h;
+        rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = fmt; rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS;
+        if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
+                                                 __uuidof(ID3D12Resource), (void**)&x.res))) return false;
+        if (FAILED(dev_->CreateSharedHandle(x.res, nullptr, GENERIC_ALL, nullptr, &x.handle))) return false;
+        const D3D12_RESOURCE_ALLOCATION_INFO ai = dev_->GetResourceAllocationInfo(0, 1, &rd);
+        gl_.createMem(1, &x.mem);
+        GLint dedicated = GL_TRUE;
+        if (gl_.memParam) gl_.memParam(x.mem, kDedicated, &dedicated);
+        gl_.importMem(x.mem, ai.SizeInBytes, kHandleD3D12Resource, x.handle);
+        glGenTextures(1, &x.tex);
+        glBindTexture(GL_TEXTURE_2D, x.tex);
+        gl_.texStorageMem(GL_TEXTURE_2D, 1, glFmt, w, h, x.mem, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        x.w = w; x.h = h;
+        return glGetError() == GL_NO_ERROR;
+    }
+    void freeShared(FgShared& x) {
+        if (x.tex) glDeleteTextures(1, &x.tex);
+        if (x.mem) gl_.deleteMem(1, &x.mem);
+        if (x.handle) CloseHandle(x.handle);
+        rel(x.res);
+        x = FgShared{};
+    }
+    bool fg_ = false, fgHave_[kRing] = {}, fgCfgFailLogged_ = false, fgPrepFailLogged_ = false;
+    FgShared fgIn_[kRing][3];                          // per ring slot: HUD-less, depth, motion vectors
+    FgParams fgParams_[kRing];
+    uint64_t fgFrameId_ = 0;
+    long long frameStartNs_[kRing] = {};
+    double latSum_ = 0, latMax_ = 0; int latN_ = 0, fgResets_ = 0;
+    UINT swapFlags_ = 0;
+    int fgCountN_ = 0; UINT fgCountP0_ = 0, fgLast0_ = 0; std::chrono::steady_clock::time_point fgCountT0_;
+#if defined(WFC_FFX_SDK)
+    HMODULE ffxDll_ = nullptr;
+    ffxFunctions ffx_{};
+    ffxContext fgSwapCtx_ = nullptr, fgCtx_ = nullptr;
+#else
+    void* fgCtx_ = nullptr;
+#endif
+
 private:
     bool createSwapchain(int w, int h) {
         DXGI_SWAP_CHAIN_DESC1 sd{};
         sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = buffers_; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        sd.Flags = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        swapFlags_ = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | (fg_ ? 0u : (UINT)DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+        sd.Flags = swapFlags_;
         IDXGISwapChain1* sc1 = nullptr;
-        if (FAILED(factory_->CreateSwapChainForHwnd(queue_, hwnd_, &sd, nullptr, nullptr, &sc1)) || !sc1) {
+#if defined(WFC_FFX_SDK)
+        if (fg_) {
+            IDXGISwapChain4* sc4 = nullptr;
+            ffxCreateContextDescFrameGenerationSwapChainForHwndDX12 d{};
+            d.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_FOR_HWND_DX12;
+            d.swapchain = &sc4; d.hwnd = hwnd_; d.desc = &sd; d.fullscreenDesc = nullptr; d.dxgiFactory = factory_; d.gameQueue = queue_;
+            if (ffx_.CreateContext(&fgSwapCtx_, &d.header, nullptr) == FFX_API_RETURN_OK && sc4) sc1 = sc4;
+            else { LOG_WARN("FRAMEGEN: FG swapchain creation failed: plain swapchain"); fg_ = false; fgSwapCtx_ = nullptr;
+                   swapFlags_ |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT; sd.Flags = swapFlags_; }
+        }
+#endif
+        if (!sc1 && (FAILED(factory_->CreateSwapChainForHwnd(queue_, hwnd_, &sd, nullptr, nullptr, &sc1)) || !sc1)) {
             LOG_WARN("D3D12 present: CreateSwapChainForHwnd failed (the GL window may not accept a flip-model swapchain)");
             return false;
         }
         factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
         sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
         rel(sc1);
-        if (swap_) { swap_->SetMaximumFrameLatency(latency_); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
+        if (swap_ && !fg_) { swap_->SetMaximumFrameLatency(latency_); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
         return resize(w, h, false);
     }
     bool resizeFail(const char* what, int w, int h) {   // logged once per kind: a failing resize falls back to GL each frame
@@ -462,8 +666,7 @@ private:
     bool resize(int w, int h, bool resizeBuffers = true) {
         while (glGetError() != GL_NO_ERROR) {}           // (a GL error left by earlier rendering is not this resize's)
         for (auto& b : back_) rel(b);
-        if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM,
-                                                         (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)))
+        if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM, swapFlags_)))
             return resizeFail("ResizeBuffers", w, h);
         for (UINT i = 0; i < buffers_; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
         // the shared texture ring + its GL imports
@@ -500,6 +703,9 @@ private:
         gl_.bindFb(0x8D40, 0);
         w_ = w; h_ = h;
         for (auto& v : frameValue_) v = 0;
+#if defined(WFC_FFX_SDK)
+        if (fg_ && !createFgContext(w, h)) { LOG_WARN("FRAMEGEN: context creation failed: real frames only"); }
+#endif
         const GLenum ge = glGetError();
         if (ge != GL_NO_ERROR) { char b[48]; std::snprintf(b, sizeof b, "GL import (error 0x%04x)", (unsigned)ge); return resizeFail(b, w, h); }
         return true;
@@ -556,15 +762,18 @@ private:
 
 D3D12Presenter* g_presenter = nullptr;
 bool presentHook() { return g_presenter && g_presenter->present(); }
-
 }  // namespace
+bool framegenActive() { return g_presenter && g_presenter->fgOn(); }
+bool framegenInputs(int renderW, int renderH, FgInputs* out) { return g_presenter && g_presenter->fgInputs(renderW, renderH, out); }
+void framegenParams(const FgParams& p) { if (g_presenter) g_presenter->fgSetParams(p); }
+void presentFrameStart(long long ns) { if (g_presenter) g_presenter->setFrameStart(ns); }
 
 // Called once with the GL context current (first frame): enables D3D12 presentation when WFC_D3D12PRESENT is set.
 void initD3D12PresentIfRequested() {
     static bool tried = false;
     if (tried) return;
     tried = true;
-    if (!std::getenv("WFC_D3D12PRESENT")) return;
+    if (!std::getenv("WFC_D3D12PRESENT") && !std::getenv("WFC_FRAMEGEN")) return;   // (frame generation presents through D3D12)
     auto* p = new D3D12Presenter();
     if (!p->init()) { delete p; LOG_WARN("PRESENT: GL (D3D12 present unavailable)"); return; }
     g_presenter = p;

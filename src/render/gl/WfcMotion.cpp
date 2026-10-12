@@ -143,7 +143,7 @@ bool Pipeline::temporalActive() const {
 
 bool Pipeline::motionVectorsOn() const {
     static const bool env = std::getenv("WFC_MOTIONVECTORS") != nullptr || std::getenv("WFC_MOTIONVIEW") != nullptr;
-    return motionOn_ || env || temporalActive();
+    return motionOn_ || env || temporalActive() || framegenOn();   // (FSR 3 FG: motion vectors, no jitter)
 }
 
 // A cut: the camera moved further in one frame than anything the game can move it (10 m: 600 m/s at 60 fps; vehicles and
