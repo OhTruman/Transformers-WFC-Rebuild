@@ -54,6 +54,7 @@ bool Pipeline::fsr3Run(int outW, int outH) {
         GenFramebuffers(1, &fsr3DepthFbo_);
     }
     glx::gpuStamp("FSR3: inputs");
+    const auto tIn = std::chrono::steady_clock::now();
     // colour / velocity / reactive: same-format copies; depth: the depth texture into R32F
     copyImage(colorTex_, GL_TEXTURE_2D, 0, 0, 0, 0, t.color, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
     copyImage(velTex_, GL_TEXTURE_2D, 0, 0, 0, 0, t.velocity, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
@@ -92,6 +93,14 @@ bool Pipeline::fsr3Run(int outW, int outH) {
     p.fovY = 2.0f * std::atan(1.0f / std::max(camProj_.m[5], 1e-6f));
     p.sharpness = std::max(0.0f, fsrSharpness_);
     glx::gpuStamp("FSR3: dispatch");
+    {
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tIn).count();
+        fsr3InSum_ += ms; fsr3InMax_ = std::max(fsr3InMax_, ms);
+        if (++fsr3InN_ == 300) {
+            LOG_INFO("FSR3 inputs (copies + depth -> R32F; avg / max ms over 300): %.3f / %.2f", fsr3InSum_ / 300, fsr3InMax_);
+            fsr3InSum_ = fsr3InMax_ = 0; fsr3InN_ = 0;
+        }
+    }
     if (!fsr3Dispatch(p)) return false;
     fsr3Out_ = t.output;
     static bool logged = false;
