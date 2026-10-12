@@ -473,6 +473,11 @@ private:
     std::chrono::steady_clock::time_point fsr3LastFrame_{};
     double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
     bool fsr3Mode() const;
+    // optional FSR 3 frame generation (WfcFrameGen.cpp): HUD-less / depth / motion inputs for the presenter's FG swapchain
+    GLuint fgDepthProg_ = 0, fgVelProg_ = 0, fgFbo_ = 0;
+    std::chrono::steady_clock::time_point fgLastFrame_{};
+    bool framegenOn() const;
+    void framegenCapture(int outW, int outH);
     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
