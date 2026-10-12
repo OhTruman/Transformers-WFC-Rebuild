@@ -18,6 +18,7 @@
 
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
+#include "render/d3d12/D3D12FrameGen.h"
 #include "platform/FileCompression.h"
 #include "render/gl/RenderWatchdog.h"
 #include "render/FrameLimiter.h"
@@ -1583,6 +1584,9 @@ public:
         LOG_INFO("renderer: upscaling mode %d (%s)", mode, kName[mode]);
     }
     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+    bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
+    bool frameGenerationActive() const override { return framegenActive(); }
+    int frameGenerationFactor() const override { return framegenActive() ? 2 : 1; }
     bool upscalingModeAvailable(int mode) const override {
         return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
     }

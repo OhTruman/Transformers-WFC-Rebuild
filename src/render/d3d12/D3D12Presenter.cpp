@@ -41,6 +41,21 @@ namespace glx { void gpuPrePresent(); }   // GLExt.cpp: the WFC_GPUSTAMPS "(pres
 
 namespace render {
 void d3d12SelectAgility();   // D3D12Agility.cpp
+static bool g_fgAtStartup = false;                // setFrameGenerationAtStartup (the profile's Frame Generation row)
+void setFrameGenerationAtStartup(bool on) { g_fgAtStartup = on; }
+// the FSR 3 FG runtime beside the exe: the FFX loader + frame-generation DLLs and the Agility D3D12 runtime
+bool frameGenerationRuntimeShipped() {
+    static const bool shipped = [] {
+        char exe[MAX_PATH * 2] = "";
+        GetModuleFileNameA(nullptr, exe, sizeof exe);
+        std::string dir(exe);
+        dir = dir.substr(0, dir.find_last_of("\\/") + 1);
+        for (const char* f : {"amd_fidelityfx_loader_dx12.dll", "amd_fidelityfx_framegeneration_dx12.dll", "D3D12\\D3D12Core.dll"})
+            if (GetFileAttributesA((dir + f).c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        return true;
+    }();
+    return shipped;
+}
 namespace {
 typedef uint64_t GLuint64_;
 typedef void(APIENTRY* PFN_CreateMemoryObjectsEXT)(GLsizei, GLuint*);
@@ -172,7 +187,7 @@ public:
         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
 #if defined(WFC_FFX_SDK)
-        if (std::getenv("WFC_FRAMEGEN")) {             // FSR 3 frame generation (M5 C): the FG swapchain + context
+        if (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) {   // FSR 3 frame generation (M5 C): the FG swapchain + context
             ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
             if (ffxDll_) { ffxLoadFunctions(&ffx_, ffxDll_); fg_ = ffx_.CreateContext && ffx_.Configure && ffx_.Dispatch && ffx_.DestroyContext; }
             if (!fg_) LOG_WARN("FRAMEGEN: amd_fidelityfx_loader_dx12.dll / entry points missing: plain D3D12 present");
@@ -270,6 +285,8 @@ public:
         using clk = std::chrono::steady_clock;
         const clk::time_point t0 = clk::now();
         RECT rc; GetClientRect(hwnd_, &rc);
+        // minimised (0 x 0 client area): nothing to present; no resize to a degenerate size (FG soak)
+        if (IsIconic(hwnd_) || rc.right - rc.left <= 0 || rc.bottom - rc.top <= 0) return true;
         const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
         if (w != w_ || h != h_) { drainWorker(); waitIdle(); if (!resize(w, h)) return false; }
         const UINT slot = (UINT)(mainFrame_++ % kRing);
@@ -587,6 +604,7 @@ public:
 #endif
     struct FgShared { ID3D12Resource* res = nullptr; HANDLE handle = nullptr; GLuint mem = 0, tex = 0; int w = 0, h = 0; };
     bool makeShared(FgShared& x, int w, int h, DXGI_FORMAT fmt, GLenum glFmt) {
+        while (glGetError() != GL_NO_ERROR) {}           // (a GL error left by earlier rendering is not this import's)
         D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)w; rd.Height = (UINT)h;
         rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = fmt; rd.SampleDesc.Count = 1;
@@ -666,6 +684,16 @@ private:
     bool resize(int w, int h, bool resizeBuffers = true) {
         while (glGetError() != GL_NO_ERROR) {}           // (a GL error left by earlier rendering is not this resize's)
         for (auto& b : back_) rel(b);
+#if defined(WFC_FFX_SDK)
+        if (resizeBuffers && fg_) {                      // FG swapchain: its presents drained and the FG context gone first
+            if (fgSwapCtx_) {
+                ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
+                wp.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12;
+                ffx_.Dispatch(&fgSwapCtx_, &wp.header);
+            }
+            if (fgCtx_) { ffx_.DestroyContext(&fgCtx_, nullptr); fgCtx_ = nullptr; }
+        }
+#endif
         if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM, swapFlags_)))
             return resizeFail("ResizeBuffers", w, h);
         for (UINT i = 0; i < buffers_; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
@@ -773,7 +801,7 @@ void initD3D12PresentIfRequested() {
     static bool tried = false;
     if (tried) return;
     tried = true;
-    if (!std::getenv("WFC_D3D12PRESENT") && !std::getenv("WFC_FRAMEGEN")) return;   // (frame generation presents through D3D12)
+    if (!std::getenv("WFC_D3D12PRESENT") && !std::getenv("WFC_FRAMEGEN") && !g_fgAtStartup) return;   // (FG presents through D3D12)
     auto* p = new D3D12Presenter();
     if (!p->init()) { delete p; LOG_WARN("PRESENT: GL (D3D12 present unavailable)"); return; }
     g_presenter = p;

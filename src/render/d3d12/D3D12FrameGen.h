@@ -28,5 +28,6 @@ void framegenParams(const FgParams& p);                      // this frame's cam
 // The renderer's frame start (steady_clock, ns since epoch): the presenter reports frame start -> Present returned (D3D12
 // present / FG; a CPU-side latency proxy, display scan-out not included).
 void presentFrameStart(long long steadyNs);
+bool frameGenerationRuntimeShipped();                        // FFX FG DLLs + D3D12/D3D12Core.dll beside the exe
 
 }  // namespace render
