@@ -380,8 +380,9 @@ def write_glb(path, prims, kind='bsp_element'):
                  'TEXCOORD_0': add(q['UV'], 'VEC2', 34962), 'TEXCOORD_1': add(q['SUV'], 'VEC2', 34962)}
         meshes.append({'primitives': [{'attributes': attrs, 'indices': add(q['I'], 'SCALAR', 34963),
                                        'material': matidx[mk]}]})
-        nodes.append({'name': q['key'].split('.')[-1], 'mesh': len(meshes) - 1,
-                      'extras': {'component': q['key'], 'kind': kind}})
+        ex = {'component': q['key'], 'kind': kind}
+        if q.get('lightmap_component'): ex['lightmap_component'] = q['lightmap_component']
+        nodes.append({'name': q['key'].split('.')[-1], 'mesh': len(meshes) - 1, 'extras': ex})
     j = {'asset': {'version': '2.0', 'generator': 'Rebuild-Rendering tools/render/build_lighting.py'},
          'scene': 0, 'scenes': [{'nodes': list(range(len(nodes)))}], 'nodes': nodes, 'meshes': meshes,
          'materials': mats, 'accessors': acc, 'bufferViews': views, 'buffers': [{'byteLength': len(bin_)}]}
@@ -395,7 +396,146 @@ def write_glb(path, prims, kind='bsp_element'):
         f.write(struct.pack('<II', len(bin_), 0x004E4942)); f.write(bytes(bin_))
 
 
-def decals(repo, out, mapname=None):
+def read_glb(path):
+    """-> [(node dict, 4x4 column-major matrix or None, [(P, N, UV1, I) per primitive])] (float64 / uint32 arrays)."""
+    b = open(path, 'rb').read()
+    n = struct.unpack_from('<I', b, 12)[0]
+    j = json.loads(b[20:20 + n])
+    binoff = 20 + n + 8
+    dt = {5126: ('<f4', 4), 5125: ('<u4', 4), 5123: ('<u2', 2), 5121: ('<u1', 1)}
+    width = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}
+
+    def acc(i):
+        a = j['accessors'][i]; v = j['bufferViews'][a['bufferView']]
+        t, sz = dt[a['componentType']]; w = width[a['type']]
+        off = binoff + v.get('byteOffset', 0) + a.get('byteOffset', 0)
+        stride = v.get('byteStride', sz * w)
+        if stride == sz * w:
+            return np.frombuffer(b, t, a['count'] * w, off).reshape(a['count'], w).astype('f8' if t == '<f4' else 'u4')
+        return np.array([np.frombuffer(b, t, w, off + k * stride) for k in range(a['count'])]).astype('f8' if t == '<f4' else 'u4')
+    out = []
+    for nd in j['nodes']:
+        if 'mesh' not in nd: continue
+        prims = []
+        for pr in j['meshes'][nd['mesh']]['primitives']:
+            at = pr['attributes']
+            if 'TEXCOORD_1' not in at or 'indices' not in pr: prims.append(None); continue
+            prims.append((acc(at['POSITION']), acc(at['NORMAL']) if 'NORMAL' in at else None, acc(at['TEXCOORD_1']),
+                          acc(pr['indices'])[:, 0]))
+        out.append((nd, nd.get('matrix'), prims))
+    return out
+
+
+class DecalReceivers:
+    """Receiver geometry for the decals' lightmap coordinates (UE3: a static decal samples its receiver's lightmap at the
+    receiver's own lightmap UV). Static-mesh receivers: the decal keeps whole receiver triangles, so each decal vertex is
+    a receiver vertex (exact match in world.glb, glTF world space). BSP receivers: the decal polygon is clipped from the
+    receiver's surfaces, so UV1 / normal are interpolated in the containing bsp.glb triangle of that ModelComponent; the
+    lightmap element (#k) is the element of that triangle."""
+    def __init__(self, mapname, out):
+        self.world = read_glb(os.path.join(VS_MAPS, mapname, 'world.glb'))
+        self.by_comp, self.by_actor = {}, {}
+        for k, (nd, _, _) in enumerate(self.world):
+            ex = nd.get('extras') or {}
+            if ex.get('component'): self.by_comp[ex['component'].lower()] = k
+            if ex.get('actor') and not ex.get('component'): self.by_actor[ex['actor'].lower()] = k
+        self.bsp = read_glb(os.path.join(out, 'bsp.glb')) if os.path.exists(os.path.join(out, 'bsp.glb')) else []
+        self._cache = {}
+
+    def _node_world(self, k):
+        if k in self._cache: return self._cache[k]
+        nd, mtx, prims = self.world[k]
+        M = np.array(mtx, 'f8').reshape(4, 4).T if mtx else np.eye(4)
+        Nm = np.linalg.inv(M[:3, :3]).T
+        P, N, U, I = [], [], [], []
+        base = 0
+        for q in prims:
+            if q is None: continue
+            P.append(q[0] @ M[:3, :3].T + M[:3, 3])
+            n = (q[1] if q[1] is not None else np.tile([0, 1.0, 0], (len(q[0]), 1))) @ Nm.T
+            N.append(n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)); U.append(q[2])
+            I.append(q[3] + base); base += len(q[0])
+        r = (np.vstack(P), np.vstack(N), np.vstack(U), np.concatenate(I)) if P else None
+        self._cache[k] = r
+        return r
+
+    @staticmethod
+    def _on_triangles(P, TP, TN, TU, tol):
+        """Per point: the nearest triangle (in-plane distance + outside penalty) -> barycentric UV1 / normal, or None
+        when a point is farther than tol (m) from every triangle."""
+        a0, e1, e2 = TP[:, 0], TP[:, 1] - TP[:, 0], TP[:, 2] - TP[:, 0]
+        n = np.cross(e1, e2); nn = (n * n).sum(1); ok = nn > 1e-18; nns = np.where(ok, nn, 1)
+        UV = np.zeros((len(P), 2)); N = np.zeros((len(P), 3)); best = np.zeros(len(P), int)
+        for i, x in enumerate(P):
+            d = x - a0
+            w2 = (np.cross(e1, d) * n).sum(1) / nns; w1 = (np.cross(d, e2) * n).sum(1) / nns; w0 = 1 - w1 - w2
+            out_ = np.maximum(0, -np.minimum(np.minimum(w0, w1), w2)) * np.sqrt(np.maximum(nns, 0)) ** 0.5
+            plane = np.abs((d * n).sum(1)) / np.sqrt(nns)
+            score = np.where(ok, plane + out_, 1e9)
+            j = int(score.argmin())
+            if score[j] > tol: return None
+            b = np.clip(np.array([w0[j], w1[j], w2[j]]), 0, None); b = b / max(b.sum(), 1e-12)
+            UV[i] = b @ TU[j]; nv = b @ TN[j]; N[i] = nv / max(np.linalg.norm(nv), 1e-12); best[i] = j
+        return UV, N, best
+
+    def mesh(self, comp_path, actor_name, P):
+        """-> (UV1, N) per decal vertex: the receiver's own vertex where one coincides (2 mm; the decal keeps whole
+        receiver triangles), else interpolated in the receiver triangle the point lies on (5 cm); None otherwise."""
+        k = self.by_comp.get(comp_path.lower())
+        if k is None and actor_name: k = self.by_actor.get(actor_name.lower())
+        if k is None: return None
+        g = self._node_world(k)
+        if g is None: return None
+        RP, RN, RU, RI = g
+        t = RI.reshape(-1, 3)
+        r = self._on_triangles(P, RP[t], RN[t], RU[t], 0.05)
+        if r is None: return None
+        UV, N, _ = r
+        for a in range(0, len(P), 256):                           # exact vertices win (no interpolation drift)
+            d = ((P[a:a + 256, None, :] - RP[None, :, :]) ** 2).sum(-1)
+            j = d.argmin(1); hit = np.sqrt(d[np.arange(len(j)), j]) < 0.002
+            UV[a:a + 256][hit] = RU[j[hit]]; N[a:a + 256][hit] = RN[j[hit]]
+        return UV, N
+
+    def bsp_element(self, comp_path, P, I):
+        """-> (element key per triangle list, UV1, N) for decal triangles on a ModelComponent, or None."""
+        pre = comp_path.lower() + '#'
+        tris = []
+        for nd, _, prims in self.bsp:
+            key = (nd.get('extras') or {}).get('component', '')
+            if not key.lower().startswith(pre): continue
+            for q in prims:
+                if q is None: continue
+                Q, NQ, UQ, IQ = q
+                t = IQ.reshape(-1, 3)
+                tris.append((key, Q[t], (NQ[t] if NQ is not None else None), UQ[t]))
+        if not tris: return None
+        TK = sum(([x[0]] * len(x[1]) for x in tris), [])
+        TP = np.concatenate([x[1] for x in tris]); TU = np.concatenate([x[3] for x in tris])
+        TN = np.concatenate([x[2] if x[2] is not None else np.tile([0, 1.0, 0], (len(x[1]), 3, 1)) for x in tris])
+        a0, e1, e2 = TP[:, 0], TP[:, 1] - TP[:, 0], TP[:, 2] - TP[:, 0]
+        n = np.cross(e1, e2); nn = (n * n).sum(1); ok = nn > 1e-18
+        best = np.zeros(len(P), int); bary = np.zeros((len(P), 3))
+        for i, x in enumerate(P):
+            d = x - a0
+            # barycentrics in each triangle's plane + distance to the plane
+            w2 = (np.cross(e1, d) * n).sum(1) / np.where(ok, nn, 1); w1 = (np.cross(d, e2) * n).sum(1) / np.where(ok, nn, 1)
+            w0 = 1 - w1 - w2
+            outside = np.maximum(0, -np.minimum(np.minimum(w0, w1), w2))
+            plane = np.abs((d * n).sum(1)) / np.sqrt(np.where(ok, nn, 1))
+            score = np.where(ok, plane + outside * 10.0, 1e9)
+            j = int(score.argmin()); best[i] = j; bary[i] = (w0[j], w1[j], w2[j])
+        # the element of each decal triangle: its vertices' majority (they lie on one receiver surface)
+        el = []
+        for t in I.reshape(-1, 3):
+            ks = [TK[best[v]] for v in t]
+            el.append(max(set(ks), key=ks.count))
+        UV = (TU[best] * bary[:, :, None]).sum(1); N = (TN[best] * bary[:, :, None]).sum(1)
+        N = N / np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+        return el, UV, N
+
+
+def decals(repo, out, mapname=None, lm_keys=None):
     """Static decals from their COOKED receiver geometry (DecalComponent native tail, licensee 144):
     [NumReceivers] x ([ReceiverComponent][VertexStride=28][NumVerts] verts{pos(3f, receiver-local),
     TangentX, TangentZ (packed), ShadowTexCoord(2f)} [IndexStride=2][NumIndices] u16 indices
@@ -439,6 +579,13 @@ def decals(repo, out, mapname=None):
     prims = []
     skipped = 0
     unplaced = 0
+    import collections
+    stats = collections.Counter()
+    lmk = {k.lower(): k for k in (lm_keys or ())}
+    try:
+        recv = DecalReceivers(mapname or p.name.rsplit('_', 2)[0], out) if lm_keys is not None else None
+    except (OSError, ValueError, KeyError) as ex:
+        print('decals: receiver geometry unavailable (%s): decals stay unlightmapped' % ex); recv = None
     for i, e in enumerate(p.exports):
         if p.class_name(e) != 'DecalComponent': continue
         t, used = pr.read_object(i + 1)
@@ -454,6 +601,7 @@ def decals(repo, out, mapname=None):
         tx, ty = d.get('TileX', 1.0), d.get('TileY', 1.0); ox, oy = d.get('OffsetX', 0.0), d.get('OffsetY', 0.0)
         o = 4
         P_, N_, UV_, I_ = [], [], [], []
+        recv_prims = []                                       # (lightmap key, P, N, UV, SUV, I) per lightmapped receiver
         for _ in range(struct.unpack_from('>i', tail, 0)[0]):
             comp, stride, cnt = struct.unpack_from('>iii', tail, o); o += 12
             verts = tail[o:o + stride * cnt]; o += stride * cnt
@@ -466,11 +614,44 @@ def decals(repo, out, mapname=None):
             Pw = (np.c_[P, np.ones(len(P))] @ M)[:, :3]
             u = 0.5 - ((Pw - L) @ T) * tx / W + ox
             v = 0.5 - ((Pw - L) @ B) * ty / H + oy
+            Pg = np.stack([Pw[:, 0] * 0.01, Pw[:, 2] * 0.01, Pw[:, 1] * 0.01], 1)
+            II = np.array(idx, 'u4')
+            # the receiver's lightmap (texture lightmaps only; vertex-lightmapped receivers stay unlightmapped [PARTIAL])
+            got = None
+            if recv is not None and lm_keys is not None:
+                rp = p.object_path(comp)
+                if p.class_name(p.exports[comp - 1]) == 'ModelComponent':
+                    r = recv.bsp_element(rp, Pg, II)
+                    if r is not None:
+                        els, SUV, NN = r
+                        tri = II.reshape(-1, 3)
+                        for ek in sorted(set(els)):
+                            if ek.lower() not in lmk: continue
+                            sel = tri[[k for k, x in enumerate(els) if x == ek]]
+                            got = got or []
+                            got.append((ek, sel.reshape(-1)))
+                        if got: got = [(lmk[ek.lower()], ii, SUV, NN) for ek, ii in got]
+                    stats['bsp ' + ('lightmapped' if got else 'unmatched / no LM')] += 1
+                elif rp.lower() in lmk:
+                    r = recv.mesh(rp, p.obj_name(p.exports[comp - 1]['outer']), Pg)
+                    if r is not None: got = [(lmk[rp.lower()], II, r[0], r[1])]
+                    stats['mesh texture-LM ' + ('matched' if got else 'UNMATCHED')] += 1
+                else:
+                    stats['mesh without texture LM'] += 1
+            if got:
+                for ek, ii, SUV, NN in got:
+                    recv_prims.append((ek, Pg, NN, np.stack([u, v], 1), SUV, ii))
+                continue
             base = len(P_)
             for q in range(cnt):
                 P_.append([Pw[q, 0] * 0.01, Pw[q, 2] * 0.01, Pw[q, 1] * 0.01])
                 N_.append([0.0, 1.0, 0.0]); UV_.append([u[q], v[q]])
             I_ += [base + x for x in idx]
+        for ek, Pg, NN, UV, SUV, ii in recv_prims:           # used vertices only, re-indexed
+            used = np.unique(ii); remap = np.zeros(len(Pg), 'u4'); remap[used] = np.arange(len(used), dtype='u4')
+            prims.append({'key': p.object_path(i + 1), 'material': mat, 'two_sided': False, 'lightmap_component': ek,
+                          'P': Pg[used].astype('f4'), 'N': NN[used].astype('f4'), 'UV': UV[used].astype('f4'),
+                          'SUV': SUV[used].astype('f4'), 'I': remap[ii]})
         if not I_: continue
         prims.append({'key': p.object_path(i + 1), 'material': mat, 'two_sided': False,
                       'P': np.array(P_, 'f4'), 'N': np.array(N_, 'f4'), 'UV': np.array(UV_, 'f4'),
@@ -479,6 +660,7 @@ def decals(repo, out, mapname=None):
     if unplaced: print('decals: %d components without serialized placement skipped (PARTIAL)' % unplaced)
     print('decals: %d (%d tris), %d receivers without transform' %
           (len(prims), sum(len(q['I']) // 3 for q in prims), skipped))
+    if stats: print('decal receivers: %s; %d lightmapped decal prims' % (dict(stats), sum(1 for q in prims if q.get('lightmap_component'))))
 
 
 def postprocess(mapname, out):
@@ -605,7 +787,7 @@ def main():
         L += lights(repo, pi)
         F = F or fog(repo, pi)
     PP = postprocess(mapname, out)
-    decals(repo, out, mapname)
+    decals(repo, out, mapname, lm_keys=set(props))   # (texture-lightmap keys: decals sample their receiver's)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
     copied = 0
     for root, _, files in os.walk(umodel_dir):

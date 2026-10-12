@@ -265,6 +265,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
             if (node.has("extras")) {
                 sm.component = node["extras"]["component"].asString();
                 sm.sourceMesh = node["extras"]["mesh"].asString();
+                sm.lightmapComponent = node["extras"]["lightmap_component"].asString();
                 sm.hiddenGame = node["extras"]["hidden_game"].asBool(false);
                 sm.sourceSection = (int)pi;
                 if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
