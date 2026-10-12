@@ -811,6 +811,7 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
+    srgbBlockTex_.clear();
     gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
@@ -1560,7 +1561,7 @@ static const bool gFileReadHookRegistered = (assets::setFileReadHook(&platform::
 
 // Loads `file`'s original blocks into the bound GL_TEXTURE_2D (levels 0..n-1, GL_TEXTURE_MAX_LEVEL n-1); false = no
 // DDS for it (the caller decodes the PNG). `bytes` receives the uploaded size (MEMSTATS).
-static bool uploadDds(const std::string& file, bool srgb, unsigned long long& bytes, bool hd) {
+static bool uploadDds(const std::string& file, bool srgb, unsigned long long& bytes, bool hd, bool* srgbBlocksOut = nullptr) {
     const auto& idx = ddsIndex();
     const std::string key = ddsKey(file);
     if (key.empty()) return false;
@@ -1597,6 +1598,11 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     const bool check = std::getenv("WFC_DDSCHECK") != nullptr && !hdBlocks;   // (HD blocks are not the PNG's size)
     const bool pwl = srgb && !srgbCurve;
     const bool blocks = !srgb && !E.opaque && (E.fmt == "DXT1" || E.fmt == "DXT5") && CompressedTexImage2D;
+    // HD sRGB colour maps: the blocks in GL's sRGB S3TC formats (the material corrects the filtered value to the PWL curve)
+    static const bool hdExact = std::getenv("WFC_HDEXACT") != nullptr;   // A/B: decoded exactly, as before
+    const bool srgbBlocks = hdBlocks && srgb && !srgbCurve && !hdExact && CompressedTexImage2D &&
+                            (E.fmt == "DXT1" || (E.fmt == "DXT5" && !E.opaque));
+    if (srgbBlocksOut) *srgbBlocksOut = srgbBlocks;
     static uint32_t lut10[256];
     static uint16_t lut16[256];
     static bool lutInit = false;
@@ -1614,6 +1620,13 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
         const size_t n = levelBytes(E.fmt, w, h);
         const uint8_t* d = f.data() + off;
         off += n;
+        if (srgbBlocks) {                                 // (opaque DXT1: the no-alpha format, alpha reads 1 as the PNG path)
+            const GLenum f = E.fmt == "DXT1" ? (E.opaque ? 0x8C4C /*SRGB_S3TC_DXT1*/ : 0x8C4D /*SRGB_ALPHA_S3TC_DXT1*/)
+                                             : 0x8C4F /*SRGB_ALPHA_S3TC_DXT5*/;
+            CompressedTexImage2D(GL_TEXTURE_2D, l, f, w, h, 0, (GLsizei)n, d);
+            bytes += n;
+            continue;
+        }
         if (blocks) {
             CompressedTexImage2D(GL_TEXTURE_2D, l, E.fmt == "DXT1" ? 0x83F1 /*RGBA_S3TC_DXT1*/ : 0x83F3 /*RGBA_S3TC_DXT5*/,
                                  w, h, 0, (GLsizei)n, d);
@@ -1671,7 +1684,9 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         unsigned long long bytes = 0;
-        if (uploadDds(file, srgb, bytes, hdTextures_)) {
+        bool srgbBlocks = false;
+        if (uploadDds(file, srgb, bytes, hdTextures_, &srgbBlocks)) {
+            if (srgbBlocks) srgbBlockTex_.insert(id);
             ++gTexCreates;
             if (file.find("/lightmaps/") != std::string::npos) { gMemLightmapBytes += bytes; ++gMemLightmaps; }
             else { gMemTextureBytes += bytes; ++gMemTextures; if (srgb) gMemSrgbTexBytes += bytes; ++gMemDdsTextures; }
@@ -2012,6 +2027,18 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     std::string fs = kFSHead;
     std::string code = body;
     for (const std::string& n : rtParams) fs += "uniform vec4 uRT_" + n + "; uniform int uRTSet_" + n + ";\n";
+    bool srgbFix = false;                                // a slot holds an HD sRGB S3TC map: its samples are corrected
+    for (size_t k = 0; k < slots.size(); ++k) srgbFix |= !slotIsCube[k] && srgbBlockTex_.count(slots[k].tex) > 0;
+    if (srgbFix)   // the filtered sRGB-linear value -> its sRGB code -> the Xenos PWL degamma (continuous between codes)
+        fs += "vec3 wfcPwlFromSrgb(vec3 x) {\n"
+              "    x = clamp(x, 0.0, 1.0);\n"
+              "    vec3 g = mix(x * 12.92, 1.055 * pow(x, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), x));\n"
+              "    vec3 hi = step(vec3(96.0 / 255.0), g);\n"
+              "    vec3 sc = mix(mix(vec3(1.0), vec3(2.0), step(vec3(64.0 / 255.0), g)), mix(vec3(4.0), vec3(8.0), step(vec3(192.0 / 255.0), g)), hi) / 1024.0;\n"
+              "    vec3 off = mix(mix(vec3(0.0), vec3(-64.0), step(vec3(64.0 / 255.0), g)), mix(vec3(-256.0), vec3(-1024.0), step(vec3(192.0 / 255.0), g)), hi);\n"
+              "    vec3 lin = g * (255.0 * 1024.0) * sc + off;\n"
+              "    return clamp(lin * (1.0 + sc), 0.0, 1023.0) / 1023.0;\n"
+              "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
         if (slotIsCube[k]) {
@@ -2024,8 +2051,12 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
         } else {
             fs += "uniform sampler2D uTex" + n + "; uniform vec4 uUnpackMin" + n + "; uniform vec4 uUnpackScale" + n + ";\n";
-            fs += "vec4 wfcS2D_" + n + "(vec2 uv) { return texture(uTex" + n + ", uv) * uUnpackScale" + n +
-                  " + uUnpackMin" + n + "; }\n";
+            if (srgbBlockTex_.count(slots[k].tex))
+                fs += "vec4 wfcS2D_" + n + "(vec2 uv) { vec4 t = texture(uTex" + n + ", uv); t.rgb = wfcPwlFromSrgb(t.rgb); return t * uUnpackScale" + n +
+                      " + uUnpackMin" + n + "; }\n";
+            else
+                fs += "vec4 wfcS2D_" + n + "(vec2 uv) { return texture(uTex" + n + ", uv) * uUnpackScale" + n +
+                      " + uUnpackMin" + n + "; }\n";
             replaceAll(code, "wfcSample2D(" + n + ", ", "wfcS2D_" + n + "(");
         }
     }

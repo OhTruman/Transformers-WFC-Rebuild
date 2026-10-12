@@ -1145,6 +1145,7 @@ private:
     bool ruleActive(const std::string& rule) const;
     bool depthDirty_ = true;
     bool sceneColorCopied_ = false;
+    std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)
     void ensureSceneDepth();
     void ensureSceneColor();
     float fxColor_[4] = {1, 1, 1, 1};
