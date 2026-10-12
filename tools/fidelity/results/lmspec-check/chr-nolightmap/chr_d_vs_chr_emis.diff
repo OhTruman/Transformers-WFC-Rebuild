@@ -1,0 +1,150 @@
+--- "/f/Transformers Rebuild/Rebuild-Rendering/work/re/chr_emis.py"	2026-10-12 13:01:36.263700900 -0500
++++ work/lmspec/geom/chr_d.py	2026-10-12 14:15:01.600943000 -0500
+@@ -11,7 +11,8 @@
+ # identified in its code and driven per trial; V_t = UE3 tangent-space camera vector (B = cross(Z, X) * w), no V fit.
+ # Writes lmspec_<map>.json and prints a summary. Usage: lmspec_verify.py MAP [material-substring]
+ import sys, os, re, json, struct, collections, numpy as np
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tools', 'render'))
++sys.path.insert(0, 'F:/Transformers Rebuild/Rebuild-Rendering/tools/render')
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # EXPERIMENTAL copy (chr_d.py): local gl2py / xemu / pk first
+ H = os.path.dirname(os.path.abspath(__file__))
+ import xenos_dis as X, xemu, gl2py
+ from ue3obj import Repo, map_packages
+@@ -20,12 +21,12 @@
+ FILT = sys.argv[2] if len(sys.argv) > 2 else None
+ RD = os.environ.get('LMS_RD', 'F:/Transformers Rebuild/Rebuild/work/render') + '/' + MAP   # LMS_RD: another render root
+ mats = json.load(open(RD + '/materials_glsl.json', encoding='utf-8'))
+-scm = [x for x in json.load(open(os.path.join(H, 'scall_%s_chr.json' % MAP))) if 'NoLightMapPolicy' in x['type']]
++scm = [x for x in json.load(open(os.path.join(H, os.environ.get('CHR_SCALL', 'scall_%s_all.json' % MAP)))) if 'NoLightMapPolicy' in x['type']]
+ pk, _ = map_packages(MAP)
+-REPO = Repo(list(reversed(pk)), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + sorted({k.split('.')[0] + '.xxx' for k in mats if k.startswith(('TR_', 'WEP_'))}))   # + the character / weapon packages (MIC parameter values)
++REPO = Repo(list(reversed(pk)), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + [q for q in os.environ.get('CHR_PKGS', '').split(',') if q] + sorted({k.split('.')[0] + '.xxx' for k in mats if k.startswith(('TR_', 'WEP_'))}))   # + the character / weapon packages (MIC parameter values)
+ blobs = {}
+ def blob(x):
+-    k = 'sc_%s_%s.bin' % (MAP, x['export'].split('.')[-1])
++    k = 'sc_%s_%s.bin' % (os.environ.get('CHR_BLOBTAG', MAP), x['export'].split('.')[-1])
+     if k not in blobs: blobs[k] = open(os.path.join(H, k), 'rb').read()
+     return blobs[k]
+ by_owner = collections.defaultdict(list)
+@@ -174,6 +175,7 @@
+     s = X.Shader(blob(x), x['off'])
+     cn = {c['name']: c for c in s.consts}
+     owner = info['_owner']
++    if owner.startswith('BRUTE:'): owner = x['materials'][0]          # EXPERIMENTAL: the candidate map's compiling material
+     p, t = REPO.native_tail(owner)
+     L = UE(p, t).lists()
+     if L is None: return {'status': 'uniforms-unparsed'}
+@@ -255,6 +257,10 @@
+     except (ValueError, KeyError) as ex:
+         return {'status': 'emulate: %s' % ex}
+     Ot = o0[('o', 0)][:3]
++    NLC = cn.get('NoLightMapColor')
++    if NLC is None: return {'status': 'no-NoLightMapColor'}
++    c1 = dict(consts); c1[NLC['reg']] = np.ones(4)
++    Dt = xemu.run(s, regs0, c1, fetch, T)[0][('o', 0)][:3] - Ot
+     if os.environ.get('CHR_PROBE'):
+         tr = []; xemu.run(s, regs0, consts, fetch, T, trace=tr)
+         PROBE.update({'trace': tr, 'Vw': Vw, 'Xg': Xg, 'Bg': Bg, 'Zg': Zg, 'raw': raw, 'UV0': UV0})
+@@ -285,46 +291,50 @@
+               'tbnUE': lambda vv: gl2py.g(Xg * np.asarray(vv)[0] + Bg * np.asarray(vv)[1] + Zg * np.asarray(vv)[2], T),
+               'normal': gl2py.g(np.array([0, 0, 1.0]), T),
+               'cameraVector': gl2py.g(Vt, T), 'reflectionVector': gl2py.g(np.stack([-Vt[0], -Vt[1], Vt[2]]), T)}
+-        out = {'status': 'ok', 'dO_rel': dO_rel, 'shader_off': x['off'], 'type': x['type'], 'owner': owner,
++        out = {'status': 'ok', 'cand': x['materials'][0], 'dO_rel': dO_rel, 'shader_off': x['off'], 'type': x['type'], 'owner': owner,
+                'assignment': [slots2d[j]['object'].split('.')[-1] for j in combo], 'O_rms': float(np.sqrt((Ot ** 2).mean()))}
+-        EE = {}
+-        for variant, glsl in (('world', v['glsl']), ('tangent', v['glsl'].replace('wfcNormalNode(m)', 'm.normal')),
+-                              ('vertex', v['glsl'].replace('wfcNormalNode(m)', 'tangentToWorldUE(m, vec3(0.0, 0.0, 1.0))'))):
+-            try:
+-                o = gl2py.evaluate(glsl, T, slots, dict(mi))
+-            except Exception as ex:
+-                out[variant] = {'error': '%s %s' % (type(ex).__name__, str(ex)[:80])}; continue
+-            E = np.asarray(getattr(o, 'EmissiveColor', gl2py.g(np.zeros(3), T)))[:3]
+-            EE[variant] = E
+-            mi2 = dict(mi); mi2['cameraVector'] = gl2py.g(Vt2, T); mi2['reflectionVector'] = gl2py.g(np.stack([-Vt2[0], -Vt2[1], Vt2[2]]), T)
+-            E2 = np.asarray(getattr(gl2py.evaluate(glsl, T, slots, mi2), 'EmissiveColor', gl2py.g(np.zeros(3), T)))[:3]
+-            dE = E - E2
+-            den_ = (dE * dE).sum(); a_ = (dE * dO).sum() / den_ if den_ > 0 else 0.0
+-            out[variant + '_view'] = {'resid': float(np.sqrt(((a_ * dE - dO) ** 2).sum() / max((dO ** 2).sum(), 1e-30))), 'scale': float(a_),
+-                                      'resid_unit_scale': float(np.sqrt(((dE - dO) ** 2).sum() / max((dO ** 2).sum(), 1e-30)))}
+-            den = (E * E).sum(); a = (E * Ot).sum() / den if den > 0 else 0.0
+-            r = float(np.sqrt(((a * E - Ot) ** 2).sum() / max((Ot ** 2).sum(), 1e-30)))
+-            out[variant] = {'resid': r, 'fog': float(a)}
+-        if len(EE) == 2:   # beta: the share of (world - tangent) the original shows (1 = world-space Normal, 0 = tangent)
+-            fa = out['tangent']['fog'] if out['tangent']['fog'] else 1.0
+-            Dd = (EE['world'] - EE['tangent']) * fa; Rr = Ot - fa * EE['tangent']
+-            dd = (Dd * Dd).sum()
+-            out['beta'] = float((Rr * Dd).sum() / dd) if dd > 0 else None
+-            out['diff_rel'] = float(np.sqrt(dd / max((Ot ** 2).sum(), 1e-30)))
+-            if dd > 0:
+-                Rw = Rr - Dd; out['resid_after_world'] = float(np.sqrt((Rw ** 2).sum() / max((Ot ** 2).sum(), 1e-30)))
+-        sc_ = min(out.get(k, {}).get('resid', 9) for k in ('world', 'tangent', 'vertex'))
+-        if best is None or sc_ < min(best.get(k, {}).get('resid', 9) for k in ('world', 'tangent', 'vertex')): best = out
++        try:
++            o = gl2py.evaluate(v['glsl'], T, slots, dict(mi))
++        except Exception as ex:
++            out['status'] = 'ours-error %s %s' % (type(ex).__name__, str(ex)[:80]); return out
++        E = np.asarray(getattr(o, 'EmissiveColor', gl2py.g(np.zeros(3), T)))[:3]
++        D = np.asarray(getattr(o, 'DiffuseColor', gl2py.g(np.zeros(3), T)))[:3]
++        num = (E * Ot).sum() + (D * Dt).sum(); den = (E * E).sum() + (D * D).sum()
++        a = num / den if den > 0 else 1.0                                       # one fog factor for both
++        def rr(M, Tt): return float(np.sqrt(((M - Tt) ** 2).sum() / max((Tt ** 2).sum(), 1e-30)))
++        def fs(M, Tt): d_ = (M * M).sum(); return float((M * Tt).sum() / d_) if d_ > 0 else 0.0
++        out.update({'fog': float(a), 'D_resid': rr(a * D, Dt), 'E_resid': rr(a * E, Ot), 'D_scale': fs(D, Dt), 'E_scale': fs(E, Ot),
++                    'D_rms': float(np.sqrt((Dt ** 2).mean())), 'E_rms': float(np.sqrt((Ot ** 2).mean())),
++                    'resid': rr(a * np.concatenate([D, E]), np.concatenate([Dt, Ot]))})
++        if best is None or out['resid'] < best['resid']: best = out
++        continue
+     return best
+ 
++_RM = {}
++def root_master(path):
++    k = path.lower()
++    if k in _RM: return _RM[k]
++    cur = path
++    for _ in range(12):
++        try: par = ((REPO.obj(cur) or {}).get('Parent') or {}).get('ref')
++        except Exception: par = None
++        if not par: break
++        cur = par
++    _RM[k] = cur.lower(); return _RM[k]
++
+ def owner_of(key, info):
+     chain = list(info.get('chain') or [key])
+     def has_resource(path):
+         try: p, t = REPO.native_tail(path)
+         except Exception: return False
+         return bool(UE(p, t).lists()) if len(t) > 40 else False
++    if os.environ.get('CHR_BRUTE'):                                 # EXPERIMENTAL: every named map under the same root master
++        rm = root_master(key); cands = [x for n, xs in by_owner.items() if root_master(n) == rm for x in xs]
++        if cands: return 'BRUTE:' + rm, cands
+     own = next((p for p in chain if has_resource(p)), None) or info.get('master')
+     if own and own.lower() in by_owner: return own, by_owner[own.lower()]
++    sm = CHRSHARE.get(key)                                          # EXPERIMENTAL: shared static-permutation map
++    if sm and sm.lower() in by_owner: return sm, by_owner[sm.lower()]
+     # a MIC with its own static permutation: try the master's map (UE3 shares maps by root master + switch set; a
+     # residual near 0 for one variant means this MIC's switch set equals the cooked one)
+     ms = (info.get('master') or '').lower()
+@@ -332,11 +342,13 @@
+     return own, []
+ 
+ PROBE = {}
++CHRSHARE = json.load(open(os.path.join(H, 'chrshare_%s.json' % MAP))) if os.path.exists(os.path.join(H, 'chrshare_%s.json' % MAP)) else {}
++KEYS = set(open(os.environ['CHR_KEYS']).read().split()) if os.environ.get('CHR_KEYS') else None
+ results = {}
+ for key, v in sorted(mats.items()):
+     if FILT and FILT.lower() not in key.lower(): continue
+     info = v.get('info') or {}
+-    if not v.get('glsl') or 'wfcNormalNode' not in v['glsl']: continue
++    if not v.get('glsl') or (KEYS and key.split('.')[-1] not in KEYS): continue
+     owner, xs = owner_of(key, info)
+     if not xs: results[key] = {'status': 'no-original-shader', 'owner': owner}; continue
+     info['_owner'] = owner
+@@ -345,5 +357,5 @@
+         try: rr.append(verify(key, v, x))
+         except Exception as ex: rr.append({'status': 'error %s %s' % (type(ex).__name__, str(ex)[:100])})
+     results[key] = {'shaders': rr}
+-    print(key, json.dumps([{k: q.get(k) for k in ('status', 'shader_off', 'world_view', 'tangent_view', 'vertex_view', 'world', 'O_rms', 'dO_rel')} for q in rr]), flush=True)
+-json.dump(results, open(os.path.join(H, 'chr_emis_%s.json' % MAP), 'w'), indent=1)
++    print(key, json.dumps([{k: (round(q[k], 4) if isinstance(q.get(k), float) else q.get(k)) for k in ('status', 'type', 'resid', 'fog', 'D_resid', 'E_resid', 'D_scale', 'E_scale', 'D_rms', 'E_rms')} for q in rr]), flush=True)
++json.dump(results, open(os.path.join(H, 'chr_d_%s.json' % MAP), 'w'), indent=1)
