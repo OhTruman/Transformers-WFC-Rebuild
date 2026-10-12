@@ -2772,7 +2772,12 @@ int Pipeline::upload(const MeshData& m) {
             auto ac = actorComponent_.find(key.substr(6));
             if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
         }
-        auto lit = lightmaps_.find(key);
+        // static decals (decals.glb extras.lightmap_component): their receiver's texture lightmap at the receiver's own
+        // lightmap UV (UE3 FDecalRenderData; tools/render/build_lighting.py decals). WFC_NODECALLM=1 = unlightmapped decals
+        static const bool noDecalLM = std::getenv("WFC_NODECALLM") != nullptr;
+        std::string lmKey = !s.lightmapComponent.empty() && !noDecalLM ? s.lightmapComponent : key;
+        std::transform(lmKey.begin(), lmKey.end(), lmKey.begin(), ::tolower);   // (lightmaps_ keys are lower case)
+        auto lit = lightmaps_.find(lmKey);
         bool lm = lit != lightmaps_.end() && m.hasUV1() && !std::getenv("WFC_NOLIGHTMAP");
         auto vit = vertexLMs_.find(key);
         if (!lm && vit != vertexLMs_.end() && !std::getenv("WFC_NOLIGHTMAP") && !std::getenv("WFC_NOVERTEXLM") &&

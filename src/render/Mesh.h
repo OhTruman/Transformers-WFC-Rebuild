@@ -26,6 +26,7 @@ struct SubMesh {
     std::string lightmapName;         // _LM atlas object name; resolved to a handle at load
     std::string component;            // source UE3 component object path (lightmap/data join key)
     std::string sourceMesh;           // source StaticMesh object path (glTF node extras.mesh)
+    std::string lightmapComponent;    // static decals: the receiver whose texture lightmap they sample (extras.lightmap_component)
     int sourceSection = -1;           // primitive index within that mesh
     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
     TextureHandle lightmapTex = kInvalidTexture;
