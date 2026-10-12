@@ -134,6 +134,7 @@ struct Program {
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
     std::string material;         // original material path, lower case (material-parameter routing)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
+    int fogIntProg = -1, fogApplyProg = -1;   // fog-volume shape: line-integral and apply variants (drawFogVolume)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
     int instProg = -1;            // instanced character variant (per-instance uniforms from the instance texture)
@@ -1140,6 +1141,15 @@ private:
     bool ruleActive(const std::string& rule) const;
     bool depthDirty_ = true;
     bool sceneColorCopied_ = false;
+    // UE3 fog volumes (fog_volumes.json): linked shape component (lower-case) -> volume; integral target RG32F
+    struct FogVolume { int type = 0; float density = 0.0f; std::string info; };
+    std::vector<FogVolume> fogVolumes_;
+    std::map<std::string, int> fogVolumeByComp_;
+    GLuint fogFbo_ = 0, fogTex_ = 0;
+    int fogW_ = 0, fogH_ = 0;
+    int fogVolumeFor(const std::string& comp) const;
+    void loadFogVolumes(const std::string& file);
+    void drawFogVolume(const Sub& s, const core::Mat4& model, int prog, int vol);
     std::set<std::string> fogShapeLogged_;               // components not drawn as fog-volume shapes (logged once each)
     std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)
     bool lmSpecBuild_ = false;                            // buildProgram: a translated original material (lightmap specular)
