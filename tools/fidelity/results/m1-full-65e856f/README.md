@@ -91,3 +91,29 @@ drift sign; the next row, 509 ov 1080 r2, is back at 2.15. If this map needs mor
 
 Warm-up 508 rp 4K r0 2.22 (discarded). Every row: 64/64, ended by Time, uncontaminated. The widest is 503 rp 4K r2 at 2.37 (0.96
 headroom). The desktop was 2560x1440 @ 144 after both fullscreen rows. Memory: commit 94/115 GB, nonpaged 24.64 -> 24.77 GB, C: 14.5 -> 14.6 GB.
+
+## Slot D - 501 + 502, 04:04-06:20: 18 / 18 MET
+
+| map | cell | r1 p90 | r2 p90 | avg fps r1 / r2 |
+|---|---|---|---|---|
+| 501 | ov 4K | 2.33 | 2.34 | 482 / 480 |
+| 501 | rp 4K | 2.19 | 2.50 | 598 / 539 |
+| 501 | ov 1080 | 2.31 | 2.29 | 479 / 484 |
+| 501 | rp 1080 | 1.78 | 1.79 | 846 / 806 |
+| 501 | fs 1440 | 2.12 | | 688 |
+| 502 | ov 4K | 2.01 | 1.97 | 542 / 548 |
+| 502 | rp 4K | 2.12 | 2.22 | 611 / 584 |
+| 502 | ov 1080 | 1.87 | 1.86 | 647 / 651 |
+| 502 | rp 1080 | 1.70 | 1.61 | 865 / 881 |
+| 502 | fs 1440 | 1.79 | | 764 |
+
+Warm-up 501 rp 4K r0 2.67 (discarded). Every row: 64/64, ended by Time, uncontaminated. The desktop was 2560x1440 @ 144 after both
+fullscreen rows. Memory: commit 94 -> 95/115 GB, nonpaged 24.77 -> 24.90 GB, C: 14.5 GB.
+
+## Full verdict: 72 / 72 MET (64 cell rows + 8 fullscreen 2560x1440 rows)
+
+Every row has p90 <= 3.33 ms, 64/64 spawned, ended by Time and no contamination. The desktop was restored after all 8 fullscreen rows.
+- Widest row: 509 rp 4K r2 at 3.20. Next: Rust (504) ov 4K / 1080 at 2.84-2.88.
+- Nonpaged pool over the night: 24.52 -> 24.90 GB (+0.38 GB in 9.7 h; the known driver leak), C: steady at 14.5 GB.
+- Integration asked for a 509 rp 4K 300 s x3 + pooled follow-up (`m509_65e856f.sh`). It started at 06:20:42 with PERF_HOLD re-armed
+  (no gap visible), and M1 waits on it.
