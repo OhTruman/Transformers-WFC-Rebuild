@@ -1,6 +1,7 @@
 // Clean-room reconstruction — render-thread stall watchdog.
 #include "render/gl/RenderWatchdog.h"
 #include "core/Log.h"
+#include "platform/DisplayMode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -191,6 +192,9 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
     // [integration 09c] the buffered log's last lines (Systems): last, after the report and dump are on disk; never blocks
     // (try-locks, returns at once if the faulting thread holds the writer).
     core::logTryFlush();
+    // [Systems] a crash in fullscreen would leave the desktop at the registry's mode: put back the saved desktop mode. Last,
+    // because it sends WM_DISPLAYCHANGE into our (possibly corrupt) window synchronously; the report and dump are on disk.
+    platform::restoreDesktopDisplayMode();
     return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
