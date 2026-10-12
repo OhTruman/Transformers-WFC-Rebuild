@@ -167,6 +167,35 @@ if (-not $NoHd) {
 }
 Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
 
+# ---- the package's bin against build_slim.json (tools/package/build_slim.py): every listed file present, nothing else; the
+# M5 runtime (FidelityFX DLLs + D3D12\D3D12Core.dll) exactly when the manifest's m5_runtime is set; never the D3D12 debug
+# layer. Packages made before the manifest existed are reported, not failed.
+$pk = [pscustomobject]@{ Manifest = $null; M5 = $false; Files = 0; Problems = @(); Note = '' }
+$manPath = Join-Path $pkgTop 'build_slim.json'
+if (Test-Path -LiteralPath $manPath) {
+    $pk.Manifest = Get-Content -LiteralPath $manPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $pk.M5 = [bool]$pk.Manifest.m5_runtime
+    $want = @{}; foreach ($f in $pk.Manifest.bin_files) { $want[(Norm $f)] = $f }
+    $have = @{}
+    foreach ($fi in Get-ChildItem -LiteralPath $pkgBin -Recurse -File) {
+        if ($fi.Name -match '^(wfc\.log|wfc_profile\.ini|wfc_characters\.ini|wfc_crash_.*|filelog.*\.txt)$') { continue }   # a playtester's run artefacts
+        $rel = $fi.FullName.Substring($pkgBin.Length).TrimStart('\', '/') -replace '\\', '/'
+        $have[(Norm $rel)] = $rel
+    }
+    foreach ($k in $want.Keys) { if (-not $have.ContainsKey($k)) { $pk.Problems += "bin file missing (listed in build_slim.json): $($want[$k])" } }
+    foreach ($k in $have.Keys) { if (-not $want.ContainsKey($k)) { $pk.Problems += "bin file not in build_slim.json (leaked into the package): $($have[$k])" } }
+    foreach ($f in 'amd_fidelityfx_loader_dx12.dll', 'amd_fidelityfx_upscaler_dx12.dll', 'amd_fidelityfx_framegeneration_dx12.dll', 'd3d12/d3d12core.dll') {
+        if ($pk.M5 -and -not $have.ContainsKey($f)) { $pk.Problems += "M5 runtime flagged but $f is not in the package" }
+        if (-not $pk.M5 -and $have.ContainsKey($f)) { $pk.Problems += "M5 runtime not flagged but $f is in the package" }
+    }
+    if ($have.ContainsKey('d3d12/d3d12sdklayers.dll')) { $pk.Problems += 'D3D12\d3d12SDKLayers.dll (the D3D12 debug layer) must not ship' }
+    $pk.Files = $have.Count
+    Write-Host ("package bin: {0} files vs build_slim.json {1}; M5 runtime {2}; {3} problems" -f $have.Count, $want.Count, $(if ($pk.M5) { 'shipped' } else { 'not shipped' }), $pk.Problems.Count)
+} else {
+    $pk.Note = 'no build_slim.json (a package made before tools/package/build_slim.py wrote one): bin contents and the M5 runtime not checked'
+    Write-Host "package bin: $($pk.Note)"
+}
+
 function WaitHold {
     if (-not $HoldFile) { return }
     $said = $false
@@ -292,6 +321,18 @@ try {
         if ($hd.Root -and -not ($hdLine -and $hdLine.Matches[0].Groups[2].Success -and [int]$hdLine.Matches[0].Groups[2].Value -eq $hd.Rows)) {
             $reasons += "HD pack not accepted by the game: $hdLog (index rows $($hd.Rows))"
         }
+        # the optional graphics rows follow what the game finds beside the exe (logged once at boot): FSR 3.1 and frame
+        # generation exactly when the package ships the M5 runtime, the HD textures row exactly when it ships the HD pack
+        $rt = $log | Select-String -Pattern 'graphics: optional runtimes: FSR 3\.1 (yes|no), frame generation (yes|no), HD texture pack (yes|no)' | Select-Object -First 1
+        $rtLog = if ($rt) { $rt.Matches[0].Value } else { 'no optional-runtimes line' }
+        if ($pk.Manifest) {
+            if ($rt) {
+                $g = $rt.Matches[0].Groups
+                if (($g[1].Value -eq 'yes') -ne $pk.M5) { $reasons += "FSR 3.1 row: the game reports $($g[1].Value), the package $(if ($pk.M5) { 'ships' } else { 'does not ship' }) the runtime" }
+                if (($g[2].Value -eq 'yes') -ne $pk.M5) { $reasons += "frame generation row: the game reports $($g[2].Value), the package $(if ($pk.M5) { 'ships' } else { 'does not ship' }) the runtime" }
+                if (-not $NoHd -and (($g[3].Value -eq 'yes') -ne [bool]$hd.Root)) { $reasons += "HD textures row: the game reports $($g[3].Value), the package $(if ($hd.Root) { 'ships' } else { 'does not ship' }) the pack" }
+            } elseif ($Strict) { $reasons += 'no "graphics: optional runtimes" log line (an exe before that line): rows unchecked' }
+        }
         if ($Strict -and $feNote -ne 'inside the package') { $reasons += "frontend data dir $(if ($feDir) { $feDir } else { '-' }): $feNote" }
         if (-not $loc) { $reasons += 'no localized-waves line' }
         else {
@@ -304,7 +345,7 @@ try {
             Run = @($rows | Where-Object { $_.Class -eq 'run' }).Count; System = @($rows | Where-Object { $_.Class -eq 'system' }).Count
             Outside = @($rows | Where-Object { $_.Class -eq 'outside' }).Count; Other = @($rows | Where-Object { $_.Class -eq 'other' }).Count
             Probes = @($rows | Where-Object { $_.Note -like 'optional probe*' -or $_.Note -like '*(probe)' }).Count
-            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors; FrontendData = $(if ($feDir) { "$feDir ($feNote)" } else { $feNote }); HdLog = $hdLog
+            FailRows = $failRows; WarnRows = $warnRows; Errors = $errors; FrontendData = $(if ($feDir) { "$feDir ($feNote)" } else { $feNote }); HdLog = $hdLog; RuntimeLog = $rtLog
             Twins = @($rows | Where-Object { $_.Note -like '*shipped*' }).Count; OtherRows = @($rows | Where-Object { $_.Class -eq 'other' })
         }
         Write-Host ("[{0}] {1} in {2} s: {3}" -f $name, $(if ($reasons.Count) { 'FAIL' } else { 'PASS' }), $secs, ($reasons -join '; '))
@@ -316,7 +357,7 @@ try {
 }
 
 # ---- report ----
-$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count
+$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count -and -not $pk.Problems.Count
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
 $md += ''
@@ -337,6 +378,12 @@ foreach ($r in $results) { $md += "- $($r.Map): frontend data dir: $($r.Frontend
 $md += ''
 $md += "HD pack: $($hd.Where)$(if ($hd.Root) { " ($($hd.Root)): $($hd.Rows) index rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB; $(if ($hd.Problems.Count) { 'FAIL' } else { 'every row present with its byte count, every DDS indexed' })" })$(if ($NoHd) { ' (-NoHd: not checked)' })"
 foreach ($x in $hd.Problems) { $md += "- $x" }
+$md += ''
+if ($pk.Manifest) {
+    $md += "Package bin vs build_slim.json: $($pk.Files) files, M5 runtime $(if ($pk.M5) { 'shipped' } else { 'not shipped' }) (head $($pk.Manifest.head)$(if ($pk.Manifest.hd_label) { ", HD pack $($pk.Manifest.hd_label)" })); $(if ($pk.Problems.Count) { 'FAIL' } else { 'exact match' })."
+    foreach ($x in $pk.Problems) { $md += "- $x" }
+    foreach ($r in $results) { $md += "- $($r.Map): $($r.RuntimeLog)" }
+} else { $md += "Package bin: $($pk.Note)." }
 foreach ($r in $results) {
     if ($r.Pass -and -not $r.OtherRows.Count -and -not $r.WarnRows.Count) { continue }
     $md += ''
