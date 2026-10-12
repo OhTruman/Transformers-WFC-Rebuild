@@ -30,7 +30,7 @@
 +}  // namespace render
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Adapter.cpp
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,79 @@
 +// Clean-room reconstruction — see D3D12Adapter.h.
 +#include "render/d3d12/D3D12Adapter.h"
 +
@@ -64,10 +64,15 @@
 +    const char* glName = (const char*)glGetString(GL_RENDERER);
 +    const std::string gl = glName ? glName : "?";
 +    auto getUb = (PFN_GetUnsignedBytev)(void*)wglGetProcAddress("glGetUnsignedBytevEXT");
++    // Only with GL_EXT_memory_object_win32 (the extension that defines the LUID query; the compatibility context lists it in
++    // GL_EXTENSIONS); afterwards any GL error the query raised is drained, so a later glGetError check is not misled.
++    const char* ext = (const char*)glGetString(GL_EXTENSIONS);
++    const bool hasLuidQuery = getUb && ext && std::strstr(ext, "GL_EXT_memory_object_win32") != nullptr;
 +    unsigned char luidBytes[8] = {};
 +    bool haveLuid = false;
-+    if (getUb) {
++    if (hasLuidQuery) {
 +        getUb(kGlDeviceLuid, luidBytes);
++        while (glGetError() != GL_NO_ERROR) {}
 +        for (unsigned char b : luidBytes) haveLuid = haveLuid || b != 0;
 +    }
 +    HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
