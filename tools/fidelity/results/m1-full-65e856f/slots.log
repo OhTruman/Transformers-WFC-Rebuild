@@ -36,3 +36,31 @@ At line:1 char:2
  
 22:53 509 rp 2160 r0 try 1: p90   
 --- 22:54 slots stopped by PID for attribution (in-script stop failed); rows 509 rp r0 + 509 ov r1 discarded
+desktop before: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+slot B open 23:31:41 maps 509 507
+mem slot-B-start: commit 93/115 GB, nonpaged 24.59 GB, free phys 15.9 GB, C: free 14.6 GB
+23:38 509 rp 2160 r0 try 1: p90 2.77  
+23:45 509 ov 2160 r1 try 1: p90 2.23  
+23:53 509 rp 2160 r1 try 1: p90 2.6  
+00:00 509 ov 1080 r1 try 1: p90 2.13  
+00:07 509 rp 1080 r1 try 1: p90 1.88  
+00:14 507 ov 2160 r1 try 1: p90 2.3  
+00:21 507 rp 2160 r1 try 1: p90 2.33  
+00:28 507 ov 1080 r1 try 1: p90 2.3  
+00:36 507 rp 1080 r1 try 1: p90 2.18  
+00:43 509 ov 2160 r2 try 1: p90 2.23  
+00:50 509 rp 2160 r2 try 1: p90 3.2  
+00:57 509 ov 1080 r2 try 1: p90 2.15  
+01:04 509 rp 1080 r2 try 1: p90 2  
+01:11 507 ov 2160 r2 try 1: p90 2.29  
+01:18 507 rp 2160 r2 try 1: p90 2.42  
+01:26 507 ov 1080 r2 try 1: p90 2.28  
+01:33 507 rp 1080 r2 try 1: p90 2.18  
+01:40 509 fs 1440 r1 try 1: p90 2.12 pid 45544: client 2560x1440, window rect (0,0)-(2560,1440) 
+01:40:25 after 509 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+01:47 507 fs 1440 r1 try 1: p90 2.28 pid 4004: client 2560x1440, window rect (0,0)-(2560,1440) 
+01:47:35 after 507 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+mem slot-B-end: commit 94/115 GB, nonpaged 24.64 GB, free phys 15.8 GB, C: free 14.5 GB
+slot B done 01:47
+slot C open 01:47:36 maps 508 503
+mem slot-C-start: commit 94/115 GB, nonpaged 24.64 GB, free phys 15.8 GB, C: free 14.5 GB

@@ -1,0 +1,1 @@
+pid 45544: client 2560x1440, window rect (0,0)-(2560,1440)
