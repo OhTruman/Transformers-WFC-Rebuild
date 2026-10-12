@@ -4,6 +4,8 @@
 // vectors and the reactive mask on (WfcMotion.cpp); after translucency the HDR scene colour, depth, velocity and reactive
 // mask go to D3D12 (render/d3d12/D3D12Upscaler.cpp), FSR upscales to the window size, and the post pass (bloom / DOF
 // gathered at the render size, tonemap / CLUT) runs at the window size on the upscaled colour: upscaling before post.
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include "render/gl/WfcPipeline.h"
 #include "render/d3d12/D3D12Upscaler.h"
 #include "core/Log.h"
@@ -11,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <string>
 
 namespace render {
 namespace wfc {
@@ -34,7 +37,20 @@ typedef void(APIENTRY* PFN_CopyImageSubData)(GLuint, GLenum, GLint, GLint, GLint
 
 bool Pipeline::fsr3Mode() const {
     static const bool env = [] { const char* e = std::getenv("WFC_FSR3"); return e && e[0] != '0'; }();
-    return env && !fsr3Failed_;
+    return (env || fsr3On_) && !fsr3Failed_;
+}
+
+bool Pipeline::fsr3RuntimeShipped() {
+    static const bool shipped = [] {
+        char exe[MAX_PATH * 2] = "";
+        GetModuleFileNameA(nullptr, exe, sizeof exe);
+        std::string dir(exe);
+        dir = dir.substr(0, dir.find_last_of("\\/") + 1);
+        return GetFileAttributesA((dir + "amd_fidelityfx_loader_dx12.dll").c_str()) != INVALID_FILE_ATTRIBUTES &&
+               GetFileAttributesA((dir + "amd_fidelityfx_upscaler_dx12.dll").c_str()) != INVALID_FILE_ATTRIBUTES &&
+               GetFileAttributesA((dir + "D3D12\\D3D12Core.dll").c_str()) != INVALID_FILE_ATTRIBUTES;
+    }();
+    return shipped;
 }
 
 // after translucency (all inputs final): -> true with fsr3Out_ = the window-size upscaled HDR colour

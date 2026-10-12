@@ -1568,11 +1568,19 @@ public:
     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
     void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
     void setUpscaling(int mode) override {
-        static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};   // AMD FSR 1 presets (Quality / Balanced / Perf.)
-        if (mode <= 0 || mode > 3) wfc_.setUpscaling(1.0f, -1.0f);       // Off: the original presentation
-        else wfc_.setUpscaling(kScale[mode], 0.2f);
-        LOG_INFO("renderer: upscaling mode %d (%s)", mode, mode <= 0 || mode > 3 ? "off" : mode == 1 ? "FSR 1 Quality" :
-                 mode == 2 ? "FSR 1 Balanced" : "FSR 1 Performance");
+        // 1-3 FSR 1, 4-6 FSR 3.1 (Quality / Balanced / Performance: AMD's 1.5x / 1.7x / 2x presets)
+        static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};
+        static const char* kName[7] = {"off", "FSR 1 Quality", "FSR 1 Balanced", "FSR 1 Performance", "FSR 3.1 Quality",
+                                       "FSR 3.1 Balanced", "FSR 3.1 Performance"};
+        if (mode <= 0 || mode > 6) mode = 0;
+        wfc_.setFsr3(mode >= 4);
+        if (mode == 0) wfc_.setUpscaling(1.0f, -1.0f);                     // Off: the original presentation
+        else wfc_.setUpscaling(kScale[mode >= 4 ? mode - 3 : mode], 0.2f);
+        LOG_INFO("renderer: upscaling mode %d (%s)", mode, kName[mode]);
+    }
+    void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+    bool upscalingModeAvailable(int mode) const override {
+        return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
     }
     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }

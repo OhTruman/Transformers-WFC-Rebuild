@@ -473,6 +473,7 @@ private:
     std::chrono::steady_clock::time_point fsr3LastFrame_{};
     double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
     bool fsr3Mode() const;
+    bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
     bool motionOn_ = false, havePrevVP_ = false;
@@ -963,6 +964,9 @@ public:
     // optional spatial upscaling (FSR 1): scale in (0.25, 1] = 3D render size / window; sharpness = RCAS stops
     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
     void setUpscaling(float scale, float sharpness);
+    void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
+    void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
+    static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
     void setHdTextures(bool on);
