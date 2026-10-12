@@ -1034,7 +1034,7 @@ namespace {
 // Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
-                       const std::function<void()>& onRecommended, bool hdAvailable) {
+                       const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1069,7 +1069,8 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     };
     row(choices, "<PCSettings:FrameLimit>", "Limit the maximum frames per second.", "Frame Rate Limit");
     // PC EXTENSION graphics options (default Off = the original look). Upscaling renders the 3D scene below the window
-    // resolution and upscales it (FSR 1 spatial upscaling); HD Textures uses the HD texture set where one exists.
+    // resolution and upscales it (FSR 1 spatial, or FSR 3.1 temporal where its runtime ships); HD Textures uses the HD
+    // texture set where one exists.
     // Rendering applies them (IRenderer::setUpscaling / setHdTextures, see Application_Frontend.cpp).
     std::vector<gfx::avm1::Value> up, hd, af;
     auto add = [&](std::vector<gfx::avm1::Value>& v, int value, const char* label) {
@@ -1078,11 +1079,19 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         vm.set(c, "FriendlyName", gfx::avm1::Value(std::string(label)));
         v.push_back(gfx::avm1::Value(c));
     };
-    add(up, 0, "Off"); add(up, 1, "FSR 1 Quality"); add(up, 2, "FSR 1 Balanced"); add(up, 3, "FSR 1 Performance");
+    // (Labels fit the value column: "Performance" is shortened, as a full "FSR 3.1 Performance" runs past the panel.)
+    add(up, 0, "Off"); add(up, 1, "FSR 1 Quality"); add(up, 2, "FSR 1 Balanced"); add(up, 3, "FSR 1 Perf.");
+    static const char* const kFsr3[] = {"FSR 3.1 Quality", "FSR 3.1 Balanced", "FSR 3.1 Perf."};
+    const bool fsr3Missing = !fsr3Available && upscalingCurrent >= 4;   // a stored FSR 3.1 choice without its runtime
+    for (int m = 4; m <= 6; ++m)
+        if (fsr3Available || m == upscalingCurrent) add(up, m, kFsr3[m - 4]);
     add(hd, 0, "Off");
     if (hdAvailable) add(hd, 1, "On");   // without the pack the row has the single value Off (cannot be changed)
     add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
-    row(up, "<PCSettings:Upscaling>", "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
+    row(up, "<PCSettings:Upscaling>",
+        fsr3Missing     ? "FSR 3.1 is not installed: FSR 1 is used at the same scale."
+        : fsr3Available ? "Render the 3D scene at a lower resolution and upscale it (higher frame rate). FSR 3.1 is sharper in motion."
+                        : "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
     row(hd, "<PCSettings:HDTextures>",
         hdAvailable ? "Use high-resolution textures (more video memory). Applies on the next map load."
                     : "The HD texture pack is not installed.", "HD Textures");
@@ -1350,7 +1359,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
-                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable());
+                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
+                                 rt_.fsr3Available(), rt_.flow().profile().display.upscaling);
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

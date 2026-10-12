@@ -313,7 +313,7 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     }
     // <OnlinePlayerData:ProfileData.Field>: the local profile (LocalProfile; original fields and defaults).
     if (fn == "WriteValue" && m == "<PCSettings:Upscaling>") {   // PC EXTENSION; applied / saved by Game.ApplyProfileSettings
-        flow_.profile().display.upscaling = std::clamp(std::atoi(arg(1).c_str()), 0, 3);
+        flow_.profile().display.upscaling = std::clamp(std::atoi(arg(1).c_str()), 0, LocalProfile::Display::kUpscalingMax);
         FlowTrace::emit("settings.upscaling", {{"mode", std::to_string(flow_.profile().display.upscaling)}, {"provenance", "PC EXTENSION"}});
         return {};
     }

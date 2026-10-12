@@ -94,7 +94,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
             else if (k == "VSync") display.vsync = v == "1";
             else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
-            else if (k == "Upscaling") display.upscaling = std::clamp(std::atoi(v.c_str()), 0, 3);
+            else if (k == "Upscaling") display.upscaling = std::clamp(std::atoi(v.c_str()), 0, Display::kUpscalingMax);
             else if (k == "HDTextures") display.hdTextures = v == "1";
             else if (k == "Anisotropy") display.anisotropy = Display::clampAnisotropy(std::atoi(v.c_str()));
             else if (k == "FrameGeneration") display.frameGeneration = std::max(0, std::atoi(v.c_str()));

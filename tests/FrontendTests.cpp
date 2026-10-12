@@ -67,6 +67,13 @@ static void testProfileBotMigration() {
     std::ifstream back("wfc_profile.ini");
     frontend::LocalProfile r;
     r.loadFrom(back);
+    {   // FSR 3.1 modes (4-6) persist; values past the range clamp to the last one
+        std::istringstream f3("[PCSettings]\nUpscaling=5\n"), big9("[PCSettings]\nUpscaling=9\n");
+        frontend::LocalProfile a, b;
+        a.loadFrom(f3); b.loadFrom(big9);
+        check(a.display.upscaling == 5 && b.display.upscaling == 6, "profile.upscaling_fsr31_range",
+              std::to_string(a.display.upscaling) + "/" + std::to_string(b.display.upscaling));
+    }
     check(r.display.upscaling == 2 && r.display.hdTextures && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
           std::to_string(r.display.upscaling) + "/" + std::to_string(r.display.hdTextures));
     back.close();
