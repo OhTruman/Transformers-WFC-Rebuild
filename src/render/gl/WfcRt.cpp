@@ -33,6 +33,8 @@ out float oDepth;
 void main() { oDepth = texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r; }
 )";
 bool depthCheckOn() { static const bool on = std::getenv("WFC_RT_DEPTHCHECK") != nullptr; return on; }
+// stage 1 (measurement): sun shadow + AO rays per pixel (WFC_RT_AORAYS, default 2; WFC_RT_AORADIUS metres, default 1)
+bool shadowAoOn() { static const bool on = std::getenv("WFC_RT_SHADOWAO") != nullptr; return on; }
 
 bool invert(const float* m, float* out) {             // general 4x4 inverse (column-major in and out), in double
     double a[16], inv[16];
@@ -63,7 +65,7 @@ bool invert(const float* m, float* out) {             // general 4x4 inverse (co
 // the depth prepass's triangle set (drawMdi's prepass: opaque MDI programs, VLM runs excluded), from the world mesh's
 // GL buffers (14 floats per vertex, positions first; MDI base vertex 0), once per map
 void Pipeline::rtBuildWorld(int meshId) {
-    if (!depthCheckOn() || rtFailed_ || meshId < 0 || !GetBufferSubData) return;
+    if (!(depthCheckOn() || shadowAoOn()) || rtFailed_ || meshId < 0 || !GetBufferSubData) return;
     const GpuMesh& g = meshes_[(size_t)meshId];
     size_t nIdx = 0;                                     // (sizes from the subs: upload() bounds-checked every range)
     for (const Sub& s : g.subs) nIdx = std::max(nIdx, (size_t)s.first + s.count);
@@ -99,10 +101,12 @@ void Pipeline::rtBuildWorld(int meshId) {
 // once per frame, as a ray-traced frame would: the first MDI set's prepass (WFC_RT_ROUNDTRIP), or for the depth check
 // the set WFC_RT_CHECKSET names (0 world, the default; 1 level BSP), traced against that set alone
 void Pipeline::rtRoundTrip(bool bspSet) {
-    static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn();
+    static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn() || shadowAoOn();
     if (!on || rtFailed_) return;
     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
-    if (depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
+    // shadow / AO: at the level BSP set's prepass when the map has one (the world set is drawn before it), else the world's
+    const bool sao = shadowAoOn() && !depthCheckOn();
+    if (sao ? bspSet != (bspMesh_ >= 0) : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
     rtFrame_ = frameNo_;
     RtTargets t;
     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT round trip: bridge unavailable"); return; }
@@ -134,7 +138,25 @@ void Pipeline::rtRoundTrip(bool bspSet) {
     RtFrame fr;
     static const unsigned maskEnv = [] { const char* e = std::getenv("WFC_RT_CHECKMASK"); return e ? (unsigned)std::atoi(e) : 0u; }();
     fr.instanceMask = maskEnv ? maskEnv : 1u << (bspSet ? 1 : 0);   // (WFC_RT_CHECKMASK: other sets too, diagnostics)
-    const bool frameOk = depthCheckOn() && invert(viewProj_.m, fr.invViewProj);
+    const bool frameOk = (depthCheckOn() || sao) && invert(viewProj_.m, fr.invViewProj);
+    if (sao) {
+        static const int aoRays = [] { const char* e = std::getenv("WFC_RT_AORAYS"); return e ? std::max(0, std::atoi(e)) : 2; }();
+        static const float aoRadius = [] { const char* e = std::getenv("WFC_RT_AORADIUS"); return e ? (float)std::atof(e) : 1.0f; }();
+        fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
+        const Light* sun = nullptr;                      // the brightest enabled directional light
+        for (const Light& L : lights_)
+            if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
+        if (sun) {
+            const core::Vec3 d = core::normalize(sun->dir);
+            fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = 1.0f;
+        }
+        static bool told = false;
+        if (!told) {
+            told = true;
+            LOG_INFO("RT shadow + AO: on (%dx%d, sun %s%s, AO %d rays radius %.2f m)", vpW_, vpH_, sun ? "'" : "none",
+                     sun ? (sun->name + "'").c_str() : "", aoRays, aoRadius);
+        }
+    }
     static int logged = 0;
     if (depthCheckOn() && logged++ < 2)
         LOG_INFO("RT depth check: frame %d znear %g zfar %g proj diag %g %g %g %g, proj[14] %g, view row2 %g %g %g %g", frameNo_, znear_, zfar_,
@@ -149,6 +171,12 @@ void Pipeline::rtRoundTrip(bool bspSet) {
             glBindTexture(GL_TEXTURE_2D, k ? t.mask : t.depth);
             glGetTexImage(GL_TEXTURE_2D, 0, 0x1903 /*GL_RED*/, GL_FLOAT, px.data());
             if (FILE* f = std::fopen(k ? "rt_dump_ray.bin" : "rt_dump_depth.bin", "wb")) { std::fwrite(px.data(), 4, px.size(), f); std::fclose(f); }
+        }
+        if (sao) {                                       // (shadow, AO) pairs
+            std::vector<float> rg((size_t)vpW_ * vpH_ * 2);
+            glBindTexture(GL_TEXTURE_2D, t.shadowAo);
+            glGetTexImage(GL_TEXTURE_2D, 0, 0x8227 /*GL_RG*/, GL_FLOAT, rg.data());
+            if (FILE* f = std::fopen("rt_dump_shadowao.bin", "wb")) { std::fwrite(rg.data(), 4, rg.size(), f); std::fclose(f); }
         }
         glBindTexture(GL_TEXTURE_2D, 0);
         std::string m;

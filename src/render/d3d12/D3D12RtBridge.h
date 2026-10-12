@@ -10,7 +10,7 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0; };            // render size, R32F both (shared with D3D12)
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0; };   // render size: depth / mask R32F, shadowAo RG16F (shared)
 
 // the static world as GL's depth prepass draws it: positions (xyz, world space), triangle lists for one-sided
 // (back faces culled, GL counter-clockwise front) and two-sided geometry
@@ -20,6 +20,10 @@ struct RtFrame {
     float invViewProj[16];    // GL clip -> world, column-major
     float viewRow2[4];        // view matrix row 2 (view depth = -dot(row, (p, 1)))
     unsigned instanceMask;    // the sets the rays see (the set whose prepass depth is compared)
+    int mode = 1;             // 1 depth check, 2 sun shadow + AO (stage 1)
+    float toSun[4] = {0, 0, 0, 0};   // unit vector towards the sun, w = 1 when there is one
+    int frameIndex = 0, aoRays = 2;
+    float aoRadius = 1.0f, bias = 0.0005f;
 };
 
 bool rtBridgePrepare(int w, int h, RtTargets* t);           // (re)create at this size; false: unavailable

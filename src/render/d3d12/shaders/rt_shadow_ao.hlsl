@@ -1,0 +1,75 @@
+// Clean-room reconstruction — M7 stage 1 (PC ADAPTATION; OFF by default; WFC_RT_SHADOWAO=1): ray-traced sun shadow +
+// ambient occlusion per pixel against the static-world TLAS (inline RayQuery, DXR 1.1), from GL's depth (position and
+// a depth-derived normal). Writes the mask (R = sun visibility 0 .. 1, G = AO openness 0 .. 1; sky 1, 1). Not composited
+// yet: the measurement step (GPU time, rays, VRAM, sync). Compiled at build time by DXC (cs_6_5) into rt_shadow_ao.h.
+RaytracingAccelerationStructure Scene : register(t0);
+Texture2D<float> RasterDepth : register(t1);
+RWTexture2D<float2> Mask : register(u0);
+RWByteAddressBuffer Stats : register(u1);     // [0] rays traced this frame
+
+cbuffer Frame : register(b0) {
+    float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)
+    float4 ToSun;           // xyz: unit vector towards the sun (-light forward); w: 1 = a sun exists
+    float4 Size;            // width, height, frame index, AO rays per pixel
+    float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), mask (instance), 0
+};
+
+float3 worldAt(int2 px, float d) {
+    const float2 ndc = (float2(px) + 0.5) / Size.xy * 2.0 - 1.0;
+    float4 p = mul(InvViewProj, float4(ndc, d * 2.0 - 1.0, 1.0));
+    return p.xyz / p.w;
+}
+
+uint hash(uint x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+float rnd(inout uint s) { s = hash(s); return (s >> 8) * (1.0 / 16777216.0); }
+
+bool occluded(float3 o, float3 dir, float tMax) {
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
+    RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;
+    q.TraceRayInline(Scene, RAY_FLAG_NONE, (uint)Params.z, r);
+    q.Proceed();
+    return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
+[numthreads(8, 8, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    const int2 px = int2(id.xy);
+    const bool inside = id.x < (uint)Size.x && id.y < (uint)Size.y;
+    const float d = inside ? RasterDepth[px] : 1.0;
+    uint rays = 0;
+    float2 outv = float2(1.0, 1.0);
+    if (inside && d < 1.0) {
+        const float3 p = worldAt(px, d);
+        // normal from depth: per axis the neighbour with the smaller step (keeps silhouettes from bending the normal)
+        const int2 mx = int2(max(px.x - 1, 0), px.y), Px = int2(min(px.x + 1, (int)Size.x - 1), px.y);
+        const int2 my = int2(px.x, max(px.y - 1, 0)), Py = int2(px.x, min(px.y + 1, (int)Size.y - 1));
+        const float3 a = worldAt(mx, RasterDepth[mx]), b = worldAt(Px, RasterDepth[Px]);
+        const float3 c = worldAt(my, RasterDepth[my]), e = worldAt(Py, RasterDepth[Py]);
+        const float3 dx = length(b - p) < length(p - a) ? b - p : p - a;
+        const float3 dy = length(e - p) < length(p - c) ? e - p : p - c;
+        float3 n = normalize(cross(dx, dy));
+        const float3 eye = worldAt(px, 0.0);                       // the near-plane point of this pixel's ray
+        if (dot(n, eye - p) < 0.0) n = -n;
+        const float dist = length(p - eye);
+        const float3 o = p + n * (0.01 + Params.y * dist);
+        if (ToSun.w > 0.5) { outv.x = occluded(o, ToSun.xyz, 10000.0) ? 0.0 : 1.0; ++rays; }
+        const uint nAo = (uint)Size.w;
+        if (nAo > 0) {
+            const float3 t = normalize(abs(n.y) < 0.99 ? cross(n, float3(0, 1, 0)) : cross(n, float3(1, 0, 0)));
+            const float3 bt = cross(n, t);
+            uint s = hash(id.x * 1973u + id.y * 9277u + (uint)Size.z * 26699u);
+            uint hit = 0;
+            for (uint k = 0; k < nAo; ++k) {                        // cosine-weighted hemisphere
+                const float u1 = rnd(s), u2 = rnd(s);
+                const float r = sqrt(u1), phi = 6.2831853 * u2;
+                const float3 dir = t * (r * cos(phi)) + bt * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1));
+                hit += occluded(o, dir, Params.x) ? 1u : 0u;
+            }
+            outv.y = 1.0 - (float)hit / (float)nAo;
+            rays += nAo;
+        }
+    }
+    if (inside) Mask[px] = outv;
+    const uint waveRays = WaveActiveSum(rays);
+    if (WaveIsFirstLane()) Stats.InterlockedAdd(0, waveRays);
+}

@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <d3d12.h>
+#include <dxgi1_4.h>
 #include <GL/gl.h>
 
 #include "render/d3d12/D3D12RtBridge.h"
@@ -19,6 +20,7 @@
 #endif
 #if defined(WFC_RT_SHADERS)
 #include "rt_depthcheck.h"
+#include "rt_shadow_ao.h"
 #endif
 
 #include <algorithm>
@@ -95,8 +97,19 @@ public:
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 o5{};
         dev_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &o5, sizeof o5);
         rtTier_ = (int)o5.RaytracingTier;
+        {   // the device's adapter (VRAM: QueryVideoMemoryInfo, the process's local usage)
+            HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
+            typedef HRESULT(WINAPI * PFN_CF1)(REFIID, void**);
+            auto cf1 = dxgi ? (PFN_CF1)(void*)GetProcAddress(dxgi, "CreateDXGIFactory1") : nullptr;
+            IDXGIFactory4* f = nullptr;
+            if (cf1 && SUCCEEDED(cf1(__uuidof(IDXGIFactory4), (void**)&f)) && f) {
+                f->EnumAdapterByLuid(dev_->GetAdapterLuid(), __uuidof(IDXGIAdapter3), (void**)&adapter_);
+                f->Release();
+            }
+        }
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
+        queue_->GetTimestampFrequency(&tsFreq_);
         for (auto& a : alloc_)
             if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&a))) return false;
         if (FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc_[0], nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&list_))) return false;
@@ -112,11 +125,13 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             waitIdle();
-            free(depth_); free(mask_);
-            if (!make(depth_, w, h) || !make(mask_, w, h)) { LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false; }
+            free(depth_); free(mask_); free(ao_);
+            if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/)) {
+                LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
+            }
             if (heap_) writeDescriptors();
         }
-        t->depth = depth_.tex; t->mask = mask_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex;
         return true;
     }
 
@@ -241,7 +256,8 @@ public:
         if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) { fence_->SetEventOnCompletion(allocDone_[a], event_); WaitForSingleObject(event_, 1000); }
         if (rbValid_[a]) readStats(a);
         alloc_[a]->Reset(); list_->Reset(alloc_[a], nullptr);
-        if (fr && tlas_ && pso_) depthCheck(*fr, a);
+        if (fr && tlas_ && pso_ && fr->mode == 2) shadowAo(*fr, a);
+        else if (fr && tlas_ && pso_) depthCheck(*fr, a);
         else copyJob();
         list_->Close();
         queue_->Wait(fence_, n);
@@ -278,7 +294,7 @@ private:
         for (auto& x : b) std::swap(x.Transition.StateBefore, x.Transition.StateAfter);
         list_->ResourceBarrier(2, b);
     }
-    // root: [0] 24 constants (b0), [1] TLAS root SRV (t0), [2] table {SRV t1 depth, UAV u0 mask}, [3] stats root UAV (u1)
+    // root: [0] 32 constants (b0), [1] TLAS root SRV (t0), [2] table {SRV t1 depth, UAV u0 mask}, [3] stats root UAV (u1)
     bool pipeline() {
 #if defined(WFC_RT_SHADERS)
         if (pso_) return true;
@@ -288,7 +304,7 @@ private:
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 1; rg[1].BaseShaderRegister = 0;
         rg[1].OffsetInDescriptorsFromTableStart = 1;
         D3D12_ROOT_PARAMETER rp[4]{};
-        rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 24;
+        rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 32;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
         rp[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[2].DescriptorTable.NumDescriptorRanges = 2; rp[2].DescriptorTable.pDescriptorRanges = rg;
         rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV; rp[3].Descriptor.ShaderRegister = 1;
@@ -303,7 +319,12 @@ private:
         D3D12_COMPUTE_PIPELINE_STATE_DESC pd{}; pd.pRootSignature = rs_;
         pd.CS.pShaderBytecode = g_rt_depthcheck; pd.CS.BytecodeLength = sizeof g_rt_depthcheck;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&pso_))) { LOG_WARN("RT bridge: depth-check PSO failed"); return false; }
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 2;
+        pd.CS.pShaderBytecode = g_rt_shadow_ao; pd.CS.BytecodeLength = sizeof g_rt_shadow_ao;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSao_))) { LOG_WARN("RT bridge: shadow / AO PSO failed"); return false; }
+        D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 4;
+        if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
+        for (auto& r : tsReadback_) r = makeBuffer(dev_, 16, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -326,6 +347,11 @@ private:
         h.ptr += inc;
         D3D12_UNORDERED_ACCESS_VIEW_DESC ud{}; ud.Format = DXGI_FORMAT_R32_FLOAT; ud.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         dev_->CreateUnorderedAccessView(mask_.res, nullptr, &ud, h);
+        h.ptr += inc;                                    // table 2 (shadow / AO): depth SRV, the RG16F target's UAV
+        dev_->CreateShaderResourceView(depth_.res, &sd, h);
+        h.ptr += inc;
+        ud.Format = DXGI_FORMAT_R16G16_FLOAT;
+        dev_->CreateUnorderedAccessView(ao_.res, nullptr, &ud, h);
     }
     void depthCheck(const RtFrame& fr, int slot) {
         static const bool flip = std::getenv("WFC_RT_FLIPWINDING") != nullptr;   // (diagnostics: the other winding)
@@ -336,13 +362,13 @@ private:
         list_->CopyBufferRegion(stats_, 0, zeros_, 0, kStatN * 4);
         std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
         list_->ResourceBarrier(1, &b);
-        float c[24];
+        float c[32] = {};
         std::memcpy(c, fr.invViewProj, 64); std::memcpy(c + 16, fr.viewRow2, 16);
         c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = flip ? 1.0f : 0.0f; c[23] = (float)(fr.instanceMask & 0xFF);
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(pso_);
         list_->SetDescriptorHeaps(1, &heap_);
-        list_->SetComputeRoot32BitConstants(0, 24, c, 0);
+        list_->SetComputeRoot32BitConstants(0, 32, c, 0);
         list_->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());
         list_->SetComputeRootDescriptorTable(2, heap_->GetGPUDescriptorHandleForHeapStart());
         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
@@ -352,9 +378,67 @@ private:
         list_->CopyBufferRegion(readback_[slot], 0, stats_, 0, kStatN * 4);
         std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
         list_->ResourceBarrier(1, &b);
-        rbValid_[slot] = true;
+        rbValid_[slot] = true; rbMode_[slot] = 1;
+    }
+    // stage 1: sun shadow + AO into the RG16F target, timestamps around the dispatch, rays counted by the shader
+    void shadowAo(const RtFrame& fr, int slot) {
+        D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = stats_;
+        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+        list_->ResourceBarrier(1, &b);
+        list_->CopyBufferRegion(stats_, 0, zeros_, 0, kStatN * 4);
+        std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+        list_->ResourceBarrier(1, &b);
+        float c[32] = {};
+        std::memcpy(c, fr.invViewProj, 64); std::memcpy(c + 16, fr.toSun, 16);
+        c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = (float)fr.frameIndex; c[23] = (float)fr.aoRays;
+        c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF);
+        list_->SetComputeRootSignature(rs_);
+        list_->SetPipelineState(psoSao_);
+        list_->SetDescriptorHeaps(1, &heap_);
+        list_->SetComputeRoot32BitConstants(0, 32, c, 0);
+        list_->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());
+        D3D12_GPU_DESCRIPTOR_HANDLE t2 = heap_->GetGPUDescriptorHandleForHeapStart();
+        t2.ptr += 2ull * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        list_->SetComputeRootDescriptorTable(2, t2);
+        list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2);
+        list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2 + 1);
+        list_->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 2, 2, tsReadback_[slot], 0);
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        list_->ResourceBarrier(1, &b);
+        list_->CopyBufferRegion(readback_[slot], 0, stats_, 0, 4);
+        std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+        list_->ResourceBarrier(1, &b);
+        rbValid_[slot] = true; rbMode_[slot] = 2;
+        saoRays_ = fr.aoRays; saoRadius_ = fr.aoRadius;
+    }
+    void readSao(int slot) {
+        rbValid_[slot] = false;
+        uint32_t rays = 0; uint64_t ts[2] = {};
+        void* p = nullptr; D3D12_RANGE r{0, 4}, none{0, 0};
+        if (SUCCEEDED(readback_[slot]->Map(0, &r, &p))) { rays = *(const uint32_t*)p; readback_[slot]->Unmap(0, &none); }
+        D3D12_RANGE r2{0, 16};
+        if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 16); tsReadback_[slot]->Unmap(0, &none); }
+        const double ms = tsFreq_ && ts[1] > ts[0] ? (double)(ts[1] - ts[0]) * 1000.0 / (double)tsFreq_ : 0.0;
+        saoMs_.push_back(ms); saoRaySum_ += rays;
+        if (saoMs_.size() < 300) return;
+        std::vector<double> v = saoMs_;
+        std::sort(v.begin(), v.end());
+        double sum = 0; for (double x : v) sum += x;
+        const double avg = sum / (double)v.size(), p95 = v[v.size() * 95 / 100];
+        const double raysPerFrame = (double)saoRaySum_ / (double)v.size();
+        unsigned long long vram = 0;
+        if (adapter_) { DXGI_QUERY_VIDEO_MEMORY_INFO mi{}; if (SUCCEEDED(adapter_->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mi))) vram = mi.CurrentUsage; }
+        LOG_INFO("RT shadow + AO (300 frames, %dx%d, sun 1 + AO %d rays / pixel, radius %.2f m): GPU %.3f ms avg, %.3f p95, %.3f max; "
+                 "%.2f M rays / frame, %.2f G rays / s; RT device VRAM %.1f MB (BLAS %.1f MB + targets)",
+                 depth_.w, depth_.h, saoRays_, saoRadius_, avg, p95, v.back(), raysPerFrame / 1e6, avg > 0 ? raysPerFrame / (avg * 1e6) : 0.0,
+                 (double)vram / 1048576.0, (double)totalBlas_ / 1048576.0);
+        saoMs_.clear(); saoRaySum_ = 0;
     }
     void readStats(int slot) {
+        if (rbMode_[slot] == 2) { readSao(slot); return; }
         rbValid_[slot] = false;
         void* p = nullptr;
         D3D12_RANGE r{0, kStatN * 4};
@@ -378,11 +462,11 @@ private:
         LOG_INFO("RT depth check: raster / ray distance, log2 quarter octaves -2 .. +2 (%%):%s", hist);
         std::fill(statSum_, statSum_ + kStatN, 0ull);
     }
-    bool make(Shared& s, int w, int h) {
+    bool make(Shared& s, int w, int h, DXGI_FORMAT fmt = DXGI_FORMAT_R32_FLOAT, GLenum glFmt = 0x822E /*GL_R32F*/) {
         while (glGetError() != GL_NO_ERROR) {}
         D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)w; rd.Height = (UINT)h;
-        rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = DXGI_FORMAT_R32_FLOAT; rd.SampleDesc.Count = 1;
+        rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = fmt; rd.SampleDesc.Count = 1;
         rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
                                                  __uuidof(ID3D12Resource), (void**)&s.res))) return false;
@@ -393,7 +477,7 @@ private:
         importMem_(s.mem, ai.SizeInBytes, kHandleD3D12Resource, s.handle);
         glGenTextures(1, &s.tex);
         glBindTexture(GL_TEXTURE_2D, s.tex);
-        texStorageMem_(GL_TEXTURE_2D, 1, 0x822E /*GL_R32F*/, w, h, s.mem, 0);
+        texStorageMem_(GL_TEXTURE_2D, 1, glFmt, w, h, s.mem, 0);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glBindTexture(GL_TEXTURE_2D, 0);
         s.w = w; s.h = h;
@@ -423,10 +507,13 @@ private:
     GLuint sem_ = 0;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_;
+    Shared depth_, mask_, ao_;
     std::vector<ID3D12Resource*> blas_; std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instances_; ID3D12Resource* tlas_ = nullptr;
     UINT64 totalBlas_ = 0;
     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
+    ID3D12PipelineState* psoSao_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
+    IDXGIAdapter3* adapter_ = nullptr; UINT64 tsFreq_ = 0; int rbMode_[2] = {};
+    std::vector<double> saoMs_; unsigned long long saoRaySum_ = 0; int saoRays_ = 0; float saoRadius_ = 0.0f;
     ID3D12Resource* stats_ = nullptr; ID3D12Resource* zeros_ = nullptr; ID3D12Resource* readback_[2] = {};
     bool rbValid_[2] = {};
     unsigned long long statSum_[kStatN] = {}; int statFrames_ = 0;
