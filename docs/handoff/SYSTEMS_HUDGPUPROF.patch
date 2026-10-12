@@ -1,0 +1,240 @@
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -8,6 +8,8 @@
+ #include <cstdlib>
+ #include <cmath>
+ #include <cstring>
++#include <cstdio>
++#include <unordered_map>
+ 
+ #ifndef GL_MAX_SAMPLES
+ #define GL_MAX_SAMPLES 0x8D57
+@@ -302,6 +304,103 @@
+     glx::ActiveTexture((GLenum)g.activeTexture);
+ }
+ 
++// [Systems, M1 diagnostics] WFC_HUDGPUPROF=<N>: HUD GPU time by work category. Every N-th HUD frame a GL_TIMESTAMP goes in
++// at each change of category (not per draw); the stamps are read back at the next sampled frame (N >= 4 frames later, so
++// never a stall). Logged every 200 sampled frames: mean ms per sampled frame per category, stamps per frame, and the text
++// shadows (count, box area, share unchanged since the previous frame - the redraw-on-change lever). Off: nothing runs.
++namespace hudprof {
++enum Cat { BackCopy, Target, FillDirect, FillStencil, Glyph, Stroke, Bitmap, Mask, ShCover, ShBlur, ShComp, Resolve, Composite, Video, ShDraw, NCat };
++const char* const kName[NCat] = {"backcopy", "clear+backdrop", "fill-direct", "fill-stencil", "glyph", "stroke", "bitmap", "mask",
++                                 "shadow-switch+clear", "shadow-blur", "shadow-comp", "resolve", "composite", "video", "shadow-glyphs"};
++constexpr int kMax = 8192;
++struct Pool { unsigned q[kMax]; signed char cat[kMax]; int n = 0; bool pending = false; bool made = false; };
++struct State {
++    int every = -1;
++    bool sampling = false;
++    int cur = -2, pi = 0;
++    Pool pools[2];
++    double sum[NCat] = {};
++    double stamps = 0;
++    long frames = 0, overflow = 0;
++    long shadows = 0, shUnchanged = 0;
++    double shArea = 0;
++    std::unordered_map<const void*, uint64_t> lastKey;
++};
++State& st() { static State s; return s; }
++int every() {
++    State& S = st();
++    if (S.every < 0) S.every = std::getenv("WFC_HUDGPUPROF") ? std::max(1, std::atoi(std::getenv("WFC_HUDGPUPROF"))) : 0;
++    return S.every;
++}
++void stamp(int cat) {   // a new region of category cat starts (cat -1: the frame ends)
++    State& S = st();
++    Pool& P = S.pools[S.pi];
++    if (P.n >= kMax) { ++S.overflow; return; }
++    glx::QueryCounter(P.q[P.n], 0x8E28 /*GL_TIMESTAMP*/);
++    P.cat[P.n++] = (signed char)cat;
++    S.cur = cat;
++}
++void mark(int cat) {
++    State& S = st();
++    if (!S.sampling || S.cur == cat) return;
++    stamp(cat);
++}
++void resolve(Pool& P) {
++    State& S = st();
++    if (!P.pending) return;
++    P.pending = false;
++    if (P.n < 2) return;
++    unsigned long long prev = 0;
++    glx::GetQueryObjectui64v(P.q[0], 0x8866 /*GL_QUERY_RESULT*/, &prev);
++    for (int i = 1; i < P.n; ++i) {
++        unsigned long long t = 0;
++        glx::GetQueryObjectui64v(P.q[i], 0x8866, &t);
++        const int c = P.cat[i - 1];
++        if (c >= 0 && c < NCat && t >= prev) S.sum[c] += (double)(t - prev) * 1e-6;
++        prev = t;
++    }
++    S.stamps += P.n;
++    if (++S.frames % 200 == 0) {
++        const double f = (double)S.frames;
++        double tot = 0; for (double v : S.sum) tot += v;
++        char line[1024]; int o = std::snprintf(line, sizeof line, "HUDGPU per sampled frame (%ld): total %.4f ms |", S.frames, tot / f);
++        for (int c = 0; c < NCat && o < (int)sizeof line - 40; ++c)
++            if (S.sum[c] > 0) o += std::snprintf(line + o, sizeof line - (size_t)o, " %s %.4f", kName[c], S.sum[c] / f);
++        LOG_INFO("%s | stamps %.0f, overflow %ld", line, S.stamps / f, S.overflow);
++        LOG_INFO("HUDGPU text shadows: %.2f per frame, box %.3f Mpx per frame, unchanged since the previous frame %.1f %%",
++                 (double)S.shadows / f, S.shArea / f * 1e-6, S.shadows ? 100.0 * (double)S.shUnchanged / (double)S.shadows : 0.0);
++    }
++}
++void beginFrame(unsigned frame) {
++    State& S = st();
++    S.sampling = false;
++    if (every() == 0 || !glx::QueryCounter || !glx::GetQueryObjectui64v || !glx::GenQueries) return;
++    if (frame % (unsigned)S.every != 0) return;
++    for (Pool& P : S.pools) if (!P.made) { glx::GenQueries(kMax, P.q); P.made = true; }
++    S.pi ^= 1;
++    resolve(S.pools[S.pi]);   // the pool written two sampled frames ago
++    S.pools[S.pi].n = 0;
++    S.sampling = true;
++    S.cur = -2;
++}
++void endFrame() {
++    State& S = st();
++    if (!S.sampling) return;
++    stamp(-1);
++    S.pools[S.pi].pending = true;
++    S.sampling = false;
++}
++void shadow(const void* owner, uint64_t key, int w, int h) {   // every frame (the unchanged share needs the previous frame)
++    State& S = st();
++    if (every() == 0) return;
++    if (!S.sampling) { S.lastKey[owner] = key; return; }
++    ++S.shadows; S.shArea += (double)w * h;
++    auto it = S.lastKey.find(owner);
++    if (it != S.lastKey.end() && it->second == key) ++S.shUnchanged;
++    S.lastKey[owner] = key;
++}
++}  // namespace hudprof
++
+ static void gfxShadowVerifyFrame();   // below, with the shadow setters
+ static int gfxImgVerifyEvery() {   // WFC_GFXVERIFY_IMAGE=<N>: every N-th HUD frame is verified (0 = off)
+     static const int n = std::getenv("WFC_GFXVERIFY_IMAGE") ? std::max(1, std::atoi(std::getenv("WFC_GFXVERIFY_IMAGE"))) : 0;
+@@ -327,6 +426,7 @@
+     }
+     saveGlState();
+     invalidateGlShadow();   // other renderers changed GL state since the last HUD frame
++    hudprof::beginFrame(frame_);
+     gfxShadowVerifyFrame();   // WFC_GFXSTATESHADOW_VERIFY summary every 600 HUD frames
+     ensureShadowTargets(width, height);
+     if (width != fbw_ || height != fbh_) {
+@@ -366,6 +466,7 @@
+         backdropW_ = width; backdropH_ = height;
+     }
+     glBindTexture(GL_TEXTURE_2D, backdropTex_);
++    hudprof::mark(hudprof::BackCopy);
+     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+     recorded_.clear();
+     recording_ = gfxImgVerifyEvery() > 0 && frame_ % (unsigned)gfxImgVerifyEvery() == 0;
+@@ -375,6 +476,7 @@
+ }
+ 
+ void GfxRendererGL::beginTarget(int width, int height) {
++    hudprof::mark(hudprof::Target);
+     glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
+     glViewport(0, 0, width, height);
+     glClearColor(0, 0, 0, 0);
+@@ -573,6 +675,7 @@
+     }
+     if (recording_) verifyImage();
+     glDisable(GL_STENCIL_TEST);
++    hudprof::mark(hudprof::Resolve);
+     glx::BindFramebuffer(GL_READ_FRAMEBUFFER, msFbo_);
+     glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, resFbo_);
+     glx::BlitFramebuffer(0, 0, w_, h_, 0, 0, w_, h_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+@@ -581,6 +684,7 @@
+     glx::UseProgram(compProg_);
+     glx::Uniform1i(glx::GetUniformLocation(compProg_, "uTex"), 0);
+     glBindTexture(GL_TEXTURE_2D, resTex_);
++    hudprof::mark(hudprof::Composite);
+     if (glBlendEq) glBlendEq(kFuncAdd);
+     glDisable(GL_BLEND);   // the target holds the finished frame (backdrop included)
+     float q[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
+@@ -589,6 +693,7 @@
+     glx::BufferData(GL_ARRAY_BUFFER, sizeof q, q, GL_STREAM_DRAW);
+     glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+     glDrawArrays(GL_TRIANGLES, 0, 6);
++    hudprof::endFrame();
+     glx::UseProgram(0);
+     glDisable(GL_BLEND);
+     glx::BindVertexArray(0);
+@@ -1029,6 +1134,7 @@
+         case RI::MaskEnd: inMask_ = false; if (level_ < 15) ++level_; continue;
+         case RI::MaskPop: {
+             if (level_ <= 0) continue;
++            hudprof::mark(hudprof::Mask);
+             sColorMask(false);
+             sStencilMask(0xFF);
+             sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+@@ -1060,6 +1166,7 @@
+             float x1 = w * 20, y1 = h * 20;
+             float q[] = {0, 0, x1, 0, x1, y1, 0, 0, x1, y1, 0, y1};
+             std::vector<float> fan(q, q + 12);
++            hudprof::mark(inMask_ ? hudprof::Mask : hudprof::Bitmap);
+             if (inMask_) { stencilWinding(fan, it.m); cover(0, 0, x1, y1, it.m, true); }
+             else {
+                 sColorMask(true);
+@@ -1117,6 +1224,8 @@
+                     g_uiCounts.stencilMesh(b, col, solid && !inMask_);
+                 }
+             }
++            hudprof::mark(inMask_ ? hudprof::Mask : glyph ? hudprof::Glyph : fs.isBitmap() ? hudprof::Bitmap
++                          : (fs.type == gfx::FillStyle::Solid && m.direct) ? hudprof::FillDirect : hudprof::FillStencil);
+             drawMesh(m, inMask_, fs.type == gfx::FillStyle::Solid, !c.dynamic);
+         }
+         if (!inMask_) {
+@@ -1129,6 +1238,7 @@
+                 sColorMask(true);
+                 sStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+                 sStencilMask(0);
++                hudprof::mark(hudprof::Stroke);
+                 drawStroke(s, !c.dynamic);
+             }
+         }
+@@ -1208,6 +1318,20 @@
+     const int W = std::min((int)(x1 - x0), 4096), H = std::min((int)(y1 - y0), 4096);
+     if (W <= 0 || H <= 0) return;
+     if (W > shW_ || H > shH_) ensureShadowTargets(std::max(W, shW_), std::max(H, shH_));   // (never in practice)
++    if (hudprof::every() > 0) {   // what the blurred coverage depends on: box, offset, blur, the glyphs and their placement
++        uint64_t k = 1469598103934665603ull;
++        auto mix = [&k](const void* d, size_t n) { const unsigned char* b = (const unsigned char*)d; for (size_t i = 0; i < n; ++i) { k ^= b[i]; k *= 1099511628211ull; } };
++        const float box[8] = {x0, y0, (float)W, (float)H, bw, bh, dx, dy};
++        mix(box, sizeof box);
++        for (size_t i = at + 1; i < end; ++i) {
++            const auto& g = items[i];
++            if (g.type != gfx::Player::RenderItem::Glyph || !g.shape) continue;
++            const void* sp = g.shape; mix(&sp, sizeof sp);
++            const float mm[6] = {g.m.a, g.m.b, g.m.c, g.m.d, g.m.tx, g.m.ty}; mix(mm, sizeof mm);
++        }
++        hudprof::shadow(sh.owner, k, W, H);
++    }
++    hudprof::mark(hudprof::ShCover);
+     // 1. Glyph coverage (white) into [0], translated so the box starts at the origin.
+     glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[0]);
+     glViewport(0, 0, W, H);
+@@ -1225,12 +1349,14 @@
+     const int savedLevel = level_;
+     level_ = 0;
+     const gfx::Matrix toBox{1, 0, 0, 1, -x0, -y0};
++    hudprof::mark(hudprof::ShDraw);
+     for (size_t i = at + 1; i < end; ++i)
+         if (items[i].type == gfx::Player::RenderItem::Glyph && items[i].shape) drawGlyphCoverage(items[i], toBox * items[i].m);
+     level_ = savedLevel;
+     glDisable(GL_STENCIL_TEST);
+     glDisable(GL_BLEND);
+     // 2. Box blur: horizontal [0] -> [1], vertical [1] -> [0].
++    hudprof::mark(hudprof::ShBlur);
+     glx::UseProgram(shBlurProg_);
+     glx::Uniform1i(glx::GetUniformLocation(shBlurProg_, "uTex"), 0);
+     glx::Uniform2f(glx::GetUniformLocation(shBlurProg_, "uTexSize"), (float)shW_, (float)shH_);
+@@ -1247,6 +1373,7 @@
+         glDrawArrays(GL_TRIANGLES, 0, 6);
+     }
+     // 3. Composite into the movie target under the current mask, offset by distance / angle.
++    hudprof::mark(hudprof::ShComp);
+     glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
+     glViewport(0, 0, w_, h_);
+     glEnable(GL_STENCIL_TEST);
