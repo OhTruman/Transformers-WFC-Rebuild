@@ -478,6 +478,10 @@ private:
     std::chrono::steady_clock::time_point fgLastFrame_{};
     bool framegenOn() const;
     void framegenCapture(int outW, int outH);
+    // M7 stage 0 (WfcRt.cpp; WFC_RT_ROUNDTRIP=1): the mid-frame GL -> D3D12 -> GL round trip after the depth prepass
+    GLuint rtDepthProg_ = 0, rtFbo_ = 0;
+    bool rtFailed_ = false;
+    void rtRoundTrip();
     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
