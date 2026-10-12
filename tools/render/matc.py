@@ -699,6 +699,9 @@ class MatCompiler:
             'master': self.master, 'chain': self.chain,
             'lighting_model': m.get('LightingModel', 'MLM_Phong'),
             'blend_mode': m.get('BlendMode', 'BLEND_Opaque'),
+            # UE3 bUsedWithFogVolumes: a translucent fog-volume material is only ever drawn by RenderFogVolume (shipped
+            # exe: Function_83052228 -> 82EBE2C8), never as a surface (Rendering work/ghidra/fogvolume_findings.md)
+            'used_with_fog_volumes': bool(m.get('bUsedWithFogVolumes', False)),
             'two_sided': bool(m.get('TwoSided', False)),
             'opacity_mask_clip': m.get('OpacityMaskClipValue', 0.3333),
             'connected': sorted(connected), 'uses': sorted(self.uses),

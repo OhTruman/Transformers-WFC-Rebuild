@@ -129,6 +129,7 @@ struct Program {
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
+    bool fogShape = false;        // translucent bUsedWithFogVolumes material: never drawn as a surface (UE3 RenderFogVolume only)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
     std::string material;         // original material path, lower case (material-parameter routing)
@@ -708,7 +709,7 @@ private:
     // render data
     struct MatSrc { std::vector<std::string> rtParams; std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
-                    float clip = 0.3333f; };
+                    float clip = 0.3333f; bool fogVolume = false; };
     std::map<std::string, MatSrc> mats_;
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
@@ -1139,6 +1140,7 @@ private:
     bool ruleActive(const std::string& rule) const;
     bool depthDirty_ = true;
     bool sceneColorCopied_ = false;
+    std::set<std::string> fogShapeLogged_;               // components not drawn as fog-volume shapes (logged once each)
     std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)
     bool lmSpecBuild_ = false;                            // buildProgram: a translated original material (lightmap specular)
     void ensureSceneDepth();
