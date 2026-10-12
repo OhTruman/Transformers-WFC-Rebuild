@@ -1089,10 +1089,14 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     add(hd, 0, "Off");
     if (hdAvailable) add(hd, 1, "On");   // without the pack the row has the single value Off (cannot be changed)
     add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
+    // Hints: one line, no wrap - at most ~58 characters stay over the title rule (measured; longer runs off the panel).
+    // Facts measured by Rendering / Integration: FSR 1 costs almost nothing; FSR 3.1 gives the best image when the GPU
+    // limits the frame rate and can lower fps on fast PCs; frame generation doubles the frames shown below the refresh
+    // rate and adds a little input latency.
     row(up, "<PCSettings:Upscaling>",
         fsr3Missing     ? "FSR 3.1 is not installed: FSR 1 is used at the same scale."
-        : fsr3Available ? "Render the 3D scene at a lower resolution and upscale it (higher frame rate). FSR 3.1 is sharper in motion."
-                        : "Render the 3D scene at a lower resolution and upscale it (higher frame rate).", "Upscaling");
+        : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
+                        : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
     row(hd, "<PCSettings:HDTextures>",
         hdAvailable ? "Use high-resolution textures (more video memory). Applies on the next map load."
                     : "The HD texture pack is not installed.", "HD Textures");
@@ -1102,7 +1106,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         add(fg, 0, frameGenActive ? "Off (restart)" : "Off");
         add(fg, 1, frameGenActive ? "On" : "On (restart)");
         row(fg, "<PCSettings:FrameGeneration>",
-            "Insert generated frames (smoother motion, slightly more latency). Applies when the game restarts.", "Frame Generation");
+            "Doubles frames below your refresh rate; adds a little lag.", "Frame Generation");   // restart: in the labels
     }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
