@@ -57,6 +57,7 @@ Exit, all required:
 Bounded work list: flank route budget, squad regroup fix, shot-mix check; then the 400 rerun.
 If the 400 misses after these, Integration brings the user the numbers before more tuning.
 CLOSED 2026-10-11 by the user (accepts Smart at ~60-63 % wins vs Classic; squads 26-38 m and cover 7.8 % accepted as is).
+USER 2026-10-12: M2 stays OPEN until the user has playtested Smart vs Classic back-to-back ("Do not treat automated results as final sign-off"). The automated numbers are accepted; the human playtest is the remaining exit item.
 400 on 1e9e583: 63.0 / 63.8 % wins; same aim proven by aim error at fire (f79969a); stucks <= Classic; flanks not a loss.
 Smart becomes the default (Gameplay World fallback + Frontend kBotAiDefault); Classic stays selectable and byte-identical.
 The user's playtest happens with M3.
@@ -103,3 +104,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   D3 licensing: read the NVIDIA RTX SDK terms before shipping D.
 - M6 Modern materials mode (optional).
 - M7 Ray tracing (shadows + AO -> reflections -> GI), optional, off by default.
+  USER 2026-10-12: stage 1 on the hybrid GL + D3D12 path (architecture A); collect real performance, VRAM, sync and ray-budget
+  numbers first. Port the renderer to D3D12 (option C; never Vulkan) only if those show the hybrid limits RT quality / performance
+  or grows overly complicated. OpenGL stays the Classic / reference / default renderer regardless.
+  DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
+  credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
