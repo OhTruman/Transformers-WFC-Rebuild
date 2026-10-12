@@ -1,0 +1,38 @@
+desktop before: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+slot A open 20:37:38 maps 510 504
+mem slot-A-start: commit 93/115 GB, nonpaged 24.52 GB, free phys 15.4 GB, C: free 14.5 GB
+20:44 510 rp 2160 r0 try 1: p90 2.88  
+20:51 510 ov 2160 r1 try 1: p90 2.62  
+20:58 510 rp 2160 r1 try 1: p90 2.67  
+21:06 510 ov 1080 r1 try 1: p90 2.4  
+21:13 510 rp 1080 r1 try 1: p90 2.4  
+21:20 504 ov 2160 r1 try 1: p90 2.88  
+21:27 504 rp 2160 r1 try 1: p90 2.74  
+21:34 504 ov 1080 r1 try 1: p90 2.85  
+21:41 504 rp 1080 r1 try 1: p90 2.04  
+21:49 510 ov 2160 r2 try 1: p90 2.62  
+21:56 510 rp 2160 r2 try 1: p90 2.48  
+22:03 510 ov 1080 r2 try 1: p90 2.41  
+22:10 510 rp 1080 r2 try 1: p90 2.28  
+22:17 504 ov 2160 r2 try 1: p90 2.88  
+22:24 504 rp 2160 r2 try 1: p90 2.71  
+22:31 504 ov 1080 r2 try 1: p90 2.84  
+22:39 504 rp 1080 r2 try 1: p90 2.15  
+22:46 510 fs 1440 r1 try 1: p90 2.37 pid 45736: client 2560x1440, window rect (0,0)-(2560,1440) 
+22:46:11 after 510 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+22:53 504 fs 1440 r1 try 1: p90 2.19 pid 41564: client 2560x1440, window rect (0,0)-(2560,1440) 
+22:53:25 after 504 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+mem slot-A-end: commit 93/115 GB, nonpaged 24.57 GB, free phys 15.9 GB, C: free 14.5 GB
+slot A done 22:53
+slot B open 22:53:27 maps 509 507
+mem slot-B-start: commit 93/115 GB, nonpaged 24.57 GB, free phys 15.9 GB, C: free 14.5 GB
+Import-Csv : Could not find file 'F:\Transformers 
+Rebuild\Rebuild-Experimental\work\permap\m1f-65e856f-509-rp-2160-t150-r0\capacity.csv'.
+At line:1 char:2
++ (Import-Csv 'work/permap/m1f-65e856f-509-rp-2160-t150-r0/capacity.csv ...
++  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Import-Csv], FileNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.ImportCsvCommand
+ 
+22:53 509 rp 2160 r0 try 1: p90   
+--- 22:54 slots stopped by PID for attribution (in-script stop failed); rows 509 rp r0 + 509 ov r1 discarded
