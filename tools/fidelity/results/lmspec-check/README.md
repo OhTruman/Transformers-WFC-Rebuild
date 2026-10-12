@@ -81,3 +81,35 @@ Notes, not defects:
 - WFC_NOLMSPEC=1 restores the previous text exactly (Rendering: 8/8 lockstep identical).
 
 Step 3 (untimed Molten same-camera A/B, WFC_NOLMSPEC=1 vs default) runs after Rendering's current timed window.
+
+## Step 3: Molten same-camera render A/B (untimed, 2026-10-12 10:44-10:55, integration 42dd17b)
+
+Same build, `WFC_NOLMSPEC=1` (off) vs default (on), lockstep seed 123, boot frame 2400, 5 fixed cams (`molten/molten_ab.ps1`,
+`molten/cmp.py`; side-by-sides `*-offon.png`, deltas x8 `*-delta.png`). Luminance 0-255:
+
+| cam | off | on | delta | rel % | px > +2 | px > +24 | p99 delta | darker px |
+|---|---|---|---|---|---|---|---|---|
+| pick (harness) | 62.05 | 71.00 | 8.95 | +14.4 | 31.6 % | 11.6 % | 119 | 0 |
+| c11 | 32.40 | 41.72 | 9.32 | +28.8 | 35.5 % | 12.2 % | 110 | 0 |
+| c9 | 32.47 | 39.73 | 7.26 | +22.4 | 29.3 % | 9.1 % | 114 | 0 |
+| c15 | 55.70 | 75.63 | 19.92 | +35.8 | 53.5 % | 23.2 % | 144 | 0 |
+| c14 | 38.57 | 43.19 | 4.62 | +12.0 | 19.1 % | 5.3 % | 97 | 0 |
+
+### The near-white pillar at c15 (Integration's first question)
+
+- **Material:** `ENV_KON_Prison_p.Materials.Parasite_01_MATINST` (StaticMeshActor_10284, ParasitePiece_01_LongerSpikes_STAT),
+  a MIC of `ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat`, found with WFC_PICK along the c15 ray turned onto the pillar (yaw 83;
+  the shipped pick uses the player camera, so a local patch in work/ab/m9c_42dd17b makes it follow WFC_FIXEDCAM; `molten/sheet.png`).
+- **Our term for it** (`molten/parasite_glsl.txt`): SpecularPower `P = 100 * (maskG + sigmoid + 0.05)` (about 5-205),
+  SpecularColor `= 1.5 * colour * (P + 2) / 2` (desaturated 25 %): the master graph's own energy-normalised Phong, so S runs up
+  to over 100 x the colour. Wherever R lines up with a bent basis `normalize(N + B_i)`, `S * LM_i * Scale_i` saturates.
+- **The original applies the same master the same way.** Rendering's emulator results for other `ENV_PhongMain_NS_Mat` MICs on Rust
+  (InroomWall_A, Arch_MAT_INST_MPRust_Decals_OR, innerCyberParts, ENV_COR_MPrustFloor, HalfArchInter) are exact (residual
+  2.5e-08 - 1.4e-07, fitted scale 1.000, so no hidden global factor), with the specular making up 18-96 % of the lightmap
+  response. So for this master the strong lightmap specular, the (P+2)/2 colour, the power source and the clamp all match the original.
+  **Not an over-brightening bug in the lightmap-specular code.**
+- **Caveat: the exact Parasite permutation cannot be emulated on Molten.** The MIC overrides static switches (EMISSIVE_ON,
+  Emissive_UseColorParam, Use_DetailNormal_Mask, ...), but no shader map for it is cooked in Molten's 14 ShaderCache exports.
+  Its name occurs only in the ART package's name table (Pillar_02_MATINST, for contrast, has a shader map). Forcing the master's
+  own Molten shaders gives a mismatch (`molten/parasite.out`, residual ~0.9), which is expected from a different permutation and is
+  not evidence. Which shader the original actually draws this MIC with (UE3's fallback for an uncooked static permutation) is open.
