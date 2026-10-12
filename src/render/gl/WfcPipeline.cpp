@@ -812,6 +812,7 @@ void Pipeline::release() {
              "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
     srgbBlockTex_.clear();
+    fogShapeLogged_.clear();
     gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
@@ -884,6 +885,7 @@ bool Pipeline::load(const std::string& mapName) {
         s.twoSided = info["two_sided"].asBool(false);
         s.lit = info["lighting_model"].asString() != "MLM_Unlit";
         s.clip = info["opacity_mask_clip"].asFloat(0.3333f);
+        s.fogVolume = info["used_with_fog_volumes"].asBool(false);
         const assets::Json& tx = info["textures"];
         for (size_t i = 0; i < tx.size(); ++i) {
             const assets::Json& t = tx[i];
@@ -2352,6 +2354,11 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
         lmSpecBuild_ = false;
         if (r >= 0) {
             progs_[(size_t)r].original = true;
+            // UE3 (shipped exe Function_83052228): a translucent material used with fog volumes is drawn only by
+            // RenderFogVolume (82EBE2C8), which draws nothing for a component no fog-volume info registered.
+            // WFC_FOGSHAPES=1: draw them as surfaces (the previous behaviour)
+            static const bool fogShapes = std::getenv("WFC_FOGSHAPES") != nullptr;
+            progs_[(size_t)r].fogShape = s.fogVolume && s.blend >= 2 && !fogShapes;
             {
                 std::string ml = matNameIn;
                 std::transform(ml.begin(), ml.end(), ml.begin(), ::tolower);
@@ -3401,6 +3408,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (s.prog < 0) {
                 ++counts_.noProgram;
                 if (frameNoProg_.size() < 64) frameNoProg_.insert(s.matName.empty() ? std::string("<none>") : s.matName);
+                continue;
+            }
+            if (progs_[(size_t)s.prog].fogShape) {
+                if (fogShapeLogged_.insert(s.comp).second)
+                    LOG_INFO("wfc: fog-volume shape not drawn as a surface: component %s, material %s", s.comp.c_str(),
+                             s.matName.c_str());
                 continue;
             }
             static const char* skipMat = std::getenv("WFC_SKIPMAT");   // diagnostics: hide by material
