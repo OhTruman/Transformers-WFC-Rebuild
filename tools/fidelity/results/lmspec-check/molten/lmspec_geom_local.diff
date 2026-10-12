@@ -1,0 +1,26 @@
+--- "/f/Transformers Rebuild/Rebuild-Rendering/work/re/lmspec_geom.py"	2026-10-12 08:38:10.183970200 -0500
++++ lmspec_geom.py	2026-10-12 11:24:55.319916200 -0500
+@@ -11,7 +11,8 @@
+ # identified in its code and driven per trial; V_t = UE3 tangent-space camera vector (B = cross(Z, X) * w), no V fit.
+ # Writes lmspec_<map>.json and prints a summary. Usage: lmspec_verify.py MAP [material-substring]
+ import sys, os, re, json, struct, collections, numpy as np
+-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tools', 'render'))
++sys.path.insert(0, 'F:/Transformers Rebuild/Rebuild-Rendering/tools/render')
++sys.path.insert(0, 'F:/Transformers Rebuild/Rebuild-Experimental/work/lmspec/geom')
+ H = os.path.dirname(os.path.abspath(__file__))
+ import xenos_dis as X, xemu, gl2py
+ from ue3obj import Repo, map_packages
+@@ -430,9 +431,13 @@
+     else the master. Its shader map must be in this map's cache (else the material is not used here)."""
+     chain = list(info.get('chain') or [key])
+     own = next((p for p in chain if has_resource(p)), None) or info.get('master')
++    if os.environ.get('LMS_OWNER'): own = os.environ['LMS_OWNER']   # EXPERIMENTAL: force the owner (MIC permutation not cooked)
+     if own and own.lower() in by_owner: return own, by_owner[own.lower()]
++    sm = SHAREMAP.get(key)                                          # EXPERIMENTAL: shared static-permutation map (equal statics)
++    if sm and sm.lower() in by_owner: return sm, by_owner[sm.lower()]
+     return own, []
+ 
++SHAREMAP = json.load(open(os.path.join(H, 'sharemap_%s.json' % MAP))) if os.environ.get('LMS_SHARE') else {}
+ results = {}
+ for key, v in sorted(mats.items()):
+     if FILT and FILT.lower() not in key.lower(): continue

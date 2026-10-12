@@ -108,8 +108,31 @@ Same build, `WFC_NOLMSPEC=1` (off) vs default (on), lockstep seed 123, boot fram
   2.5e-08 - 1.4e-07, fitted scale 1.000, so no hidden global factor), with the specular making up 18-96 % of the lightmap
   response. So for this master the strong lightmap specular, the (P+2)/2 colour, the power source and the clamp all match the original.
   **Not an over-brightening bug in the lightmap-specular code.**
-- **Caveat: the exact Parasite permutation cannot be emulated on Molten.** The MIC overrides static switches (EMISSIVE_ON,
-  Emissive_UseColorParam, Use_DetailNormal_Mask, ...), but no shader map for it is cooked in Molten's 14 ShaderCache exports.
-  Its name occurs only in the ART package's name table (Pillar_02_MATINST, for contrast, has a shader map). Forcing the master's
-  own Molten shaders gives a mismatch (`molten/parasite.out`, residual ~0.9), which is expected from a different permutation and is
-  not evidence. Which shader the original actually draws this MIC with (UE3's fallback for an uncooked static permutation) is open.
+- **RETRACTED caveat (same day): the Parasite permutation IS cooked; it is shared and carries another MIC's name.** UE3 keys a
+  static-permutation shader map by root master + static parameter set, so MICs with equal switch values share one map, and the map
+  carries the friendly name of only one of them. `molten/sharemap.py` pairs each unnamed material with a named one that has the same
+  root master and the same switch values. Parasite_01_MATINST pairs with `ENV_ORB_Trypticon_p.Materials.TrypWallLight_MATINST`.
+  Emulated against that map with Parasite's own parameter values (`molten/parasite_shared.out`), it is **exact on all three
+  policies**: Texture / InterpolatedTexture residual 1.9e-08, Vertex 5.4e-08, fitted scale 1.000, specular colour error 1e-7, and
+  specular is 93-99 % of the lightmap response; the diffuse-only model fails (0.91). **The original also takes this pillar
+  near-white.** (The first forced-master run, residual ~0.9, used the master's own default permutation, so it was the wrong shader.)
+
+## Full Molten coverage (4th map, outputs only in Experimental work/; Rendering's emulator copied, `molten/lmspec_geom_local.diff`)
+
+Molten's ShaderCache: 397 lightmapped base-pass PS (155 Vertex, 154 Texture, 88 InterpolatedTexture). Per material (`molten/summ.py`):
+
+| | name-matched only (Rendering's method) | + shared static-permutation maps |
+|---|---|---|
+| exact (spec term matches the original) | 37 | **202** (75 world-package) |
+| differs in diffuse / normal (not the spec term) | 15 | 37 |
+| spec colour only differs / spec term extra | 0 | **0** |
+| no original LM shader found | 258 | 71 (59 world) |
+| not emulated (registers / uniforms) | 7 | 7 |
+
+- No Molten material differs in the specular term alone, and none fits the diffuse-only model better. The 37 "differs" are all
+  character / weapon materials (RB_ / VH_ / WEP_ / Frenzy / Rumble), which never draw with lightmaps; the same set shows on Rust.
+- Still unpaired: 59 world materials (incl. ENV_CORE_CanyonFloor_A, BSPWall_A/C/D/F, CanyonWall_A, GasChamber*). Their
+  shared map has no name-matched sibling with identical switch values under this key (component masks, stale switches or
+  name garbling are candidates). This is a coverage gap of the check, not a finding against the code.
+- Classifier note: on Rust my per-material classifier counts 36 exact / 19 differing against Rendering's 29 / 26 (different
+  grouping of multi-shader materials); neither count has a spec-only mismatch.
