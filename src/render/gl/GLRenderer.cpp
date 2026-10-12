@@ -72,6 +72,7 @@ public:
         // for a window GL has already presented to (the frontend / loading screen swap before the first 3D frame)
         initD3D12PresentIfRequested();
         if (const char* fl = std::getenv("WFC_FRAMELIMIT")) { limiter_.setLimit((float)std::atof(fl)); limitFromEnv_ = true; }
+        if (std::getenv("WFC_HDFORCE")) wfc_.setHdTextures(true);   // (verification: HD on without the frontend's setting, e.g. the scene viewer)
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         glEnable(GL_CULL_FACE);
