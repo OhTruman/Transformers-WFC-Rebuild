@@ -764,6 +764,8 @@ void Pipeline::release() {
         for (GLuint* f : {&opaqueCopyFbo_, &reactiveFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(opaqueCopyTex_); delTex(reactiveTex_); delProg(reactiveProg_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
+        for (GLuint* p : {&fsr3DepthProg_, &fgDepthProg_, &fgVelProg_}) delProg(*p);   // (fsr3Out_ is the upscaler's)
+        for (GLuint* f : {&fsr3DepthFbo_, &fgFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
         delVao(occVao_); delVao(spriteFrameVao_); delVao(spriteRingVao_);
@@ -842,12 +844,14 @@ void Pipeline::release() {
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
     const int keepAniso = anisotropy_;
     const bool keepHd = hdTextures_;
+    const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
     anisotropy_ = keepAniso;
     hdTextures_ = keepHd;
+    fsr3On_ = keepFsr3;
 }
 
 // ------------------------------------------------------------------------- loading

@@ -21,6 +21,8 @@ struct FgParams {
 };
 
 bool framegenActive();                                       // the presenter runs the FG swapchain
+bool framegenGenerating();                                   // ... and the last frame had FG inputs (generated frames)
+void shutdownD3D12Present();                                 // ordered presenter teardown (exit; GL context current)
 // Before writing this frame's inputs: the textures of the ring slot the next present uses (its previous D3D12 reads
 // are complete). False: no FG inputs this frame (FG then shows real frames only).
 bool framegenInputs(int renderW, int renderH, FgInputs* out);
