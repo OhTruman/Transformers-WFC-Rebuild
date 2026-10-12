@@ -12,8 +12,17 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
   --hd    the HD pack source (default AssetTools/out/hd/pack): hd_index.json + ONLY the indexed files are copied to
           <out>/Transformers Rebuild/AssetTools/out/hd (the loader's default location; the source dir also holds non-PASS
           textures that must not ship); every row's byte count is checked. --no-hd: no HD folder.
+  --hd-label  a name for the HD pack shipped (e.g. "D"), recorded in build_slim.json; --hd points at that pack's folder
+          (any pack in the loader's index layout: hd_index.json + the DDS it names).
+  --m5    ship the M5 runtime the exe was built with, taken from --bin (CMake copies it there only when the SDKs were fetched,
+          so the DLLs match the exe): amd_fidelityfx_loader / upscaler / framegeneration _dx12.dll and D3D12\\D3D12Core.dll,
+          AMD's license.md -> licenses/amd_fidelityfx/, Microsoft's Agility SDK LICENSE.txt (--agility-license, default
+          third_party/d3d12_agility/LICENSE.txt) -> licenses/microsoft_d3d12_agility/. Never d3d12SDKLayers.dll (the debug
+          layer: not needed at run time, not in the package). Without --m5 none of these files ship even if --bin has them.
   --plan  dry run: counts, bytes, missing sources; writes nothing.
-Run outside any PERF_HOLD (IO + CPU heavy). Verify afterwards with tools/package/verify_slim.ps1 -Strict.
+Writes <out>/build_slim.json: head, flags (m5, hd + label) and the exact bin file list, which verify_slim.ps1 holds the
+package to (no file missing, none extra). Run outside any PERF_HOLD (IO + CPU heavy). Verify afterwards with
+tools/package/verify_slim.ps1 -Strict.
 """
 import csv, json, os, shutil, sys, time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +35,14 @@ XPR = ROOT + '/AssetTools/out/package/xpr_twins.tsv'
 BIN_DEST = 'Transformers Rebuild/Rebuild/build/release/bin'
 HD_DEST = 'Transformers Rebuild/AssetTools/out/hd'
 MARKER = '.build_slim_output'
+MANIFEST = 'build_slim.json'
+# M5 runtime (--m5): (path in --bin, path in the package's bin)
+M5_FROM_BIN = [('amd_fidelityfx_loader_dx12.dll', 'amd_fidelityfx_loader_dx12.dll'),
+               ('amd_fidelityfx_upscaler_dx12.dll', 'amd_fidelityfx_upscaler_dx12.dll'),
+               ('amd_fidelityfx_framegeneration_dx12.dll', 'amd_fidelityfx_framegeneration_dx12.dll'),
+               ('D3D12/D3D12Core.dll', 'D3D12/D3D12Core.dll'),
+               ('license.md', 'licenses/amd_fidelityfx/license.md')]
+AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
 
 
 def arg(name, default=None):
@@ -77,6 +94,20 @@ def main():
             problems.append('--bin lacks %s (the previous package shipped it)' % rel)
         else:
             bin_rows.append((src, BIN_DEST + '/' + rel))
+    m5 = '--m5' in sys.argv
+    if m5:
+        for src_rel, dst_rel in M5_FROM_BIN:
+            src = os.path.join(bin_dir, src_rel)
+            if not os.path.isfile(src):
+                problems.append('--m5: --bin lacks %s (build with the FFX SDK / Agility runtime fetched: tools/render/fetch_ffx_sdk.py, '
+                                'fetch_d3d12_agility.py)' % src_rel)
+            else:
+                bin_rows.append((src, BIN_DEST + '/' + dst_rel))
+        lic = arg('--agility-license', os.path.join(REPO, 'third_party', 'd3d12_agility', 'LICENSE.txt'))
+        if not os.path.isfile(lic):
+            problems.append('--m5: Microsoft Agility SDK LICENSE.txt not found: %s' % lic)
+        else:
+            bin_rows.append((lic, BIN_DEST + '/' + AGILITY_LICENSE_DEST))
     missing = [r['source'] for r in rows if not os.path.isfile(os.path.join(ROOT, r['source']))]
     problems += ['source missing: %s' % m for m in missing[:20]]
     if len(missing) > 20:
@@ -118,9 +149,16 @@ def main():
     bin_b = sum(os.path.getsize(s) for s, _ in bin_rows)
     hd_b = sum(os.path.getsize(s) for s, _ in hd_rows)
     print('slim_files.tsv: %d keep (%.2f GB), %d xpr (%.2f GB before compression), %d drop; bin from --bin: %d files (%.3f GB); '
-          'HD: %s' % (sum(r['action'] == 'keep' for r in rows), keep_b / 2**30, sum(r['action'] == 'xpr' for r in rows),
+          'HD: %s; M5 runtime: %s' % (sum(r['action'] == 'keep' for r in rows), keep_b / 2**30, sum(r['action'] == 'xpr' for r in rows),
                       xpr_b / 2**30, drop, len(bin_rows), bin_b / 2**30,
-                      '%d files (%.2f GB)' % (len(hd_rows), hd_b / 2**30) if hd_src else 'none'))
+                      '%d files (%.2f GB)' % (len(hd_rows), hd_b / 2**30) if hd_src else 'none', 'yes' if m5 else 'no'))
+    bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
+    manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
+                'm5_runtime': m5, 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
+                'bin_dest': BIN_DEST, 'bin_files': bin_files}
+    if plan:
+        print('bin files (%d):' % len(bin_files))
+        for b in bin_files: print('  ' + b)
     for p in problems:
         print('PROBLEM:', p)
     if plan or problems:
@@ -172,10 +210,15 @@ def main():
         t = open(os.path.join(HERE, 'slim_template', n), encoding='utf-8', newline='').read()
         version = arg('--version', '09c %s, Release + PGO' % head)
         t = t.replace('09c 37eec59, Release + PGO', version).replace('09c b898c75 slim', '09c %s slim' % head)
+        if n == 'README.txt' and m5:
+            t = t.rstrip('\r\n') + ('\n\nOptional graphics runtime (Graphics menu: FSR 3.1 upscaling, frame generation; off by default): AMD FidelityFX\n'
+                                    'DLLs and Microsoft D3D12 Agility SDK runtime (D3D12\\D3D12Core.dll) beside the game; their licences are in\n'
+                                    'Transformers Rebuild\\Rebuild\\build\\release\\bin\\licenses\\amd_fidelityfx and \\microsoft_d3d12_agility.\n')
         t = t.replace('\r\n', '\n').replace('\n', '\r\n')   # CRLF whatever the checkout's line endings: cmd mis-parses LF-only labels
         if head not in t:
             fails.append(('VERSION', n))
         open(os.path.join(out, n), 'w', encoding='utf-8', newline='').write(t)
+    json.dump(manifest, open(os.path.join(out, MANIFEST), 'w', encoding='utf-8'), indent=1)
     print('wrote %s: keep %d, xpr %d, %.2f GB, %d s, failures %d' % (out, tot['keep'], tot['xpr'], tot['bytes'] / 2**30,
                                                                    time.time() - t0, len(fails)))
     for f_ in fails[:20]:

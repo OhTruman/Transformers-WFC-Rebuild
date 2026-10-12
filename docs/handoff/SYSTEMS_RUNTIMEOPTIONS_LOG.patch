@@ -1,0 +1,13 @@
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -191,6 +191,10 @@
+     if constexpr (HasRendererFrameGen<R>::value) {
+         if (r) { f.frameGen = r->frameGenerationAvailable(); f.frameGenActive = r->frameGenerationActive(); }
+     }
++    // [Systems] what the optional graphics rows may offer on this install (the runtimes shipped beside the exe): the package
++    // check (tools/package/verify_slim.ps1) matches it against the package's contents
++    LOG_INFO("graphics: optional runtimes: FSR 3.1 %s, frame generation %s, HD texture pack %s", f.fsr3 ? "yes" : "no",
++             f.frameGen ? "yes" : "no", f.hdTexturePack ? "yes" : "no");
+     f.cpuCores = (int)std::thread::hardware_concurrency();
+     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
+     (void)r;
