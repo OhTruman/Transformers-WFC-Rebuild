@@ -855,6 +855,8 @@ void Pipeline::release() {
 bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
     std::string root = renderDataRoot();
+    cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
+    loadFrame_ = frameNo_;
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
     yieldLoad();
@@ -7196,7 +7198,11 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
-    if (motionVectorsOn()) { havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0; prevViewProj_ = viewProjNoJitter_; motionDraws_.clear(); motionRigid_.clear(); }
+    if (motionVectorsOn()) {
+        detectCameraCut(cam);
+        havePrevVP_ = frameNo_ > 1 && velValidFrame_ >= 0 && !cameraCut_;
+        prevViewProj_ = viewProjNoJitter_; motionDraws_.clear(); motionRigid_.clear();
+    }
     {
         core::Mat4 proj = cam.proj();
         viewProjNoJitter_ = proj * cam.view();
@@ -7208,8 +7214,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
             jitterIndex_ = jitterIndex_ % phases + 1;
             jitterPx_[0] = halton(jitterIndex_, 2) - 0.5f;
             jitterPx_[1] = halton(jitterIndex_, 3) - 0.5f;
-            proj.m[8] += jitterPx_[0] * 2.0f / (float)std::max(vpW_, 1);   // clip-space offset (column 2: x / w, y / w)
-            proj.m[9] += jitterPx_[1] * 2.0f / (float)std::max(vpH_, 1);
+            // the image moves by +jitterPx_ render pixels (+x right, +y up): column 2 multiplies view z and clip w = -z,
+            // so subtracting 2 j / size here adds 2 j / size in NDC (M5 item 2: the old += moved it by -jitterPx_)
+            proj.m[8] -= jitterPx_[0] * 2.0f / (float)std::max(vpW_, 1);
+            proj.m[9] -= jitterPx_[1] * 2.0f / (float)std::max(vpH_, 1);
         }
         viewProj_ = proj * cam.view();
         camProj_ = proj;
