@@ -12,6 +12,7 @@
 #include <windows.h>
 #include <d3d12.h>
 #include <dxgi1_4.h>
+#include "render/d3d12/D3D12Adapter.h"
 #include <GL/gl.h>
 
 #include "render/d3d12/D3D12Upscaler.h"
@@ -97,7 +98,9 @@ public:
         d3d12SelectAgility();                        // (D3D12Agility.cpp: SM 6.6+ runtime when shipped)
         HMODULE d3d = LoadLibraryW(L"d3d12.dll");
         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
-        const HRESULT hr = create ? create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
+        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+        const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
+        if (adapter) adapter->Release();
         if (FAILED(hr)) { LOG_WARN("FSR3: no D3D12 device (D3D12CreateDevice 0x%08lx)", (unsigned long)hr); return false; }
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;

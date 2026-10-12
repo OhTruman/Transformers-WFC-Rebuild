@@ -11,6 +11,7 @@
 #include <GL/gl.h>
 
 #include "core/Log.h"
+#include "render/d3d12/D3D12Adapter.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -63,7 +64,10 @@ bool probeD3D12Interop(std::string& detail) {
     HMODULE d3d = LoadLibraryW(L"d3d12.dll");
     auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
     ID3D12Device* dev = nullptr;
-    if (!create || FAILED(create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev)) || !dev) {
+    IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+    const bool made = create && SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev)) && dev;
+    if (adapter) adapter->Release();
+    if (!made) {
         detail = "no D3D12 device (feature level 12_0)";
         return false;
     }

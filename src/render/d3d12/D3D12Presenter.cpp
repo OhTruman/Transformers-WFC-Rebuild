@@ -14,6 +14,7 @@
 
 #include "platform/PresentHook.h"
 #include "render/d3d12/D3D12FrameGen.h"
+#include "render/d3d12/D3D12Adapter.h"
 #include "core/Log.h"
 #if defined(WFC_FFX_SDK)
 #include "ffx_api.h"
@@ -182,10 +183,11 @@ public:
         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
-        if (!create || !cf2 || FAILED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) ||
-            FAILED(create(nullptr, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_))) {
-            LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false;
-        }
+        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
+                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
+        if (adapter) adapter->Release();
+        if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
         BOOL tear = FALSE;
         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
