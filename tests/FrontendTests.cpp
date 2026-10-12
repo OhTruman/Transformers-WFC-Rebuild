@@ -104,6 +104,11 @@ static void testGraphicsAutoDetect() {
     check(d.tier == "low" && d.height == 1080 && d.width == 1920 && d.upscaling == 2 && d.anisotropy == 4, "autodetect.integrated_low_1080_fsr",
           d.tier + " " + std::to_string(d.width) + "x" + std::to_string(d.height) + " " + d.why);
     check(t.isIntegrated("AMD Radeon(TM) Graphics") && !t.isIntegrated("AMD Radeon RX 7900 XTX"), "autodetect.integrated_keywords");
+    // A presets file asking for an FSR 3.1 mode (4-6) still gets FSR 1 at most: FSR 3.1 is only an explicit user choice.
+    frontend::GraphicsPresetTable f3;
+    const bool f3ok = f3.loadFromString("{\"tiers\":[{\"name\":\"x\",\"nativePixelBudget\":100,\"upscalingOverBudget\":5}]}");
+    const frontend::GraphicsPreset e = f3.pick(big);
+    check(f3ok && e.upscaling == 3, "autodetect.never_picks_fsr31", std::to_string(e.upscaling));
 }
 
 static void testRecommendedBots() {
