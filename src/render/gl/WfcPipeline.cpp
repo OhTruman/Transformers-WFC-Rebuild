@@ -2092,11 +2092,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     // Directional lightmap specular (TBasePassPixelShader<FDirectional(Interpolated)TextureLightMapPolicy> microcode, Rust /
     // Streets / Gorge shader caches, emulated per material against the translation: work/re/lmspec_verify.py):
     // S * sum_i LM_i * Scale_i * pow(max(sat(dot(normalize(N + B_i), R)), 1e-4), SpecularPower), R the tangent-space
-    // reflection of the camera vector. Translated opaque / masked lit materials with a specular input only; the rest
-    // (and WFC_NOLMSPEC=1) compile the unchanged diffuse-only text.
+    // reflection of the camera vector. Translated opaque / masked / translucent lit materials with a specular input only
+    // (translucent: Remnant's yellowsign_arrows_CLR_Mat, the one shipped translucent lit lightmapped material - its
+    // texture-lightmap PS has the term, work/re/lmspecg_tl_MP_ESC_Remnant.json; its users are static floor decals, which
+    // the runtime draws without their receivers' lightmaps today, so no shipped draw changes yet); the rest (and
+    // WFC_NOLMSPEC=1) compile the unchanged diffuse-only text.
     static const bool noLmSpec = std::getenv("WFC_NOLMSPEC") != nullptr;
     std::string mainLM;
-    if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 1 &&
+    if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
         code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
         mainLM = kFSMainLM;
         const std::string anchor = "        c += o.DiffuseColor * L;\n";
