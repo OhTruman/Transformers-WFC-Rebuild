@@ -1,0 +1,22 @@
+--- a/src/ui/gl/GfxRendererGL.cpp
++++ b/src/ui/gl/GfxRendererGL.cpp
+@@ -1339,7 +1339,19 @@
+     sColorMask(true);
+     glClearColor(0, 0, 0, 0);
+     sStencilMask(0xFF);
++    // [Systems, M1] glClear ignores the viewport: unscissored it cleared the whole framebuffer-sized target (at 4K ~66 MB per
++    // shadow, ~0.07 ms each; half the HUD's GPU time). Only what the passes read is cleared: the horizontal blur reads [0]
++    // at columns up to W - 1 + ceil((n - 1) / 2) + 1 (linear filtering at half-texel offsets for even n) on rows 0..H-1, the
++    // vertical pass reads [1] (never cleared, as before), the composite reads [0] inside W x H; the glyph draws stay inside
++    // the viewport. n / 2 + 2 columns and 2 rows of margin; same texels for every read. WFC_HUDSHADOWFULLCLEAR=1: the old clear.
++    static const bool fullClear = std::getenv("WFC_HUDSHADOWFULLCLEAR") != nullptr;
++    if (!fullClear) {
++        const int n = std::max(1, (int)std::floor(std::min(64.0f, bw) + 0.5f));
++        glEnable(GL_SCISSOR_TEST);
++        glScissor(0, 0, std::min(W + n / 2 + 2, shW_), std::min(H + 2, shH_));
++    }
+     glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
++    if (!fullClear) glDisable(GL_SCISSOR_TEST);
+     glEnable(GL_STENCIL_TEST);
+     if (glBlendEq) glBlendEq(kFuncAdd);
+     glEnable(GL_BLEND);

@@ -118,6 +118,28 @@ for the later RT / modern-materials modes (M6 / M7) and for weaker PCs; temporal
 - Stability: 64p real-play soak per backend (no device-removed, no interop errors), window resize / fullscreen toggles,
   alt-tab, map travel.
 
+## 7b. Item 10 detail: frame cap and vsync with frame generation (Systems, design; code once FG presents)
+
+Today (09c): the cap is the renderer's limiter (GLRenderer::setFrameLimit / waitFrameSlot at the top of the frame, from
+[PCSettings] FrameLimit or WFC_FPS_LIMIT; Application_Frontend.cpp applyFrameLimit); vsync is the GL swap interval
+(Win32Window::setVSync, wglSwapIntervalEXT). With WFC_D3D12PRESENT the GL swap is skipped, so vsync there is
+D3D12Presenter's own sync interval (WFC_D3D12_VSYNC) and the GL swap interval does nothing.
+
+With FG on (output = 2 x the rendered base frames):
+- Cap: the limiter caps the BASE rate: setFrameLimit(cap / 2) when cap > 0 (cap = the user's displayed-fps target; the
+  setting keeps meaning "frames on screen"). With cap = 0 (unlimited) the limiter stays off.
+- Vsync / pacing: the FG swapchain (FSR's frame-interpolation swapchain; Streamline's for DLSS-G) presents and paces both
+  frames; our present path must stop pacing on its own (no D3D12Presenter latency wait / sync interval of its own; the
+  swapchain's vsync flag comes from [PCSettings] VSync). Over the panel's refresh, the excess is the swapchain's to drop or
+  tear; with vsync and cap 0, base settles at refresh / 2 (144 Hz -> 72 + 72).
+- One source of truth: a small FramePacing struct (displayed target Hz, vsync, fg on / off, refresh) resolved at boot and on
+  every settings apply, handing the renderer its base limit and the presenter its present mode; FlowTrace logs
+  display.frameLimit with base and displayed values. The FG-off path is unchanged byte for byte (same limiter value).
+- Latency: Anti-Lag 2 / Reflex markers around input sampling (the limiter wait already sits before input; Reflex's sleep
+  replaces it when Reflex is on).
+- Checks: WFC_PRESENTTRACE intervals at cap 144 / vsync on / unlimited, FG on vs off: base ~72 (cap 144), output
+  ~144, no 2-frame bunching; FG off identical to today.
+
 ## 8. Sources (checked 2026-10-11)
 
 - AMD FSR SDK, Frame Generation Swapchain 3.1.7: https://gpuopen.com/manuals/fsr_sdk/techniques/frame-interpolation-swap-chain/
