@@ -1,0 +1,18 @@
+--- a/src/render/gl/RenderWatchdog.cpp
++++ b/src/render/gl/RenderWatchdog.cpp
+@@ -1,6 +1,7 @@
+ // Clean-room reconstruction — render-thread stall watchdog.
+ #include "render/gl/RenderWatchdog.h"
+ #include "core/Log.h"
++#include "platform/DisplayMode.h"
+ 
+ #include <algorithm>
+ #include <atomic>
+@@ -118,6 +119,7 @@
+ 
+ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
+     if (gCrashed.exchange(true)) return EXCEPTION_CONTINUE_SEARCH;   // one report (a fault inside the report)
++    platform::restoreDesktopDisplayMode();   // [Systems] a crash in fullscreen leaves the desktop at its own mode, not the registry's
+     const DWORD pid = GetCurrentProcessId();
+     char path[96];
+     std::snprintf(path, sizeof path, "wfc_crash_%lu.txt", (unsigned long)pid);
