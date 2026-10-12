@@ -36,7 +36,8 @@ public:
     // PC SKU display settings (PCSettings.*).
     // frameLimit: PC EXTENSION ([PCSettings] FrameLimit, not an original setting; 0 = no cap, the default).
     // PC EXTENSION graphics options (not in the original; default off = the original look), [PCSettings]:
-    //   upscaling: 0 Off, 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance (later DLSS / FSR 3 values follow);
+    //   upscaling: 0 Off, 1 / 2 / 3 FSR 1 Quality / Balanced / Performance, 4 / 5 / 6 FSR 3.1 Quality / Balanced /
+    //   Performance (Rendering's IRenderer::setUpscaling; FSR 3.1 only where its runtime ships, never auto-detected);
     //   hdTextures: the HD texture set; anisotropy: 4 (the original's, default), 8 or 16;
     //   frameGeneration / rayTracing: reserved (no menu row yet, always off).
     bool pcSettingsLoaded = false;   // the profile file had a [PCSettings] section (else: first launch -> auto-detect)
@@ -44,6 +45,7 @@ public:
     struct Display {
         int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
         int upscaling = 0; bool hdTextures = false; int anisotropy = 4; int frameGeneration = 0; bool rayTracing = false;
+        static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance
         static int clampAnisotropy(int v) { return v >= 16 ? 16 : v >= 8 ? 8 : 4; }
     };
     // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and

@@ -117,7 +117,7 @@ template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int h
 }
 
 // PC EXTENSION graphics options -> Rendering. The renderer opts in by providing (detected, so either side builds alone):
-//   void setUpscaling(int mode);   // 0 Off (default), 1 FSR 1 Quality, 2 FSR 1 Balanced, 3 FSR 1 Performance
+//   void setUpscaling(int mode);   // 0 Off (default), 1 / 2 / 3 FSR 1, 4 / 5 / 6 FSR 3.1 Quality / Balanced / Performance
 //   void setHdTextures(bool on);   // HD texture set where available (default off)
 //   void setAnisotropy(int x);     // 4 (the original's, default), 8 or 16
 // called at boot and on every Game.ApplyProfileSettings when the value changed. Values live in LocalProfile::Display
@@ -134,7 +134,7 @@ template <class R> struct HasRendererAnisotropy<R, std::void_t<decltype(std::dec
 template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, bool& hdTextures, int& anisotropy, bool& envOverride) {
     envOverride = false;
     if (const char* e = std::getenv("WFC_ANISOTROPY")) { anisotropy = frontend::LocalProfile::Display::clampAnisotropy(std::atoi(e)); envOverride = true; }
-    if (const char* e = std::getenv("WFC_UPSCALING")) { upscaling = std::clamp(std::atoi(e), 0, 3); envOverride = true; }
+    if (const char* e = std::getenv("WFC_UPSCALING")) { upscaling = std::clamp(std::atoi(e), 0, frontend::LocalProfile::Display::kUpscalingMax); envOverride = true; }
     if (const char* e = std::getenv("WFC_HDTEXTURES")) { hdTextures = std::atoi(e) != 0; envOverride = true; }
     bool any = false;
     if constexpr (HasRendererUpscaling<R>::value) { if (r) { r->setUpscaling(upscaling); any = true; } }
@@ -151,6 +151,10 @@ template <class R, class = void> struct HasRendererGpuFacts : std::false_type {}
 template <class R> struct HasRendererGpuFacts<R, std::void_t<decltype(std::declval<R&>().gpuFacts())>> : std::true_type {};
 template <class R, class = void> struct HasRendererHdPack : std::false_type {};
 template <class R> struct HasRendererHdPack<R, std::void_t<decltype(std::declval<R&>().hdTexturesAvailable())>> : std::true_type {};
+// Rendering e8d3f18: bool IRenderer::upscalingModeAvailable(int mode) const (4-6 = FSR 3.1: its runtime DLLs beside the exe;
+// file checks only). Detected; without it FSR 3.1 counts as unavailable.
+template <class R, class = void> struct HasRendererUpscalingAvail : std::false_type {};
+template <class R> struct HasRendererUpscalingAvail<R, std::void_t<decltype(std::declval<const R&>().upscalingModeAvailable(4))>> : std::true_type {};
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -164,6 +168,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
         }
     }
     if constexpr (HasRendererHdPack<R>::value) { if (r) f.hdTexturePack = r->hdTexturesAvailable(); }
+    if constexpr (HasRendererUpscalingAvail<R>::value) { if (r) f.fsr3 = r->upscalingModeAvailable(4); }
     f.cpuCores = (int)std::thread::hardware_concurrency();
     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
     (void)r;

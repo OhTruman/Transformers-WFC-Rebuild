@@ -13,6 +13,7 @@ struct HardwareFacts {
     unsigned gpuVendorId = 0;         // PCI vendor (0x10DE NVIDIA, 0x1002 AMD, 0x8086 Intel), 0 unknown
     int vramMB = 0;
     bool rayTracing = false, hdTexturePack = false;
+    bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
     int cpuCores = 0;
     int nativeW = 0, nativeH = 0, nativeHz = 0;   // the monitor's current (desktop) mode
     std::string gpuId() const;                    // stored with the settings to re-detect when the GPU changes

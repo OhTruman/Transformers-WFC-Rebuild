@@ -148,6 +148,8 @@ public:
     void setHardwareFacts(const HardwareFacts& f) { hardware_ = f; hardwareKnown_ = true; }
     // The HD texture pack is installed and complete (Rendering's hdTexturesAvailable at boot).
     bool hdTexturesAvailable() const { return hardwareKnown_ && hardware_.hdTexturePack; }
+    // FSR 3.1 upscaling (modes 4-6) can run: its runtime ships beside the exe (Rendering's upscalingModeAvailable at boot).
+    bool fsr3Available() const { return hardwareKnown_ && hardware_.fsr3; }
     // Picks the preset for the known facts and writes it into the profile (saved); why: "first launch", "gpu changed",
     // "recommended" (the menu action). The caller applies the display mode / renderer settings (profile apply).
     GraphicsPreset applyRecommendedGraphics(const char* why);
