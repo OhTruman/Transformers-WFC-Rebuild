@@ -73,3 +73,21 @@ fullscreen rows. Memory: commit 93 -> 94/115 GB, nonpaged 24.59 -> 24.64 GB, C: 
 (all GPU-bound) are over 3.33, against 728 in r1. The ov cells are steady (2.23 / 2.23), so this is a real-play tail: the player route and
 fights differ per rep (determinism probe b9053ad), and in r2 the camera spent longer in a GPU-heavy view. It is not a contamination or
 drift sign; the next row, 509 ov 1080 r2, is back at 2.15. If this map needs more margin, a 300 s x3 pooled rp row at 509 would settle it.
+
+## Slot C - 508 + 503, 01:47-04:04: 18 / 18 MET
+
+| map | cell | r1 p90 | r2 p90 | avg fps r1 / r2 |
+|---|---|---|---|---|
+| 508 | ov 4K | 2.09 | 2.08 | 546 / 550 |
+| 508 | rp 4K | 2.17 | 2.10 | 576 / 605 |
+| 508 | ov 1080 | 2.03 | 2.02 | 550 / 553 |
+| 508 | rp 1080 | 1.61 | 1.70 | 869 / 854 |
+| 508 | fs 1440 | 1.90 | | 700 |
+| 503 | ov 4K | 2.33 | 2.33 | 470 / 470 |
+| 503 | rp 4K | 2.18 | 2.37 | 579 / 528 |
+| 503 | ov 1080 | 2.25 | 2.24 | 505 / 510 |
+| 503 | rp 1080 | 1.78 | 1.72 | 835 / 856 |
+| 503 | fs 1440 | 1.95 | | 688 |
+
+Warm-up 508 rp 4K r0 2.22 (discarded). Every row: 64/64, ended by Time, uncontaminated. The widest is 503 rp 4K r2 at 2.37 (0.96
+headroom). The desktop was 2560x1440 @ 144 after both fullscreen rows. Memory: commit 94/115 GB, nonpaged 24.64 -> 24.77 GB, C: 14.5 -> 14.6 GB.

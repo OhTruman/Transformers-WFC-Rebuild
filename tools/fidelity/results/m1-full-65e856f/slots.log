@@ -64,3 +64,28 @@ mem slot-B-end: commit 94/115 GB, nonpaged 24.64 GB, free phys 15.8 GB, C: free 
 slot B done 01:47
 slot C open 01:47:36 maps 508 503
 mem slot-C-start: commit 94/115 GB, nonpaged 24.64 GB, free phys 15.8 GB, C: free 14.5 GB
+01:54 508 rp 2160 r0 try 1: p90 2.22  
+02:01 508 ov 2160 r1 try 1: p90 2.09  
+02:09 508 rp 2160 r1 try 1: p90 2.17  
+02:16 508 ov 1080 r1 try 1: p90 2.03  
+02:23 508 rp 1080 r1 try 1: p90 1.61  
+02:30 503 ov 2160 r1 try 1: p90 2.33  
+02:37 503 rp 2160 r1 try 1: p90 2.18  
+02:44 503 ov 1080 r1 try 1: p90 2.25  
+02:52 503 rp 1080 r1 try 1: p90 1.78  
+02:59 508 ov 2160 r2 try 1: p90 2.08  
+03:06 508 rp 2160 r2 try 1: p90 2.1  
+03:13 508 ov 1080 r2 try 1: p90 2.02  
+03:20 508 rp 1080 r2 try 1: p90 1.7  
+03:28 503 ov 2160 r2 try 1: p90 2.33  
+03:35 503 rp 2160 r2 try 1: p90 2.37  
+03:42 503 ov 1080 r2 try 1: p90 2.24  
+03:49 503 rp 1080 r2 try 1: p90 1.72  
+03:56 508 fs 1440 r1 try 1: p90 1.9 pid 30940: client 2560x1440, window rect (0,0)-(2560,1440) 
+03:56:47 after 508 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+04:04 503 fs 1440 r1 try 1: p90 1.95 pid 41016: client 2560x1440, window rect (0,0)-(2560,1440) 
+04:04:00 after 503 fs r1: \\.\DISPLAY1 (AMD Radeon RX 7900 XTX) attached primary: current 2560x1440 @ 144 Hz
+mem slot-C-end: commit 94/115 GB, nonpaged 24.77 GB, free phys 15.6 GB, C: free 14.6 GB
+slot C done 04:04
+slot D open 04:04:02 maps 501 502
+mem slot-D-start: commit 94/115 GB, nonpaged 24.77 GB, free phys 15.6 GB, C: free 14.6 GB
