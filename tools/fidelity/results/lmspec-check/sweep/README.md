@@ -45,3 +45,28 @@ Ranked by number of maps, then by the worst residual. Notes:
   Interior_NewFloor and Interior_WallsCeilings_AquaLight on Rust as "diffuse/normal differs (pre-existing)". SideSupport and
   CleanDoor_Off are new here: their maps were found only through shared-map pairing.
 - Not yet done: a per-material breakdown (which translated expression differs). That is a next step for Rendering or me on request.
+
+## After the normal-node fix (integration bf8acad+, materials_glsl.json regenerated; re-run 13:30-14:10)
+
+The same 8 maps were re-run one process at a time (`onemap.sh`), with Rendering's updated gl2py (wfcNormalNode). The before set is
+the 11:40-12:10 run above. Compare with `cmpba.py`:
+
+| map | world exact | world differs | all exact | all differs |
+|---|---|---|---|---|
+| Berth | 32 -> 35 | 3 -> 0 | 155 -> 175 | 40 -> 20 |
+| Rust | 56 -> 63 | 7 -> 0 | 178 -> 202 | 44 -> 20 |
+| Seed | 35 -> 35 | 0 -> 0 | 159 -> 176 | 37 -> 20 |
+| Streets | 59 -> 60 | 1 -> 0 | 184 -> 202 | 38 -> 20 |
+| Molten | 78 -> 78 | 0 -> 0 | 202 -> 219 | 37 -> 20 |
+| Debris | 94 -> 94 | 0 -> 0 | 219 -> 236 | 37 -> 20 |
+| Complex | 67 -> 67 | 0 -> 0 | 191 -> 208 | 37 -> 20 |
+| Gorge | 35 -> 35 | 0 -> 0 | 158 -> 175 | 36 -> 19 |
+| **total** | **456 -> 467** | **11 -> 0** | **1446 -> 1593** | **306 -> 159** |
+
+- 147 map-material pairs moved from differs to exact (11 world, 136 character / weapon), and no material regressed.
+- **No world material differs from the original any more** (`rank_after.txt` is empty).
+- The remaining ~20 per map are the same set on every map: bot soldiers (RB_/VH_Soldier*), Frenzy/Rumble, Slipstream, Laserbeak,
+  SniperDec and the melee weapons (LongSword, ProngDagger, SerratedBlade, SpikedBat). All are on the diffuse/normal side, with fitted
+  scales 0.5-1.9, which suggests a poor pairing or texture assignment more than a single wrong term. They never draw lightmapped, so
+  this test is a weak judge for them. Not chased.
+- Coverage limits as before: the "not emulated" counts are unchanged, and the ESC maps were not run.

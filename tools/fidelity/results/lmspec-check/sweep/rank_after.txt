@@ -1,0 +1,10 @@
+MP_IAC_Berth {'exact': 35, 'differs': 0, 'not emulated': 93}
+MP_IAC_Rust {'exact': 63, 'differs': 0, 'not emulated': 131}
+MP_IAC_Seed {'exact': 35, 'differs': 0, 'not emulated': 122}
+MP_IAC_Streets {'exact': 60, 'differs': 0, 'not emulated': 69}
+MP_KON_Molten {'exact': 78, 'differs': 0, 'not emulated': 65}
+MP_ORB_Debris {'exact': 94, 'differs': 0, 'not emulated': 31}
+MP_UND_Complex {'exact': 67, 'differs': 0, 'not emulated': 53}
+MP_UND_Gorge {'exact': 35, 'differs': 0, 'not emulated': 73}
+
+rank | material | maps | worst resid | fitted scale | kind | spec share | policy | owner map
