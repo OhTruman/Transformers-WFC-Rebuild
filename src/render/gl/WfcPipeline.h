@@ -1140,6 +1140,7 @@ private:
     bool depthDirty_ = true;
     bool sceneColorCopied_ = false;
     std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)
+    bool lmSpecBuild_ = false;                            // buildProgram: a translated original material (lightmap specular)
     void ensureSceneDepth();
     void ensureSceneColor();
     float fxColor_[4] = {1, 1, 1, 1};
