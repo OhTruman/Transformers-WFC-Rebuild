@@ -31,3 +31,22 @@ Rust ov is the slowest cell (2.84-2.88 at both resolutions, so not resolution-bo
 The in-script stop in `attrib_65e856f.sh` did not take (taskkill on the msys bash PIDs left the slot loop alive; it went on into
 509 ov 4K r1). Stopped by PID with Stop-Process at 22:53:59 (shells, harness, exe); rows 509 rp r0 and 509 ov r1 discarded.
 The attribution rows were restarted with `attrib2_65e856f.sh` (same rows, no stop phase), which then restarts slots B C D.
+
+### Attribution result (22:54-23:31): CONFIRMED - the HUD shadow cache carries most of the real-play gain
+
+Gorge rp 4K 300 s, off = WFC_NOHUDSHADOWCACHE=1, order off / on / off for drift. All rows 64/64, ended by Time, uncontaminated.
+
+| row | p90 | p50 | p99 | under 3.33 | avg fps |
+|---|---|---|---|---|---|
+| off1 | 3.08 | 2.47 | 3.62 | 96.6 % | 405 |
+| on1 (control) | 2.80 | 2.21 | 3.56 | 97.9 % | 460 |
+| off2 | 3.22 | 2.68 | 3.83 | 93.6 % | 376 |
+| off pooled | 3.15 | 2.58 | 3.74 | 95.2 % | 234096 frames |
+
+- Turning the cache off brings p90 from 2.80 (control; the earlier 3 reps were 2.68-2.84) to 3.15 pooled: the cache is worth about 0.35-0.40
+  ms in real play, against 0.08 for everything at 510 in lockstep. That fits the reading that the cache hits when several rendered frames
+  share one sim step.
+- The off arm is still 0.15 below 9c3560e's 3.30 mean. That matches the remaining Rendering items (lockstep -0.04..-0.11), within the
+  rep spread seen on 9c3560e (3.14-3.41).
+- off2 is 0.14 above off1, with the on control between them in range. That is drift of the size seen between reps before, not a sign of an
+  environmental cause: nonpaged 24.58 -> 24.59 GB, C: 14.5 -> 14.6 GB.

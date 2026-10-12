@@ -1,0 +1,10 @@
+attribution resumed 22:54:15; PERF_HOLD kept
+mem attrib-start: commit 93/115 GB, nonpaged 24.58 GB, free phys 15.8 GB, C: free 14.5 GB
+23:06 off1 try 1: p90 3.08 
+23:19 on1 try 1: p90 2.8 
+23:31 off2 try 1: p90 3.22 
+work/permap/m1a-65e856f-510-rp-2160-t300-off1: 121359 frames, p90 3.08 ms (MET), under 3.333 ms 96.6 %
+work/permap/m1a-65e856f-510-rp-2160-t300-off2: 112737 frames, p90 3.22 ms (MET), under 3.333 ms 93.6 %
+POOLED over 2 reps: 234096 frames, p90 3.15 ms (MET), p50 2.58, p99 3.74, under 3.333 ms 95.2 %
+mem attrib-end: commit 93/115 GB, nonpaged 24.59 GB, free phys 15.9 GB, C: free 14.6 GB
+attribution done 23:31 - restarting slots B C D
