@@ -789,3 +789,21 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 504 | 1920x1080 | - | 64 | 389.4 | 2.75 | 3.15 | 3.29 | 3.69 | 9.15 | 244 | 174.4 | 0 / 0 | 0 | 95.9 % |  |  |  |  |  | 5966 |
+
+## 2026-10-11 20:11 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 65e856f map 510 rp 4K 300s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 471.1 | 2.14 | 2.68 | 2.85 | 3.3 | 8.08 | 279.7 | 236.7 | 0 / 0 | 0 | 99.1 % |  |  |  |  |  | 5272 |
+
+## 2026-10-11 20:24 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 65e856f map 510 rp 4K 300s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 441.3 | 2.28 | 2.84 | 3.05 | 3.52 | 8.12 | 260.5 | 215.8 | 0 / 0 | 0 | 98.1 % |  |  |  |  |  | 5363 |
+
+## 2026-10-11 20:36 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 re-verdict 65e856f map 510 rp 4K 300s rep 3
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 463.3 | 2.18 | 2.72 | 2.91 | 3.3 | 7.54 | 278.3 | 223 | 0 / 0 | 0 | 99.1 % |  |  |  |  |  | 5290 |

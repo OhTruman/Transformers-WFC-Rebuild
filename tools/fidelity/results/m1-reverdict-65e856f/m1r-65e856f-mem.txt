@@ -1,0 +1,3 @@
+mem start: commit 93/115 GB, nonpaged 24.50 GB, free phys 15.0 GB, C: free 14.7 GB
+mem after-regress: commit 93/115 GB, nonpaged 24.51 GB, free phys 15.5 GB, C: free 14.5 GB
+mem end: commit 93/115 GB, nonpaged 24.52 GB, free phys 15.5 GB, C: free 14.5 GB

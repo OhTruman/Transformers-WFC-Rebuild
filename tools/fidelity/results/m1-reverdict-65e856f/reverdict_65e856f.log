@@ -1,0 +1,25 @@
+window open 19:33:35
+mem start: commit 93/115 GB, nonpaged 24.50 GB, free phys 15.0 GB, C: free 14.7 GB
+REGRESSION (8 maps, lockstep): pass 8 / fail 0 / known 0 / info 0 / skip 0 / human 0 / unknown 0 / waiting 0 / partial 0
+| map | base p90 (best of 2) | head p90 (best of 2) | delta | verdict | note |
+|---|---|---|---|---|---|
+| 501 | 2.24 | 2.13 | -0.11 | PASS |  |
+| 502 | 2 | 1.9 | -0.10 | PASS |  |
+| 503 | 2.36 | 2.3 | -0.06 | PASS |  |
+| 504 | 2.57 | 2.5 | -0.07 | PASS | lockstep.head.r1.contaminated UNKNOWN; lockstep.head.r1 UNKNOWN |
+| 507 | 2.39 | 2.34 | -0.05 | PASS |  |
+| 508 | 2.09 | 2.05 | -0.04 | PASS |  |
+| 509 | 2.77 | 2.72 | -0.05 | PASS |  |
+| 510 | 2.58 | 2.5 | -0.08 | PASS |  |
+regress done 19:52
+mem after-regress: commit 93/115 GB, nonpaged 24.51 GB, free phys 15.5 GB, C: free 14.5 GB
+19:59 510 rp 2160 150s r0 try 1: p90 2.76 
+20:11 510 rp 2160 300s r1 try 1: p90 2.68 
+20:24 510 rp 2160 300s r2 try 1: p90 2.84 
+20:36 510 rp 2160 300s r3 try 1: p90 2.72 
+work/permap/m1r-65e856f-510-rp-2160-t300-r1: 141192 frames, p90 2.68 ms (MET), under 3.333 ms 99.1 %
+work/permap/m1r-65e856f-510-rp-2160-t300-r2: 132269 frames, p90 2.84 ms (MET), under 3.333 ms 98.1 %
+work/permap/m1r-65e856f-510-rp-2160-t300-r3: 138862 frames, p90 2.72 ms (MET), under 3.333 ms 99.1 %
+POOLED over 3 reps: 412323 frames, p90 2.74 ms (MET), p50 2.2, p99 3.39, under 3.333 ms 98.8 %
+mem end: commit 93/115 GB, nonpaged 24.52 GB, free phys 15.5 GB, C: free 14.5 GB
+window done 20:37

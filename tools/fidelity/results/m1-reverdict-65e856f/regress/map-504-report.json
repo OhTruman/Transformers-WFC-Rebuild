@@ -1,0 +1,45 @@
+﻿{
+    "summary":  {
+                    "pass":  3,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  2,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "lockstep.base.r1",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "base: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 2.07 / 2.58 / 3.16 ms over 8999 frames; slow frames 55: GPU 3.5 (world 1.31, fx 0.55, transl 1.21, post 0.2), CPU render 2.56, outside 1.56; all frames: chars CPU 0.78, draws 1367 (dyn 185, fx 113), binds 1074"
+                    },
+                    {
+                        "id":  "lockstep.head.r1.contaminated",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "foreign process during the row - rerun: 19:41:08 foreign process 40348 python.exe (started 19:41:07): F:\\Transformers Rebuild\\AssetTools\\bin\\py\\python.exe | cmd: \"F:\\Transformers Rebuild\\AssetTools\\bin\\py\\python.exe\" cmp_hdoff.py | parent 40388 bash.exe: \"C:\\Program Files\\Git\\bin\\..\\usr\\bin\\bash.exe\" -c \"source /c/Users/coxes/.claude/shell-snapshots/snapshot-bash-1791093428427-c2w1qh.sh 2\u003e/dev/null || true \u0026\u0026 export TEMP=\u0027C:\\Users\\coxes\\AppData\\Local\\Temp\u0027 TMP=\u0027C:\\Users\\coxes\\AppData\\Local\\Temp\u0027 \u0026\u0026 shopt -u extglob 2\u003e/dev/null || true \u0026\u0026 { \\builtin ..."
+                    },
+                    {
+                        "id":  "lockstep.head.r1",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental",
+                        "note":  "head: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 1.99 / 2.5 / 3.08 ms over 9000 frames; slow frames 40: GPU 3.3 (world 1.22, fx 0.5, transl 1.18, post 0.22), CPU render 2.46, outside 1.55; all frames: chars CPU 0.72, draws 1365 (dyn 183, fx 113), binds 1069"
+                    },
+                    {
+                        "id":  "lockstep.base.r2",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "base: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 2.07 / 2.57 / 3.14 ms over 9000 frames; slow frames 52: GPU 3.26 (world 1.14, fx 0.52, transl 1.15, post 0.21), CPU render 2.42, outside 1.47; all frames: chars CPU 0.77, draws 1367 (dyn 185, fx 113), binds 1076"
+                    },
+                    {
+                        "id":  "lockstep.head.r2",
+                        "status":  "PASS",
+                        "owner":  "Experimental",
+                        "note":  "head: steps 9000 (600-9600), same match as \u0027base\u0027 True, workload parity True; frame p50 / p90 / p99 2.02 / 2.5 / 3.07 ms over 8998 frames; slow frames 42: GPU 3.75 (world 1.63, fx 0.5, transl 1.2, post 0.22), CPU render 2.77, outside 1.92; all frames: chars CPU 0.72, draws 1366 (dyn 184, fx 113), binds 1072"
+                    }
+                ]
+}
