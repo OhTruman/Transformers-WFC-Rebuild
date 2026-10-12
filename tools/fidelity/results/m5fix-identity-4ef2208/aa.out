@@ -1,0 +1,12 @@
+free commit 14 GB
+18:47:07 510-base2: 25 shots, 3002 simhash, size 
+free commit 13 GB
+18:47:36 510-head2: 25 shots, 3002 simhash, size 
+simhash 3002 common, 0 differ  work/m5id/runs/510-base work/m5id/runs/510-base2 diffs 1
+   00660:6px max1 (103,366)-(120,372)
+simhash 3002 common, 0 differ  work/m5id/runs/510-head work/m5id/runs/510-head2 diffs 0
+simhash 3002 common, 0 differ  work/m5id/runs/510-base2 work/m5id/runs/510-head2 diffs 0
+simhash 3002 common, 0 differ  work/m5id/runs/510-base work/m5id/runs/510-head2 diffs 1
+   00660:6px max1 (103,366)-(120,372)
+simhash 3002 common, 0 differ  work/m5id/runs/510-head work/m5id/runs/510-base2 diffs 0
+aa done 18:48:01

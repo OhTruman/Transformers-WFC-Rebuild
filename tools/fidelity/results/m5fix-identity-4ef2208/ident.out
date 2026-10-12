@@ -1,0 +1,23 @@
+free commit 14 GB
+18:42:04 510-base: 25 shots, 3002 simhash, size 
+free commit 17 GB
+18:43:00 510-head: 25 shots, 3002 simhash, size 
+map simhash: 3002 common steps, 0 differ, first differing step none
+map 510: simhash lines base 3002 head 3002
+work/m5id/runs/510-base work/m5id/runs/510-head diffs 1
+   00660:6px max1 (103,366)-(120,372)
+free commit 14 GB
+18:44:09 504-base: 25 shots, 3002 simhash, size 
+free commit 14 GB
+18:44:56 504-head: 25 shots, 3002 simhash, size 
+map simhash: 3002 common steps, 0 differ, first differing step none
+map 504: simhash lines base 3002 head 3002
+work/m5id/runs/504-base work/m5id/runs/504-head diffs 0
+free commit 14 GB
+18:45:39 508-base: 25 shots, 3002 simhash, size 
+free commit 14 GB
+18:46:15 508-head: 25 shots, 3002 simhash, size 
+map simhash: 3002 common steps, 0 differ, first differing step none
+map 508: simhash lines base 3002 head 3002
+work/m5id/runs/508-base work/m5id/runs/508-head diffs 0
+ident done 18:46:21
