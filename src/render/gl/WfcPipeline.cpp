@@ -7416,7 +7416,9 @@ void Pipeline::endFrame() {
     }
     glx::gpuStamp("post: tonemap into the window");
     const int outW = winW_ > 0 ? winW_ : vpW_, outH = winH_ > 0 ? winH_ : vpH_;
-    const bool fsr = fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
+    // FSR 3.1 (WFC_FSR3): the HDR scene upscaled to the window before post; else FSR 1 after post
+    const bool fsr3 = fsrActive() && !fsrFailed_ && fsr3Run(outW, outH);
+    const bool fsr = !fsr3 && fsrActive() && !fsrFailed_ && ensureFsr(vpW_, vpH_, outW, outH);
     BindVertexArray(postVao_);
     if (fsr) { BindFramebuffer(GL_FRAMEBUFFER, fsrInFbo_); glViewport(0, 0, vpW_, vpH_); }   // FSR input (render size)
     else { BindFramebuffer(GL_FRAMEBUFFER, 0); glViewport(0, 0, outW, outH); }   // the window (WFC_RENDERSIZE: scaled)
@@ -7424,7 +7426,7 @@ void Pipeline::endFrame() {
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, clutTex_);
-    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, fsr3 ? fsr3Out_ : colorTex_);
     auto U = [&](const char* n) { return GetUniformLocation(postProg_, n); };
     Uniform1i(U("uScene"), 0);
     Uniform1i(U("uBloom"), 1);

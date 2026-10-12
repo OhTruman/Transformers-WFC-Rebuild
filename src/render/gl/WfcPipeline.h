@@ -467,6 +467,12 @@ private:
     GLuint fsrEasuProg_ = 0, fsrRcasProg_ = 0, fsrInFbo_ = 0, fsrInTex_ = 0, fsrMidFbo_ = 0, fsrMidTex_ = 0;
     int fsrInW_ = 0, fsrInH_ = 0, fsrMidW_ = 0, fsrMidH_ = 0;
     bool fsrActive() const;
+    // optional FSR 3.1 (WfcFsr3.cpp; WFC_FSR3=1 with the FSR render scale): upscaling before post over D3D12
+    bool fsr3Failed_ = false;
+    GLuint fsr3Out_ = 0, fsr3DepthProg_ = 0, fsr3DepthFbo_ = 0;
+    std::chrono::steady_clock::time_point fsr3LastFrame_{};
+    bool fsr3Mode() const;
+    bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
     bool motionOn_ = false, havePrevVP_ = false;
     core::Mat4 prevViewProj_;                          // previous frame, unjittered (motion vectors exclude jitter)

@@ -32,6 +32,7 @@
 namespace glx { void gpuPrePresent(); }   // GLExt.cpp: the WFC_GPUSTAMPS "(present)" stamp
 
 namespace render {
+void d3d12SelectAgility();   // D3D12Agility.cpp
 namespace {
 typedef uint64_t GLuint64_;
 typedef void(APIENTRY* PFN_CreateMemoryObjectsEXT)(GLsizei, GLuint*);
@@ -149,6 +150,7 @@ public:
         if (!gl_.load()) { LOG_WARN("D3D12 present: GL external-object entry points missing: GL present kept"); return false; }
         hwnd_ = WindowFromDC(wglGetCurrentDC());
         if (!hwnd_) { LOG_WARN("D3D12 present: no window: GL present kept"); return false; }
+        d3d12SelectAgility();                        // (D3D12Agility.cpp: the Agility runtime when shipped)
         HMODULE d3d = LoadLibraryW(L"d3d12.dll"), dxgi = LoadLibraryW(L"dxgi.dll");
         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);

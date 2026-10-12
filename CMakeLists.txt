@@ -47,6 +47,27 @@ add_executable(wfc_rebuild
 )
 
 target_include_directories(wfc_rebuild PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# Optional FSR 3.1 (M5 B, src/render/d3d12/D3D12Upscaler.cpp): AMD FFX API headers + signed DLLs fetched by
+# tools/render/fetch_ffx_sdk.py into third_party/ffx_sdk (not committed: AMD binary licence); without them the
+# upscaler builds as an unavailable stub
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include/ffx_api.h")
+    target_include_directories(wfc_rebuild PRIVATE "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include"
+        "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/upscalers/include")
+    target_compile_definitions(wfc_rebuild PRIVATE WFC_FFX_SDK=1 _WINDOWS)   # (_WINDOWS: ffx_api_loader.h platform check)
+    add_custom_command(TARGET wfc_rebuild POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/bin/amd_fidelityfx_loader_dx12.dll"
+        "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/bin/amd_fidelityfx_upscaler_dx12.dll"
+        "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/license.md" $<TARGET_FILE_DIR:wfc_rebuild>)
+endif()
+# D3D12 Agility SDK runtime (tools/render/fetch_d3d12_agility.py, not committed): FSR 3.1 needs shader model 6.6;
+# the exe exports D3D12SDKVersion / D3D12SDKPath (src/render/d3d12/D3D12Agility.cpp) and D3D12Core.dll goes to bin/D3D12
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core.dll")
+    target_compile_definitions(wfc_rebuild PRIVATE WFC_D3D12_AGILITY=614)
+    add_custom_command(TARGET wfc_rebuild POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:wfc_rebuild>/D3D12"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core.dll"
+            "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/d3d12SDKLayers.dll" "$<TARGET_FILE_DIR:wfc_rebuild>/D3D12")
+endif()
 
 target_compile_options(wfc_rebuild PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
