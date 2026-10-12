@@ -57,6 +57,9 @@ $abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --material
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
     @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
+# UE3 fog volumes (density infos + their linked shape components) for the runtime fog-volume rendering
+& $py (Join-Path $PSScriptRoot "build_fog_volumes.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "build_fog_volumes failed" }
 # Beast light-probe grids (character ambient SH; only Orbital Debris bakes them)
 & $py (Join-Path $PSScriptRoot "beast_probes.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "beast_probes failed" }

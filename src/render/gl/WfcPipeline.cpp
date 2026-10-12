@@ -308,6 +308,29 @@ void main() {
 // HUD post-process chain MaterialEffect (UI_GFxHud_p LowHealth / StaticDischarge, RE 6bbf2cb): the material reads
 // the finished frame through SceneTexture; its output replaces the frame weighted by the WFC ScreenAlpha input
 // [HIGH: the exact ScreenAlpha combine is not traced - multiply darkens toward the edges (LowHealth tunnel vision)]
+// UE3 fog volumes (shipped exe RenderFogVolume 82EBE2C8; Rust ShaderCache_6561 TFogIntegralPixelShader<Constant> /
+// FFogVolumeApplyPixelShader). Integral: the shape's back faces, then its front faces, additively (One, One, no depth
+// test), each = Density * min(face clip z = view depth - near (capped at 65535), scene view depth) in UE units; the original
+// packs it into RGBA8 at a reduced size, here RG32F full size (R back, G front). Apply: the shape again,
+// colour = the material emissive through the height-fog interpolants (emissive * fog.a + fog.rgb), alpha = transmittance
+// exp2(-(back - front)), blended Src * (1 - a) + Dst * a.
+const char* kFSMainFogIntegral = R"(
+uniform vec4 uFogDensity;     // x: constant density (1 / UE unit)
+void main() {
+    float face = min(wfcLinearDepth(gl_FragCoord.z) - uNearFar.x * 100.0, 65535.0);   // clip z = view z - near
+    float scene = wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r);
+    oColor = vec4(uFogDensity.x * min(face, scene));
+}
+)";
+const char* kFSMainFogApply = R"(
+uniform sampler2D uFogIntegral;
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    vec2 I = texelFetch(uFogIntegral, ivec2(gl_FragCoord.xy), 0).rg;
+    oColor = vec4(o.EmissiveColor * vFog.a + vFog.rgb, clamp(exp2(-(I.r - I.g)), 0.0, 1.0));
+}
+)";
 const char* kFSMainScreenEffect = R"(
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
@@ -789,11 +812,12 @@ void Pipeline::release() {
     }
     for (GLuint* t : {&clutTex_, &neutralMaskTex_, &testMaskTex_, &whiteTex_, &blackTex_, &flatNormalTex_, &blackCube_,
                       &colorTex_, &depthTex_, &depthCopyTex_, &distTex_, &sceneCopyTex_, &shadowDepthTex_,
-                      &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1]})
+                      &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1], &fogTex_})
         tex(*t);
     for (GLuint* f : {&fbo_, &depthCopyFbo_, &distFbo_, &sceneCopyFbo_, &shadowFbo_, &maskFbo_, &maskTmpFbo_,
-                      &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1]})
+                      &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1], &fogFbo_})
         fbo(*f);
+    fogW_ = fogH_ = 0;
     if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
     for (GLuint* t : {&refMask_.tex, &refMask_.tmpTex, &refMask_.blurTex}) tex(*t);   // (WFC_SHADOWRECTCHECK set)
     for (GLuint* f : {&refMask_.fbo, &refMask_.tmpFbo, &refMask_.blurFbo}) fbo(*f);
@@ -839,6 +863,7 @@ bool Pipeline::load(const std::string& mapName) {
     loadMovers(dataDir_ + "/movers.json");
     yieldLoad();
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
+    loadFogVolumes(dataDir_ + "/fog_volumes.json");
     {   // MaterialInstanceActor -> MIC (build_materials.py): Matinee material-parameter routing
         assets::Json MJ;
         std::string mt = readText(dataDir_ + "/material_instance_actors.json");
@@ -2371,6 +2396,16 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 mainOverride_ = nullptr;
                 if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
             }
+            if (progs_[(size_t)r].fogShape && !fogVolumes_.empty()) {   // fog-volume rendering variants
+                mainOverride_ = kFSMainFogIntegral;
+                const int fi = buildProgram(key + "|FOGINT", s.glsl, slots, s.cube, 0, true, false, s.clip, false, s.rtParams);
+                mainOverride_ = kFSMainFogApply;
+                const int fa = buildProgram(key + "|FOGAPPLY", s.glsl, slots, s.cube, 2, true, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                progs_[(size_t)r].fogIntProg = fi; progs_[(size_t)r].fogApplyProg = fa;
+                if (fi >= 0) progs_[(size_t)fi].original = true;
+                if (fa >= 0) progs_[(size_t)fa].original = true;
+            }
             if (!lightmapped && matName.find("ScreenEffect_M") != std::string::npos) {   // HUD chain material
                 mainOverride_ = kFSMainScreenEffect;
                 int sf = buildProgram(key + "|SCREENFX", s.glsl, slots, s.cube, 0, true, false, s.clip, false, s.rtParams);
@@ -3410,7 +3445,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (frameNoProg_.size() < 64) frameNoProg_.insert(s.matName.empty() ? std::string("<none>") : s.matName);
                 continue;
             }
-            if (progs_[(size_t)s.prog].fogShape) {
+            if (progs_[(size_t)s.prog].fogShape && fogVolumeFor(s.comp) < 0) {
                 if (fogShapeLogged_.insert(s.comp).second)
                     LOG_INFO("wfc: fog-volume shape not drawn as a surface: component %s, material %s", s.comp.c_str(),
                              s.matName.c_str());
@@ -3475,6 +3510,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                     if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
                 }
                 if (out) { ++counts_.culled; continue; }
+            }
+            if (P.fogShape) {                              // linked fog-volume shape (non-linked ones never get here)
+                drawFogVolume(s, subModel, s.prog, fogVolumeFor(s.comp));
+                ++counts_.draws; ++counts_.translucent;
+                continue;
             }
             bindCommon(P, subModel);
             Uniform1i(ULOC(P, "uDecalClip"), g.decal ? 1 : 0);
@@ -6664,6 +6704,96 @@ void Pipeline::ensureSceneColor() {
     BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     sceneColorCopied_ = true;
+}
+
+void Pipeline::loadFogVolumes(const std::string& file) {
+    fogVolumes_.clear(); fogVolumeByComp_.clear();
+    static const bool off = std::getenv("WFC_NOFOGVOLUMES") != nullptr;   // linked shapes stay undrawn (302d212)
+    std::string text = readText(file);
+    if (off || text.empty()) return;
+    assets::Json J;
+    if (!assets::Json::parse(text, J)) return;
+    const assets::Json& V = J["volumes"];
+    for (size_t i = 0; i < V.size(); ++i) {
+        const assets::Json& v = V[i];
+        if (v["shapes"].size() == 0) continue;
+        FogVolume f;
+        f.info = v["info"].asString();
+        const std::string cls = v["class"].asString();
+        if (cls.find("ConstantDensity") == std::string::npos) {   // half-space / sphere / cone: not yet
+            LOG_INFO("wfc: fog volume %s (%s) not rendered: density type not implemented", f.info.c_str(), cls.c_str());
+            continue;
+        }
+        f.type = 0;
+        f.density = v["density"]["Density"].asFloat(0.0f);
+        const int idx = (int)fogVolumes_.size();
+        fogVolumes_.push_back(f);
+        for (size_t k = 0; k < v["shapes"].size(); ++k) {
+            std::string c = v["shapes"][k].asString();
+            std::transform(c.begin(), c.end(), c.begin(), ::tolower);
+            fogVolumeByComp_[c] = idx;
+        }
+        LOG_INFO("wfc: fog volume %s: constant density %g, %zu shape keys", f.info.c_str(), f.density,
+                 (size_t)v["shapes"].size());
+    }
+}
+
+int Pipeline::fogVolumeFor(const std::string& comp) const {
+    if (fogVolumeByComp_.empty()) return -1;
+    std::string c = comp;
+    std::transform(c.begin(), c.end(), c.begin(), ::tolower);
+    auto it = fogVolumeByComp_.find(c);
+    return it == fogVolumeByComp_.end() ? -1 : it->second;
+}
+
+void Pipeline::drawFogVolume(const Sub& s, const core::Mat4& model, int prog, int vol) {
+    const int fi = progs_[(size_t)prog].fogIntProg, fa = progs_[(size_t)prog].fogApplyProg;
+    if (fi < 0 || fa < 0 || vol < 0) return;
+    const FogVolume& V = fogVolumes_[(size_t)vol];
+    glx::GpuSection gsec("fog volume");
+    ensureSceneDepth();
+    const int w = std::max(vpW_, 1), h = std::max(vpH_, 1);
+    if (!fogFbo_ || fogW_ != w || fogH_ != h) {
+        if (!fogFbo_) { GenFramebuffers(1, &fogFbo_); glGenTextures(1, &fogTex_); }
+        glBindTexture(GL_TEXTURE_2D, fogTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, 0x8230 /*GL_RG32F*/, w, h, 0, 0x8227 /*GL_RG*/, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, fogFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fogTex_, 0);
+        fogW_ = w; fogH_ = h;
+    }
+    // integral: back faces -> R, front faces -> G (One, One; no depth test, no depth write)
+    BindFramebuffer(GL_FRAMEBUFFER, fogFbo_);
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    const Program& I = progs_[(size_t)fi];
+    bindCommon(I, model);
+    ActiveTexture(GL_TEXTURE0 + 12);
+    glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    Uniform4f(ULOC(I, "uFogDensity"), V.density, 0.0f, 0.0f, 0.0f);
+    glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT); glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+    glCullFace(GL_BACK); glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_FALSE);
+    glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    // apply: back faces only, no depth test - each pixel of a convex shape once (the original: a NotEqual / Replace
+    // stencil per volume; the scene target here carries no stencil); Src * (1 - a) + Dst * a, destination alpha kept
+    const Program& A = progs_[(size_t)fa];
+    bindCommon(A, model);
+    ActiveTexture(GL_TEXTURE0 + 24);
+    glBindTexture(GL_TEXTURE_2D, fogTex_);
+    Uniform1i(ULOC(A, "uFogIntegral"), 24);
+    BlendFuncSeparate(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ZERO, GL_ONE);
+    glCullFace(GL_FRONT);
+    glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+    glCullFace(GL_BACK);
+    glEnable(GL_DEPTH_TEST);
+    glBlendFunc(GL_ONE, GL_ONE);
 }
 
 void Pipeline::ensureSceneDepth() {
