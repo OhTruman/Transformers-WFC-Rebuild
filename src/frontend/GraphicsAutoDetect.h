@@ -14,6 +14,7 @@ struct HardwareFacts {
     int vramMB = 0;
     bool rayTracing = false, hdTexturePack = false;
     bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
+    bool frameGen = false, frameGenActive = false;   // FSR frame generation can run / did start this session (Rendering)
     int cpuCores = 0;
     int nativeW = 0, nativeH = 0, nativeHz = 0;   // the monitor's current (desktop) mode
     std::string gpuId() const;                    // stored with the settings to re-detect when the GPU changes

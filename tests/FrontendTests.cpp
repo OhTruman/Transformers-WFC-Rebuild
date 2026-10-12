@@ -67,6 +67,12 @@ static void testProfileBotMigration() {
     std::ifstream back("wfc_profile.ini");
     frontend::LocalProfile r;
     r.loadFrom(back);
+    {   // Frame generation: 0 / 1 (any non-zero is On); default Off
+        std::istringstream on("[PCSettings]\nFrameGeneration=7\n");
+        frontend::LocalProfile a, d;
+        a.loadFrom(on);
+        check(a.display.frameGeneration == 1 && d.display.frameGeneration == 0, "profile.frame_generation_0_1");
+    }
     {   // FSR 3.1 modes (4-6) persist; values past the range clamp to the last one
         std::istringstream f3("[PCSettings]\nUpscaling=5\n"), big9("[PCSettings]\nUpscaling=9\n");
         frontend::LocalProfile a, b;

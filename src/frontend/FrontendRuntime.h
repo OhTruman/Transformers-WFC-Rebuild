@@ -150,6 +150,9 @@ public:
     bool hdTexturesAvailable() const { return hardwareKnown_ && hardware_.hdTexturePack; }
     // FSR 3.1 upscaling (modes 4-6) can run: its runtime ships beside the exe (Rendering's upscalingModeAvailable at boot).
     bool fsr3Available() const { return hardwareKnown_ && hardware_.fsr3; }
+    // FSR frame generation: its runtime ships (the row is offered) / it started this session (set at launch only).
+    bool frameGenerationAvailable() const { return hardwareKnown_ && hardware_.frameGen; }
+    bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
     // Picks the preset for the known facts and writes it into the profile (saved); why: "first launch", "gpu changed",
     // "recommended" (the menu action). The caller applies the display mode / renderer settings (profile apply).
     GraphicsPreset applyRecommendedGraphics(const char* why);
