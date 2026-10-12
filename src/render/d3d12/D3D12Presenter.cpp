@@ -46,6 +46,9 @@ void setFrameGenerationAtStartup(bool on) { g_fgAtStartup = on; }
 // the FSR 3 FG runtime beside the exe: the FFX loader + frame-generation DLLs and the Agility D3D12 runtime
 bool frameGenerationRuntimeShipped() {
     static const bool shipped = [] {
+#if !defined(WFC_FFX_SDK)
+        return false;                                    // (built without the FFX SDK: FG can never start)
+#endif
         char exe[MAX_PATH * 2] = "";
         GetModuleFileNameA(nullptr, exe, sizeof exe);
         std::string dir(exe);

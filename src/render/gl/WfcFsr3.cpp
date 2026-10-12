@@ -42,6 +42,9 @@ bool Pipeline::fsr3Mode() const {
 
 bool Pipeline::fsr3RuntimeShipped() {
     static const bool shipped = [] {
+#if !defined(WFC_FFX_SDK)
+        return false;                                    // (built without the FFX SDK: FSR 3.1 can never start)
+#endif
         char exe[MAX_PATH * 2] = "";
         GetModuleFileNameA(nullptr, exe, sizeof exe);
         std::string dir(exe);
