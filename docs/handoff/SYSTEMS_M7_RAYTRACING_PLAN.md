@@ -104,6 +104,30 @@ memory, joint matrices copied up each frame):
 - In production the skinning runs in GL compute into a buffer shared with D3D12 (one more shared resource in the existing
   hand-off); the costs above are the D3D12-side equivalent.
 
+### Stage-0 measurement: blend modes and instancing (2026-10-12, tools/systems/m7_slices.py, world.glb structure)
+
+| Map | Placed triangles | Opaque | Masked (alpha-tested) | Translucent / additive | Unique-mesh triangles | Placements per mesh |
+|---|---|---|---|---|---|---|
+| Gorge | 1.22 M | 98.7 % | 0.4 % | 0.9 % | 0.13 M | 9.7x |
+| Berth | 1.29 M | 99.4 % | 0.3 % | 0.3 % | 0.15 M | 8.5x |
+| Complex | 1.64 M | 99.4 % | 0.1 % | 0.5 % | 0.15 M | 11.1x |
+| Debris | 1.64 M | 98.4 % | 0.8 % | 0.8 % | 0.21 M | 7.9x |
+| Molten | 1.70 M | 99.2 % | 0.2 % | 0.5 % | 0.18 M | 9.3x |
+| Rust | 1.90 M | 99.7 % | 0.0 % | 0.3 % | 0.29 M | 6.6x |
+| Streets | 1.98 M | 99.2 % | 0.5 % | 0.3 % | 0.23 M | 8.6x |
+| BrokenHope | 2.16 M | 99.6 % | 0.0 % | 0.4 % | 0.30 M | 7.3x |
+| Seed | 2.45 M | 99.7 % | 0.1 % | 0.3 % | 0.28 M | 8.7x |
+| Remnant | 2.86 M | 98.2 % | 0.8 % | 1.1 % | 0.25 M | 11.4x |
+
+- Flags: opaque BLAS geometry for >= 98 % of the world (D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE: no any-hit); masked
+  <= 0.8 % (the RayQuery candidate loop with the opacity-mask texture, opacity_mask_clip from the material); translucent /
+  additive <= 1.1 %: not in the BLAS (raster only). Materials carry extras.blend_mode in world.glb, so the split is free.
+- Instancing: world.glb keeps its node -> mesh structure (the game's loader bakes it). One BLAS per unique mesh (150 - 320
+  per map) + a TLAS over the placements (1,700 - 4,800 instances) would hold 6.6 - 11.4x fewer triangles: at the measured
+  ~66 B per compacted triangle, ~9 - 20 MB of static BLAS per map instead of 81 - 194 MB (estimate from the ratio). The
+  cost is TLAS traversal over thousands of instances vs one merged BLAS: measure trace time both ways in stage 1 before
+  choosing (memory is not the constraint on a 24 GB card; trace time may be).
+
 ## 4. Denoising (licences checked 2026-10-12)
 
 | Option | Effects | Licence | On the 7900 XTX |
