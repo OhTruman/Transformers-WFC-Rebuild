@@ -37,3 +37,17 @@ NoLightMap shader map under the same root master is tried, and the best fit is k
   (cooked into every MP map), but no map in Rust's cache carries its name, and the closest sibling (Skywarp) differs only in emissive.
 - Suggested next step (Rendering or me on request): compare the emissive expressions of the Neu soldiers / Slipstream with their
   closest siblings' switch sets (team colour / Cust_E emissive switches are the likely difference).
+
+## Follow-up (14:50): the 5 suspects are explained by one static switch each, so they are not translator evidence
+
+Static switch values of each suspect against its best sibling map's material (`mic_static_params`; component masks equal in all three):
+
+| suspect | best sibling | only switch that differs (suspect, sibling) |
+|---|---|---|
+| RB/VH_Slipstream_NormSpec_Cust_E | RB_Skywarp_Mat_INST | UseReconstructedNormal (True, False) |
+| RB_SoldierMultiNeu_MatINST | VH_AirRaid_NormSpec_Cust_E | UseNeutralEnergonColor (True, False) |
+| RB_SoldierCarNeu_Robo_MatINST (and VH_SoldierCarNeu) | VH_AirRaid_NormSpec_Cust_E | UseNeutralEnergonColor (True, False) |
+
+The residuals measure that switch's effect against a different permutation (NeutralEnergonColor feeds the emissive, which matches
+the emissive-heavy residuals). Their own permutation is not in the caches tried, so they are **unverifiable, not suspects**. No translator
+issue is indicated among the ~20 leftovers.
