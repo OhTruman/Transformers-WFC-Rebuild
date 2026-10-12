@@ -52,3 +52,32 @@ the colour of its lightmap coefficient. It is the same as Rendering's `dot(norma
 7. The vertex-lightmap variant (LMT_1D) should get the same term; not yet decoded here.
 
 Step 3 (untimed Molten render A/B) waits for the commit.
+
+## Step 2: Rendering's GLSL against the checklist (ac9d77c + frame fix d8a49fb, integration 2ae4c67): 7 / 7 match
+
+Read from `git show d8a49fb:src/render/gl/WfcPipeline.cpp` (code read only; done during Rendering's timed window, no build or run).
+The term is spliced into `kFSMainLM` right after `c += o.DiffuseColor * L;`:
+
+    vec3 R = -m.cameraVector + n * (dot(n, m.cameraVector) * 2.0);
+    Ls = sum_i pow(max(clamp(dot(normalize(n + LMB_i), R), 0, 1), 0.0001), o.SpecularPower) * l_i * uLMScale[i];
+    c += o.SpecularColor * Ls;
+
+1. Basis: the same LMB0-2 constants the diffuse uses. MATCH.
+2. `n = normalize(o.Normal)` (material normal, tangent space); `m.cameraVector` = normalize(camPos - pos) in the T, B, N frame
+   (toward the eye), so `R = -V + 2 n (n.V) = reflect(-V, n)`; directions `normalize(n + LMB_i)`. MATCH (d8a49fb removed ac9d77c's
+   binormal flip; the frame is the one `wfcBuildInput` gives every material).
+3. `max(sat(.), 1e-4)` before pow, exponent `o.SpecularPower`. MATCH.
+4. Weight `l_i * uLMScale[i]`, no `w_i^2`. MATCH.
+5. `* o.SpecularColor`, added to `c` with the diffuse before translucent-out / fog. SceneColorBiasFactor is a common linear scale on
+   both, so the order is equivalent. MATCH.
+6. Gated on lit, blend <= 1, translated original material, and the generated code not containing `o.SpecularColor = vec3(0.0);`.
+   A material with no specular input gets the old diffuse-only text. MATCH (and a zero SpecularColor in any other form gives zero).
+7. Vertex lightmaps: `l_i` reads `vVLM0-2` when `uVertexLM`, so the same term applies. MATCH by construction; I did not decode the
+   LMT_1D microcode myself (Rendering's emulator check lists the Vertex policy as exact).
+
+Notes, not defects:
+- Lit translucent lightmapped materials (blend > 1) get no term. Whether the original translucent base pass has it is not checked
+  here (my decode covers opaque @0x60467 only).
+- WFC_NOLMSPEC=1 restores the previous text exactly (Rendering: 8/8 lockstep identical).
+
+Step 3 (untimed Molten same-camera A/B, WFC_NOLMSPEC=1 vs default) runs after Rendering's current timed window.
