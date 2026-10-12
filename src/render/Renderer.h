@@ -148,9 +148,17 @@ public:
     // with sharpness < 0 = off: the original presentation (default). Effective from the next frame.
     virtual void setUpscaling(float renderScale, float sharpness) { (void)renderScale; (void)sharpness; }
     // The PC Graphics menu's Upscaling row: 0 Off (the original path), 1 FSR 1 Quality (1.5x: scale 0.667),
-    // 2 Balanced (1.7x: 0.588), 3 Performance (2x: 0.5); AMD's default RCAS sharpness (0.2 stops). Safe at any time:
-    // the render size changes at the next frame.
+    // 2 Balanced (1.7x: 0.588), 3 Performance (2x: 0.5); 4 / 5 / 6 FSR 3.1 Quality / Balanced / Performance (temporal,
+    // over D3D12; falls back to FSR 1 at the same scale when unavailable at run time); AMD's default sharpness (0.2).
+    // Safe at any time: the render size changes at the next frame.
     virtual void setUpscaling(int mode) { (void)mode; }
+    // Whether a mode of that row can run here (menus grey out the rest): 0-3 always; 4-6 when the FSR 3.1 runtime
+    // pieces ship beside the exe (amd_fidelityfx_loader_dx12.dll + D3D12/D3D12Core.dll). Cheap (file checks only).
+    virtual bool upscalingModeAvailable(int mode) const { return mode >= 0 && mode <= 3; }
+    // The next frame's camera does not continue this one's (respawn, teleport, spectator / guided-missile view entered or
+    // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
+    // for the log. Large jumps are also detected from the camera itself; this covers the cuts it cannot see.
+    virtual void notifyCameraCut(const char* reason) { (void)reason; }
     // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
     // originals); stored until that root exists.
     virtual void setHdTextures(bool on) { (void)on; }
