@@ -10,6 +10,7 @@
 
 #include "platform/Window.h"
 #include "platform/PresentHook.h"
+#include "platform/DisplayMode.h"
 #include "core/Log.h"
 
 #include <cmath>
@@ -21,6 +22,12 @@
 #include <vector>
 
 namespace platform {
+
+// [Systems] The desktop mode saved before the fullscreen mode switch (platform/DisplayMode.h): one per process, so the crash
+// handler and atexit can put it back too.
+DesktopModeKeeper& desktopModeKeeper() { static DesktopModeKeeper k; return k; }
+void restoreDesktopDisplayMode() { desktopModeKeeper().restore(&ChangeDisplaySettingsExW); }
+
 namespace {
 
 // Map a neutral Button to a Win32 virtual key.
@@ -237,8 +244,18 @@ public:
             }
             if (best.dmSize) {
                 best.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+                // [Systems] the desktop's mode as it runs now (not the registry's), kept for the way back; not overwritten
+                // while our mode is active (a re-apply or a resolution change in fullscreen sees our own mode in `cur`)
+                desktopModeKeeper().saveBeforeSwitch(mi.szDevice, cur);
                 ok = ChangeDisplaySettingsExW(mi.szDevice, &best, nullptr, CDS_FULLSCREEN, nullptr) == DISP_CHANGE_SUCCESSFUL;
-                if (ok) { modeChanged_ = true; LOG_INFO("window: fullscreen %dx%d @ %lu Hz", fsW_, fsH_, best.dmDisplayFrequency); }
+                if (ok) {
+                    desktopModeKeeper().switched();
+                    static const bool atExit = std::atexit([] { restoreDesktopDisplayMode(); }) == 0;   // every normal exit path
+                    (void)atExit;
+                    modeChanged_ = true;
+                    LOG_INFO("window: fullscreen %dx%d @ %lu Hz (desktop %lux%lu @ %lu Hz kept for the return)", fsW_, fsH_,
+                             best.dmDisplayFrequency, cur.dmPelsWidth, cur.dmPelsHeight, cur.dmDisplayFrequency);
+                }
             }
             if (!ok) LOG_WARN("window: display mode %dx%d not available; fullscreen at the desktop size", fsW_, fsH_);
         }
@@ -249,9 +266,18 @@ public:
         return ok;
     }
     void restoreDesktopMode() {
+        // [Systems] exactly the mode the desktop ran before the switch (ChangeDisplaySettingsEx(nullptr) would restore the
+        // registry mode, which can differ: a 144 Hz desktop could come back at 60 Hz); the registry mode only if refused
         if (!modeChanged_) return;
-        ChangeDisplaySettingsExW(monitorDevice_.empty() ? nullptr : monitorDevice_.c_str(), nullptr, nullptr, 0, nullptr);
+        const DEVMODEW want = desktopModeKeeper().saved();
+        const LONG r = desktopModeKeeper().restore(&ChangeDisplaySettingsExW);
         modeChanged_ = false;
+        DEVMODEW now{};
+        now.dmSize = sizeof(now);
+        EnumDisplaySettingsW(monitorDevice_.empty() ? nullptr : monitorDevice_.c_str(), ENUM_CURRENT_SETTINGS, &now);
+        LOG_INFO("window: desktop mode back to %lux%lu @ %lu Hz (saved %lux%lu @ %lu Hz%s)", now.dmPelsWidth, now.dmPelsHeight,
+                 now.dmDisplayFrequency, want.dmPelsWidth, want.dmPelsHeight, want.dmDisplayFrequency,
+                 r == DISP_CHANGE_SUCCESSFUL ? "" : "; refused, registry mode restored instead");
     }
 
     void setDisplayMode(int w, int h, bool full) override {
@@ -542,6 +568,9 @@ private:
                 width_ = LOWORD(lp); height_ = HIWORD(lp);
                 if (width_ < 1) width_ = 1;
                 if (height_ < 1) height_ = 1;
+                // [Systems] minimised in fullscreen by any route (Win+D, the taskbar): the desktop gets its own mode back;
+                // reactivation (WM_ACTIVATEAPP) switches to ours again
+                if (wp == SIZE_MINIMIZED && fullscreen_ && modeChanged_) restoreDesktopMode();
                 return 0;
             case 0x02E4: {   // WM_GETDPISCALEDSIZE: the window size for the new DPI keeps the client size (no rescale)
                 if (fullscreen_) return FALSE;
