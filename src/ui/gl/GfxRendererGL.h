@@ -130,6 +130,17 @@ private:
     void drawTextShadow(const std::vector<gfx::Player::RenderItem>& items, size_t at, float alpha);
     void drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m);
     void ensureShadowTargets(int w, int h);
+    // [Systems, M1] Text-shadow result cache (WFC_NOHUDSHADOWCACHE=1: off; see drawTextShadow). Per position in the frame's
+    // shadow sequence: the key of what the shadow's writes depend on, its horizontal-pass image ([1], W x H) and its blurred
+    // result ([0], (W + 1) x (H + 1) with the zero border the composite's filtering reads). shSig1_ / shSig2_: the key sequences
+    // of the last two frames; shGen_: shadow-target (re)allocations.
+    struct ShCacheEntry { uint64_t key = 0; unsigned hTex = 0, fTex = 0; int tw = 0, th = 0; bool valid = false; };
+    std::vector<ShCacheEntry> shCache_;
+    std::vector<uint64_t> shSeq_, shSeqPrev_;
+    uint64_t shSig1_ = 1, shSig2_ = 2;
+    unsigned shGen_ = 0, shGenStart_ = 0;
+    bool shStable_ = false, shDiverged_ = false;
+    void shCacheFrame();
     bool inMask_ = false;
     std::map<std::pair<const gfx::ShapeDef*, bool>, Cached> shapes_;
     unsigned frame_ = 0;   // begin() count: display-object shapes (drawing API redrawn per frame) are dropped when unused

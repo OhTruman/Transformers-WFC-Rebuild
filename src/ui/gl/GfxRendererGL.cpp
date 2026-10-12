@@ -309,9 +309,9 @@ void GfxRendererGL::restoreGlState() {
 // never a stall). Logged every 200 sampled frames: mean ms per sampled frame per category, stamps per frame, and the text
 // shadows (count, box area, share unchanged since the previous frame - the redraw-on-change lever). Off: nothing runs.
 namespace hudprof {
-enum Cat { BackCopy, Target, FillDirect, FillStencil, Glyph, Stroke, Bitmap, Mask, ShCover, ShBlur, ShComp, Resolve, Composite, Video, ShDraw, NCat };
+enum Cat { BackCopy, Target, FillDirect, FillStencil, Glyph, Stroke, Bitmap, Mask, ShCover, ShBlur, ShComp, Resolve, Composite, Video, ShDraw, ShReplay, NCat };
 const char* const kName[NCat] = {"backcopy", "clear+backdrop", "fill-direct", "fill-stencil", "glyph", "stroke", "bitmap", "mask",
-                                 "shadow-switch+clear", "shadow-blur", "shadow-comp", "resolve", "composite", "video", "shadow-glyphs"};
+                                 "shadow-switch+clear", "shadow-blur", "shadow-comp", "resolve", "composite", "video", "shadow-glyphs", "shadow-replay"};
 constexpr int kMax = 8192;
 struct Pool { unsigned q[kMax]; signed char cat[kMax]; int n = 0; bool pending = false; bool made = false; };
 struct State {
@@ -428,6 +428,7 @@ void GfxRendererGL::begin(int width, int height) {
     invalidateGlShadow();   // other renderers changed GL state since the last HUD frame
     hudprof::beginFrame(frame_);
     gfxShadowVerifyFrame();   // WFC_GFXSTATESHADOW_VERIFY summary every 600 HUD frames
+    shCacheFrame();
     ensureShadowTargets(width, height);
     if (width != fbw_ || height != fbh_) {
         if (msFbo_) { glx::DeleteFramebuffers(1, &msFbo_); glx::DeleteRenderbuffers(1, &msColor_); glx::DeleteRenderbuffers(1, &msDepth_); }
@@ -1270,6 +1271,27 @@ void GfxRendererGL::ensureShadowTargets(int nw, int nh) {
         if (k == 0) glx::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, shStencil_);
     }
     shW_ = nw; shH_ = nh;
+    ++shGen_;   // the targets' texels are gone: the shadow cache waits for two frames on the new ones
+}
+
+namespace {
+struct ShStat { long frames = 0, replayed = 0, computed = 0, diverged = 0, unstable = 0; } gShStat;
+bool shStatOn() { static const bool on = std::getenv("WFC_HUDSHADOWSTATS") != nullptr; return on; }   // counts, logged every 600 HUD frames
+}
+
+void GfxRendererGL::shCacheFrame() {
+    // The frame that just ended drew shSeq_ (on the targets of generation shGen_, which includes a mid-frame reallocation).
+    uint64_t sig = 1469598103934665603ull ^ ((uint64_t)shGen_ << 32) ^ (uint64_t)shSeq_.size();
+    for (uint64_t k : shSeq_) { sig ^= k; sig *= 1099511628211ull; }
+    shSig2_ = shSig1_; shSig1_ = sig;
+    shStable_ = shSig1_ == shSig2_;   // [1] starts this frame as it started the last one (same writes, overwriting)
+    shSeqPrev_.swap(shSeq_);
+    shSeq_.clear();
+    shDiverged_ = false;
+    shGenStart_ = shGen_;             // a reallocation from here on (begin() or mid-frame) disables replays this frame
+    if (shStatOn() && ++gShStat.frames % 600 == 0)
+        LOG_INFO("HUD shadow cache: %ld frames, %ld shadows replayed, %ld computed (%ld after a change in the frame, %ld unstable frame)",
+                 gShStat.frames, gShStat.replayed, gShStat.computed, gShStat.diverged, gShStat.unstable);
 }
 
 void GfxRendererGL::drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m) {
@@ -1332,6 +1354,53 @@ void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& i
         hudprof::shadow(sh.owner, k, W, H);
     }
     hudprof::mark(hudprof::ShCover);
+    // [Systems, M1] Result cache. A shadow's output depends on (a) its own inputs: the glyphs and their placement in the box, the
+    // box size, the blur widths and the target size (key below), and (b) the texels of [1] the vertical pass reads below the
+    // box, left there by earlier shadows' horizontal passes (this frame or before). Writes to [1] depend only on (a), and they
+    // overwrite: if the last two frames drew the same key sequence on the same targets, [1] starts this frame as it started the
+    // previous one, so a shadow whose key and every earlier key in this frame match the previous frame reads exactly what it
+    // read then, and its cached images ARE its output. It then replays them: its horizontal image into [1] (so later shadows
+    // see the same texels) and its result plus the zero border into [0], and the unchanged composite runs. From the first
+    // change in a frame on, every shadow is computed (and cached). No render-target switch on a replay. The verifier's
+    // reference pass (refMode_) always computes, so WFC_GFXVERIFY_IMAGE compares the cached frame with a full recompute.
+    static const bool noShCache = std::getenv("WFC_NOHUDSHADOWCACHE") != nullptr;
+    const bool shCacheOn = !noShCache && !refMode_ && glx::CopyImageSubData;
+    size_t shIdx = 0;
+    uint64_t shKey = 0;
+    bool shReuse = false;
+    if (shCacheOn) {
+        uint64_t k = 1469598103934665603ull;
+        auto mix = [&k](const void* d, size_t n) { const unsigned char* b = (const unsigned char*)d; for (size_t i = 0; i < n; ++i) { k ^= b[i]; k *= 1099511628211ull; } };
+        const int dims[4] = {W, H, shW_, shH_};
+        mix(dims, sizeof dims);
+        const float blur[2] = {bw, bh};
+        mix(blur, sizeof blur);
+        const gfx::Matrix box{1, 0, 0, 1, -x0, -y0};
+        for (size_t i = at + 1; i < end; ++i) {
+            const auto& g = items[i];
+            if (g.type != gfx::Player::RenderItem::Glyph || !g.shape) continue;
+            const void* sp = g.shape; mix(&sp, sizeof sp);
+            const gfx::Matrix gm = box * g.m;
+            const float mm[6] = {gm.a, gm.b, gm.c, gm.d, gm.tx, gm.ty}; mix(mm, sizeof mm);
+        }
+        shKey = k;
+        shIdx = shSeq_.size();
+        shSeq_.push_back(shKey);
+        if (shIdx >= shSeqPrev_.size() || shSeqPrev_[shIdx] != shKey) shDiverged_ = true;
+        shReuse = shStable_ && !shDiverged_ && shGen_ == shGenStart_ && shIdx < shCache_.size() && shCache_[shIdx].valid &&
+                  shCache_[shIdx].key == shKey;
+    }
+    if (shCacheOn && shStatOn()) {
+        if (shReuse) ++gShStat.replayed;
+        else { ++gShStat.computed; if (!shStable_ || shGen_ != shGenStart_) ++gShStat.unstable; else if (shDiverged_) ++gShStat.diverged; }
+    }
+    if (shReuse) {
+        hudprof::mark(hudprof::ShReplay);
+        const ShCacheEntry& e = shCache_[shIdx];
+        glx::CopyImageSubData(e.hTex, GL_TEXTURE_2D, 0, 0, 0, 0, shTex_[1], GL_TEXTURE_2D, 0, 0, 0, 0, W, H, 1);
+        glx::CopyImageSubData(e.fTex, GL_TEXTURE_2D, 0, 0, 0, 0, shTex_[0], GL_TEXTURE_2D, 0, 0, 0, 0, W + 1, H + 1, 1);
+        if (glBlendEq) glBlendEq(kFuncAdd);   // the blend equation step 1 leaves for the composite
+    } else {
     // 1. Glyph coverage (white) into [0], translated so the box starts at the origin.
     glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[0]);
     glViewport(0, 0, W, H);
@@ -1384,6 +1453,29 @@ void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& i
         glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
+    if (shCacheOn) {   // cache this shadow's images (its horizontal pass is still in [1]; [0] holds the result + zero border)
+        if (shCache_.size() <= shIdx) shCache_.resize(shIdx + 1);
+        ShCacheEntry& e = shCache_[shIdx];
+        e.valid = false;
+        if (W + 1 <= shW_ && H + 1 <= shH_) {
+            if (!e.hTex || e.tw < W + 1 || e.th < H + 1) {
+                const int tw = std::max(e.tw, W + 1), th = std::max(e.th, H + 1);
+                if (!e.hTex) { glGenTextures(1, &e.hTex); glGenTextures(1, &e.fTex); }
+                for (unsigned t : {e.hTex, e.fTex}) {
+                    glBindTexture(GL_TEXTURE_2D, t);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                }
+                e.tw = tw; e.th = th;
+            }
+            glx::CopyImageSubData(shTex_[1], GL_TEXTURE_2D, 0, 0, 0, 0, e.hTex, GL_TEXTURE_2D, 0, 0, 0, 0, W, H, 1);
+            glx::CopyImageSubData(shTex_[0], GL_TEXTURE_2D, 0, 0, 0, 0, e.fTex, GL_TEXTURE_2D, 0, 0, 0, 0, W + 1, H + 1, 1);
+            e.key = shKey;
+            e.valid = true;
+        }
+    }
+    }   // not replayed
     // 3. Composite into the movie target under the current mask, offset by distance / angle.
     hudprof::mark(hudprof::ShComp);
     glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
