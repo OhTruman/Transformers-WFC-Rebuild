@@ -1,0 +1,39 @@
+target ps_3_0 0xffff0300
+   ('LightMapScale', 'float4', 10, 3)
+   ('LightMapTextures', 'sampler', 2, 3)
+   ('SceneColorBiasFactor', 'float4', 3, 1)
+   ('Texture2D_0', 'sampler', 0, 1)
+   ('Texture2D_1', 'sampler', 1, 1)
+   ('UniformScalar_0', 'float4', 6, 1)
+   ('UniformScalar_1', 'float4', 7, 1)
+   ('UniformScalar_2', 'float4', 8, 1)
+   ('UniformScalar_3', 'float4', 9, 1)
+   ('UniformVector_0', 'float4', 4, 1)
+   ('UniformVector_1', 'float4', 5, 1)
+microcode at 0x2933f
+; EXEC addr=2 count=6
+  2  MULv r2.x___, r1.xxxx, c7.xxxx
+  2  MUL_CONST_1 r2._y__, c8.x * r1.y
+  3  tfetch r4.xyz_, r0.xyx, tf4
+  4  tfetch r5.xyz_, r0.xyx, tf3
+  5  tfetch r1._xyz, r2.xyx, tf1
+  6  tfetch r3.xyz_, r0.xyx, tf2
+  7  tfetch r0.x___, r2.xyx, tf0
+; ALLOC
+; EXEC addr=8 count=6
+  8  ADDv r2.xyz_, -c4.xyzz, c255.xxxx
+  9  MULv r0._yzw, c5.xxyz, c6.xxxx
+ 10  MULADDv r0.xyz_, r0.yzww, r0.xxxx, c4.xyzz
+ 11  MULv r3.xyz_, r3.xyzz, c255.yyyy
+ 12  MULv r5.xyz_, r5.xyzz, c255.yyyy
+ 12  MUL_CONST_1 r6.x___, c9.x * r1.y
+ 13  MULv r4.xyz_, r4.xyzz, c255.yyyy
+ 13  MUL_CONST_1 r6._y__, c9.x * r1.z
+; EXEC_END addr=14 count=6
+ 14  MULv r4.xyz_, r4.xzyy, c12.xzyy
+ 14  MUL_CONST_1 r6.__z_, c9.x * r1.w
+ 15  MULv r2.xyz_, r6.xyzz, r2.xyzz
+ 16  MULADDv r1.xyz_, r5.xyzz, c11.xyzz, r4.xzyy
+ 17  MULADDv r1.xyz_, r3.xyzz, c10.xyzz, r1.xyzz
+ 18  MULADDv r0.xyz_, r2.xyzz, r1.xyzz, r0.xyzz
+ 19  MULv oC0.xyz_, r0.xyzz, c3.xxxx
