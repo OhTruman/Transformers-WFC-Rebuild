@@ -31,3 +31,4 @@ wfc.log
 __pycache__/
 *.pyc
 third_party/ffx_sdk/
+third_party/d3d12_agility/

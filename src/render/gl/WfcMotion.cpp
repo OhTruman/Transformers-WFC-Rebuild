@@ -138,7 +138,7 @@ bool invert(const float* m, float* out) {        // column-major 4x4 (core::Mat4
 
 bool Pipeline::temporalActive() const {
     static const bool env = std::getenv("WFC_TEMPORAL") != nullptr;   // test switch until a temporal upscaler sets it
-    return temporalOn_ || env;
+    return temporalOn_ || env || (fsr3Mode() && fsrActive());   // (FSR 3: jitter + motion vectors + reactive mask)
 }
 
 bool Pipeline::motionVectorsOn() const {

@@ -1,5 +1,6 @@
 """Fetch the pinned AMD FidelityFX / FSR SDK pieces the optional D3D12 upscaling / frame-generation path uses
-(PC ADAPTATION, A3a) into third_party/ffx_sdk/ (not committed: AMD's licence permits binary redistribution with its
+(PC ADAPTATION, A3a) into third_party/ffx_sdk/ in the SDK's own layout (api/, upscalers/, framegeneration/: the
+headers include each other by relative path; not committed: AMD's licence permits binary redistribution with its
 notice; see third_party/ffx_sdk/license.md after fetching).
 
   fetch_ffx_sdk.py            downloads (skips files already present with the expected size)
@@ -16,18 +17,19 @@ BASE = 'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SD
 MEDIA = 'https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/raw/%s/' % TAG   # (binary files)
 FILES = [
     ('Kits/FidelityFX/docs/license.md', 'license.md'),
-    ('Kits/FidelityFX/api/include/ffx_api.h', 'include/ffx_api.h'),
-    ('Kits/FidelityFX/api/include/ffx_api.hpp', 'include/ffx_api.hpp'),
-    ('Kits/FidelityFX/api/include/ffx_api_types.h', 'include/ffx_api_types.h'),
-    ('Kits/FidelityFX/api/include/ffx_api_loader.h', 'include/ffx_api_loader.h'),
-    ('Kits/FidelityFX/api/include/dx12/ffx_api_dx12.h', 'include/dx12/ffx_api_dx12.h'),
-    ('Kits/FidelityFX/api/include/dx12/ffx_api_dx12.hpp', 'include/dx12/ffx_api_dx12.hpp'),
-    ('Kits/FidelityFX/upscalers/include/ffx_upscale.h', 'include/ffx_upscale.h'),
-    ('Kits/FidelityFX/upscalers/include/ffx_upscale.hpp', 'include/ffx_upscale.hpp'),
-    ('Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h', 'include/ffx_framegeneration.h'),
-    ('Kits/FidelityFX/framegeneration/include/ffx_framegeneration.hpp', 'include/ffx_framegeneration.hpp'),
-    ('Kits/FidelityFX/framegeneration/include/dx12/ffx_api_framegeneration_dx12.h', 'include/dx12/ffx_api_framegeneration_dx12.h'),
-    ('Kits/FidelityFX/framegeneration/include/dx12/ffx_api_framegeneration_dx12.hpp', 'include/dx12/ffx_api_framegeneration_dx12.hpp'),
+    ('Kits/FidelityFX/api/include/ffx_api.h', 'api/include/ffx_api.h'),
+    ('Kits/FidelityFX/api/include/ffx_api.hpp', 'api/include/ffx_api.hpp'),
+    ('Kits/FidelityFX/api/include/ffx_api_types.h', 'api/include/ffx_api_types.h'),
+    ('Kits/FidelityFX/api/include/ffx_api_loader.h', 'api/include/ffx_api_loader.h'),
+    ('Kits/FidelityFX/api/include/dx12/ffx_api_dx12.h', 'api/include/dx12/ffx_api_dx12.h'),
+    ('Kits/FidelityFX/api/include/dx12/ffx_api_dx12.hpp', 'api/include/dx12/ffx_api_dx12.hpp'),
+    ('Kits/FidelityFX/upscalers/include/ffx_upscale.h', 'upscalers/include/ffx_upscale.h'),
+    ('Kits/FidelityFX/upscalers/include/ffx_upscale.hpp', 'upscalers/include/ffx_upscale.hpp'),
+    ('Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h', 'framegeneration/include/ffx_framegeneration.h'),
+    ('Kits/FidelityFX/framegeneration/include/ffx_framegeneration.hpp', 'framegeneration/include/ffx_framegeneration.hpp'),
+    ('Kits/FidelityFX/framegeneration/include/ffx_framegeneration_api_types.h', 'framegeneration/include/ffx_framegeneration_api_types.h'),
+    ('Kits/FidelityFX/framegeneration/include/dx12/ffx_api_framegeneration_dx12.h', 'framegeneration/include/dx12/ffx_api_framegeneration_dx12.h'),
+    ('Kits/FidelityFX/framegeneration/include/dx12/ffx_api_framegeneration_dx12.hpp', 'framegeneration/include/dx12/ffx_api_framegeneration_dx12.hpp'),
     ('Kits/FidelityFX/signedbin/amd_fidelityfx_loader_dx12.dll', 'bin/amd_fidelityfx_loader_dx12.dll'),
     ('Kits/FidelityFX/signedbin/amd_fidelityfx_upscaler_dx12.dll', 'bin/amd_fidelityfx_upscaler_dx12.dll'),
     ('Kits/FidelityFX/signedbin/amd_fidelityfx_framegeneration_dx12.dll', 'bin/amd_fidelityfx_framegeneration_dx12.dll'),
