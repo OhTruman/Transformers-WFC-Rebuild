@@ -52,6 +52,7 @@ void Pipeline::framegenCapture(int outW, int outH) {
         GLuint fv = vs ? compileShader(GL_FRAGMENT_SHADER, kFgVelFS, "fg_vel.fs") : 0;
         fgDepthProg_ = fd ? linkProgram(vs, fd, "fg_depth") : 0;
         fgVelProg_ = fv ? linkProgram(vs, fv, "fg_vel") : 0;
+        for (GLuint sh : {vs, fd, fv}) if (sh) DeleteShader(sh);   // (the programs keep them; per map otherwise leaked)
         GenFramebuffers(1, &fgFbo_);
         if (!fgDepthProg_ || !fgVelProg_) { LOG_WARN("FRAMEGEN: input shaders unavailable"); return; }
     }

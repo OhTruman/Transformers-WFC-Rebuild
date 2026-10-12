@@ -38,7 +38,7 @@
 #include <mutex>
 #include <thread>
 
-namespace glx { void gpuPrePresent(); }   // GLExt.cpp: the WFC_GPUSTAMPS "(present)" stamp
+namespace glx { void gpuPrePresent(); void textureCacheInvalidate(); }   // GLExt.cpp (WFC_GPUSTAMPS stamp; the bind cache)
 
 namespace render {
 void d3d12SelectAgility();   // D3D12Agility.cpp
@@ -247,14 +247,14 @@ public:
         });
         while (ready == 0) std::this_thread::yield();
         if (ready < 0) { worker_->join(); delete worker_; worker_ = nullptr; LOG_WARN("D3D12 present: worker context not current: in-thread present kept"); }
-        else worker_->detach();
     }
     void workerLoop() {
         for (;;) {
             Job j;
             {
                 std::unique_lock<std::mutex> lk(mx_);
-                cv_.wait(lk, [this] { return !jobs_.empty(); });
+                cv_.wait(lk, [this] { return stop_ || !jobs_.empty(); });
+                if (jobs_.empty()) break;                // stop_ with nothing queued: shutdown()
                 j = jobs_.front();
                 jobs_.pop_front();
             }
@@ -278,6 +278,15 @@ public:
             }
             cv_.notify_all();
         }
+        wglMakeCurrent(nullptr, nullptr);
+    }
+    void stopWorker() {
+        if (!worker_) return;
+        drainWorker();
+        { std::lock_guard<std::mutex> lk(mx_); stop_ = true; }
+        cv_.notify_all();
+        worker_->join(); delete worker_; worker_ = nullptr;
+        if (workerCtx_) { wglDeleteContext(workerCtx_); workerCtx_ = nullptr; }
     }
     void drainWorker() {
         if (!worker_) return;
@@ -290,11 +299,26 @@ public:
         using clk = std::chrono::steady_clock;
         const clk::time_point t0 = clk::now();
         RECT rc; GetClientRect(hwnd_, &rc);
-        // minimised (0 x 0 client area): nothing to present; no resize to a degenerate size (FG soak)
-        if (IsIconic(hwnd_) || rc.right - rc.left <= 0 || rc.bottom - rc.top <= 0) return true;
+        // minimised (0 x 0 client area): nothing to present; no resize to a degenerate size (FG soak). The GL work is
+        // still submitted and the loop throttled (no unbounded queue while hidden), and the first frame back resets FG.
+        if (IsIconic(hwnd_) || rc.right - rc.left <= 0 || rc.bottom - rc.top <= 0) {
+            glFlush();
+            Sleep(10);
+            resumeReset_ = true;
+            return true;
+        }
         const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
-        if (w != w_ || h != h_) { drainWorker(); waitIdle(); if (!resize(w, h)) return false; }
+        if (w != w_ || h != h_) {
+            drainWorker(); waitIdle();
+            if (!resize(w, h)) {                         // no flip-model swapchain at this size: GL presents from now on
+                LOG_ERROR("D3D12 present: the swapchain could not be resized to %dx%d: presenting through GL from now on "
+                          "(frame generation off)", w, h);
+                failed_ = true;
+                return false;
+            }
+        }
         const UINT slot = (UINT)(mainFrame_++ % kRing);
+        if (resumeReset_) { fgParams_[slot].reset = true; resumeReset_ = false; }   // (restored: no history across the gap)
         // diagnostics: WFC_D3D12_PREFLUSH=1 submits the frame's GL work first (attribution: is the signal's cost the submission?)
         static const bool preFlush = std::getenv("WFC_D3D12_PREFLUSH") != nullptr;
         if (preFlush) glFlush();
@@ -374,6 +398,7 @@ public:
     // D3D12: wait for GL, copy into the back buffer, present, signal (on the calling thread or the worker)
     bool d3dTail(UINT slot, std::chrono::steady_clock::time_point t0, std::chrono::steady_clock::time_point t1, const double sp[4]) {
         using clk = std::chrono::steady_clock;
+        if (lost_) return true;                          // (device lost: the main thread falls back to GL)
         for (int k = 0; k < 4; ++k) { subSum_[k] += sp[k]; subMax_[k] = std::max(subMax_[k], sp[k]); }
         if (waitable_) WaitForSingleObjectEx(waitable_, 1000, TRUE);   // frame-latency pacing (no fence spin)
         const clk::time_point t2 = clk::now();
@@ -423,7 +448,10 @@ public:
         ID3D12CommandList* lists[] = {list_};
         queue_->ExecuteCommandLists(1, lists);
         const clk::time_point t4 = clk::now();
-        const HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
+        static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
+        if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
         ++value_;
         queue_->Signal(fence_, value_);
         frameValue_[bi] = value_;
@@ -447,7 +475,7 @@ public:
                 phN_ = 0;
             }
         }
-        if (FAILED(hr)) { LOG_WARN("D3D12 present: Present failed (0x%08lx)", (unsigned long)hr); }
+        if (FAILED(hr)) presentFailed(hr);
         {   // frame start -> Present returned (CPU-side latency proxy) and FG resets, per 300 frames
             const long long fs = frameStartNs_[slot];
             if (fs) { const double ms = (std::chrono::duration_cast<std::chrono::nanoseconds>(clk::now().time_since_epoch()).count() - fs) / 1e6;
@@ -490,8 +518,66 @@ public:
         return true;
     }
 
+    // a failed Present: device removed / reset / hung -> lost_ (logged once; present() then hands the window back to GL);
+    // any other code logged once per code (no per-frame spam)
+    void presentFailed(HRESULT hr) {
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG) {
+            if (!lost_.exchange(true))
+                LOG_ERROR("D3D12 present: device lost (Present 0x%08lx, removed reason 0x%08lx): presenting through GL from now on "
+                          "(frame generation off)", (unsigned long)hr, (unsigned long)dev_->GetDeviceRemovedReason());
+            return;
+        }
+        std::lock_guard<std::mutex> lk(logMx_);
+        if (std::find(failCodes_.begin(), failCodes_.end(), hr) != failCodes_.end()) return;
+        failCodes_.push_back(hr);
+        LOG_WARN("D3D12 present: Present failed (0x%08lx; logged once per code)", (unsigned long)hr);
+    }
+    bool failed() const { return failed_ || lost_; }
+    // ordered teardown (exit, or the GL fallback): worker joined, GPU idle, FG presents drained, FG context, the FG
+    // inputs and the shared ring freed, the swapchain released before the FG swapchain context, then the device objects.
+    // The GL context must be current (it is: ~GLRenderer, or present() on the main thread).
+    void shutdown() {
+        if (down_) return;
+        down_ = true;
+        stopWorker();
+        // drained unless the device is really gone (then fences complete at once; a healthy device - Present failed for
+        // another reason, or WFC_D3D12_SIMLOST - must drain, or destroying the FG swapchain blocks on its present queue)
+        const bool removed = dev_ && dev_->GetDeviceRemovedReason() != S_OK;
+        if (!removed) waitIdle();
+#if defined(WFC_FFX_SDK)
+        if (fgSwapCtx_ && !removed) {
+            ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
+            wp.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12;
+            ffx_.Dispatch(&fgSwapCtx_, &wp.header);
+        }
+        if (fgCtx_) { ffx_.DestroyContext(&fgCtx_, nullptr); fgCtx_ = nullptr; }
+#endif
+        for (auto& slot : fgIn_) for (auto& x : slot) freeShared(x);
+        for (UINT k = 0; k < kRing; ++k) {
+            if (glFbo_[k]) { gl_.deleteFb(1, &glFbo_[k]); glFbo_[k] = 0; }
+            if (glTex_[k]) { glDeleteTextures(1, &glTex_[k]); glTex_[k] = 0; }
+            if (glMem_[k]) { gl_.deleteMem(1, &glMem_[k]); glMem_[k] = 0; }
+            if (sharedHandle_[k]) { CloseHandle(sharedHandle_[k]); sharedHandle_[k] = nullptr; }
+            rel(shared_[k]);
+        }
+        glx::textureCacheInvalidate();
+        for (auto& b : back_) rel(b);
+        rel(swap_);
+#if defined(WFC_FFX_SDK)
+        if (fgSwapCtx_) { ffx_.DestroyContext(&fgSwapCtx_, nullptr); fgSwapCtx_ = nullptr; }
+#endif
+        fg_ = false;
+        rel(list_);
+        for (auto& a : alloc_) rel(a);
+        rel(queue_); rel(fence_);
+        if (fenceHandle_) { CloseHandle(fenceHandle_); fenceHandle_ = nullptr; }
+        rel(dev_); rel(factory_);
+        LOG_INFO("D3D12 present: shut down%s", lost_ ? " (device lost)" : "");
+    }
+
     // ---------------------------------------------------------------- FSR 3 frame generation (M5 C)
-    bool fgOn() const { return fg_ && fgCtx_; }
+    bool fgOn() const { return fg_ && fgCtx_ && !lost_ && !failed_; }
+    bool fgGenerating() const { return fgOn() && fgGenerating_; }
     // the slot the next present() uses: wait (GPU side) for D3D12's last reads of it, (re)create the inputs at this size
     bool fgInputs(int rw, int rh, FgInputs* out) {
         if (!fgOn() || rw <= 0 || rh <= 0) return false;
@@ -504,11 +590,28 @@ public:
             gl_.waitSem(sem_, 0, nullptr, t[0] ? 3 : 0, t, l);
         }
         if (fgIn_[slot][0].w != w_ || fgIn_[slot][0].h != h_ || fgIn_[slot][1].w != rw || fgIn_[slot][1].h != rh) {
+            const int key[4] = {w_, h_, rw, rh};
+            if (std::equal(key, key + 4, fgFailSize_)) return false;   // (failed at this size already: no retry each frame)
+            // FG may still read these inputs (queued presents / interpolation): drained and idle first, as resize()
+            if (fgIn_[slot][0].res) {
+                drainWorker();
+#if defined(WFC_FFX_SDK)
+                if (fgSwapCtx_) {
+                    ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
+                    wp.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12;
+                    ffx_.Dispatch(&fgSwapCtx_, &wp.header);
+                }
+#endif
+                waitIdle();
+            }
             for (auto& x : fgIn_[slot]) freeShared(x);
             if (!makeShared(fgIn_[slot][0], w_, h_, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
                 !makeShared(fgIn_[slot][1], rw, rh, DXGI_FORMAT_R32_FLOAT, 0x822E /*GL_R32F*/) ||
                 !makeShared(fgIn_[slot][2], rw, rh, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/)) {
-                LOG_WARN("FRAMEGEN: input textures failed"); for (auto& x : fgIn_[slot]) freeShared(x); return false;
+                LOG_WARN("FRAMEGEN: input textures failed at %dx%d / render %dx%d (real frames only at this size)", w_, h_, rw, rh);
+                for (auto& x : fgIn_[slot]) freeShared(x);
+                std::copy(key, key + 4, fgFailSize_);
+                return false;
             }
         }
         out->hudless = fgIn_[slot][0].tex; out->depth = fgIn_[slot][1].tex; out->velocity = fgIn_[slot][2].tex;
@@ -527,6 +630,7 @@ public:
         if (!fgOn()) return;
         const bool have = fgHave_[slot];
         fgHave_[slot] = false;
+        fgGenerating_ = have;                            // (frameGenerationFactor: 2 only while frames are generated)
         const FgParams& p = fgParams_[slot];
         if (have && p.reset) ++fgResets_;
         const uint64_t id = ++fgFrameId_;
@@ -626,17 +730,22 @@ public:
         glBindTexture(GL_TEXTURE_2D, x.tex);
         gl_.texStorageMem(GL_TEXTURE_2D, 1, glFmt, w, h, x.mem, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
+        glx::textureCacheInvalidate();                   // (raw binds: the renderer's bind cache no longer matches)
         x.w = w; x.h = h;
         return glGetError() == GL_NO_ERROR;
     }
     void freeShared(FgShared& x) {
-        if (x.tex) glDeleteTextures(1, &x.tex);
+        if (x.tex) { glDeleteTextures(1, &x.tex); glx::textureCacheInvalidate(); }
         if (x.mem) gl_.deleteMem(1, &x.mem);
         if (x.handle) CloseHandle(x.handle);
         rel(x.res);
         x = FgShared{};
     }
     bool fg_ = false, fgHave_[kRing] = {}, fgCfgFailLogged_ = false, fgPrepFailLogged_ = false;
+    std::atomic<bool> fgGenerating_{false}, lost_{false};
+    bool failed_ = false, down_ = false, stop_ = false, resumeReset_ = false;
+    int fgFailSize_[4] = {};
+    std::mutex logMx_; std::vector<HRESULT> failCodes_;
     FgShared fgIn_[kRing][3];                          // per ring slot: HUD-less, depth, motion vectors
     FgParams fgParams_[kRing];
     uint64_t fgFrameId_ = 0;
@@ -734,6 +843,7 @@ private:
             gl_.fbTex(0x8D40, 0x8CE0 /*GL_COLOR_ATTACHMENT0*/, GL_TEXTURE_2D, glTex_[k], 0);
         }
         gl_.bindFb(0x8D40, 0);
+        glx::textureCacheInvalidate();                   // (raw binds / deletes above)
         w_ = w; h_ = h;
         for (auto& v : frameValue_) v = 0;
 #if defined(WFC_FFX_SDK)
@@ -794,9 +904,25 @@ private:
 };
 
 D3D12Presenter* g_presenter = nullptr;
-bool presentHook() { return g_presenter && g_presenter->present(); }
+}  // namespace
+// exit (~GLRenderer, GL context current, before the window goes) or the GL fallback: ordered teardown, GL presents
+void shutdownD3D12Present() {
+    if (!g_presenter) return;
+    platform::setPresentOverride(nullptr);
+    g_presenter->shutdown();
+    delete g_presenter;
+    g_presenter = nullptr;
+}
+namespace {
+bool presentHook() {
+    if (!g_presenter) return false;
+    if (!g_presenter->failed() && g_presenter->present() && !g_presenter->failed()) return true;
+    shutdownD3D12Present();                              // device lost / no swapchain: this frame and the rest through GL
+    return false;
+}
 }  // namespace
 bool framegenActive() { return g_presenter && g_presenter->fgOn(); }
+bool framegenGenerating() { return g_presenter && g_presenter->fgGenerating(); }
 bool framegenInputs(int renderW, int renderH, FgInputs* out) { return g_presenter && g_presenter->fgInputs(renderW, renderH, out); }
 void framegenParams(const FgParams& p) { if (g_presenter) g_presenter->fgSetParams(p); }
 void presentFrameStart(long long ns) { if (g_presenter) g_presenter->setFrameStart(ns); }

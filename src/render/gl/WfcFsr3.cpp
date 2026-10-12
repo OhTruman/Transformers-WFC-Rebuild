@@ -69,6 +69,8 @@ bool Pipeline::fsr3Run(int outW, int outH) {
         GLuint vs = compileShader(GL_VERTEX_SHADER, kFsr3VS, "fsr3.vs");
         GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kDepthToR32FS, "fsr3_depth.fs") : 0;
         fsr3DepthProg_ = fs ? linkProgram(vs, fs, "fsr3_depth") : 0;
+        if (vs) DeleteShader(vs);
+        if (fs) DeleteShader(fs);                        // (the program keeps them; per map otherwise leaked)
         if (!fsr3DepthProg_) { fsr3Failed_ = true; return false; }
         GenFramebuffers(1, &fsr3DepthFbo_);
     }

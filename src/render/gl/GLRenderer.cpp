@@ -63,6 +63,7 @@ namespace {
 class GLRenderer final : public IRenderer {
 public:
     ~GLRenderer() override {
+        shutdownD3D12Present();               // presenter worker / FG / swapchain before the window and its GL context go
         watchdog::stop();
         wfc::Pipeline::clearProgramCache();   // M54: cached programs belong to this context
     }
@@ -1587,7 +1588,7 @@ public:
     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
     bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
     bool frameGenerationActive() const override { return framegenActive(); }
-    int frameGenerationFactor() const override { return framegenActive() ? 2 : 1; }
+    int frameGenerationFactor() const override { return framegenGenerating() ? 2 : 1; }   // (menus: real frames only)
     bool upscalingModeAvailable(int mode) const override {
         return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
     }
