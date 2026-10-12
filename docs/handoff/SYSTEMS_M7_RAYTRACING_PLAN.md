@@ -83,6 +83,27 @@ PREFER_FAST_TRACE | ALLOW_COMPACTION, opaque, built once:
 - Next for stage 0: real instancing (repeated static meshes as TLAS instances of one BLAS: needs the per-node meshes,
   not the baked world mesh), the alpha-tested flag per slice, and the skinned-character refit cost.
 
+### Stage-0 measurement: skinned characters per frame (2026-10-12, tools/systems/skin_probe.cpp, RX 7900 XTX)
+
+64 characters = 8 robot bodies (Car2, Car4, Jet, Jet4, Tank2, Tank3, Truck, Truck3) x 8, real meshes / joints / weights:
+534 k vertices, 623 k triangles, 6,464 joints. Per frame on the GPU (300 frames, D3D12 compute skinning, inputs in GPU-local
+memory, joint matrices copied up each frame):
+
+| Path | Skinning | 64 BLAS | TLAS | Total |
+|---|---|---|---|---|
+| refit (ALLOW_UPDATE, PREFER_FAST_BUILD, PERFORM_UPDATE) | 0.21 ms | 0.61 ms | 0.15 ms | **0.97 ms** |
+| full rebuild (PREFER_FAST_BUILD) | 0.23 ms | 2.51 ms | 0.15 ms | 2.89 ms |
+
+- Refit is the path; 98 MB of character BLAS (refittable, fast build), 6 MB of skinned positions.
+- ~1 ms of the ~3.5 ms RT budget if every character is refit every frame: worth trimming before stage 1's budget check:
+  only characters that can matter (on screen or inside the shadow-casting range of the lights traced: in a 64p match
+  usually a fraction of the 64), a reduced-LOD proxy mesh for RT (shadows / AO tolerate it), distant characters refit every
+  second frame, and a full rebuild only when a refit degrades (e.g. transforms vehicle <-> robot: a different mesh anyway).
+- The compute skinning pass can also feed the raster path (today the vertex shader skins), so part of the 0.2 ms is a
+  shift, not an addition, if Rendering takes the skinned buffer for drawing too.
+- In production the skinning runs in GL compute into a buffer shared with D3D12 (one more shared resource in the existing
+  hand-off); the costs above are the D3D12-side equivalent.
+
 ## 4. Denoising (licences checked 2026-10-12)
 
 | Option | Effects | Licence | On the 7900 XTX |
