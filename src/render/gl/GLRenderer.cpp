@@ -66,6 +66,9 @@ public:
     }
     bool init() override {
         watchdog::start();                    // stall diagnostics: a freeze logs its phase and writes a minidump
+        // D3D12 present (WFC_D3D12PRESENT, M5 item 1): before anything is presented - DXGI refuses a flip-model swapchain
+        // for a window GL has already presented to (the frontend / loading screen swap before the first 3D frame)
+        initD3D12PresentIfRequested();
         if (const char* fl = std::getenv("WFC_FRAMELIMIT")) { limiter_.setLimit((float)std::atof(fl)); limitFromEnv_ = true; }
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
