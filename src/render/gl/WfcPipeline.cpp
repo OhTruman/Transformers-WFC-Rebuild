@@ -2062,7 +2062,48 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     fs += "void wfcMaterial(in MatIn m, out MatOut o) {\n" + code + "\n}\n";
     fs += kFSPrologue;
-    fs += mainOverride_ ? mainOverride_ : (lightmapped ? kFSMainLM : kFSMainUber);
+    // Directional lightmap specular (TBasePassPixelShader<FDirectional(Interpolated)TextureLightMapPolicy> microcode, Rust /
+    // Streets / Gorge shader caches, emulated per material against the translation: work/re/lmspec_verify.py):
+    // S * sum_i LM_i * Scale_i * pow(max(sat(dot(normalize(N + B_i), R)), 1e-4), SpecularPower), R the tangent-space
+    // reflection of the camera vector. Translated opaque / masked lit materials with a specular input only; the rest
+    // (and WFC_NOLMSPEC=1) compile the unchanged diffuse-only text.
+    static const bool noLmSpec = std::getenv("WFC_NOLMSPEC") != nullptr;
+    std::string mainLM;
+    if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 1 &&
+        code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
+        mainLM = kFSMainLM;
+        const std::string anchor = "        c += o.DiffuseColor * L;\n";
+        size_t at = mainLM.find(anchor);
+        if (at != std::string::npos)
+            mainLM.insert(at + anchor.size(),
+                // R in UE3's tangent frame (B = cross(TangentZ, TangentX) * w, along +dP/dv): our vertex binormal is the
+                // mirror of it (work/re/tbncheck.py: 91% of mesh triangles along -dP/dv); BSP carries no vertex
+                // tangents -> UE3's BSP frame from the texture axes = the per-pixel UV-derivative frame
+                "        vec3 Fn = tbn[2], Ft = tbn[0], Fb = -tbn[1];\n"
+                "        if (dot(vTan.xyz, vTan.xyz) < 1e-12) {\n"
+                "            float det = dux.x * duy.y - dux.y * duy.x;\n"
+                "            if (abs(det) > 1e-20) {\n"
+                "                vec3 dpdu = (duy.y * dpx - dux.y * dpy) / det, dpdv = (dux.x * dpy - duy.x * dpx) / det;\n"
+                "                vec3 t = dpdu - Fn * dot(Fn, dpdu);\n"
+                "                if (dot(t, t) > 1e-20) { Ft = normalize(t); Fb = cross(Fn, Ft); if (dot(Fb, dpdv) < 0.0) Fb = -Fb; }\n"
+                "            }\n"
+                "        }\n"
+                "        vec3 Vw = normalize(uCamPos - vPos);\n"
+                "        vec3 Vt = vec3(dot(Vw, Ft), dot(Vw, Fb), dot(Vw, Fn));\n"
+                "        vec3 R = -Vt + n * (dot(n, Vt) * 2.0);\n"
+                "        float SP = o.SpecularPower;\n"
+                "        vec3 Ls = pow(max(clamp(dot(normalize(n + LMB0), R), 0.0, 1.0), 0.0001), SP) * l0 * uLMScale[0]\n"
+                "                + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SP) * l1 * uLMScale[1]\n"
+                "                + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SP) * l2 * uLMScale[2];\n"
+                "        c += o.SpecularColor * Ls;\n");
+        const std::string head = "    mat3 tbn; MatIn m = wfcBuildInput(tbn);\n";   // derivatives before any discard
+        size_t hd = mainLM.find(head);
+        if (at != std::string::npos && hd != std::string::npos)
+            mainLM.insert(hd + head.size(), "    vec3 dpx = dFdx(vPos), dpy = dFdy(vPos);\n"
+                                            "    vec2 dux = dFdx(vUV0), duy = dFdy(vUV0);\n");
+        else mainLM.clear();
+    }
+    fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
@@ -2323,7 +2364,9 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             for (int c = 0; c < 4; ++c) { sl.umin[c] = s.umin[k][(size_t)c]; sl.uscale[c] = s.umax[k][(size_t)c] - s.umin[k][(size_t)c]; }
             slots.push_back(sl);
         }
+        lmSpecBuild_ = true;
         int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+        lmSpecBuild_ = false;
         if (r >= 0) {
             progs_[(size_t)r].original = true;
             {
@@ -2350,7 +2393,9 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             if (mdiWanted_ && mdiOn && s.blend <= 1 && progs_[(size_t)r].distProg < 0 && !progs_[(size_t)r].sceneDepth &&
                 !progs_[(size_t)r].sceneColor && MultiDrawElementsIndirect && VertexAttribDivisor) {
                 mdiBuild_ = true;
+                lmSpecBuild_ = true;
                 int md = buildProgram(key + "|MDI", s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+                lmSpecBuild_ = false;
                 mdiBuild_ = false;
                 if (md >= 0) { progs_[(size_t)md].original = true; progs_[(size_t)md].material = progs_[(size_t)r].material;
                                progs_[(size_t)r].mdiProg = md; }
