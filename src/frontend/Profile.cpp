@@ -97,7 +97,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "Upscaling") display.upscaling = std::clamp(std::atoi(v.c_str()), 0, Display::kUpscalingMax);
             else if (k == "HDTextures") display.hdTextures = v == "1";
             else if (k == "Anisotropy") display.anisotropy = Display::clampAnisotropy(std::atoi(v.c_str()));
-            else if (k == "FrameGeneration") display.frameGeneration = std::max(0, std::atoi(v.c_str()));
+            else if (k == "FrameGeneration") display.frameGeneration = std::atoi(v.c_str()) != 0 ? 1 : 0;
             else if (k == "RayTracing") display.rayTracing = v == "1";
             else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }

@@ -39,7 +39,8 @@ public:
     //   upscaling: 0 Off, 1 / 2 / 3 FSR 1 Quality / Balanced / Performance, 4 / 5 / 6 FSR 3.1 Quality / Balanced /
     //   Performance (Rendering's IRenderer::setUpscaling; FSR 3.1 only where its runtime ships, never auto-detected);
     //   hdTextures: the HD texture set; anisotropy: 4 (the original's, default), 8 or 16;
-    //   frameGeneration / rayTracing: reserved (no menu row yet, always off).
+    //   frameGeneration: 0 Off (default) / 1 On - FSR frame generation (Rendering), decided at start-up (applies at the
+    //   next launch), offered only where its runtime ships, never set by auto-detect; rayTracing: reserved (always off).
     bool pcSettingsLoaded = false;   // the profile file had a [PCSettings] section (else: first launch -> auto-detect)
     std::string autoDetectGpu;       // [PCSettings] AutoDetectGpu: the GPU the settings were detected for (PC EXTENSION)
     struct Display {

@@ -1034,7 +1034,8 @@ namespace {
 // Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
-                       const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent) {
+                       const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
+                       bool frameGenAvailable, bool frameGenActive) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1096,6 +1097,13 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         hdAvailable ? "Use high-resolution textures (more video memory). Applies on the next map load."
                     : "The HD texture pack is not installed.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
+    if (frameGenAvailable) {   // decided at start-up: a value different from this session's state says so
+        std::vector<gfx::avm1::Value> fg;
+        add(fg, 0, frameGenActive ? "Off (restart)" : "Off");
+        add(fg, 1, frameGenActive ? "On" : "On (restart)");
+        row(fg, "<PCSettings:FrameGeneration>",
+            "Insert generated frames (smoother motion, slightly more latency). Applies when the game restarts.", "Frame Generation");
+    }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
         gfx::avm1::Object* item = vm.newPlain();
@@ -1112,7 +1120,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     }
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
-    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", "Upscaling,HD Textures,Anisotropic Filtering,Recommended Settings"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
 }
 }
 
@@ -1360,7 +1368,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         if (!p.attachHook)
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
                 addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
-                                 rt_.fsr3Available(), rt_.flow().profile().display.upscaling);
+                                 rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
+                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive());
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

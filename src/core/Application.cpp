@@ -108,6 +108,7 @@ bool Application::init() {
     window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
     if (!window_) { LOG_ERROR("window creation failed"); return false; }
 
+    applyStartupGraphics();   // PC EXTENSION (Application_Frontend.cpp): frame generation is fixed when the renderer starts
     renderer_ = render::createGLRenderer();
     if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
 

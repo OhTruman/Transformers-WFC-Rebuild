@@ -23,6 +23,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
+#include <type_traits>
 #include <cstring>
 #include <map>
 #include <new>
@@ -41,6 +43,16 @@
 #if __has_include("game/FrontendAudioRuntime.h")
 #include "game/FrontendAudioRuntime.h"
 #define WFC_SYSTEMS_FRONTEND_AUDIO 1
+// Rendering (M5 C): void render::setFrameGenerationAtStartup(bool), called before createGLRenderer. A free function, so it
+// is detected through a fallback overload: without Rendering's function the template below is the only candidate and
+// returns the marker type; with it, the exact non-template match wins.
+namespace render {
+struct FrameGenStartupMissing {};
+template <class T> FrameGenStartupMissing setFrameGenerationAtStartup(T) { return {}; }
+} // namespace render
+constexpr bool kRendererFrameGenStartup =
+    !std::is_same_v<decltype(render::setFrameGenerationAtStartup(true)), render::FrameGenStartupMissing>;
+
 namespace {
 // Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
 // InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
@@ -155,6 +167,10 @@ template <class R> struct HasRendererHdPack<R, std::void_t<decltype(std::declval
 // file checks only). Detected; without it FSR 3.1 counts as unavailable.
 template <class R, class = void> struct HasRendererUpscalingAvail : std::false_type {};
 template <class R> struct HasRendererUpscalingAvail<R, std::void_t<decltype(std::declval<const R&>().upscalingModeAvailable(4))>> : std::true_type {};
+// Rendering (M5 C): IRenderer::frameGenerationAvailable() / frameGenerationActive() const. Detected.
+template <class R, class = void> struct HasRendererFrameGen : std::false_type {};
+template <class R> struct HasRendererFrameGen<R, std::void_t<decltype(std::declval<const R&>().frameGenerationAvailable()),
+                                                             decltype(std::declval<const R&>().frameGenerationActive())>> : std::true_type {};
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -169,6 +185,9 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
     }
     if constexpr (HasRendererHdPack<R>::value) { if (r) f.hdTexturePack = r->hdTexturesAvailable(); }
     if constexpr (HasRendererUpscalingAvail<R>::value) { if (r) f.fsr3 = r->upscalingModeAvailable(4); }
+    if constexpr (HasRendererFrameGen<R>::value) {
+        if (r) { f.frameGen = r->frameGenerationAvailable(); f.frameGenActive = r->frameGenerationActive(); }
+    }
     f.cpuCores = (int)std::thread::hardware_concurrency();
     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
     (void)r;
@@ -303,6 +322,19 @@ std::string processMemoryMB() {
 
 Application::Application() = default;
 Application::~Application() = default;
+
+void Application::applyStartupGraphics() {
+    frontend::LocalProfile p;   // just the stored values (no save, no migration): the full load runs later, in GameFlow
+    {
+        std::ifstream f(frontend::LocalProfile::kFile);
+        if (f) p.loadFrom(f);
+    }
+    const bool fg = p.display.frameGeneration != 0;
+    if constexpr (kRendererFrameGenStartup) render::setFrameGenerationAtStartup(fg);
+    frontend::FlowTrace::emit("display.frameGenerationStartup", {{"on", frontend::FlowTrace::boolean(fg)},
+                                                                 {"by", kRendererFrameGenStartup ? "renderer" : "stored (no renderer API yet)"},
+                                                                 {"provenance", "PC EXTENSION"}});
+}
 
 bool Application::wantsFrontendBoot() {
     if (const char* b = std::getenv("WFC_BOOT")) return std::strcmp(b, "match") != 0;
