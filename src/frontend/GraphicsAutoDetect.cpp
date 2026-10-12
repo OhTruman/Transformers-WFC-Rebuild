@@ -2,6 +2,7 @@
 #include "assets/Json.h"
 #include "frontend/OpenPath.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -78,7 +79,9 @@ GraphicsPreset GraphicsPresetTable::pick(const HardwareFacts& f) const {
     p.anisotropy = t.anisotropy >= 16 ? 16 : t.anisotropy >= 8 ? 8 : 4;
     p.textureQuality = t.textureQuality < 0 ? 0 : t.textureQuality > 2 ? 2 : t.textureQuality;
     p.hdTextures = t.hdTextures && f.hdTexturePack;
-    p.upscaling = (long long)w * h > t.nativePixelBudget ? t.upscalingOverBudget : 0;
+    // Auto-detect picks FSR 1 at most (0-3): FSR 3.1 (upscaling 4-6) is only ever an explicit user choice (Integration
+    // 2026-10-12), whatever graphics_presets.json says.
+    p.upscaling = (long long)w * h > t.nativePixelBudget ? std::clamp(t.upscalingOverBudget, 0, 3) : 0;
     char why[256];
     std::snprintf(why, sizeof why, "vram %d MB, %d cores%s; %dx%d = %lld px vs native budget %lld: %s", f.vramMB, f.cpuCores,
                   integrated ? ", integrated" : "", w, h, (long long)w * h, t.nativePixelBudget, p.upscaling ? "upscaling" : "native");
