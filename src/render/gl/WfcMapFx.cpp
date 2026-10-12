@@ -2150,6 +2150,7 @@ void Pipeline::drawMapPresentation() {
     glx::gpuStamp("translucency: build / upload");
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     reactiveEnd();
+    temporalDump();                                    // WFC_TEMPORALDUMP (diagnostics; motion vectors on only)
     glx::gpuMark(glx::kPassTranslucent);
     glx::gpuStamp("after translucency");
     if (fxSubCpuOn()) fxSubFrameEnd();

@@ -11,8 +11,11 @@
 #include "core/Log.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 
 namespace render {
 namespace wfc {
@@ -143,6 +146,35 @@ bool Pipeline::motionVectorsOn() const {
     return motionOn_ || env || temporalActive();
 }
 
+// A cut: the camera moved further in one frame than anything the game can move it (10 m: 600 m/s at 60 fps; vehicles and
+// boosts stay well under, a 0.25 s hitch at a 40 m/s boost is 10 m), turned more than 90 degrees in one frame (history
+// is useless after that anyway), or changed its FOV by more than 15 degrees (a zoom snap); plus a pending explicit cut.
+// WFC_CAMCUTLOG=1 logs every cut (else the first 20 and a count per 600 frames).
+void Pipeline::detectCameraCut(const Camera& cam) {
+    static const bool logAll = std::getenv("WFC_CAMCUTLOG") != nullptr;
+    const core::Vec3 fwd = core::forwardFromYawPitch(cam.yaw, cam.pitch);
+    const char* why = nullptr;
+    float amount = 0.0f;
+    if (cutPending_) why = cutPendingWhy_ ? cutPendingWhy_ : "explicit";
+    else if (!haveLastCam_) why = "first frame";
+    else {
+        const core::Vec3 d = cam.pos - lastCamPos_;
+        const float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+        const float cosA = fwd.x * lastCamFwd_.x + fwd.y * lastCamFwd_.y + fwd.z * lastCamFwd_.z;
+        if (dist > 10.0f) { why = "position jump (m)"; amount = dist; }
+        else if (cosA < 0.0f) { why = "turn > 90 deg (deg)"; amount = std::acos(std::max(-1.0f, cosA)) * 57.29578f; }
+        else if (std::fabs(cam.fovXDeg - lastCamFov_) > 15.0f) { why = "FOV snap (deg)"; amount = cam.fovXDeg - lastCamFov_; }
+    }
+    cameraCut_ = why != nullptr;
+    cutPending_ = false; cutPendingWhy_ = nullptr;
+    lastCamPos_ = cam.pos; lastCamFwd_ = fwd; lastCamFov_ = cam.fovXDeg; haveLastCam_ = true;
+    if (cameraCut_) {
+        ++cutsSince_;
+        if (logAll || cutsLogged_ < 20) { ++cutsLogged_; LOG_INFO("MOTION: camera cut at frame %d: %s %.2f", frameNo_, why, amount); }
+    }
+    if (frameNo_ % 600 == 0 && cutsSince_) { LOG_INFO("MOTION: %d camera cuts in the last 600 frames", cutsSince_); cutsSince_ = 0; }
+}
+
 // Reactive mask (temporal upscalers): where the translucent pass changed the opaque image, the upscaler leans less on
 // its history (FFX's generate-reactive-mask idea: max channel difference, scaled, clamped). Opaque colour kept first.
 namespace {
@@ -236,6 +268,7 @@ void Pipeline::motionCameraPass() {
     ensureSceneDepth();
     float inv[16];
     if (!invert(viewProj_.m, inv)) return;
+    velPassVP_ = viewProj_;
     // state: the caller (opaque -> translucency) restores what it needs; keep the scene FBO bound afterwards
     GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
     const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
@@ -273,6 +306,7 @@ void Pipeline::motionRecordMesh(int id, const core::Mat4& model, const core::Mat
 }
 
 void Pipeline::motionObjectPass() {
+    if (cameraCut_) { motionDraws_.clear(); motionRigid_.clear(); }   // a cut: no object motion either (zero velocity)
     if (!motionVectorsOn() || (motionDraws_.empty() && motionRigid_.empty()) || velValidFrame_ != frameNo_) return;
     if (!velRigidProg_) {
         GLuint vs = compileShader(GL_VERTEX_SHADER, kRigidVS, "motion_rigid.vs");
@@ -342,6 +376,62 @@ void Pipeline::motionObjectPass() {
     UseProgram((GLuint)prevProg);
     glx::uniformCacheForgetCurrent();
     motionDraws_.clear();
+}
+
+// WFC_TEMPORALDUMP=<dir>,<frame>[,<count>[,<map>]] (M5 item 2 verification, tools/render/temporal_check.py): for <count>
+// consecutive frames from <frame> after the last map load (only a map whose data dir contains <map>; count default 2),
+// after translucency, at render size, bottom row first: f<N>_color.bin (RGBA32F, the
+// scene colour before post), f<N>_vel.bin (RG32F, prevUV - curUV), f<N>_depth.bin (R32F, the opaque depth),
+// f<N>_reactive.bin (R8, temporal only) and f<N>.json (size, jitter, cut flag, the matrices).
+void Pipeline::temporalDump() {
+    static const char* spec = std::getenv("WFC_TEMPORALDUMP");
+    if (!spec || !motionVectorsOn() || velValidFrame_ != frameNo_) return;
+    static std::string dir, mapFilter; static int first = -1, count = 2;
+    if (first < 0) {
+        std::string s(spec);
+        size_t c = s.find(',');
+        dir = s.substr(0, c);
+        first = c == std::string::npos ? 600 : std::atoi(s.c_str() + c + 1);
+        size_t c2 = c == std::string::npos ? c : s.find(',', c + 1);
+        if (c2 != std::string::npos) count = std::max(1, std::atoi(s.c_str() + c2 + 1));
+        size_t c3 = c2 == std::string::npos ? c2 : s.find(',', c2 + 1);
+        if (c3 != std::string::npos) mapFilter = s.substr(c3 + 1);
+    }
+    if (!mapFilter.empty() && dataDir_.find(mapFilter) == std::string::npos) return;
+    const int mf = frameNo_ - loadFrame_;               // (frames since the map load)
+    if (mf < first || mf >= first + count) return;
+    const int w = vpW_, h = vpH_;
+    std::vector<float> buf((size_t)w * h * 4);
+    auto save = [&](const char* name, GLuint tex, GLenum fmt, GLenum type, size_t bytes) {
+        if (!tex) return;
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glGetTexImage(GL_TEXTURE_2D, 0, fmt, type, buf.data());
+        const std::string p = dir + "/f" + std::to_string(frameNo_) + "_" + name + ".bin";
+        if (FILE* f = std::fopen(p.c_str(), "wb")) { std::fwrite(buf.data(), 1, bytes, f); std::fclose(f); }
+    };
+    // (no ensureSceneDepth here: depthCopyTex_ stays the copy the camera pass reprojected)
+    save("color", colorTex_, GL_RGBA, GL_FLOAT, (size_t)w * h * 16);
+    save("vel", velTex_, 0x8227 /*GL_RG*/, GL_FLOAT, (size_t)w * h * 8);
+    save("depth", depthCopyTex_, GL_DEPTH_COMPONENT, GL_FLOAT, (size_t)w * h * 4);
+    if (temporalActive()) save("reactive", reactiveTex_, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE, (size_t)w * h);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    auto mat = [](const core::Mat4& m) {
+        std::string s = "[";
+        for (int i = 0; i < 16; ++i) { char b[32]; std::snprintf(b, sizeof b, "%s%.9g", i ? "," : "", m.m[i]); s += b; }
+        return s + "]";
+    };
+    const std::string p = dir + "/f" + std::to_string(frameNo_) + ".json";
+    if (FILE* f = std::fopen(p.c_str(), "w")) {
+        std::fprintf(f, "{\"frame\": %d, \"w\": %d, \"h\": %d, \"temporal\": %s, \"jitter_px\": [%.9g, %.9g], \"jitter_index\": %d,\n"
+                        " \"camera_cut\": %s, \"have_prev_vp\": %s, \"znear\": %.9g, \"zfar\": %.9g,\n"
+                        " \"view_proj\": %s,\n \"view_proj_nojitter\": %s,\n \"prev_view_proj\": %s,\n \"camera_pass_vp\": %s}\n",
+                     frameNo_, w, h, temporalActive() ? "true" : "false", jitterPx_[0], jitterPx_[1], jitterIndex_,
+                     cameraCut_ ? "true" : "false", havePrevVP_ ? "true" : "false", znear_, zfar_,
+                     mat(viewProj_).c_str(), mat(viewProjNoJitter_).c_str(), mat(prevViewProj_).c_str(), mat(velPassVP_).c_str());
+        std::fclose(f);
+    }
+    LOG_INFO("MOTION: temporal inputs of frame %d dumped to %s (%dx%d)", frameNo_, dir.c_str(), w, h);
 }
 
 // WFC_MOTIONVIEW=1: |velocity| over the window (after post / upscaling, before the HUD)

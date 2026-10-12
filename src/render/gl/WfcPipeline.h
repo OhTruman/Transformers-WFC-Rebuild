@@ -483,6 +483,19 @@ private:
     GLuint velFbo_ = 0, velTex_ = 0, velCameraProg_ = 0, velViewProg_ = 0;
     int velW_ = 0, velH_ = 0, velValidFrame_ = -1;
     bool motionVectorsOn() const;
+    // camera cuts (M5 item 2): the frame whose camera does not continue the previous one (map load, respawn / death /
+    // spectate camera switches, teleports, cinematic cuts, a snap turn): no camera or object velocity that frame, and
+    // the temporal upscaler / frame generation drop their history (cameraCut_). Detected from the camera itself
+    // (detectCameraCut) plus cutPending_ (map load); only while motion vectors are on
+    bool cameraCut_ = false, cutPending_ = false, haveLastCam_ = false;
+    const char* cutPendingWhy_ = nullptr;
+    core::Vec3 lastCamPos_{0, 0, 0}, lastCamFwd_{0, 0, -1};
+    float lastCamFov_ = 0.0f;
+    int cutsLogged_ = 0, cutsSince_ = 0;
+    void detectCameraCut(const Camera& cam);
+    void temporalDump();                               // WFC_TEMPORALDUMP (diagnostics, WfcMotion.cpp)
+    int loadFrame_ = 0;                                // frameNo_ at the last map load
+    core::Mat4 velPassVP_;                             // the viewProj_ motionCameraPass reprojected with (dump)
     void motionCameraPass();
     void motionDebugView(int outW, int outH);
     // characters' own motion: this frame's skinned draws, with what they displayed in the previous frame
