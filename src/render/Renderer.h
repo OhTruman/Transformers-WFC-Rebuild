@@ -159,6 +159,14 @@ public:
     // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
     // for the log. Large jumps are also detected from the camera itself; this covers the cuts it cannot see.
     virtual void notifyCameraCut(const char* reason) { (void)reason; }
+    // FSR 3 frame generation (PC ADAPTATION, M5 C; off by default, never chosen by auto-detect). It presents through a
+    // D3D12 swapchain that must exist before the window's first GL present, so it is decided at start-up:
+    // render::setFrameGenerationAtStartup(on) before createGLRenderer (a changed setting applies at the next launch).
+    // Available: the FSR runtime ships beside the exe (file checks). Active: FG actually started (swapchain + context).
+    // Factor: frames on screen per rendered frame while FG presents (2), else 1 (the frame limiter divides by it).
+    virtual bool frameGenerationAvailable() const { return false; }
+    virtual bool frameGenerationActive() const { return false; }
+    virtual int frameGenerationFactor() const { return 1; }
     // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
     // originals); stored until that root exists.
     virtual void setHdTextures(bool on) { (void)on; }
@@ -551,6 +559,8 @@ public:
 
 // Factory (fixed-function GL implementation for the first milestone).
 IRenderer* createGLRenderer();
+// FSR 3 frame generation at start-up (the profile's setting): call before createGLRenderer; WFC_FRAMEGEN=1 also forces it.
+void setFrameGenerationAtStartup(bool on);
 
 // Render-data root (WFC_RENDER_DATA, else the first work/render above the executable that holds render data): map data in <root>/<map>, UI data in <root>/_ui.
 std::string wfcRenderDataRoot();
