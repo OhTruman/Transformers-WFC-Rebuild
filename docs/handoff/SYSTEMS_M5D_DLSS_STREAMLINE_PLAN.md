@@ -106,3 +106,26 @@ at the end.
 - NVIDIA RTX SDKs License (DLSS SDK LICENSE.txt, quoted sections 1.c, 2.a-c, 4.a/b/e, 12; Supplement 1, 4, 7):
   https://github.com/NVIDIA/DLSS and https://developer.nvidia.com/downloads/nvidia-rtx-sdks-license-23jan2023pdf
 - Streamline DLSS-G programming guide (HUD-less colour, UI colour / alpha, Reflex): https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_G.md
+
+## 5. User decisions (2026-10-12, relayed by Integration)
+
+- Licensing status: "Yes. Treat this project as non-commercial and not intended to be sold. If that ever changes, we will
+  revisit licensing requirements before any commercial release." (So the DLSS SDK's notify-before-commercial-release clause
+  does not apply now; any commercial plan reopens section 1.)
+- DLSS attribution: "Use all three where applicable: startup splash; About screen, if we have one; credits. Keep it clean
+  and unobtrusive."
+
+## 6. Credit spec for Frontend (hand over when M5 D starts; only in builds that ship the DLSS DLLs)
+
+- Where: (1) the startup splash sequence - one short, static line or small mark ("NVIDIA DLSS" / NVIDIA's DLSS badge per
+  NVIDIA's usage guidelines) on the existing PC-adaptation splash step, never a new full-screen card or a delay; (2) the About
+  screen, if the PC build has one (else skip); (3) the credits - a line in the third-party technology block ("NVIDIA DLSS,
+  NVIDIA Streamline").
+- When: only in packages that contain nvngx_dlss.dll / nvngx_dlssg.dll (a build / package flag, not a runtime GPU check:
+  the credit follows what is shipped, not whether the player's GPU uses it).
+- Style: the game's existing credit font / size / colour, no animation, no extra sound; the original game's own logos and
+  credit order untouched (PC-adaptation additions after the original credits).
+- Text and logo: NVIDIA's current trademark / logo guidelines for DLSS (fetched when D starts); no other NVIDIA marks.
+- Notices: NVIDIA's licence / notice text for the shipped DLLs goes in the package's licenses folder beside the vgmstream
+  ones (bin/licenses/nvidia/), referenced from README.txt.
+- D itself waits for the user's RTX 5090 laptop session (section 3).
