@@ -1,0 +1,108 @@
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -473,6 +473,12 @@
+     virtual void setFrameLimit(float hz) { (void)hz; }
+     virtual float frameLimit() const { return 0.0f; }
+     virtual void waitFrameSlot() {}
++    // [Systems, M5 item 10] Frames on screen per rendered frame while frame generation presents: 2 for FSR 3 FG / DLSS-G,
++    // 3 or 4 for DLSS 4 multi frame generation; 1 without (the default). The application gives the limiter the user's Frame
++    // Rate Limit divided by it - the limit keeps meaning frames on screen (144 with FG: 72 rendered + 72 generated) - and the
++    // frame-generation swapchain paces what it presents (its own vsync from [PCSettings] VSync). Polled once per frame; > 1
++    // only while generated frames actually present (not when frame generation is selected but failed to start).
++    virtual int frameGenerationFactor() const { return 1; }
+     // M76 weapon impact decal (HmWeaponMesh.CreateImpactEffects / TnProjectileMesh explosion; RE pass 5 s12 add. 29).
+     // glTF metres; `weaponClass` is the script class (e.g. "TnWeaponAssaultRifle"). The renderer resolves the hit
+     // surface's PhysicalMaterial from the world geometry's material and applies the cooked tables (impact_decals.json):
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -57,6 +57,11 @@
+     uint32_t selectionSentSerial_ = 0;   // GameFlow::selectionSerial() last forwarded to Gameplay (0 = none this match)
+     // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
+     int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
++    // [Systems, M5 item 10] the displayed-frame target (FrameLimit / WFC_FPS_LIMIT) and the frame-generation factor at the
++    // last check (frames on screen per rendered frame): the limiter gets target / factor (the rendered rate)
++    int pacingHz_ = 0;
++    int pacingFg_ = 1;
++    void pacingCheckFrameGeneration();
+     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
+     bool appliedHdTextures_ = false;
+     int appliedAnisotropy_ = -1;
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -108,11 +108,14 @@
+ template <class R>
+ struct HasRendererFrameLimit<R, std::void_t<decltype(std::declval<R&>().setFrameLimit(1.0f)), decltype(std::declval<R&>().waitFrameSlot())>>
+     : std::true_type {};
+-template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz) {
++// fg [Systems, M5 item 10]: frames on screen per rendered frame (frame generation presents: 2, multi frame generation 3 / 4);
++// the limiter paces the RENDERED frames at hz / fg (hz keeps meaning frames on screen). fg 1: exactly the values handed over
++// before.
++template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz, int fg = 1) {
+     if constexpr (HasRendererFrameLimit<R>::value) {
+-        if (r) { r->setFrameLimit((float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
++        if (r) { r->setFrameLimit(fg > 1 && hz > 0 ? (float)hz / (float)fg : (float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
+     }
+-    if (w) w->setFrameLimit(hz);
++    if (w) w->setFrameLimit(fg > 1 && hz > 0 ? (hz + fg - 1) / fg : hz);
+     return "window";
+ }
+ 
+@@ -353,7 +356,8 @@
+         // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
+         int cap = d.frameLimit;
+         if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
+-        const char* by = applyFrameLimit(renderer_, window_, cap);
++        const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
++        pacingHz_ = cap;
+         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
+         appliedUpscaling_ = d.upscaling;
+         appliedHdTextures_ = d.hdTextures;
+@@ -393,7 +397,8 @@
+ #endif
+         if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
+             appliedFrameLimit_ = p.display.frameLimit;
+-            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
++            pacingHz_ = appliedFrameLimit_;
++            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_, pacingFg_);
+             frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
+         }
+         if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
+@@ -902,6 +907,7 @@
+         // ---- frontend levels (and the loading screen up to the match load) ----
+         bool quit = false;
+         for (;;) {
++            pacingCheckFrameGeneration();   // [Systems, M5 item 10] as runMatch's loop (the limiter waits in endFrame here)
+             bool pumped;
+             { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
+             if (!pumped) { quit = true; break; }
+@@ -1519,6 +1525,20 @@
+ // missing API fails the build here instead of silently disabling the feature (frame limiter, bot info / capacity, QA,
+ // awards / progression).
+ static_assert(HasRendererFrameLimit<render::IRenderer>::value, "IRenderer::setFrameLimit / waitFrameSlot");
++
++// [Systems, M5 item 10] Called once per frame before the limiter slot: frame generation started, stopped or changed its
++// factor -> the limiter's rate follows (displayed target / factor). Nothing happens while the factor is unchanged, so
++// without frame generation (factor 1) this never touches the limiter or the flow trace.
++void core::Application::pacingCheckFrameGeneration() {
++    if (!renderer_) return;
++    const int fg = std::max(1, renderer_->frameGenerationFactor());
++    if (fg == pacingFg_) return;
++    pacingFg_ = fg;
++    const char* by = applyFrameLimit(renderer_, window_, pacingHz_, pacingFg_);
++    frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(pacingHz_)}, {"factor", std::to_string(fg)},
++                                                     {"rendered", std::to_string(pacingHz_ > 0 ? (double)pacingHz_ / fg : 0.0)},
++                                                     {"by", by}, {"when", fg > 1 ? "frameGeneration.on" : "frameGeneration.off"}});
++}
+ static_assert(HasParticipantInfo<game::MatchPlayer>::value, "MatchPlayer kind / level / specialty");
+ static_assert(HasMatchCapacity<game::MatchSettings>::value, "MatchSettings maxPerTeam / maxPlayers");
+ static_assert(HasExtendedSlots<game::MatchSettings>::value, "MatchSettings::applyExtendedSlots (Bot Settings EXTENDED range)");
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -509,6 +509,7 @@
+         ++frame;
+         // [Rendering M09] PC ADAPTATION: presented-frame limiter slot, before the frame's clock read and input pump
+         // (lowest latency; the simulation's fixed step is unaffected). No-op when the limit is 0 (unlimited).
++        pacingCheckFrameGeneration();   // [Systems, M5 item 10] frame generation on / off / factor: the limiter paces the rendered rate
+         if (renderer_) renderer_->waitFrameSlot();
+         double now = nowSeconds();
+         double realDt = now - last;
