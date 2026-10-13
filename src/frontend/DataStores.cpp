@@ -116,6 +116,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<OnlinePlayerData:ProfileData.UseAllRegionMatchmaking>") return written_.count(markup) ? written_[markup] : "0";
     if (markup.rfind("<TnGameSettings:", 0) == 0 && markup.size() > 17) {
         std::string field = markup.substr(16, markup.size() - 17);
+        if (const GameFlow::BotOption* o = GameFlow::botOption(field))   // PC ADAPTATION: bot rows of Game Mode Options
+            return flow_.botChoiceLabel(o->field, flow_.botValue(o->field));
         const GameSettings* cur = flow_.currentSettings();
         if (const SettingField* f = cur ? cur->field(field) : nullptr) {
             int i = flow_.settingIndex(cur, field);
@@ -212,6 +214,12 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
     }
     if (markup.rfind("<TnGameSettings:", 0) == 0 && markup.size() > 17) {
         std::string field = markup.substr(16, markup.size() - 17);
+        if (const GameFlow::BotOption* o = GameFlow::botOption(field)) {   // PC ADAPTATION: values 0..max in order
+            c.columns = {o->name};
+            c.headers = {o->header};
+            for (int v = 0; v <= std::max(0, flow_.botMax(o->field)); ++v) { c.rows.push_back({flow_.botChoiceLabel(o->field, v)}); c.enabled.push_back(true); }
+            return true;
+        }
         const GameSettings* cur = flow_.currentSettings();
         const SettingField* f = cur ? cur->field(field) : nullptr;
         if (!f) return false;
@@ -360,6 +368,18 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         flow_.profile().set(m.substr(30, m.size() - 31), arg(1));
         return {};
     }
+    if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17)
+        if (const GameFlow::BotOption* o = GameFlow::botOption(m.substr(16, m.size() - 17))) {
+            // Create Game writes every row's label: only a changed value is applied (an unchanged count must not count
+            // as the player's edit, which would stop the map-aware Extended counts).
+            for (int v = 0; v <= std::max(0, flow_.botMax(o->field)); ++v)
+                if (flow_.botChoiceLabel(o->field, v) == arg(1)) {
+                    if (v != flow_.botValue(o->field)) flow_.setBotSetting(o->field, v);
+                    break;
+                }
+            invalidate();
+            return {};
+        }
     if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17 &&
         flow_.setSettingValue(m.substr(16, m.size() - 17), arg(1))) return {};
     if (fn == "WriteValue") { written_[m] = arg(1); FlowTrace::emit("datastore.write", {{"markup", m}, {"value", arg(1)}}); return {}; }
@@ -411,6 +431,9 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         std::string out;
         if (m == "TnGameSettings" && flow_.currentSettings())
             for (const SettingField& f : flow_.currentSettings()->fields) out += (out.empty() ? "" : ",") + f.name;
+        // PC ADAPTATION (user playtest 2026-10-13): the Private Match bot settings follow the mode's own options.
+        if (m == "TnGameSettings" && flow_.currentSettings())
+            for (const GameFlow::BotOption& o : flow_.botOptions()) out += (out.empty() ? "" : ",") + std::string(o.name);
         return BridgeValue(out);
     }
     FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});

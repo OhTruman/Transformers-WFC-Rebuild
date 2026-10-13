@@ -227,6 +227,15 @@ public:
     }
     int botMax(const std::string& field) const;   // "autobot" / "decepticon" / "enemy" / "difficulty" / "extended"
     void setBotSetting(const std::string& field, int value);   // clamped; saved
+    int botValue(const std::string& field) const;               // the profile's value (extended 0 / 1)
+    // The bot settings as rows of the Private Match Game Mode Options menu (PartyLobby_GFX
+    // mc_menuMultiplayerGameModeSettings builds its rows from the TnGameSettings fields: header, choices, current
+    // value; Create Game writes each row back). User playtest 2026-10-13: "all of those settings make more sense together
+    // inside the Game Mode Options menu" - no rows on the following lobby screen. Field names are the rebuild's own.
+    struct BotOption { const char* name; const char* field; const char* header; };
+    std::vector<BotOption> botOptions() const;                       // for the current mode's kind (none: no rows)
+    static const BotOption* botOption(const std::string& name);      // "WfcBotsAutobot" -> its row
+    std::string botChoiceLabel(const std::string& field, int v) const;   // "EASY", "ORIGINAL (5 V 5)", "3"
     // Map-aware Extended bot counts (user decision, PC ADAPTATION): AssetTools' recommended players per versus map
     // (per side incl. the human; FFA total; optional per mode).
     struct RecommendedPlayers { int perSide = 0, ffa = 0; std::map<std::string, std::pair<int, int>> modes; };

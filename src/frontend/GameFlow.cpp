@@ -511,6 +511,48 @@ int GameFlow::botMax(const std::string& field) const {
     return 0;
 }
 
+int GameFlow::botValue(const std::string& field) const {
+    const LocalProfile::Bots& b = profile_.bots;
+    return field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy
+         : field == "extended" ? (b.extended ? 1 : 0) : b.difficulty;
+}
+
+namespace {
+const GameFlow::BotOption kBotOptions[] = {
+    {"WfcPlayerLimit", "extended", "Player Limit"},
+    {"WfcBotsAutobot", "autobot", "Autobot Bots"},
+    {"WfcBotsDecepticon", "decepticon", "Decepticon Bots"},
+    {"WfcBots", "enemy", "Bots"},
+    {"WfcBotDifficulty", "difficulty", "Bot Difficulty"},
+};
+}
+
+std::vector<GameFlow::BotOption> GameFlow::botOptions() const {
+    std::vector<BotOption> out;
+    const BotRows rows = botRows();
+    if (rows == BotRows::None || lobby_.playlistId >= 0) return out;
+    for (const BotOption& o : kBotOptions) {
+        const std::string f = o.field;
+        if (rows == BotRows::Teams && f == "enemy") continue;
+        if (rows == BotRows::FreeForAll && (f == "autobot" || f == "decepticon")) continue;
+        out.push_back(o);
+    }
+    return out;
+}
+
+const GameFlow::BotOption* GameFlow::botOption(const std::string& name) {
+    for (const BotOption& o : kBotOptions) if (name == o.name) return &o;
+    return nullptr;
+}
+
+std::string GameFlow::botChoiceLabel(const std::string& field, int v) const {
+    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD", "EXPERT"};   // EXPERT: PC EXTENSION (Gameplay's Expert AI)
+    const bool teams = botRows() == BotRows::Teams;
+    if (field == "difficulty") return kDiff[std::clamp(v, 0, 3)];
+    if (field == "extended") return v ? (teams ? "EXTENDED (32 V 32)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
+    return std::to_string(v);
+}
+
 bool GameFlow::recommendedFor(int mapId, const std::string& mode, int& perSide, int& ffa) const {
     auto it = recommended_.find(mapId);
     if (it == recommended_.end() || it->second.perSide <= 0) return false;

@@ -122,7 +122,6 @@ private:
     void recommendedSettingsPressed();
     struct QueuedKey { int frames; int code; bool down; };
     std::vector<QueuedKey> keyQueue_;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
-    std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
     float endScoreScroll_ = 0.0f;   // the same for the end-of-match View Scores list (EndGameStats_GFX)
     bool extendedMatch_ = false;
@@ -138,7 +137,7 @@ private:
     float feedMinGapLogged_ = 1e9f;
     float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
     void scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt);
-    void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
+    void syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;

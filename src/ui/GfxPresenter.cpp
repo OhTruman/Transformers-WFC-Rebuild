@@ -697,7 +697,6 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     for (size_t i = movies_.size(); i-- > 0;) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
             rt_.dataStores().forgetMovie(movies_[i].object);
-            botRowsBuilt_.erase(&movies_[i].movie->player());   // keyed by the Player's address: gone with the movie
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1155,162 +1154,69 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
 }
 }
 
-// PC ADAPTATION: Private Match bot rows. GameLobby_GFX's menu (lobby_mc.menuAnchor_mc.menu_mc: Start Game, Select Map,
-// Create a Character, Teletran I, Friends List; HmMenu navigation through each row's focusUp / focusDown names) gets
-// lateral selectors below its last row, duplicated from its own Select Map selector (HmLateralSelector: text,
-// displaySelection, createSelectionData, selectionUpdated, onOver -> HintWidget.HintText): Player Limit (ORIGINAL 5 v 5 /
-// EXTENDED Custom Game), then team modes Autobot Bots + Decepticon Bots, free-for-all Bots, and Bot Difficulty; other
-// modes none. Rebuilt when the mode's kind changes; when the limit or the human's faction changes only the count rows'
-// choices are refreshed in place (focus stays). The values are GameFlow's (persisted; sent in the launch URL).
+// PC ADAPTATION (user playtest 2026-10-13): the Private Match bot settings are rows of the mode's Game Mode Options menu
+// (PartyLobby_GFX mc_menuMultiplayerGameModeSettings), served as TnGameSettings fields by DataStores
+// (GameFlow::botOptions): the movie builds them as its own lateral selectors after the mode's rows. Here each one applies
+// its value as it changes, as the lobby rows did (Player Limit re-ranges the count rows and the map-aware Extended counts
+// show at once); Create Game's WriteValue then finds them unchanged. No bot rows on the following lobby screen.
 namespace {
-std::vector<gfx::avm1::Value> botChoices(gfx::avm1::VM& vm, const std::string& field, int maxV, bool teams) {
-    std::vector<gfx::avm1::Value> out;
-    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD", "EXPERT"};   // EXPERT: PC EXTENSION (Gameplay's Expert AI)
-    for (int v = 0; v <= maxV; ++v) {
-        gfx::avm1::Object* c = vm.newPlain();
-        vm.set(c, "Value", gfx::avm1::Value((double)v));
-        std::string label = std::to_string(v);
-        if (field == "difficulty") label = kDiff[std::min(v, 3)];
-        else if (field == "extended") label = v ? (teams ? "EXTENDED (32 V 32)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
-        vm.set(c, "FriendlyName", gfx::avm1::Value(label));
-        out.push_back(gfx::avm1::Value(c));
+gfx::MovieClip* findClipNamed(gfx::MovieClip* c, const std::string& name, int depth = 0) {
+    if (!c || depth > 10) return nullptr;
+    for (auto& ch : c->children) {
+        if (!ch.second || ch.second->kind != gfx::DisplayObject::Kind::Clip || ch.second->removed) continue;
+        auto* m = static_cast<gfx::MovieClip*>(ch.second.get());
+        if (m->name == name) return m;
+        if (gfx::MovieClip* f = findClipNamed(m, name, depth + 1)) return f;
     }
-    return out;
-}
-// The hint line (lobby_mc.footer_mc.hint_mc) sits below the menu; three added rows fit above it, each further row moves it
-// down one row (23) so it never overlaps. Re-applied every frame against the y the footer's own timeline last set (the
-// footer animates in; the runtime lets a timeline move a script-changed instance, unlike Flash).
-void placeBotHint(gfx::Player& p, int rows) {
-    gfx::DisplayObject* h = p.resolveTarget("lobby_mc.footer_mc.hint_mc", p.root());
-    if (!h || !h->script) return;
-    gfx::avm1::VM& vm = p.vm();
-    const double offset = 23.0 * std::max(0, rows - 3);
-    const double cur = vm.toNumber(vm.get(h->script, "_y"));
-    gfx::avm1::Value last = vm.get(h->script, "__wfcHintSet");
-    // the timeline's y: the current one unless it is still the value this function set
-    double base = cur;
-    if (!last.isUndef() && std::fabs(vm.toNumber(last) - cur) < 0.01) base = vm.toNumber(vm.get(h->script, "__wfcHintY"));
-    vm.set(h->script, "__wfcHintY", gfx::avm1::Value(base));
-    vm.set(h->script, "_y", gfx::avm1::Value(base + offset));
-    vm.set(h->script, "__wfcHintSet", gfx::avm1::Value(vm.toNumber(vm.get(h->script, "_y"))));
-}
-int botValue(const frontend::LocalProfile::Bots& b, const std::string& f) {
-    return f == "autobot" ? b.autobot : f == "decepticon" ? b.decepticon : f == "enemy" ? b.enemy : f == "extended" ? (b.extended ? 1 : 0)
-         : b.difficulty;
+    return nullptr;
 }
 }
 
-void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
-    using frontend::GameFlow;
-    const int kind = (int)flow.botRows();
-    gfx::DisplayObject* menuD = p.resolveTarget("lobby_mc.menuAnchor_mc.menu_mc", p.root());
-    if (!menuD || !menuD->script) { botRowsBuilt_.erase(&p); return; }
+void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::MovieClip* menu = findClipNamed(p.root(), "menuMultiplayerGameModeSettings_mc");
+    if (!menu || !menu->script) return;
     gfx::avm1::VM& vm = p.vm();
-    gfx::avm1::Object* menu = menuD->script;
-    static const char* kNames[] = {"botLimit_mc", "botAutobot_mc", "botDecepticon_mc", "botEnemy_mc", "botDifficulty_mc"};
-    const bool teams = kind == (int)GameFlow::BotRows::Teams;
-    const frontend::LocalProfile::Bots& b = flow.profile().bots;
-    const int limitKey = (b.extended ? 1 : 0) * 2 + flow.humanFaction();
-    auto it = botRowsBuilt_.find(&p);
-    const bool present = vm.get(menu, "botLimit_mc").isObject();
-    if (it != botRowsBuilt_.end() && it->second / 10 == kind && (present || kind == (int)GameFlow::BotRows::None)) {
-        placeBotHint(p, kind == (int)GameFlow::BotRows::None ? 0 : (kind == (int)GameFlow::BotRows::Teams ? 4 : 3));
-        if (it->second % 10 != limitKey) {   // limit / faction change: the count rows' ranges, in place
-            for (const char* n : {"botAutobot_mc", "botDecepticon_mc", "botEnemy_mc"}) {
-                gfx::avm1::Value r = vm.get(menu, n);
-                if (!r.isObject()) continue;
-                const std::string field = std::string(n) == "botAutobot_mc" ? "autobot" : std::string(n) == "botDecepticon_mc" ? "decepticon" : "enemy";
-                const int maxV = flow.botMax(field);
-                vm.callMethod(r, "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, field, maxV, teams)))});
-                vm.set(r.o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(botValue(b, field), 0, maxV)));
+    using V = gfx::avm1::Value;
+    const V items = vm.get(menu->script, "itemArray");
+    if (!items.isObject() || items.o->kind != gfx::avm1::ObjKind::Array) return;
+    int hooked = 0;
+    for (const V& it : items.o->elems) {
+        if (!it.isObject()) continue;
+        const std::string sf = vm.toString(vm.get(it.o, "selectionField"));
+        if (sf.size() < 18 || sf.rfind("<TnGameSettings:", 0) != 0) continue;
+        const frontend::GameFlow::BotOption* o = frontend::GameFlow::botOption(sf.substr(16, sf.size() - 17));
+        if (!o) continue;
+        const std::string field = o->field;
+        if (!vm.toBool(vm.get(it.o, "__wfcBots"))) {
+            vm.set(it.o, "__wfcBots", V(true));
+            vm.set(it.o, "selectionUpdated", V(vm.newFunction(
+                [&flow, field](gfx::avm1::VM& v, const V& self, gfx::avm1::Args&) -> V {
+                    if (!self.isObject()) return V();
+                    const int idx = (int)v.toNumber(v.get(self.o, "currentSelectionIndex"));
+                    if (idx >= 0 && idx != flow.botValue(field)) flow.setBotSetting(field, idx);
+                    return V();
+                }, "selectionUpdated", 0)));
+            ++hooked;
+        }
+        // The rows follow the profile: a new range after a Player Limit change, the counts it recommends.
+        const int maxV = std::max(0, flow.botMax(field));
+        const V data = vm.get(it.o, "selectionData");
+        const int have = data.isObject() && data.o->kind == gfx::avm1::ObjKind::Array ? (int)data.o->elems.size() : -1;
+        if (have != maxV + 1) {
+            std::vector<V> ch;
+            for (int v = 0; v <= maxV; ++v) {
+                gfx::avm1::Object* c = vm.newPlain();
+                vm.set(c, "FriendlyName", V(flow.botChoiceLabel(field, v)));
+                ch.push_back(V(c));
             }
-            it->second = kind * 10 + limitKey;
-            frontend::FlowTrace::emit("lobby.botRows", {{"refresh", "limits"}, {"extended", frontend::FlowTrace::boolean(b.extended)},
-                                                        {"humanFaction", std::to_string(flow.humanFaction())}});
+            vm.callMethod(it, "createSelectionData", {V(vm.newArray(ch))});
         }
-        // Counts the flow changed itself (map-aware Extended counts on a map change): the rows follow the profile.
-        for (const char* n : {"botAutobot_mc", "botDecepticon_mc", "botEnemy_mc"}) {
-            gfx::avm1::Value r = vm.get(menu, n);
-            if (!r.isObject()) continue;
-            const std::string field = std::string(n) == "botAutobot_mc" ? "autobot" : std::string(n) == "botDecepticon_mc" ? "decepticon" : "enemy";
-            const int maxV = flow.botMax(field), want = std::clamp(botValue(b, field), 0, maxV);
-            if ((int)vm.toNumber(vm.get(r.o, "currentSelectionIndex")) == want) continue;
-            vm.callMethod(r, "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, field, maxV, teams)))});
-            vm.set(r.o, "currentSelectionIndex", gfx::avm1::Value((double)want));
-            frontend::FlowTrace::emit("lobby.botRows", {{"refresh", field}, {"value", std::to_string(want)}});
-        }
-        return;
+        const int want = std::clamp(flow.botValue(field), 0, maxV);
+        if ((int)vm.toNumber(vm.get(it.o, "currentSelectionIndex")) != want) vm.set(it.o, "currentSelectionIndex", V((double)want));
     }
-    for (const char* n : kNames) {   // a mode-kind change: the old rows go
-        gfx::avm1::Value r = vm.get(menu, n);
-        if (r.isObject()) vm.callMethod(r, "removeMovieClip", {});
-    }
-    gfx::avm1::Value invite = vm.get(menu, "invite_mc");
-    botRowsBuilt_[&p] = kind * 10 + limitKey;
-    if (kind == (int)GameFlow::BotRows::None) {
-        if (invite.isObject()) vm.set(invite.o, "focusDown", gfx::avm1::Value());
-        placeBotHint(p, 0);
-        return;
-    }
-    gfx::DisplayObject* src = p.resolveTarget("selectMap_mc", menuD);
-    if (!src || !invite.isObject()) return;
-    struct Row { const char* name; std::string field, label, hint; };
-    std::vector<Row> rows;
-    rows.push_back({kNames[0], "extended", "Player Limit", "Original: 10 players (5 v 5). Extended: up to 64 players (PC Custom Game)."});
-    if (teams) {
-        rows.push_back({kNames[1], "autobot", "Autobot Bots", "AI players on the Autobot team."});
-        rows.push_back({kNames[2], "decepticon", "Decepticon Bots", "AI players on the Decepticon team."});
-    } else {
-        rows.push_back({kNames[3], "enemy", "Bots", "AI opponents in the match."});
-    }
-    rows.push_back({kNames[4], "difficulty", "Bot Difficulty", "How tough the AI plays."});
-    const float y0 = vm.toNumber(vm.get(invite.o, "_y")) + 23.0f;
-    // The menu column has room for four rows above the original hint line; five or more sit 20 apart.
-    const float pitch = rows.size() >= 5 ? 20.0f : 23.0f;
-    std::string prev = "invite_mc";
-    for (size_t i = 0; i < rows.size(); ++i) {
-        const Row& row = rows[i];
-        gfx::avm1::Object* init = vm.newPlain();
-        vm.set(init, "text", gfx::avm1::Value(row.label));
-        vm.set(init, "_y", gfx::avm1::Value((double)(y0 + pitch * (float)i)));
-        gfx::MovieClip* dup = p.duplicate(src, row.name, 900 + (int)i, init);
-        if (!dup || !dup->script) continue;
-        gfx::avm1::Object* o = dup->script;
-        // HmLateralSelector copies its text to label_txt when constructed; the duplicate keeps the source's label.
-        vm.set(o, "text", gfx::avm1::Value(row.label));
-        gfx::avm1::Value lab = vm.get(o, "label_txt");
-        if (lab.isObject()) vm.set(lab.o, "htmlText", gfx::avm1::Value(row.label));
-        vm.set(o, "displaySelection", gfx::avm1::Value(true));
-        vm.set(o, "loopNavigation", gfx::avm1::Value(false));
-        vm.set(o, "focusUp", gfx::avm1::Value(prev));
-        vm.set(o, "focusDown", gfx::avm1::Value());
-        gfx::avm1::Value prevObj = vm.get(menu, prev);
-        if (prevObj.isObject()) vm.set(prevObj.o, "focusDown", gfx::avm1::Value(std::string(row.name)));
-        prev = row.name;
-        const int maxV = flow.botMax(row.field);
-        vm.callMethod(gfx::avm1::Value(o), "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, row.field, maxV, teams)))});
-        vm.set(o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(botValue(b, row.field), 0, maxV)));
-        const std::string field = row.field, hint = row.hint;
-        vm.set(o, "selectionUpdated", gfx::avm1::Value(vm.newFunction(
-            [&flow, field](gfx::avm1::VM& v, const gfx::avm1::Value& self, gfx::avm1::Args&) -> gfx::avm1::Value {
-                gfx::avm1::Value d = self.isObject() ? v.get(self.o, "currentSelectionData") : gfx::avm1::Value();
-                if (d.isObject()) flow.setBotSetting(field, (int)v.toNumber(v.get(d.o, "Value")));
-                return gfx::avm1::Value();
-            }, "selectionUpdated", 0)));
-        vm.set(o, "onOver", gfx::avm1::Value(vm.newFunction(
-            [menu, hint, field, &flow](gfx::avm1::VM& v, const gfx::avm1::Value&, gfx::avm1::Args&) -> gfx::avm1::Value {
-                gfx::avm1::Value w = v.get(menu, "HintWidget");
-                // the count rows / Player Limit add the selected map's recommendation (map-aware Extended counts)
-                std::string text = hint;
-                const std::string rec = field == "difficulty" ? std::string() : flow.botRecommendationText();
-                if (!rec.empty()) text = rec + ". " + hint;
-                if (w.isObject()) v.set(w.o, "HintText", gfx::avm1::Value(text));
-                return gfx::avm1::Value();
-            }, "onOver", 0)));
-    }
-    placeBotHint(p, (int)rows.size());
-    frontend::FlowTrace::emit("lobby.botRows", {{"kind", teams ? "teams" : "ffa"}, {"rows", std::to_string(rows.size())},
-                                                {"extended", frontend::FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
+    if (hooked > 0)
+        frontend::FlowTrace::emit("lobby.modeOptionBots", {{"rows", std::to_string(hooked)}, {"mode", flow.lobby().gameModeTag},
+                                                           {"provenance", "PC ADAPTATION"}});
 }
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
@@ -1395,8 +1301,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     frameLimitShown_ = flow.profile().display.frameLimit;
     for (Open& op : movies_) {
+        if (op.object.find("PartyLobby_GFX") != std::string::npos) syncModeOptionBots(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") == std::string::npos) continue;
-        syncBotRows(op.movie->player(), flow);
         // the selected map's name centred on its preview, above the frame (ui/MapLabel.h, user playtest 2026-10-13)
         const ui::MapLabelResult ml = ui::centreMapLabels(op.movie->player());
         if (ml.raisedTo >= 0)
