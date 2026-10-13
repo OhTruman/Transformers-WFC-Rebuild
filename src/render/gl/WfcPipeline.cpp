@@ -1029,6 +1029,7 @@ bool Pipeline::load(const std::string& mapName) {
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         if (kv.second["hidden"].asBool(false)) hiddenComponents_.insert(key);
         if (kv.second["no_lights"].asBool(false)) noLightComponents_.insert(key);
+        if (kv.second["no_shadow"].asBool(false)) noShadowComponents_.insert(key);
         if (kv.second["dynamic_channel"].asBool(false)) dynChannelComponents_.insert(key);
     }
 
@@ -2802,6 +2803,7 @@ int Pipeline::upload(const MeshData& m) {
             continue;
         }
         d.noLights = noLightComponents_.count(key) > 0;
+        d.noShadow = noShadowComponents_.count(key) > 0;
         d.dynChannel = dynChannelComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
             auto ac = actorComponent_.find(key.substr(6));

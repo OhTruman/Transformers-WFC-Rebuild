@@ -115,7 +115,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     RtStaticWorld W;
     W.pos.resize(v.size() / 14 * 3);
     for (size_t i = 0, n = v.size() / 14; i < n; ++i) std::memcpy(&W.pos[i * 3], &v[i * 14], 12);
-    size_t subs = 0, skipped = 0;
+    size_t subs = 0, skipped = 0, noShadow = 0;
     std::vector<std::pair<float, std::string>> largest;      // (diagnostics) the biggest subs going into the TLAS
     for (const Sub& s : g.subs) {
         if (s.mdiRow < 0 || s.prog < 0 || s.vlmTex || (size_t)s.first + s.count > idx.size()) continue;
@@ -123,6 +123,7 @@ void Pipeline::rtBuildWorld(int meshId) {
         if (P.mdiProg < 0) continue;
         const Program& M = progs_[(size_t)P.mdiProg];
         if (M.blend != 0) continue;
+        if (s.noShadow) { ++noShadow; continue; }       // (authored CastShadow false: not an occluder)
         const core::Vec3 ext = s.bmax - s.bmin;
         const float size = std::max(ext.x, std::max(ext.y, ext.z));
         // sky domes / boxes are not occluders (every sun ray hit Rust's 4.5 km Spacedome): over 2 km, or named so
@@ -153,7 +154,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     const int set = meshId == bspMesh_ ? 1 : 0;
     static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
-    LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs left out)", subs, set ? "level BSP" : "world", meshId, skipped);
+    LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)", subs, set ? "level BSP" : "world", meshId, skipped, noShadow);
     if (rtBridgeAddStaticWorld(W, 1u << set)) { ++rtWorldSets_; rtSets_.push_back({meshId, set}); }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
@@ -223,7 +224,7 @@ void Pipeline::rtBuildMasked() {
         RtMaskedSet S;
         for (size_t si = 0; si < g.subs.size(); ++si) {
             const Sub& s = g.subs[si];
-            if (s.prog < 0 || progs_[(size_t)s.prog].blend != 1 || !s.actor.empty() || (size_t)s.first + s.count > idx.size()) continue;
+            if (s.prog < 0 || progs_[(size_t)s.prog].blend != 1 || !s.actor.empty() || s.noShadow || (size_t)s.first + s.count > idx.size()) continue;
             float u0 = 1e30f, v0 = 1e30f, u1 = -1e30f, v1 = -1e30f;
             for (uint32_t k = 0; k < s.count; ++k) {
                 const float* vv = &v[(size_t)idx[s.first + k] * 14];
