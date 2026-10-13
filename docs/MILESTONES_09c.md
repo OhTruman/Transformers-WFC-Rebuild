@@ -512,5 +512,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   goal's floor) + ditherGuard (>12 m walked, <3 m net in 6 s outside combat -> avoid the spot, drop the goal, hold
   rejoins 4 s). Next: fix the spawn-near mechanism itself (starts with a short nav path to the squad / on the main nav
   piece) rather than switching it off.
+  18:45 E A/B (AssetTools, first DML window; D GPU rows DONE 18:32): the 2x-generation path is ~indistinguishable from D
+  (exact lock + D's fine band) -> REJECTED; only E-4x-G3 visibly changes the wall (smoother grime; faint horizontal
+  streaks on flat dark areas = artefact). BUG: D protected wherever TEXSET Masks B > 0.1 blocked E on most ENV surfaces
+  (B is the Cust A/B BLEND factor, high almost everywhere; 2 of 3 units came out dE 0.00) - Systems asked for the exact
+  designer-colour channel / threshold. Approved next: 'G4' A/B = 4x, denoise 0.70, lock at half the original resolution,
+  fixed protection, 5 units (~30 min). If G4 is the look: milestone 1 (user's 5 maps) ~17 GPU h over the week, the rest
+  of the world after the playtest; the user sees the sheet + hours first.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
