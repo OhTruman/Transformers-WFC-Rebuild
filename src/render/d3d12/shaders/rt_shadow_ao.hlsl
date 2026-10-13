@@ -27,7 +27,10 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     // characters, and only where the sun would otherwise reach them: their world shadows are baked into the lightmaps
     // (indoors, under a roof, a character casts no sun shadow). AO on world pixels: the characters' contact occlusion.
     const bool dynamicPx = inside && d < WorldDepth[px];
-    const uint traceMask = dynamicPx ? (uint)Params.z : 0x4u;
+    // (R3, Realistic: ToSun.w >= 2) AO everywhere - world pixels are occluded by the world too (contact shadows in corners
+    // and under props, 1 m radius), not only by the characters; Faithful keeps the characters-only contact AO. (A map
+    // without a directional sun has ToSun.w 0: characters-only AO there in both modes.)
+    const uint traceMask = (dynamicPx || ToSun.w > 1.5) ? (uint)Params.z : 0x4u;
     if (inside && d < 1.0) {
         const float3 p = worldAt(px, d);
         // normal from depth: per axis the neighbour with the smaller step (keeps silhouettes from bending the normal)

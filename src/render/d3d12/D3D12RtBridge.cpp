@@ -93,6 +93,7 @@ public:
         importSem_ = (PFN_ImportSemaphoreWin32HandleEXT)g("glImportSemaphoreWin32HandleEXT");
         semParam_ = (PFN_SemaphoreParameterui64vEXT)g("glSemaphoreParameterui64vEXT"); waitSem_ = (PFN_WaitSemaphoreEXT)g("glWaitSemaphoreEXT");
         signalSem_ = (PFN_SignalSemaphoreEXT)g("glSignalSemaphoreEXT");
+        deleteSem_ = (PFN_DeleteSemaphoresEXT_)g("glDeleteSemaphoresEXT");
         if (!createMem_ || !importMem_ || !texStorageMem_ || !genSem_ || !importSem_ || !semParam_ || !waitSem_ || !signalSem_) {
             LOG_WARN("RT bridge: GL external-object entry points missing"); return false;
         }
@@ -1025,6 +1026,21 @@ private:
         s.w = w; s.h = h;
         return glGetError() == GL_NO_ERROR;
     }
+    // process exit (the renderer's destructor, GL context still current): the last frame's D3D12 job finishes first, then
+    // the GL side lets go of everything imported from D3D12 (shared textures' memory objects, the fence's semaphore), then
+    // the scene. Without it the process ended with D3D12 work in flight on resources whose GL imports went with the
+    // context - a teardown the driver must sort out while other processes have work on the same GPU.
+public:
+    void shutdown() {
+        if (!waitIdle()) LOG_WARN("RT bridge: shutdown - the D3D12 queue did not go idle within 5 s");
+        clearStaticWorld();
+        for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_}) free(*s);
+        if (sem_ && deleteSem_) deleteSem_(1, &sem_);
+        sem_ = 0;
+        glFinish();
+        LOG_INFO("RT bridge: shut down (queue idle, GL imports released)");
+    }
+private:
     void free(Shared& s) {
         if (s.tex) glDeleteTextures(1, &s.tex);
         if (s.mem && deleteMem_) deleteMem_(1, &s.mem);
@@ -1064,6 +1080,8 @@ private:
     ID3D12CommandAllocator* alloc_[2] = {}; ID3D12GraphicsCommandList* list_ = nullptr;
     ID3D12Fence* fence_ = nullptr; HANDLE fenceHandle_ = nullptr, event_ = nullptr;
     GLuint sem_ = 0;
+    typedef void(APIENTRY* PFN_DeleteSemaphoresEXT_)(GLsizei, const GLuint*);
+    PFN_DeleteSemaphoresEXT_ deleteSem_ = nullptr;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
     Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_;
@@ -1150,6 +1168,7 @@ bool ensure() {
 }  // namespace
 
 bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
+void rtBridgeShutdown() { if (g_bridge) g_bridge->shutdown(); }
 bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
@@ -1164,6 +1183,7 @@ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridg
 #include "render/d3d12/D3D12RtBridge.h"
 namespace render {
 bool rtBridgeAvailable() { return false; }
+void rtBridgeShutdown() {}
 bool rtBridgePrepare(int, int, RtTargets*) { return false; }
 bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}
