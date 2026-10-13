@@ -111,3 +111,14 @@ Five AMD TDRs this morning. The cause was oversubscription of the shared card (s
 
 ### N1 residual, observed 08:54:41 (TDR #6, 2-exe rule active)
 The leak soak on 51260f56 hung after the reset with its main thread blocked in wglSwapBuffers (atio6axx <- opengl32 <- gdi32 SwapBuffers <- Win32Window::present <- Application::drawFrontendFrame), in the lobby between matches 2 and 3. Never spinning; never reaching the beginFrame poll. Systems' 23456 dump showed the same signature. So 2 of today's 3 hang dumps are the case the merged fix does not cover; the GetDeviceRemovedReason backstop is needed for players. The soak stopped at 2 of 16 matches (Seed 5778 -> 4689 MB, Berth 5433 -> 4584 MB; audio PCM back to 36.5 MB both times): no leak verdict yet.
+**Residual closed (integration 14c3ffca):** covered by the evidence backstop. The watchdog keeps a small D3D11 probe device per hardware adapter; a render thread stalled >= 5 s is ended (after the stall line and the dump) only when a probe's GetDeviceRemovedReason reports the device removed. Never on time alone, and never under a debugger. WFC_SIMHANG=removed tests the path. Verified by simulation only; a real-TDR test needs `dxcap -forcetdr` with the user's OK. Review notes (minor): the probes cover every hardware adapter, not only GL's, so a reset on another adapter during an unrelated long stall (e.g. a minutes-long RT build) would also end the game. Keying the probe to GL's adapter LUID (d3d12AdapterForGL) would close that. This machine shows only the RX 7900 XTX plus the Parsec virtual display.
+
+### N1b: the robust GL context is never created on AMD 26.6.4 (found from Systems' log observation, 09:30)
+Every run today logged "OpenGL context: legacy (WGL_ARB_create_context_robustness unavailable: getExt 1 create 1 ext 0)". A standalone WGL probe (work/wglprobe/probe.c) shows:
+- the driver omits WGL_ARB_create_context_robustness from both WGL extension strings, while GL_ARB_robustness / GL_KHR_robustness are present;
+- the legacy context's GL_RESET_NOTIFICATION_STRATEGY is NO_RESET_NOTIFICATION (0x8261), so the beginFrame reset poll can never report a TDR on this machine. 14c3ffca's device-removed backstop is the protection that actually works here;
+- wglCreateContextAttribsARB still accepts LOSE_CONTEXT_ON_RESET (with or without ROBUST_ACCESS) and reports strategy 0x8252.
+
+Proposed fix: try the robust creation whenever WGL_ARB_create_context exists; keep it only if the strategy reads 0x8252; leave out ROBUST_ACCESS (its cost is unmeasured). Status: FAIL (detection gap), owner Systems / Rendering (Win32Window).
+
+rt-build-check: direct boots apply the profile's Ray Tracing row only on frontend boots, so the -Exe check now also sets WFC_RT_MODE=2 (Systems).

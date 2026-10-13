@@ -26,7 +26,7 @@ if ($Exe) {
     $Exe = (Resolve-Path $Exe).Path; $d = Join-Path $OutDir "rt_on"; New-Item -ItemType Directory -Force $d | Out-Null; $lg = Join-Path $d "wfc.log"
     if (-not (Test-Path $lg)) {
         (Get-BotProfile 0 0 1 -Width 1920 -Height 1080 -RayTracing 2) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
-        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_MATCH_URL = "${Map}?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
+        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_RT_MODE = "2"; WFC_MATCH_URL = "${Map}?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
     }
     if (-not (Test-Path $lg)) { Res "runtime" "UNKNOWN" "no log" "Experimental" }
     else {
