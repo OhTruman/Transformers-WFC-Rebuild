@@ -70,7 +70,9 @@ void main() {
 }
 )";
 
-bool on() { static const bool v = std::getenv("WFC_RT_CHARS") != nullptr; return v; }
+// the characters join the RT scene with Ray Tracing on (Faithful / Realistic: the characters are its point); WFC_RT_CHARS=0
+// opts out (diagnostics). The members below also require the RT scene and a non-Off mode: nothing is built while Off.
+bool on() { static const bool v = [] { const char* e = std::getenv("WFC_RT_CHARS"); return !e || std::atoi(e) != 0; }(); return v; }
 float envF(const char* n, float d) { const char* e = std::getenv(n); return e ? (float)std::atof(e) : d; }
 
 typedef uint64_t GLuint64_;
@@ -145,7 +147,7 @@ uint64_t fnv(const void* p, size_t n) {
 
 void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
                           const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha) {
-    if (!on() || warmup_ || !key) return;                 // (warm-up draws and prewarms are not scene characters)
+    if (!on() || !rtInfra_ || rtMode_ <= 0 || warmup_ || !key) return;   // (warm-up draws / prewarms are not scene characters)
     if (rtSkinFrame_ != frameNo_) {                       // the first note of a frame: the previous frame's list moves back
         rtSkinPrevFrame_ = rtSkinFrame_; rtSkinPrev_.swap(rtSkinCur_); rtSkinCur_.clear(); rtSkinIdx_.clear();
         rtSkinFrame_ = frameNo_;
@@ -178,7 +180,7 @@ void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void*
 }
 
 void Pipeline::rtSkinFeed(bool afterCharacters) {
-    if (!on() || S.failed || !rtDynamicAvailable()) return;
+    if (!on() || !rtInfra_ || rtMode_ <= 0 || S.failed || !rtDynamicAvailable()) return;
     syncEpoch();
     if (!S.prog) {
         S.prog = linkCS(kSkinCS);

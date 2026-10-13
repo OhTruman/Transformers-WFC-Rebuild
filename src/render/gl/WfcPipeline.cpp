@@ -2412,11 +2412,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                 }
                 // (the cube's mips are box-filtered, not GGX-prefiltered: the blur approximates the lobe)
                 // (RT Realistic: the ray-traced reflection replaces the cube here too - Modern strips the cube from the base,
-                // so this environment term is where pbr materials consume the RT reflections; blurred by the roughness over
-                // the reflection target's mips, WFC_RT_REFLECT_ROUGHLOD levels at roughness 1)
-                static const std::string roughLod = [] { const char* e = std::getenv("WFC_RT_REFLECT_ROUGHLOD"); return std::string(e ? e : "8.0"); }();
-                fs += rtRefl ? "vec4 wfcSCR_" + n + "(vec3 d, float r) { return wfcRtRefl(textureLod(uTex" + n + ", d, r * " +
-                               std::to_string(levels - 1) + ".0), r * " + roughLod + "); }\n"
+                // so this environment term is where pbr materials consume the RT reflections. Only this term: the rule-3 mean
+                // (wfcSCM_) is an albedo factor. Blur: the roughness over the screen-sized reflection target's own mip chain,
+                // r x log2(its size) x WFC_RT_REFLECT_ROUGHLOD (0.5). Reflection hits evaluate the ORIGINAL graphs: under
+                // Modern, reflections of Modern surfaces show their Original shading - a known difference for now.)
+                static const std::string roughLod = [] { const char* e = std::getenv("WFC_RT_REFLECT_ROUGHLOD"); return std::string(e ? e : "0.5"); }();
+                fs += rtRefl ? "vec4 wfcSCR_" + n + "(vec3 d, float r) { ivec2 rs = textureSize(uRtRefl, 0); return wfcRtRefl(textureLod(uTex" + n +
+                               ", d, r * " + std::to_string(levels - 1) + ".0), r * log2(float(max(rs.x, rs.y))) * " + roughLod + "); }\n"
                              : "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
                                std::to_string(levels - 1) + ".0); }\n";
                 replaceAll(code, "wfcSampleCubeRough(" + n + ", ", "wfcSCR_" + n + "(");
@@ -4093,6 +4095,10 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (!queued) {
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
                 glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            }
+            if (rtUvAtlas_) {                              // (M7 RT: the program leaves the atlas pass in screen space again -
+                static const float zero[4] = {0, 0, 0, 0};  //  paths that do not set uRtUvSpace must not inherit it)
+                Uniform4fv(ULOC(P, "uRtUvSpace"), 1, zero);
             }
             ++gStats.draws;
             ++counts_.draws;

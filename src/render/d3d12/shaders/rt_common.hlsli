@@ -54,9 +54,10 @@ bool maskedOpaque(uint set, uint prim, float2 bc) {
     return MaskAtlas.SampleLevel(PointClamp, tile.xy + t * tile.zw, 0) > 0.5;
 }
 
-// an occlusion ray that also reports its accepted hit's distance (the first found: a blocker distance estimate)
+// an occlusion ray that also reports the NEAREST blocker's distance (closest committed hit: a far wall must not widen the
+// penumbra - the soft pass runs after the denoiser, so an any-hit distance would flicker as penumbra width)
 bool occludedT(float3 o, float3 dir, float tMax, uint mask, out float t) {
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
+    RayQuery<RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
     RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;
     q.TraceRayInline(Scene, RAY_FLAG_NONE, mask, r);
     while (q.Proceed()) {
