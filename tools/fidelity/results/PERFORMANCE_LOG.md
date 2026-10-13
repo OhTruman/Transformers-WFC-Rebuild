@@ -915,3 +915,363 @@ Uncapped, fixed cam (WFC_FIXEDCAM per map), frontend-launched private TDM with b
 | map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 504 | 2560x1440 | - | 64 | 621.4 | 1.66 | 2.19 | 2.39 | 2.66 | 7.7 | 350.3 | 285.3 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5939 |
+
+## 2026-10-11 23:06 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 attribution 65e856f Gorge rp 4K 300s off1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 404.9 | 2.47 | 3.08 | 3.24 | 3.62 | 9.04 | 256.9 | 217.4 | 0 / 0 | 0 | 96.6 % |  |  |  |  |  | 5194 |
+
+## 2026-10-11 23:19 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 attribution 65e856f Gorge rp 4K 300s on1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 459.8 | 2.21 | 2.8 | 3.03 | 3.56 | 7.95 | 258.5 | 213.9 | 0 / 0 | 0 | 97.9 % |  |  |  |  |  | 5315 |
+
+## 2026-10-11 23:31 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 attribution 65e856f Gorge rp 4K 300s off2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 510 | 1920x1080 | - | 64 | 376.1 | 2.68 | 3.22 | 3.4 | 3.83 | 8.31 | 240.9 | 183.5 | 0 / 0 | 0 | 93.6 % |  |  |  |  |  | 5309 |
+
+## 2026-10-11 23:45 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 509 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 510.4 | 1.93 | 2.23 | 2.33 | 2.47 | 3.53 | 392.1 | 365.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5456 |
+
+## 2026-10-11 23:53 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 509 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 497.4 | 2 | 2.6 | 2.85 | 3.31 | 7.54 | 279 | 231.9 | 0 / 0 | 0 | 99.1 % |  |  |  |  |  | 5506 |
+
+## 2026-10-12 00:00 - ? - cam overview - M1 full verdict 65e856f map 509 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 550.6 | 1.79 | 2.13 | 2.24 | 2.42 | 4.45 | 397.7 | 364.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5299 |
+
+## 2026-10-12 00:07 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 509 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 694.1 | 1.41 | 1.88 | 2.01 | 2.29 | 7.17 | 410.8 | 358.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5269 |
+
+## 2026-10-12 00:14 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 507 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 511 | 1.93 | 2.3 | 2.42 | 2.63 | 4.07 | 366 | 335.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5521 |
+
+## 2026-10-12 00:21 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 507 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 547.2 | 1.78 | 2.33 | 2.47 | 2.78 | 6.45 | 331.2 | 270.7 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5552 |
+
+## 2026-10-12 00:28 - ? - cam overview - M1 full verdict 65e856f map 507 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 516.8 | 1.92 | 2.3 | 2.42 | 2.62 | 4.09 | 365.6 | 331.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5413 |
+
+## 2026-10-12 00:36 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 507 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 570.5 | 1.73 | 2.18 | 2.32 | 2.56 | 6.78 | 372.1 | 329.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5435 |
+
+## 2026-10-12 00:43 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 509 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 511.2 | 1.92 | 2.23 | 2.32 | 2.47 | 3.51 | 389.2 | 349.5 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5529 |
+
+## 2026-10-12 00:50 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 509 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 458.4 | 2.07 | 3.2 | 3.4 | 3.83 | 7.49 | 244.5 | 210.4 | 0 / 0 | 0 | 93.5 % |  |  |  |  |  | 5620 |
+
+## 2026-10-12 00:57 - ? - cam overview - M1 full verdict 65e856f map 509 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 546.2 | 1.81 | 2.15 | 2.25 | 2.43 | 4.55 | 396.5 | 361.8 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5290 |
+
+## 2026-10-12 01:04 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 509 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 679.4 | 1.43 | 2 | 2.16 | 2.46 | 7.18 | 382.4 | 338.3 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5209 |
+
+## 2026-10-12 01:11 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 507 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 513.8 | 1.91 | 2.29 | 2.42 | 2.62 | 4.01 | 366 | 333.5 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5428 |
+
+## 2026-10-12 01:18 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 507 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 524 | 1.87 | 2.42 | 2.59 | 2.98 | 8.01 | 305.9 | 243.5 | 0 / 0 | 0 | 99.7 % |  |  |  |  |  | 5498 |
+
+## 2026-10-12 01:26 - ? - cam overview - M1 full verdict 65e856f map 507 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 520.7 | 1.9 | 2.28 | 2.4 | 2.6 | 4.13 | 370.4 | 340 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5326 |
+
+## 2026-10-12 01:33 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 507 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 1920x1080 | - | 64 | 555.5 | 1.78 | 2.18 | 2.3 | 2.49 | 6.64 | 382.7 | 340.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5313 |
+
+## 2026-10-12 01:40 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 509 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 2560x1440 | - | 64 | 630.6 | 1.56 | 2.12 | 2.26 | 2.49 | 7.04 | 376.4 | 319.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5487 |
+
+## 2026-10-12 01:47 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 507 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 507 | 2560x1440 | - | 64 | 549 | 1.81 | 2.28 | 2.44 | 2.71 | 7.03 | 346.9 | 309.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5548 |
+
+## 2026-10-12 02:01 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 508 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 546.3 | 1.81 | 2.09 | 2.15 | 2.36 | 4.99 | 404.8 | 369.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5508 |
+
+## 2026-10-12 02:09 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 508 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 576.4 | 1.71 | 2.17 | 2.32 | 2.71 | 6.39 | 345.4 | 297.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5293 |
+
+## 2026-10-12 02:16 - ? - cam overview - M1 full verdict 65e856f map 508 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 549.9 | 1.81 | 2.03 | 2.12 | 2.38 | 6.39 | 395.6 | 344.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5317 |
+
+## 2026-10-12 02:23 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 508 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 869.1 | 1.09 | 1.61 | 1.75 | 2 | 6.59 | 469.3 | 407.3 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5159 |
+
+## 2026-10-12 02:30 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 503 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 470.4 | 2.09 | 2.33 | 2.44 | 2.66 | 3.9 | 362 | 336.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5249 |
+
+## 2026-10-12 02:37 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 503 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 578.8 | 1.74 | 2.18 | 2.33 | 2.66 | 6.77 | 346.2 | 288 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5239 |
+
+## 2026-10-12 02:44 - ? - cam overview - M1 full verdict 65e856f map 503 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 504.6 | 2 | 2.25 | 2.35 | 2.58 | 5.79 | 367.6 | 328.7 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5065 |
+
+## 2026-10-12 02:52 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 503 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 834.8 | 1.1 | 1.78 | 1.96 | 2.21 | 5.92 | 419.9 | 346.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5124 |
+
+## 2026-10-12 02:59 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 508 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 549.8 | 1.8 | 2.08 | 2.14 | 2.35 | 5.05 | 405.3 | 364.8 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5288 |
+
+## 2026-10-12 03:06 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 508 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 605 | 1.61 | 2.1 | 2.31 | 2.72 | 6.63 | 333.5 | 274 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5348 |
+
+## 2026-10-12 03:13 - ? - cam overview - M1 full verdict 65e856f map 508 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 552.7 | 1.8 | 2.02 | 2.11 | 2.36 | 5.04 | 400 | 353.2 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5156 |
+
+## 2026-10-12 03:20 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 508 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 1920x1080 | - | 64 | 854.3 | 1.09 | 1.7 | 1.85 | 2.14 | 6.2 | 434.3 | 355.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5155 |
+
+## 2026-10-12 03:28 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 503 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 469.8 | 2.09 | 2.33 | 2.44 | 2.67 | 4.56 | 360.8 | 332.3 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5391 |
+
+## 2026-10-12 03:35 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 503 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 528.4 | 1.87 | 2.37 | 2.54 | 2.86 | 7.68 | 322.6 | 252.4 | 0 / 0 | 0 | 99.9 % |  |  |  |  |  | 5299 |
+
+## 2026-10-12 03:42 - ? - cam overview - M1 full verdict 65e856f map 503 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 510.1 | 1.99 | 2.24 | 2.32 | 2.53 | 5.87 | 373.2 | 330.5 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5102 |
+
+## 2026-10-12 03:49 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 503 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 1920x1080 | - | 64 | 855.7 | 1.05 | 1.72 | 1.89 | 2.15 | 6.49 | 436.1 | 369.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5010 |
+
+## 2026-10-12 03:56 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 508 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 508 | 2560x1440 | - | 64 | 699.5 | 1.37 | 1.9 | 2.03 | 2.28 | 6.56 | 401.8 | 319.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5330 |
+
+## 2026-10-12 04:04 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 503 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 503 | 2560x1440 | - | 64 | 687.5 | 1.42 | 1.95 | 2.13 | 2.4 | 6.31 | 392.6 | 338 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5383 |
+
+## 2026-10-12 04:18 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 501 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 481.6 | 2.07 | 2.33 | 2.43 | 2.69 | 5.96 | 352.9 | 320.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5716 |
+
+## 2026-10-12 04:25 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 501 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 597.5 | 1.59 | 2.19 | 2.32 | 2.73 | 6.1 | 340.3 | 299.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5645 |
+
+## 2026-10-12 04:32 - ? - cam overview - M1 full verdict 65e856f map 501 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 479.1 | 2.09 | 2.31 | 2.39 | 2.77 | 5.97 | 341.8 | 308.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5469 |
+
+## 2026-10-12 04:39 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 501 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 845.7 | 1.13 | 1.78 | 1.94 | 2.25 | 7.2 | 414 | 347.4 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5578 |
+
+## 2026-10-12 04:47 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 502 ov 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 542.3 | 1.81 | 2.01 | 2.17 | 2.5 | 5.82 | 363.5 | 311.9 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5159 |
+
+## 2026-10-12 04:54 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 502 rp 2160 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 611 | 1.56 | 2.12 | 2.33 | 2.84 | 6.24 | 316.8 | 241.9 | 0 / 0 | 0 | 99.8 % |  |  |  |  |  | 5117 |
+
+## 2026-10-12 05:01 - ? - cam overview - M1 full verdict 65e856f map 502 ov 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 646.8 | 1.52 | 1.87 | 1.96 | 2.16 | 5.68 | 439.8 | 388.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 4937 |
+
+## 2026-10-12 05:08 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 502 rp 1080 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 864.7 | 1.1 | 1.7 | 1.84 | 2.09 | 7.15 | 447.3 | 382.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 4905 |
+
+## 2026-10-12 05:15 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 501 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 479.9 | 2.08 | 2.34 | 2.43 | 2.7 | 5.92 | 351.9 | 324.7 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5747 |
+
+## 2026-10-12 05:23 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 501 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 538.6 | 1.85 | 2.5 | 2.71 | 3.26 | 6.94 | 250.7 | 163.4 | 0 / 0 | 0 | 99.2 % |  |  |  |  |  | 5771 |
+
+## 2026-10-12 05:30 - ? - cam overview - M1 full verdict 65e856f map 501 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 483.8 | 2.07 | 2.29 | 2.37 | 2.74 | 6.02 | 345.3 | 312.5 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5575 |
+
+## 2026-10-12 05:37 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 501 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 1920x1080 | - | 64 | 806.4 | 1.16 | 1.79 | 1.96 | 2.2 | 5.97 | 428 | 363.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5540 |
+
+## 2026-10-12 05:44 - ? - 3D at 3840x2160 - cam overview - M1 full verdict 65e856f map 502 ov 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 548.1 | 1.81 | 1.97 | 2.09 | 2.34 | 5.72 | 414.1 | 382.3 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5186 |
+
+## 2026-10-12 05:51 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 502 rp 2160 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 583.7 | 1.68 | 2.22 | 2.39 | 2.83 | 6.42 | 322.7 | 264 | 0 / 0 | 0 | 99.8 % |  |  |  |  |  | 5069 |
+
+## 2026-10-12 05:58 - ? - cam overview - M1 full verdict 65e856f map 502 ov 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 651.3 | 1.51 | 1.86 | 1.95 | 2.14 | 5.69 | 443.8 | 391.1 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 4937 |
+
+## 2026-10-12 06:06 - ? - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 502 rp 1080 150s rep 2
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 1920x1080 | - | 64 | 881.3 | 1.08 | 1.61 | 1.72 | 2 | 5.88 | 463.9 | 400.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 4820 |
+
+## 2026-10-12 06:13 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 501 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 501 | 2560x1440 | - | 64 | 688 | 1.4 | 2.12 | 2.3 | 2.59 | 7.26 | 360 | 301.8 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5782 |
+
+## 2026-10-12 06:20 - ? - 3D at 2560x1440 - real play: PLAYERBOT 1, follow cam - M1 full verdict 65e856f map 502 fs 1440 150s rep 1
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 502 | 2560x1440 | - | 64 | 764.4 | 1.29 | 1.79 | 1.97 | 2.16 | 6.67 | 431.6 | 348.6 | 0 / 0 | 0 | 100 % |  |  |  |  |  | 5175 |
+
+## 2026-10-12 06:40 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 509 rp 4K 300s rep 1 65e856f
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 490.9 | 2.01 | 2.64 | 2.84 | 3.22 | 9.83 | 285.3 | 217 | 0 / 0 | 0 | 99.4 % |  |  |  |  |  | 5469 |
+
+## 2026-10-12 06:52 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 509 rp 4K 300s rep 2 65e856f
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 455.1 | 2.17 | 2.88 | 3.14 | 3.62 | 7.26 | 260.1 | 230.4 | 0 / 0 | 0 | 97.2 % |  |  |  |  |  | 5472 |
+
+## 2026-10-12 07:05 - ? - 3D at 3840x2160 - real play: PLAYERBOT 1, follow cam - M1 509 rp 4K 300s rep 3 65e856f
+
+| map | res | async | participants | avg fps | p50 | p90 | p95 | p99 | worst steady | 1% low | 0.1% low | >16.7 / >33 ms | hitches | <=3.33 ms | submit | GPU wait | sim step | chars | FX | MB at load |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 509 | 1920x1080 | - | 64 | 451.1 | 2.23 | 2.91 | 3.12 | 3.5 | 7.48 | 268.4 | 231.3 | 0 / 0 | 0 | 98 % |  |  |  |  |  | 5462 |
