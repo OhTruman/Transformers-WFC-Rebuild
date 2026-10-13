@@ -1,6 +1,7 @@
 #include "render/gl/WfcPipeline.h"
 #include "platform/LongPath.h"
 #include "core/LoadYield.h"
+#include "render/d3d12/D3D12RtBridge.h"
 #include "render/d3d12/D3D12FrameGen.h"   // (presentFrameStart)
 #include <tuple>
 
@@ -905,6 +906,7 @@ void Pipeline::release() {
     lmArrays_.clear(); lmArrOf_.clear();
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
+    rtBridgeClearStaticWorld();                        // (M7 stage 0: no-op unless a static world was built)
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
@@ -939,6 +941,10 @@ void Pipeline::release() {
         for (GLuint* f : {&opaqueCopyFbo_, &reactiveFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(opaqueCopyTex_); delTex(reactiveTex_); delProg(reactiveProg_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
+        delProg(rtDepthProg_);                         // (M7 RT: the depth -> R32F program and its FBO)
+        delProg(rtCompositeProg_); delTex(rtWhiteTex_); delTex(rtReflPrev_);   // (the composite, AO white, kept reflections)
+        if (rtFbo_) { DeleteFramebuffers(1, &rtFbo_); rtFbo_ = 0; }
+        if (rtAtlasFbo_) { DeleteFramebuffers(1, &rtAtlasFbo_); rtAtlasFbo_ = 0; }
         for (GLuint* p : {&fsr3DepthProg_, &fgDepthProg_, &fgVelProg_}) delProg(*p);   // (fsr3Out_ is the upscaler's)
         for (GLuint* f : {&fsr3DepthFbo_, &fgFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(touchTex_); delTex(instTex_);
@@ -1022,6 +1028,7 @@ void Pipeline::release() {
     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+    const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
@@ -1030,6 +1037,7 @@ void Pipeline::release() {
     hdTextures_ = keepHd;
     fsr3On_ = keepFsr3;
     modern_ = keepModern;
+    rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
 }
 
 // WFC_SETTINGSTEST=1 (at init, before any map): every caller setting set to a non-default value survives release() -
@@ -1039,8 +1047,12 @@ void Pipeline::runSettingsSelfTest() {
     auto check = [&](bool ok, const char* what) { (ok ? pass : fail)++; LOG_INFO("settings-test %s: %s", ok ? "PASS" : "FAIL", what); };
     const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+    const int rm = rtMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+    rtMode_ = 2;
     release();
+    check(rtMode_ == 2, "Ray Tracing mode");
+    rtMode_ = rm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
@@ -1052,6 +1064,8 @@ bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
     std::string root = renderDataRoot();
     cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
+    rtInitMode();
+    rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
     loadFrame_ = frameNo_;
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
@@ -1245,6 +1259,7 @@ bool Pipeline::load(const std::string& mapName) {
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         if (kv.second["hidden"].asBool(false)) hiddenComponents_.insert(key);
         if (kv.second["no_lights"].asBool(false)) noLightComponents_.insert(key);
+        if (kv.second["no_shadow"].asBool(false)) noShadowComponents_.insert(key);
         if (kv.second["dynamic_channel"].asBool(false)) dynChannelComponents_.insert(key);
     }
 
@@ -2397,15 +2412,29 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    vec3 lin = g * (255.0 * 1024.0) * sc + off;\n"
               "    return clamp(lin * (1.0 + sc), 0.0, 1023.0) / 1023.0;\n"
               "}\n";
+    const bool rtRefl = rtReflComposite();
+    if (rtRefl)   // (M7 stage 2 modern mode) the ray-traced reflection at this pixel (premultiplied by its hit share; miss = the cube)
+        fs += "uniform sampler2D uRtRefl; uniform mat4 uRtReflVP; uniform int uRtReflOn; uniform float uRtReflLod;\n"
+              "vec4 wfcRtRefl(vec4 cube, float bias) {\n"
+              "    if (uRtReflOn == 0) return cube;\n"
+              "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
+              "    if (p.w <= 0.0) return cube;\n"
+              "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
+              "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return cube;\n"
+              "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + max(bias, 0.0));\n"
+              "    return vec4(mix(cube.rgb, r.rgb / max(r.a, 1e-3), clamp(r.a, 0.0, 1.0)), cube.a);\n"
+              "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
         if (slotIsCube[k]) {
             fs += "uniform samplerCube uTex" + n + ";\n";
             // UE world direction -> cube lookup (faces in UE/D3D order, see cubeTexture)
-            fs += "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
+            fs += rtRefl ? "vec4 wfcSC_" + n + "(vec3 d) { return wfcRtRefl(texture(uTex" + n + ", d), 0.0); }\n"
+                         : "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
             replaceAll(code, "wfcSampleCube(" + n + ", ", "wfcSC_" + n + "(");
             // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
-            fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
+            fs += rtRefl ? "vec4 wfcSCB_" + n + "(vec3 d, float b) { return wfcRtRefl(texture(uTex" + n + ", d, b), b); }\n"
+                         : "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
             replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
             if (code.find("wfcSampleCubeRough(" + n + ", ") != std::string::npos) {   // (M6 Modern: the env at the roughness level)
                 int levels = 1;
@@ -2418,8 +2447,16 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                     while ((w >> levels) > 0) ++levels;
                 }
                 // (the cube's mips are box-filtered, not GGX-prefiltered: the blur approximates the lobe)
-                fs += "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
-                      std::to_string(levels - 1) + ".0); }\n";
+                // (RT Realistic: the ray-traced reflection replaces the cube here too - Modern strips the cube from the base,
+                // so this environment term is where pbr materials consume the RT reflections. Only this term: the rule-3 mean
+                // (wfcSCM_) is an albedo factor. Blur: the roughness over the screen-sized reflection target's own mip chain,
+                // r x log2(its size) x WFC_RT_REFLECT_ROUGHLOD (0.5). Reflection hits evaluate the ORIGINAL graphs: under
+                // Modern, reflections of Modern surfaces show their Original shading - a known difference for now.)
+                static const std::string roughLod = [] { const char* e = std::getenv("WFC_RT_REFLECT_ROUGHLOD"); return std::string(e ? e : "0.5"); }();
+                fs += rtRefl ? "vec4 wfcSCR_" + n + "(vec3 d, float r) { ivec2 rs = textureSize(uRtRefl, 0); return wfcRtRefl(textureLod(uTex" + n +
+                               ", d, r * " + std::to_string(levels - 1) + ".0), r * log2(float(max(rs.x, rs.y))) * " + roughLod + "); }\n"
+                             : "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
+                               std::to_string(levels - 1) + ".0); }\n";
                 replaceAll(code, "wfcSampleCubeRough(" + n + ", ", "wfcSCR_" + n + "(");
             }
             if (code.find("wfcSampleCubeMean(" + n + ")") != std::string::npos) {   // (M6 pbr rule 3: the cube's mean colour)
@@ -2487,9 +2524,42 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos) mainUber.replace(at, 9, specOccU);
     }
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
+    if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
+        const size_t nl1 = fs.find('\n');
+        if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\nuniform int uRtUvMode;\n");
+        const std::string dl = "if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;";
+        for (size_t at = fs.find(dl); at != std::string::npos; at = fs.find(dl, at + dl.size()))
+            fs.insert(at + dl.size(), " if (uRtUvSpace.z > 0.0) { oColor = uRtUvMode == 1 ? vec4(o.DiffuseColor, 1.0) :"
+                                      " uRtUvMode == 2 ? vec4(o.EmissiveColor, 1.0) : vec4(1.0); return; }");
+    }
+    if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
+        auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
+        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;\nuniform int uRtOn;");
+        sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).w;");
+        // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
+        // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
+        // is not the sun, and maps add directional fill lights for dynamic objects that must stay unshadowed
+        // (uRtOn 0 - the RT path not drawing, e.g. Ray Tracing Off: the original's mask semantics, rtVis = 1)
+        sub("float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;",
+            "float rtVis0 = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;"
+            " float rtVis = uRtOn != 0 ? rtVis0 : 1.0; float mask = uRtOn != 0 ? 1.0 : rtVis0;");
+        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 || dot(uLDir[i].xyz, uRtSunDir) < 0.999 ? 1.0 : rtVis);");
+    }
 
-    static GLuint vsShared = 0;
-    if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
+    static GLuint vsSharedBy[2] = {0, 0};               // (without / with the RT text: maps can load with or without RT)
+    GLuint& vsShared = vsSharedBy[rtShadowAoOn() ? 1 : 0];
+    if (!vsShared) {
+        std::string vsText = kVS;
+        if (rtShadowAoOn()) {                            // (M7 RT, RT on only: the atlas pass places triangles at their UV0)
+            const size_t nl1 = vsText.find('\n');
+            if (nl1 != std::string::npos) vsText.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\n");
+            const std::string gp = "gl_Position = uViewProj * wp;";
+            const size_t at = vsText.find(gp);
+            if (at != std::string::npos)
+                vsText.insert(at + gp.size(), "\n    if (uRtUvSpace.z > 0.0) gl_Position = vec4((aUV0 - uRtUvSpace.xy) * uRtUvSpace.zw * 2.0 - 1.0, 0.0, 1.0);");
+        }
+        vsShared = compile(GL_VERTEX_SHADER, vsText, "world.vs");
+    }
     GLuint vsUse = vsShared;
     int instRt = 0;
     if (instBuild_) {   // instanced character variant: per-instance uniforms become globals loaded from the instance row
@@ -2674,6 +2744,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uVLM"), 11);
     Uniform1i(U("uVLMBuf"), 22);                         // (MDI variants: the set's vertex-lightmap sample buffer)
     Uniform1i(U("uShadowMask"), 10);
+    Uniform1i(U("uRtAo"), 25);                          // (M7 stage 1 RT-on variant only; -1 otherwise)
     if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
     if (mdiBuild_) Uniform1i(U("uRowTex"), 20);
     UseProgram(0);
@@ -3166,6 +3237,7 @@ int Pipeline::upload(const MeshData& m) {
             continue;
         }
         d.noLights = noLightComponents_.count(key) > 0;
+        d.noShadow = noShadowComponents_.count(key) > 0;
         d.dynChannel = dynChannelComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
             auto ac = actorComponent_.find(key.substr(6));
@@ -3408,6 +3480,19 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform3f(ULOC(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
+        if (rtShadowAoOn()) {
+            ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10);
+            Uniform3f(ULOC(P, "uRtSunDir"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
+            Uniform1i(ULOC(P, "uRtOn"), rtMaskActive_ ? 1 : 0);
+        }
+        if (rtReflComposite()) {                         // (M7 stage 2 modern mode) the previous frame's reflections
+            static const float lod = [] { const char* e = std::getenv("WFC_RT_REFLECT_LOD"); return e ? (float)std::atof(e) : 1.0f; }();
+            ActiveTexture(GL_TEXTURE0 + 26); glBindTexture(GL_TEXTURE_2D, rtReflPrev_); ActiveTexture(GL_TEXTURE0 + 10);
+            Uniform1i(ULOC(P, "uRtRefl"), 26);
+            Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ && rtReflLive() ? 1 : 0);
+            Uniform1f(ULOC(P, "uRtReflLod"), lod);
+            UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
+        }
     }
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
@@ -3837,7 +3922,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const bool mdiMesh = bspSet || (meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty());
     if (bspSet) { swapMdiSlot(bspMdi_); drawMdi(g); swapMdiSlot(bspMdi_); }
     else if (mdiMesh) drawMdi(g);
-    for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
+    for (int pass = onlySub >= 0 && !rtUvAtlas_ ? 1 : 0; pass < (rtDepthOnly_ || rtUvAtlas_ ? 1 : 2); ++pass) {   // 0: opaque + masked, 1: translucent
         // one sub (a queued translucent draw): index it directly - scanning every sub of the world mesh per queued
         // item was ~10 % of the main thread at 10 v 10
         const size_t siBegin = onlySub >= 0 ? (size_t)onlySub : 0;
@@ -3907,7 +3992,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
                                         model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
             static const bool noFrustum = std::getenv("WFC_NOFRUSTUMCULL") != nullptr;   // diagnostics: culling regression test
-            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_) {
+            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_ && !rtUvAtlas_) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
@@ -3923,6 +4008,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 continue;
             }
             bindCommon(P, subModel);
+            if (rtShadowAoOn()) {                          // (M7 RT, RT-on programs only: the masked-opacity atlas pass)
+                static const float zero[4] = {0, 0, 0, 0};
+                Uniform4fv(ULOC(P, "uRtUvSpace"), 1, rtUvAtlas_ ? rtUvSpace_ : zero);
+                if (rtUvAtlas_) Uniform1i(ULOC(P, "uRtUvMode"), rtUvMode_);
+                if (rtUvAtlas_) glDisable(GL_CULL_FACE);
+            }
             Uniform1i(ULOC(P, "uDecalClip"), g.decal ? 1 : 0);
             {
                 // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
@@ -4048,6 +4139,10 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
                 glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             }
+            if (rtUvAtlas_) {                              // (M7 RT: the program leaves the atlas pass in screen space again -
+                static const float zero[4] = {0, 0, 0, 0};  //  paths that do not set uRtUvSpace must not inherit it)
+                Uniform4fv(ULOC(P, "uRtUvSpace"), 1, zero);
+            }
             ++gStats.draws;
             ++counts_.draws;
             if (meshIdx >= 0 && meshIdx == bspMesh_) ++counts_.bspDraws;
@@ -4071,7 +4166,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 fd.fx |= frameFx_;
             }
             if (!trans) depthDirty_ = true;
-            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION")) {
+            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION") && !rtUvAtlas_) {
                 const Program& D = progs_[(size_t)P.distProg];
                 BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
                 if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }
@@ -4688,7 +4783,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
                            const core::Mat4& model, const void* key, uint64_t serial) {
     const size_t n = bind.vertexCount();
     if (n == 0 || joints.size() != n * 4 || weights.size() != n * 4 || palette.empty() || (int)palette.size() > kMaxBones)
-        return false;
+        { if (!palette.empty() && (int)palette.size() > kMaxBones) rtSkinMissed("more bones than the GPU skin supports (CPU-skinned)"); return false; }
     struct SkinTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
         ~SkinTimer() { gStats.skinMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinCalls; } } skinTimer;
     // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
@@ -4761,7 +4856,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     if (si.row < 0) {
         if (!freeSkinRows_.empty()) { si.row = freeSkinRows_.back(); freeSkinRows_.pop_back(); }
         else if (skinRowsUsed_ < kSkinRows) si.row = skinRowsUsed_++;
-        else { skinInsts_.erase(key); return false; }
+        else { skinInsts_.erase(key); rtSkinMissed("bone-texture rows full (CPU-skinned)"); return false; }
     }
     const bool usePrev = prevPalette && alpha < 1.0f && prevPalette->size() == palette.size();
     // exact bounds (pixel-identical lighting / shadow fit): the skinned positions of assets::skinPose, positions only,
@@ -4869,6 +4964,8 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
         SkinDraw d0;
         d0.vao = sm.vao; d0.mn = si.mn; d0.mx = si.mx;   // the last exact bounds (pose of the last prepared frame)
+        // (M7 RT: hidden from the camera, not from the sun - the last prepared pose stays in the TLAS, unchanged serial)
+        rtSkinNote(bind, sm, key, si.serial, model, si.mn, si.mx, si.row, 1, (int)palette.size(), 1.0f);
         skinDraw_ = &d0;
         skinPrepSkipped_ = true;
         ++statOccPrepSkipped_;
@@ -4950,6 +5047,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
     skinDraw_ = &d;
     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
+    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx, si.row, skinMode_, skinBones_, skinAlpha_);   // (WFC_RT_CHARS: M7 RT)
     if (motion) {
         MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
                       skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};
@@ -5307,6 +5405,7 @@ void Pipeline::buildMdi(int meshId) {
     VertexAttribDivisor(11, 1);
     BindVertexArray(0);
     mdiMesh_ = meshId;
+    rtBuildWorld(meshId);                              // (WFC_RT_DEPTHCHECK: M7 stage 0, the prepass set as BLAS / TLAS)
     LOG_INFO("wfc: %s MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)",
              meshId == bspMesh_ ? "level BSP" : "world", row, mdiBuckets_.size(), arrayed);
     LOG_INFO("wfc: %s subs drawn singly: %zu without an MDI program, %zu translucent, %zu actor-owned, %zu vertex-lightmapped, "
@@ -6028,6 +6127,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
     // WFC_ZPREPASS_TEST=1 (positive control only): the prepassed buckets are not shaded, so the opaque world shows
     // the clear colour / sky - visibly wrong whenever the prepass is active
     static const bool zTest = std::getenv("WFC_ZPREPASS_TEST") != nullptr;
+    rtRoundTrip(bspMesh_ >= 0 && &g == &meshes_[(size_t)bspMesh_]);   // (WFC_RT_ROUNDTRIP / _DEPTHCHECK: M7 stage 0)
     glx::gpuStamp("world: MDI shading");
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
@@ -6129,6 +6229,7 @@ void Pipeline::releaseMeshCaches(const MeshData* m) {
     for (const Material& mt : m->mats) dynProgMemo_.erase(&mt);   // memo keyed by these materials' addresses
     auto sm = skinModels_.find(m);
     if (sm != skinModels_.end()) {
+        rtSkinForget(m);
         if (sm->second.vao) DeleteVertexArrays(1, &sm->second.vao);
         for (GLuint* b : {&sm->second.vbo, &sm->second.jwVbo, &sm->second.ibo}) if (*b) DeleteBuffers(1, b);
         skinModels_.erase(sm);
@@ -6172,6 +6273,7 @@ void Pipeline::setAnisotropy(int level) {
 }
 
 void Pipeline::evictSkin(bool all) {
+    if (all) rtSkinForget(nullptr);                     // (M7 RT characters: the feed forgets every model / slot)
     for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
         if (all || frameNo_ - it->second.lastFrame > 600) {
             if (it->second.row >= 0 && !all) freeSkinRows_.push_back(it->second.row);
@@ -6182,6 +6284,7 @@ void Pipeline::evictSkin(bool all) {
         // models (static buffers + bounds sets per bind mesh) are kept ~60 s at 300 fps: a body that is dead for its
         // respawn delay must not be rebuilt (vertex build + upload + per-joint hulls) when it spawns again
         if (all || (!it->second.pinned && frameNo_ - it->second.lastFrame > 18000)) {
+            if (!all) rtSkinForget(it->first);
             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
             for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
             it = skinModels_.erase(it);
@@ -6874,6 +6977,13 @@ void Pipeline::flushDynQueue() {
         run(false);
         dump("shadoworder_original.bmp");
         DeleteFramebuffers(1, &sFbo); glDeleteTextures(1, &sCol); glDeleteTextures(1, &sDep);
+    } else if (rtDynBegin()) {                          // M7 stage 1 (WFC_RT_SHADOWAO): RT shadows / AO replace the projectors
+        glx::gpuStamp("RT: dynamic depth");
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // depth only (rtDepthOnly_: opaque + masked)
+        rtDynMid();
+        glx::gpuStamp("characters: queued draws");
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // shaded with the RT mask + AO
+        rtDynEnd();
     } else {
         run(incremental);
     }
@@ -7078,6 +7188,7 @@ void Pipeline::writeFrameReport() {
 // texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
 GLuint Pipeline::shadowMaskTexFor(bool character) {
     maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
+    if (rtMaskActive_) return rtSoftActive_ ? rtTargets_.shadowSoft : rtTargets_.shadowDn;   // (M7: the RT sun visibility, screen-sized)
     if (character && maskDrawnFrame_ == frameNo_ && maskBlurTex_) {
         maskTexelOffset_[0] = 0.5f / (float)maskW_;
         maskTexelOffset_[1] = 0.5f / (float)maskH_;

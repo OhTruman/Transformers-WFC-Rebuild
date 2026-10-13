@@ -67,6 +67,7 @@ int vkFor(Button b) {
         case Button::DebugNextStart: return VK_F6;  // test spawn cycling (not a WFC binding)
         case Button::DebugPrevStart: return VK_F7;
         case Button::Dash:         return VK_SHIFT; // [CONF] Shift = "Ability0 | VehicleSpecialMove";
+        case Button::RenderMode:   return VK_F9;    // PC ADAPTATION: the Ray Tracing mode cycle
                                                     // PlayerInCarForm.StartVehicleSpecialMove -> set_DashingInput
         default:                   return 0;
     }

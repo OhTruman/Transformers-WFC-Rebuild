@@ -159,6 +159,7 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, CopyImageSubData, (GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei)) \
     X(void, TextureView, (GLuint, GLenum, GLuint, GLenum, GLuint, GLuint, GLuint, GLuint)) \
     X(void, CompressedTexImage2D, (GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*)) \
+    X(void, GetCompressedTexImage, (GLenum, GLint, void*)) \
     X(void, GenQueries, (GLsizei, GLuint*)) \
     X(void, DeleteQueries, (GLsizei, const GLuint*)) \
     X(void, BeginQuery, (GLenum, GLuint)) \
