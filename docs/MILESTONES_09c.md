@@ -476,36 +476,36 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   realistic textures possible ... add more detail wherever needed' = THE texture deliverable (D stays Faithful); strength
   G2 vs G3 chosen by the user from a crop sheet (Original | D | E-2x-G2 | E-2x-G3 | E-4x-G3); scope every world surface,
   then characters + weapons.
-  18:00 Experimental FAST launch check of package 2 PASS 2/2 (via the Play.bat route, own profile); self-test sweep on
+  17:05 Experimental FAST launch check of package 2 PASS 2/2 (via the Play.bat route, own profile); self-test sweep on
   2017eeba running. Gameplay: WFC_NULLRENDER=1 CPU-only harness boot landed 46f2c713 (stub IRenderer, no window / GL;
   DETERMINISM 30 s null boot 0.63 GB / 7 s; GL-vs-null digest identity pending a 1-min slot): sim-only harnesses run
   without the GPU from now. Pathing: two Smart-only changes coded (pure-pursuit steering 3.5 m ahead through corridors;
   stuck response = back off 0.6 s toward the open side instead of hopping), measured by NAVQ on the 4 user maps
   (baseline / +pursuit / +both / Classic), patch after the numbers. User: not playing; package 2 untested so far.
-  18:10 NAVQ BASELINE (3 seeds x 4 maps; slow % / reversals per travel-min / off-mesh % / stucks per bot-min): SMART
+  17:10 NAVQ BASELINE (3 seeds x 4 maps; slow % / reversals per travel-min / off-mesh % / stucks per bot-min): SMART
   MOVES WORSE THAN CLASSIC ON EVERY MAP - Streets 7.8/5.5/5.7/1.65 vs 5.4/3.7/5.1/1.55; Molten 3.2/2.4/3.3/0.72 vs
   2.1/2.3/1.6/1.04; Debris 6.1/2.5/5.5/1.60 vs 3.2/0.8/1.9/0.82; Gorge 11.1/7.7/12.5/2.85 vs 6.9/3.8/7.2/2.15 (matches
   the user's 'pathing could be a lot better'). Stuck sidestep worse everywhere (dropped); pursuit helps Streets only.
   Ablation running (exposure cost, per-bot route noise reseeded every 10 s = prime suspect, squads, flank); repaths
   ~45-55 per bot-min = corridor churn. TARGET for the next playtest: Smart >= Classic in all four columns on every map
   with the tactics kept; fix mechanisms (seed hold, repath cap, corridor hysteresis), not feature zeroing.
-  18:30 USER REQUEST: automated game runs must be silent while they use the PC (movie). WFC_MUTE=1 added c246ed3e
+  17:25 USER REQUEST: automated game runs must be silent while they use the PC (movie). WFC_MUTE=1 added c246ed3e
   (Win32Audio feeds silence to the device, mix / cue logic / stats unchanged; env-only, never a package default), pinned
   in tools/fidelity (eef42f10) and every lane runner; a Windows session muter (Core Audio, scratchpad script) mutes any
   wfc_rebuild.exe session within 2 s for builds without the switch (running 17:27-03:27). Systems' light calibration
   merged 13b29545 (fit_lights.json x10, shipped by build_slim --vbake).
-  18:45 NAVQ ABLATION (Gameplay, 3 seeds x 4 maps): Smart's movement deficit comes from SQUADS - squadSize=0 brings Smart
+  17:40 NAVQ ABLATION (Gameplay, 3 seeds x 4 maps): Smart's movement deficit comes from SQUADS - squadSize=0 brings Smart
   to ~Classic (Streets 4.0/4.3/3.5/1.26 vs 5.4/3.7/5.1/1.55; Molten 2.2/2.1/2.0/0.73 vs 2.1/2.3/1.6/1.04; Debris
   3.7/1.8/2.5/0.79 vs 3.2/0.8/1.9/0.82; Gorge 8.4/5.3/6.7/2.43 vs 6.9/3.8/7.2/2.15). Route noise HELPS (removing it
   doubles Gorge reversals); exposure / flank mixed; no single squad sub-feature explains it (squadSize also gates
   respawn-near-squad). Next: squads off / spawn-near off / per-member slots 5 m around the shared destination / Classic
   at 6 seeds; the fix keeps squads and removes the crowding mechanism.
-  19:00 RT STEP 1 MERGED fd3bd799 (rt2 a93a3e11): the RT pass runs every frame (world-only pass at flushTranslucency when
+  17:50 RT STEP 1 MERGED fd3bd799 (rt2 a93a3e11): the RT pass runs every frame (world-only pass at flushTranslucency when
   no character is queued); no-character RT verified on Rust (sun swap ON, 32 % vs Off every frame) + Molten; Off identity
   with the REAL build (Rendering caught a stale-mtime baseline-vs-baseline pair and reran): Rust 5/5 shots, SIMHASH
-  identical. First DML WINDOW opened 18:55 (~2 h): D GPU rows, the E A/B sheet for the user, E milestone 1 start;
+  identical. First DML WINDOW opened 17:45 (~2 h): D GPU rows, the E A/B sheet for the user, E milestone 1 start;
   Experimental's sweep parked at test 55 (WFC_TILETEST); Rendering on code (reflection layer, S1 tracer).
-  19:10 NAVQ at 6 seeds (Gameplay): Smart's RESPAWN-NEAR-SQUAD is the main Gorge culprit (off: Gorge 5.5/4.1/5.3/1.77 vs
+  17:55 NAVQ at 6 seeds (Gameplay): Smart's RESPAWN-NEAR-SQUAD is the main Gorge culprit (off: Gorge 5.5/4.1/5.3/1.77 vs
   base 12.1/10.0/14.7/3.06, better than Classic 5.9/5.0/7.0/2.31; helps Molten + Debris); member slots shelved. A real
   visible bug behind the reversal outliers: a Roam goal on a floor 18 m below a railing + horizontal-only arrival made a
   bot ping-pong 2.5 m at 8 m/s for 263 s (565 reversals). Smart-only fixes under test: goalFloorM 3 (arrival needs the
