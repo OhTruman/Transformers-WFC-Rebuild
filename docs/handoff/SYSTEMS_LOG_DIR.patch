@@ -1,0 +1,199 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 844aa669..1850f71a 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -407,7 +407,7 @@ Application::~Application() = default;
+ void Application::applyStartupGraphics() {
+     frontend::LocalProfile p;   // just the stored values (no save, no migration): the full load runs later, in GameFlow
+     {
+-        std::ifstream f(frontend::LocalProfile::kFile);
++        std::ifstream f(core::userFilePath(frontend::LocalProfile::kFile));
+         if (f) p.loadFrom(f);
+     }
+     const bool fg = p.display.frameGeneration != 0;
+diff --git a/src/core/Log.cpp b/src/core/Log.cpp
+index 157318bc..7295400c 100644
+--- a/src/core/Log.cpp
++++ b/src/core/Log.cpp
+@@ -24,10 +24,36 @@ namespace core {
+ // write-and-flush-per-line behaviour.
+ namespace {
+ 
++std::string exeDirSlash() {
++#ifdef _WIN32
++    char buf[MAX_PATH] = {};
++    const DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
++    std::string s(buf, n);
++    const size_t k = s.find_last_of("\\/");
++    return k == std::string::npos ? std::string() : s.substr(0, k + 1);
++#else
++    return std::string();
++#endif
++}
++
+ std::FILE* logFile() {
+-    // Mirror all logs to a file next to the executable so output is capturable even when
+-    // launched as a windowed process with no attached console.
+-    static std::FILE* f = std::fopen("wfc.log", "w");
++    // Mirror all logs to wfc.log (userDirPrefix(): the working directory, or the exe's folder when that is not writable) so
++    // output is capturable even when launched as a windowed process with no attached console. The first line names the
++    // file's full path (a playtest log that is hard to find costs the session).
++    static std::FILE* f = [] {
++        const std::string path = userFilePath("wfc.log");
++        std::FILE* h = std::fopen(path.c_str(), "w");
++        if (h) {
++#ifdef _WIN32
++            char full[MAX_PATH] = {};
++            if (!_fullpath(full, path.c_str(), MAX_PATH)) std::snprintf(full, sizeof full, "%s", path.c_str());
++#else
++            const char* full = path.c_str();
++#endif
++            std::fprintf(h, "[info ] log file: %s%s\n", full, *userDirPrefix() ? " (the working directory is not writable: the exe's folder)" : "");
++        }
++        return h;
++    }();
+     return f;
+ }
+ 
+@@ -171,4 +197,12 @@ void logMessage(LogLevel level, const char* fmt, ...) {
+     if (level == LogLevel::Error) w.drain();               // an error is on disk before the caller goes on
+ }
+ 
++const char* userDirPrefix() {
++    static const std::string dir = [] {
++        if (std::FILE* t = std::fopen("wfc.log", "a")) { std::fclose(t); return std::string(); }   // (the log opens it "w" next)
++        return exeDirSlash();
++    }();
++    return dir.c_str();
++}
++
+ } // namespace core
+diff --git a/src/core/Log.h b/src/core/Log.h
+index 2dc2a816..077bd586 100644
+--- a/src/core/Log.h
++++ b/src/core/Log.h
+@@ -1,6 +1,7 @@
+ // Clean-room reconstruction — logging.
+ #pragma once
+ #include <cstdio>
++#include <string>
+ 
+ namespace core {
+ 
+@@ -18,6 +19,13 @@ const char* logLastLine();
+ // Dev tools that react to log lines (WFC_CPUPROF's hitch capture on "SLOWFRAME" lines): set once at startup, called with each
+ // line (first ~150 chars) on the logging thread; null = nothing.
+ void setLogLineHook(void (*hook)(const char* line));
++// Where the per-run user files go (wfc.log, wfc_profile.ini, wfc_characters.ini, crash / hang reports): the working
++// directory when it is writable - harnesses start one exe from per-run folders and collect them there - else the exe's
++// folder (a launch whose start folder is not writable, e.g. C:\Windows\System32, used to lose the log and the settings
++// silently). Decided once, at the first call (the log's open); userDirPrefix() is "" (the working directory) or
++// "<exe dir>/", never allocates after that first call (crash filters use it).
++const char* userDirPrefix();
++inline std::string userFilePath(const char* name) { return std::string(userDirPrefix()) + name; }
+ 
+ } // namespace core
+ 
+diff --git a/src/frontend/FrontendRuntime.cpp b/src/frontend/FrontendRuntime.cpp
+index d3e11fff..d5df0aa8 100644
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -247,12 +247,13 @@ bool FrontendRuntime::init() {
+     roster_.loadAuthored(frontendDataFile("character_presets.json"));
+     // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->
+     // ResetCharacterFromName) and written at once (MarkAsDirty -> the profile save); later runs load them.
+-    if (!std::filesystem::exists(kCharactersFile)) {
++    const std::string charactersFile = core::userFilePath(kCharactersFile);
++    if (!std::filesystem::exists(charactersFile)) {
+         roster_.randomizeAllColors();
+-        roster_.save(kCharactersFile);
+-        FlowTrace::emit("customize.freshProfile", {{"file", kCharactersFile}, {"colors", "random palettes"}});
++        roster_.save(charactersFile);
++        FlowTrace::emit("customize.freshProfile", {{"file", charactersFile}, {"colors", "random palettes"}});
+     }
+-    roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
++    roster_.loadSaved(charactersFile);   // the player's edits (Create a Character)
+     {   // PC ADAPTATION chassis XP unlocks (user decision): chassis id -> level of the chassis' own specialty
+         assets::Json j;
+         std::ifstream f(openPath(frontendDataFile("chassis_xp_unlocks.json")));
+@@ -597,8 +598,8 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
+         return {};
+     }
+     if (fn == "Customize.WriteCustomizationFile") {
+-        bool ok = roster_.save(kCharactersFile);
+-        FlowTrace::emit("customize.write", {{"file", kCharactersFile}, {"ok", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (file)"}});
++        bool ok = roster_.save(core::userFilePath(kCharactersFile));
++        FlowTrace::emit("customize.write", {{"file", core::userFilePath(kCharactersFile)}, {"ok", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (file)"}});
+         return {};
+     }
+     if (fn == "Customize.ResetCharacter") {
+diff --git a/src/frontend/Profile.cpp b/src/frontend/Profile.cpp
+index b848b1e7..5079215d 100644
+--- a/src/frontend/Profile.cpp
++++ b/src/frontend/Profile.cpp
+@@ -67,7 +67,7 @@ void LocalProfile::set(const std::string& field, const std::string& value) {
+ }
+ 
+ void LocalProfile::load() {
+-    std::ifstream f(kFile);
++    std::ifstream f(core::userFilePath(kFile));
+     if (loadFrom(f)) save();
+ }
+ 
+@@ -139,7 +139,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
+ }
+ 
+ void LocalProfile::save() const {
+-    std::ofstream f(kFile);
++    std::ofstream f(core::userFilePath(kFile));
+     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
+          "; display settings under [PCSettings].\n";
+     f << "\n[ProfileData]\n";
+diff --git a/src/render/gl/RenderWatchdog.cpp b/src/render/gl/RenderWatchdog.cpp
+index 92fe3b7a..ad241826 100644
+--- a/src/render/gl/RenderWatchdog.cpp
++++ b/src/render/gl/RenderWatchdog.cpp
+@@ -126,8 +126,8 @@ std::atomic<bool> gCrashed{false};
+ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
+     if (gCrashed.exchange(true)) return EXCEPTION_CONTINUE_SEARCH;   // one report (a fault inside the report)
+     const DWORD pid = GetCurrentProcessId();
+-    char path[96];
+-    std::snprintf(path, sizeof path, "wfc_crash_%lu.txt", (unsigned long)pid);
++    char path[MAX_PATH + 32];
++    std::snprintf(path, sizeof path, "%swfc_crash_%lu.txt", core::userDirPrefix(), (unsigned long)pid);
+     HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+     if (f != INVALID_HANDLE_VALUE) {
+         const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
+@@ -188,8 +188,8 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
+         if (map) VirtualFree((void*)map, 0, MEM_RELEASE);
+         CloseHandle(f);
+     }
+-    char dpath[96];
+-    std::snprintf(dpath, sizeof dpath, "wfc_crash_%lu.dmp", (unsigned long)pid);
++    char dpath[MAX_PATH + 32];
++    std::snprintf(dpath, sizeof dpath, "%swfc_crash_%lu.dmp", core::userDirPrefix(), (unsigned long)pid);
+     const bool dumped = writeDump(dpath, ep);
+     char msg[256];
+     const int n = std::snprintf(msg, sizeof msg, "wfc_rebuild crashed: report %s, minidump %s%s\n", path, dpath, dumped ? "" : " (failed)");
+@@ -321,8 +321,8 @@ void loop() {
+                   gPhase.load(), gFrame.load());
+ #ifdef _WIN32
+         if (dumps < 2) {
+-            char path[96];
+-            std::snprintf(path, sizeof path, "wfc_hang_%lu_%d.dmp", (unsigned long)GetCurrentProcessId(), dumps++);
++            char path[MAX_PATH + 32];
++            std::snprintf(path, sizeof path, "%swfc_hang_%lu_%d.dmp", core::userDirPrefix(), (unsigned long)GetCurrentProcessId(), dumps++);
+             LOG_ERROR("watchdog: minidump %s: %s", path, writeDump(path) ? "written (all thread stacks)" : "failed");
+         }
+ #endif
+@@ -355,8 +355,8 @@ void gpuLost(const char* why) {
+     LOG_ERROR("GPU driver reset / hang: exiting (%s)", why);
+ #ifdef _WIN32
+     const DWORD pid = GetCurrentProcessId();
+-    char path[96];
+-    std::snprintf(path, sizeof path, "wfc_gpu_lost_%lu.txt", (unsigned long)pid);
++    char path[MAX_PATH + 32];
++    std::snprintf(path, sizeof path, "%swfc_gpu_lost_%lu.txt", core::userDirPrefix(), (unsigned long)pid);
+     if (HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); f != INVALID_HANDLE_VALUE) {
+         put(f, "wfc_rebuild stopped: the graphics driver was reset or stopped responding.\n%s\nrender phase '%s', frame %d; "
+                "hang minidump (if written): wfc_hang_%lu_0.dmp\n", why, gPhase.load(), gFrame.load(), (unsigned long)pid);
