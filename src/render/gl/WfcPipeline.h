@@ -304,6 +304,11 @@ private:
     };
 
     GLuint texture(const std::string& file, bool srgb, bool clampU, bool clampV);
+    // M6 modern material maps from the HD pack (hd_pbr_index.json / hd_modern_index.json next to hd_index.json): the
+    // map of a role ("roughness", "height", "orm") for a texture object (its cooked path, e.g. "Pkg.Group.Name"), BC4 /
+    // BC7 linear blocks; 0 when HD textures are off, the pack has no such row, or its file is bad (that map only).
+    GLuint hdPbrTexture(const std::string& textureObject, const std::string& role);
+    std::map<std::pair<std::string, std::string>, GLuint> hdPbrTex_;   // (per map: deleted on release)
     GLuint cubeTexture(const std::vector<std::string>& faces, bool srgb);
     int programFor(const std::string& matName, const Material* gltfMat, bool lightmapped);
     std::string resolveBySourceName(const Material* m) const;
