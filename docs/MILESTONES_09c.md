@@ -449,5 +449,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering GPU time. 4c replacing the ~270 baked local lights per map (+2-3 days) = user scope question (default after
   the playtest; the probes already bounce their light). Budget: Realistic <= 4 ms RT at 2560x1440 (~120-165 fps, cannot
   meet the 300 cap), Faithful = the high-fps RT mode, Realistic VRAM delta <= 1 GB.
+  17:10 REVISED and approved (supersedes the DDGI steps and the 4c question): a RUNTIME RAY-TRACED LIGHTMAP - per
+  lightmap texel: sun (soft) + sky + every static light from lighting.json with RT shadow rays + bounce, written in the
+  bake's 3-coefficient directional basis (shaders / UVs unchanged, lightmap textures replaced); full pass under the
+  loading screen, cached per map, rotating subset per frame; character probe grid from the same data; dynamic lights per
+  pixel; fallback = the baked lightmaps (WFC_RT_GI=0). Stages, each whole-map: S1 sun + sky 16-22 h, S2 static lights +
+  RT shadows 10-14 h, S3 multi-bounce + character probes 10-14 h, S4 dynamic lights + per-map brightness calibration +
+  perf 8-12 h; ~6-7 days of slot time; cost ~ today's Realistic + 1.5 ms. Order: RT-without-characters -> reflections ->
+  S1-S4 -> shadow refinement -> Modern / level 2 -> checks. Systems asked to confirm lighting.json carries every static
+  light with the bake's units.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
