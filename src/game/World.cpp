@@ -490,6 +490,7 @@ void World::respawnPlayer() {
     player_.pawn().setHoverApplied(0.0f);   // placed on the floor
     player_.pawn().groundY = spawnPos_.y;
     player_.controller().setCameraYaw(spawnYaw_);
+    if (renderer_) renderer_->notifyCameraCut("respawn");
 }
 
 // gameplay.json "pickups": the placed TnAmmoCrate/TnHealth/TnOverShield pickup factories with their
@@ -612,6 +613,7 @@ void World::teleportToStart(int index) {
     pc.velocity() = {0, 0, 0};
     pc.groundY = p.y;
     player_.controller().setCameraYaw(s.yaw);
+    if (renderer_) renderer_->notifyCameraCut("teleport");
     LOG_INFO("start %d/%zu: %s (%s, cluster %s) at %.1f %.1f %.1f", index, starts_.size(), s.actor.c_str(), s.cls.c_str(),
              s.cluster.c_str(), p.x, p.y, p.z);
 }
@@ -2374,6 +2376,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
         pc.setPosition(p); pc.setYaw(st.yaw); pc.groundY = p.y;
         player_.controller().setCameraYaw(st.yaw);
         player_.controller().setSpectatorView(st.pos + core::Vec3{0, core::config::kPawnHalfHeight, 0}, st.yaw);
+        if (renderer_) renderer_->notifyCameraCut("spectate");
     }
     // Under the match load: cache (and prewarm) the four default MP bodies of the local player's faction, so a class pick in
     // the lobby (after this, on a visible frame) is instant. Other participants' bodies (bots, the other faction, custom
@@ -3335,6 +3338,7 @@ void World::tickMatch(float dt) {
                     player_.controller().setCameraYaw(st.yaw);
                     localDead_ = false;
                     player_.controller().clearSpectatorView();
+                    if (renderer_) renderer_->notifyCameraCut("spectate end");
                     if (spawnProf()) LOG_INFO("SPAWNPROF local spawn: chassis apply %.1f ms, respawnReset %.1f ms, specialty+loadout %.1f ms, rest %.1f ms (%s)",
                                               tp1 - tp0, tp2 - tp1, tp3 - tp2, profNowMs() - tp3, mp.chassis.c_str());
                     recordSpawnEvent(localPlayer_);
@@ -3382,6 +3386,7 @@ void World::tickMatch(float dt) {
                 // runtime stops the match here and returns to free play.
                 LOG_INFO("match: return to lobby");
                 player_.controller().clearSpectatorView();
+                if (renderer_) renderer_->notifyCameraCut("spectate end");
                 matchActive_ = false;
                 localDead_ = false;
                 returned = true;
@@ -5397,7 +5402,8 @@ void World::tickGuidedMissile(float dt) {
             missile_ = GuidedMissile{};
             missile_.alive = true; missile_.life = 30.0f; missile_.vel = dir * 20.0f;
             missile_.pos = pc.actorLocation() + core::Vec3{0, pc.robotParams().eyeHeight, 0} + core::forwardFromYawPitch(pc.yaw(), 0.0f) * 2.0f;
-            ctl.setGuiding(true);
+            ctl.setGuiding(true);                               // the missile view below starts this tick: the cut is here, once
+            if (renderer_) renderer_->notifyCameraCut("missile cam");
             LOG_INFO("guided missile launched (pitch %.1f deg)", pitch * 57.2958f);
         }
     }
@@ -5432,6 +5438,7 @@ void World::tickGuidedMissile(float dt) {
     } else if (ctl.guiding()) {
         ctl.setGuiding(false);
         ctl.clearSpectatorView();
+        if (renderer_) renderer_->notifyCameraCut("missile cam end");
     }
     pc.missileAlive_ = m.alive || missileDelay_ >= 0.0f;
 }
@@ -6357,6 +6364,7 @@ void World::qaTeleportToAim() {
     float gy; core::Vec3 gn;
     if (col->groundHeight(p.x, p.z, p.y + 1.0f, 6.0f, gy, gn)) p.y = gy;
     pc.setPosition(p); pc.velocity() = {0, 0, 0}; pc.groundY = p.y;
+    if (renderer_) renderer_->notifyCameraCut("teleport");
     LOG_INFO("qa: teleported to aim (%.1f %.1f %.1f)", p.x, p.y, p.z);
 }
 
