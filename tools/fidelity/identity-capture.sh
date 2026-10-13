@@ -11,7 +11,7 @@ PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"; SP="C:/Users/coxes/Ap
 freegb() { powershell -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory/1MB)"; }
 mine() { powershell -NoProfile -Command "Get-CimInstance Win32_Process | ? { \$_.ExecutablePath -like '*Rebuild-Experimental\work\ab\m9c_*' } | % { \$_.ProcessId }"; }
 gate() {
-  ls "F:/Transformers Rebuild/"*/work/PERF_HOLD 2>/dev/null && { echo "PERF_HOLD: stopping"; exit 3; }
+  for h in "F:/Transformers Rebuild/"*/work/PERF_HOLD; do [ -e "$h" ] || continue; case "$h" in *Rebuild-Experimental*) [ -n "$WFC_GATE_IGNORE_HOLD" ] && continue;; esac; echo "PERF_HOLD $h: stopping"; exit 3; done
   local f=$(freegb | tr -d '\r'); [ "$f" -lt 8 ] && { echo "free commit ${f} GB < 8: stopping"; exit 4; }
   echo "free commit ${f} GB"
 }
