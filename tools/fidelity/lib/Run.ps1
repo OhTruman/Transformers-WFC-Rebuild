@@ -56,7 +56,8 @@ function Get-WfcRtState([string]$WfcLog) {
     if (-not (Test-Path $WfcLog)) { return $o }
     foreach ($l in [IO.File]::ReadLines((Resolve-Path $WfcLog).Path)) {
         if ($l.Contains('renderer: Ray Tracing ')) { $m = [regex]::Match($l, 'renderer: Ray Tracing (Off|Faithful|Realistic)'); if ($m.Success) { $o.mode = @{ Off = 0; Faithful = 1; Realistic = 2 }[$m.Groups[1].Value]; $o.modeLogged = $true } }
-        elseif ($l -match 'TLAS \d+ instances') { $o.scene = $true }
+        # (the static world's BLAS / prepass lines, not only the masked world's TLAS line: a map without masked subs logs no TLAS line - Systems)
+        elseif ($l -match 'TLAS \d+ instances|RT bridge: static set \(mask|RT world: \d+ prepassed subs') { $o.scene = $true }
         elseif ($l.Contains('built without the RT shaders') -or $l.Contains('this build has no RT shaders')) { $o.noShaders = $true }
         elseif ($l.Contains('reflection hit data')) { $o | Add-Member -NotePropertyName refl -NotePropertyValue $true -Force }
     }
