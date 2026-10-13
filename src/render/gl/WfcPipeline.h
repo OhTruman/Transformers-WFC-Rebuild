@@ -489,6 +489,14 @@ private:
     // stage 1 option b (WfcRt.cpp): flushDynQueue's RT path - the world depth, a depth-only pass of the dynamic draws, the
     // round trip + world composite, then the dynamic draws shaded with the RT mask (uShadowMask) and AO (unit 25)
     bool rtShadowAoOn() const;
+    // M7 stage 2 modern mode (WFC_RT_REFLECT_COMPOSITE, with WFC_RT_REFLECT): the materials' authored cube reflections
+    // sample the ray-traced reflection instead (the previous frame's, reprojected; blurred by their LOD bias)
+    bool rtReflComposite() const;
+    GLuint rtReflPrev_ = 0;
+    int rtReflPrevW_ = 0, rtReflPrevH_ = 0;
+    bool rtReflValid_ = false;
+    float rtReflVP_[16] = {};
+    void rtReflKeep();
     bool rtDynBegin();
     void rtDynMid();
     void rtDynEnd();

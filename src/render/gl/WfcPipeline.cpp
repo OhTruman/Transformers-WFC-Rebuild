@@ -2071,15 +2071,29 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    vec3 lin = g * (255.0 * 1024.0) * sc + off;\n"
               "    return clamp(lin * (1.0 + sc), 0.0, 1023.0) / 1023.0;\n"
               "}\n";
+    const bool rtRefl = rtReflComposite();
+    if (rtRefl)   // (M7 stage 2 modern mode) the ray-traced reflection at this pixel (premultiplied by its hit share; miss = the cube)
+        fs += "uniform sampler2D uRtRefl; uniform mat4 uRtReflVP; uniform int uRtReflOn; uniform float uRtReflLod;\n"
+              "vec4 wfcRtRefl(vec4 cube, float bias) {\n"
+              "    if (uRtReflOn == 0) return cube;\n"
+              "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
+              "    if (p.w <= 0.0) return cube;\n"
+              "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
+              "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return cube;\n"
+              "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + max(bias, 0.0));\n"
+              "    return vec4(mix(cube.rgb, r.rgb / max(r.a, 1e-3), clamp(r.a, 0.0, 1.0)), cube.a);\n"
+              "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
         if (slotIsCube[k]) {
             fs += "uniform samplerCube uTex" + n + ";\n";
             // UE world direction -> cube lookup (faces in UE/D3D order, see cubeTexture)
-            fs += "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
+            fs += rtRefl ? "vec4 wfcSC_" + n + "(vec3 d) { return wfcRtRefl(texture(uTex" + n + ", d), 0.0); }\n"
+                         : "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
             replaceAll(code, "wfcSampleCube(" + n + ", ", "wfcSC_" + n + "(");
             // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
-            fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
+            fs += rtRefl ? "vec4 wfcSCB_" + n + "(vec3 d, float b) { return wfcRtRefl(texture(uTex" + n + ", d, b), b); }\n"
+                         : "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
             replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
         } else {
             fs += "uniform sampler2D uTex" + n + "; uniform vec4 uUnpackMin" + n + "; uniform vec4 uUnpackScale" + n + ";\n";
@@ -3050,6 +3064,14 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (rtShadowAoOn()) {
             ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10);
             Uniform3f(ULOC(P, "uRtSunDir"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
+        }
+        if (rtReflComposite()) {                         // (M7 stage 2 modern mode) the previous frame's reflections
+            static const float lod = [] { const char* e = std::getenv("WFC_RT_REFLECT_LOD"); return e ? (float)std::atof(e) : 1.0f; }();
+            ActiveTexture(GL_TEXTURE0 + 26); glBindTexture(GL_TEXTURE_2D, rtReflPrev_); ActiveTexture(GL_TEXTURE0 + 10);
+            Uniform1i(ULOC(P, "uRtRefl"), 26);
+            Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ ? 1 : 0);
+            Uniform1f(ULOC(P, "uRtReflLod"), lod);
+            UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
     }
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values

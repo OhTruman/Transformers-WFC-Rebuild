@@ -190,6 +190,36 @@ void Pipeline::rtBuildWorld(int meshId) {
 // (WFC_RT_SHADOWAO, stage 1 option b): at the end of the opaque pass (flushTranslucency, after the characters), where
 // the depth is complete and this frame's poses exist; endOfOpaque marks that call.
 bool Pipeline::rtShadowAoOn() const { return shadowAoOn() && !depthCheckOn(); }
+bool Pipeline::rtReflComposite() const {
+    static const bool on = reflectOn() && std::getenv("WFC_RT_REFLECT_COMPOSITE") != nullptr;
+    return on && rtShadowAoOn();
+}
+// after the round trip: this frame's reflections + view-projection kept for the next frame's world draws (a GL-owned
+// RGBA16F copy with mips: the materials' LOD bias blurs it; the shared target is D3D12's again next frame)
+void Pipeline::rtReflKeep() {
+    const RtTargets& t = rtTargets_;
+    if (!t.refl || !CopyImageSubData) { rtReflValid_ = false; return; }
+    if (!rtReflPrev_ || rtReflPrevW_ != vpW_ || rtReflPrevH_ != vpH_) {
+        if (rtReflPrev_) glDeleteTextures(1, &rtReflPrev_);
+        glGenTextures(1, &rtReflPrev_);
+        glBindTexture(GL_TEXTURE_2D, rtReflPrev_);
+        int levels = 1; while ((std::max(vpW_, vpH_) >> levels) > 0) ++levels;
+        for (int l = 0; l < levels; ++l)
+            glTexImage2D(GL_TEXTURE_2D, l, GL_RGBA16F, std::max(1, vpW_ >> l), std::max(1, vpH_ >> l), 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        rtReflPrevW_ = vpW_; rtReflPrevH_ = vpH_;
+    }
+    CopyImageSubData(t.refl, GL_TEXTURE_2D, 0, 0, 0, 0, rtReflPrev_, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
+    glBindTexture(GL_TEXTURE_2D, rtReflPrev_);
+    GenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glx::textureCacheInvalidate();
+    std::memcpy(rtReflVP_, viewProj_.m, sizeof rtReflVP_);
+    rtReflValid_ = true;
+}
 
 // the shared depth -> R32F copy (the scene depth as of now) into tex
 void Pipeline::rtCopyDepth(GLuint tex) {
@@ -644,6 +674,7 @@ void Pipeline::rtDynMid() {
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     depthDirty_ = true;
     rtRoundTrip(false, true);
+    if (rtReflComposite()) { glx::gpuStamp("RT: reflections kept"); rtReflKeep(); }
     glx::gpuStamp("RT: world composite");
     const RtTargets& t = rtTargets_;
     const Light* sun = nullptr;
