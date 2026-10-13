@@ -10,6 +10,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -165,6 +166,10 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         static const int aoRays = [] { const char* e = std::getenv("WFC_RT_AORAYS"); return e ? std::max(0, std::atoi(e)) : 2; }();
         static const float aoRadius = [] { const char* e = std::getenv("WFC_RT_AORADIUS"); return e ? (float)std::atof(e) : 1.0f; }();
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
+        // the sun's angular radius (WFC_RT_SUNCONE degrees; default 0.27, the real sun's): soft shadows for the denoiser
+        static const float coneTan = [] { const char* e = std::getenv("WFC_RT_SUNCONE"); const float deg = e ? (float)std::atof(e) : 0.27f;
+                                          return std::tan(deg * 3.14159265f / 180.0f); }();
+        fr.sunConeTan = coneTan;
         const Light* sun = nullptr;                      // the brightest enabled directional light
         for (const Light& L : lights_)
             if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;

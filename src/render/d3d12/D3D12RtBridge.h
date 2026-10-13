@@ -25,6 +25,7 @@ struct RtFrame {
     float toSun[4] = {0, 0, 0, 0};   // unit vector towards the sun, w = 1 when there is one
     int frameIndex = 0, aoRays = 2;
     float aoRadius = 1.0f, bias = 0.0005f;
+    float sunConeTan = 0.0f;  // tan(the sun cone's half angle): soft shadows (0 = hard)
     // the FidelityFX conventions (ndc (x, 1 - 2v, depth 0 .. 1)), column-major: for the denoiser and the velocity
     float eye[3] = {0, 0, 0};
     float ffxProjInv[16] = {}, ffxReproj[16] = {}, ffxViewProjInv[16] = {};

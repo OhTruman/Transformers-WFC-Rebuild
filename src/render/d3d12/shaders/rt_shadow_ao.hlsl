@@ -15,7 +15,7 @@ cbuffer Frame : register(b0) {
     float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)
     float4 ToSun;           // xyz: unit vector towards the sun (-light forward); w: 1 = a sun exists
     float4 Size;            // width, height, frame index, AO rays per pixel
-    float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), instance mask, 0
+    float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), instance mask, sun cone tan(half angle)
     float4x4 Reproj;        // FidelityFX ndc (x, 1 - 2v, depth) now -> FidelityFX clip space of the previous frame
 };
 
@@ -62,12 +62,21 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
         if (dot(n, eye - p) < 0.0) n = -n;
         const float dist = length(p - eye);
         const float3 o = p + n * (0.01 + Params.y * dist);
-        if (ToSun.w > 0.5) { outv.x = occluded(o, ToSun.xyz, 10000.0) ? 0.0 : 1.0; ++rays; }
+        uint s = hash(id.x * 1973u + id.y * 9277u + (uint)Size.z * 26699u);   // per pixel and frame (the denoisers average)
+        if (ToSun.w > 0.5) {                             // soft sun: one ray in the sun's cone (a uniform disc of directions)
+            float3 sd = ToSun.xyz;
+            if (Params.w > 0.0) {
+                const float3 su = normalize(abs(sd.y) < 0.99 ? cross(sd, float3(0, 1, 0)) : cross(sd, float3(1, 0, 0)));
+                const float3 sv = cross(sd, su);
+                const float r = sqrt(rnd(s)) * Params.w, phi = 6.2831853 * rnd(s);
+                sd = normalize(sd + su * (r * cos(phi)) + sv * (r * sin(phi)));
+            }
+            outv.x = occluded(o, sd, 10000.0) ? 0.0 : 1.0; ++rays;
+        }
         const uint nAo = (uint)Size.w;
         if (nAo > 0) {
             const float3 t = normalize(abs(n.y) < 0.99 ? cross(n, float3(0, 1, 0)) : cross(n, float3(1, 0, 0)));
             const float3 bt = cross(n, t);
-            uint s = hash(id.x * 1973u + id.y * 9277u + (uint)Size.z * 26699u);
             uint hit = 0;
             for (uint k = 0; k < nAo; ++k) {                        // cosine-weighted hemisphere
                 const float u1 = rnd(s), u2 = rnd(s);

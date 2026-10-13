@@ -478,7 +478,7 @@ private:
         float c[48] = {};
         std::memcpy(c, fr.invViewProj, 64); std::memcpy(c + 16, fr.toSun, 16);
         c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = (float)fr.frameIndex; c[23] = (float)fr.aoRays;
-        c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF);
+        c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF); c[27] = fr.sunConeTan;
         std::memcpy(c + 28, fr.ffxReproj, 64);
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
