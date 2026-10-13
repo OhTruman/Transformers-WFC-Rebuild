@@ -127,7 +127,7 @@ public:
     }
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
-            waitIdle();
+            if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
             free(depth_); free(mask_); free(ao_); free(dnOut_);
             rel(hit_); rel(nrm_); rel(vel_);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
@@ -152,7 +152,7 @@ public:
     // ---- the static world: per MDI set (world, level BSP) a one-sided and a two-sided BLAS as identity instances with
     // the set's instance mask; the TLAS is rebuilt over all instances whenever a set is added (map load) ----
     bool addStaticWorld(const RtStaticWorld& W, unsigned mask) {
-        if (tlas_) { waitIdle(); rel(tlas_); }
+        if (tlas_) { if (!waitIdle()) return false; rel(tlas_); }
 #if !defined(WFC_RT_SHADERS)
         LOG_WARN("RT bridge: built without the RT shaders (tools/render/fetch_dxc.py before configuring): no depth check");
         return false;
@@ -235,7 +235,7 @@ public:
                 ID3D12CommandList* lists[] = {cl};
                 queue_->ExecuteCommandLists(1, lists);
             }
-            waitIdle();
+            if (!waitIdle()) { LOG_WARN("RT bridge: BLAS build not finished: its upload / scratch buffers leaked, set dropped"); return false; }
         }
         const double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
         rel(cl); rel(al); rel(vb); rel(ib[0]); rel(ib[1]); rel(instBuf);
@@ -250,7 +250,10 @@ public:
 #endif
     }
     void clearStaticWorld() {
-        if (tlas_ || !blas_.empty()) waitIdle();
+        if ((tlas_ || !blas_.empty()) && !waitIdle()) {   // (still in flight: dropped, not freed)
+            tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
+            return;
+        }
         rel(tlas_);
         for (auto* b : blas_) b->Release();
         blas_.clear(); instances_.clear(); totalBlas_ = 0;
@@ -262,12 +265,26 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[2] = {depth_.tex, mask_.tex}; GLenum ly[2] = {kLayoutShaderRead, kLayoutGeneral};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 2, tx, ly);
+        GLuint tx[4] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex};
+        GLenum ly[4] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral};
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 4, tx, ly);
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
-        if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) { fence_->SetEventOnCompletion(allocDone_[a], event_); WaitForSingleObject(event_, 1000); }
+        if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) {
+            fence_->SetEventOnCompletion(allocDone_[a], event_);
+            if (WaitForSingleObject(event_, 1000) != WAIT_OBJECT_0 && fence_->GetCompletedValue() < allocDone_[a]) {
+                static bool logged = false;
+                if (!logged) { logged = true; LOG_WARN("RT bridge: the D3D12 job of two frames ago is still running after 1 s: this frame's job skipped"); }
+                queue_->Wait(fence_, n);                     // (GL still needs its value: signalled after the pending work)
+                const UINT64 skip = ++value_;
+                queue_->Signal(fence_, skip);
+                GLuint64_ wv = skip; semParam_(sem_, kFenceValue, &wv);
+                GLuint wt[3] = {mask_.tex, ao_.tex, dnOut_.tex}; GLenum wl[3] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
+                waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 3, wt, wl);
+                return false;
+            }
+        }
         if (rbValid_[a]) readStats(a);
         alloc_[a]->Reset(); list_->Reset(alloc_[a], nullptr);
         if (fr && tlas_ && pso_ && fr->mode == 2) shadowAo(*fr, a);
@@ -552,10 +569,13 @@ private:
         rel(s.res);
         s = Shared{};
     }
-    void waitIdle() {
-        if (!queue_) return;
+    bool waitIdle() {
+        if (!queue_) return true;
         const UINT64 v = ++value_; queue_->Signal(fence_, v);
         if (fence_->GetCompletedValue() < v) { fence_->SetEventOnCompletion(v, event_); WaitForSingleObject(event_, 5000); }
+        if (fence_->GetCompletedValue() >= v) return true;
+        LOG_WARN("RT bridge: the D3D12 queue did not go idle within 5 s (resources kept, not freed)");
+        return false;
     }
     PFN_CreateMemoryObjectsEXT createMem_ = nullptr; PFN_DeleteMemoryObjectsEXT deleteMem_ = nullptr;
     PFN_ImportMemoryWin32HandleEXT importMem_ = nullptr; PFN_MemoryObjectParameterivEXT memParam_ = nullptr;

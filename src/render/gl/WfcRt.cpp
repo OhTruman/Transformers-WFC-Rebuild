@@ -119,6 +119,8 @@ void Pipeline::rtBuildWorld(int meshId) {
 void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn() || shadowAoOn();
     if (!on || rtFailed_) return;
+    GLint drawFb = 0; glGetIntegerv(0x8CA6 /*GL_DRAW_FRAMEBUFFER_BINDING*/, &drawFb);
+    if ((GLuint)drawFb != fbo_) return;                // the main scene pass only (not a shadow / warm-up pass's drawMdi)
     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
     const bool sao = shadowAoOn() && !depthCheckOn();
     if (sao ? (!endOfOpaque || rtFrame_ == frameNo_ || rtWorldSets_ == 0) : endOfOpaque ? true
@@ -126,10 +128,13 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     rtFrame_ = frameNo_;
     RtTargets t;
     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT round trip: bridge unavailable"); return; }
+    if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }   // (the bridge's raw binds)
     if (!rtDepthProg_) {
         GLuint vs = compileShader(GL_VERTEX_SHADER, kRtVS, "rt.vs");
         GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kRtDepthFS, "rt_depth.fs") : 0;
         rtDepthProg_ = fs ? linkProgram(vs, fs, "rt_depth") : 0;
+        if (vs) DeleteShader(vs);
+        if (fs) DeleteShader(fs);                        // (the program keeps them)
         GenFramebuffers(1, &rtFbo_);
         if (!rtDepthProg_) { rtFailed_ = true; return; }
         LOG_INFO("RT round trip: on (after the world depth prepass, %dx%d)", vpW_, vpH_);
@@ -137,6 +142,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     glx::gpuStamp("RT: round trip");
     ensureSceneDepth();
     GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    GLint prevVp[4]; glGetIntegerv(GL_VIEWPORT, prevVp);
     const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
     GLboolean cm[4]; glGetBooleanv(GL_COLOR_WRITEMASK, cm);
     glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -150,7 +156,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFb);
     RtFrame fr;
     static const unsigned maskEnv = [] { const char* e = std::getenv("WFC_RT_CHECKMASK"); return e ? (unsigned)std::atoi(e) : 0u; }();
     fr.instanceMask = maskEnv ? maskEnv : 1u << (bspSet ? 1 : 0);   // (WFC_RT_CHECKMASK: other sets too, diagnostics)
@@ -225,6 +231,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     if (blendOn) glEnable(GL_BLEND);
     if (cullOn) glEnable(GL_CULL_FACE);
     UseProgram((GLuint)prevProg);
+    glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
     glx::uniformCacheForgetCurrent();
 }
 

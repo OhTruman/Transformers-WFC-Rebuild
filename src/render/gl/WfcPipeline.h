@@ -483,6 +483,7 @@ private:
     bool rtFailed_ = false;
     void rtRoundTrip(bool bspSet, bool endOfOpaque = false);
     core::Mat4 rtPrevVP_; bool rtHavePrevVP_ = false;
+    GLuint rtLastDepthTex_ = 0;
     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
     int rtFrame_ = -1;
     void rtBuildWorld(int meshId);

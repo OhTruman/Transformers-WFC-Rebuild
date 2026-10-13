@@ -766,6 +766,8 @@ void Pipeline::release() {
         for (GLuint* f : {&opaqueCopyFbo_, &reactiveFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(opaqueCopyTex_); delTex(reactiveTex_); delProg(reactiveProg_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
+        delProg(rtDepthProg_);                         // (M7 RT: the depth -> R32F program and its FBO)
+        if (rtFbo_) { DeleteFramebuffers(1, &rtFbo_); rtFbo_ = 0; }
         delTex(touchTex_); delTex(instTex_);
         for (GLuint* p : {&touchProg2D_, &touchProgCube_, &occProg_, &zPreProg_}) delProg(*p);
         delVao(occVao_); delVao(spriteFrameVao_); delVao(spriteRingVao_);
@@ -3712,12 +3714,6 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
     if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
-    {   // (diagnostics, M7 stage 0) WFC_RT_DUMPFRAME: the mesh draws of that frame, in order (what the depth holds)
-        static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
-        if (frameNo_ == dumpAt)
-            LOG_INFO("RT census frame %d: draw mesh %d (world %d, %zu subs, mdi %d) at (%.2f %.2f %.2f) scale %.3f", frameNo_, id,
-                     g.world ? 1 : 0, g.subs.size(), id == mdiMesh_ ? 1 : 0, model.m[12], model.m[13], model.m[14], model.m[0]);
-    }
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
