@@ -55,7 +55,7 @@ def plan(a):
             run = '%s_%s' % (name, hd); rd = os.path.join(out, 'runs', run)
             L = ['@echo off', 'if not exist "%s%sshots" mkdir "%s%sshots"' % (rd, B, rd, B),
                  'copy /y "%s" "%s%swfc_profile.ini" >nul' % (prof, rd, B), 'cd /d "%s"' % rd,
-                 'set WFC_AUTODETECT=0', 'set WFC_LOGEVERY=0', 'set WFC_LOGTIME=1', 'set WFC_MEMSTATS=1',
+                 'set WFC_AUTODETECT=0', 'set WFC_AUTODETECT_WINDOWED=1', 'set WFC_LOGEVERY=0', 'set WFC_LOGTIME=1', 'set WFC_MEMSTATS=1',
                  'set WFC_NOMOUSE=1', 'set WFC_SKIPINTRO=1', 'set WFC_LOCKSTEP=1', 'set WFC_LOCKSTEP_EXACT=1',
                  'set WFC_HDTEXTURES=%d' % (1 if hd == 'on' else 0)]
             if hd == 'on' and mid not in TDM_MAPS: L.append('set WFC_HDFORCE=1')   # (the scene viewer has no frontend HD setting)
@@ -134,6 +134,11 @@ def report(a):
                 'ok' if total <= a.budget_mb else 'OVER', srgb_ok, sh))
         for hd in ('on', 'off'):
             for w in res[hd]['warn'][:3]: rows.append('|  | %s warn | %s |||||||||||' % (hd, w[:150]))
+    # the pack state each run reported, in full (texture count + root: which pack a run actually used)
+    rows += ['', '## Pack state per run', '']
+    for n in names:
+        for hd in ('on', 'off'):
+            rows.append('- %s %s: %s' % (n, hd, parse(os.path.join(runs, '%s_%s' % (n, hd), 'wfc.log'))['pack'] or '-'))
     # information: the HD pack's size on disk (its index rows; the budget above is in-game texture memory per map)
     import json
     roots = set()

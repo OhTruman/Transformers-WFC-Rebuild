@@ -173,6 +173,10 @@ public:
     // True when the optional HD texture pack is installed and valid (its index parses); auto-detect turns HD
     // Textures on only then. WFC_HD_ROOT overrides the pack root (default <ExtractedAssets>/../AssetTools/out/hd).
     virtual bool hdTexturesAvailable() { return false; }
+    // The HD row with levels (Frontend): 0 Off, 1 Faithful (the D pack: today's root), 2 Enhanced (the E pack's own root,
+    // switched as a whole). Level 2 is unavailable until an E root exists; level 1 = setHdTextures(true).
+    virtual bool hdTextureLevelAvailable(int level) const { (void)level; return false; }
+    virtual void setHdTextureLevel(int level) { setHdTextures(level > 0); }
     // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
     // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
     virtual void setAnisotropy(int level) { (void)level; }
