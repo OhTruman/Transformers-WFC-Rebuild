@@ -203,6 +203,7 @@ bool Application::init() {
     if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
     if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
     if (std::getenv("WFC_FXOWNERTEST")) { runFxOwnerTest(); return false; }      // bot flashes stay on the bot; vehicle HUD capacity + reload
+    if (std::getenv("WFC_NAVQTEST")) { runNavQualityTest(); return false; }      // bot pathing quality metrics (measurement)
     if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
@@ -4579,7 +4580,8 @@ void Application::runFxOwnerTest() {
     game::MatchOpponent* A = world_.addMatchOpponent("FxBot", true);
     game::CharacterSelection sa; sa.type = 0; sa.specialty = game::Specialty::Soldier;
     world_.match().selectCharacter(A->matchPlayer(), sa);
-    game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.weapons = {"IonBlaster", "HeavyPistol"};
+    // Scout: its car's weapon holds more than one round (the Soldier's TankCannon clip is 1: it reloads by itself on every shot).
+    game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scout; me.weapons = {"IonBlaster", "HeavyPistol"};
     world_.match().selectCharacter(world_.localMatchPlayer(), me);
     run(11.0f);
     game::Character& pc = world_.player().pawn();
@@ -4604,21 +4606,26 @@ void Application::runFxOwnerTest() {
         hooked = true;
     }
     auto at = [](const core::Mat4& m) { return core::Vec3{m.m[12], m.m[13], m.m[14]}; };
-    core::Vec3 p0{0, 0, 0};
+    // The flash's local-space particles sit in socket space (the "Long" streak starts 190 UU ahead and flies at 9 m/s): compare in
+    // that frame - its world position must be the bot socket's transform of its socket-space position, then and after the bot moved.
+    core::Vec3 p0{0, 0, 0}, l0{0, 0, 0};
     const int heldAfter = fx.anchoredParticles(game::WeaponFx::kHeldOwner);
-    const int bot0 = fx.anchoredParticles(A->matchPlayer(), &p0);
-    LOG_INFO("FXOWNER shot: bot socket %d held socket %d hook %d; held-anchored particles %d -> %d, bot-anchored %d, first %.2f m from the bot muzzle, %.2f m from the held muzzle",
-             (int)botHas, (int)heldHas, (int)hooked, held0, heldAfter, bot0, core::length(p0 - at(botSock)), heldHas ? core::length(p0 - heldMuzzle) : -1.0f);
+    const int bot0 = fx.anchoredParticles(A->matchPlayer(), &p0, &l0);
+    const float onBot0 = core::length(p0 - core::transformPoint(botSock, l0));
+    LOG_INFO("FXOWNER shot: bot socket %d held socket %d hook %d; held-anchored particles %d -> %d, bot-anchored %d, first %.2f m from the bot muzzle (%.3f m off its socket frame), %.2f m from the held muzzle",
+             (int)botHas, (int)heldHas, (int)hooked, held0, heldAfter, bot0, core::length(p0 - at(botSock)), onBot0, heldHas ? core::length(p0 - heldMuzzle) : -1.0f);
     check(hooked && heldAfter == held0, "a bot's flash adds no particle anchored to the local held weapon");
-    check(bot0 > 0 && core::length(p0 - at(botSock)) < 1.0f, "the bot's flash spawns on the bot's MuzzleFlash socket");
+    check(bot0 > 0 && onBot0 < 0.01f && (!heldHas || core::length(p0 - at(botSock)) < core::length(p0 - heldMuzzle)),
+          "the bot's flash spawns in the bot's MuzzleFlash socket frame");
     if (A->spawned()) A->pawn().setPosition(A->pawn().position() + side * 1.0f);   // the bot steps aside: its flash follows it
     for (int i = 0; i < 6; ++i) step(idle);
-    core::Mat4 botNow; core::Vec3 p1{0, 0, 0};
+    core::Mat4 botNow; core::Vec3 p1{0, 0, 0}, l1{0, 0, 0};
     const bool botNowHas = world_.participantMuzzleWorld(A->matchPlayer(), botNow);
-    const int bot1 = fx.anchoredParticles(A->matchPlayer(), &p1);
-    LOG_INFO("FXOWNER +6 ticks: bot-anchored %d, first %.2f m from the bot's current muzzle (socket %d), held-anchored %d",
-             bot1, core::length(p1 - at(botNow)), (int)botNowHas, fx.anchoredParticles(game::WeaponFx::kHeldOwner));
-    check(bot1 > 0 && botNowHas && core::length(p1 - at(botNow)) < 1.5f, "after 6 ticks the bot's flash stays on the bot's (moved) socket");
+    const int bot1 = fx.anchoredParticles(A->matchPlayer(), &p1, &l1);
+    const float onBot1 = core::length(p1 - core::transformPoint(botNow, l1)), offOld = core::length(p1 - core::transformPoint(botSock, l1));
+    LOG_INFO("FXOWNER +6 ticks: bot-anchored %d, socket moved %.2f m; first %.3f m off the bot's current socket frame, %.2f m off its old one (socket %d), held-anchored %d",
+             bot1, core::length(at(botNow) - at(botSock)), onBot1, offOld, (int)botNowHas, fx.anchoredParticles(game::WeaponFx::kHeldOwner));
+    check(bot1 > 0 && botNowHas && onBot1 < 0.01f && offOld > 0.5f, "after 6 ticks the bot's flash moved with the bot's socket");
     check(pc.weapon().ammo == clip0 && pc.weapon().reserve == res0 && pc.weapon().reloading() == rel0,
           "the player's clip / reserve / reload state are unchanged by the bot's shot");
     // (b) vehicle form: HUD capacities from the vehicle weapon; the reload tap reloads it.
@@ -4628,6 +4635,7 @@ void Application::runFxOwnerTest() {
         run(2.0f);
     }
     const game::Weapon* vw = pc.vehicleWeapon();
+    LOG_INFO("FXOWNER vehicle form %s transforming %d vehicle weapon %d", game::formName(pc.moveForm()), (int)pc.isTransforming(), (int)(vw != nullptr));
     const bool veh = pc.moveForm() == game::Form::Vehicle && !pc.isTransforming() && vw;
     const auto& pf = world_.presented();
     LOG_INFO("FXOWNER vehicle: form %s, vehicle weapon %s clip %d/%d reserve %d/%d; presented localMag %d localReserveMax %d (robot weapon mag %d)",
@@ -4654,6 +4662,81 @@ void Application::runFxOwnerTest() {
         check(false, "vehicle form: a reload tap reloads the vehicle weapon (not in vehicle form)");
     }
     LOG_INFO("FXOWNER SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_NAVQTEST (measurement, no pass / fail; playtest 2026-10-13 P1 #9 "bot pathing ... could be a lot better"): one TDM match of
+// 4 friendly + 5 enemy HARD bots on the loaded map for WFC_NAVQ_SECS (default 300) s, the local player idle. Per bot, while it
+// TRAVELS (alive, robot or vehicle, not transforming, no target, a corridor to follow, not holding still on purpose):
+//   slow   - on the ground under 1.5 m/s (pushing into geometry, queueing at a doorway, turning on the spot)
+//   rev    - heading reversals: the 0.25 s displacement turns > 120 deg from the previous one (zig-zag / dithering at corners)
+//   offmesh- on the ground off the nav mesh; idle5 - 5 s without 0.5 m of movement outside combat
+// plus the brains' stuck events, repaths and failed searches per bot-minute. WFC_BOTAI pins the AI (default Smart).
+void Application::runNavQualityTest() {
+    const float dt = 1.0f / 60.0f;
+    const float secs = std::getenv("WFC_NAVQ_SECS") ? (float)std::atof(std::getenv("WFC_NAVQ_SECS")) : 300.0f;
+    const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 30) +
+                            "?BotsFriendly=4?BotsEnemy=5?BotDifficulty=2";
+    game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
+    if (!world_.launchMatch(L)) { LOG_INFO("NAVQ launch failed"); return; }
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier;
+    world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+    struct Acc { double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0; core::Vec3 last{}, sample{}; bool have = false;
+                 float sampleT = 0, stillT = 0; core::Vec3 stillAt{}; core::Vec3 prevDir{}; bool havePrev = false; };
+    std::map<int, Acc> acc;
+    platform::InputFrame idle;
+    const int steps = (int)((secs + 12.0f) / dt);
+    int i = 0;
+    for (; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
+        world_.handleInput(idle, dt); world_.tick(dt);
+        if (i < 60 * 12) continue;   // countdown + first spawn
+        for (const game::MatchOpponent* o : world_.matchOpponents()) {
+            Acc& a = acc[o->matchPlayer()];
+            if (!o->spawned()) { a.have = false; a.havePrev = false; a.stillT = 0.0f; continue; }
+            const game::Character& pc = o->pawn();
+            const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+            const core::Vec3 p = pc.position();
+            a.aliveT += dt;
+            const bool travel = b && !pc.isTransforming() && b->target < 0 && b->wp < b->path.size() && !world_.botHoldingStill(o->matchPlayer());
+            core::Vec3 v = pc.velocity(); v.y = 0.0f;
+            if (travel) {
+                a.travelT += dt;
+                if (pc.onGround() && core::length(v) < 1.5f) a.slowT += dt;
+                if (pc.onGround() && world_.botNav().findCell(p, 0.0f) < 0) a.offT += dt;
+                if (a.have) a.dist += core::length(core::Vec3{p.x - a.last.x, 0.0f, p.z - a.last.z});
+            }
+            if (!a.have) { a.sample = p; a.sampleT = 0.0f; a.stillAt = p; a.stillT = 0.0f; a.have = true; }
+            if ((a.sampleT += dt) >= 0.25f) {
+                core::Vec3 d = p - a.sample; d.y = 0.0f;
+                const float l = core::length(d);
+                if (travel && l > 0.4f) {
+                    const core::Vec3 dir = d * (1.0f / l);
+                    if (a.havePrev && core::dot(dir, a.prevDir) < -0.5f) ++a.rev;
+                    a.prevDir = dir; a.havePrev = true;
+                } else if (!travel) a.havePrev = false;
+                a.sample = p; a.sampleT = 0.0f;
+            }
+            if (b && b->target < 0 && !world_.botHoldingStill(o->matchPlayer())) {
+                core::Vec3 m = p - a.stillAt; m.y = 0.0f;
+                if (core::length(m) > 0.5f) { a.stillAt = p; a.stillT = 0.0f; }
+                else if ((a.stillT += dt) >= 5.0f && a.stillT - dt < 5.0f) ++a.idle5;
+            } else { a.stillAt = p; a.stillT = 0.0f; }
+            a.last = p;
+        }
+    }
+    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0;
+    for (const auto& [p, a] : acc) {
+        travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
+        if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; }
+        smart += world_.botIsSmart(p); ++nb;
+        LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
+                 a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
+    }
+    const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
+    LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
+             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min",
+             world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
+             dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
+             stucks / botMin, repaths / botMin, noPaths / botMin);
 }
 
 // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

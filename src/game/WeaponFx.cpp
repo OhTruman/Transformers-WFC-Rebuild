@@ -381,12 +381,13 @@ bool WeaponFx::anchorOf(int owner, core::Mat4& m) const {
     return true;
 }
 
-int WeaponFx::anchoredParticles(int owner, Vec3* firstWorld) const {
+int WeaponFx::anchoredParticles(int owner, Vec3* firstWorld, Vec3* firstLocal) const {
     int n = 0;
     core::Mat4 m;
     const bool have = anchorOf(owner, m);
     for (const Part& p : parts_) {
         if (p.anchor != owner) continue;
+        if (n == 0 && firstLocal) *firstLocal = p.pos;
         if (n++ == 0 && firstWorld && have) *firstWorld = core::transformPoint(m, p.pos);
     }
     return n;

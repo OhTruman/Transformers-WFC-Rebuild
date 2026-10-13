@@ -50,8 +50,8 @@ public:
     bool spawnMuzzleFlash(const std::string& psTemplate, const core::Mat4& socketWorld, int owner = kHeldOwner);
     // A participant's current MuzzleFlash socket world matrix (false: not posed now - its effects keep the last socket).
     void setParticipantMuzzleSource(std::function<bool(int, core::Mat4&)> fn) { participantMuzzle_ = std::move(fn); }
-    // Self-test probe (WFC_FXOWNERTEST): live local-space particles anchored to `owner`, and the world position of the first.
-    int anchoredParticles(int owner, core::Vec3* firstWorld = nullptr) const;
+    // Self-test probe (WFC_FXOWNERTEST): live local-space particles anchored to `owner`, and the first one's world / socket-space position.
+    int anchoredParticles(int owner, core::Vec3* firstWorld = nullptr, core::Vec3* firstLocal = nullptr) const;
     bool spawnTracer(const std::string& psTemplate, const core::Vec3& muzzle, const core::Vec3& hit);
     bool spawnImpact(const std::string& psTemplate, const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
 

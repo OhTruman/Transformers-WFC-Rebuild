@@ -102,6 +102,7 @@ private:
     void runMuzzleTest();
     void runRobotMuzzleTest();
     void runFxOwnerTest();
+    void runNavQualityTest();
     void runChargeTest();
     void runDropTest();
     void runRiserTest();

@@ -749,6 +749,8 @@ public:
     void removeBots();
     int botDifficulty() const { return botDifficulty_; }
     const BotBrain* botBrain(int player) const;
+    // Smart standing still on purpose this step (holding cover, a squad leader waiting): not a navigation stall (WFC_NAVQTEST).
+    bool botHoldingStill(int player) const { return botIsSmart(player) && smart_[(size_t)player].holdStill; }
     const std::vector<BotBrain>& botBrains() const { return bots_; }
     const BotNav& botNav() const { return botNav_; }
     // The MoveIntent a participant pawn simulated this step (bots: the AI's throttle / strafe / boost / steer, same meaning as the local
