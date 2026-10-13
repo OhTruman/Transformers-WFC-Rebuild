@@ -45,6 +45,9 @@ M5_FROM_BIN = [('amd_fidelityfx_loader_dx12.dll', 'amd_fidelityfx_loader_dx12.dl
 AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
 # render-data files shipped beside every map's materials_glsl.json, newer than slim_files.tsv
 RENDER_EXTRA = ['materials_pbr.json']
+# ... and shipped when the map has one (newer than slim_files.tsv; the UI dirs have none): verify_slim 2026-10-13 found the
+# game opening every MP map's fog_volumes.json, missing from the package
+RENDER_IF_PRESENT = ['fog_volumes.json']
 
 
 def arg(name, default=None):
@@ -96,6 +99,12 @@ def main():
     for r in list(rows):
         if not r['dest'].endswith('/materials_glsl.json'):
             continue
+        for extra in RENDER_IF_PRESENT:
+            dst = r['dest'][:-len('materials_glsl.json')] + extra
+            src = r['source'][:-len('materials_glsl.json')] + extra
+            if dst not in have_dest and os.path.isfile(os.path.join(ROOT, src)):
+                rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='render extra'))
+                have_dest.add(dst)
         for extra in RENDER_EXTRA:
             dst = r['dest'][:-len('materials_glsl.json')] + extra
             src = r['source'][:-len('materials_glsl.json')] + extra
