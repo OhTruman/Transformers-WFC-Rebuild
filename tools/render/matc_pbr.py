@@ -154,71 +154,123 @@ def pick_parent(objs):
     return sorted(objs, key=lambda o: (0 if any(k in o.lower() for k in ('mask', 'spec', 'gloss')) else 1, o.lower()))[0] if objs else None
 
 
+class F:
+    """glsl_emu's per-value flags: view (camera / reflection / light vectors or a cube sample), cam (the vectors
+    themselves), tex (a 2D sample), bc (a scalar broadcast into a vector: a factor); g = a GLSL value object (a bare number
+    literal is not one: it takes the other operand's flags)."""
+    __slots__ = ('view', 'cam', 'tex', 'bc', 'g')
+    def __init__(self, view=False, cam=False, tex=False, bc=False, g=True):
+        self.view, self.cam, self.tex, self.bc, self.g = view, cam, tex, bc, g
+    def copy(self): return F(self.view, self.cam, self.tex, self.bc, self.g)
+
+
+def _join(a, b):
+    """glsl_emu G._join: or the flags, and the broadcast flag (a number literal: the other operand's flags)."""
+    if not a.g and not b.g: return F(g=False)
+    if not b.g: return a.copy()
+    if not a.g: return b.copy()
+    return F(a.view or b.view, a.cam or b.cam, a.tex or b.tex, a.bc and b.bc)
+
+
+def _setflags(fs, broadcast=False):
+    """glsl_emu _setflags (functions, constructors): or over the value arguments; bc = all of them broadcast (+ a ctor's own)."""
+    gs = [f for f in fs if f.g]
+    return F(any(f.view for f in gs), any(f.cam for f in gs), any(f.tex for f in gs),
+             broadcast or (bool(gs) and all(f.bc for f in gs)))
+
+
 class Strip:
-    """The view-flag walk of one body: per temporary its type, its stripped text (None = unchanged) and its view flag."""
+    """The flag walk of one body (glsl_emu's strip_view): per temporary its type, flags, stripped text and whether it
+    changed; rule 3's cube means are re-emitted copies (mean mode: cube samples -> wfcSampleCubeMean(k))."""
     def __init__(self):
-        self.ty, self.view, self.changed, self.rt = {}, {}, {}, []
+        self.ty, self.fl, self.changed, self.rt = {}, {}, {}, []
+        self.nodes = {}
         self.rename = lambda t: 't%d' % (100000 + int(t[1:]))
+        self.mean_name = lambda t: 't%d' % (20000000 + int(t[1:]))
+        self.mean_text = {}                       # temporary -> its mean-mode text (rule 3)
+        self.meanmode = False
         self.inputs = None                         # (rule 2) view inputs replaced by a direction literal
-        self.fixed = set()                         # (rule 2) temporaries held at their value (cube samples)
         self.loop_name = None                      # (rule 2) the per-direction copy name of a temporary
 
     def name(self, t):
         if self.loop_name and t in self.loop_name: return self.loop_name[t]
+        if self.meanmode and self.fl[t].view and not self.fl[t].cam:
+            if t not in self.mean_text:
+                self.mean_text[t] = None           # (recursion guard)
+                self.mean_text[t] = self.w(self.nodes[t])[0]
+            return self.mean_name(t)
         return self.rename(t) if self.changed.get(t) else t
 
+    def mean(self, node):
+        old = self.meanmode; self.meanmode = True
+        try: return self.w(node)[0]
+        finally: self.meanmode = old
+
     def w(self, n):
-        """-> (text, type, view, changed)"""
+        """-> (text, type, flags, changed)"""
         k = n[0]
-        if k == 'num': return n[1], 1, False, False
+        if k == 'num': return n[1], 1, F(g=False), False
         if k == 'paren':
-            t, ty, v, c = self.w(n[1]); return '(' + t + ')', ty, v, c
+            t, ty, f, c = self.w(n[1]); return '(' + t + ')', ty, f, c
         if k == 'neg':
-            t, ty, v, c = self.w(n[1]); return '-' + t, ty, v, c
+            t, ty, f, c = self.w(n[1]); return '-' + t, ty, f, c
         if k == 'id':
             nm = n[1]
             if nm in self.ty:
-                return self.name(nm), self.ty[nm], self.view[nm], self.name(nm) != nm
-            return nm, 'struct', False, False
+                x = self.name(nm)
+                return x, self.ty[nm], self.fl[nm].copy(), x != nm
+            return nm, 'struct', F(), False
         if k == 'member':
             b = n[1]
             if b[0] == 'id' and b[1] == 'm':
-                if self.inputs is not None and n[2] in VIEW_INPUTS: return self.inputs, 3, True, True
-                return 'm.' + n[2], M_FIELDS.get(n[2], 3), n[2] in VIEW_INPUTS, False
-            if b[0] == 'id' and b[1] == 'o': return 'o.' + n[2], O_FIELDS.get(n[2], 3), False, False
-            t, ty, v, c = self.w(b)
-            return t + '.' + n[2], len(n[2]), v, c
+                if n[2] in VIEW_INPUTS:
+                    if self.inputs is not None: return self.inputs, 3, F(True, True), True
+                    return 'm.' + n[2], 3, F(True, True), False
+                return 'm.' + n[2], M_FIELDS.get(n[2], 3), F(), False
+            if b[0] == 'id' and b[1] == 'o': return 'o.' + n[2], O_FIELDS.get(n[2], 3), F(), False
+            t, ty, f, c = self.w(b)
+            return t + '.' + n[2], len(n[2]), f, c
         if k == 'bin':
             op = n[1]
-            ta, tya, va, ca = self.w(n[2]); tb, tyb, vb, cb = self.w(n[3])
-            if op in '+-' and va != vb and isinstance(tya, int) and isinstance(tyb, int) and tya >= 3 and tyb >= 3:
-                if va: return ('(' + tb + ')' if op == '+' else '(-(' + tb + '))'), tyb, False, True   # (V + A, V - A)
-                return '(' + ta + ')', tya, False, True                                              # (A + V, A - V)
-            if tya == 'm2': ty = 2
-            elif isinstance(tya, int) and isinstance(tyb, int): ty = max(tya, tyb)
-            else: ty = tya if isinstance(tya, int) else tyb
-            return '%s %s %s' % (ta, op, tb), ty, va or vb, ca or cb
+            ta, tya, fa, ca = self.w(n[2]); tb, tyb, fb, cb = self.w(n[3])
+            sz = lambda ty: ty if isinstance(ty, int) else 0
+            if op in '+-' and fa.g and fb.g and fa.view != fb.view and sz(tya) >= 3 and sz(tyb) >= 3:     # rule 1
+                if fa.view: return ('(' + tb + ')' if op == '+' else '(-(' + tb + '))'), tyb, F(tex=fb.tex), True
+                return '(' + ta + ')', tya, F(tex=fa.tex), True
+            if tya == 'm2':
+                return '%s %s %s' % (ta, op, tb), 2, _setflags([fa, fb]), ca or cb
+            ty = max(sz(tya), sz(tyb)) or (tya if isinstance(tya, int) else tyb)
+            if op == '*' and fa.g and fb.g and fa.view != fb.view:                                      # rule 3
+                vf, cf, cty = (fa, fb, tyb) if fa.view else (fb, fa, tya)
+                if not vf.cam and cf.tex and not cf.bc and sz(cty) >= 3:
+                    if fa.view: return '%s * %s' % (self.mean(n[2]), tb), ty, F(tex=True), True
+                    return '%s * %s' % (ta, self.mean(n[3])), ty, F(tex=True), True
+            return '%s %s %s' % (ta, op, tb), ty, _join(fa, fb), ca or cb
         if k == 'call':
             f, args = n[1], n[2]
             A = [self.w(a) for a in args]
             txt = lambda: '%s(%s)' % (f, ', '.join(a[0] for a in A))
-            anyv = any(a[2] for a in A); anyc = any(a[3] for a in A)
-            if f.startswith('wfcRtParam_'):          # a runtime parameter's "set ? value : default" (not view-dependent)
+            anyc = any(a[3] for a in A)
+            fl = [a[2] for a in A]
+            if f.startswith('wfcRtParam_'):          # a runtime parameter's "set ? value : default" (no flags)
                 s, val = self.rt[int(f[len('wfcRtParam_'):])]
-                return '(uRTSet_%s != 0 ? %s : %s)' % (s, val, A[0][0]), A[0][1], False, anyc
+                return '(uRTSet_%s != 0 ? %s : %s)' % (s, val, A[0][0]), A[0][1], F(g=A[0][2].g), anyc
             if f in GL_T:
-                return txt(), GL_T[f], anyv, anyc
-            if f == 'mat2': return txt(), 'm2', anyv, anyc
-            if f == 'wfcSample2D': return txt(), 4, False, anyc
-            if f in ('wfcSampleCube', 'wfcSampleCubeBias'): return txt(), 4, True, anyc
-            if f in ('tangentToWorldUE', 'tangentToView', 'tangentToLocal'): return txt(), 3, A[1][2], anyc
-            if f == 'wfcNormalNode': return txt(), 3, False, False
-            if f in ('dot', 'length', 'distance', 'wfcDepthBiasedAlpha'): return txt(), 1, anyv, anyc
-            if f == 'cross': return txt(), 3, anyv, anyc
-            if f == 'wfcSceneColor': return txt(), 4, anyv, anyc
-            if f == 'wfcScreenUV': return txt(), 2, False, False
+                broadcast = f != 'float' and len(A) == 1 and A[0][1] == 1
+                return txt(), GL_T[f], _setflags(fl, broadcast), anyc
+            if f == 'mat2': return txt(), 'm2', _setflags(fl), anyc
+            if f == 'wfcSample2D': return txt(), 4, F(tex=True), anyc
+            if f in ('wfcSampleCube', 'wfcSampleCubeBias'):
+                if self.meanmode: return 'wfcSampleCubeMean(%s)' % A[0][0], 4, F(view=True), True
+                return txt(), 4, F(view=True), anyc
+            if f in ('tangentToWorldUE', 'tangentToView', 'tangentToLocal'): return txt(), 3, A[1][2].copy(), anyc
+            if f == 'wfcNormalNode': return txt(), 3, F(), False
+            if f in ('dot', 'length', 'distance', 'wfcDepthBiasedAlpha'): return txt(), 1, _setflags(fl), anyc
+            if f == 'cross': return txt(), 3, _setflags(fl), anyc
+            if f == 'wfcSceneColor': return txt(), 4, _setflags(fl), anyc
+            if f == 'wfcScreenUV': return txt(), 2, F(), False
             tys = [a[1] for a in A if isinstance(a[1], int)]
-            return txt(), max(tys) if tys else 1, anyv, anyc
+            return txt(), max(tys) if tys else 1, _setflags(fl), anyc
         raise TranslateError('node %s' % k)
 
 
@@ -240,56 +292,57 @@ def pbr_body(glsl, info):
         if m: stmts.append((k,) + m.groups())
     defs = {s[3]: s for s in stmts if s[2]}
     S = Strip()
-    nodes, stext = {}, {}
+    nodes, stext = S.nodes, {}
     out = list(lines)
     base_rule = 0
     diff = [s for s in stmts if s[3] == 'o.DiffuseColor']
-    try:
-        for k, ind, decl, lhs, rhs in stmts:
-            if not decl: continue
-            nodes[lhs] = _parse(rhs, S)
-            t, ty, v, c = S.w(nodes[lhs])
-            S.ty[lhs] = GL_T[decl]; S.view[lhs] = v; S.changed[lhs] = c; stext[lhs] = t
-        if diff:
-            dnode = _parse(diff[-1][4], S)
-            dt, dty, dv, dc = S.w(dnode)
-            need, stack = [], [x for x in _TMP.findall(dt)]
-            seen = set()
-            while stack:                                 # the changed temporaries the stripped base colour reads
-                t = stack.pop()
-                base = t if t in defs else ('t%d' % (int(t[1:]) - 100000) if t[1:].isdigit() and int(t[1:]) >= 100000 else None)
-                if base is None or base in seen or base not in defs: continue
-                seen.add(base)
-                if S.changed.get(base):
-                    need.append(base); stack += _TMP.findall(stext[base])
-            k, ind, decl, lhs, rhs = diff[-1]
-            copies = ['%s%s %s = %s;' % (ind, defs[t][2], S.rename(t), stext[t]) for t in sorted(need, key=lambda x: defs[x][0])]
-            if dv:                                       # rule 2: the mean over VIEW_SET, unrolled
-                base_rule = 2
-                chain, stack, seen = [], [x for x in _TMP.findall(dt)], set()
-                while stack:                             # every temporary of the stripped chain (stripped names resolved)
-                    t = stack.pop()
-                    b = t if t in defs else ('t%d' % (int(t[1:]) - 100000) if t[1:].isdigit() and int(t[1:]) >= 100000 else None)
-                    if b is None or b in seen or b not in defs: continue
-                    seen.add(b); chain.append(b); stack += _TMP.findall(stext[b])
-                vt = sorted([t for t in chain if S.view[t] and not _CUBE.search(defs[t][4])], key=lambda x: defs[x][0])
-                sums = []
-                for i, d in enumerate(VIEW_SET):
-                    S.inputs = 'vec3(%r, %r, %r)' % d
-                    S.loop_name = {t: 't%d' % (10000000 + 100000 * i + int(t[1:])) for t in vt}
-                    for t in vt:
-                        tt, _, _, _ = S.w(nodes[t])
-                        copies.append('%s%s %s = %s;' % (ind, defs[t][2], S.loop_name[t], tt))
-                    st, _, _, _ = S.w(dnode)
-                    copies.append('%svec3 t%d = %s;' % (ind, 9000000 + i, st))
-                    sums.append('t%d' % (9000000 + i))
-                S.inputs = None; S.loop_name = None
-                dt = '(%s) / 32.0' % ' + '.join(sums)
-            elif dc:
-                base_rule = 1
-            out[k] = '\n'.join(copies + ['%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, dt)])
-    except TranslateError:
-        raise
+    def base_of(nm):
+        """a copy name -> (family, original temporary): 's' stripped, 'm' mean (rule 3), None original"""
+        if not nm[1:].isdigit(): return None, None
+        v = int(nm[1:])
+        if 20000000 <= v < 30000000: return 'm', 't%d' % (v - 20000000)
+        if 100000 <= v < 10000000: return 's', 't%d' % (v - 100000)
+        return None, nm
+    for k, ind, decl, lhs, rhs in stmts:
+        if not decl: continue
+        nodes[lhs] = _parse(rhs, S)
+        tx, ty, fl, c = S.w(nodes[lhs])
+        S.ty[lhs] = GL_T[decl]; S.fl[lhs] = fl; S.changed[lhs] = c; stext[lhs] = tx
+    if diff:
+        dnode = _parse(diff[-1][4], S)
+        dt, dty, dfl, dc = S.w(dnode)
+        need, stack, seen = [], list(_TMP.findall(dt)), set()
+        while stack:                                     # the copies the stripped base colour reads (both families)
+            fam, tb = base_of(stack.pop())
+            if fam is None or tb not in defs or (fam, tb) in seen: continue
+            seen.add((fam, tb))
+            need.append((fam, tb))
+            stack += _TMP.findall(stext[tb] if fam == 's' else S.mean_text[tb])
+        k, ind, decl, lhs, rhs = diff[-1]
+        copies = ['%s%s %s = %s;' % (ind, defs[tb][2], S.rename(tb) if fam == 's' else S.mean_name(tb),
+                                      stext[tb] if fam == 's' else S.mean_text[tb])
+                  for fam, tb in sorted(need, key=lambda x: defs[x[1]][0])]
+        if dfl.view:                                     # rule 2: the mean over VIEW_SET, unrolled
+            base_rule = 2
+            chain, stack, seen = [], list(_TMP.findall(dt)), set()
+            while stack:
+                fam, tb = base_of(stack.pop())
+                if tb not in defs or tb in seen: continue
+                seen.add(tb); chain.append(tb); stack += _TMP.findall(stext[tb])
+            vt = sorted([x for x in chain if S.fl[x].view and not _CUBE.search(defs[x][4])], key=lambda x: defs[x][0])
+            sums = []
+            for i, d in enumerate(VIEW_SET):
+                S.inputs = 'vec3(%r, %r, %r)' % d
+                S.loop_name = {x: 't%d' % (10000000 + 100000 * i + int(x[1:])) for x in vt}
+                for x in vt:
+                    copies.append('%s%s %s = %s;' % (ind, defs[x][2], S.loop_name[x], S.w(nodes[x])[0]))
+                copies.append('%svec3 t%d = %s;' % (ind, 9000000 + i, S.w(dnode)[0]))
+                sums.append('t%d' % (9000000 + i))
+            S.inputs = None; S.loop_name = None
+            dt = '(%s) / 32.0' % ' + '.join(sums)
+        elif dc:
+            base_rule = 1
+        out[k] = '\n'.join(copies + ['%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, dt)])
     # the roughness parent (Systems' order) and the UV its body samples it with
     texs = info.get('textures') or []
     slot_of = {t.get('object'): t.get('slot') for t in texs if t.get('kind', '2d') == '2d' and 'slot' in t and t.get('object')}
@@ -361,6 +414,7 @@ def check(res, vectors_path, emu_dir, map_name):
     for name, vv in V.items():
         if not isinstance(vv, dict) or vv.get('map') != map_name or name not in res: continue
         body = '\n'.join(l for l in res[name]['glsl'].splitlines() if 'wfcPbr' not in l)
+        body = re.sub(r'wfcSampleCubeMean\((\d+)\)', r'wfcSampleCube(\1, vec3(0.0, 0.0, 1.0))', body)   # (the emulator's cube value is its mean)
         for vec in vv['vectors']:
             s2 = {int(k): v for k, v in vec['samples2d'].items()}; sc = {int(k): v for k, v in vec['samples_cube'].items()}
             o = E.run(body, E.Material(s2, sc, rt_value=1.0 if vec.get('runtime_params_set') else None))
