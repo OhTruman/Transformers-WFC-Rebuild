@@ -60,7 +60,7 @@ endif()
 if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
     set(WFC_RT_SHADER_DIR "${CMAKE_BINARY_DIR}/generated/rt")
     set(WFC_RT_SHADER_HEADERS "")
-    foreach(sh rt_depthcheck rt_shadow_ao)
+    foreach(sh rt_depthcheck rt_shadow_ao rt_ao_filter)
         set(out "${WFC_RT_SHADER_DIR}/${sh}.h")
         add_custom_command(OUTPUT "${out}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"

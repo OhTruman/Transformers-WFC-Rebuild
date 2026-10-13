@@ -47,7 +47,7 @@ void main() {
     if (s.z > 0.5) { oFactor = vec4(1.0); return; }
     float vis = texelFetch(uVis, p, 0).r;
     vis = vis > 0.985 ? 1.0 : vis;                  // (the 8-bit denoised visibility tops out just under 1: unlit pixels exact)
-    float ao = s.y > 0.985 ? 1.0 : s.y;
+    float ao = s.w > 0.985 ? 1.0 : s.w;          // (the filtered AO)
     vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, ao, uAoStrength);
     oFactor = vec4(f, 1.0);
 }
@@ -351,6 +351,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         mul4(kGlToFfx, tmp, tmp2);
         std::memcpy(fr.ffxReproj, tmp2, sizeof tmp2);
         fr.eye[0] = camPos_.x; fr.eye[1] = camPos_.y; fr.eye[2] = camPos_.z;
+        fr.znear = znear_; fr.zfar = zfar_;
         fr.resetHistory = !rtHavePrevVP_ || cameraCut_;
         { static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
           fr.debugDump = frameNo_ == dumpAt; }
@@ -379,9 +380,9 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             if (FILE* f = std::fopen(k ? "rt_dump_ray.bin" : "rt_dump_depth.bin", "wb")) { std::fwrite(px.data(), 4, px.size(), f); std::fclose(f); }
         }
         if (sao) {                                       // (shadow, AO) pairs
-            std::vector<float> rg((size_t)vpW_ * vpH_ * 2);
+            std::vector<float> rg((size_t)vpW_ * vpH_ * 4);   // (sun, raw AO, dynamic, filtered AO)
             glBindTexture(GL_TEXTURE_2D, t.shadowAo);
-            glGetTexImage(GL_TEXTURE_2D, 0, 0x8227 /*GL_RG*/, GL_FLOAT, rg.data());
+            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, rg.data());
             if (FILE* f = std::fopen("rt_dump_shadowao.bin", "wb")) { std::fwrite(rg.data(), 4, rg.size(), f); std::fclose(f); }
             std::vector<unsigned char> dn((size_t)vpW_ * vpH_);
             glBindTexture(GL_TEXTURE_2D, t.shadowDn);

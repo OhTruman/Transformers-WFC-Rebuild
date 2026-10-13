@@ -31,6 +31,7 @@ struct RtFrame {
     float eye[3] = {0, 0, 0};
     float ffxProjInv[16] = {}, ffxReproj[16] = {}, ffxViewProjInv[16] = {};
     bool resetHistory = false;
+    float znear = 0.1f, zfar = 1000.0f;   // (the AO filter's depth linearisation)
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 

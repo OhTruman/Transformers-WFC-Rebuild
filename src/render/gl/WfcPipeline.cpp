@@ -2124,7 +2124,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
         sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;");
-        sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).y;");
+        sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).w;");
         // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
         // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
         // is not the sun, and maps add directional fill lights for dynamic objects that must stay unshadowed

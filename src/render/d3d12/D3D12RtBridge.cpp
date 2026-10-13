@@ -22,6 +22,7 @@
 #if defined(WFC_RT_SHADERS)
 #include "rt_depthcheck.h"
 #include "rt_shadow_ao.h"
+#include "rt_ao_filter.h"
 #endif
 #if defined(WFC_RT_DENOISER)
 #include "render/d3d12/D3D12RtDenoise.h"
@@ -399,6 +400,8 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&pso_))) { LOG_WARN("RT bridge: depth-check PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_shadow_ao; pd.CS.BytecodeLength = sizeof g_rt_shadow_ao;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSao_))) { LOG_WARN("RT bridge: shadow / AO PSO failed"); return false; }
+        pd.CS.pShaderBytecode = g_rt_ao_filter; pd.CS.BytecodeLength = sizeof g_rt_ao_filter;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoAoF_))) { LOG_WARN("RT bridge: AO filter PSO failed"); return false; }
         D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 8;
         if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
         for (auto& r : tsReadback_) r = makeBuffer(dev_, 32, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -485,6 +488,7 @@ private:
         c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = (float)fr.frameIndex; c[23] = (float)fr.aoRays;
         c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF); c[27] = fr.sunConeTan;
         std::memcpy(c + 28, fr.ffxReproj, 64);
+        c[44] = fr.znear; c[45] = fr.zfar;
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
         list_->SetDescriptorHeaps(1, &heap_);
@@ -496,6 +500,12 @@ private:
         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4);
         list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 3) / 4, 1);     // one 8 x 4 group per denoiser tile
+        {   // the AO filter (same root signature and table): raw AO (.y) -> filtered AO (.w)
+            D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
+            list_->SetPipelineState(psoAoF_);
+            list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
+            list_->SetPipelineState(psoSao_);
+        }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4 + 1);
 #if defined(WFC_RT_DENOISER)
         if (dn_.ready()) {
@@ -655,7 +665,7 @@ private:
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> dynInst_;
     UINT64 totalBlas_ = 0;
     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
-    ID3D12PipelineState* psoSao_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
+    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
     IDXGIAdapter3* adapter_ = nullptr; UINT64 tsFreq_ = 0; int rbMode_[2] = {};
     std::vector<double> saoMs_; unsigned long long saoRaySum_ = 0; int saoRays_ = 0; float saoRadius_ = 0.0f;
     ID3D12Resource* stats_ = nullptr; ID3D12Resource* zeros_ = nullptr; ID3D12Resource* readback_[2] = {};
