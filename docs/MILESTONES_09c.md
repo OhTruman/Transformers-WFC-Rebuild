@@ -418,5 +418,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   still all give a solid gun (no composite leak). FINAL REPACKAGE HEAD a44aa6db named (tag playtest/09c-fixes-a44aa6db);
   Systems building + packaging with the b0-12+ freeze; verify (incl. -ForeignCwd, SETTINGSTEST 7, R1 sun swap ON gate)
   after Experimental's after-runs.
+  17:50 PACKAGE 2 BUILT: work/playtest_slim (a44aa6db, 14.99 GB: HD D b0-12 = 1,531 rows / 9,393 MB static PASS, M5
+  runtime, R1 vbake x10, new Play.bat); a17309b7 kept as playtest_slim_a17309b7; verify pending slot B. RT REFLECTIONS
+  PROVEN working but weak by design (Rendering: Realistic with vs without, Molten 29.7 % / Rust 11.5 % of pixels change,
+  slightly darker grounded metal): the RT sample only replaces the original's low-weighted cube sample. APPROVED for
+  Realistic only (user: push further, beyond faithful): a Fresnel-weighted RT specular layer on glossy surfaces
+  (SpecularPower-gated) + roughness gate, switchable, with before / after crops, next package. R1 confirmed ON on a direct
+  boot (18 pages). Test-only Gameplay patch (FXOWNER socket-frame checks, WFC_NAVQTEST) on integration 2017eeba.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
