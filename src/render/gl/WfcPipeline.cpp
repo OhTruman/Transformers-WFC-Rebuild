@@ -32,6 +32,7 @@ unsigned long long gMemLightmapBytes = 0, gMemTextureBytes = 0, gMemMeshBytes = 
 unsigned long gMemLightmaps = 0, gMemTextures = 0, gMemMeshes = 0;
 unsigned long long gMemSrgbTexBytes = 0;               // of gMemTextureBytes: SRGB (PWL, RGBA16) textures
 unsigned long gMemDdsTextures = 0;                      // of gMemTextures: loaded from the original blocks
+unsigned long gMemPbrMaps = 0; size_t gMemPbrBytes = 0;          // M6 HD modern material maps (BC4 / BC7)
 unsigned long gMemHdTextures = 0;                       // of those: from the HD texture pack   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
@@ -727,6 +728,8 @@ void Pipeline::release() {
     if (gInstPipeline == this) gInstPipeline = nullptr;
     touchQueue_.clear();                               // its textures are deleted with the map
     if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
+    for (auto& kv : hdPbrTex_) if (kv.second) glDeleteTextures(1, &kv.second);
+    hdPbrTex_.clear();
     if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
     for (size_t a = 1; a < lmArrays_.size(); ++a) if (lmArrays_[a]) glDeleteTextures(1, &lmArrays_[a]);
     lmArrays_.clear(); lmArrOf_.clear();
@@ -840,7 +843,7 @@ void Pipeline::release() {
              texCache_.size() + lmTextures_.size());
     srgbBlockTex_.clear();
     fogShapeLogged_.clear();
-    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
+    gMemLightmapBytes = gMemTextureBytes = gMemMeshBytes = gMemSrgbTexBytes = 0; gMemDdsTextures = 0; gMemHdTextures = 0; gMemPbrMaps = 0; gMemPbrBytes = 0; gMemLightmaps = gMemTextures = gMemMeshes = 0;   // MEMSTATS
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
     const float keepFsrScale = fsrScale_, keepFsrSharp = fsrSharpness_;
@@ -1548,9 +1551,12 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
             if (key.empty() || dds.empty()) continue;
             std::ifstream f(platform::longPath(root + "/" + dds), std::ios::binary | std::ios::ate);   // [Systems] long paths
             const long long want = (long long)r["bytes"].asFloat(-1.0f);
-            if (!f || (want >= 0 && (long long)f.tellg() != want)) { ++missing; continue; }
+            if (!f || (want >= 0 && (long long)f.tellg() != want)) {
+                if (!missing) LOG_WARN("wfc: HD texture pack: first missing / wrong-size file %s (%s)", dds.c_str(), !f ? "missing" : "size");
+                ++missing; continue;
+            }
             if (fmt != "DXT1" && fmt != "DXT5" && fmt != "DXT3" && fmt != "A8R8G8B8" && fmt != "G8") {
-                LOG_WARN("wfc: HD texture pack format %s not supported yet: pack ignored", fmt.c_str());
+                LOG_WARN("wfc: HD texture pack format %s not supported yet (%s): pack ignored", fmt.c_str(), dds.c_str());
                 m.clear(); return m;
             }
             m[key] = HdEntry{dds, fmt};
@@ -1562,11 +1568,108 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
     }();
     return idx;
 }
+// M6 modern material maps (AssetTools / Systems: HD_BEYOND_D_PLAN): a separate index next to hd_index.json -
+// hd_pbr_index.json (else hd_modern_index.json), never read by builds without this code, so hd_index.json stays the
+// colour pack's. Rows: key "<parent key>#<role>", tex = the parent texture object, role roughness | height | orm, dds
+// (relative to the root), format BC4 | BC7, space linear, optional bytes. A bad row is skipped (that map only: the
+// material derives the value), never the pack. Only read when HD textures are on (hdPbrTexture).
+struct HdPbrEntry { std::string dds, fmt; long long bytes = -1; };
+const std::map<std::pair<std::string, std::string>, HdPbrEntry>& hdPbrIndex() {
+    static const std::map<std::pair<std::string, std::string>, HdPbrEntry> idx = [] {
+        std::map<std::pair<std::string, std::string>, HdPbrEntry> m;
+        const std::string root = hdRoot();
+        std::string t = readText(root + "/hd_pbr_index.json"), name = "hd_pbr_index.json";
+        if (t.empty()) { t = readText(root + "/hd_modern_index.json"); name = "hd_modern_index.json"; }
+        assets::Json J;
+        if (t.empty() || !assets::Json::parse(t, J)) return m;
+        const assets::Json* rows = nullptr;
+        for (const char* k : {"rows", "textures", "entries"}) if (J[k].arr.size()) { rows = &J[k]; break; }
+        if (!rows) return m;
+        size_t bad = 0;
+        for (const assets::Json& r : rows->arr) {
+            std::string tex = r["tex"].asString(), role = r["role"].asString(), dds = r["dds"].asString(), fmt = r["format"].asString();
+            const std::string space = r["space"].asString();
+            if (fmt.compare(0, 3, "PF_") == 0) fmt = fmt.substr(3);
+            std::transform(tex.begin(), tex.end(), tex.begin(), ::tolower);
+            std::transform(role.begin(), role.end(), role.begin(), ::tolower);
+            const long long want = (long long)r["bytes"].asFloat(-1.0f);
+            std::ifstream f(root + "/" + dds, std::ios::binary | std::ios::ate);
+            if (tex.empty() || role.empty() || dds.empty() || (fmt != "BC4" && fmt != "BC7") || (!space.empty() && space != "linear") ||
+                !f || (want >= 0 && (long long)f.tellg() != want)) { ++bad; continue; }
+            m[{tex, role}] = HdPbrEntry{dds, fmt, want};
+        }
+        LOG_INFO("wfc: HD modern material maps: %zu (%s)%s", m.size(), name.c_str(),
+                 bad ? (" - " + std::to_string(bad) + " rows skipped (format / space / missing or wrong-size file)").c_str() : "");
+        return m;
+    }();
+    return idx;
+}
+// a BC4 / BC7 DDS (DX10 header: DXGI 80 BC4_UNORM / 98 BC7_UNORM; legacy FourCC ATI1 / BC4U for BC4): the mip chain
+bool readDdsBc(const std::string& path, const std::string& fmt, int& w, int& h, std::vector<std::vector<uint8_t>>& levels) {
+    std::ifstream f(path, std::ios::binary);
+    std::vector<uint8_t> d((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    auto u32 = [&](size_t o) { return o + 4 <= d.size() ? (uint32_t)d[o] | ((uint32_t)d[o + 1] << 8) | ((uint32_t)d[o + 2] << 16) | ((uint32_t)d[o + 3] << 24) : 0u; };
+    if (d.size() < 128 || u32(0) != 0x20534444u) return false;          // "DDS "
+    h = (int)u32(12); w = (int)u32(16);
+    const int mips = std::max(1, (int)u32(28));
+    const uint32_t cc = u32(84);
+    size_t off = 128; std::string got;
+    if (cc == 0x30315844u) {                                          // "DX10"
+        if (d.size() < 148) return false;
+        const uint32_t dxgi = u32(128);
+        got = dxgi == 80 ? "BC4" : dxgi == 98 ? "BC7" : "";
+        off = 148;
+    } else if (cc == 0x31495441u || cc == 0x55344342u) got = "BC4";  // "ATI1" / "BC4U"
+    if (got != fmt || w <= 0 || h <= 0) return false;
+    const size_t bs = fmt == "BC4" ? 8 : 16;
+    levels.clear();
+    for (int l = 0, lw = w, lh = h; l < mips; ++l, lw = std::max(1, lw / 2), lh = std::max(1, lh / 2)) {
+        const size_t n = (size_t)((lw + 3) / 4) * (size_t)((lh + 3) / 4) * bs;
+        if (off + n > d.size()) return false;
+        levels.emplace_back(d.begin() + (long)off, d.begin() + (long)(off + n));
+        off += n;
+    }
+    return true;
+}
 // Available = the index parses with rows (no per-file stat at boot); once the setting has verified the files, the result
 // of that verification
 bool Pipeline::hdTexturesAvailable() { return hdIndexRows() && (!gHdVerified || !hdIndex().empty()); }
 // HD Textures setting: textures load from the pack (when available) from the next map / scene load on; a live
 // change does not reload the current map's textures (they are bound into its materials)
+GLuint Pipeline::hdPbrTexture(const std::string& textureObject, const std::string& role) {
+    if (!hdTextures_ || !CompressedTexImage2D) return 0;
+    std::string key = textureObject, r = role;
+    std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+    std::transform(r.begin(), r.end(), r.begin(), ::tolower);
+    auto c = hdPbrTex_.find({key, r});
+    if (c != hdPbrTex_.end()) return c->second;
+    GLuint tex = 0;
+    const auto& idx = hdPbrIndex();
+    auto it = idx.find({key, r});
+    if (it != idx.end()) {
+        int w = 0, h = 0; std::vector<std::vector<uint8_t>> lv;
+        if (readDdsBc(hdRoot() + "/" + it->second.dds, it->second.fmt, w, h, lv)) {
+            glGenTextures(1, &tex);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            const GLenum gf = it->second.fmt == "BC4" ? 0x8DBB /*COMPRESSED_RED_RGTC1*/ : 0x8E8C /*COMPRESSED_RGBA_BPTC_UNORM*/;
+            size_t bytes = 0;
+            for (size_t l = 0; l < lv.size(); ++l) {
+                CompressedTexImage2D(GL_TEXTURE_2D, (GLint)l, gf, std::max(1, w >> l), std::max(1, h >> l), 0, (GLsizei)lv[l].size(), lv[l].data());
+                bytes += lv[l].size();
+            }
+            glTexParameteri(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, (GLint)lv.size() - 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, lv.size() > 1 ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)anisotropy_);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glx::textureCacheInvalidate();
+            ++gMemPbrMaps; gMemPbrBytes += bytes;
+        } else LOG_WARN("wfc: HD modern material map %s#%s: bad DDS %s (skipped: derived values)", key.c_str(), r.c_str(), it->second.dds.c_str());
+    }
+    hdPbrTex_[{key, r}] = tex;
+    return tex;
+}
+
 void Pipeline::setHdTextures(bool on) {
     hdTextures_ = on && hdIndexRows() && !hdIndex().empty();   // (turning on verifies the pack's files once)
     LOG_INFO("renderer: HD textures %s%s", hdTextures_ ? "on" : "off",
@@ -3756,6 +3859,7 @@ void Pipeline::logMemStats(const char* when) {
              "skinned models %zu, posed buffers %zu, dynamic draw lists %zu, FX instances %zu",
              when, gMemLightmaps, gMemLightmapBytes / 1048576.0, gMemTextures, gMemTextureBytes / 1048576.0, gMemSrgbTexBytes / 1048576.0, gMemDdsTextures, gMemHdTextures, gMemMeshes,
              gMemMeshBytes / 1048576.0, skinModels_.size(), posed_.size(), dynSubs_.size(), fxInstances_.size());
+    if (gMemPbrMaps) LOG_INFO("MEMSTATS %s: HD modern material maps %lu = %.0f MB (BC4 / BC7 + mips)", when, gMemPbrMaps, gMemPbrBytes / 1048576.0);
 }
 
 // WFC_RENDERSIZE=<w>x<h>: the internal 3D render size (measurement), else unchanged
