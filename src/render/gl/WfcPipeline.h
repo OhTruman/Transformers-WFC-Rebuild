@@ -1192,6 +1192,14 @@ private:
     void drawFogVolume(const Sub& s, const core::Mat4& model, int prog, int vol);
     std::set<std::string> fogShapeLogged_;               // components not drawn as fog-volume shapes (logged once each)
     std::set<GLuint> srgbBlockTex_;                       // HD sRGB maps uploaded as sRGB S3TC blocks (buildProgram corrects)
+    // M6 Modern materials: the setting, whether this map loaded with it (HD on + materials_pbr.json), the matc "pbr"
+    // bodies (tools/render/matc_pbr.py), and buildProgram's flag for a Modern build
+    bool modern_ = false, modernActive_ = false, pbrBuild_ = false;
+    struct PbrSrc { std::string glsl, roughParent; int roughSlot = -1; };
+    std::map<std::string, PbrSrc> pbr_;
+public:
+    void setModernMaterials(bool on);
+private:
     bool lmSpecBuild_ = false;                            // buildProgram: a translated original material (lightmap specular)
     void ensureSceneDepth();
     void ensureSceneColor();

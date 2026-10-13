@@ -176,6 +176,11 @@ public:
     // The HD row with levels (Frontend): 0 Off, 1 Faithful (the D pack: today's root), 2 Enhanced (the E pack's own root,
     // switched as a whole). Level 2 is unavailable until an E root exists; level 1 = setHdTextures(true).
     virtual bool hdTextureLevelAvailable(int level) const { (void)level; return false; }
+    // M6 Modern materials (under the HD switch): physically based shading of the original materials - base colour without
+    // the authored cube reflection, GGX specular, image-based specular from the material's own cube map, the HD pack's
+    // roughness maps where present. Takes effect from the next map load, only with HD textures on; off = unchanged.
+    virtual bool modernMaterialsAvailable() const { return false; }
+    virtual void setModernMaterials(bool on) { (void)on; }
     virtual void setHdTextureLevel(int level) { setHdTextures(level > 0); }
     // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
     // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
