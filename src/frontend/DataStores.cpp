@@ -63,6 +63,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:HDTextures>") return std::to_string(flow_.profile().display.hdTextures);   // PC EXTENSION
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
+    if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
@@ -328,6 +329,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         flow_.profile().display.frameGeneration = arg(1) == "1" || arg(1) == "true" ? 1 : 0;
         FlowTrace::emit("settings.frameGeneration", {{"on", FlowTrace::boolean(flow_.profile().display.frameGeneration != 0)},
                                                      {"applies", "next launch"}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:ShowFps>") {   // PC EXTENSION; the corner readout follows at once
+        flow_.profile().display.showFps = arg(1) == "1" || arg(1) == "true";
+        FlowTrace::emit("settings.showFps", {{"on", FlowTrace::boolean(flow_.profile().display.showFps)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:RayTracing>") {   // PC EXTENSION (the row shows only where it can run)

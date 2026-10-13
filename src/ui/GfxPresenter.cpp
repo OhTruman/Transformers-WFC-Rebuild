@@ -1130,6 +1130,11 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
             rtNextMap ? "Turned on now, it starts with the next map."
                       : "Off frees its memory (~0.2-0.5 GB) when the map changes.", "Ray Tracing");
     }
+    {   // PC EXTENSION (user playtest 2026-10-13): the FPS counter in the top-right corner
+        std::vector<gfx::avm1::Value> fc;
+        add(fc, 0, "Off"); add(fc, 1, "On");
+        row(fc, "<PCSettings:ShowFps>", "Shows frames per second in the top-right corner.", "FPS Counter");
+    }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
         gfx::avm1::Object* item = vm.newPlain();
@@ -1461,7 +1466,9 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     gfx::Player::hostViewportW = (float)w;   // a noScale movie opened later lays out for this viewport
     gfx::Player::hostViewportH = (float)h;
     if (shapesStale_) { gl_.forgetShapes(); shapesStale_ = false; }
-    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !(scoreboard_ && scoreboardShown_)) return;
+    const bool fpsOn = rt_.flow().profile().display.showFps;
+    if (!fpsOn && fps_) { fps_.reset(); fpsMeter_.reset(); fpsW_ = fpsH_ = 0; fpsText_.clear(); }
+    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !(scoreboard_ && scoreboardShown_) && !fpsOn) return;
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {
@@ -1483,6 +1490,10 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
 #if WFC_DLSS_PACKAGE
     if (credit_ && creditShown_) drawMovie(*credit_);
 #endif
+    if (fpsOn) {
+        drawFps(w, h);
+        if (fps_) drawMovie(*fps_);
+    }
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
     gl_.end();
 }
@@ -1509,21 +1520,12 @@ void GfxPresenter::syncPackageCredit() {
     }
     if (!shown || creditFailed_) return;
     if (!credit_) {
-        credit_ = std::make_unique<GfxMovie>();
-        if (!credit_->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",
-                           [](GfxMovie&, const std::string&, gfx::avm1::Args&) { return gfx::avm1::Value(); },
-                           [](GfxMovie&, const std::string&, const std::string&) {})) {
-            credit_.reset();
-            creditFailed_ = true;
-            return;
-        }
-        credit_->advance(1.0f / credit_->frameRate());   // frame 1 (the root script object); never advanced again
+        if (!openOverlayMovie(credit_, "dlss_txt")) { creditFailed_ = true; return; }
         creditW_ = creditH_ = 0;
     }
     gfx::Player& p = credit_->player();
     gfx::MovieClip* root = p.root();
     if (!root || !root->script) return;
-    for (auto& c : root->children) if (c.second && c.second->name != "dlss_txt") c.second->visible = false;   // the cursor art
     if (creditW_ == viewW_ && creditH_ == viewH_) return;
     creditW_ = viewW_; creditH_ = viewH_;
     p.setViewport((float)viewW_, (float)viewH_);
@@ -1547,6 +1549,68 @@ void GfxPresenter::syncPackageCredit() {
                              "' color='#C8C8C8'>" + frontend::kDlssCreditText + "</font></p>"));
 }
 #endif
+
+bool GfxPresenter::openOverlayMovie(std::unique_ptr<GfxMovie>& m, const char* keep) {
+    m = std::make_unique<GfxMovie>();
+    if (!m->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",
+                 [](GfxMovie&, const std::string&, gfx::avm1::Args&) { return gfx::avm1::Value(); },
+                 [](GfxMovie&, const std::string&, const std::string&) {})) {
+        m.reset();
+        return false;
+    }
+    m->advance(1.0f / m->frameRate());   // frame 1 (the root script object); never advanced again
+    if (gfx::MovieClip* root = m->player().root())   // the cursor art stays hidden
+        for (auto& c : root->children) if (c.second && c.second->name != keep) c.second->visible = false;
+    return true;
+}
+
+// PC EXTENSION (user playtest 2026-10-13): the FPS counter, top-right, "144 FPS  6.9 ms" refreshed 4 times a second
+// (frontend::FpsMeter: the presented-frame interval, Rendering's guidance), white with the HUD's soft drop shadow, ~1.8 %
+// of the window height (19 px at 1080p), a 1.5 % margin. Drawn in the UI layer (after post-processing).
+void GfxPresenter::drawFps(int w, int h) {
+    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    fpsMeter_.frame(t);
+    if (fpsFailed_) return;
+    if (!fps_) {
+        if (!openOverlayMovie(fps_, "fps_txt")) { fpsFailed_ = true; return; }
+        fpsW_ = fpsH_ = 0;
+        frontend::FlowTrace::emit("settings.fpsCounter", {{"shown", "true"}, {"provenance", "PC EXTENSION"}});
+    }
+    gfx::Player& p = fps_->player();
+    gfx::MovieClip* root = p.root();
+    if (!root || !root->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    const double perUnit = std::max(1e-3, (double)GfxRendererGL::movieMatrix(p, w, h).a * 20.0);   // window px per stage unit
+    const float px = std::max(12.0f, (float)h * 0.018f), margin = (float)h * 0.015f;
+    if (fpsW_ != w || fpsH_ != h) {
+        fpsW_ = w; fpsH_ = h;
+        fpsText_.clear();
+        p.setViewport((float)w, (float)h);
+        const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, w, h).inverse();
+        const float boxW = px * 12.0f;   // "1000 FPS  1.0 ms" fits
+        const gfx::Point a = inv.apply({(float)w - margin - boxW, margin}), b = inv.apply({(float)w - margin, margin + px * 1.6f});
+        V f = vm.callMethod(V(root->script), "createTextField", {V("fps_txt"), V(1000), V(a.x / 20.0), V(a.y / 20.0),
+                                                                  V((b.x - a.x) / 20.0), V((b.y - a.y) / 20.0)});
+        if (!f.isObject()) { fpsFailed_ = true; return; }
+        vm.setV(f, "html", V(true));
+        vm.setV(f, "embedFonts", V(true));
+        vm.setV(f, "selectable", V(false));
+        vm.setV(f, "shadowColor", V(0.0));
+        vm.setV(f, "shadowAlpha", V(0.8));
+        vm.setV(f, "shadowStrength", V(2.0));
+        vm.setV(f, "shadowDistance", V(0.0));
+        vm.setV(f, "shadowBlurX", V(4.0));
+        vm.setV(f, "shadowBlurY", V(4.0));
+    }
+    const std::string text = fpsMeter_.text();
+    if (text == fpsText_) return;
+    fpsText_ = text;
+    const V f = vm.get(root->script, "fps_txt");
+    if (!f.isObject()) return;
+    vm.setV(f, "htmlText", V(std::string("<p align='right'><font face='$NormalFont' size='") +
+                             std::to_string(std::max(1, (int)std::lround(px / perUnit))) + "' color='#FFFFFF'>" + text + "</font></p>"));
+}
 
 void GfxPresenter::recommendedSettingsPressed() {
     rt_.applyRecommendedGraphics("recommended");
