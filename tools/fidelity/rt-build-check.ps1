@@ -26,14 +26,20 @@ if ($Exe) {
     $Exe = (Resolve-Path $Exe).Path; $d = Join-Path $OutDir "rt_on"; New-Item -ItemType Directory -Force $d | Out-Null; $lg = Join-Path $d "wfc.log"
     if (-not (Test-Path $lg)) {
         (Get-BotProfile 0 0 1 -Width 1920 -Height 1080 -RayTracing 2) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
-        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_MATCH_URL = "$Map?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
+        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_MATCH_URL = "${Map}?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
     }
     if (-not (Test-Path $lg)) { Res "runtime" "UNKNOWN" "no log" "Experimental" }
     else {
         $rs = Get-WfcRtState $lg
+        # (a map that did not load is the harness' fault, not the build's: 2026-10-13 "$Map?..." expanded an undefined variable and
+        #  the run fell back to the graybox arena - Systems)
+        $noMap = Select-String -Path $lg -Pattern 'render data not found' -Quiet
+        if ($noMap) { Res "runtime" "UNKNOWN" ("map '{0}' did not load (render data not found): no verdict" -f $Map) "Experimental"; $Exe = $null }
+        if (-not $Exe) { } else {
         $st = if ($rs.noShaders) { "FAIL" } elseif ($rs.scene -and $rs.mode -eq 2) { "PASS" } elseif (Select-String -Path $lg -Pattern 'RT bridge: no D3D12 device|raytracing tier .* < 1\.1' -Quiet) { "UNKNOWN" } else { "FAIL" }
         Res "runtime" $st ("profile RayTracing=2 on {0}: mode {1} (logged {2}), RT scene {3}, no-shader message {4}{5}" -f $Map, $rs.mode, $rs.modeLogged, $rs.scene, $rs.noShaders,
             $(if ($st -eq "UNKNOWN") { " (this machine has no DXR 1.1 device: not a build verdict)" } else { "" })) "Rendering"
+        }
     }
 }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
