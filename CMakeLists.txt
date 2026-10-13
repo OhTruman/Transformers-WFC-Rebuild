@@ -73,6 +73,29 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
     target_sources(wfc_rebuild PRIVATE ${WFC_RT_SHADER_HEADERS})
     target_include_directories(wfc_rebuild PRIVATE "${WFC_RT_SHADER_DIR}")
     target_compile_definitions(wfc_rebuild PRIVATE WFC_RT_SHADERS=1)
+    # the FidelityFX shadow denoiser's five passes (tools/render/fetch_ffx_denoiser.py, SDK v1.1.4, MIT), cs_6_6 with
+    # their embedded root signatures (render/d3d12/D3D12RtDenoise.cpp)
+    set(FFXDN "${CMAKE_SOURCE_DIR}/third_party/ffx_denoiser")
+    if(EXISTS "${FFXDN}/VERSION.txt")
+        set(WFC_DN_HEADERS "")
+        foreach(pair "prepare:ffx_denoiser_prepare_shadow_mask_pass" "tile:ffx_denoiser_shadows_tile_classification_pass"
+                     "filter0:ffx_denoiser_filter_soft_shadows_0_pass" "filter1:ffx_denoiser_filter_soft_shadows_1_pass"
+                     "filter2:ffx_denoiser_filter_soft_shadows_2_pass")
+            string(REPLACE ":" ";" kv "${pair}")
+            list(GET kv 0 short)
+            list(GET kv 1 src)
+            set(out "${WFC_RT_SHADER_DIR}/ffx_dn_${short}.h")
+            add_custom_command(OUTPUT "${out}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"
+                COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_6 -E CS -O3 -DFFX_GPU=1 -DFFX_HLSL=1 -DFFX_DENOISER_SHADOWS_EMBED_ROOTSIG=1
+                    -I "${FFXDN}/gpu" -Fh "${out}" -Vn g_ffx_dn_${short} "${FFXDN}/passes/${src}.hlsl"
+                DEPENDS "${FFXDN}/passes/${src}.hlsl"
+                COMMENT "DXC ${src}.hlsl")
+            list(APPEND WFC_DN_HEADERS "${out}")
+        endforeach()
+        target_sources(wfc_rebuild PRIVATE ${WFC_DN_HEADERS})
+        target_compile_definitions(wfc_rebuild PRIVATE WFC_RT_DENOISER=1)
+    endif()
 endif()
 target_compile_options(wfc_rebuild PRIVATE -Wall -Wextra -Wno-unused-parameter)
 

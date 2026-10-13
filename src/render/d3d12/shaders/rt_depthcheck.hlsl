@@ -5,7 +5,7 @@
 RaytracingAccelerationStructure Scene : register(t0);
 Texture2D<float> RasterDepth : register(t1);
 RWTexture2D<float> OutDepth : register(u0);   // the ray's view depth (0 = miss), for a debug view
-RWByteAddressBuffer Stats : register(u1);     // counters, see below
+RWByteAddressBuffer Stats : register(u4);     // counters, see below
 
 cbuffer Frame : register(b0) {
     float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)

@@ -3185,6 +3185,7 @@ unsigned char* Pipeline::spriteRingAcquire(size_t bytes, size_t& base) {
 
 void Pipeline::flushTranslucency() {
     flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
+    rtRoundTrip(false, true);                          // (WFC_RT_SHADOWAO, M7 stage 1: the opaque depth is complete here)
     if (transQueue_.empty()) return;
     const bool fxOn = fxSubCpuOn();
     double fxt = fxOn ? fxSubNowMs() : 0.0;

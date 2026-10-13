@@ -60,6 +60,19 @@ bool invert(const float* m, float* out) {             // general 4x4 inverse (co
     for (int i = 0; i < 16; ++i) out[i] = (float)(inv[i] / det);
     return true;
 }
+// column-major 4 x 4: c = a * b
+void mul4(const float* a, const float* b, float* c) {
+    for (int col = 0; col < 4; ++col)
+        for (int r = 0; r < 4; ++r) {
+            double v = 0.0;
+            for (int k = 0; k < 4; ++k) v += (double)a[k * 4 + r] * (double)b[col * 4 + k];
+            c[col * 4 + r] = (float)v;
+        }
+}
+// FidelityFX ndc (x, 1 - 2v, depth 0 .. 1) -> GL ndc (x, -y, 2 depth - 1) and back (the shared textures keep GL's rows,
+// so v runs up GL's image: y flips; depth is the window depth GL wrote)
+const float kFfxToGl[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 2, 0, 0, 0, -1, 1};
+const float kGlToFfx[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.5f, 0, 0, 0, 0.5f, 1};
 }  // namespace
 
 // the depth prepass's triangle set (drawMdi's prepass: opaque MDI programs, VLM runs excluded), from the world mesh's
@@ -95,18 +108,21 @@ void Pipeline::rtBuildWorld(int meshId) {
     }
     const int set = meshId == bspMesh_ ? 1 : 0;
     LOG_INFO("RT depth check: %zu prepassed subs of the %s set (mesh %d) -> D3D12", subs, set ? "level BSP" : "world", meshId);
-    if (!rtBridgeAddStaticWorld(W, 1u << set)) LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
+    if (rtBridgeAddStaticWorld(W, 1u << set)) ++rtWorldSets_;
+    else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
 
 // once per frame, as a ray-traced frame would: the first MDI set's prepass (WFC_RT_ROUNDTRIP), or for the depth check
-// the set WFC_RT_CHECKSET names (0 world, the default; 1 level BSP), traced against that set alone
-void Pipeline::rtRoundTrip(bool bspSet) {
+// the set WFC_RT_CHECKSET names (0 world, the default; 1 level BSP), traced against that set alone. Shadow / AO
+// (WFC_RT_SHADOWAO, stage 1 option b): at the end of the opaque pass (flushTranslucency, after the characters), where
+// the depth is complete and this frame's poses exist; endOfOpaque marks that call.
+void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn() || shadowAoOn();
     if (!on || rtFailed_) return;
     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
-    // shadow / AO: at the level BSP set's prepass when the map has one (the world set is drawn before it), else the world's
     const bool sao = shadowAoOn() && !depthCheckOn();
-    if (sao ? bspSet != (bspMesh_ >= 0) : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
+    if (sao ? (!endOfOpaque || rtFrame_ == frameNo_ || rtWorldSets_ == 0) : endOfOpaque ? true
+            : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
     rtFrame_ = frameNo_;
     RtTargets t;
     if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT round trip: bridge unavailable"); return; }
@@ -150,6 +166,20 @@ void Pipeline::rtRoundTrip(bool bspSet) {
             const core::Vec3 d = core::normalize(sun->dir);
             fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = 1.0f;
         }
+        // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut
+        float glInvP[16], glInvVP[16], tmp[16], tmp2[16];
+        invert(camProj_.m, glInvP); invert(viewProj_.m, glInvVP);
+        mul4(glInvP, kFfxToGl, fr.ffxProjInv);
+        mul4(glInvVP, kFfxToGl, fr.ffxViewProjInv);
+        const float* prev = rtHavePrevVP_ ? rtPrevVP_.m : viewProj_.m;
+        mul4(prev, fr.ffxViewProjInv, tmp);              // previous GL clip of this pixel's point
+        mul4(kGlToFfx, tmp, tmp2);
+        std::memcpy(fr.ffxReproj, tmp2, sizeof tmp2);
+        fr.eye[0] = camPos_.x; fr.eye[1] = camPos_.y; fr.eye[2] = camPos_.z;
+        fr.resetHistory = !rtHavePrevVP_ || cameraCut_;
+        { static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
+          fr.debugDump = frameNo_ == dumpAt; }
+        rtPrevVP_ = viewProj_; rtHavePrevVP_ = true;
         static bool told = false;
         if (!told) {
             told = true;
@@ -177,6 +207,12 @@ void Pipeline::rtRoundTrip(bool bspSet) {
             glBindTexture(GL_TEXTURE_2D, t.shadowAo);
             glGetTexImage(GL_TEXTURE_2D, 0, 0x8227 /*GL_RG*/, GL_FLOAT, rg.data());
             if (FILE* f = std::fopen("rt_dump_shadowao.bin", "wb")) { std::fwrite(rg.data(), 4, rg.size(), f); std::fclose(f); }
+            std::vector<unsigned char> dn((size_t)vpW_ * vpH_);
+            glBindTexture(GL_TEXTURE_2D, t.shadowDn);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glGetTexImage(GL_TEXTURE_2D, 0, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE, dn.data());
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            if (FILE* f = std::fopen("rt_dump_shadowdn.bin", "wb")) { std::fwrite(dn.data(), 1, dn.size(), f); std::fclose(f); }
         }
         glBindTexture(GL_TEXTURE_2D, 0);
         std::string m;
