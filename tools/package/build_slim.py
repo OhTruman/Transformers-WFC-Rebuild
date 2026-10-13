@@ -96,7 +96,29 @@ def main():
     # materials_pbr.json (Rendering's M6 Modern mode, tools/render/matc_pbr.py; the HD row's Enhanced level)
     have_dest = {r['dest'] for r in rows}
     problems = []
+    # --vbake <dir>: the R1 sun-swap data (Systems' tools/systems/vbake: <dir>/<map>/fit.json + vbake_*.png) shipped as
+    # <render data>/<map>/vbake/ beside each MP map's materials_glsl.json (Rendering reads <render data>/<map>/vbake; without
+    # it Ray Tracing Realistic silently has no sun swap). Maps without a fit.json there ship none (reported).
+    vbake_dir = arg('--vbake')
+    vbake_maps = []
+    if vbake_dir and not os.path.isdir(vbake_dir):
+        problems_vb = ['--vbake: not a folder: %s' % vbake_dir]
+    else:
+        problems_vb = []
     for r in list(rows):
+        if vbake_dir and not problems_vb and r['dest'].endswith('/materials_glsl.json'):
+            mapdir = r['dest'][:-len('materials_glsl.json')]
+            name = mapdir.rstrip('/').split('/')[-1]
+            src_dir = os.path.join(vbake_dir, name)
+            if name.startswith('MP_') and os.path.isfile(os.path.join(src_dir, 'fit.json')):
+                files = ['fit.json'] + sorted(f for f in os.listdir(src_dir) if f.startswith('vbake_') and f.endswith('.png'))
+                for f in files:
+                    src_abs = os.path.join(src_dir, f)
+                    rows.append(dict(dest=mapdir + 'vbake/' + f, source=os.path.relpath(src_abs, ROOT).replace('\\', '/'),
+                                     bytes=str(os.path.getsize(src_abs)), action='keep', reason='R1 vbake'))
+                vbake_maps.append('%s (%d pages)' % (name, len(files) - 1))
+            elif name.startswith('MP_'):
+                problems_vb.append('--vbake: no fit.json for %s in %s' % (name, vbake_dir))
         if not r['dest'].endswith('/materials_glsl.json'):
             continue
         for extra in RENDER_IF_PRESENT:
@@ -151,6 +173,9 @@ def main():
             problems.append('--m5: Microsoft Agility SDK LICENSE.txt not found: %s' % lic)
         else:
             bin_rows.append((lic, BIN_DEST + '/' + AGILITY_LICENSE_DEST))
+    problems += problems_vb
+    if vbake_dir:
+        print('R1 vbake from %s: %d maps: %s' % (vbake_dir, len(vbake_maps), ', '.join(vbake_maps)))
     missing = [r['source'] for r in rows if not os.path.isfile(os.path.join(ROOT, r['source']))]
     problems += ['source missing: %s' % m for m in missing[:20]]
     if len(missing) > 20:
@@ -199,7 +224,7 @@ def main():
                       '%d files (%.2f GB)' % (len(hd_rows), hd_b / 2**30) if hd_src else 'none', 'yes' if m5 else 'no'))
     bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
     manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
-                'm5_runtime': m5, 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
+                'm5_runtime': m5, 'vbake': vbake_dir or '', 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
                 'bin_dest': BIN_DEST, 'bin_files': bin_files}
     if plan:
         print('bin files (%d):' % len(bin_files))
