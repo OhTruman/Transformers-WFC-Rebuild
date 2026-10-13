@@ -3,6 +3,57 @@
  "note": "normalise each generated map so its mean roughness equals target_mean_roughness (the derived sqrt(2/(SpecularPower+2)) mean over the materials using it, from their own textures); the renderer reads an ORM metal channel only for reviewed metal rows; orm_candidate_materials are per (texture, material)",
  "rows": [
   {
+   "tex": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShip1_TEXSET.PROP_MegatronShip1_TEXSET_Masks_NormY",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.3412690501024537,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShip1_MATINST",
+     "class": "dielectric",
+     "target_mean_roughness": 0.3412690501024537
+    }
+   ]
+  },
+  {
+   "tex": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShip2_TEXSET.PROP_MegatronShip2_TEXSET_Masks_NormY",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.3554091835871691,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShip2_MATINST",
+     "class": "dielectric",
+     "target_mean_roughness": 0.3554091835871691
+    }
+   ]
+  },
+  {
+   "tex": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShipBack_TEXSET.PROP_MegatronShipBack_TEXSET_Masks_NormY",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.3355476548721195,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShipBack_MATINST",
+     "class": "dielectric",
+     "target_mean_roughness": 0.3355476548721195
+    }
+   ]
+  },
+  {
    "tex": "DES_IAC_Omega_Cover_p.Texture.innerCyberParts_CLR_TEXSET.innerCyberParts_CLR_TEXSET_Masks_NormY",
    "role": "roughness",
    "format": "BC4",
@@ -70,6 +121,23 @@
      "material": "ENV_ORB_D1_Deco_p.Materials.LiftLock_WhiteYellow_MATINST",
      "class": "dielectric",
      "target_mean_roughness": 0.39155622521042066
+    }
+   ]
+  },
+  {
+   "tex": "DES_ORB_Asteroids_p.Textures.DebrisCard_B_CLR",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.14002800840280097,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "DES_ORB_Asteroids_p.Textures.DebrisCardB_MATINST",
+     "class": "dielectric",
+     "target_mean_roughness": 0.14002800840280097
     }
    ]
   },
@@ -4613,6 +4681,77 @@
      "material": "ENV_NEU_Bridges_p.Textures.Bridge_Neutral_red_MATINST",
      "class": "dielectric",
      "target_mean_roughness": 0.4282775292259423
+    }
+   ]
+  },
+  {
+   "tex": "ENV_NEU_CybertronOrbit_P.ENV_CybertronOrbitCore_CLR",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.5184997712751716,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowCore_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.5184997712751716
+    }
+   ]
+  },
+  {
+   "tex": "ENV_NEU_CybertronOrbit_P.ENV_CybertronOrbitShell2k_CLR",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.48306017221113384,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowCrust_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.48109394323607313
+    },
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowDebris_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.47954730422255687
+    },
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowWeb_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.4885392691747715
+    }
+   ]
+  },
+  {
+   "tex": "ENV_NEU_CybertronOrbit_P.ENV_CybertronOrbit_Buildings_clr",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.518397862905597,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowBlast_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.5183726088522422
+    },
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowIocon_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.5187064847660672
+    },
+    {
+     "material": "ENV_NEU_CybertronOrbit_P.ENV_NEU_CybertronLowKaon_Mat",
+     "class": "dielectric",
+     "target_mean_roughness": 0.5181144950984816
     }
    ]
   },
@@ -9354,6 +9493,40 @@
      "material": "TR_SoldierCarNeu_VEH_p.VH_SoldierCarNeu_NormSpec_Cust_E_Mat_INST",
      "class": "metallic_paint",
      "target_mean_roughness": 0.3583227382647206
+    }
+   ]
+  },
+  {
+   "tex": "TR_SoldierJetAut_VEH_p.VH_SoldierJetAut_SpecPwr_DiffLum_EnrGlow",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.5358452639955907,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "TR_SoldierJetAut_VEH_p.VH_SoldierJetAut_NormSpec_Cust_E_Mat_INST",
+     "class": "metallic_paint",
+     "target_mean_roughness": 0.5358452639955907
+    }
+   ]
+  },
+  {
+   "tex": "TR_SoldierJetDec_VEH_p.VH_SoldierJetDec_SpecPwr_DifLum_EnrGlow",
+   "role": "roughness",
+   "format": "BC4",
+   "space": "linear",
+   "srgb": false,
+   "resolution": "half of the colour map",
+   "target_mean_roughness": 0.44764651424489077,
+   "orm_candidate_materials": [],
+   "materials": [
+    {
+     "material": "TR_SoldierJetDec_VEH_p.VH_SoldierJetDec_NormSpec_Cust_E_Mat_INST",
+     "class": "metallic_paint",
+     "target_mean_roughness": 0.44764651424489077
     }
    ]
   },
