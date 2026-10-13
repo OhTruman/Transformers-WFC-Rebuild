@@ -18,9 +18,13 @@ $Only = @($Only | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() 
 if ($Only.Count) { $tests = @($tests | Where-Object { $Only -contains $_ }) }
 $res = New-WfcResults; $rows = New-Object System.Collections.Generic.List[object]
 $failRe = '(?<![A-Za-z])(FAIL|FAILED)(?![A-Za-z])'; $passRe = '(?<![A-Za-z])(PASS|PASSED|SUMMARY)(?![A-Za-z])'
+# tests that check a companion switch (2026-10-13: QATEST / QABOTTEST fail their first check "WFC_QA set" without the QA panel)
+$TestEnv = @{ WFC_QATEST = @{ WFC_QA = "1" }; WFC_QABOTTEST = @{ WFC_QA = "1" } }
 foreach ($t in ($tests | Sort-Object)) {
     $d = Join-Path $OutDir ($t.ToLower()); $lg = Join-Path $d "wfc.log"; $code = $null; $t0 = Get-Date
-    if (-not $ReportOnly -and -not (Test-Path $lg)) { $code = Invoke-WfcExe $exe $d @{ $t = "1"; WFC_NO_WATCHDOG = "1" } "run.log" $TimeoutSec }
+    $e = @{ $t = "1"; WFC_NO_WATCHDOG = "1" }
+    if ($TestEnv.ContainsKey($t)) { foreach ($k in $TestEnv[$t].Keys) { $e[$k] = $TestEnv[$t][$k] } }
+    if (-not $ReportOnly -and -not (Test-Path $lg)) { $code = Invoke-WfcExe $exe $d $e "run.log" $TimeoutSec }
     $secs = [int]((Get-Date) - $t0).TotalSeconds
     $lines = @(if (Test-Path $lg) { [IO.File]::ReadLines($lg) })
     $tag = ($t -replace '^WFC_', '' -replace 'TEST$', '')
