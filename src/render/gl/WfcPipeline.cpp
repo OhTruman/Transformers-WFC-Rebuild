@@ -3753,6 +3753,13 @@ unsigned char* Pipeline::spriteRingAcquire(size_t bytes, size_t& base) {
 }
 
 void Pipeline::flushTranslucency() {
+    // RT on and no character queued this frame: the world's RT pass (shadows / AO / the R1 sun swap) still runs here, at the
+    // end of the opaque pass. It ran only inside the characters' flush, so frames without a queued character (none in view,
+    // none deferred) had no RT at all (Systems' a44aa6db package gate: R1 loaded, never composited).
+    if (dynQueue_.empty() && !flushingDyn_) {
+        flushWeaponQueue();                              // (as the characters' flush: the weapons before the RT depth copy)
+        if (rtDynBegin()) { glx::gpuStamp("RT: world only (no queued characters)"); rtDynMid(); rtDynEnd(); }
+    }
     flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
     if (transQueue_.empty()) return;
     const bool fxOn = fxSubCpuOn();
