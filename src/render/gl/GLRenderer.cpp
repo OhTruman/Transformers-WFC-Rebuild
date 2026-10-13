@@ -1593,7 +1593,7 @@ public:
     bool hdTextureLevelAvailable(int level) const override {
         return level == 0 || (level == 1 && wfc::Pipeline::hdTexturesAvailable());   // (level 2: no Enhanced root yet)
     }
-    void setHdTextureLevel(int level) override { wfc_.setHdTextures(level == 1); }
+    void setHdTextureLevel(int level) override { wfc_.setHdTextures(level >= 1); }   // (2 = the E root once per-level roots exist)
     GpuFacts gpuFacts() override {
         if (!gpuFactsRead_) { gpuFacts_ = readGpuFacts(); gpuFactsRead_ = true; }
         return gpuFacts_;
