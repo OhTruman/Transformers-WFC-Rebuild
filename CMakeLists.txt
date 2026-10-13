@@ -87,7 +87,7 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
             set(out "${WFC_RT_SHADER_DIR}/ffx_dn_${short}.h")
             add_custom_command(OUTPUT "${out}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"
-                COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_6 -E CS -O3 -DFFX_GPU=1 -DFFX_HLSL=1 -DFFX_DENOISER_SHADOWS_EMBED_ROOTSIG=1
+                COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_6 -E CS -O3 -DFFX_GPU=1 -DFFX_HLSL=1 -DFFX_HALF=1 -enable-16bit-types -DFFX_DENOISER_SHADOWS_EMBED_ROOTSIG=1
                     -I "${FFXDN}/gpu" -Fh "${out}" -Vn g_ffx_dn_${short} "${FFXDN}/passes/${src}.hlsl"
                 DEPENDS "${FFXDN}/passes/${src}.hlsl"
                 COMMENT "DXC ${src}.hlsl")
