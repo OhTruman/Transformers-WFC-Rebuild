@@ -1118,10 +1118,11 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         row(fg, "<PCSettings:FrameGeneration>",
             "Doubles frames below your refresh rate; adds a little lag.", "Frame Generation");   // restart: in the labels
     }
-    if (rtAvailable) {   // PC EXTENSION; Off by default, never auto-detected (user decision 2026-10-12)
+    if (rtAvailable) {   // PC EXTENSION; Off by default, never auto-detected (user decision 2026-10-12). Hint: Rendering /
+        // Integration 2026-10-13 (Off keeps the RT data until the map changes; modes switch live on a map loaded with RT)
         std::vector<gfx::avm1::Value> rtv;
         add(rtv, 0, "Off"); add(rtv, 1, "Faithful"); add(rtv, 2, "Realistic");
-        row(rtv, "<PCSettings:RayTracing>", "Ray-traced shadows and lighting. Faithful: original look.", "Ray Tracing");
+        row(rtv, "<PCSettings:RayTracing>", "Off frees its memory (~0.2-0.5 GB) when the map changes.", "Ray Tracing");
     }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
