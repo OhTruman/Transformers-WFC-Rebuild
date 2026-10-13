@@ -3,6 +3,7 @@
 // fscommands to the frontend runtime, feeds engine -> AS callbacks (loading text, data-store changes) and gives the
 // focused movie the UI keys (the key codes the movies' KeyListener expects).
 #pragma once
+#include <chrono>
 #include <map>
 #include <memory>
 #include <string>
@@ -145,6 +146,8 @@ private:
     // library's $NormalFont), drawn above the full-screen movie.
     std::unique_ptr<GfxMovie> credit_;
     bool creditShown_ = false, creditFailed_ = false;
+    bool creditOnLogo_ = false;                          // shown for a boot logo (bridges the gap to the next one)
+    std::chrono::steady_clock::time_point creditGapFrom_{};
     int creditW_ = 0, creditH_ = 0;   // the window size the line was laid out for
     void syncPackageCredit();
 #endif
