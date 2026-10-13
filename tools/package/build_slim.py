@@ -113,6 +113,21 @@ def main():
             problems.append('--bin lacks %s (the previous package shipped it)' % rel)
         else:
             bin_rows.append((src, BIN_DEST + '/' + rel))
+    # ---- the exe's build: RT shaders compiled in (Experimental 2026-10-13: a tree without third_party/dxc and
+    # third_party/ffx_denoiser builds with no RT shaders - CMake defines WFC_RT_SHADERS / WFC_RT_DENOISER only when they
+    # exist - and the Ray Tracing row then silently does nothing). DXC is build-time only (the DXIL is embedded as headers in
+    # <build>/generated/rt; nothing of DXC ships). --no-rt-check skips this (a deliberately RT-less package).
+    build_dir = os.path.normpath(os.path.join(bin_dir, '..'))
+    if '--no-rt-check' not in sys.argv:
+        ninja = os.path.join(build_dir, 'build.ninja')
+        ninja_txt = open(ninja, encoding='utf-8', errors='replace').read() if os.path.isfile(ninja) else ''
+        for define in ('WFC_RT_SHADERS=1', 'WFC_RT_DENOISER=1'):
+            if define not in ninja_txt:
+                problems.append('--bin was built without %s (%s): fetch tools/render/fetch_dxc.py + fetch_ffx_denoiser.py into the '
+                                'build tree, re-configure and rebuild (or --no-rt-check)' % (define, ninja if ninja_txt else 'no build.ninja beside --bin'))
+        for h in ('rt_shadow_ao.h', 'rt_reflect.h', 'ffx_dn_filter0.h'):
+            if not os.path.isfile(os.path.join(build_dir, 'generated', 'rt', h)):
+                problems.append('--bin: the RT shader header generated/rt/%s is missing in %s' % (h, build_dir))
     m5 = '--m5' in sys.argv
     if m5:
         for src_rel, dst_rel in M5_FROM_BIN:
