@@ -543,6 +543,29 @@ static void testFlow() {
     check(f.ui().state() == UIState::FrontEnd && f.ui().openMovie() == "UI_GFxFrontEnd_p.FrontEnd_GFX_1", "flow.frontend_ui");
     check(runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; }), "flow.reached_gamelobby");
     check(f.lobby().gameModeTag == "TDM" && f.lobby().mapSelectionMethod == 1, "flow.gamelobby_private_tdm");
+    {   // Game Mode Options bot rows (user playtest 2026-10-13): TnGameSettings fields after the mode's own; Create Game's
+        // write of an unchanged label is not an edit; a changed one applies.
+        DataStores& ds = rt.dataStores();
+        const std::string fields = ds.call("GetDataStoreFields", {"TnGameSettings"}).s;
+        const bool rows = fields.find(",WfcPlayerLimit,WfcBotsAutobot,WfcBotsDecepticon,WfcBotDifficulty") != std::string::npos &&
+                          fields.find("WfcBots,") == std::string::npos && fields.rfind("WfcBotDifficulty") + 16 == fields.size();
+        const bool header = ds.call("GetCollectionColumnHeader", {"<TnGameSettings:WfcBotDifficulty>", "0"}).s == "Bot Difficulty" &&
+                            ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotDifficulty>"}).n == 4 &&
+                            ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotsAutobot>"}).n == f.botMax("autobot") + 1 &&
+                            ds.call("ReadValue", {"<TnGameSettings:WfcPlayerLimit>"}).s == "ORIGINAL (5 V 5)";
+        LocalProfile::Bots& b = f.profile().bots;
+        const LocalProfile::Bots saved = b;
+        b.editedSinceMap = false;
+        ds.call("WriteValue", {"<TnGameSettings:WfcBotsAutobot>", std::to_string(b.autobot)});
+        const bool unchanged = !b.editedSinceMap;
+        ds.call("WriteValue", {"<TnGameSettings:WfcBotsAutobot>", "2"});
+        ds.call("WriteValue", {"<TnGameSettings:WfcBotDifficulty>", "EXPERT"});
+        const bool applied = b.autobot == 2 && b.editedSinceMap && b.difficulty == 3 &&
+                             ds.call("ReadValue", {"<TnGameSettings:WfcBotsAutobot>"}).s == "2";
+        b = saved;
+        f.profile().save();
+        check(rows && header && unchanged && applied, "lobby.mode_options_bot_rows", fields);
+    }
     {   // An Escalation-only map (CompatibleGameTypes=SV) requested for TDM is refused; a TDM map is accepted.
         const int before = f.lobby().mapId;
         f.call("Online.SetSelectedMapID", {"505"});
