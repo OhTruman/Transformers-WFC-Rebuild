@@ -193,6 +193,9 @@ public:
     virtual int rayTracingMode() const { return 0; }
     // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
     virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
+    // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
+    // effect from the next map load (the row shows "(next map)").
+    virtual bool rayTracingLoadedThisMap() const { return false; }
     // GPU facts for settings auto-detection (read once, cached; logged as "GPU facts: ...").
     virtual GpuFacts gpuFacts() { return GpuFacts{}; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
