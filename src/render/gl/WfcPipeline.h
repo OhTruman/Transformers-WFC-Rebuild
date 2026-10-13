@@ -489,6 +489,20 @@ private:
     // stage 1 option b (WfcRt.cpp): flushDynQueue's RT path - the world depth, a depth-only pass of the dynamic draws, the
     // round trip + world composite, then the dynamic draws shaded with the RT mask (uShadowMask) and AO (unit 25)
     bool rtShadowAoOn() const;
+    // The Ray Tracing row (M7): 0 Off (baked), 1 Faithful, 2 Realistic. The RT scene (BLAS, RT shader text) exists when
+    // the map loaded with RT on (a non-Off mode, WFC_RT_SHADOWAO or WFC_RT_TOGGLE); then switches are live. Off -> on on a
+    // map loaded without it takes effect from the next map load.
+public:
+    bool rtAvailable();
+    int rtMode() const { return rtMode_; }
+    bool rtSetMode(int mode);
+private:
+    int rtMode_ = -1;                                  // (-1: from the environment on first use)
+    bool rtInfra_ = false;
+    int rtAvailKnown_ = -1;
+    void rtInitMode();
+    bool rtReflLive() const;
+    bool rtReflPass() const;
     // M7 stage 2 modern mode (WFC_RT_REFLECT_COMPOSITE, with WFC_RT_REFLECT): the materials' authored cube reflections
     // sample the ray-traced reflection instead (the previous frame's, reprojected; blurred by their LOD bias)
     bool rtReflComposite() const;

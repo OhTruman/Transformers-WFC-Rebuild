@@ -1059,6 +1059,7 @@ bool ensure() {
 }
 }  // namespace
 
+bool rtBridgeAvailable() { return ensure(); }
 bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
@@ -1072,6 +1073,7 @@ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridg
 #else
 #include "render/d3d12/D3D12RtBridge.h"
 namespace render {
+bool rtBridgeAvailable() { return false; }
 bool rtBridgePrepare(int, int, RtTargets*) { return false; }
 bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}

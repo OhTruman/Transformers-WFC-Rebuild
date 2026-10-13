@@ -328,6 +328,27 @@ void Application::run() {
         // drew the debug capsule box + aim ray into screenshots); use WFC_DEBUGDRAW there.
         if (smokeFrames <= 0 && input.wasPressed(platform::Button::Debug))
             core::DebugFlags::get().enabled = !core::DebugFlags::get().enabled;
+        // PC ADAPTATION (M7): F9 cycles the Ray Tracing mode, Off -> Faithful -> Realistic, in the same view; WFC_RT_MODESCRIPT
+        // "frame:mode,..." switches it at given frames (scripted full-frame A / B)
+        {
+            static const std::vector<std::pair<long, int>> modeScript = [] {
+                std::vector<std::pair<long, int>> v;
+                if (const char* e = std::getenv("WFC_RT_MODESCRIPT"))
+                    for (const char* p = e; *p;) {
+                        char* end = nullptr; const long f = std::strtol(p, &end, 10);
+                        if (!end || *end != ':') break;
+                        v.push_back({f, (int)std::strtol(end + 1, &end, 10)});
+                        p = (*end == ',') ? end + 1 : end;
+                    }
+                return v;
+            }();
+            int want = -1;
+            for (const auto& fm : modeScript) if (fm.first == (long)frame) want = fm.second;
+            if (want < 0 && smokeFrames <= 0 && input.wasPressed(platform::Button::RenderMode) && renderer_->rayTracingAvailable())
+                want = (renderer_->rayTracingMode() + 1) % 3;
+            if (want >= 0 && renderer_->setRayTracingMode(want))
+                LOG_INFO("Ray Tracing mode -> %s (frame %ld)", want == 0 ? "Off" : want == 1 ? "Faithful" : "Realistic", (long)frame);
+        }
 
         if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw
             world_.player().controller().setCameraYaw((float)std::atof(fy));

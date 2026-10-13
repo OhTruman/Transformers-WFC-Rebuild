@@ -103,7 +103,8 @@ const float kGlToFfx[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.5f, 0, 0, 0, 0.5f, 
 // the depth prepass's triangle set (drawMdi's prepass: opaque MDI programs, VLM runs excluded), from the world mesh's
 // GL buffers (14 floats per vertex, positions first; MDI base vertex 0), once per map
 void Pipeline::rtBuildWorld(int meshId) {
-    if (!(depthCheckOn() || shadowAoOn()) || rtFailed_ || meshId < 0 || !GetBufferSubData) return;
+    if (!(depthCheckOn() || rtInfra_) || rtFailed_ || meshId < 0 || !GetBufferSubData) return;
+    const bool keepHit = reflectOn() || rtInfra_;          // (reflection hits: Realistic)
     const GpuMesh& g = meshes_[(size_t)meshId];
     size_t nIdx = 0;                                     // (sizes from the subs: upload() bounds-checked every range)
     for (const Sub& s : g.subs) nIdx = std::max(nIdx, (size_t)s.first + s.count);
@@ -152,7 +153,7 @@ void Pipeline::rtBuildWorld(int meshId) {
         largest.push_back({size, s.matName + (M.lit ? "" : " (unlit)")});
         std::vector<uint32_t>& out = M.twoSided ? W.twoSided : W.oneSided;
         out.insert(out.end(), idx.begin() + s.first, idx.begin() + s.first + s.count);
-        if (reflectOn()) keep.sub[M.twoSided ? 1 : 0].insert(keep.sub[M.twoSided ? 1 : 0].end(), s.count / 3, (uint32_t)(&s - g.subs.data()));
+        if (keepHit) keep.sub[M.twoSided ? 1 : 0].insert(keep.sub[M.twoSided ? 1 : 0].end(), s.count / 3, (uint32_t)(&s - g.subs.data()));
         ++subs;
     }
     std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -163,7 +164,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
     LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)", subs, set ? "level BSP" : "world", meshId, skipped, noShadow);
     W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
-    if (reflectOn()) {
+    if (keepHit) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
         keep.uv1.resize(v.size() / 14 * 2);
         for (size_t i = 0, n = v.size() / 14; i < n; ++i) { keep.uv1[i * 2] = v[i * 14 + 12]; keep.uv1[i * 2 + 1] = v[i * 14 + 13]; }
@@ -180,7 +181,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     }
     if (rtBridgeAddStaticWorld(W, 1u << set)) {
         ++rtWorldSets_; rtSets_.push_back({meshId, set});
-        if (reflectOn()) rtHitKeep_.push_back(std::move(keep));
+        if (keepHit) rtHitKeep_.push_back(std::move(keep));
     }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
@@ -189,10 +190,35 @@ void Pipeline::rtBuildWorld(int meshId) {
 // the set WFC_RT_CHECKSET names (0 world, the default; 1 level BSP), traced against that set alone. Shadow / AO
 // (WFC_RT_SHADOWAO, stage 1 option b): at the end of the opaque pass (flushTranslucency, after the characters), where
 // the depth is complete and this frame's poses exist; endOfOpaque marks that call.
-bool Pipeline::rtShadowAoOn() const { return shadowAoOn() && !depthCheckOn(); }
-bool Pipeline::rtReflComposite() const {
-    static const bool on = reflectOn() && std::getenv("WFC_RT_REFLECT_COMPOSITE") != nullptr;
-    return on && rtShadowAoOn();
+bool Pipeline::rtShadowAoOn() const { return rtInfra_ && !depthCheckOn(); }
+// the composite's shader text: every RT-scene map (Realistic switches it on live); its uniform gate is rtReflLive
+bool Pipeline::rtReflComposite() const { return rtShadowAoOn(); }
+bool Pipeline::rtReflPass() const { return rtMode_ == 2 || (rtMode_ >= 1 && reflectOn()); }
+bool Pipeline::rtReflLive() const {
+    static const bool envComposite = std::getenv("WFC_RT_REFLECT_COMPOSITE") != nullptr;
+    return rtMode_ == 2 || (rtMode_ >= 1 && reflectOn() && envComposite);
+}
+// the starting mode: WFC_RT_MODE (0 / 1 / 2), else WFC_RT_SHADOWAO = Faithful (+ WFC_RT_WORLDSHADOWS = Realistic), else Off
+void Pipeline::rtInitMode() {
+    if (rtMode_ >= 0) return;
+    if (const char* e = std::getenv("WFC_RT_MODE")) rtMode_ = std::min(2, std::max(0, std::atoi(e)));
+    else if (shadowAoOn()) rtMode_ = std::getenv("WFC_RT_WORLDSHADOWS") ? 2 : 1;
+    else rtMode_ = 0;
+}
+bool Pipeline::rtAvailable() {
+    if (rtAvailKnown_ < 0) rtAvailKnown_ = rtBridgeAvailable() ? 1 : 0;
+    return rtAvailKnown_ == 1 && !rtFailed_;
+}
+bool Pipeline::rtSetMode(int mode) {
+    if (mode < 0 || mode > 2) return false;
+    rtInitMode();
+    if (mode > 0 && !rtAvailable()) return false;
+    if (mode == rtMode_) return true;
+    rtMode_ = mode;
+    rtHavePrevVP_ = false; rtReflValid_ = false;       // (the denoiser / reflection history restarts)
+    LOG_INFO("renderer: Ray Tracing %s%s", mode == 0 ? "Off" : mode == 1 ? "Faithful" : "Realistic",
+             mode > 0 && !rtInfra_ ? " (from the next map load: this map loaded without the RT scene)" : "");
+    return true;
 }
 // after the round trip: this frame's reflections + view-projection kept for the next frame's world draws (a GL-owned
 // RGBA16F copy with mips: the materials' LOD bias blurs it; the shared target is D3D12's again next frame)
@@ -642,7 +668,7 @@ void Pipeline::rtBuildHit() {
 // flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
 // begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
 bool Pipeline::rtDynBegin() {
-    if (!rtShadowAoOn() || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == frameNo_) return false;
+    if (!rtShadowAoOn() || rtMode_ <= 0 || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == frameNo_) return false;
     GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
     if ((GLuint)drawFb != fbo_) return false;
     RtTargets t;
@@ -659,7 +685,7 @@ bool Pipeline::rtDynBegin() {
         if (!rtDepthProg_ || !rtCompositeProg_) { rtFailed_ = true; return false; }
     }
     if (!rtMaskedBuilt_) rtBuildMasked();                // (once per map, textures resident by now)
-    if (!rtHitBuilt_ && reflectOn()) rtBuildHit();
+    if (!rtHitBuilt_ && rtReflPass()) rtBuildHit();
     rtCopyDepth(t.worldDepth);
     rtTargets_ = t;
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -674,7 +700,7 @@ void Pipeline::rtDynMid() {
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     depthDirty_ = true;
     rtRoundTrip(false, true);
-    if (rtReflComposite()) { glx::gpuStamp("RT: reflections kept"); rtReflKeep(); }
+    if (rtReflComposite() && rtReflLive()) { glx::gpuStamp("RT: reflections kept"); rtReflKeep(); }
     glx::gpuStamp("RT: world composite");
     const RtTargets& t = rtTargets_;
     const Light* sun = nullptr;
@@ -729,12 +755,12 @@ GLuint Pipeline::rtAoTexture() {
 }
 
 void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
-    static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn() || shadowAoOn();
-    if (!on || rtFailed_) return;
+    static const bool envOn = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn();
+    if (!(envOn || rtInfra_) || rtFailed_) return;
     GLint drawFb = 0; glGetIntegerv(0x8CA6 /*GL_DRAW_FRAMEBUFFER_BINDING*/, &drawFb);
     if ((GLuint)drawFb != fbo_) return;                // the main scene pass only (not a shadow / warm-up pass's drawMdi)
     static const int checkSet = [] { const char* e = std::getenv("WFC_RT_CHECKSET"); return e ? std::atoi(e) : 0; }();
-    const bool sao = shadowAoOn() && !depthCheckOn();
+    const bool sao = rtInfra_ && !depthCheckOn();
     if (sao ? (!endOfOpaque || rtFrame_ == frameNo_ || rtWorldSets_ == 0) : endOfOpaque ? true
             : depthCheckOn() ? (bspSet ? 1 : 0) != checkSet : rtFrame_ == frameNo_) return;
     rtFrame_ = frameNo_;
@@ -777,8 +803,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         static const int aoRays = [] { const char* e = std::getenv("WFC_RT_AORAYS"); return e ? std::max(0, std::atoi(e)) : 2; }();
         static const float aoRadius = [] { const char* e = std::getenv("WFC_RT_AORADIUS"); return e ? (float)std::atof(e) : 1.0f; }();
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
-        static const bool reflect = std::getenv("WFC_RT_REFLECT") != nullptr;   // (M7 stage 2 prototype)
-        fr.reflect = reflect;
+        fr.reflect = rtReflPass();                       // (M7 stage 2: Realistic, or WFC_RT_REFLECT)
         static const bool shadeAb = std::getenv("WFC_RT_REFLECT_AB") != nullptr;   // (hit shading off in every other 30-frame block)
         fr.reflectShade = !shadeAb || (frameNo_ / 30) % 2 == 0;
         fr.time = time_;
@@ -808,8 +833,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
         if (sun) {
             const core::Vec3 d = core::normalize(sun->dir);
-            static const bool worldShadows = std::getenv("WFC_RT_WORLDSHADOWS") != nullptr;   // (the later modern mode)
-            fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = worldShadows ? 2.0f : 1.0f;
+            static const bool worldShadows = std::getenv("WFC_RT_WORLDSHADOWS") != nullptr;   // (Realistic, or forced)
+            fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = (worldShadows || rtMode_ == 2) ? 2.0f : 1.0f;
             rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
         }
         // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut

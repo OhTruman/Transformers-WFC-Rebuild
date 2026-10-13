@@ -10,6 +10,7 @@ enum class Button {
     Reload, CameraToggle, Debug, Quit,
     FineAim,   // WFC: RightMouseButton = "ToggleFineAim | Boost"; pad LeftTrigger = "FineAim | Boost"
     Dash,      // Dash = VehicleSpecialMove (hover dash / nitro): PC Shift, pad RightShoulder [CONF]
+    RenderMode,   // PC ADAPTATION: F9 cycles the Ray Tracing mode (Off / Faithful / Realistic) for side-by-side comparison
     Count
 };
 

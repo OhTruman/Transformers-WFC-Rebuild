@@ -39,6 +39,7 @@ struct RtFrame {
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 
+bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (creates it once)
 bool rtBridgePrepare(int w, int h, RtTargets* t);           // (re)create at this size; false: unavailable
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask);   // add a set's BLAS, rebuild the TLAS (map load)
 void rtBridgeClearStaticWorld();                            // map unload

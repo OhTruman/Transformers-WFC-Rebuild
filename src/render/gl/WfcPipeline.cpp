@@ -859,6 +859,8 @@ bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
     std::string root = renderDataRoot();
     cutPending_ = true; cutPendingWhy_ = "map load";   // (temporal history never spans maps)
+    rtInitMode();
+    rtInfra_ = rtMode_ > 0 || std::getenv("WFC_RT_SHADOWAO") != nullptr || std::getenv("WFC_RT_TOGGLE") != nullptr;
     loadFrame_ = frameNo_;
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
@@ -2146,17 +2148,20 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
-        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;");
+        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;\nuniform int uRtOn;");
         sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).w;");
         // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
         // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
         // is not the sun, and maps add directional fill lights for dynamic objects that must stay unshadowed
+        // (uRtOn 0 - the RT path not drawing, e.g. Ray Tracing Off: the original's mask semantics, rtVis = 1)
         sub("float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;",
-            "float rtVis = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x; float mask = 1.0;");
+            "float rtVis0 = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;"
+            " float rtVis = uRtOn != 0 ? rtVis0 : 1.0; float mask = uRtOn != 0 ? 1.0 : rtVis0;");
         sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 || dot(uLDir[i].xyz, uRtSunDir) < 0.999 ? 1.0 : rtVis);");
     }
 
-    static GLuint vsShared = 0;
+    static GLuint vsSharedBy[2] = {0, 0};               // (without / with the RT text: maps can load with or without RT)
+    GLuint& vsShared = vsSharedBy[rtShadowAoOn() ? 1 : 0];
     if (!vsShared) {
         std::string vsText = kVS;
         if (rtShadowAoOn()) {                            // (M7 RT, RT on only: the atlas pass places triangles at their UV0)
@@ -3064,12 +3069,13 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (rtShadowAoOn()) {
             ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10);
             Uniform3f(ULOC(P, "uRtSunDir"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
+            Uniform1i(ULOC(P, "uRtOn"), rtMaskActive_ ? 1 : 0);
         }
         if (rtReflComposite()) {                         // (M7 stage 2 modern mode) the previous frame's reflections
             static const float lod = [] { const char* e = std::getenv("WFC_RT_REFLECT_LOD"); return e ? (float)std::atof(e) : 1.0f; }();
             ActiveTexture(GL_TEXTURE0 + 26); glBindTexture(GL_TEXTURE_2D, rtReflPrev_); ActiveTexture(GL_TEXTURE0 + 10);
             Uniform1i(ULOC(P, "uRtRefl"), 26);
-            Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ ? 1 : 0);
+            Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ && rtReflLive() ? 1 : 0);
             Uniform1f(ULOC(P, "uRtReflLod"), lod);
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
