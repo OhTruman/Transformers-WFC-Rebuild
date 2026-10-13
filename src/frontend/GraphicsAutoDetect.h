@@ -25,11 +25,14 @@ struct HardwareFacts {
 
 // HD textures are Off by default and never set by auto-detect (user decision 2026-10-12, reversed the same day: "HD
 // texture's should be off my default too"). Where the pack is installed and the GPU has at least ~6 GB of video memory
-// (the pack adds up to ~2 GB per map; 6 GB cards report 6000-6144 MB), a one-time message points to the row.
-// Below a level's floor the row only warns (Experimental's review): it never blocks. kHdEnhancedMinVramMB is provisional
-// until Systems' per-map memory table gives the figure.
+// (6 GB cards report 6000-6144 MB), a one-time message points to the row.
+// Below a level's floor the row only warns (Experimental's review): it never blocks. Systems' per-map table: Faithful
+// adds up to +317 MB of map textures over the originals, Enhanced (BC4 roughness at HD size) up to +554 MB; the whole
+// process measured 2.9-3.3 GB device-local with RT on at 1440p, so Enhanced + RT is ~3.9 GB worst case. 6000 MB leaves
+// ~2 GB for the OS / compositor and 4K targets; Enhanced together with ray tracing at 4K output wants 8000 MB.
 constexpr int kHdTexturesMinVramMB = 6000;
-constexpr int kHdEnhancedMinVramMB = 8000;
+constexpr int kHdEnhancedMinVramMB = 6000;
+constexpr int kHdEnhancedRtMinVramMB = 8000;
 // The level handed to the renderer this session: a stored level whose root is missing falls to the next lower installed
 // one (Enhanced -> Faithful -> Off, never up). The stored choice is kept as it is.
 inline int hdTexturesEffective(int stored, bool faithful, bool enhanced) {
