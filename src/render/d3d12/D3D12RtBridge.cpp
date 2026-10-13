@@ -35,6 +35,10 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -491,11 +495,11 @@ public:
                     }
                 }
             }
-            D3D12_COMPUTE_PIPELINE_STATE_DESC pd{}; pd.pRootSignature = rs_;
-            pd.CS.pShaderBytecode = D.materialShader.data(); pd.CS.BytecodeLength = D.materialShader.size();
-            if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoReflMat_))) {
-                psoReflMat_ = nullptr; LOG_WARN("RT bridge: the map's material reflection PSO failed (the proxy shades)");
-            }
+            // the map's material reflection PSO (one uber-switch over every material): AMD's compiler took 440 s for
+            // Molten on a cold driver cache (2026-10-13; the main thread inside amdxc64.dll at the first Realistic
+            // frame). Compiled on a worker; until it is ready the reflection rays shade with the proxy PSO (the same
+            // fallback as a failed build), then it is picked up between frames.
+            startMaterialPso(D.materialShader);
         }
         UINT64 lmBytes = 0;
         for (size_t k = 0; k < D.lightmaps.size() && k < (size_t)kMaxLm && ok; ++k) {   // the lightmap pages
@@ -534,12 +538,13 @@ public:
         LOG_INFO("RT bridge: reflection hit data: %u BLAS, %u triangles, %u subs, %zu lightmap pages; %.1f MB (of it materials %.1f MB:"
                  " %zu + %zu cube textures, %u slots, vertex frames; material PSO %s)", hBlasN_, hTris_, hSubN_, hLm_.size(),
                  (double)hitBytes_ / 1048576.0, (double)matBytes / 1048576.0, hTex2D_.size(), hTexCube_.size(), hMatTexN_,
-                 psoReflMat_ ? "yes" : "no");
+                 psoJob_ ? "compiling" : psoReflMat_ ? "yes" : "no");
         LOG_INFO("RT bridge: longest load-time D3D12 submission this map: %.0f ms ('%s')", maxSubmitMs_, maxSubmitWhat_);
         return true;
 #endif
     }
     void releaseHit() {
+        abandonMaterialPso();
         rel(hInst_); rel(hIdx_); rel(hUv1_); rel(hTriSub_); rel(hSubs_); rel(hVtx_); rel(hMatTex_); rel(psoReflMat_);
         for (auto* t : hTex2D_) rel(t);
         for (auto* t : hTexCube_) rel(t);
@@ -899,6 +904,7 @@ private:
         }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
         tsShade_[slot] = fr.reflectShade;
+        pollMaterialPso();
         if (fr.reflect && psoRefl_) {                    // stage 2 prototype: the reflection rays (table C)
             D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
             list_->SetComputeRootSignature(rs_);
@@ -1052,6 +1058,46 @@ private:
     // each timed (execute -> idle, wall clock: an upper bound of its GPU time); the longest per map is logged, and one over
     // 250 ms warns (Windows resets the driver at ~2 s of one packet's GPU work - a shared or slow GPU nears it sooner)
     double maxSubmitMs_ = 0.0; const char* maxSubmitWhat_ = "";
+    struct PsoJob { std::mutex m; ID3D12PipelineState* pso = nullptr; bool done = false, failed = false, abandoned = false; double ms = 0; };
+    std::shared_ptr<PsoJob> psoJob_;
+    void startMaterialPso(const std::vector<unsigned char>& bytes) {
+        auto job = std::make_shared<PsoJob>();
+        psoJob_ = job;
+        ID3D12Device* dev = dev_; ID3D12RootSignature* rs = rs_;
+        dev->AddRef(); rs->AddRef();
+        std::thread([job, dev, rs, code = bytes]() {
+            const auto t0 = std::chrono::steady_clock::now();
+            D3D12_COMPUTE_PIPELINE_STATE_DESC pd{}; pd.pRootSignature = rs;
+            pd.CS.pShaderBytecode = code.data(); pd.CS.BytecodeLength = code.size();
+            ID3D12PipelineState* p = nullptr;
+            const bool ok = SUCCEEDED(dev->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&p)) && p;
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            {
+                std::lock_guard<std::mutex> lk(job->m);
+                job->done = true; job->failed = !ok; job->ms = ms;
+                if (job->abandoned) { if (p) p->Release(); }    // (the map changed meanwhile)
+                else job->pso = p;
+            }
+            rs->Release(); dev->Release();
+        }).detach();
+        LOG_INFO("RT bridge: the map's material reflection PSO compiles in the background (reflections use the proxy shading until it is ready)");
+    }
+    void pollMaterialPso() {                             // between frames: a finished background PSO goes live
+        if (!psoJob_) return;
+        std::lock_guard<std::mutex> lk(psoJob_->m);
+        if (!psoJob_->done) return;
+        if (psoJob_->failed) LOG_WARN("RT bridge: the map's material reflection PSO failed after %.0f ms (the proxy shades)", psoJob_->ms);
+        else { psoReflMat_ = psoJob_->pso; psoJob_->pso = nullptr;
+               LOG_INFO("RT bridge: the map's material reflection PSO is ready after %.0f ms (material-shaded reflections on)", psoJob_->ms); }
+        psoJob_.reset();
+    }
+    void abandonMaterialPso() {
+        if (!psoJob_) return;
+        std::lock_guard<std::mutex> lk(psoJob_->m);
+        if (psoJob_->done) { if (psoJob_->pso) psoJob_->pso->Release(); psoJob_->pso = nullptr; }
+        else psoJob_->abandoned = true;
+        psoJob_.reset();
+    }
     bool submitTimed(ID3D12GraphicsCommandList* cl, const char* what) {
         const auto t0 = std::chrono::steady_clock::now();
         ID3D12CommandList* lists[] = {cl};
