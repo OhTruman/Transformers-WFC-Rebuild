@@ -176,6 +176,14 @@ public:
     // The Anisotropic Filtering row: 4 = the original (Xe-TransEngine.ini MaxAnisotropy=4, default), 8 / 16 = PC
     // options. Applied live to every loaded material texture and lightmap page; textures loaded later use it too.
     virtual void setAnisotropy(int level) { (void)level; }
+    // The Ray Tracing row (M7, PC ADAPTATION; off by default - the user's decision 2026-10-12): 0 Off (the original's
+    // baked lighting), 1 Faithful (RT shadows / AO only where the original had dynamic shadowing), 2 Realistic (RT
+    // lighting, shadows, AO and reflections for everything). Available = a DXR 1.1 device + the D3D12 runtime; this
+    // build has no RT renderer yet (the RT branch fills these in), so the row reports unavailable and stays Off.
+    virtual bool rayTracingAvailable() { return false; }
+    virtual int rayTracingMode() const { return 0; }
+    // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
+    virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
     // GPU facts for settings auto-detection (read once, cached; logged as "GPU facts: ...").
     virtual GpuFacts gpuFacts() { return GpuFacts{}; }
     // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
