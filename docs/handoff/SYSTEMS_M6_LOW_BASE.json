@@ -1,78 +1,317 @@
 [
  {
-  "material": "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
-  "base_share": -0.08200185970242427
- },
- {
   "material": "ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile1_MATINST",
-  "base_share": 0.0
+  "base_share": 0.0,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
  },
  {
   "material": "ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile2_MATINST",
-  "base_share": 0.0
+  "base_share": 0.0,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
  },
  {
-  "material": "TR_Barricade_VEH_p.VH_Barricade_NormSpec_Cust_B_Mat_INST",
-  "base_share": 0.08330406066907414
+  "material": "TPRO_SecurityCamera_p.PROP_SecurityCamera_MATINST",
+  "base_share": 0.05747947928054177,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
  },
  {
-  "material": "TR_Deadend_VEH_p.VH_Deadend_NormSpec_Cust_E_Mat_INST",
-  "base_share": 0.09614101393477519
- },
- {
-  "material": "TR_Warpath_ROBO_p.RB_Warpath1_Cust_Mat_INST_B",
-  "base_share": 0.10940688756160179
- },
- {
-  "material": "WEP_Shotgun_p.WEP_Shotgun_MATINST",
-  "base_share": 0.11335545278622036
- },
- {
-  "material": "FX_IonBlaster_p.IonBlaster_Mag_MATINST",
-  "base_share": 0.1336648084329081
- },
- {
-  "material": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_MATINST",
-  "base_share": 0.137126900681061
- },
- {
-  "material": "TR_SilverBolt_ROBO_p.RB_Silverbolt_Cust_Mat_INST_B",
-  "base_share": 0.14428832756069035
- },
- {
-  "material": "WEP_EMPShotgun_p.WEP_EMPShotgun_MATINST",
-  "base_share": 0.15727180537502045
- },
- {
-  "material": "WEP_TurretIonGun_p.WEP_TurretIonGun01_MATINST",
-  "base_share": 0.1732771447504186
- },
- {
-  "material": "WEP_IonBlaster_p.WEP_IonBlaster_MATINST",
-  "base_share": 0.17715142154203953
- },
- {
-  "material": "WEP_BurstRifle_p.Materials.WEP_BurstRifle_MATINST",
-  "base_share": 0.17753680386476853
- },
- {
-  "material": "TR_Jazz_ROBO_p.RB_Jazz_NormSpec_Cust_E_Mat_INST",
-  "base_share": 0.18328477030741308
- },
- {
-  "material": "TR_Jazz_VEH_p.VH_Jazz_NormSpec_Cust_E_Mat_INST",
-  "base_share": 0.18880599015924407
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_InteriorWalls_RED_MATINST",
+  "base_share": 0.06111719288690758,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
  },
  {
   "material": "ENV_KON_Prison_p.Materials.PrisonCell_Plane_MATINST",
-  "base_share": 0.22863300401324152
+  "base_share": 0.06329999552742187,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
  },
  {
-  "material": "WEP_BazookaTemp1_p.WEP_Bazooka_MATINST",
-  "base_share": 0.2360260524688688
+  "material": "WEP_TurretIonGun_p.WEP_TurretIonGun01_MATINST",
+  "base_share": 0.06573825958520435,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
  },
  {
-  "material": "TR_Deadend_ROBO_p.RB_Deadend_NormSpec_Cust_E_Mat_INST",
-  "base_share": 0.2384918025262466
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_InteriorWalls_NoEmiss_MATINST",
+  "base_share": 0.07033263217508641,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_InteriorWalls_MATINST",
+  "base_share": 0.07079718817455814,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_InteriorWalls_BLUE_MATINST",
+  "base_share": 0.07096299585913049,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_InteriorWalls_Orange_MATINST",
+  "base_share": 0.07141005012652023,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_CanyonDeco_MATINST",
+  "base_share": 0.07881187134423653,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "TPRO_KON_Corruptor_p.Materials.KON_Corruptor_MATINST",
+  "base_share": 0.1155604017859004,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_Tracks_orangeMATINST",
+  "base_share": 0.11936515400401199,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_MATINST",
+  "base_share": 0.1273704043763784,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_LaserShield_A_MATINST",
+  "base_share": 0.13692757276788278,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_GalacticTransport_p.Materials.ENV_ORB_TransportInnerDEAD_MAT",
+  "base_share": 0.15387651785542095,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "DES_ORB_Asteroids_p.Textures.SpaceDebris_Large_MATINST",
+  "base_share": 0.15485882780841673,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "PROP_NEU_Battery_p.Battery1.PROP_NEU_Battery1_MATINST",
+  "base_share": 0.16124578026253097,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_CORE_SupportColumns_p.Materials.CoolantPipe2_MATINST",
+  "base_share": 0.16180634266207283,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "WEP_TurretIonGun_p.WEP_TurretIonGun_MATINST",
+  "base_share": 0.17185041344446886,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_FloorPanel_01_MATINST",
+  "base_share": 0.17617896476770145,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "WEP_EMPShotgun_p.WEP_EMPShotgun_MATINST",
+  "base_share": 0.17726261609164412,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "WEP_Shotgun_p.WEP_Shotgun_MATINST",
+  "base_share": 0.1783535983553645,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_IAC_Deco_1_p.Material.ChainLinkFence_MATINST",
+  "base_share": 0.17843559274389859,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_BatteryIacOrange_MAT",
+  "base_share": 0.1806531370666819,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_CorruptedBattery_MAT",
+  "base_share": 0.18364528836592567,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_KON_Architecture_p.Materials.BasePlatform_Column_01_MATINST",
+  "base_share": 0.187662670072945,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_CeilingPanel_01_MATINST",
+  "base_share": 0.18969467126063683,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "WEP_IonBlaster_p.WEP_IonBlaster_MATINST",
+  "base_share": 0.192161191688952,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_Street_MATINST",
+  "base_share": 0.19309000720776132,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials2_p.Materials.White_CanyonWall_A_MATINST",
+  "base_share": 0.2010912181848109,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "WEP_BurstRifle_p.Materials.WEP_BurstRifle_MATINST",
+  "base_share": 0.20132519470063237,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_Battery_MAT",
+  "base_share": 0.20204698160969398,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "PROP_NEU_Monitors_p.PROP_NEU_Monitor01_red_MATINST",
+  "base_share": 0.2119957354292014,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "PROP_NEU_Monitors_p.PROP_NEU_Monitor01_MATINST",
+  "base_share": 0.2140632311854672,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "PROP_NEU_Monitors_p.PROP_NEU_Monitor01noEmiss_MATINST",
+  "base_share": 0.21419894449068727,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "WEP_SerratedBlade_p.WEP_SerratedBlade_MATINST",
+  "base_share": 0.21424858060931656,
+  "tint_consumer": true,
+  "tints": "palette (10 swatches) + default energon",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_IAC_Turret_p.Texture.IAC_searchlight_RED_MATINST",
+  "base_share": 0.2151922831926877,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_InroomCnrWall_B_MATINST",
+  "base_share": 0.21583717503393166,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_KON_Architecture_p.Materials.BasePlatform_04_MATINST",
+  "base_share": 0.22040666617190685,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_IAC_Turret_p.Texture.IAC_searchlight_purple_MATINST",
+  "base_share": 0.22333322942150813,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_CanyonGate_A_MATINST",
+  "base_share": 0.2289295686907218,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_Platform_MATINST",
+  "base_share": 0.23263836437242572,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
+ },
+ {
+  "material": "ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_WallPanel_01_MATINST",
+  "base_share": 0.2388039467466092,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
+  "material": "ENV_ORB_WhiteMaterials_p.Materials.White_CanyonFloor_A_MATINST",
+  "base_share": 0.24330047954351014,
+  "tint_consumer": true,
+  "tints": "authored",
+  "metal_review_candidate": false
  }
 ]

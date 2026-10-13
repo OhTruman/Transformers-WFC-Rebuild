@@ -18,7 +18,14 @@ Tangent / world transforms are identity (the mapping does not change them).
      of WEP_PhongMain / ENV_PhongMain_NS: pow(sqrt(1 - dot(V, T)^2), n) * colour * k, added to the diffuse chain);
   2. a view dependence still present at o.DiffuseColor (a multiplicative Fresnel / view factor) is replaced by its
      view-independent mean: DiffuseColor averaged over the fixed direction set VIEW_SET (cube samples held fixed).
+  3. a cube-derived factor multiplying a texture-derived colour (vec3 / vec4) is not a view term: the product is kept,
+     the cube standing for its view-independent mean (matc: the cube map's mean colour, i.e. its 1 x 1 mip). This is the
+     robot paint x cube of CHR_Transformer_NormSpec_Cust_E and the ENV tint x cube; a camera-dependent factor (the
+     anisotropic specular) is not covered (rule 1 drops it), nor is a cube x constant tint (the ENV reflection term).
+  The base colour is then clamped to >= 0 (oversaturation mixes such as mix(c, lum(c), -0.15) can go negative).
   Only DiffuseColor (the base colour) is stripped; EmissiveColor and every other output keep the view terms.
+  Known limit: the view flag does not propagate through a sample's UV (a texture sampled at a view-dependent UV counts
+  as view-independent); 1 material today.
 """
 import math
 import re
@@ -46,73 +53,98 @@ DEFAULT_LIGHT = (0.45, 0.30, 0.84)
 
 
 class G:
-    """A GLSL value: float (size 1) or vecN, with swizzles, broadcasting arithmetic and the view-dependence flag."""
-    __slots__ = ('v', 'view')
+    """A GLSL value: float (size 1) or vecN, with swizzles, broadcasting arithmetic and three flags:
+    view (depends on the view: camera / reflection / light vectors or a cube sample), cam (depends on the camera / reflection
+    / light vectors themselves: not only through a cube sample), tex (depends on a 2D texture sample) and bc (a scalar
+    broadcast into a vector, e.g. vec3(mask.y): a factor, not a colour)."""
+    __slots__ = ('v', 'view', 'cam', 'tex', 'bc')
 
-    def __init__(self, v, view=False):
+    def __init__(self, v, view=False, cam=False, tex=False, bc=False):
         self.v = np.atleast_1d(np.asarray(v, dtype=np.float64))
-        self.view = view
+        self.view, self.cam, self.tex, self.bc = view, cam, tex, bc
+
+    def _like(self, v):
+        return G(v, self.view, self.cam, self.tex, self.bc)
 
     def __getattr__(self, name):
         if name and all(c in _SW for c in name):
             idx = [_SW[c] for c in name]
             if max(idx) >= self.v.size:
                 if self.v.size == 1:
-                    return G(np.repeat(self.v, len(idx)), self.view)     # (scalar.xxx)
+                    return self._like(np.repeat(self.v, len(idx)))      # (scalar.xxx)
                 raise Unsupported('swizzle .%s of a vec%d' % (name, self.v.size))
-            return G(self.v[idx], self.view)
+            return self._like(self.v[idx])
         raise AttributeError(name)
 
     @staticmethod
     def _o(other):
         return other.v if isinstance(other, G) else np.float64(other)
 
-    @staticmethod
-    def _vw(other):
-        return isinstance(other, G) and other.view
+    def _join(self, other, v):
+        if isinstance(other, G):
+            return G(v, self.view or other.view, self.cam or other.cam, self.tex or other.tex, self.bc and other.bc)
+        return self._like(v)
 
     def _add(self, other, sign, reverse=False):
         """reverse False: self + sign * other; reverse True: other + sign * self."""
-        ov = self._vw(other)
         o = self._o(other)
+        ov = isinstance(other, G) and other.view
         # rule 1 applies at colour sums (both operands vec3 / vec4): scalar arithmetic inside a view term (1 - dot^2, the
         # N.H falloff) is not a boundary
         if _STRIP[0] and self.view != ov and self.v.size >= 3 and isinstance(other, G) and other.v.size >= 3:
             if self.view:                                              # (self is the view term: keep the other operand)
-                return G(o if reverse else sign * o, False)
-            return G(sign * self.v if reverse else self.v, False)     # (other is the view term)
-        return G(o + sign * self.v if reverse else self.v + sign * o, self.view or ov)
+                return G(o if reverse else sign * o, False, False, other.tex)
+            return G(sign * self.v if reverse else self.v, False, False, self.tex)
+        return self._join(other, o + sign * self.v if reverse else self.v + sign * o)
+
+    def _mul(self, other, v):
+        # rule 3: a cube-derived factor (view, not camera-dependent) multiplying a texture-derived colour (vec3 / vec4, not
+        # view-dependent) stands for the cube map's view-independent mean: the product is kept as a colour (the robot paint
+        # x cube x 0.2 of CHR_Transformer_NormSpec_Cust_E, ENV tint x cube), not dropped as a view term by rule 1
+        if _STRIP[0] and isinstance(other, G) and self.view != other.view:
+            vt, ct = (self, other) if self.view else (other, self)
+            if not vt.cam and not ct.view and ct.tex and not ct.bc and ct.v.size >= 3:
+                return G(v, False, False, True)
+        return self._join(other, v)
 
     def __add__(self, o): return self._add(o, 1)
     def __radd__(self, o): return self._add(o, 1, reverse=True)
     def __sub__(self, o): return self._add(o, -1)
     def __rsub__(self, o): return self._add(o, -1, reverse=True)
-    def __mul__(self, o): return G(self.v * self._o(o), self.view or self._vw(o))
-    def __rmul__(self, o): return G(self._o(o) * self.v, self.view or self._vw(o))
+    def __mul__(self, o): return self._mul(o, self.v * self._o(o))
+    def __rmul__(self, o): return self._mul(o, self._o(o) * self.v)
     def __truediv__(self, o):
         with np.errstate(divide='ignore', invalid='ignore'):
-            return G(self.v / self._o(o), self.view or self._vw(o))
+            return self._join(o, self.v / self._o(o))
     def __rtruediv__(self, o):
         with np.errstate(divide='ignore', invalid='ignore'):
-            return G(self._o(o) / self.v, self.view or self._vw(o))
-    def __neg__(self): return G(-self.v, self.view)
+            return self._join(o, self._o(o) / self.v)
+    def __neg__(self): return self._like(-self.v)
     def __float__(self): return float(self.v[0])
 
     def __repr__(self):
-        return 'G(%s%s)' % (np.array2string(self.v, precision=6), ', view' if self.view else '')
+        f = [n for n in ('view', 'cam', 'tex') if getattr(self, n)]
+        return 'G(%s%s)' % (np.array2string(self.v, precision=6), (', ' + ','.join(f)) if f else '')
 
 
 def _anyview(args):
     return any(isinstance(a, G) and a.view for a in args)
 
 
+def _setflags(r, args):
+    gs = [a for a in args if isinstance(a, G)]
+    r.view = r.view or any(a.view for a in gs)
+    r.cam = r.cam or any(a.cam for a in gs)
+    r.tex = r.tex or any(a.tex for a in gs)
+    r.bc = bool(gs) and all(a.bc for a in gs)
+    return r
+
+
 def _vf(fn):
-    """A GLSL function on G values: the result depends on the view when any argument does."""
+    """A GLSL function on G values: each flag is set when any argument has it."""
     def w(*args):
         r = fn(*args)
-        if isinstance(r, G):
-            r.view = r.view or _anyview(args)
-        return r
+        return _setflags(r, args) if isinstance(r, G) else r
     return w
 
 
@@ -126,11 +158,14 @@ def _flat(args):
 def _ctor(n):
     def f(*args):
         vals = _flat(args)
-        if len(vals) == 1:
+        broadcast = len(vals) == 1
+        if broadcast:
             vals = vals * n
         if len(vals) < n:
             raise Unsupported('vec%d from %d values' % (n, len(vals)))
-        return G(vals[:n], _anyview(args))
+        r = _setflags(G(vals[:n]), args)
+        r.bc = r.bc or broadcast
+        return r
     return f
 
 
@@ -181,9 +216,9 @@ class Mat2:
     def __init__(self, a, b, c, d):
         f = lambda x: float(np.atleast_1d(_v(x))[0])
         self.m = np.array([[f(a), f(c)], [f(b), f(d)]])
-        self.view = _anyview((a, b, c, d))
+        self.args = (a, b, c, d)
     def __mul__(self, o):
-        return G(self.m @ _v(o)[:2], self.view or (isinstance(o, G) and o.view))
+        return _setflags(G(self.m @ _v(o)[:2]), self.args + (o,))
 
 
 def _mat2(a, b, c, d): return Mat2(a, b, c, d)
@@ -209,7 +244,7 @@ class Material:
                 return G((0.0, 0.0, 0.0))
         m = M()
         m.uv0 = G(uv0); m.uv1 = G(uv0); m.vertexColor = G(vertex_color)
-        m.cameraVector = G(camera, True); m.reflectionVector = G(refl, True); m.lightVector = G(light, True)
+        m.cameraVector = G(camera, True, True); m.reflectionVector = G(refl, True, True); m.lightVector = G(light, True, True)
         m.worldPosition = G((0.0, 0.0, 0.0)); m.time = G([time]); m.screenPos = G((0.5, 0.5, 0.0, 1.0))
         m.worldNormal = G((0.0, 0.0, 1.0)); m.normal = G((0.0, 0.0, 1.0)); m.worldPosUE = G((0.0, 0.0, 0.0))
         self.m = m
@@ -226,10 +261,10 @@ class Material:
             u, v = _v(uv)[:2]
             x = int(math.floor((u - math.floor(u)) * w)) % w
             y = int(math.floor((v - math.floor(v)) * h)) % h
-            return G(img[y, x])
+            return G(img[y, x], tex=True)
         if s not in self.samples2d:
             raise Unsupported('no sample for 2D slot %d' % s)
-        return G(self.samples2d[s])
+        return G(self.samples2d[s], tex=True)
 
     def sample_cube(self, slot, *rest):
         s = int(float(slot))
@@ -282,6 +317,11 @@ def _run_once(glsl, ctx):
             target, expr = md.group(1), md.group(2)
             if ctx.rt_value is None:
                 expr = _RT_TERNARY.sub(lambda mm: '(' + mm.group(2) + ')', expr)
+            elif isinstance(ctx.rt_value, dict):               # (named values set, every other runtime parameter unset)
+                expr = _RT_TERNARY.sub(lambda mm: '(' + (mm.group(1) if mm.group(1).split('.')[0] in ctx.rt_value else mm.group(2)) + ')', expr)
+                for n in _RT_NAME.findall(expr):
+                    if n in ctx.rt_value:
+                        env.setdefault(n, G(ctx.rt_value[n]))
             else:
                 expr = _RT_TERNARY.sub(lambda mm: '(' + mm.group(1) + ')', expr)
                 for n in _RT_NAME.findall(expr):
@@ -315,16 +355,17 @@ def run(glsl, ctx):
     outs = _run_once(glsl, _clone(ctx, strip_view=False))
     res = {k: v.v.copy() for k, v in outs.items()}
     if ctx.strip_view and 'DiffuseColor' in outs:
+        res['_diffuse_original'] = res['DiffuseColor'].copy()
         s = _run_once(glsl, _clone(ctx, strip_view=True))['DiffuseColor']
         if s.view:                                                     # rule 2: the mean over VIEW_SET
             acc = np.zeros_like(s.v)
             for d in VIEW_SET:
                 acc += _run_once(glsl, _clone(ctx, strip_view=True, camera=d, refl=d, light=d))['DiffuseColor'].v
-            res['DiffuseColor'] = acc / len(VIEW_SET)
+            res['DiffuseColor'] = np.maximum(acc / len(VIEW_SET), 0.0)
             res['_base_rule'] = np.array([2.0])
         else:                                                          # (1: an additive view term was dropped; 0: none)
             res['_base_rule'] = np.array([1.0 if not np.allclose(s.v, res['DiffuseColor']) else 0.0])
-            res['DiffuseColor'] = s.v.copy()
+            res['DiffuseColor'] = np.maximum(s.v, 0.0)
     return res
 
 

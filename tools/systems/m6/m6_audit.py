@@ -44,6 +44,42 @@ TINT_RE = re.compile(r'(?i)cust_?colou?r|energon|faction|uRT_Cust|teamcolor|team
 NEVER_REMAP_RE = re.compile(r'\b(?:uRT_)?(?:FriendlyColor|EnemyColor|AutobotColor|DecepticonColor|TeamID|NeutralColor|Flashing|PingOpacity)\b')
 METAL_WORDS = {'metal', 'metals', 'chrome', 'steel', 'iron', 'gold', 'copper', 'brass', 'aluminium', 'aluminum', 'bronze', 'tin'}
 EXCLUDED_BLEND = {'BLEND_Translucent', 'BLEND_Additive', 'BLEND_Modulate', 'BLEND_SoftMasked'}
+# representative customisation tints (Experimental's re-review b): the character-select palette swatches (Autobot +
+# Decepticon; TnCharacterApplier PrimaryColor -> Cust_Color_A, SecondaryColor -> Cust_COLOR_B) and the chassis materials'
+# default energon (AssetTools energon_default) - not the 0.1 grey placeholder of an unset runtime parameter
+CHAR_UI = 'F:/Transformers Rebuild/AssetTools/manifests/mp_content/character_select_ui.json'
+CONTENT = 'F:/Transformers Rebuild/ExtractedAssets/'
+ENERGON_DEFAULT = [0.843, 0.302, 0.029, 1.0]
+
+
+def palette():
+    try:
+        j = json.load(open(CHAR_UI, encoding='utf-8'))
+    except Exception:                                                   # noqa: BLE001
+        return []
+    found = []
+    def walk(x):
+        if isinstance(x, dict):
+            if str(x.get('resource', '')).startswith(('autobotPalette', 'decepticonPalette')) and x.get('png'):
+                found.append(x['png'])
+            for v in x.values():
+                walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(j)
+    cols = []
+    for png in sorted(set(found)):
+        try:
+            a = np.asarray(Image.open(CONTENT + png).convert('RGB'), dtype=np.float64) / 255.0
+            c = E.srgb_to_linear(a.reshape(-1, 3).mean(axis=0))
+            cols.append([float(c[0]), float(c[1]), float(c[2]), 1.0])
+        except Exception:                                               # noqa: BLE001
+            continue
+    return cols
+
+
+PALETTE = palette()
 
 
 def arg(name, default=None):
@@ -169,13 +205,22 @@ def audit_material(mname, mat, imgs, npoints):
         images = {s: a for s, a in images.items() if a is not None}
         fallback = {s: [0.5, 0.5, 0.5, 1.0] for s in slot2d if s not in images}
         cube = {s: [0.5, 0.5, 0.5, 1.0] for s in slotcube}
-        rs, sp, dd, ss = [], [], [], []
-        for _ in range(npoints):
+        rs, sp, dd, ss, oo = [], [], [], [], []
+        rt_tint = 'uRT_Cust' in glsl or 'uRT_Energon' in glsl
+        for k in range(npoints):
             uv = tuple(rng.uniform(0.0, 1.0, 2))
-            r = E.run(glsl, E.Material(fallback, cube, uv0=uv, images=images, strip_view=True))
+            rtv = None
+            if rt_tint and PALETTE:                                   # (representative tints, cycling through the palette)
+                rtv = {'uRT_Cust_Color_A': PALETTE[k % len(PALETTE)], 'uRT_Cust_COLOR_B': PALETTE[(k + 1) % len(PALETTE)],
+                       'uRT_EnergonColor': ENERGON_DEFAULT}
+            r = E.run(glsl, E.Material(fallback, cube, uv0=uv, images=images, strip_view=True, rt_value=rtv))
             SPv = float(r.get('SpecularPower', np.array([15.0]))[0])
             sp.append(SPv); rs.append(float(E.roughness_from_power(SPv)))
             dd.append(r.get('DiffuseColor', np.zeros(3))[:3]); ss.append(r.get('SpecularColor', np.zeros(3))[:3])
+            oo.append(r.get('_diffuse_original', r.get('DiffuseColor', np.zeros(3)))[:3])
+        ol = float(np.mean(oo, axis=0) @ LUM)
+        row['base_share'] = float(np.mean(dd, axis=0) @ LUM) / ol if ol > 1e-6 else None
+        row['tints'] = 'palette (%d swatches) + default energon' % len(PALETTE) if (rt_tint and PALETTE) else ('authored' if tint else None)
         row['real_textures'] = '%d of %d' % (len(images), len(slot2d))
         row['roughness_target'] = float(np.mean(rs)); row['spec_power_mean'] = float(np.mean(sp))
         row['base_mean'] = np.mean(dd, axis=0).tolist(); row['spec_mean'] = np.mean(ss, axis=0).tolist()
@@ -261,6 +306,10 @@ def main():
     rt = max((r['emulation'].get('roundtrip_max_rel', 0.0) for r in ok), default=0.0)
     rule = Counter(r['emulation'].get('base_rule', 0) for r in ok)
     infl = [r for r in ok if r['emulation'].get('base_inflation_max', 0) > 1.0 + 1e-9]
+    low = sorted((r for r in ok if r.get('base_share') is not None and r['base_share'] < 0.25), key=lambda r: r['base_share'])
+    json.dump([dict(material=r['material'], base_share=r['base_share'], tint_consumer=r['tint_consumer'], tints=r.get('tints'),
+                    metal_review_candidate=not r['tint_consumer']) for r in low],
+              open(os.path.join(out, 'm6_low_base.json'), 'w', encoding='utf-8'), indent=1)
     cls_names = sorted(by_cls)
     lines = ['# M6 classification audit (tools/systems/m6/m6_audit.py)', '',
              'Maps: %s. Unique materials: %d.' % (', '.join(maps), len(U)), '',
@@ -276,6 +325,11 @@ def main():
               '- rule-1 base colour brighter than the original diffuse (must be 0): %d%s' % (
                   len(infl), (' - ' + ', '.join(r['material'] for r in infl[:6])) if infl else ''),
               '- SpecularPower -> roughness -> SpecularPower: max relative error %.2e' % rt,
+              '- low base after the strip (< 25 %% of the original diffuse, real textures, palette tints for runtime-tint '
+              'consumers): %d (%d tint consumers, %d non-tint = metal-review candidates: %s)' % (
+                  len(low), sum(1 for r in low if r['tint_consumer']), sum(1 for r in low if not r['tint_consumer']),
+                  ', '.join(r['material'] for r in low if not r['tint_consumer'])),
+              '- palette tints loaded: %d swatches' % len(PALETTE),
               '- customisation-tint consumers (forced dielectric): %d; HUD-marker materials (never remapped): %d' % (
                   sum(1 for r in U if r.get('tint_consumer')), by_cls.get('never_remap', 0)),
               '- metal candidates (PROVISIONAL, for review; not applied): %d' % by_cls.get('metal_candidate', 0),
