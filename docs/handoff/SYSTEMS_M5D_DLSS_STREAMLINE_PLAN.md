@@ -220,3 +220,19 @@ On the jitter sign, the SL 2.14 guides specify only "pixel space" (and no jitter
 - **R6**: two constants sets per token avoided. DLSS SR now runs on its own viewport (1), since its inputs keep GL's row order with different jitter / motion signs; DLSS-G uses viewport 0. Step 4 reports a count of Streamline warning lines.
 - Note for Integration: SYSTEMS_DISPLAYMODE_REVIEW.patch also touches Win32Window.cpp near the same lines (the restore); the two hunks are separate lines and should apply in either order with offsets.
 
+### 7c. Rebased onto Rendering's shared device (RENDERING_SHARED_DEVICE.patch, agents/rendering 3c386d3)
+
+The patch now applies on **de6783e + RENDERING_SHARED_DEVICE.patch** (apply that first); `git apply --check` is clean, 29 files.
+
+- d3d12SharedDevice() (Rendering's D3D12Device.cpp) calls streamlineCaps() before it creates the device. On NVIDIA that is slInit; elsewhere one adapter query.
+- After creation, d3d12SharedDevice() registers the device with Streamline (streamlineRegisterDevice -> slSetD3DDevice). So on NVIDIA one device runs the presenter, FSR 3.1 / DLSS SR, DLSS-G and RT, and Streamline sees it before any feature.
+- streamlineDevice() no longer creates a device: it returns the registered shared device (not AddRef'ed).
+- A device re-created after a removal is refused by Streamline (one device per process): DLSS stays off for the session, DLSS SR falls back to FSR 3.1, and the presenter's recovery uses FSR 3 FG (g_dlssgDeviceLost, unchanged).
+- The presenter takes the shared device as in Rendering's patch, and runs DLSS-G only when streamlineDevice() == that device.
+- AMD check (WFC_D3D12PRESENT=1, a stored DLSS Quality choice, Streets 5v5):
+  - "DLSS: unavailable (not an NVIDIA GPU ...)" before "D3D12: shared device created".
+  - D3D12 present on it.
+  - No NVIDIA / Streamline module at 46 s and 91 s.
+  - FSR 1 at 0.67 in the match.
+  - 0 [error].
+

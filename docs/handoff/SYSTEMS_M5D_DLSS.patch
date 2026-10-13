@@ -309,18 +309,18 @@ index ee3c227..ec31a07 100644
  
  }  // namespace render
 diff --git a/src/render/d3d12/D3D12Presenter.cpp b/src/render/d3d12/D3D12Presenter.cpp
-index 0b07162..e9c1004 100644
+index 2acea0a..5a62f6f 100644
 --- a/src/render/d3d12/D3D12Presenter.cpp
 +++ b/src/render/d3d12/D3D12Presenter.cpp
-@@ -15,6 +15,7 @@
- #include "platform/PresentHook.h"
+@@ -16,6 +16,7 @@
  #include "render/d3d12/D3D12FrameGen.h"
  #include "render/d3d12/D3D12Adapter.h"
+ #include "render/d3d12/D3D12Device.h"
 +#include "render/d3d12/D3D12Streamline.h"
  #include "core/Log.h"
  #if defined(WFC_FFX_SDK)
  #include "ffx_api.h"
-@@ -44,6 +45,11 @@ namespace render {
+@@ -45,6 +46,11 @@ namespace render {
  void d3d12SelectAgility();   // D3D12Agility.cpp
  static bool g_fgAtStartup = false;                // setFrameGenerationAtStartup (the profile's Frame Generation row)
  void setFrameGenerationAtStartup(bool on) { g_fgAtStartup = on; }
@@ -332,21 +332,18 @@ index 0b07162..e9c1004 100644
  // the FSR 3 FG runtime beside the exe: the FFX loader + frame-generation DLLs and the Agility D3D12 runtime
  bool frameGenerationRuntimeShipped() {
      static const bool shipped = [] {
-@@ -184,15 +190,33 @@ public:
-         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
-         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
-         IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
--        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
--                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
-+        bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_));
+@@ -185,11 +191,29 @@ public:
+         // the shared device (D3D12Device.h: Agility, GL's adapter; FSR 3.1 and RT use the same one)
+         const bool made = cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) && (dev_ = d3d12SharedDevice()) != nullptr;
+         if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
 +        // [Systems M5 D] frame generation on an NVIDIA RTX GPU: DLSS-G through Streamline (WFC_FG_BACKEND=fsr: FSR 3 FG).
-+        // The swapchain then comes from Streamline's upgraded factory, on Streamline's device (it runs one device).
++        // On NVIDIA the shared device is Streamline's (registered at its creation); the swapchain comes from Streamline's
++        // upgraded factory. After a device loss Streamline keeps the dead device (one per process): FSR 3 FG instead.
 +        static const char* fgBackend = std::getenv("WFC_FG_BACKEND");
-+        if (made && (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) && !(fgBackend && std::strcmp(fgBackend, "fsr") == 0) &&
++        if ((std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) && !(fgBackend && std::strcmp(fgBackend, "fsr") == 0) &&
 +            !g_dlssgDeviceLost && dlssFrameGenerationAvailable()) {
-+            ID3D12Device* sd = streamlineDevice();
-+            if (sd && streamlineUpgrade((void**)&factory_) && streamlineReflexOptions(1, 0)) {   // (DLSS-G requires Reflex)
-+                dev_ = sd; dev_->AddRef(); dlssg_ = true;
++            if (streamlineDevice() == dev_ && streamlineUpgrade((void**)&factory_) && streamlineReflexOptions(1, 0)) {   // (DLSS-G requires Reflex)
++                dlssg_ = true;
 +                const char* e = std::getenv("WFC_DLSSG_FACTOR");
 +                dlssgFrames_ = dlssgWanted_ = std::max(1, std::min(3, (e ? std::atoi(e) : g_fgFactorAtStartup) - 1));
 +                streamlineDlssgStatus();                 // (NVIDIA's maximum generated frames, when it already answers)
@@ -355,11 +352,8 @@ index 0b07162..e9c1004 100644
 +                    LOG_INFO("DLSS-G: %dx asked, this GPU generates at most %d frame(s): %dx", dlssgFrames_ + 1, mx, mx + 1);
 +                    dlssgFrames_ = mx;
 +                }
-+            } else LOG_WARN("DLSS-G: Streamline device / factory / Reflex unavailable: FSR 3 frame generation instead");
++            } else LOG_WARN("DLSS-G: the Streamline device / factory / Reflex is unavailable: FSR 3 frame generation instead");
 +        }
-+        made = made && (dev_ || SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_)));
-         if (adapter) adapter->Release();
-         if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
          BOOL tear = FALSE;
          if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
          vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
@@ -369,7 +363,7 @@ index 0b07162..e9c1004 100644
              ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
              if (ffxDll_) { ffxLoadFunctions(&ffx_, ffxDll_); fg_ = ffx_.CreateContext && ffx_.Configure && ffx_.Dispatch && ffx_.DestroyContext; }
              if (!fg_) LOG_WARN("FRAMEGEN: amd_fidelityfx_loader_dx12.dll / entry points missing: plain D3D12 present");
-@@ -212,7 +236,8 @@ public:
+@@ -209,7 +233,8 @@ public:
          gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
          RECT rc; GetClientRect(hwnd_, &rc);
          if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
@@ -379,7 +373,7 @@ index 0b07162..e9c1004 100644
          {   // M5 item 1 diagnostics: is the WGL_NV_DX_interop2 path (lock / unlock instead of an external semaphore) offered?
              typedef const char*(WINAPI * PFN_GetExtStr)(HDC);
              auto ges = (PFN_GetExtStr)(void*)wglGetProcAddress("wglGetExtensionsStringARB");
-@@ -222,7 +247,8 @@ public:
+@@ -219,7 +244,8 @@ public:
          }
          LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
                   vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "",
@@ -389,7 +383,7 @@ index 0b07162..e9c1004 100644
          return true;
      }
      // WFC_D3D12_WORKER=1: the GL semaphore signal (~0.7 ms CPU in the AMD driver, M5 item 1) and the D3D12 copy / present
-@@ -302,11 +328,13 @@ public:
+@@ -299,11 +325,13 @@ public:
          // minimised (0 x 0 client area): nothing to present; no resize to a degenerate size (FG soak). The GL work is
          // still submitted and the loop throttled (no unbounded queue while hidden), and the first frame back resets FG.
          if (IsIconic(hwnd_) || rc.right - rc.left <= 0 || rc.bottom - rc.top <= 0) {
@@ -403,7 +397,7 @@ index 0b07162..e9c1004 100644
          const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
          if (w != w_ || h != h_) {
              drainWorker(); waitIdle();
-@@ -414,6 +442,7 @@ public:
+@@ -411,6 +439,7 @@ public:
          b[1].Transition.pResource = back_[bi]; b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; b[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
          list_->ResourceBarrier(2, b);
          fgRecord(slot);                                  // FSR 3 FG: configure + prepare (depth / motion / camera) for this frame
@@ -411,7 +405,7 @@ index 0b07162..e9c1004 100644
          list_->CopyResource(back_[bi], shared_[slot]);
          // WFC_D3D12SHOT=<frame>,<file.bmp> (verification): the presented image read back from the D3D12 side
          static int shotFrame = -1; static std::string shotFile;
-@@ -449,7 +478,9 @@ public:
+@@ -446,7 +475,9 @@ public:
          ID3D12CommandList* lists[] = {list_};
          queue_->ExecuteCommandLists(1, lists);
          const clk::time_point t4 = clk::now();
@@ -421,7 +415,7 @@ index 0b07162..e9c1004 100644
          // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
          static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
          if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
-@@ -545,6 +576,12 @@ public:
+@@ -542,6 +573,12 @@ public:
          // another reason, or WFC_D3D12_SIMLOST - must drain, or destroying the FG swapchain blocks on its present queue)
          const bool removed = dev_ && dev_->GetDeviceRemovedReason() != S_OK;
          if (!removed) waitIdle();
@@ -434,7 +428,7 @@ index 0b07162..e9c1004 100644
  #if defined(WFC_FFX_SDK)
          if (fgSwapCtx_ && !removed) {
              ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
-@@ -577,7 +614,58 @@ public:
+@@ -574,7 +611,58 @@ public:
      }
  
      // ---------------------------------------------------------------- FSR 3 frame generation (M5 C)
@@ -494,7 +488,7 @@ index 0b07162..e9c1004 100644
      bool fgGenerating() const { return fgOn() && fgGenerating_; }
      // the slot the next present() uses: wait (GPU side) for D3D12's last reads of it, (re)create the inputs at this size
      bool fgInputs(int rw, int rh, FgInputs* out) {
-@@ -630,7 +718,7 @@ public:
+@@ -627,7 +715,7 @@ public:
      }
      void fgRecord(UINT slot) {
  #if defined(WFC_FFX_SDK)
@@ -503,7 +497,7 @@ index 0b07162..e9c1004 100644
          const bool have = fgHave_[slot];
          fgHave_[slot] = false;
          fgGenFrames_ = have ? 30 : std::max(0, fgGenFrames_.load() - 1);   // (frameGenerationFactor: 2 while generated
-@@ -683,7 +771,7 @@ public:
+@@ -680,7 +768,7 @@ public:
      }
      // presented frames (real + generated) from the swapchain's statistics vs real frames, per 300 real frames
      void fgCount(std::chrono::steady_clock::time_point t0) {
@@ -512,7 +506,7 @@ index 0b07162..e9c1004 100644
          if (fgCountN_ == 0) {
              fgCountT0_ = t0; DXGI_FRAME_STATISTICS st{};
              fgCountP0_ = SUCCEEDED(swap_->GetFrameStatistics(&st)) ? st.PresentCount : 0;
-@@ -759,6 +847,16 @@ public:
+@@ -756,6 +844,16 @@ public:
      double latSum_ = 0, latMax_ = 0; int latN_ = 0, fgResets_ = 0;
      UINT swapFlags_ = 0;
      int fgCountN_ = 0; UINT fgCountP0_ = 0, fgLast0_ = 0; std::chrono::steady_clock::time_point fgCountT0_;
@@ -529,7 +523,7 @@ index 0b07162..e9c1004 100644
  #if defined(WFC_FFX_SDK)
      HMODULE ffxDll_ = nullptr;
      ffxFunctions ffx_{};
-@@ -772,7 +870,7 @@ private:
+@@ -769,7 +867,7 @@ private:
          DXGI_SWAP_CHAIN_DESC1 sd{};
          sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
          sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = buffers_; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -538,7 +532,7 @@ index 0b07162..e9c1004 100644
          sd.Flags = swapFlags_;
          IDXGISwapChain1* sc1 = nullptr;
  #if defined(WFC_FFX_SDK)
-@@ -793,7 +891,7 @@ private:
+@@ -790,7 +888,7 @@ private:
          factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
          sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
          rel(sc1);
@@ -547,7 +541,7 @@ index 0b07162..e9c1004 100644
          return resize(w, h, false);
      }
      bool resizeFail(const char* what, int w, int h) {   // logged once per kind: a failing resize falls back to GL each frame
-@@ -814,6 +912,7 @@ private:
+@@ -811,6 +909,7 @@ private:
              if (fgCtx_) { ffx_.DestroyContext(&fgCtx_, nullptr); fgCtx_ = nullptr; }
          }
  #endif
@@ -555,7 +549,7 @@ index 0b07162..e9c1004 100644
          if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM, swapFlags_)))
              return resizeFail("ResizeBuffers", w, h);
          for (UINT i = 0; i < buffers_; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
-@@ -917,6 +1016,7 @@ bool g_initTried = false;
+@@ -914,6 +1013,7 @@ bool g_initTried = false;
  void teardownPresenter() {
      if (!g_presenter) return;
      platform::setPresentOverride(nullptr);
@@ -563,7 +557,7 @@ index 0b07162..e9c1004 100644
      g_presenter->shutdown();
      delete g_presenter;
      g_presenter = nullptr;
-@@ -934,6 +1034,7 @@ bool startPresenter() {
+@@ -931,6 +1031,7 @@ bool startPresenter() {
      if (!p->init()) { delete p; return false; }
      g_presenter = p;
      platform::setPresentOverride(&presentHook);
@@ -571,7 +565,7 @@ index 0b07162..e9c1004 100644
      return true;
  }
  bool presentHook() {
-@@ -957,6 +1058,8 @@ bool presentHook() {
+@@ -954,6 +1055,8 @@ bool presentHook() {
  }  // namespace
  bool framegenActive() { return g_presenter && g_presenter->fgOn(); }
  bool framegenGenerating() { return g_presenter && g_presenter->fgGenerating(); }
@@ -580,6 +574,36 @@ index 0b07162..e9c1004 100644
  bool framegenInputs(int renderW, int renderH, FgInputs* out) { return g_presenter && g_presenter->fgInputs(renderW, renderH, out); }
  void framegenParams(const FgParams& p) { if (g_presenter) g_presenter->fgSetParams(p); }
  void presentFrameStart(long long ns) { if (g_presenter) g_presenter->setFrameStart(ns); }
+diff --git a/src/render/d3d12/D3D12Device.cpp b/src/render/d3d12/D3D12Device.cpp
+index 83e5f0f..75fb1bb 100644
+--- a/src/render/d3d12/D3D12Device.cpp
++++ b/src/render/d3d12/D3D12Device.cpp
+@@ -7,6 +7,7 @@
+ 
+ #include "render/d3d12/D3D12Device.h"
+ #include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12Streamline.h"
+ #include "core/Log.h"
+ 
+ #include <mutex>
+@@ -32,6 +33,9 @@ ID3D12Device* d3d12SharedDevice() {
+         g_dev = nullptr;
+     }
+     if (!g_dev) {
++        // [Systems M5 D] on NVIDIA, Streamline is initialised before the device exists and the device is registered with it
++        // (it runs one device: presenter, FSR 3.1 / DLSS SR, DLSS-G and RT all on this one). Elsewhere: one adapter query.
++        const bool sl = streamlineCaps().initialised;
+         d3d12SelectAgility();
+         HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+@@ -44,6 +48,7 @@ ID3D12Device* d3d12SharedDevice() {
+             return nullptr;
+         }
+         ++g_created;
++        if (sl) streamlineRegisterDevice(g_dev);           // (a re-created device after a removal is refused: DLSS stays off)
+         LOG_INFO("D3D12: shared device %s (presenter, FSR 3.1 and RT share it)", g_created == 1 ? "created" : "re-created after a removal");
+     }
+     g_dev->AddRef();
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
 index fcef999..c805b28 100644
 --- a/src/core/Application.cpp
@@ -838,10 +862,10 @@ index f382a9e..cd938fa 100644
                                                                     time.time() - t0, len(fails)))
 diff --git a/src/render/d3d12/D3D12Streamline.h b/src/render/d3d12/D3D12Streamline.h
 new file mode 100644
-index 0000000..dab9f05
+index 0000000..1df5043
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Streamline.h
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,103 @@
 +// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems).
 +// Nothing here runs unless a DLSS row is selected, and nothing NVIDIA is even loaded unless GL's adapter is an NVIDIA GPU:
 +// on any other GPU the probe answers "unavailable" from the adapter's vendor id alone (no DLL loaded, no error logged), so
@@ -879,8 +903,11 @@ index 0000000..dab9f05
 +int dlssFrameGenerationMaxFactor();
 +bool streamlineRuntimeShipped();            // the DLLs are beside the exe (file checks only; no load)
 +
-+// The Streamline D3D12 device (created once on GL's adapter, after slInit; registered with Streamline). nullptr: unavailable.
++// The Streamline D3D12 device: the process's shared device (D3D12Device.h), registered with Streamline (slSetD3DDevice)
++// when it was created after slInit. Not AddRef'ed (the shared device holds it). nullptr: unavailable, or the registered
++// device was removed (Streamline cannot take another one in-process: DLSS stays off for the session).
 +ID3D12Device* streamlineDevice();
++void streamlineRegisterDevice(ID3D12Device* dev);      // (D3D12Device.cpp, at the shared device's creation)
 +// slUpgradeInterface: a native IDXGIFactory / swapchain becomes Streamline's proxy (DLSS-G needs the swapchain created
 +// through an upgraded factory). False: unavailable (the object is left as it was).
 +bool streamlineUpgrade(void** iface);
@@ -944,10 +971,10 @@ index 0000000..dab9f05
 +}  // namespace render
 diff --git a/src/render/d3d12/D3D12Streamline.cpp b/src/render/d3d12/D3D12Streamline.cpp
 new file mode 100644
-index 0000000..3ca2cf1
+index 0000000..2516bda
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Streamline.cpp
-@@ -0,0 +1,493 @@
+@@ -0,0 +1,496 @@
 +// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems;
 +// render/d3d12/D3D12Streamline.h). Built only with the SDK headers (WFC_STREAMLINE_SDK, tools/render/fetch_streamline.py);
 +// the interposer is loaded at run time (LoadLibrary + GetProcAddress: no import library, no load on non-NVIDIA GPUs).
@@ -968,6 +995,7 @@ index 0000000..3ca2cf1
 +
 +#include "render/d3d12/D3D12Streamline.h"
 +#include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12Device.h"
 +#include "render/d3d12/D3D12FrameGen.h"
 +#include "core/Log.h"
 +
@@ -1170,28 +1198,29 @@ index 0000000..3ca2cf1
 +    return std::strstr(S.adapterName, "RTX 50") ? 4 : 2;
 +}
 +
++void streamlineRegisterDevice(ID3D12Device* dev) {
++    if (!S.caps.initialised || !dev) return;
++    if (S.dev) {                                          // (one device per process: a re-created shared device is refused)
++        if (dev != S.dev) { LOG_WARN("Streamline: a new D3D12 device after a removal: DLSS stays off for this session"); S.devFailed = true; }
++        return;
++    }
++    const sl::Result r = S.f.setDevice(dev);
++    if (r != sl::Result::eOk) { LOG_WARN("Streamline: slSetD3DDevice: %s", sl::getResultAsStr(r)); S.devFailed = true; return; }
++    S.dev = dev;                                          // (not AddRef'ed: the shared device's reference keeps it)
++    LOG_INFO("Streamline: the shared D3D12 device is registered");
++}
++
 +ID3D12Device* streamlineDevice() {
++    if (S.devFailed || !streamlineCaps().initialised) return nullptr;
++    if (!S.dev) {                                         // (no shared device yet: create it now - it registers itself)
++        if (ID3D12Device* d = d3d12SharedDevice()) d->Release();
++    }
 +    if (S.dev && S.dev->GetDeviceRemovedReason() != S_OK) {   // (removed: never handed out again; Streamline runs one device)
 +        LOG_WARN("Streamline: its D3D12 device was removed: DLSS stays off for this session");
-+        S.devFailed = true; S.dev = nullptr;              // (not released: Streamline may still hold it until shutdown)
++        S.devFailed = true; S.dev = nullptr;
 +        streamlineReflexLost();
 +    }
-+    if (S.dev || S.devFailed) return S.dev;
-+    if (!streamlineCaps().initialised) { S.devFailed = true; return nullptr; }
-+    d3d12SelectAgility();
-+    HMODULE d3d = LoadLibraryW(L"d3d12.dll");
-+    auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
-+    IDXGIAdapter1* adapter = d3d12AdapterForGL();
-+    const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&S.dev) : E_FAIL;
-+    if (adapter) adapter->Release();
-+    if (FAILED(hr) || !S.dev) { LOG_WARN("Streamline: no D3D12 device (0x%08lx)", (unsigned long)hr); S.devFailed = true; S.dev = nullptr; return nullptr; }
-+    const sl::Result r = S.f.setDevice(S.dev);
-+    if (r != sl::Result::eOk) {
-+        LOG_WARN("Streamline: slSetD3DDevice: %s", sl::getResultAsStr(r));
-+        S.dev->Release(); S.dev = nullptr; S.devFailed = true; return nullptr;
-+    }
-+    LOG_INFO("Streamline: D3D12 device registered");
-+    return S.dev;
++    return S.devFailed ? nullptr : S.dev;
 +}
 +
 +bool streamlineUpgrade(void** iface) {
@@ -1420,6 +1449,7 @@ index 0000000..3ca2cf1
 +bool streamlineRuntimeShipped() { return false; }
 +int dlssFrameGenerationMaxFactor() { return frameGenerationRuntimeShipped() ? 2 : 1; }
 +ID3D12Device* streamlineDevice() { return nullptr; }
++void streamlineRegisterDevice(ID3D12Device*) {}
 +bool streamlineUpgrade(void**) { return false; }
 +void streamlineBeginFrame(uint32_t) {}
 +void* streamlineFrameToken() { return nullptr; }
