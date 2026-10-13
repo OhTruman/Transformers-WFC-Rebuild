@@ -195,7 +195,25 @@ A **graphics preset** row could bundle these later: "Original" (the faithful loo
    - each roughness map's mean is normalised to the derived sqrt(2 / (SpecularPower + 2)) of its material;
    - an ORM's metal channel must agree with the per-material class (else the map is rejected for that material);
    - per texture family: eye sheets and the luminance exit.
-3. **VRAM**: a per-map table of the sibling maps (BC4 roughness about +40-50 % of a map's colour-texture memory at full resolution); AssetTools asked for half-resolution roughness.
+3. **VRAM**: the per-map table (work/m6/vram_table.py, 2026-10-12). It covers the map materials' 2D textures with full mip chains: the originals, the HD pack's rows (bytes as packed), and BC4 roughness for the work list's parents at the HD size.
+
+   | map | original MB | HD (Faithful) MB | + roughness MB | Enhanced MB |
+   |---|---|---|---|---|
+   | BrokenHope | 623 | 914 | 222 | 1136 |
+   | Remnant | 630 | 927 | 222 | 1149 |
+   | Berth | 575 | 805 | 214 | 1019 |
+   | Rust | 646 | 963 | 238 | 1201 |
+   | Seed | 614 | 908 | 229 | 1137 |
+   | Streets | 597 | 850 | 220 | 1070 |
+   | Molten | 609 | 897 | 222 | 1119 |
+   | Debris | 632 | 855 | 220 | 1075 |
+   | Complex | 576 | 845 | 208 | 1053 |
+   | Gorge | 576 | 832 | 214 | 1046 |
+
+   - Worst case: Enhanced adds +554 MB over the originals (Rust).
+   - Rendering measured the whole process's device-local use at 2.9-3.3 GB with RT on at 1440p, so Enhanced + RT is about 3.9 GB.
+   - Half-resolution roughness would cut the roughness column by 3/4.
+   - Floors given to Frontend: 6000 MB for Enhanced, 8000 MB for Enhanced + RT at 4K output. They only drive a row warning; nothing is blocked.
 4. **Calibration inputs**:
    - every calibration file (M6 luminance, R1 split check, R4 GI fit) records the texture-pack version it was made with;
    - loading it with another pack version fails loudly (no silent stale calibration);
