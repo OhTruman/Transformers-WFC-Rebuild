@@ -318,5 +318,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Faithful's where the bake had no sun (Molten m01200) -> keep a soft sky / ambient character shadow in Realistic;
   (2) RT reflections on rough metal read as dirt veins (Molten m00600) -> roughness gate; (3) robot lineup with two
   similar team colours still to capture. HD-on set (Original / D / E + Modern x RT) after the E pack.
+  10:56 E PILOT DONE (AssetTools): out\hd\push_e_gen, 20 rows / 125.5 MB, G2 strength, all 11 Rust units pass every gate;
+  by eye G2 replaces D's crunchy grit with smoother natural weathering, designs kept. D pass: batches 0-3 packed (463
+  textures), 4-5 reviewed + rebuilding for the 12:30 freeze, 6-10 built awaiting review; colour model 870 / 1,657 (~31 h
+  left at the shared-CPU rate, ~2026-10-14 18:00). Gameplay sweep: 16 harness groups PASS; QABOT 6/7 (QA freeze tool:
+  bots moved 5.34 m after freeze, likely vehicle coasting; Gameplay isolating; dev tool). TDR #8 10:29:27 with ONE menu
+  exe + DML; id 1001 GL errors = post-reset spam on legacy-context builds (closed). Final head candidate 0ec2a0bb.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
