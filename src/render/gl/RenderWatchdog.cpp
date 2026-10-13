@@ -222,6 +222,15 @@ void loop() {
             std::thread([] { platform::restoreDesktopDisplayMode(); }).detach();
         }
 #endif
+        // [Systems] backstop: a render thread blocked in the driver (a lost context after a TDR) never comes back - after the
+        // dump and WFC_HANG_EXIT_S more seconds (default 10), end the process with a report instead of hanging forever.
+        static const double exitAfter = [] { const char* e = std::getenv("WFC_HANG_EXIT_S"); return e ? std::atof(e) : 10.0; }();
+        if (reported && exitAfter >= 0 && stalled >= kStallSeconds + exitAfter) {
+            static char why[192];
+            std::snprintf(why, sizeof why, "no frame completed for %.1f s (render thread last at '%s', frame %d): GPU driver "
+                          "reset or hang", stalled, gPhase.load(), gFrame.load());
+            gpuLost(why);
+        }
         if (reported) continue;
         reported = true;
         LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d", stalled,
@@ -254,6 +263,45 @@ void frameDone(int frame) {
     gArmed.store(true, std::memory_order_relaxed);
     gFrame.store(frame, std::memory_order_relaxed);
     gLastProgressMs.store(nowMs(), std::memory_order_relaxed);
+}
+
+void gpuLost(const char* why) {
+    static std::atomic<bool> once{false};
+    if (once.exchange(true)) for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));   // the other caller exits
+    LOG_ERROR("GPU driver reset / hang: exiting (%s)", why);
+#ifdef _WIN32
+    const DWORD pid = GetCurrentProcessId();
+    char path[96];
+    std::snprintf(path, sizeof path, "wfc_gpu_lost_%lu.txt", (unsigned long)pid);
+    if (HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); f != INVALID_HANDLE_VALUE) {
+        put(f, "wfc_rebuild stopped: the graphics driver was reset or stopped responding.\n%s\nrender phase '%s', frame %d; "
+               "hang minidump (if written): wfc_hang_%lu_0.dmp\n", why, gPhase.load(), gFrame.load(), (unsigned long)pid);
+        CloseHandle(f);
+    }
+    core::logTryFlush();
+    // the desktop mode on its own thread (ChangeDisplaySettingsEx notifies every top-level window; ours may not answer),
+    // waited for at most 3 s
+    if (platform::desktopModeKeeper().active()) {
+        std::atomic<bool> done{false};
+        std::thread([&done] { platform::restoreDesktopDisplayMode(); done = true; }).detach();
+        for (int i = 0; i < 30 && !done.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    // a visible message: a message box on its own thread, shown for at most WFC_GPULOST_DIALOG_S seconds (the process then
+    // ends whether or not it was closed: a harness run is never held)
+    static const double dialogS = [] { const char* e = std::getenv("WFC_GPULOST_DIALOG_S"); return e ? std::atof(e) : 20.0; }();
+    if (dialogS > 0) {
+        std::atomic<bool> closed{false};
+        std::thread([&closed] {
+            MessageBoxA(nullptr, "The graphics driver was reset or stopped responding, so Transformers: War for Cybertron "
+                        "(rebuild) has to close.\n\nPlease start the game again. Details are in wfc.log and wfc_gpu_lost_*.txt.",
+                        "Graphics driver reset", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+            closed = true;
+        }).detach();
+        for (int i = 0; i < (int)(dialogS * 10) && !closed.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    TerminateProcess(GetCurrentProcess(), 3);
+#endif
+    std::_Exit(3);
 }
 
 void installCrashHandler() {

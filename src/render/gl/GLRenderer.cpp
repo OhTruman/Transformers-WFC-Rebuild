@@ -251,6 +251,20 @@ public:
 
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
+        // [Systems] a lost context (TDR): checked before this frame's first query read-back - after a reset AMD's
+        // glGetQueryObjectiv spins in the driver (pawnOcclusionResults / gpuTimerBegin) instead of returning
+        // WFC_SIMRESET=N (diagnostics): report a reset at the N-th beginFrame, to prove this exit path
+        static const int simReset = WFC_ENV("WFC_SIMRESET") ? std::atoi(WFC_ENV("WFC_SIMRESET")) : 0;
+        static int begun = 0;
+        const bool fakeReset = simReset > 0 && ++begun == simReset;
+        if (glx::GetGraphicsResetStatus || fakeReset) {
+            const GLenum rs = fakeReset ? (GLenum)0x8255 /*GL_UNKNOWN_CONTEXT_RESET*/ : glx::pollResetStatus();
+            if (rs != GL_NO_ERROR) {
+                static char why[96];
+                std::snprintf(why, sizeof why, "the GL context was lost (reset status 0x%04X)", (unsigned)rs);
+                watchdog::gpuLost(why);
+            }
+        }
         glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
         glx::textureCacheInvalidate();               // ... and textures
         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
@@ -391,6 +405,10 @@ public:
           if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
               watchdog::phase("WFC_HANGTEST stall");
               std::this_thread::sleep_for(std::chrono::seconds(7));
+          }
+          if (frames == 60 && WFC_ENV("WFC_SIMHANG")) {    // [Systems] diagnostics: blocked for good (a driver that never
+              watchdog::phase("WFC_SIMHANG blocked");        // returns): the watchdog's backstop must end the process
+              for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
           } }
         watchdog::phase("after endFrame (buffer swap / game update)");
         if (WFC_ENV("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
