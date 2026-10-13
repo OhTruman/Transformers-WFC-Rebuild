@@ -458,5 +458,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   perf 8-12 h; ~6-7 days of slot time; cost ~ today's Realistic + 1.5 ms. Order: RT-without-characters -> reflections ->
   S1-S4 -> shadow refinement -> Modern / level 2 -> checks. Systems asked to confirm lighting.json carries every static
   light with the bake's units.
+  17:20 HD FINISH PLAN approved (AssetTools docs/HD_FINISH_PLAN.md): D complete ~2026-10-15 morning (~700 textures of
+  colour left, ~22 h CPU, 2 x 12-thread trial; GPU rows 1-2 h; review + caps + pack pipelined for 19 batches); E = every
+  world surface at G2 (~1,400 textures / ~800 units, ~8 GPU h, ~10 h CPU, ~12 h review) ~2026-10-17/18, map order
+  Molten, Streets, Gorge, Rust, Debris; then 490 M6 roughness maps; E as a level-2 root over D + hd_pbr_index.json;
+  snapshots per milestone. GPU SHARING: Rendering holds the card; AssetTools' DML in announced exclusive windows
+  (~2 x 2 h / day, the first after Rendering's RT-pass fix). NEXT PLAYTEST TARGET ~2026-10-21/22.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
