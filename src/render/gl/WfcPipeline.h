@@ -525,6 +525,24 @@ private:
     GLuint rtAoTexture();
     RtTargets rtTargets_;
     GLuint rtCompositeProg_ = 0, rtWhiteTex_ = 0;
+    // R1 sun swap (RT Realistic with the map's V_bake; WfcRt.cpp): the world pass writes, per lightmapped pixel, the sun's
+    // share of its lighting (Systems' fit: k x max(B_i . L_t, 0)^p x sun, per lightmap coefficient, decoded like the
+    // lightmap, fogged) and V_bake (the bake's sun visibility) to a second target; the world composite then swaps the
+    // baked sun for the ray-traced one: colour += share x (V_rt - V_bake). Per map, never a setting (the mode is rtMode_).
+    bool r1Map_ = false, r1Built_ = false, r1WorldMrt_ = false, r1Suppress_ = false;
+    float r1Fit_[4] = {0, 1, 1, 0};                    // k, p, tangent_y_sign
+    float r1Sun_[3] = {0, 0, 0};                       // the sun's linear colour x brightness (fit.json sun_linear)
+    float r1SunDir_[3] = {0, 0, 1};                    // towards the sun (world)
+    std::string r1Dir_;
+    std::vector<GLuint> vbTex_;                        // per lightmap page (index as lmTextures_): R = V_bake, G = 1 (covered)
+    std::vector<GLuint> vbArrays_;                     // per lightmap array (as lmArrays_): the same, layer for layer
+    GLuint r1SunTex_ = 0, rtCompositeR1Prog_ = 0;
+    int r1SunW_ = 0, r1SunH_ = 0, r1ClearedFrame_ = -1;
+    bool r1Active() const;
+    void r1Build();
+    void r1WorldBegin();
+    void r1WorldEnd();
+    void r1BindDraw(int prog, int lm0, int arr);
     bool rtDepthOnly_ = false, rtMaskActive_ = false;
     // masked (alpha-tested) world geometry in the TLAS (WfcRt.cpp): an opacity atlas rendered once per map in UV space
     bool rtUvAtlas_ = false, rtMaskedBuilt_ = false;

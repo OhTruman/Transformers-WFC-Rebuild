@@ -251,11 +251,7 @@ public:
         }
         if (cl) {
             cl->Close();
-            if (ok) {
-                ID3D12CommandList* lists[] = {cl};
-                queue_->ExecuteCommandLists(1, lists);
-            }
-            if (!waitIdle()) { LOG_WARN("RT bridge: BLAS build not finished: its upload / scratch buffers leaked, set dropped"); return false; }
+            if (!(ok ? submitTimed(cl, "static BLAS + TLAS") : waitIdle())) { LOG_WARN("RT bridge: BLAS build not finished: its upload / scratch buffers leaked, set dropped"); return false; }
         }
         const double ms = std::chrono::duration<double, std::milli>(clk::now() - t0).count();
         rel(cl); rel(al); rel(vb); rel(ib[0]); rel(ib[1]); rel(instBuf);
@@ -353,8 +349,7 @@ public:
         }
         if (ok) ok = rebuildTlas(cl, temp);
         cl->Close();
-        if (ok) { ID3D12CommandList* lists[] = {cl}; queue_->ExecuteCommandLists(1, lists); }
-        const bool idle = waitIdle();
+        const bool idle = ok ? submitTimed(cl, "masked BLAS + TLAS") : waitIdle();
         rel(cl); rel(al);
         if (idle) for (auto* r : temp) r->Release();     // (not idle: leaked rather than freed in flight)
         if (!ok) { releaseMasked(); return false; }
@@ -431,7 +426,8 @@ public:
         hSubs_ = toDefault(D.subs.data(), D.subs.size() * 4);
         hBlasN_ = (UINT)D.blas.size(); hTris_ = (UINT)triSub.size(); hVerts_ = (UINT)(uv1.size() / 2); hSubN_ = (UINT)(D.subs.size() / 32);
         bool ok = hInst_ && hIdx_ && hUv1_ && hTriSub_ && hSubs_;
-        UINT64 matBytes = 0;
+        UINT64 matBytes = 0, chunkBytes = 0;
+        constexpr UINT64 kChunkBytes = 32ull << 20;
         if (ok && haveVtx && !D.matTex.empty()) {        // materials: per-vertex frame / UV0, the slot table, the textures
             hVtx_ = toDefault(vtx.data(), vtx.size() * 4); hMatTex_ = toDefault(D.matTex.data(), D.matTex.size() * 4);
             hMatTexN_ = (UINT)(D.matTex.size() / 12);
@@ -480,10 +476,18 @@ public:
                                 b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
                                 cl->ResourceBarrier(1, &b);
                                 matBytes += total;
+                                chunkBytes += total;
                             }
                         }
                     }
                     out.push_back(t);                    // (null keeps the index: the slot samples black)
+                    if (chunkBytes >= kChunkBytes && ok) {   // (bounded submissions: this chunk's copies now, its uploads freed)
+                        cl->Close();
+                        if (!submitTimed(cl, "hit data: material texture copies")) { ok = false; break; }
+                        for (auto* r : temp) r->Release();
+                        temp.clear(); chunkBytes = 0;
+                        al->Reset(); cl->Reset(al, nullptr);
+                    }
                 }
             }
             D3D12_COMPUTE_PIPELINE_STATE_DESC pd{}; pd.pRootSignature = rs_;
@@ -520,8 +524,7 @@ public:
             lmBytes += (UINT64)L.w * L.h * 4;
         }
         cl->Close();
-        if (ok) { ID3D12CommandList* lists[] = {cl}; queue_->ExecuteCommandLists(1, lists); }
-        const bool idle = waitIdle();
+        const bool idle = ok ? submitTimed(cl, "hit data: buffers + lightmaps") : waitIdle();
         rel(cl); rel(al);
         if (idle) for (auto* r : temp) r->Release();
         if (!ok) { releaseHit(); return false; }
@@ -531,6 +534,7 @@ public:
                  " %zu + %zu cube textures, %u slots, vertex frames; material PSO %s)", hBlasN_, hTris_, hSubN_, hLm_.size(),
                  (double)hitBytes_ / 1048576.0, (double)matBytes / 1048576.0, hTex2D_.size(), hTexCube_.size(), hMatTexN_,
                  psoReflMat_ ? "yes" : "no");
+        LOG_INFO("RT bridge: longest load-time D3D12 submission this map: %.0f ms ('%s')", maxSubmitMs_, maxSubmitWhat_);
         return true;
 #endif
     }
@@ -551,7 +555,11 @@ public:
                                         [](const D3D12_RAYTRACING_INSTANCE_DESC& d) { return d.InstanceMask == 0x8; }), instances_.end());
     }
     void clearStaticWorld() {
+        maxSubmitMs_ = 0.0; maxSubmitWhat_ = "";
         if ((tlas_ || !blas_.empty() || rtDynamicHasWork()) && !waitIdle()) {   // (still in flight: dropped, not freed)
+            LOG_WARN("RT bridge: the GPU did not go idle at the map change: the RT scene is dropped without release (leaked: "
+                     "%zu BLAS %.1f MB, TLAS %s, reflection hit data %.1f MB)", blas_.size(), (double)totalBlas_ / 1048576.0,
+                     tlas_ ? "yes" : "no", (double)hitBytes_ / 1048576.0);
             tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
             for (auto& d : dyn_) d = DynTlas{};
             rtDynamicAbandon();
@@ -1024,6 +1032,20 @@ private:
         rel(s.res);
         s = Shared{};
     }
+    // load-time submissions (BLAS / TLAS builds, masked world, reflection hit data): executed and waited for one at a time,
+    // each timed (execute -> idle, wall clock: an upper bound of its GPU time); the longest per map is logged, and one over
+    // 250 ms warns (Windows resets the driver at ~2 s of one packet's GPU work - a shared or slow GPU nears it sooner)
+    double maxSubmitMs_ = 0.0; const char* maxSubmitWhat_ = "";
+    bool submitTimed(ID3D12GraphicsCommandList* cl, const char* what) {
+        const auto t0 = std::chrono::steady_clock::now();
+        ID3D12CommandList* lists[] = {cl};
+        queue_->ExecuteCommandLists(1, lists);
+        const bool idle = waitIdle();
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (ms > maxSubmitMs_) { maxSubmitMs_ = ms; maxSubmitWhat_ = what; }
+        if (ms > 250.0) LOG_WARN("RT bridge: load-time D3D12 submission '%s' took %.0f ms (execute -> idle)", what, ms);
+        return idle;
+    }
     bool waitIdle() {
         if (!queue_) return true;
         const UINT64 v = ++value_; queue_->Signal(fence_, v);
@@ -1081,6 +1103,45 @@ private:
 
 Bridge* g_bridge = nullptr;
 bool g_failed = false;
+// Ray Tracing availability without building the bridge (the Settings row asks at every launch, RT Off must stay idle):
+// GL's external-object entry points, then a throwaway D3D12 device on GL's adapter with ray tracing tier >= 1.1, released.
+// The bridge itself (device, queue, allocators, the shared fence imported as a GL semaphore) is built on the first enable.
+bool probeAvailable() {
+    static int known = -1;
+    if (known >= 0) return known == 1;
+    known = 0;
+#if !defined(WFC_RT_SHADERS)
+    // a build without the RT shaders (third_party/dxc absent at configure: tools/render/fetch_dxc.py) could build the scene but
+    // never trace it - Faithful / Realistic would look Original: report RT unavailable, so the Settings row hides it
+    LOG_INFO("RT availability: this build has no RT shaders (third_party/dxc missing at configure): Ray Tracing unavailable");
+    return false;
+#endif
+    auto g = [](const char* n) { return (void*)wglGetProcAddress(n); };
+    for (const char* n : {"glCreateMemoryObjectsEXT", "glImportMemoryWin32HandleEXT", "glTexStorageMem2DEXT", "glGenSemaphoresEXT",
+                          "glImportSemaphoreWin32HandleEXT", "glSemaphoreParameterui64vEXT", "glWaitSemaphoreEXT", "glSignalSemaphoreEXT"})
+        if (!g(n)) { LOG_INFO("RT availability: GL external-object entry point %s missing: Ray Tracing unavailable", n); return false; }
+    d3d12SelectAgility();
+    HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+    auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+#if defined(WFC_RT_GL_ADAPTER)
+    IDXGIAdapter1* adapter = d3d12AdapterForGL();
+#else
+    IUnknown* adapter = nullptr;
+#endif
+    ID3D12Device* dev = nullptr;
+    const bool made = create && SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev)) && dev;
+    if (adapter) adapter->Release();
+    int tier = 0;
+    if (made) {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 o5{};
+        if (SUCCEEDED(dev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &o5, sizeof o5))) tier = (int)o5.RaytracingTier;
+        dev->Release();
+    }
+    known = made && tier >= (int)D3D12_RAYTRACING_TIER_1_1 ? 1 : 0;
+    LOG_INFO("RT availability (probe, nothing kept): %s", !made ? "no D3D12 device" : known ? "ray tracing tier 1.1+" : "ray tracing tier below 1.1");
+    return known == 1;
+}
+
 bool ensure() {
     if (g_failed) return false;
     if (!g_bridge) { g_bridge = new Bridge(); if (!g_bridge->init()) { delete g_bridge; g_bridge = nullptr; g_failed = true; return false; } }
@@ -1088,7 +1149,7 @@ bool ensure() {
 }
 }  // namespace
 
-bool rtBridgeAvailable() { return ensure(); }
+bool rtBridgeAvailable() { return g_bridge ? true : !g_failed && probeAvailable(); }
 bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->prepare(w, h, t); }
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }

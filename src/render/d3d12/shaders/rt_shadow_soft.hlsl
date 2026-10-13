@@ -62,10 +62,15 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float penumbra = blocker * 2.0 * Extra2.z;            // world width (m)
     const float r = clamp(0.5 * penumbra / pxWorld, 0.0, maxR);
     if (r < 0.75) { Soft[px] = v0; return; }                   // contact: as sharp as the denoiser left it
-    // the disc: same-surface taps (plane distance, normal) only
+    // the disc: same-surface taps (plane distance, normal) only. 32 taps above 6 pixels (the 16-tap disc again, turned
+    // 45 degrees at 0.7 of the radius): large penumbrae without the 16-tap grain
     float sum = v0, wsum = 1.0;
-    [unroll] for (uint k2 = 0; k2 < 16; ++k2) {
-        const float2 o = float2(kDisc[k2].x * cr - kDisc[k2].y * sr, kDisc[k2].x * sr + kDisc[k2].y * cr) * r;
+    const uint nTaps = r > 6.0 ? 32u : 16u;
+    for (uint k2 = 0; k2 < nTaps; ++k2) {
+        const float2 dk = kDisc[k2 & 15u];
+        const float c2 = k2 < 16u ? cr : (cr - sr) * 0.70710678, s2 = k2 < 16u ? sr : (sr + cr) * 0.70710678;
+        const float rk = k2 < 16u ? r : r * 0.7;
+        const float2 o = float2(dk.x * c2 - dk.y * s2, dk.x * s2 + dk.y * c2) * rk;
         const int2 q = clamp(px + int2(round(o)), int2(0, 0), int2(Size.xy) - 1);
         const float dq = RasterDepth[q];
         if (dq >= 1.0) continue;

@@ -53,6 +53,37 @@ void main() {
     oFactor = vec4(f, 1.0);
 }
 )";
+// R1 sun swap (Realistic + V_bake): dual-source - colour = colour x factor + add. World pixels with a sun share (the world
+// pass's second target, alpha = V_bake >= 0): the RT AO on everything, the baked sun (V_bake x share) swapped for the ray-
+// traced one (vis x share: world + characters, soft) - add = share x (vis - ao x V_bake). Other world pixels (vertex-lit,
+// unlit): the AO only (their visibility is the full one now; the bake already shadows them from the world).
+const char* kRtCompositeR1FS = R"(#version 430
+uniform sampler2D uVis;
+uniform sampler2D uSao;
+uniform sampler2D uSun;
+uniform vec3 uModShadow;
+uniform float uAoStrength;
+uniform int uR1View;        // WFC_RT_R1VIEW=1 (diagnostics): red = RT lights more than the bake, green = less, blue = the share
+layout(location = 0, index = 0) out vec4 oAdd;
+layout(location = 0, index = 1) out vec4 oFactor;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec4 s = texelFetch(uSao, p, 0);
+    oAdd = vec4(0.0);
+    if (s.z > 0.5) { oFactor = vec4(1.0); return; }
+    float vis = texelFetch(uVis, p, 0).r;
+    vis = vis > 0.985 ? 1.0 : vis;
+    float ao = s.w > 0.985 ? 1.0 : s.w;
+    float f = mix(1.0, ao, uAoStrength);
+    vec4 sun = texelFetch(uSun, p, 0);
+    if (sun.a >= 0.0) oAdd = vec4(sun.rgb * (vis - f * sun.a), 0.0);
+    oFactor = vec4(vec3(f), 1.0);
+    if (uR1View != 0) {
+        oFactor = vec4(0.0, 0.0, 0.0, 1.0);
+        oAdd = sun.a >= 0.0 ? vec4(max(vis - sun.a, 0.0), max(sun.a - vis, 0.0), min(dot(sun.rgb, vec3(0.3333)), 1.0), 0.0) : vec4(0.0);
+    }
+}
+)";
 bool depthCheckOn() { static const bool on = std::getenv("WFC_RT_DEPTHCHECK") != nullptr; return on; }
 // stage 1 (measurement): sun shadow + AO rays per pixel (WFC_RT_AORAYS, default 2; WFC_RT_AORADIUS metres, default 1)
 bool shadowAoOn() { static const bool on = std::getenv("WFC_RT_SHADOWAO") != nullptr; return on; }
@@ -100,8 +131,11 @@ const float kFfxToGl[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 2, 0, 0, 0, -1, 1};
 const float kGlToFfx[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.5f, 0, 0, 0, 0.5f, 1};
 }  // namespace
 
-// the depth prepass's triangle set (drawMdi's prepass: opaque MDI programs, VLM runs excluded), from the world mesh's
-// GL buffers (14 floats per vertex, positions first; MDI base vertex 0), once per map
+// the world mesh's static opaque triangles (every sub with an opaque program: MDI-drawn or not, lightmapped or vertex-lit;
+// sky domes and CastShadow-false subs left out, actor-placed nodes kept as before; alpha-tested subs are the masked set), from its GL buffers
+// (14 floats per vertex, positions first; base vertex 0), once per map. (Before 2026-10-13 only the depth prepass's set -
+// MDI-drawn, no vertex-lit runs - went in: half of Gorge's occluders, 634 k of 1.2 M triangles, were missing, so sun rays
+// escaped through roofs and rock that the bake - and Systems' V_bake trace - had as solid.)
 void Pipeline::rtBuildWorld(int meshId) {
     if (!(depthCheckOn() || rtInfra_) || rtFailed_ || meshId < 0 || !GetBufferSubData) return;
     const bool keepHit = reflectOn() || rtInfra_;          // (reflection hits: Realistic)
@@ -122,14 +156,13 @@ void Pipeline::rtBuildWorld(int meshId) {
     RtHitKeep keep;
     W.pos.resize(v.size() / 14 * 3);
     for (size_t i = 0, n = v.size() / 14; i < n; ++i) std::memcpy(&W.pos[i * 3], &v[i * 14], 12);
-    size_t subs = 0, skipped = 0, noShadow = 0;
+    size_t subs = 0, skipped = 0, noShadow = 0, vlmSubs = 0, nonMdiSubs = 0;
     std::vector<std::pair<float, std::string>> largest;      // (diagnostics) the biggest subs going into the TLAS
     for (const Sub& s : g.subs) {
-        if (s.mdiRow < 0 || s.prog < 0 || s.vlmTex || (size_t)s.first + s.count > idx.size()) continue;
+        if (s.prog < 0 || (size_t)s.first + s.count > idx.size()) continue;
         const Program& P = progs_[(size_t)s.prog];
-        if (P.mdiProg < 0) continue;
-        const Program& M = progs_[(size_t)P.mdiProg];
-        if (M.blend != 0) continue;
+        const Program& M = P.mdiProg >= 0 ? progs_[(size_t)P.mdiProg] : P;
+        if (M.blend != 0 || P.blend != 0) continue;
         if (s.noShadow) { ++noShadow; continue; }       // (authored CastShadow false: not an occluder)
         const core::Vec3 ext = s.bmax - s.bmin;
         const float size = std::max(ext.x, std::max(ext.y, ext.z));
@@ -151,6 +184,8 @@ void Pipeline::rtBuildWorld(int meshId) {
             if (hit) { ++skipped; continue; }
         }
         largest.push_back({size, s.matName + (M.lit ? "" : " (unlit)")});
+        if (s.vlmTex) ++vlmSubs;
+        if (s.mdiRow < 0) ++nonMdiSubs;
         std::vector<uint32_t>& out = M.twoSided ? W.twoSided : W.oneSided;
         out.insert(out.end(), idx.begin() + s.first, idx.begin() + s.first + s.count);
         if (keepHit) keep.sub[M.twoSided ? 1 : 0].insert(keep.sub[M.twoSided ? 1 : 0].end(), s.count / 3, (uint32_t)(&s - g.subs.data()));
@@ -162,7 +197,8 @@ void Pipeline::rtBuildWorld(int meshId) {
     const int set = meshId == bspMesh_ ? 1 : 0;
     static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
-    LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)", subs, set ? "level BSP" : "world", meshId, skipped, noShadow);
+    LOG_INFO("RT world: %zu static opaque subs of the %s set (mesh %d; %zu vertex-lit, %zu not MDI-drawn) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)",
+             subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow);
     W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
     if (keepHit) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
@@ -713,17 +749,32 @@ void Pipeline::rtDynMid() {
     GLint bs = 0, bd = 0; glGetIntegerv(0x80C9 /*GL_BLEND_SRC_RGB*/, &bs); glGetIntegerv(0x80C8 /*GL_BLEND_DST_RGB*/, &bd);
     GLint bsa = 0, bda = 0; glGetIntegerv(0x80CB /*GL_BLEND_SRC_ALPHA*/, &bsa); glGetIntegerv(0x80CA /*GL_BLEND_DST_ALPHA*/, &bda);
     glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glEnable(GL_BLEND);
-    BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
+    bool r1 = r1Active() && r1ClearedFrame_ == frameNo_ && r1SunTex_;
+    if (r1 && !rtCompositeR1Prog_) {                     // (R1: built on first use; a failure keeps the plain composite)
+        GLuint vs = compileShader(GL_VERTEX_SHADER, kRtVS, "rt.vs");
+        GLuint cf = vs ? compileShader(GL_FRAGMENT_SHADER, kRtCompositeR1FS, "rt_composite_r1.fs") : 0;
+        rtCompositeR1Prog_ = cf ? linkProgram(vs, cf, "rt_composite_r1") : 0;
+        for (GLuint sh : {vs, cf}) if (sh) DeleteShader(sh);
+        if (!rtCompositeR1Prog_) { LOG_WARN("RT R1: the sun-swap composite failed to build: R1 off"); r1Map_ = false; }
+    }
+    r1 = r1 && rtCompositeR1Prog_;
+    const GLuint cp = r1 ? rtCompositeR1Prog_ : rtCompositeProg_;
+    if (r1) BlendFuncSeparate(GL_ONE, 0x88F9 /*GL_SRC1_COLOR*/, GL_ZERO, GL_ONE);   // colour = colour x factor + add
+    else BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
-    UseProgram(rtCompositeProg_);
+    UseProgram(cp);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, rtSoftActive_ ? t.shadowSoft : t.shadowDn);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, t.shadowAo);
+    if (r1) { ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, r1SunTex_); }
     ActiveTexture(GL_TEXTURE0);
-    Uniform1i(cachedUniformLocation(rtCompositeProg_, "uVis"), 0);
-    Uniform1i(cachedUniformLocation(rtCompositeProg_, "uSao"), 1);
-    Uniform3f(cachedUniformLocation(rtCompositeProg_, "uModShadow"), sun ? sun->modShadowColor[0] : 0.0f,
+    Uniform1i(cachedUniformLocation(cp, "uVis"), 0);
+    Uniform1i(cachedUniformLocation(cp, "uSao"), 1);
+    if (r1) Uniform1i(cachedUniformLocation(cp, "uSun"), 2);
+    static const bool r1View = std::getenv("WFC_RT_R1VIEW") != nullptr;
+    if (r1) Uniform1i(cachedUniformLocation(cp, "uR1View"), r1View ? 1 : 0);
+    Uniform3f(cachedUniformLocation(cp, "uModShadow"), sun ? sun->modShadowColor[0] : 0.0f,
               sun ? sun->modShadowColor[1] : 0.0f, sun ? sun->modShadowColor[2] : 0.0f);
-    Uniform1f(cachedUniformLocation(rtCompositeProg_, "uAoStrength"), aoStrength);
+    Uniform1f(cachedUniformLocation(cp, "uAoStrength"), aoStrength);
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -831,11 +882,17 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                                           return std::tan(deg * 3.14159265f / 180.0f); }();
         fr.sunConeTan = coneTan;
         // (R2) contact-hardening penumbrae (WFC_RT_SOFT=0: off): hard rays, the width from the blocker distance and the
-        // sun's half angle - the real sun's 0.27 degrees, or an "area light" (WFC_RT_SUNAREA degrees)
+        // sun's half angle. Faithful: the real sun's 0.27 degrees. Realistic: kRealisticSunArea (the user: stage-1 shadows
+        // "way too hard ... softer and more natural") - the sun's disc plus the forward-scattering haze around it, which is
+        // what makes real penumbrae read soft. WFC_RT_SUNAREA (degrees) overrides both. The widest penumbra: WFC_RT_SOFTMAX
+        // pixels at 1080 lines, scaled with the viewport height (the same world width at 1440p / 4K).
         static const bool soft = [] { const char* e = std::getenv("WFC_RT_SOFT"); return !e || std::atoi(e) != 0; }();
-        static const float areaTan = [] { const char* e = std::getenv("WFC_RT_SUNAREA"); const float deg = e ? (float)std::atof(e) : 0.27f;
-                                          return std::tan(deg * 3.14159265f / 180.0f); }();
-        static const float softMax = [] { const char* e = std::getenv("WFC_RT_SOFTMAX"); return e ? (float)std::atof(e) : 24.0f; }();
+        static const float areaEnv = [] { const char* e = std::getenv("WFC_RT_SUNAREA"); return e ? (float)std::atof(e) : -1.0f; }();
+        constexpr float kRealisticSunArea = 1.5f;
+        const float areaDeg = areaEnv >= 0.0f ? areaEnv : (rtMode_ == 2 ? kRealisticSunArea : 0.27f);
+        const float areaTan = std::tan(areaDeg * 3.14159265f / 180.0f);
+        static const float softMax1080 = [] { const char* e = std::getenv("WFC_RT_SOFTMAX"); return e ? (float)std::atof(e) : 24.0f; }();
+        const float softMax = std::min(softMax1080 * (float)std::max(vpH_, 1) / 1080.0f, 64.0f);
         fr.softShadow = soft; fr.penumbraTan = areaTan; fr.softMaxRadius = softMax;
         if (soft) fr.sunConeTan = 0.0f;
         rtSoftActive_ = soft;
@@ -846,6 +903,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             const core::Vec3 d = core::normalize(sun->dir);
             static const bool worldShadows = std::getenv("WFC_RT_WORLDSHADOWS") != nullptr;   // (Realistic, or forced)
             fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = (worldShadows || rtMode_ == 2) ? 2.0f : 1.0f;
+            if (r1Active() && r1ClearedFrame_ == frameNo_) fr.toSun[3] = 3.0f;   // (R1: the world's own sun visibility too)
             rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
         }
         // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut

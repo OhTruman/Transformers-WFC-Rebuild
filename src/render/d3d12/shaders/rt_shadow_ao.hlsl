@@ -55,7 +55,9 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             // pixels, the per-object light visibility on dynamic objects - so RT darkens only where characters (and not the
             // world) block the sun: character shadows on everything, self-shadowing included. ToSun.w = 2 (WFC_RT_WORLDSHADOWS,
             // the later modern mode): dynamic pixels shadowed by the world too.
-            if (dynamicPx && ToSun.w > 1.5) {
+            // ToSun.w = 3 (R1 sun swap, Realistic with the map's V_bake): world pixels too - the world composite swaps the
+            // lightmaps' baked sun (V_bake) for this visibility, so it must be the full one (world + characters)
+            if ((dynamicPx && ToSun.w > 1.5) || ToSun.w > 2.5) {
                 float t; outv.x = occludedT(o, sd, 10000.0, (uint)Params.z, t) ? 0.0 : 1.0; ++rays;
                 if (outv.x < 0.5) blockT = t;
             }
