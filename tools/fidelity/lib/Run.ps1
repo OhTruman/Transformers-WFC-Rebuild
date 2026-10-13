@@ -8,6 +8,9 @@
 #   display is degraded, no fullscreen of any kind).
 # - WFC_HDTEXTURES=0 (Integration 2026-10-12): the env override wins over the profile at boot and on apply, so neither the HD default
 #   nor a found pack can turn HD on in a timed row. HD-on rows set it explicitly and must pin WFC_HD_ROOT (Assert-WfcHdRoot).
+# (user 2026-10-13) silent by default for EVERY process a harness starts, including those launched without Add-WfcHarnessEnv
+# (unit-test exes, bash launchers started from a harness): WFC_MUTE=1 in this process's environment unless the caller set it
+if (-not $env:WFC_MUTE) { $env:WFC_MUTE = "1" }
 function Add-WfcHarnessEnv([hashtable]$Env) {
     $e = if ($Env) { $Env.Clone() } else { @{} }
     if (-not $e.ContainsKey("WFC_AUTODETECT")) { $e.WFC_AUTODETECT = "0" }
@@ -15,6 +18,12 @@ function Add-WfcHarnessEnv([hashtable]$Env) {
     if (-not $e.ContainsKey("WFC_HDTEXTURES")) { $e.WFC_HDTEXTURES = "0" }
     # integration 45a8b9c0+: a GPU driver reset ends the process with a message box; a harness run must never wait on it
     if (-not $e.ContainsKey("WFC_GPULOST_DIALOG_S")) { $e.WFC_GPULOST_DIALOG_S = "0" }
+    # (Integration 2026-10-13: the watchdog backstop is off by default in the product; harness runs opt in, so a TDR that leaves the
+    #  render thread blocked in SwapBuffers ends the run with exit 3 + wfc_gpu_lost_<pid>.txt instead of hanging the harness)
+    if (-not $e.ContainsKey("WFC_HANG_EXIT_S")) { $e.WFC_HANG_EXIT_S = "60" }
+    # (user 2026-10-13: every game exe a lane launches must be silent - integration WFC_MUTE=1: zero device output, the mix and cue
+    #  logic unchanged, so audio harness rows still measure the same; builds before it ignore the variable)
+    if (-not $e.ContainsKey("WFC_MUTE")) { $e.WFC_MUTE = "1" }
     Assert-WfcHdRoot $e
     return $e
 }
@@ -53,7 +62,8 @@ function Get-WfcRtState([string]$WfcLog) {
     if (-not (Test-Path $WfcLog)) { return $o }
     foreach ($l in [IO.File]::ReadLines((Resolve-Path $WfcLog).Path)) {
         if ($l.Contains('renderer: Ray Tracing ')) { $m = [regex]::Match($l, 'renderer: Ray Tracing (Off|Faithful|Realistic)'); if ($m.Success) { $o.mode = @{ Off = 0; Faithful = 1; Realistic = 2 }[$m.Groups[1].Value]; $o.modeLogged = $true } }
-        elseif ($l -match 'TLAS \d+ instances') { $o.scene = $true }
+        # (the static world's BLAS / prepass lines, not only the masked world's TLAS line: a map without masked subs logs no TLAS line - Systems)
+        elseif ($l -match 'TLAS \d+ instances|RT bridge: static set \(mask|RT world: \d+ prepassed subs') { $o.scene = $true }
         elseif ($l.Contains('built without the RT shaders') -or $l.Contains('this build has no RT shaders')) { $o.noShaders = $true }
         elseif ($l.Contains('reflection hit data')) { $o | Add-Member -NotePropertyName refl -NotePropertyValue $true -Force }
     }

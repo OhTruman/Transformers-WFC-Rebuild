@@ -11,7 +11,7 @@ PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"; SP="C:/Users/coxes/Ap
 freegb() { powershell -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory/1MB)"; }
 mine() { powershell -NoProfile -Command "Get-CimInstance Win32_Process | ? { \$_.ExecutablePath -like '*Rebuild-Experimental\work\ab\m9c_*' } | % { \$_.ProcessId }"; }
 gate() {
-  ls "F:/Transformers Rebuild/"*/work/PERF_HOLD 2>/dev/null && { echo "PERF_HOLD: stopping"; exit 3; }
+  for h in "F:/Transformers Rebuild/"*/work/PERF_HOLD; do [ -e "$h" ] || continue; case "$h" in *Rebuild-Experimental*) [ -n "$WFC_GATE_IGNORE_HOLD" ] && continue;; esac; echo "PERF_HOLD $h: stopping"; exit 3; done
   local f=$(freegb | tr -d '\r'); [ "$f" -lt 8 ] && { echo "free commit ${f} GB < 8: stopping"; exit 4; }
   echo "free commit ${f} GB"
 }
@@ -20,7 +20,7 @@ run() {   # run <sha> <map> <tag>
   [ -f $d/wfc.log ] && [ $(ls $d/shots 2>/dev/null | wc -l) -ge 25 ] && { echo "$d done"; return; }
   gate; rm -rf $d; mkdir -p $d/shots
   cp work/sweep/ident_profile.ini $d/wfc_profile.ini
-  ( cd $d && env WFC_BOOT=frontend WFC_BOTAI=Classic WFC_HDTEXTURES=0 WFC_GPULOST_DIALOG_S=0 WFC_HANG_EXIT_S=60 WFC_SKIPINTRO=1 WFC_NOMOUSE=1 \
+  ( cd $d && env WFC_BOOT=frontend WFC_BOTAI=Classic WFC_HDTEXTURES=0 WFC_GPULOST_DIALOG_S=0 WFC_HANG_EXIT_S=60 WFC_MUTE=1 WFC_SKIPINTRO=1 WFC_NOMOUSE=1 \
       WFC_FLOWSEED=1 WFC_SEED=7 WFC_AUTODETECT=0 WFC_LOGEVERY=0 WFC_LOGTIME=1 WFC_LOCKSTEP=1 WFC_LOCKSTEP_EXACT=1 WFC_SIMHASH=0 \
       WFC_RENDERSIZE=3840x2160 WFC_PLAYERBOT=1 WFC_SHOTMATCH="$(cygpath -w "$PWD")\\shots,60,1500,60" \
       WFC_LOBBY_OPTIONS="ExtendedPlayers=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=300" \
