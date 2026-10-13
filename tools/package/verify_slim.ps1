@@ -197,6 +197,19 @@ if (Test-Path -LiteralPath $manPath) {
     Write-Host "package bin: $($pk.Note)"
 }
 
+# ---- render data: every map folder with materials_glsl.json also ships materials_pbr.json (the M6 Modern mode, HD Enhanced;
+# Rendering's matc_pbr.py output). Missing: a package problem (the loader keeps HD Faithful working without it).
+$renderDir = Join-Path $pkg 'Rebuild\work\render'
+$pbrMaps = 0
+if (Test-Path -LiteralPath $renderDir) {
+    foreach ($d in Get-ChildItem -LiteralPath $renderDir -Directory) {
+        if (-not (Test-Path -LiteralPath (Join-Path $d.FullName 'materials_glsl.json'))) { continue }
+        if (Test-Path -LiteralPath (Join-Path $d.FullName 'materials_pbr.json')) { $pbrMaps++ }
+        else { $pk.Problems += "render data: $($d.Name)\materials_pbr.json missing (the M6 Modern mode; tools/render/matc_pbr.py)" }
+    }
+    Write-Host "render data: materials_pbr.json in $pbrMaps map folder(s)"
+}
+
 function WaitHold {
     if (-not $HoldFile) { return }
     $said = $false

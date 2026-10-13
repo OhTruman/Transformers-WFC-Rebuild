@@ -43,6 +43,8 @@ M5_FROM_BIN = [('amd_fidelityfx_loader_dx12.dll', 'amd_fidelityfx_loader_dx12.dl
                ('D3D12/D3D12Core.dll', 'D3D12/D3D12Core.dll'),
                ('license.md', 'licenses/amd_fidelityfx/license.md')]
 AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
+# render-data files shipped beside every map's materials_glsl.json, newer than slim_files.tsv
+RENDER_EXTRA = ['materials_pbr.json']
 
 
 def arg(name, default=None):
@@ -87,7 +89,24 @@ def main():
                 tsv_bin.append(r['dest'][len(BIN_DEST) + 1:])
             else:
                 rows.append(r)
-    bin_rows, problems = [], []
+    # render-data files newer than AssetTools' slim_files.tsv, shipped beside each map's materials_glsl.json:
+    # materials_pbr.json (Rendering's M6 Modern mode, tools/render/matc_pbr.py; the HD row's Enhanced level)
+    have_dest = {r['dest'] for r in rows}
+    problems = []
+    for r in list(rows):
+        if not r['dest'].endswith('/materials_glsl.json'):
+            continue
+        for extra in RENDER_EXTRA:
+            dst = r['dest'][:-len('materials_glsl.json')] + extra
+            src = r['source'][:-len('materials_glsl.json')] + extra
+            if dst in have_dest:
+                continue
+            if os.path.isfile(os.path.join(ROOT, src)):
+                rows.append(dict(dest=dst, source=src, bytes=str(os.path.getsize(os.path.join(ROOT, src))), action='keep', reason='render extra'))
+                have_dest.add(dst)
+            else:
+                problems.append('render data: %s missing beside %s (Rendering: tools/render/matc_pbr.py)' % (src, r['source']))
+    bin_rows = []
     for rel in tsv_bin:
         src = os.path.join(bin_dir, rel)
         if not os.path.isfile(src):
@@ -211,10 +230,10 @@ def main():
         version = arg('--version', '09c %s, Release + PGO' % head)
         t = t.replace('09c 37eec59, Release + PGO', version).replace('09c b898c75 slim', '09c %s slim' % head)
         if n == 'README.txt' and hd_src:                 # (user 2026-10-12: everything new is opt-in; the original look is the default)
-            t = t.rstrip('\r\n') + ('\n\nGraphics: the game starts with its original look. The optional HD pack (new textures and, where the pack\n'
-                                    'has them, modern material maps) is included but OFF by default: Settings > Graphics > HD Textures: Faithful or Enhanced\n'
-                                    '(applies on the next map load). Ray-traced shadows / lighting, where the build has them, are also OFF\n'
-                                    'by default and only run when switched on in the same menu.\n')
+            t = t.rstrip('\r\n') + ('\n\nGraphics: the game starts with its original look. The optional HD pack is included but OFF by default:\n'
+                                    'Settings > Graphics > HD Textures: Faithful (the new textures, the original materials) or Enhanced (the new\n'
+                                    'textures plus modern, physically based materials); applies on the next map load. Ray-traced shadows /\n'
+                                    'lighting, where the build has them, are also OFF by default and only run when switched on in the same menu.\n')
         if n == 'README.txt' and m5:
             t = t.rstrip('\r\n') + ('\n\nOptional graphics runtime (Graphics menu: FSR 3.1 upscaling, frame generation; off by default): AMD FidelityFX\n'
                                     'DLLs and Microsoft D3D12 Agility SDK runtime (D3D12\\D3D12Core.dll) beside the game; their licences are in\n'
