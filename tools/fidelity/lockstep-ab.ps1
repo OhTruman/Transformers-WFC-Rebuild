@@ -48,7 +48,8 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
         $d = Join-Path $OutDir ("{0}-r{1}" -f $label, $rep); $lg = Join-Path $d "wfc.log"
         if (-not $ReportOnly -and -not (Test-Path $lg)) {
             New-Item -ItemType Directory -Force $d | Out-Null
-            (Get-BotProfile 0 0 1 -Width 1920 -Height 1080) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+            $rtArm = [int]$(if ((ArmEnv $extra).WFC_RT_MODE) { (ArmEnv $extra).WFC_RT_MODE } else { 0 })   # (the profile row wins over WFC_RT_MODE at boot)
+            (Get-BotProfile 0 0 1 -Width 1920 -Height 1080 -RayTracing $rtArm) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
             if (-not (Wait-WfcGpu)) { Res "$label.r$rep.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
             $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$Seed"; WFC_SMOKE_FRAMES = "$($Steps + 600)"; WFC_LOGEVERY = "0"
                     WFC_NOMOUSE = "1"; WFC_SLOWFRAME = "0.01"; WFC_SIMHASH = "0" }   # every frame: 'interval' = wall frame time (PERF frame= is the lockstep dt)
@@ -59,6 +60,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             $null = Invoke-WfcExe $exe $d $e "run.log" (1800)
         }
         if (-not (Test-Path $lg)) { Res "$label.r$rep" "UNKNOWN" "no log" "Experimental"; continue }
+        $rs = Get-WfcRtState $lg; $rtReq = [int]$(if ((ArmEnv $extra).WFC_RT_MODE) { (ArmEnv $extra).WFC_RT_MODE } else { 0 })
         $hs = Get-WfcHdState $lg; $hdReq = [bool]((Add-WfcHarnessEnv (ArmEnv $extra)).WFC_HDTEXTURES -match '^\s*[1-9]')
         # walk the log: SIMHASH <step> <hash> marks the current sim step; PERF / SLOWFRAME lines belong to it
         $step = -1; $hash = @{}; $ft = New-Object System.Collections.Generic.List[double]; $sf = New-Object System.Collections.Generic.List[object]; $occT = 0; $occS = 0
@@ -78,7 +80,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             gpu_transl = [Math]::Round((Mean (& $col 12)), 2); gpu_post = [Math]::Round((Mean (& $col 13)), 2); cpu_render = [Math]::Round((Mean (& $col 1)), 2)
             cpu_chars = [Math]::Round((Mean (& $colA 3)), 2); outside = [Math]::Round((Mean (& $col 7)), 2)
             draws = [Math]::Round((Mean (& $colA 14)), 0); draws_dyn = [Math]::Round((Mean (& $colA 15)), 0); draws_fx = [Math]::Round((Mean (& $colA 16)), 0); binds = [Math]::Round((Mean (& $colA 17)), 0)
-            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root
+            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root; rt_req = $rtReq; rt_mode = $rs.mode; rt_scene = $rs.scene; rt_noshaders = $rs.noShaders
             hashes = ($rng | ForEach-Object { $hash[$_] }) -join ',' })
     }
 }
@@ -118,6 +120,11 @@ foreach ($r in $rows) {
     elseif ($r.hd_on -and $hdRef -and ($r.hd_pack -ne $hdRef.hd_pack -or $r.hd_root -ne $hdRef.hd_root)) {
         $hdOk = $false; $occNote += " HD pack differs from '{0}': {1} textures ({2}) vs {3} ({4})" -f $hdRef.arm, $r.hd_pack, $r.hd_root, $hdRef.hd_pack, $hdRef.hd_root }
     elseif ($r.hd_on) { $occNote += " HD on: {0} textures ({1})" -f $r.hd_pack, $r.hd_root }
+    # Ray Tracing (5d1aecd0+): the arm's mode must be the one it asked for (WFC_RT_MODE, written into its profile, which wins at
+    # boot), an RT-on arm must have built its RT scene with the RT shaders - else the arms drew different things: UNKNOWN.
+    if ($r.rt_mode -ne $r.rt_req) { $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
+    elseif ($r.rt_req -gt 0 -and ($r.rt_noshaders -or -not $r.rt_scene)) { $hdOk = $false; $occNote += " Ray Tracing requested but no RT scene{0}" -f $(if ($r.rt_noshaders) { " (build without the RT shaders)" } else { "" }) }
+    elseif ($r.rt_req -gt 0) { $occNote += " Ray Tracing mode {0}, scene built" -f $r.rt_req }
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
     $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity -or -not $hdOk) { "UNKNOWN" } else { "PASS" }
     if ($contam) { Res "$($r.arm).r$($r.rep).contaminated" "UNKNOWN" ("foreign process during the row - rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }

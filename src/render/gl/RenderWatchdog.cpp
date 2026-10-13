@@ -30,6 +30,10 @@ std::atomic<bool> gRun{false};
 // present outside the renderer's frames and are not a stall (09a false dump at every boot)
 std::atomic<bool> gArmed{false};
 std::thread gThread;
+// joined at static destruction too (defined after gThread, so destroyed before it): a harness path that returns from
+// init without destroying the renderer (WFC_PARTICIPANTTEST on 2026-10-13: "libc++abi: terminating", 0xC0000409) left
+// gThread joinable and std::thread's destructor called terminate at exit; ~GLRenderer still calls stop() first normally
+struct StopAtExit { ~StopAtExit() { stop(); } } gStopAtExit;
 
 long long nowMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
