@@ -68,11 +68,12 @@ static void testProfileBotMigration() {
     frontend::LocalProfile r;
     r.loadFrom(back);
     {   // Ray tracing: 0 Off (default) / 1 Faithful / 2 Realistic; HD textures: the user's pick is kept
-        std::istringstream in("[PCSettings]\nRayTracing=2\nHDTexturesUserSet=1\n"), big("[PCSettings]\nRayTracing=9\n");
+        std::istringstream in("[PCSettings]\nRayTracing=2\nHDTexturesUserSet=1\nHDPackHintShown=1\n"), big("[PCSettings]\nRayTracing=9\n");
         frontend::LocalProfile a, b, d;
         a.loadFrom(in); b.loadFrom(big);
         check(a.display.rayTracing == 2 && b.display.rayTracing == 2 && d.display.rayTracing == 0 && a.display.hdTexturesUserSet &&
-              !d.display.hdTexturesUserSet, "profile.ray_tracing_0_2_hd_user_set");
+              a.display.hdPackHintShown && !d.display.hdTexturesUserSet && !d.display.hdPackHintShown && !d.display.hdTextures,
+              "profile.ray_tracing_0_2_hd_user_set");
     }
     {   // Frame generation: 0 / 1 (any non-zero is On); default Off
         std::istringstream on("[PCSettings]\nFrameGeneration=7\n");
@@ -106,15 +107,16 @@ static void testGraphicsAutoDetect() {
     big.nativeW = 3840; big.nativeH = 2160; big.nativeHz = 144; big.hdTexturePack = true;
     frontend::GraphicsPreset a = t.pick(big);
     check(a.tier == "ultra" && a.width == 3840 && a.height == 2160 && a.fullscreen && a.frameLimit == 144 && a.anisotropy == 16 &&
-          a.upscaling == 0 && a.hdTextures && a.textureQuality == 2, "autodetect.strong_pc_native_4k", a.tier + " " + a.why);
+          a.upscaling == 0 && a.textureQuality == 2, "autodetect.strong_pc_native_4k", a.tier + " " + a.why);
     big.hdTexturePack = false;
-    check(!t.pick(big).hdTextures, "autodetect.hd_textures_only_with_pack");
-    {   // HD textures on every tier with the pack, from 6 GB (user decision 2026-10-12)
+    {   // HD textures: never set by auto-detect; the one-time message only with the pack and >= 6 GB (user decision 2026-10-12)
         frontend::HardwareFacts six = big;
-        six.hdTexturePack = true; six.vramMB = 6144; six.cpuCores = 2; six.nativeW = 1920; six.nativeH = 1080;
-        const frontend::GraphicsPreset lo = t.pick(six);
+        six.hdTexturePack = true; six.vramMB = 6144;
+        const bool yes = frontend::hdTexturesSuggested(six);
         six.vramMB = 5900;
-        check(lo.tier == "low" && lo.hdTextures && !t.pick(six).hdTextures, "autodetect.hd_textures_every_tier_6gb", lo.tier);
+        const bool lowVram = frontend::hdTexturesSuggested(six);
+        six.vramMB = 16384; six.hdTexturePack = false;
+        check(yes && !lowVram && !frontend::hdTexturesSuggested(six), "autodetect.hd_pack_hint_pack_and_6gb");
     }
     frontend::HardwareFacts mid = big;
     mid.gpuName = "NVIDIA GeForce RTX 3060 Ti"; mid.vramMB = 8192; mid.cpuCores = 8;
@@ -123,7 +125,7 @@ static void testGraphicsAutoDetect() {
     frontend::HardwareFacts low = big;
     low.gpuName = "NVIDIA GeForce GTX 1050 Ti"; low.vramMB = 4096; low.cpuCores = 4; low.nativeW = 1920; low.nativeH = 1080; low.nativeHz = 60;
     frontend::GraphicsPreset c = t.pick(low);
-    check(c.tier == "medium" && c.width == 1920 && c.upscaling == 0 && c.anisotropy == 8 && !c.hdTextures && c.frameLimit == 60,
+    check(c.tier == "medium" && c.width == 1920 && c.upscaling == 0 && c.anisotropy == 8 && c.frameLimit == 60,
           "autodetect.4gb_1080p_native", c.tier + " " + c.why);
     frontend::HardwareFacts igp = big;
     igp.gpuName = "Intel(R) UHD Graphics 770"; igp.gpuVendorId = 0x8086; igp.vramMB = 128; igp.cpuCores = 12; igp.nativeW = 2560; igp.nativeH = 1440;

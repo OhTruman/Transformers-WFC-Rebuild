@@ -100,6 +100,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "FrameGeneration") display.frameGeneration = std::atoi(v.c_str()) != 0 ? 1 : 0;
             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
             else if (k == "HDTexturesUserSet") display.hdTexturesUserSet = v == "1";
+            else if (k == "HDPackHintShown") display.hdPackHintShown = v == "1";
             else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 3);   // 3 = Expert (PC EXTENSION)
@@ -150,7 +151,7 @@ void LocalProfile::save() const {
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
       << "\nFrameLimit=" << display.frameLimit << "\nUpscaling=" << display.upscaling << "\nHDTextures=" << (display.hdTextures ? 1 : 0)
-      << "\nHDTexturesUserSet=" << (display.hdTexturesUserSet ? 1 : 0)
+      << "\nHDTexturesUserSet=" << (display.hdTexturesUserSet ? 1 : 0) << "\nHDPackHintShown=" << (display.hdPackHintShown ? 1 : 0)
       << "\nAnisotropy=" << display.anisotropy
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon

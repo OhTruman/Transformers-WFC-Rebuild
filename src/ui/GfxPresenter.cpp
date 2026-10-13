@@ -1035,7 +1035,7 @@ namespace {
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
-                       bool frameGenAvailable, bool frameGenActive, bool hdTurnedOn, bool rtAvailable) {
+                       bool frameGenAvailable, bool frameGenActive, bool rtAvailable) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1098,9 +1098,8 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
                         : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
     row(hd, "<PCSettings:HDTextures>",
-        !hdAvailable ? "The HD texture pack is not installed."
-        : hdTurnedOn ? "The HD texture pack was found and turned on."
-                     : "HD textures use more video memory. Applies on next map.", "HD Textures");
+        hdAvailable ? "HD textures use more video memory. Applies on next map."
+                    : "The HD texture pack is not installed.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
     if (frameGenAvailable) {   // decided at start-up: a value different from this session's state says so
         std::vector<gfx::avm1::Value> fg;
@@ -1379,8 +1378,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
                 addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
                                  rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
-                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.hdTexturesTurnedOnAtBoot(),
-                                 rt_.rayTracingAvailable());
+                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable());
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

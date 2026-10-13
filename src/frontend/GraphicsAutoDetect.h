@@ -22,18 +22,17 @@ struct HardwareFacts {
     std::string gpuId() const;                    // stored with the settings to re-detect when the GPU changes
 };
 
-// HD textures default (user decision 2026-10-12, "the brand new textures should be the default"): On when the HD pack is
-// installed and the GPU has at least ~6 GB of video memory (the pack adds up to ~2 GB per map; 6 GB cards report
-// 6000-6144 MB). Used by auto-detect on every tier and, until the user picks a value, at every boot.
+// HD textures are Off by default and never set by auto-detect (user decision 2026-10-12, reversed the same day: "HD
+// texture's should be off my default too"). Where the pack is installed and the GPU has at least ~6 GB of video memory
+// (the pack adds up to ~2 GB per map; 6 GB cards report 6000-6144 MB), a one-time message points to the row.
 constexpr int kHdTexturesMinVramMB = 6000;
-inline bool hdTexturesDefault(const HardwareFacts& f) { return f.hdTexturePack && f.vramMB >= kHdTexturesMinVramMB; }
+inline bool hdTexturesSuggested(const HardwareFacts& f) { return f.hdTexturePack && f.vramMB >= kHdTexturesMinVramMB; }
 
 struct GraphicsPreset {
     std::string tier, why;
     int width = 1280, height = 720;
     bool fullscreen = false, vsync = false;
-    int frameLimit = 0, anisotropy = 4, upscaling = 0, textureQuality = 2;
-    bool hdTextures = false;
+    int frameLimit = 0, anisotropy = 4, upscaling = 0, textureQuality = 2;   // HD textures: never (user choice)
 };
 
 class GraphicsPresetTable {

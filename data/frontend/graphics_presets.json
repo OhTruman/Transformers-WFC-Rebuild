@@ -13,8 +13,7 @@
     "  maxHeight                 0 = native resolution; else the largest monitor-aspect resolution with height <= this",
     "  anisotropy 4/8/16, textureQuality 0-2, fullscreen, vsync",
     "  frameLimit                'refresh' = the monitor's refresh rate, or a number (0 = uncapped)",
-    "HD Textures: on for every tier when the HD pack is installed and the GPU has >= 6000 MB (frontend::hdTexturesDefault).",
-    "Ray Tracing and Frame Generation are never turned on by auto-detect (user choice)."
+    "HD Textures, Ray Tracing and Frame Generation are never turned on by auto-detect (user choice; all default Off)."
   ],
   "integratedKeywords": ["Intel(R) UHD", "Intel(R) HD", "Intel(R) Iris", "Iris(R) Xe", "Radeon(TM) Graphics", "Radeon Vega", "Vega 8", "Vega 6"],
   "tiers": [

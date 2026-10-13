@@ -38,10 +38,9 @@ public:
     // PC EXTENSION graphics options (not in the original; default off = the original look), [PCSettings]:
     //   upscaling: 0 Off, 1 / 2 / 3 FSR 1 Quality / Balanced / Performance, 4 / 5 / 6 FSR 3.1 Quality / Balanced /
     //   Performance (Rendering's IRenderer::setUpscaling; FSR 3.1 only where its runtime ships, never auto-detected);
-    //   hdTextures: the HD texture set - default On where the pack is installed and the GPU has >= 6 GB (user decision
-    //   2026-10-12; frontend::hdTexturesDefault); hdTexturesUserSet: the user picked a value in the menu (else the
-    //   setting follows the default at every boot, so installing the pack later turns it on); anisotropy: 4 (the
-    //   original's, default), 8 or 16;
+    //   hdTextures: the HD texture set (with the modern materials when they land: one switch) - default Off, never
+    //   set by auto-detect (user decision 2026-10-12); hdTexturesUserSet: the user changed the row; hdPackHintShown:
+    //   the one-time "HD texture pack found" message was shown; anisotropy: 4 (the original's, default), 8 or 16;
     //   frameGeneration: 0 Off (default) / 1 On - FSR frame generation (Rendering), decided at start-up (applies at the
     //   next launch), offered only where its runtime ships, never set by auto-detect; rayTracing: 0 Off (default) / 1 Faithful
     //   / 2 Realistic - ray-traced shadows and lighting (Rendering), offered only where the renderer reports it, never
@@ -51,7 +50,7 @@ public:
     struct Display {
         int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
         int upscaling = 0; bool hdTextures = false; int anisotropy = 4; int frameGeneration = 0; int rayTracing = 0;
-        bool hdTexturesUserSet = false;
+        bool hdTexturesUserSet = false, hdPackHintShown = false;
         static constexpr int kRayTracingMax = 2;   // Realistic
         static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance
         static int clampAnisotropy(int v) { return v >= 16 ? 16 : v >= 8 ? 8 : 4; }
