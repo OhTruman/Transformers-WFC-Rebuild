@@ -469,5 +469,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   user's five maps, ~2 GPU h) -> reflections -> S1; Experimental FAST check of package 2 + the self-test sweep (slot B);
   Gameplay FXOWNER rerun + NAVQ pathing baseline after; Systems extended light fit (point / spot scales, falloff, sky +
   bounce residual, Molten first; bake-lights audit merged e5c5d55d: 0 missing lights, Beast settings not cooked).
+  17:50 E ESTIMATE CORRECTED (AssetTools): generation runs at HD size (16x the pixels): milestone 1 ~11 GPU h, every world
+  surface ~110 GPU h (weeks). Decision: generate E detail at 2x the original and let D's upscale carry it (4x less GPU:
+  milestone 1 ~3-4 h, everything ~28 h) after a 3-unit Rust A/B in the first DML window; user maps first; overnight DML
+  windows; fewer denoise steps in reserve. USER LOCK: E = 'a full overhaul ... past the artist representation ... the most
+  realistic textures possible ... add more detail wherever needed' = THE texture deliverable (D stays Faithful); strength
+  G2 vs G3 chosen by the user from a crop sheet (Original | D | E-2x-G2 | E-2x-G3 | E-4x-G3); scope every world surface,
+  then characters + weapons.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
