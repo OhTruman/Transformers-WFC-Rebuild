@@ -1,6 +1,7 @@
 // Clean-room reconstruction — logging.
 #pragma once
 #include <cstdio>
+#include <string>
 
 namespace core {
 
@@ -18,6 +19,13 @@ const char* logLastLine();
 // Dev tools that react to log lines (WFC_CPUPROF's hitch capture on "SLOWFRAME" lines): set once at startup, called with each
 // line (first ~150 chars) on the logging thread; null = nothing.
 void setLogLineHook(void (*hook)(const char* line));
+// Where the per-run user files go (wfc.log, wfc_profile.ini, wfc_characters.ini, crash / hang reports): the working
+// directory when it is writable - harnesses start one exe from per-run folders and collect them there - else the exe's
+// folder (a launch whose start folder is not writable, e.g. C:\Windows\System32, used to lose the log and the settings
+// silently). Decided once, at the first call (the log's open); userDirPrefix() is "" (the working directory) or
+// "<exe dir>/", never allocates after that first call (crash filters use it).
+const char* userDirPrefix();
+inline std::string userFilePath(const char* name) { return std::string(userDirPrefix()) + name; }
 
 } // namespace core
 

@@ -407,7 +407,7 @@ Application::~Application() = default;
 void Application::applyStartupGraphics() {
     frontend::LocalProfile p;   // just the stored values (no save, no migration): the full load runs later, in GameFlow
     {
-        std::ifstream f(frontend::LocalProfile::kFile);
+        std::ifstream f(core::userFilePath(frontend::LocalProfile::kFile));
         if (f) p.loadFrom(f);
     }
     const bool fg = p.display.frameGeneration != 0;

@@ -247,12 +247,13 @@ bool FrontendRuntime::init() {
     roster_.loadAuthored(frontendDataFile("character_presets.json"));
     // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->
     // ResetCharacterFromName) and written at once (MarkAsDirty -> the profile save); later runs load them.
-    if (!std::filesystem::exists(kCharactersFile)) {
+    const std::string charactersFile = core::userFilePath(kCharactersFile);
+    if (!std::filesystem::exists(charactersFile)) {
         roster_.randomizeAllColors();
-        roster_.save(kCharactersFile);
-        FlowTrace::emit("customize.freshProfile", {{"file", kCharactersFile}, {"colors", "random palettes"}});
+        roster_.save(charactersFile);
+        FlowTrace::emit("customize.freshProfile", {{"file", charactersFile}, {"colors", "random palettes"}});
     }
-    roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
+    roster_.loadSaved(charactersFile);   // the player's edits (Create a Character)
     {   // PC ADAPTATION chassis XP unlocks (user decision): chassis id -> level of the chassis' own specialty
         assets::Json j;
         std::ifstream f(openPath(frontendDataFile("chassis_xp_unlocks.json")));
@@ -597,8 +598,8 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
         return {};
     }
     if (fn == "Customize.WriteCustomizationFile") {
-        bool ok = roster_.save(kCharactersFile);
-        FlowTrace::emit("customize.write", {{"file", kCharactersFile}, {"ok", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (file)"}});
+        bool ok = roster_.save(core::userFilePath(kCharactersFile));
+        FlowTrace::emit("customize.write", {{"file", core::userFilePath(kCharactersFile)}, {"ok", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (file)"}});
         return {};
     }
     if (fn == "Customize.ResetCharacter") {

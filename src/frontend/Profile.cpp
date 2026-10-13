@@ -67,7 +67,7 @@ void LocalProfile::set(const std::string& field, const std::string& value) {
 }
 
 void LocalProfile::load() {
-    std::ifstream f(kFile);
+    std::ifstream f(core::userFilePath(kFile));
     if (loadFrom(f)) save();
 }
 
@@ -140,7 +140,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
 }
 
 void LocalProfile::save() const {
-    std::ofstream f(kFile);
+    std::ofstream f(core::userFilePath(kFile));
     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
          "; display settings under [PCSettings].\n";
     f << "\n[ProfileData]\n";

@@ -24,10 +24,36 @@ namespace core {
 // write-and-flush-per-line behaviour.
 namespace {
 
+std::string exeDirSlash() {
+#ifdef _WIN32
+    char buf[MAX_PATH] = {};
+    const DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+    std::string s(buf, n);
+    const size_t k = s.find_last_of("\\/");
+    return k == std::string::npos ? std::string() : s.substr(0, k + 1);
+#else
+    return std::string();
+#endif
+}
+
 std::FILE* logFile() {
-    // Mirror all logs to a file next to the executable so output is capturable even when
-    // launched as a windowed process with no attached console.
-    static std::FILE* f = std::fopen("wfc.log", "w");
+    // Mirror all logs to wfc.log (userDirPrefix(): the working directory, or the exe's folder when that is not writable) so
+    // output is capturable even when launched as a windowed process with no attached console. The first line names the
+    // file's full path (a playtest log that is hard to find costs the session).
+    static std::FILE* f = [] {
+        const std::string path = userFilePath("wfc.log");
+        std::FILE* h = std::fopen(path.c_str(), "w");
+        if (h) {
+#ifdef _WIN32
+            char full[MAX_PATH] = {};
+            if (!_fullpath(full, path.c_str(), MAX_PATH)) std::snprintf(full, sizeof full, "%s", path.c_str());
+#else
+            const char* full = path.c_str();
+#endif
+            std::fprintf(h, "[info ] log file: %s%s\n", full, *userDirPrefix() ? " (the working directory is not writable: the exe's folder)" : "");
+        }
+        return h;
+    }();
     return f;
 }
 
@@ -169,6 +195,14 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         w.pending.append(text, len);
     }
     if (level == LogLevel::Error) w.drain();               // an error is on disk before the caller goes on
+}
+
+const char* userDirPrefix() {
+    static const std::string dir = [] {
+        if (std::FILE* t = std::fopen("wfc.log", "a")) { std::fclose(t); return std::string(); }   // (the log opens it "w" next)
+        return exeDirSlash();
+    }();
+    return dir.c_str();
 }
 
 } // namespace core

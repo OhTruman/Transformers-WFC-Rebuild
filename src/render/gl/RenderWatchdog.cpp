@@ -126,8 +126,8 @@ std::atomic<bool> gCrashed{false};
 LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
     if (gCrashed.exchange(true)) return EXCEPTION_CONTINUE_SEARCH;   // one report (a fault inside the report)
     const DWORD pid = GetCurrentProcessId();
-    char path[96];
-    std::snprintf(path, sizeof path, "wfc_crash_%lu.txt", (unsigned long)pid);
+    char path[MAX_PATH + 32];
+    std::snprintf(path, sizeof path, "%swfc_crash_%lu.txt", core::userDirPrefix(), (unsigned long)pid);
     HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f != INVALID_HANDLE_VALUE) {
         const uintptr_t base = (uintptr_t)GetModuleHandleW(nullptr);
@@ -188,8 +188,8 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
         if (map) VirtualFree((void*)map, 0, MEM_RELEASE);
         CloseHandle(f);
     }
-    char dpath[96];
-    std::snprintf(dpath, sizeof dpath, "wfc_crash_%lu.dmp", (unsigned long)pid);
+    char dpath[MAX_PATH + 32];
+    std::snprintf(dpath, sizeof dpath, "%swfc_crash_%lu.dmp", core::userDirPrefix(), (unsigned long)pid);
     const bool dumped = writeDump(dpath, ep);
     char msg[256];
     const int n = std::snprintf(msg, sizeof msg, "wfc_rebuild crashed: report %s, minidump %s%s\n", path, dpath, dumped ? "" : " (failed)");
@@ -321,8 +321,8 @@ void loop() {
                   gPhase.load(), gFrame.load());
 #ifdef _WIN32
         if (dumps < 2) {
-            char path[96];
-            std::snprintf(path, sizeof path, "wfc_hang_%lu_%d.dmp", (unsigned long)GetCurrentProcessId(), dumps++);
+            char path[MAX_PATH + 32];
+            std::snprintf(path, sizeof path, "%swfc_hang_%lu_%d.dmp", core::userDirPrefix(), (unsigned long)GetCurrentProcessId(), dumps++);
             LOG_ERROR("watchdog: minidump %s: %s", path, writeDump(path) ? "written (all thread stacks)" : "failed");
         }
 #endif
@@ -355,8 +355,8 @@ void gpuLost(const char* why) {
     LOG_ERROR("GPU driver reset / hang: exiting (%s)", why);
 #ifdef _WIN32
     const DWORD pid = GetCurrentProcessId();
-    char path[96];
-    std::snprintf(path, sizeof path, "wfc_gpu_lost_%lu.txt", (unsigned long)pid);
+    char path[MAX_PATH + 32];
+    std::snprintf(path, sizeof path, "%swfc_gpu_lost_%lu.txt", core::userDirPrefix(), (unsigned long)pid);
     if (HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); f != INVALID_HANDLE_VALUE) {
         put(f, "wfc_rebuild stopped: the graphics driver was reset or stopped responding.\n%s\nrender phase '%s', frame %d; "
                "hang minidump (if written): wfc_hang_%lu_0.dmp\n", why, gPhase.load(), gFrame.load(), (unsigned long)pid);
