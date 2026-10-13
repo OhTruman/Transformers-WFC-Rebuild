@@ -441,5 +441,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   at a days-scale scope + Enhanced live with Modern materials) and (b) full ray tracing: GI replacing the bake in
   Realistic, visible reflections, sky / ambient character shadows, shadow refinement, the RT-pass fix. Plans + ETAs
   requested from Rendering and AssetTools; interim packages keep shipping the playtest-1 fixes.
+  User clarification: GI = the ray-traced lighting for the ENTIRE map (replacing the bake). Rendering's FULL-RT PLAN
+  approved (work/fsr3/RT_FULL_PLAN.md): 1 RT-pass-without-characters fix 1 h -> 3 visible reflections (Fresnel layer +
+  roughness gate) 5-7 h -> 2 GI: DDGI-style irradiance probes, baked sun direct + bounce replaced by RT sun + probe GI,
+  characters lit by probes, 20-28 h (fallback today's Realistic) -> 4 character sky / ambient shadows 3-4 h -> 5 shadow
+  refinement 4-6 h -> 6 Modern calibration + level-2 E root 6-8 h -> 7 Molten + globe checks 2 h. Total 4-6 days of
+  Rendering GPU time. 4c replacing the ~270 baked local lights per map (+2-3 days) = user scope question (default after
+  the playtest; the probes already bounce their light). Budget: Realistic <= 4 ms RT at 2560x1440 (~120-165 fps, cannot
+  meet the 300 cap), Faithful = the high-fps RT mode, Realistic VRAM delta <= 1 GB.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
