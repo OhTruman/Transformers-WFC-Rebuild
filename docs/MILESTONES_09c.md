@@ -500,5 +500,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   doubles Gorge reversals); exposure / flank mixed; no single squad sub-feature explains it (squadSize also gates
   respawn-near-squad). Next: squads off / spawn-near off / per-member slots 5 m around the shared destination / Classic
   at 6 seeds; the fix keeps squads and removes the crowding mechanism.
+  19:00 RT STEP 1 MERGED fd3bd799 (rt2 a93a3e11): the RT pass runs every frame (world-only pass at flushTranslucency when
+  no character is queued); no-character RT verified on Rust (sun swap ON, 32 % vs Off every frame) + Molten; Off identity
+  with the REAL build (Rendering caught a stale-mtime baseline-vs-baseline pair and reran): Rust 5/5 shots, SIMHASH
+  identical. First DML WINDOW opened 18:55 (~2 h): D GPU rows, the E A/B sheet for the user, E milestone 1 start;
+  Experimental's sweep parked at test 55 (WFC_TILETEST); Rendering on code (reflection layer, S1 tracer).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
