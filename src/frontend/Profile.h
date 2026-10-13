@@ -38,7 +38,7 @@ public:
     // PC EXTENSION graphics options (not in the original; default off = the original look), [PCSettings]:
     //   upscaling: 0 Off, 1 / 2 / 3 FSR 1 Quality / Balanced / Performance, 4 / 5 / 6 FSR 3.1 Quality / Balanced /
     //   Performance (Rendering's IRenderer::setUpscaling; FSR 3.1 only where its runtime ships, never auto-detected);
-    //   hdTextures: 0 Off / 1 Faithful (the HD set of the original look) / 2 Enhanced (beyond faithful, with the modern
+    //   hdTextures: 0 Off / 1 Faithful (the HD set, original shading) / 2 Enhanced (beyond faithful + Rendering M6 Modern
     //   material maps: one switch) - each level offered where its pack root is installed; default Off, never
     //   set by auto-detect (user decision 2026-10-12); hdTexturesUserSet: the user changed the row; hdPackHintShown:
     //   the one-time "HD texture pack found" message was shown; anisotropy: 4 (the original's, default), 8 or 16;

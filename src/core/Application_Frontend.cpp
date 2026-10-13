@@ -199,6 +199,32 @@ static_assert(!DeclaresRtNames<render::IRenderer>::value || HasRendererRayTracin
               "IRenderer declares rayTracingAvailable but HasRendererRayTracing does not match its signatures");
 static_assert(!DeclaresHdLevelNames<render::IRenderer>::value || HasRendererHdLevel<render::IRenderer>::value,
               "IRenderer declares setHdTextureLevel but HasRendererHdLevel does not match its signatures");
+// Rendering M6 (4349632d): bool modernMaterialsAvailable() const / void setModernMaterials(bool) - Modern materials ride
+// the HD row (user: "materials should be hd textures too", one switch): Enhanced (2) = E textures + Modern materials,
+// Faithful (1) = D textures with the original shading, Off = neither. Effective from the next map load. Detected.
+template <class R, class = void> struct HasRendererModernMaterials : std::false_type {};
+template <class R> struct HasRendererModernMaterials<R, std::void_t<decltype(std::declval<R&>().modernMaterialsAvailable()),
+                                                                    decltype(std::declval<R&>().setModernMaterials(true))>> : std::true_type {};
+template <class R, class = void> struct DeclaresModernNames : std::false_type {};
+template <class R> struct DeclaresModernNames<R, std::void_t<decltype(&R::setModernMaterials)>> : std::true_type {};
+static_assert(!DeclaresModernNames<render::IRenderer>::value || HasRendererModernMaterials<render::IRenderer>::value,
+              "IRenderer declares setModernMaterials but HasRendererModernMaterials does not match its signatures");
+// hdLevel: the HD level handed over (after the test override). Traces display.modernMaterials.
+template <class R> void applyModernMaterials(R* r, int hdLevel, const char* when) {
+    bool on = false;
+    const char* by = "stored (no renderer API yet)";
+    if constexpr (HasRendererModernMaterials<R>::value) {
+        if (r) {
+            on = hdLevel == 2 && r->modernMaterialsAvailable();
+            r->setModernMaterials(on);
+            by = hdLevel != 2 ? "renderer (HD level not Enhanced)" : on ? "renderer" : "renderer (unavailable)";
+        }
+    }
+    (void)r;
+    frontend::FlowTrace::emit("display.modernMaterials", {{"on", frontend::FlowTrace::boolean(on)}, {"hdLevel", std::to_string(hdLevel)},
+                                                          {"by", by}, {"when", when}, {"applies", "next map load"},
+                                                          {"provenance", "PC EXTENSION"}});
+}
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -420,6 +446,7 @@ void Application::attachPresenter() {
                                                                  {"anisotropy", std::to_string(af)},
                                                                  {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
                                                                  {"provenance", "PC EXTENSION"}});
+        applyModernMaterials(renderer_, hd, "boot");
         appliedRayTracing_ = d.rayTracing;
         frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, frontend_->rayTracingAvailable())},
                                                          {"when", "boot"}, {"provenance", "PC EXTENSION"}});
@@ -455,6 +482,7 @@ void Application::attachPresenter() {
             frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
                                                                      {"anisotropy", std::to_string(af)},
                                                                      {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
+            applyModernMaterials(renderer_, hd, "apply");
         }
         if (p.display.rayTracing != appliedRayTracing_) {
             appliedRayTracing_ = p.display.rayTracing;
