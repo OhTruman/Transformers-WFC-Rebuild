@@ -397,5 +397,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   baseline: robot-form idle shows no ammo drop and no reload prompt (the vehicle-form row is being added); the image
   flash detector is being reworked offline; WFC_FXOWNERTEST is the authoritative proof. User's settings: max, no FSR / FG,
   300 cap, fullscreen native; RT ON when the jet gun looked see-through.
+  17:05 P0 #1 JUDDER FIXED a44aa6db (rt2 9d949f4b): real cause = the gun drawn one step behind the body on every step
+  frame (weaponWorld_ is set in the step's background part after the frame that shows the new pawn position), catching
+  up next frame (+-30 px flicker at 1280x720); weaponDrawWorld() = current meshMatrix x socket bone lerped prev -> cur at
+  pose alpha x offset at the draw sites only (gameplay keeps weaponWorld(), SIMHASH unchanged; WFC_WEAPONBLEND=0 A/B).
+  Rendering's proof (gun vs body judder): 144 Hz 55.6 -> 2.98 px, 300 cap 25.2 -> 0.46 px, 60 Hz control 2.24; not the
+  M1 queue, interpolation or skin upload. Experimental's independent after-run pending. #2 cross-talk REPRODUCED
+  objectively on a17309b7 (21 flashes / 60 s on the idle player's gun, HUD ammo unchanged). Repackage head candidate
+  a44aa6db; final after #1b (jet gun under RT).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
