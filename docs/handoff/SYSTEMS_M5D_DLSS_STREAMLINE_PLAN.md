@@ -210,3 +210,13 @@ On the jitter sign, the SL 2.14 guides specify only "pixel space" (and no jitter
 
 **AMD rerun** (stored DLSS Quality, Streets 5v5): no NVIDIA / Streamline module at 46 s and 91 s; the DLSS choice kept through the match load (FSR 1 at 0.67, sharpness 0.20); 0 [error].
 
+### 7b. Experimental's re-review residuals (same patch)
+
+- **R1**: the DLSS-G factor follows NVIDIA's maximum in both directions once it is known. An unknown maximum clamps the first options to 1 frame; the asked factor is kept (dlssgWanted_) and re-applied after the maximum is learnt.
+- **R2**: after a DLSS-G device loss Reflex stops (streamlineReflexLost): no per-frame token / sleep / markers on the dead device.
+- **R3**: frameGenerationMaxFactor() creates no device. It is exact once a DLSS-G session has asked NVIDIA; before that, 4 if GL's adapter is an "RTX 50", else 2.
+- **R4**: DLSS-G is off across our display-mode switches via a new platform hook. platform::setDisplayModeChangeHook / notifyDisplayModeChange (PresentHook.h) is called by Win32Window before the CDS_FULLSCREEN switch and before the desktop-mode restore. DLSS-G is also off while the window is minimised. It turns itself back on at the next frame.
+- **R5**: the token's presented flag is set by the presenter after Present returns, not inside the PCL marker.
+- **R6**: two constants sets per token avoided. DLSS SR now runs on its own viewport (1), since its inputs keep GL's row order with different jitter / motion signs; DLSS-G uses viewport 0. Step 4 reports a count of Streamline warning lines.
+- Note for Integration: SYSTEMS_DISPLAYMODE_REVIEW.patch also touches Win32Window.cpp near the same lines (the restore); the two hunks are separate lines and should apply in either order with offsets.
+
