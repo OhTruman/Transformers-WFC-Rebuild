@@ -431,5 +431,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (idle player, 60 s, same bot activity): flashes at the player's gun 21 -> 0; vehicle-form HUD clip 60/6 -> 60/60;
   ammo drops 0 / 0. Verdict rule = gun / body within the control's ratio + 0.25 and flips <= body + 0.1 (an absolute
   px rule cannot pass at 144 Hz). Slot B -> Systems' package verify (RT gate granted, Rendering paused).
+  16:28 PACKAGE 2 VERIFIED (Systems): all PASS incl. -ForeignCwd (log beside the exe proven), SETTINGSTEST 7/7, RT gates;
+  one row open: the R1 first-Realistic-frame line never logged on the direct boot. Root cause found by Rendering during
+  the user's session: the WHOLE RT pass runs only inside the characters' flush (flushDynQueue returns early on an empty
+  queue), so character-free frames get no RT shadows / AO / sun swap and the effects pop with characters (explains the
+  'subtle' verdict, the Molten shadow report and the gate); fix = a world-only RT pass at flushTranslucency when the
+  queue is empty (written, builds after the session). Shipped for playtest 2 as is (RT Off by default).
+  USER DECISION 16:45: the NEXT PLAYTEST waits for (a) the new textures finished (D pass complete + the beyond-D E pass
+  at a days-scale scope + Enhanced live with Modern materials) and (b) full ray tracing: GI replacing the bake in
+  Realistic, visible reflections, sky / ambient character shadows, shadow refinement, the RT-pass fix. Plans + ETAs
+  requested from Rendering and AssetTools; interim packages keep shipping the playtest-1 fixes.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
