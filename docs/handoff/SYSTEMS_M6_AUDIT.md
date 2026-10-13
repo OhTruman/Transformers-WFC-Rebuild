@@ -22,8 +22,13 @@ Shipped here:
    - Scalar arithmetic inside a view term (1 - dot^2, falloffs) is not a boundary.
 2. **A remaining multiplicative Fresnel / view factor is replaced by its view-independent mean.** If DiffuseColor still depends on the view after rule 1, the base colour is its mean over the 32 directions of glsl_emu.VIEW_SET (cube samples held fixed).
    - This is never "1": the mean preserves average brightness.
-   - It occurs in 1 material today.
-3. **Only the base colour is stripped.** EmissiveColor, SpecularColor, SpecularPower and Opacity are evaluated normally. 113 emissives read the cube; they keep it (Experimental 2c).
+   - It occurs in 0 materials today (the earlier one resolves through rule 3); kept for future materials.
+3. **A cube-derived factor multiplying a texture-derived colour (vec3/vec4, not a broadcast scalar) is kept, not dropped.** The cube stands for its view-independent mean; matc uses the cube map's mean colour, its 1x1 mip.
+   - This is the robot paint x cube x 0.2 of CHR_Transformer_NormSpec_Cust_E (all 67 robot bodies) and the ENV tint x cube (rule 3; 74 materials).
+   - It does not cover a camera-dependent factor (the anisotropic specular stays rule 1).
+   - It does not cover a cube x constant tint x scalar mask (the ENV reflection term stays rule 1).
+4. **Then max(., 0).** Oversaturation mixes such as mix(c, lum(c), -0.15) can go negative.
+5. **Only the base colour is stripped.** EmissiveColor, SpecularColor, SpecularPower and Opacity are evaluated normally. 113 emissives read the cube; they keep it (Experimental 2c).
 
 **Roughness** = clamp(sqrt(2 / (SpecularPower + 2)), 0.02, 1) per pixel, from the material's own SpecularPower.
 - hdPbrTexture(roughness_parent, "roughness") replaces it.
@@ -50,12 +55,16 @@ Shipped here:
   - The class uses means over 128 points of the material's own textures, decoded as the GPU sees them.
   - The spec/base ratio is ignored at a base luminance below 0.02.
 - 2b: the view strip above covers the 38 anisotropic-specular materials. Rule 1 never brightens the base (checked: 0 cases).
+- Re-review (a): rule 3 for cube x colour products. The robot bodies keep their paint (base share 1.00 for all 67, was a median of 0.60). Rule-1 materials: 683; rule-2: 0 (the one rule-2 material resolves through rule 3).
   - WEP_PhongMain keeps a median 73 % of the original diffuse luminance (min 3 %), ENV_PhongMain_NS a median 94 %.
 - 2c: the emissive is untouched, and the runtime-set vectors are added.
 - 3: the runtime ternary uRT_X(.swizzle) form is parsed. All 908 remapped materials emulate (was 871 of 909).
 - 4: the roughness parent is picked deterministically (mask / spec / gloss-named first, then by name). The targets are the materials' own derived means (median 0.38, p10 0.26, p90 0.54).
-- Low base after the strip: 19 materials keep under 25 % of their diffuse (mostly vehicle / weapon paint whose look is mostly reflection) in SYSTEMS_M6_LOW_BASE.json.
-  - They are the strongest metal-review candidates. Without a reviewed metal row they would read too dark under Modern.
+- Re-review (b): runtime-tint consumers are evaluated with representative tints, not the 0.1 grey placeholder: the 10 character-select palette swatches cycling as Cust A / B, plus the default energon (0.843, 0.302, 0.029). The low base share is now measured on the materials' own textures (128 points).
+  - Low base after the strip (under 25 % of the original diffuse): 45, in SYSTEMS_M6_LOW_BASE.json.
+  - 26 are non-tint: the metal-review candidates (metal_review_candidate: true). They include D1_FloorTile1 / 2, which are authored cube-only (base 0): keep the original shading or review them as metal.
+  - 19 are tint consumers: 8 player weapons whose look is the anisotropic camera specular (rule 1, exact per Experimental), and 11 ENV materials with authored tints, mostly the reflection-dominated "White" set. They are review items, not metal candidates.
+- Known limit: the view flag does not propagate through a sample's UV (a texture sampled at a view-dependent UV counts as view-independent; 1 material).
 
 ## Tint mask channels (for AssetTools' E pass: never generate inside these)
 
@@ -97,9 +106,11 @@ Maps: MP_ESC_BrokenHope, MP_ESC_Remnant, MP_IAC_Berth, MP_IAC_Rust, MP_IAC_Seed,
 ## Emulation (glsl_emu; real textures for the targets)
 
 - emulated: 908 of 908 remapped materials; not emulated: 0 ()
-- base-colour strip: no view term 150, additive view terms dropped (rule 1) 757, multiplicative view factor averaged (rule 2) 1
+- base-colour strip: no view term 225, additive view terms dropped (rule 1) 683, multiplicative view factor averaged (rule 2) 0
 - rule-1 base colour brighter than the original diffuse (must be 0): 0
 - SpecularPower -> roughness -> SpecularPower: max relative error 5.51e-16
+- low base after the strip (< 25 % of the original diffuse, real textures, palette tints for runtime-tint consumers): 45 (19 tint consumers, 26 non-tint = metal-review candidates: ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile1_MATINST, ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile2_MATINST, TPRO_SecurityCamera_p.PROP_SecurityCamera_MATINST, ENV_KON_Prison_p.Materials.PrisonCell_Plane_MATINST, ENV_ORB_WhiteMaterials_p.Materials.White_CanyonDeco_MATINST, TPRO_KON_Corruptor_p.Materials.KON_Corruptor_MATINST, ENV_ORB_WhiteMaterials2_p.Materials.White_LaserShield_A_MATINST, ENV_ORB_GalacticTransport_p.Materials.ENV_ORB_TransportInnerDEAD_MAT, DES_ORB_Asteroids_p.Textures.SpaceDebris_Large_MATINST, PROP_NEU_Battery_p.Battery1.PROP_NEU_Battery1_MATINST, ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_FloorPanel_01_MATINST, ENV_IAC_Deco_1_p.Material.ChainLinkFence_MATINST, ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_BatteryIacOrange_MAT, ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_CorruptedBattery_MAT, ENV_KON_Architecture_p.Materials.BasePlatform_Column_01_MATINST, ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_CeilingPanel_01_MATINST, ENV_ORB_WhiteMaterials_p.Materials.White_Street_MATINST, ENV_ORB_WhiteMaterials2_p.Materials.White_CanyonWall_A_MATINST, ENV_CORE_SeedChamberBoss_p.Materials.ENV_COR_Battery_MAT, PROP_NEU_Monitors_p.PROP_NEU_Monitor01_red_MATINST, PROP_NEU_Monitors_p.PROP_NEU_Monitor01_MATINST, PROP_NEU_Monitors_p.PROP_NEU_Monitor01noEmiss_MATINST, ENV_IAC_Turret_p.Texture.IAC_searchlight_RED_MATINST, ENV_ORB_WhiteMaterials_p.Materials.White_InroomCnrWall_B_MATINST, ENV_IAC_Turret_p.Texture.IAC_searchlight_purple_MATINST, ENV_ORB_D1_MegatronCruiser_p.Materials.Ship_WallPanel_01_MATINST)
+- palette tints loaded: 10 swatches
 - customisation-tint consumers (forced dielectric): 403; HUD-marker materials (never remapped): 1
 - metal candidates (PROVISIONAL, for review; not applied): 25
 
