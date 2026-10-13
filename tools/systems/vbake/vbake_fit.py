@@ -13,7 +13,13 @@ k and p (and the tangent frame's handedness, which the tracer can only guess fro
 texels of one component, one lit and one shadowed by the trace, with similar N.L: their difference is the sun's share
 (the indirect light cancels to first order). The result splits each texel: indirect_i = L_i - V_bake * share_i.
 
-  vbake_fit.py --trace <vbake_trace out dir> --render <render map dir>
+  vbake_fit.py --trace <vbake_trace out dir> --render <render map dir> [--k-quantile 0.3 | --max-clamp 0.10]
+  --k-quantile Q  k = the Q-quantile of the per-pair estimates D / x (lit minus shadowed coefficient over the model's unit
+                  share, pairs with x above 10 % of its median): a robust low k (Rendering 2026-10-13, "a touch strong");
+                  p and the handedness stay the least-squares fit's
+  --max-clamp F   lower k (keeping p and the handedness) until the >= 0 clamp of the indirect removes at most F of the sun
+                  energy over the covered texels (bisection; Rendering 2026-10-13: the first fits' 11-30 % clamp read "a touch
+                  strong" in Realistic). fit.json keeps the least-squares k as k_fit; k is what the runtime uses.
 """
 import json
 import os
@@ -127,9 +133,41 @@ def main():
     k, p, flip = best['k'], best['p'], best['flip']
     print('pairs %d; best fit k %.4f, p %.2f, tangent-frame y %s, median relative residual %.3f' %
           (D.shape[1], k, p, '+' if flip > 0 else '-', best['residual']))
+    k_fit = k
+    k_quantile = float(arg('--k-quantile')) if arg('--k-quantile') else None
+    if k_quantile is not None:
+        lt_f = LT * np.array([1.0, flip, 1.0])
+        x = ((np.clip(lt_f @ B.T, 0.0, None).T) ** p) * sun_lum                # (3, n): the unit-k model share
+        ok = x > 0.1 * np.median(x[x > 0]) if (x > 0).any() else x > 0
+        ratios = (D[ok] / x[ok])
+        k = float(np.quantile(ratios, k_quantile))
+        print('k at the %.0f %% quantile of %d per-pair estimates: %.4f (%.0f %% of the fit %.4f; estimates p10 %.3f, median %.3f, p90 %.3f)' %
+              (100 * k_quantile, ratios.size, k, 100 * k / max(k_fit, 1e-12), k_fit, np.quantile(ratios, 0.1), np.median(ratios), np.quantile(ratios, 0.9)))
+    max_clamp = float(arg('--max-clamp')) if arg('--max-clamp') else None
+    if max_clamp is not None:
+        # the clamped fraction at a given k: sum(max(V k s1 - Lc, 0)) / sum(V k s1) over covered texels (s1 = the share at k 1)
+        terms = []
+        for P in pages:
+            m = P['cov'] == 1
+            lt_f = P['lt'] * np.array([1.0, flip, 1.0])
+            s1 = np.moveaxis((np.clip(lt_f @ B.T, 0.0, None) ** p)[..., None] * sun_lin, 2, 0)   # (3, h, w, 3)
+            terms.append(((P['V'][None, :, :, None] * s1)[:, m], P['Lc'][:, m]))
+        def clamped(kk):
+            neg = sum(float(np.clip(kk * vs - lc, 0, None).sum()) for vs, lc in terms)
+            sun = sum(float((kk * vs).sum()) for vs, _ in terms)
+            return neg / max(sun, 1e-12)
+        if clamped(k) > max_clamp:
+            lo, hi = 0.0, k
+            for _ in range(30):
+                mid = 0.5 * (lo + hi)
+                if clamped(mid) > max_clamp: hi = mid
+                else: lo = mid
+            k = lo
+        print('k for a clamp <= %.0f %%: %.4f (%.0f %% of the fit %.4f; clamp at the fit %.1f %%)' %
+              (100 * max_clamp, k, 100 * k / max(k_fit, 1e-12), k_fit, 100 * clamped(k_fit)))
 
     # ---- per page: V_bake, the split, agreement metrics, previews
-    report = dict(map_render_dir=rdir, sun=tr['sun'], sun_linear=list(map(float, sun_lin)), k=k, p=p,
+    report = dict(map_render_dir=rdir, sun=tr['sun'], sun_linear=list(map(float, sun_lin)), k=k, k_fit=k_fit, k_quantile=k_quantile, max_clamp=max_clamp, p=p,
                   tangent_y_sign=flip, residual=best['residual'], pairs=int(D.shape[1]), pages=[],
                   basis='HL2 (lighting.json note)', cone_deg=tr['cone_deg'], supersample=tr['supersample'])
     tot = dict(cov=0, neg_energy=0.0, sun_energy=0.0, mm_lit=0, mm_shadow=0, lit=0, shadow=0)
