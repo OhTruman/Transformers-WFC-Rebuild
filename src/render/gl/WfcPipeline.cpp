@@ -1017,7 +1017,8 @@ bool Pipeline::load(const std::string& mapName) {
         std::string pt = readText(dataDir_ + "/materials_pbr.json");
         if (pt.empty()) if (const char* pd = std::getenv("WFC_PBR_DIR")) pt = readText(std::string(pd) + "/" + mapName + "/materials_pbr.json");
         assets::Json PJ;
-        if (!pt.empty() && assets::Json::parse(pt, PJ))
+        const bool parsed = !pt.empty() && assets::Json::parse(pt, PJ);
+        if (parsed)
             for (const auto& kv : PJ.obj) {
                 PbrSrc ps;
                 ps.glsl = kv.second["glsl"].asString();
@@ -1026,7 +1027,11 @@ bool Pipeline::load(const std::string& mapName) {
                 if (!ps.glsl.empty()) pbr_[kv.first] = std::move(ps);
             }
         modernActive_ = !pbr_.empty();
-        LOG_INFO("wfc: Modern materials %s (%zu pbr bodies)", modernActive_ ? "on" : "unavailable: no materials_pbr.json", pbr_.size());
+        // (the package check greps this: a map without usable pbr bodies falls back to the original materials; the HD
+        // textures and every material stay as Faithful)
+        if (modernActive_) LOG_INFO("wfc: Modern materials on for %s (%zu pbr bodies)", mapName.c_str(), pbr_.size());
+        else LOG_WARN("wfc: Modern materials unavailable for %s: materials_pbr.json %s - the original materials (HD textures unchanged)",
+                      mapName.c_str(), pt.empty() ? "missing" : !parsed ? "unparsable" : "has no bodies");
     }
 
     {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
