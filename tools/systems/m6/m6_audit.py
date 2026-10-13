@@ -81,13 +81,16 @@ def palette():
 
 PALETTE = palette()
 # two reviewed metal decisions (Integration / Experimental, 2026-10-12; revised after Experimental's review of c9e92922):
-#  - robot bodies (CHR_Transformer_NormSpec_Cust_E): "metallic paint" - baseColor = f0 = the tinted paint (rule 3's colour
-#    operand) bounded to [0, 1] keeping the hue (paint / max(1, max channel): the paint reaches ~2x through
-#    mask.r + sigmoid), metallic = M_PAINT; the shading's diffuse = baseColor x (1 - m) keeps a dielectric share;
-#    EnergonColor / the emissive untouched
+#  - robot bodies (CHR_Transformer_NormSpec_Cust_E): "metallic paint" - f0 = the tinted paint P (rule 3's colour operand)
+#    bounded to [0, 1] keeping the hue (P / max(1, max channel): P reaches ~2x through mask.r + sigmoid); baseColor = null,
+#    i.e. the stripped rule-3 base (it keeps the 1.5 x paint x DL diffuse term; P carries the gloss pattern twice and
+#    drops DL: Experimental's re-review, L* correlation 0.83 -> 0.98); metallic = M_PAINT constant (it does not follow the
+#    gloss: the gloss is already in P and SpecularPower); the shading's diffuse = base x (1 - m); EnergonColor / the
+#    emissive untouched
 #  - player weapons (WEP_PhongMain): per-pixel metallic = (1 - mask.b) x mask.g (B = the tint mask, G = the gloss / reflection
 #    mask: matte parts had no reflection in the original and stay dielectric); f0 = the reflection's constant colour per unit
-#    cube light, clamped to [0, 1] per channel; baseColor = the stripped base (the hook's baseColor is null), so the shading's
+#    cube light, bounded as f / max(1, max channel) (hue kept; truly white only for Maul, SerratedBlade, ShortSword,
+#    FX_RollerMine and the master); baseColor = the stripped base (the hook's baseColor is null), so the shading's
 #    diffuse = stripped base x (1 - metallic)
 MASTER_PAINT = 'TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat'
 MASTER_WEP = 'WEP_Shared_p.WEP_PhongMain_MAT'
@@ -216,7 +219,8 @@ def audit_material(mname, mat, imgs, npoints):
             cubes1 = {sl: [1.0, 1.0, 1.0, 1.0] for sl in slotcube}
             rr = E.run(glsl, E.Material(ones, cubes1, strip_view=True))
             f0_metal = np.maximum(rr['_diffuse_original'][:3] - rr['DiffuseColor'][:3], 0.0)
-            f0_metal = np.clip(f0_metal, 0.0, 1.0)                 # (Experimental: clamp, not normalise)
+            f0_metal = f0_metal / max(1.0, float(f0_metal.max()))  # (bounded keeping the hue, as the CHR paint: a per-channel
+            #                                                        clamp whitened the blue steel, e.g. IonBlaster (3.9, 4.2, 6.0))
             row['f0_metal'] = f0_metal.tolist(); row['metal_mask'] = '%s (metallic = (1 - B) x G)' % slot2d[mask_slot]['object']
             mt = wep_mask_temp(glsl, mask_slot)
             if mt is None or f0_metal.max() < 0.04:                # (no reflection to carry: stays dielectric)
@@ -231,7 +235,7 @@ def audit_material(mname, mat, imgs, npoints):
                 pe = rp['_paint_expr']
                 pc = pe[:-4] if pe.endswith('.rgb') else pe        # (the channels of a vec4 temporary's .rgb)
                 bounded = '(%s / max(1.0, max(max(%s.r, %s.g), %s.b)))' % (pe, pc, pc, pc)
-                row['pbr_hooks'] = dict(metallic='%r' % M_PAINT, f0=bounded, baseColor=bounded, glsl_hash=row['glsl_sha1'])
+                row['pbr_hooks'] = dict(metallic='%r' % M_PAINT, f0=bounded, baseColor=None, glsl_hash=row['glsl_sha1'])
         # ---- the oracle vectors: 3 fixed-seed sample tables + 1 with the runtime parameters set
         for k in range(4):
             s2 = {s: rng.uniform(0.05, 0.95, 4).tolist() for s in slot2d}
@@ -247,7 +251,7 @@ def audit_material(mname, mat, imgs, npoints):
             metal, base_pbr, f0 = 0.0, B, np.array([0.04, 0.04, 0.04])
             hooks = row.get('pbr_hooks')
             if hooks and master == MASTER_PAINT and '_paint' in r:
-                metal, base_pbr = M_PAINT, paint_bounded(r['_paint']); f0 = base_pbr
+                metal, f0 = M_PAINT, paint_bounded(r['_paint'])
             elif hooks and f0_metal is not None:
                 metal = float(np.clip((1.0 - float(s2[mask_slot][2])) * float(s2[mask_slot][1]), 0.0, 1.0)); f0 = f0_metal
             vecs.append(dict(samples2d={str(s): v for s, v in s2.items()}, samples_cube={str(s): v for s, v in sc.items()},
@@ -290,6 +294,10 @@ def audit_material(mname, mat, imgs, npoints):
     except E.Unsupported as e:
         emu = dict(ok=False, why=str(e))
     row['emulation'] = emu
+    if emu.get('base_rule') == 2:                    # (Experimental: a view mean flattens e.g. pow(N.V, 3) limb darkening)
+        row['class'] = 'never_remap'; row['keep_original'] = True
+        row['why'] = 'rule 2: a multiplicative view factor in the base colour - keep the Original shading'
+        return row, None
     # ---- classification (PROVISIONAL metal candidates; reviewed rows decide)
     cls, why = 'dielectric', 'default'
     if 'spec_mean' in row:
@@ -305,7 +313,7 @@ def audit_material(mname, mat, imgs, npoints):
             why = 'tint consumer: forced dielectric (was a metal candidate: %s)' % why
         cls = 'dielectric_tint'
     if master == MASTER_PAINT and row.get('pbr_hooks'):
-        cls, why = 'metallic_paint', 'reviewed: robot body, baseColor = tinted paint, metallic %.1f (sheets: 0.6 - 0.8)' % M_PAINT
+        cls, why = 'metallic_paint', 'reviewed: robot body, f0 = bounded tinted paint, base = the stripped base, metallic %.1f' % M_PAINT
     elif master == MASTER_WEP and row.get('pbr_hooks'):
         cls, why = 'weapon_metal_mask', 'reviewed: %s; metal F0 %s' % (row.get('metal_mask'), np.round(f0_metal, 3).tolist())
     row['class'], row['why'] = cls, why
@@ -325,7 +333,9 @@ def main():
     os.makedirs(out, exist_ok=True)
     imgs = Images()
     uniq, maps_of, vectors = {}, defaultdict(set), {}
-    maps = sorted(d for d in os.listdir(root) if d.startswith('MP_') and os.path.isfile(os.path.join(root, d, 'materials_glsl.json')))
+    have = lambda d: os.path.isfile(os.path.join(root, d, 'materials_glsl.json'))
+    maps = (sorted(d for d in os.listdir(root) if d.startswith('MP_') and have(d)) +
+            sorted(d for d in os.listdir(root) if d.startswith('UI_') and have(d)))
     for mp in maps:
         mats = json.load(open(os.path.join(root, mp, 'materials_glsl.json'), encoding='utf-8'))
         for name, mat in mats.items():

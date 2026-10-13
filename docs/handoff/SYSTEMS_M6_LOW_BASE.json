@@ -77,6 +77,13 @@
   "metal_review_candidate": true
  },
  {
+  "material": "CINE_D3B_LevelIntro_p.MegatronShip.PROP_MegatronShipBack_MATINST",
+  "base_share": 0.11264174711755563,
+  "tint_consumer": false,
+  "tints": null,
+  "metal_review_candidate": true
+ },
+ {
   "material": "TPRO_KON_Corruptor_p.Materials.KON_Corruptor_MATINST",
   "base_share": 0.1155604017859004,
   "tint_consumer": false,
