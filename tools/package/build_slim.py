@@ -210,6 +210,10 @@ def main():
         t = open(os.path.join(HERE, 'slim_template', n), encoding='utf-8', newline='').read()
         version = arg('--version', '09c %s, Release + PGO' % head)
         t = t.replace('09c 37eec59, Release + PGO', version).replace('09c b898c75 slim', '09c %s slim' % head)
+        if n == 'README.txt' and hd_src:                 # (user 2026-10-12: the new textures are the default)
+            t = t.rstrip('\r\n') + ('\n\nGraphics: the new HD textures are ON by default. To play with the original textures: Options > Graphics >\n'
+                                    'HD Textures: Off (applies on the next map load). Ray-traced shadows / lighting, where the build has them,\n'
+                                    'are OFF by default and only run when switched on in the same menu.\n')
         if n == 'README.txt' and m5:
             t = t.rstrip('\r\n') + ('\n\nOptional graphics runtime (Graphics menu: FSR 3.1 upscaling, frame generation; off by default): AMD FidelityFX\n'
                                     'DLLs and Microsoft D3D12 Agility SDK runtime (D3D12\\D3D12Core.dll) beside the game; their licences are in\n'

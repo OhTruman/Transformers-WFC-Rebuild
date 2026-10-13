@@ -141,6 +141,21 @@ R1-R3 do not need M6 and can ship first.
 - The user's per-family sheets approved.
 - The RT hit-shading albedo matches the raster albedo (the stage-2 reflection check).
 
+## 4b. Defaults (user 2026-10-12) and what could become default later
+
+User, verbatim: "Yes the brand new textures should be the default, and by default the Ray traced shadows and lighting should be off unless enabled."
+
+| Piece | Default now | Could become default later (only if the user asks) |
+|---|---|---|
+| HD textures (M4) | **ON** (the package ships the pack; the profile default and auto-detect turn it on; the originals stay one menu switch away) | - |
+| Modern materials (M6) on the baked lighting | off ("Materials: Original") | The best candidate: it needs no RT hardware and runs on every GPU the game supports. It completes the "brand new" look with the HD textures (HD normal / detail + physically based shading). It is only a candidate once calibrated (per-map luminance within 5 %) and approved on the per-family sheets. |
+| RT Realistic R1-R2 (RT sun shadows on the world, soft contact-hardening shadows, AO everywhere) | **off** (user) | Possibly "on when the GPU supports DXR 1.1 and has headroom" through auto-detect, but only if the user asks. Never on GPUs without ray tracing. |
+| RT reflections (R3) | **off** | Same rule as R1-R2, after a performance review. |
+| Lightmap-free GI (R4) | **off** | Unlikely as a default: it is the largest departure from the original lighting and the most expensive. It stays an explicit choice. |
+| FSR 3.1 / DLSS, frame generation | off (explicit choices, M5) | - |
+
+A **graphics preset** row could bundle these later: "Original" (the faithful look), "Modern" (HD + Modern materials), "Realistic" (Modern + RT Realistic). The preset only sets the individual rows; each stays switchable. The proposal is Frontend's row; the user decides whether to add it.
+
 ## 5. Asks
 
 - **Rendering**:
