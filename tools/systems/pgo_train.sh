@@ -18,7 +18,7 @@ MAPS=${MAPS:-"MP_IAC_Streets MP_IAC_Rust MP_IAC_Seed MP_IAC_Berth MP_KON_Molten 
 [ -x "$EXE" ] || { echo "no instrumented exe at $EXE"; exit 1; }
 rm -rf "$RAW"; mkdir -p "$RAW"
 export LLVM_PROFILE_FILE="$RAW/wfc-%p.profraw"
-export WFC_SEED=7 WFC_FLOWSEED=7 WFC_FRAMELIMIT=0 WFC_NOMOUSE=1   # FLOWSEED: GameFlow RNG (team pick, rotation) for the frontend run
+export WFC_SEED=7 WFC_FLOWSEED=7 WFC_FRAMELIMIT=0 WFC_NOMOUSE=1 WFC_MUTE=1   # FLOWSEED: GameFlow RNG (team pick, rotation) for the frontend run
 run_match() {   # map, bots url
     echo "PGO training: $1 $2"
     WFC_BOOT=match WFC_MATCH_SECONDS=$SECS WFC_SMOKE_FRAMES=2000000 \
