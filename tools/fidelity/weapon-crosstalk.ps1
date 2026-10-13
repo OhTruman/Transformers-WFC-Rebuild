@@ -29,6 +29,7 @@ function RunOne([string]$name, [int]$f, [int]$e, [hashtable]$extra, [int]$steps,
     if (Test-Path (Join-Path $d "wfc.log")) { return $d }
     New-Item -ItemType Directory -Force $fr | Out-Null
     (Get-BotProfile $f $e 1 -Width 1280 -Height 720) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+    # (the lobby's extended flag is BotsExtended, not ExtendedPlayers - Gameplay: without it the roster clamps to 5 a side, 4v5)
     # bots come from the lobby (a direct match boot ignores ?Bots*): the frontend flow to a private TDM, as capacity-stress does;
     # the real HUD runs, so WFC_HUDTRACE logs its clip calls. The script quits ~15 s after the last capture step.
     $H = Get-ExeHooks $Exe; $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
@@ -36,7 +37,7 @@ function RunOne([string]$name, [int]$f, [int]$e, [hashtable]$extra, [int]$steps,
             "call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5",
             "call:Online.SetSelectedMapID,$MapId", "wait:t=1", "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:ui=InGame", "wait:t=$([int]($steps / 60) + 15)", "quit")) -join ";"
     $env0 = @{ WFC_BOOT = "frontend"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "$([int]($steps / 60) + 400)"; WFC_RT_MODE = "0"
-               WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1"; WFC_RENDERHZ = "60"; WFC_HUDTRACE = "1"; WFC_LOBBY_OPTIONS = "ExtendedPlayers=$(if ($f + $e + 1 -gt 10) { 1 } else { 0 });BotsFriendly=$f;BotsEnemy=$e;BotsAutobot=$f;BotsDecepticon=$e;PointsToWin=9999;TimeLimit=900"
+               WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1"; WFC_RENDERHZ = "60"; WFC_HUDTRACE = "1"; WFC_LOBBY_OPTIONS = "BotsExtended=$(if ($f + $e + 1 -gt 10) { 1 } else { 0 });BotsFriendly=$f;BotsEnemy=$e;BotsAutobot=$f;BotsDecepticon=$e;PointsToWin=9999;TimeLimit=900"
                WFC_SHOTMATCH = ($fr -replace '\\', '/') + ",30,$steps,$stride"; WFC_SMOKE_FRAMES = "100000000" }
     if ($H.Contains("WFC_CHARSELECT")) { $env0.WFC_CHARSELECT = "1" }
     if ($H.Contains("WFC_FLOWSEED")) { $env0.WFC_FLOWSEED = "1" }
