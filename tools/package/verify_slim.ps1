@@ -61,6 +61,8 @@ param(
     [string]$RtBuildDir = "",    # the cmake build tree the package's exe came from: rt-build-check's build half (build.ninja, generated/rt)
     [string]$RtCheck = "",       # Experimental's tools/fidelity/rt-build-check.ps1 (default: beside this repo's tools/package)
     [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
+    [int]$SettingsExpected = 0,  # WFC_SETTINGSTEST: the number of renderer settings checks expected (0 = any count; all must pass)
+    [switch]$NoSettingsTest,     # skip the settings self-test run
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
@@ -230,6 +232,7 @@ function PkgTwin([string]$n) {
 }
 
 $results = @()
+$setTest = [pscustomobject]@{ Status = $(if ($NoSettingsTest -or $StaticOnly) { 'SKIP' } else { 'FAIL' }); Pass = 0; Fail = 0; Note = 'not run' }
 $rtGate = [pscustomobject]@{ Status = $(if ($NoRtCheck -or $StaticOnly) { 'SKIP' } else { 'FAIL' }); Lines = @(); Note = $(if ($NoRtCheck) { '-NoRtCheck' } elseif ($StaticOnly) { '-StaticOnly' } else { 'not run' }) }
 $saved = @{}
 Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
@@ -395,6 +398,35 @@ try {
         }
         Write-Host ("[{0}] {1} in {2} s: {3}" -f $name, $(if ($reasons.Count) { 'FAIL' } else { 'PASS' }), $secs, ($reasons -join '; '))
     }
+    # ---- the settings self-test (Integration 2026-10-13): WFC_SETTINGSTEST=1 sets every renderer setting the frontend hands
+    # over (display gamma, FSR, anisotropy, HD, FSR 3.1, Modern, Ray Tracing, DLSS in DLSS builds) to a non-default value,
+    # runs release() (a map change) and logs "settings-test: <n> pass, <m> fail" - every row must survive in the package.
+    if (-not $NoSettingsTest -and -not $StaticOnly) {
+        WaitHold
+        $stRun = Join-Path $WorkDir 'settingstest'
+        if (Test-Path -LiteralPath $stRun) { Remove-Item -LiteralPath $stRun -Recurse -Force }
+        $stBin = Join-Path $stRun 'bin'
+        New-Item -ItemType Directory -Force -Path $stBin | Out-Null
+        Copy-Item -Path (Join-Path $pkgBin '*') -Destination $stBin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*', 'filelog*.txt'
+        if ($ExeBin) { Copy-Item -Path (Join-Path $ExeBin '*.exe'), (Join-Path $ExeBin '*.dll') -Destination $stBin -Force }
+        Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
+        foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
+        $env:WFC_SETTINGSTEST = '1'; $env:WFC_AUTODETECT = '0'; $env:WFC_SKIPINTRO = '1'; $env:WFC_NOMOUSE = '1'; $env:WFC_BOOT = 'frontend'
+        $env:WFC_GPULOST_DIALOG_S = '0'; $env:WFC_FRONTEND_SCRIPT = 'wait:frontend;wait:t=1;quit'
+        $sp = Start-Process -FilePath (Join-Path $stBin 'wfc_rebuild.exe') -WorkingDirectory $stBin -PassThru
+        if (-not $sp.WaitForExit(180000)) { Stop-Process -Id $sp.Id -Force -ErrorAction SilentlyContinue; $setTest.Note = 'timeout (killed)' }
+        $stLog = Join-Path $stBin 'wfc.log'
+        $sl = if (Test-Path -LiteralPath $stLog) { Get-Content -LiteralPath $stLog } else { @() }
+        $sum = $sl | Select-String -Pattern 'settings-test: (\d+) pass, (\d+) fail' | Select-Object -Last 1
+        if ($sum) {
+            $setTest.Pass = [int]$sum.Matches[0].Groups[1].Value; $setTest.Fail = [int]$sum.Matches[0].Groups[2].Value
+            $failed = @($sl | Select-String -SimpleMatch 'settings-test FAIL:' | ForEach-Object { $_.Line.Trim() })
+            $countOk = $SettingsExpected -le 0 -or ($setTest.Pass + $setTest.Fail) -eq $SettingsExpected
+            $setTest.Status = if ($setTest.Fail -eq 0 -and $countOk) { 'PASS' } else { 'FAIL' }
+            $setTest.Note = "$($setTest.Pass) pass, $($setTest.Fail) fail$(if ($SettingsExpected -gt 0) { " (expected $SettingsExpected checks)" })$(if ($failed.Count) { ': ' + ($failed -join '; ') })"
+        } elseif ($setTest.Note -eq 'not run') { $setTest.Note = 'no settings-test summary line in the log' }
+        Write-Host "[Settings] $($setTest.Status): $($setTest.Note)"
+    }
     # ---- the Ray Tracing gate (Integration 2026-10-13; Experimental's rt-build-check.ps1): a direct-boot Streets match with the
     # profile's Ray Tracing row = Realistic must build its RT scene (a TLAS line) and never log "without the RT shaders" - an exe
     # built without third_party/dxc + ffx_denoiser shows the row and does nothing. Run from a copy of the package's bin with the
@@ -446,7 +478,7 @@ try {
 }
 
 # ---- report ----
-$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count -and -not $pk.Problems.Count -and $rtGate.Status -ne 'FAIL'
+$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count -and -not $pk.Problems.Count -and $rtGate.Status -ne 'FAIL' -and $setTest.Status -ne 'FAIL'
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
 $md += ''
@@ -484,6 +516,8 @@ foreach ($r in $results) {
     foreach ($w in $r.WarnRows) { $md += "- warning: ``$($w.Path)``: $($w.Note)" }
     if ($r.OtherRows.Count) { $md += "- other paths (not failing): " + (($r.OtherRows | Select-Object -First 10 | ForEach-Object { "``$($_.Path)``" }) -join ', ') }
 }
+$md += ''
+$md += "Settings self-test (WFC_SETTINGSTEST: every renderer setting survives a map change): $($setTest.Status) - $($setTest.Note)"
 $md += ''
 $md += "Ray Tracing gate (rt-build-check.ps1, profile RayTracing=2, direct-boot Streets): $($rtGate.Status)$(if ($rtGate.Note) { " - $($rtGate.Note)" })"
 foreach ($x in $rtGate.Lines) { $md += "- $x" }
