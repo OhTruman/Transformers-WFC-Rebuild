@@ -46,7 +46,9 @@ void main() {
     vec4 s = texelFetch(uSao, p, 0);
     if (s.z > 0.5) { oFactor = vec4(1.0); return; }
     float vis = texelFetch(uVis, p, 0).r;
-    vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, s.y, uAoStrength);
+    vis = vis > 0.985 ? 1.0 : vis;                  // (the 8-bit denoised visibility tops out just under 1: unlit pixels exact)
+    float ao = s.y > 0.985 ? 1.0 : s.y;
+    vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, ao, uAoStrength);
     oFactor = vec4(f, 1.0);
 }
 )";
@@ -113,19 +115,45 @@ void Pipeline::rtBuildWorld(int meshId) {
     RtStaticWorld W;
     W.pos.resize(v.size() / 14 * 3);
     for (size_t i = 0, n = v.size() / 14; i < n; ++i) std::memcpy(&W.pos[i * 3], &v[i * 14], 12);
-    size_t subs = 0;
+    size_t subs = 0, skipped = 0;
+    std::vector<std::pair<float, std::string>> largest;      // (diagnostics) the biggest subs going into the TLAS
     for (const Sub& s : g.subs) {
         if (s.mdiRow < 0 || s.prog < 0 || s.vlmTex || (size_t)s.first + s.count > idx.size()) continue;
         const Program& P = progs_[(size_t)s.prog];
         if (P.mdiProg < 0) continue;
         const Program& M = progs_[(size_t)P.mdiProg];
         if (M.blend != 0) continue;
+        const core::Vec3 ext = s.bmax - s.bmin;
+        const float size = std::max(ext.x, std::max(ext.y, ext.z));
+        // sky domes / boxes are not occluders (every sun ray hit Rust's 4.5 km Spacedome): over 2 km, or named so
+        std::string lower = s.matName;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        if (size > 2000.0f || lower.find("dome") != std::string::npos || lower.find("sky") != std::string::npos) { ++skipped; continue; }
+        // (diagnostics) WFC_RT_EXCLUDE=<substr;substr>: material names left out of the TLAS
+        static const std::string exclude = [] { const char* e = std::getenv("WFC_RT_EXCLUDE"); return std::string(e ? e : ""); }();
+        if (!exclude.empty()) {
+            bool hit = false;
+            for (size_t a = 0; a <= exclude.size() && !hit;) {
+                const size_t b = exclude.find(';', a);
+                const std::string tok = exclude.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                hit = !tok.empty() && s.matName.find(tok) != std::string::npos;
+                if (b == std::string::npos) break;
+                a = b + 1;
+            }
+            if (hit) { ++skipped; continue; }
+        }
+        largest.push_back({size, s.matName + (M.lit ? "" : " (unlit)")});
         std::vector<uint32_t>& out = M.twoSided ? W.twoSided : W.oneSided;
         out.insert(out.end(), idx.begin() + s.first, idx.begin() + s.first + s.count);
         ++subs;
     }
+    std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (size_t k = 0; k < std::min<size_t>(6, largest.size()); ++k)
+        LOG_INFO("RT world: large sub %.0f m: %s", largest[k].first, largest[k].second.c_str());
     const int set = meshId == bspMesh_ ? 1 : 0;
-    LOG_INFO("RT depth check: %zu prepassed subs of the %s set (mesh %d) -> D3D12", subs, set ? "level BSP" : "world", meshId);
+    static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
+    if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
+    LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs left out)", subs, set ? "level BSP" : "world", meshId, skipped);
     if (rtBridgeAddStaticWorld(W, 1u << set)) ++rtWorldSets_;
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
@@ -309,7 +337,9 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
         if (sun) {
             const core::Vec3 d = core::normalize(sun->dir);
-            fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = 1.0f;
+            static const bool worldShadows = std::getenv("WFC_RT_WORLDSHADOWS") != nullptr;   // (the later modern mode)
+            fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = worldShadows ? 2.0f : 1.0f;
+            rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
         }
         // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut
         float glInvP[16], glInvVP[16], tmp[16], tmp2[16];

@@ -496,6 +496,7 @@ private:
     RtTargets rtTargets_;
     GLuint rtCompositeProg_ = 0, rtWhiteTex_ = 0;
     bool rtDepthOnly_ = false, rtMaskActive_ = false;
+    float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
     int rtFrame_ = -1;
     void rtBuildWorld(int meshId);

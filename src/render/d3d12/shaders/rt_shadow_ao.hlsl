@@ -77,10 +77,13 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
                 const float r = sqrt(rnd(s)) * Params.w, phi = 6.2831853 * rnd(s);
                 sd = normalize(sd + su * (r * cos(phi)) + sv * (r * sin(phi)));
             }
-            if (dynamicPx) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z) ? 0.0 : 1.0; ++rays; }
+            // faithful (default): the world's occlusion of the sun stays the original's - baked into the lightmaps on world
+            // pixels, the per-object light visibility on dynamic objects - so RT darkens only where characters (and not the
+            // world) block the sun: character shadows on everything, self-shadowing included. ToSun.w = 2 (WFC_RT_WORLDSHADOWS,
+            // the later modern mode): dynamic pixels shadowed by the world too.
+            if (dynamicPx && ToSun.w > 1.5) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z) ? 0.0 : 1.0; ++rays; }
             else {
                 const bool any = occluded(o, sd, 10000.0, (uint)Params.z); ++rays;
-                // occluded: by the world (baked: no extra darkening) or by characters only (the RT character shadow)
                 if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x4u) ? 1.0 : 0.0; ++rays; }
             }
         }

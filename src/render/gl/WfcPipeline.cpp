@@ -2123,13 +2123,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
-        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;");
+        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;");
         sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).y;");
-        // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the directional lights only: the
-        // original's one mask came from the environment's dominant shadow light, which indoors is not the sun
+        // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
+        // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
+        // is not the sun, and maps add directional fill lights for dynamic objects that must stay unshadowed
         sub("float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;",
             "float rtVis = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x; float mask = 1.0;");
-        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 ? 1.0 : rtVis);");
+        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 || dot(uLDir[i].xyz, uRtSunDir) < 0.999 ? 1.0 : rtVis);");
     }
 
     static GLuint vsShared = 0;
@@ -3025,7 +3026,10 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform3f(ULOC(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
-        if (rtShadowAoOn()) { ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10); }
+        if (rtShadowAoOn()) {
+            ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10);
+            Uniform3f(ULOC(P, "uRtSunDir"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
+        }
     }
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
