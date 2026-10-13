@@ -34,13 +34,14 @@ Shipped here:
 - hdPbrTexture(roughness_parent, "roughness") replaces it.
 - The generated map's mean is normalised to the material's target_mean_roughness, its derived mean from its own textures.
 
-**Metallic hooks (reviewed rows, Integration / Experimental 2026-10-12).** Per material, m6_mapping.json's `pbr_hooks` gives GLSL expressions over the body's own temporaries: `metallic`, `f0` (vec3) and `baseColor` (null = the stripped base). matc emits them as wfcPbrMetallic / wfcPbrF0 (and the base override). The shading uses diffuse = baseColor x (1 - metallic) and F0 = mix(0.04, f0, metallic). The vectors carry expect.metallic, expect.f0 (the hook's f0, unmixed) and expect.baseColor. Without a hook: metallic 0, f0 0.04.
-- **metallic_paint** (CHR_Transformer_NormSpec_Cust_E, 67 robot bodies): baseColor = f0 = the tinted paint, metallic = 0.8.
+**Metallic hooks (reviewed rows, Integration / Experimental 2026-10-12).** Per material, m6_mapping.json's `pbr_hooks` gives GLSL expressions over the body's own temporaries: `metallic`, `f0` (vec3) and `baseColor` (null = the stripped base), plus `glsl_hash`: the SHA-1 hex of the material's materials_glsl.json "glsl" string, UTF-8 as stored (the row also carries it as `glsl_sha1`). The hooks name temporaries by number, so matc_pbr skips a row with a warning when the hash differs. Every hook temporary is defined before the o.DiffuseColor line (checked: 103 rows). matc emits them as wfcPbrMetallic / wfcPbrF0 (and the base override). The shading uses diffuse = baseColor x (1 - metallic) and F0 = mix(0.04, f0, metallic). The vectors carry expect.metallic, expect.f0 (the hook's f0, unmixed) and expect.baseColor. Without a hook: metallic 0, f0 0.04.
+- **metallic_paint** (CHR_Transformer_NormSpec_Cust_E, 67 robot bodies): baseColor = f0 = the tinted paint P bounded as P / max(1, max channel), which keeps the hue, metallic = 0.8. The paint reaches about 2x on random sample tables (mask.r + sigmoid); on the real textures, 0 of 2,010 customised pixels exceed 1.
   - The paint is rule 3's colour operand, the TINTED paint mix(albedo, Cust A / B, masks), never SpecularColor. The temporary varies per material (t41 in 57, t40, t34, t46).
   - A dielectric share is kept: diffuse = paint x 0.2. EnergonColor and the emissive are untouched.
-  - Exit check (tools/systems/m6/chr_paint_check.py): all 10 palette swatches as Cust A / B, on customised pixels, in diffuse-only, IBL-only and combined lighting, with the cube at its mean. Results for m = 0.6 / 0.7 / 0.8 are below. 0.8 is the default; per-family sheets decide in 0.6 - 0.8.
-- **weapon_metal_mask** (WEP_PhongMain, 36 materials): metallic = clamp(1 - mask.b, 0, 1) per pixel, where mask is the weapon _MASK texture's sample whose B is the tint mask (t23 in tinted instances; t10, the first mask sample, in instances without the Cust path).
-  - f0 = the constant reflection colour: the cube term per unit cube light with every texture at 1, scaled into [0, 1] by its max to keep the hue.
+  - Exit check (tools/systems/m6/chr_paint_check.py): CIEDE2000 per pixel, the IBL modelled as env x (F0 A + B) x occ (Karis' EnvBRDFApprox at the material roughness, NoV 0.3 / 0.6 / 0.9; env = the cube mean; occ 1). Results are below; the gate does not pass yet.
+- **weapon_metal_mask** (WEP_PhongMain, 36 materials): metallic = clamp((1 - mask.b) x mask.g, 0, 1) per pixel. The mask is the weapon _MASK texture's sample whose B is the tint mask (t23 in tinted instances; t10, the first mask sample, in instances without the Cust path). G is the reflection / gloss mask: the original reflection is constant x cube x mask.g, so matte parts (grips, rubber) had none and stay dielectric.
+  - f0 = the constant reflection colour: the cube term per unit cube light with every texture at 1, clamped per channel to [0, 1].
+  - 14 come out white (1, 1, 1): WEP_IonBlaster, BurstRifle, EMPShotgun, GrenadeLauncher, TurretIonGun (both), TurretRocket, Maul, SerratedBlade, ShortSword, Shotgun, FX_IonBlaster Mag, FX_RollerMine and the WEP_PhongMain master. For the sheets: these, plus PROP_NEU_AmmoPickup, FX_RollerMine and FX_IonBlaster Mag for readability.
   - The tinted paint stays dielectric per pixel (gate 1).
   - Weapons whose reflection colour is below 0.04 (5: the melee staves / daggers / bat) get no hook and stay dielectric.
 
@@ -158,12 +159,20 @@ Metal candidates (review list):
 - PROP_IAC_Statues_p.Texture.BB_ancestor_Statue_MATINST (PROP): strong, coloured specular (sat 0.43, spec/base lum 7.18)
 - WEP_Rocket_p.WEP_Rocket_Temp_MAT (WEP): strong, coloured specular (sat 1.00, spec/base lum 1.00)
 
-## Metallic-paint exit check (chr_paint_check.py, 67 materials x 10 swatches x 16 points; hue in degrees: worst per-material median / p90)
+## Metallic-paint exit check (chr_paint_check.py: 67 materials x 10 swatches x 16 points, 2,010 customised pixels)
 
-| m | diffuse-only | IBL-only | combined | combined L* (Modern - Original): median (p10, p90) |
-|---|---|---|---|---|
-| 0.6 | 5.7 / 1.4 | 71.1 / 8.9 | 22.0 / 5.0 | +10.6 (-12.8, +21.7) |
-| 0.7 | 5.7 / 1.4 | 61.3 / 5.7 | 20.3 / 5.5 | +7.1 (-15.8, +18.2) |
-| 0.8 | 5.7 / 1.4 | 12.0 / 3.5 | 19.2 / 7.1 | +2.9 (-19.4, +14.2) |
+The gate is a median dE00 of at most 5 per (material, swatch). The table gives the pass share, the median of the medians, the median dH* and the median signed dL*. The L*-matched pass share is the same check with Modern at Original's L*, so colour without exposure.
 
-At m 0.8, the 5 saturated swatches (sat >= 0.95) and the grey hold within about 5 degrees (worst material). The 4 desaturated swatches (sat 0.36 - 0.63) reach 11 - 19 degrees worst (median 1 - 6): a low-saturation hue moves a long way for a small RGB change. The per-family sheets are the final look.
+| m | mode | pass | median dE00 | dH* | dL* | L*-matched pass (median) |
+|---|---|---|---|---|---|---|
+| 0.8 | diffuse | 20 % | 9.9 | 0.3 | -8.0 | 53 % (4.8) |
+| 0.8 | IBL | 70 % | 2.8 | 0.4 | +2.5 | 86 % (1.5) |
+| 0.8 | combined | 17 % | 9.7 | 0.7 | -3.7 | 57 % (3.9) |
+| 0.7 | combined | 9 % | 9.9 | 0.6 | -0.6 | 60 % (4.1) |
+| 0.6 | combined | 9 % | 10.5 | 0.6 | +2.6 | 62 % (3.9) |
+
+Reading:
+- The hue holds (dH* under 1 in every mode).
+- The failure is lightness and chroma spread per pixel: the median dL* is small, but its sign varies across pixels. The Original diffuse chain is paint x (0.6 x gloss + cube x 0.2), then the -0.15 oversaturation mix. Modern's paint x (1 - m) + env x (F0 A + B) follows the gloss mask only through the roughness.
+- m does not fix it. The combined pass share is 9 - 17 % at 0.6 - 0.8.
+- Open: whether the gate compares the right quantities (Original's DiffuseColor is lit by the direct light; Modern's IBL term by the env only), or whether the paint's diffuse share should follow the gloss mask.

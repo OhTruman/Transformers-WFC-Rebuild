@@ -80,16 +80,24 @@ def palette():
 
 
 PALETTE = palette()
-# two reviewed metal decisions (Integration / Experimental, 2026-10-12):
-#  - robot bodies (CHR_Transformer_NormSpec_Cust_E): "metallic paint" - baseColor = the tinted paint (rule 3's colour
-#    operand), metallic = M_PAINT (0.6 - 0.8; per-family sheets decide; 0.8 matched best in chr_paint_check.py),
-#    F0 = mix(0.04, paint, m), the diffuse share paint x (1 - m) kept; EnergonColor emissive untouched
-#  - player weapons (WEP_PhongMain): per-pixel metallic = 1 - (the weapon _MASK texture's B, the tint mask); the metal F0
-#    = the reflection's constant factor per unit cube light (clamped to [0, 1]); baseColor = mix(stripped base, F0_metal,
-#    metallic): gun metal is metal, the tinted paint stays dielectric (gate 1 holds per pixel)
+# two reviewed metal decisions (Integration / Experimental, 2026-10-12; revised after Experimental's review of c9e92922):
+#  - robot bodies (CHR_Transformer_NormSpec_Cust_E): "metallic paint" - baseColor = f0 = the tinted paint (rule 3's colour
+#    operand) bounded to [0, 1] keeping the hue (paint / max(1, max channel): the paint reaches ~2x through
+#    mask.r + sigmoid), metallic = M_PAINT; the shading's diffuse = baseColor x (1 - m) keeps a dielectric share;
+#    EnergonColor / the emissive untouched
+#  - player weapons (WEP_PhongMain): per-pixel metallic = (1 - mask.b) x mask.g (B = the tint mask, G = the gloss / reflection
+#    mask: matte parts had no reflection in the original and stay dielectric); f0 = the reflection's constant colour per unit
+#    cube light, clamped to [0, 1] per channel; baseColor = the stripped base (the hook's baseColor is null), so the shading's
+#    diffuse = stripped base x (1 - metallic)
 MASTER_PAINT = 'TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat'
 MASTER_WEP = 'WEP_Shared_p.WEP_PhongMain_MAT'
 M_PAINT = 0.8
+
+
+def paint_bounded(paint):
+    """The metallic-paint base / F0: paint / max(1, max channel) (energy-bounded, hue kept)."""
+    p = np.maximum(np.asarray(paint[:3], dtype=np.float64), 0.0)
+    return p / max(1.0, float(p.max()))
 
 
 def wep_mask_temp(glsl, slot):
@@ -197,6 +205,9 @@ def audit_material(mname, mat, imgs, npoints):
     rng = np.random.default_rng(seed_of(mname))                       # (deterministic per material: Experimental 1d)
     emu, vecs = dict(ok=True), []
     master = info.get('master', '')
+    # the body's hash: hooks name temporaries by number, so regenerated render data could rebind them (matc_pbr skips +
+    # warns on a mismatch; Rendering 42ec0a72): SHA-1 hex of the materials_glsl.json "glsl" string, UTF-8, as stored
+    row['glsl_sha1'] = hashlib.sha1(glsl.encode('utf-8')).hexdigest()
     mask_slot = next((sl for sl, t in slot2d.items() if str(t.get('object', '')).lower().endswith('_mask')), None)
     f0_metal = None
     try:
@@ -205,19 +216,22 @@ def audit_material(mname, mat, imgs, npoints):
             cubes1 = {sl: [1.0, 1.0, 1.0, 1.0] for sl in slotcube}
             rr = E.run(glsl, E.Material(ones, cubes1, strip_view=True))
             f0_metal = np.maximum(rr['_diffuse_original'][:3] - rr['DiffuseColor'][:3], 0.0)
-            if f0_metal.max() > 1.0:                               # (keep the hue: scale into [0, 1] rather than clip to white)
-                f0_metal = f0_metal / f0_metal.max()
-            row['f0_metal'] = f0_metal.tolist(); row['metal_mask'] = '%s B (metallic = 1 - B)' % slot2d[mask_slot]['object']
+            f0_metal = np.clip(f0_metal, 0.0, 1.0)                 # (Experimental: clamp, not normalise)
+            row['f0_metal'] = f0_metal.tolist(); row['metal_mask'] = '%s (metallic = (1 - B) x G)' % slot2d[mask_slot]['object']
             mt = wep_mask_temp(glsl, mask_slot)
             if mt is None or f0_metal.max() < 0.04:                # (no reflection to carry: stays dielectric)
                 f0_metal = None
             else:
-                row['pbr_hooks'] = dict(metallic='clamp(1.0 - %s.b, 0.0, 1.0)' % mt,
-                                        f0='vec3(%r, %r, %r)' % tuple(float(x) for x in f0_metal), baseColor=None)
+                row['pbr_hooks'] = dict(metallic='clamp((1.0 - %s.b) * %s.g, 0.0, 1.0)' % (mt, mt),
+                                        f0='vec3(%r, %r, %r)' % tuple(float(x) for x in f0_metal), baseColor=None,
+                                        glsl_hash=row['glsl_sha1'])
         if master == MASTER_PAINT:                                 # metallic paint: the paint temporary (rule 3's colour operand)
             rp = E.run(glsl, E.Material({sl: [0.5, 0.5, 0.5, 1.0] for sl in slot2d}, {sl: [0.5, 0.5, 0.5, 1.0] for sl in slotcube}, strip_view=True))
             if rp.get('_paint_expr'):
-                row['pbr_hooks'] = dict(metallic='%r' % M_PAINT, f0=rp['_paint_expr'], baseColor=rp['_paint_expr'])
+                pe = rp['_paint_expr']
+                pc = pe[:-4] if pe.endswith('.rgb') else pe        # (the channels of a vec4 temporary's .rgb)
+                bounded = '(%s / max(1.0, max(max(%s.r, %s.g), %s.b)))' % (pe, pc, pc, pc)
+                row['pbr_hooks'] = dict(metallic='%r' % M_PAINT, f0=bounded, baseColor=bounded, glsl_hash=row['glsl_sha1'])
         # ---- the oracle vectors: 3 fixed-seed sample tables + 1 with the runtime parameters set
         for k in range(4):
             s2 = {s: rng.uniform(0.05, 0.95, 4).tolist() for s in slot2d}
@@ -233,9 +247,9 @@ def audit_material(mname, mat, imgs, npoints):
             metal, base_pbr, f0 = 0.0, B, np.array([0.04, 0.04, 0.04])
             hooks = row.get('pbr_hooks')
             if hooks and master == MASTER_PAINT and '_paint' in r:
-                metal, base_pbr = M_PAINT, np.asarray(r['_paint'][:3]); f0 = base_pbr
+                metal, base_pbr = M_PAINT, paint_bounded(r['_paint']); f0 = base_pbr
             elif hooks and f0_metal is not None:
-                metal = float(np.clip(1.0 - float(s2[mask_slot][2]), 0.0, 1.0)); f0 = f0_metal
+                metal = float(np.clip((1.0 - float(s2[mask_slot][2])) * float(s2[mask_slot][1]), 0.0, 1.0)); f0 = f0_metal
             vecs.append(dict(samples2d={str(s): v for s, v in s2.items()}, samples_cube={str(s): v for s, v in sc.items()},
                              runtime_params_set=rt is not None,
                              expect=dict(baseColor=np.asarray(base_pbr).tolist(), baseStripped=B.tolist(), base_rule=br,
@@ -293,7 +307,7 @@ def audit_material(mname, mat, imgs, npoints):
     if master == MASTER_PAINT and row.get('pbr_hooks'):
         cls, why = 'metallic_paint', 'reviewed: robot body, baseColor = tinted paint, metallic %.1f (sheets: 0.6 - 0.8)' % M_PAINT
     elif master == MASTER_WEP and row.get('pbr_hooks'):
-        cls, why = 'weapon_metal_mask', 'reviewed: metallic = 1 - %s; metal F0 %s' % (row.get('metal_mask'), np.round(f0_metal, 3).tolist())
+        cls, why = 'weapon_metal_mask', 'reviewed: %s; metal F0 %s' % (row.get('metal_mask'), np.round(f0_metal, 3).tolist())
     row['class'], row['why'] = cls, why
     row['mapping'] = dict(baseColor='DiffuseColor under the base-colour strip' + (' (view / cube terms present)' if row['view_in_diffuse'] else ''),
                           roughness='derived: clamp(sqrt(2/(SpecularPower+2)), 0.02, 1)', metallic=0.0, f0='0.04',
