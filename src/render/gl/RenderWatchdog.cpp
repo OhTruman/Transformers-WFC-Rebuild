@@ -207,11 +207,16 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
 
 #ifdef _WIN32
 // ---- GPU-loss evidence (Experimental's review): a TDR resets the adapter and removes every D3D device on it, in every
-// process. The watchdog keeps one tiny D3D11 device per hardware adapter (no GL on this thread; the GL context's adapter is
-// not known here, so all of them) and asks GetDeviceRemovedReason: a stalled render thread is only ended when one says
-// removed. Created on the watchdog thread at start (d3d11 / dxgi loaded at run time: no link dependency); a few MB each.
+// process. The watchdog keeps one tiny D3D11 device on GL's adapter and asks GetDeviceRemovedReason: a stalled render
+// thread is only ended when it says removed. GL's adapter comes from the renderer (setGpuAdapter: its LUID, read with the
+// GL context current); on a hybrid laptop a reset of the OTHER adapter (the iGPU) during a long legitimate stall must not end
+// the game (Experimental's review of 14c3ffca). Unknown LUID, or no adapter with it: every hardware adapter, as before.
+// Created on the watchdog thread once the first frame completed (the renderer has set the adapter by then; d3d11 / dxgi
+// loaded at run time: no link dependency); a few MB.
 ID3D11Device* gProbe[4] = {};
 int gProbes = 0;
+std::atomic<bool> gLuidKnown{false};
+LUID gLuid{};
 
 void createProbes() {
     HMODULE dxgi = LoadLibraryA("dxgi.dll"), d3d = LoadLibraryA("d3d11.dll");
@@ -224,10 +229,20 @@ void createProbes() {
         return;
     }
     IDXGIAdapter1* a = nullptr;
+    const bool known = gLuidKnown.load();
+    bool matched = false;
+    if (known)                                       // (is GL's adapter enumerable? else probe them all)
+        for (UINT i = 0; f->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i) {
+            DXGI_ADAPTER_DESC1 d{};
+            a->GetDesc1(&d);
+            matched = matched || (d.AdapterLuid.LowPart == gLuid.LowPart && d.AdapterLuid.HighPart == gLuid.HighPart);
+            a->Release();
+        }
     for (UINT i = 0; gProbes < 4 && f->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i) {
         DXGI_ADAPTER_DESC1 d{};
         a->GetDesc1(&d);
-        if (!(d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
+        const bool mine = !matched || (d.AdapterLuid.LowPart == gLuid.LowPart && d.AdapterLuid.HighPart == gLuid.HighPart);
+        if (mine && !(d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
             ID3D11Device* dev = nullptr;
             if (SUCCEEDED(mkDevice(a, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, nullptr)) && dev)
                 gProbe[gProbes++] = dev;
@@ -235,7 +250,8 @@ void createProbes() {
         a->Release();
     }
     f->Release();
-    LOG_INFO("watchdog: GPU-loss probe on %d adapter(s)", gProbes);
+    LOG_INFO("watchdog: GPU-loss probe on %d adapter(s) (%s)", gProbes,
+             matched ? "GL's adapter, by LUID" : known ? "GL's LUID matches no adapter: all of them" : "GL's adapter unknown: all of them");
 }
 
 // the first probe that reports removal (its reason), or S_OK. WFC_SIMHANG=removed simulates DXGI_ERROR_DEVICE_REMOVED.
@@ -249,16 +265,19 @@ HRESULT gpuRemovedReason() {
 #endif
 
 void loop() {
-#ifdef _WIN32
-    createProbes();
-#endif
     int dumps = 0;
+#ifdef _WIN32
+    bool probed = false;
+#endif
     bool reported = false;
     bool displayRestored = false;
     while (gRun.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         const long long last = gLastProgressMs.load();
         if (last == 0 || !gArmed.load()) continue;
+#ifdef _WIN32
+        if (!probed) { probed = true; createProbes(); }   // (after the first frame: the renderer has set GL's adapter)
+#endif
         const double stalled = (nowMs() - last) / 1000.0;
         if (stalled < kStallSeconds) { reported = false; displayRestored = false; continue; }
 #ifdef _WIN32
@@ -372,6 +391,17 @@ void gpuLost(const char* why) {
     TerminateProcess(GetCurrentProcess(), 3);
 #endif
     std::_Exit(3);
+}
+
+void setGpuAdapter(IDXGIAdapter1* adapter) {
+#ifdef _WIN32
+    if (!adapter) return;
+    DXGI_ADAPTER_DESC1 d{};
+    if (SUCCEEDED(adapter->GetDesc1(&d))) { gLuid = d.AdapterLuid; gLuidKnown = true; }
+    adapter->Release();
+#else
+    (void)adapter;
+#endif
 }
 
 void installCrashHandler() {

@@ -2,6 +2,8 @@
 // RX 7900 XTX, no TDR / WER record).
 #pragma once
 
+struct IDXGIAdapter1;
+
 namespace render::watchdog {
 
 // The render thread marks where it is (a static string) and when a frame completes. A side thread checks every
@@ -14,6 +16,9 @@ void start();
 void phase(const char* where);     // static-lifetime string
 void frameDone(int frame);
 void stop();
+// GL's DXGI adapter (render::d3d12AdapterForGL, read on the GL thread): the GPU-loss probe watches only that adapter (a reset
+// of another one - a hybrid laptop's iGPU - is not evidence). Takes ownership (Releases it). nullptr / never called: all adapters.
+void setGpuAdapter(IDXGIAdapter1* adapter);
 
 // [Systems] GPU driver reset / unrecoverable hang (AMD TDR, 2026-10-13: after a reset the main thread blocked in the driver -
 // glGetQueryObjectiv spinning in atio6axx, or SwapBuffers never returning - and the process hung forever). Ends the process

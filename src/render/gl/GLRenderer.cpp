@@ -21,6 +21,7 @@
 #include "render/d3d12/D3D12FrameGen.h"
 #include "platform/FileCompression.h"
 #include "render/gl/RenderWatchdog.h"
+#include "render/d3d12/D3D12Adapter.h"
 #include "render/FrameLimiter.h"
 #include "platform/Image.h"
 #include "core/Config.h"
@@ -69,6 +70,7 @@ public:
     }
     bool init() override {
         watchdog::start();                    // stall diagnostics: a freeze logs its phase and writes a minidump
+        watchdog::setGpuAdapter(d3d12AdapterForGL());   // [Systems] the GPU-loss probe on GL's adapter only (hybrid laptops)
         // D3D12 present (WFC_D3D12PRESENT, M5 item 1): before anything is presented - DXGI refuses a flip-model swapchain
         // for a window GL has already presented to (the frontend / loading screen swap before the first 3D frame)
         initD3D12PresentIfRequested();
