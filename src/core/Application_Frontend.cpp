@@ -134,6 +134,7 @@ template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int h
 // PC EXTENSION graphics options -> Rendering. The renderer opts in by providing (detected, so either side builds alone):
 //   void setUpscaling(int mode);   // 0 Off (default), 1 / 2 / 3 FSR 1, 4 / 5 / 6 FSR 3.1 Quality / Balanced / Performance
 //   void setHdTextures(bool on);   // HD texture set where available (default off)
+//   void setHdTextureLevel(int);   // preferred when present: 0 Off, 1 Faithful, 2 Enhanced (Rendering, proposed)
 //   void setAnisotropy(int x);     // 4 (the original's, default), 8 or 16
 // called at boot and on every Game.ApplyProfileSettings when the value changed. Values live in LocalProfile::Display
 // ([PCSettings] Upscaling / HDTextures / Anisotropy), set from the PC graphics menu; WFC_UPSCALING / WFC_HDTEXTURES /
@@ -142,18 +143,22 @@ template <class R, class = void> struct HasRendererUpscaling : std::false_type {
 template <class R> struct HasRendererUpscaling<R, std::void_t<decltype(std::declval<R&>().setUpscaling(0))>> : std::true_type {};
 template <class R, class = void> struct HasRendererHdTextures : std::false_type {};
 template <class R> struct HasRendererHdTextures<R, std::void_t<decltype(std::declval<R&>().setHdTextures(true))>> : std::true_type {};
+template <class R, class = void> struct HasRendererHdLevel : std::false_type {};
+template <class R> struct HasRendererHdLevel<R, std::void_t<decltype(std::declval<R&>().setHdTextureLevel(0)),
+                                                           decltype(std::declval<R&>().hdTextureLevelAvailable(2))>> : std::true_type {};
 template <class R, class = void> struct HasRendererAnisotropy : std::false_type {};
 template <class R> struct HasRendererAnisotropy<R, std::void_t<decltype(std::declval<R&>().setAnisotropy(4))>> : std::true_type {};
 // upscaling / hdTextures: in the profile values, out the values handed over (after the test overrides); envOverride
 // says whether one applied (for the trace).
-template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, bool& hdTextures, int& anisotropy, bool& envOverride) {
+template <class R> const char* applyGraphicsExtensions(R* r, int& upscaling, int& hdTextures, int& anisotropy, bool& envOverride) {
     envOverride = false;
     if (const char* e = std::getenv("WFC_ANISOTROPY")) { anisotropy = frontend::LocalProfile::Display::clampAnisotropy(std::atoi(e)); envOverride = true; }
     if (const char* e = std::getenv("WFC_UPSCALING")) { upscaling = std::clamp(std::atoi(e), 0, frontend::LocalProfile::Display::kUpscalingMax); envOverride = true; }
-    if (const char* e = std::getenv("WFC_HDTEXTURES")) { hdTextures = std::atoi(e) != 0; envOverride = true; }
+    if (const char* e = std::getenv("WFC_HDTEXTURES")) { hdTextures = std::clamp(std::atoi(e), 0, frontend::LocalProfile::Display::kHdTexturesMax); envOverride = true; }
     bool any = false;
     if constexpr (HasRendererUpscaling<R>::value) { if (r) { r->setUpscaling(upscaling); any = true; } }
-    if constexpr (HasRendererHdTextures<R>::value) { if (r) { r->setHdTextures(hdTextures); any = true; } }
+    if constexpr (HasRendererHdLevel<R>::value) { if (r) { r->setHdTextureLevel(hdTextures); any = true; } }
+    else if constexpr (HasRendererHdTextures<R>::value) { if (r) { r->setHdTextures(hdTextures > 0); any = true; } }
     if constexpr (HasRendererAnisotropy<R>::value) { if (r) { r->setAnisotropy(anisotropy); any = true; } }
     (void)r; (void)upscaling; (void)hdTextures; (void)anisotropy;
     return any ? "renderer" : "stored (no renderer API yet)";
@@ -178,13 +183,29 @@ template <class R> struct HasRendererFrameGen<R, std::void_t<decltype(std::declv
 // void IRenderer::setRayTracingMode(int mode) (0 Off, 1 Faithful, 2 Realistic). Detected; without them the Ray Tracing
 // row stays hidden and the stored value is only kept.
 template <class R, class = void> struct HasRendererRayTracing : std::false_type {};
-template <class R> struct HasRendererRayTracing<R, std::void_t<decltype(std::declval<const R&>().rayTracingAvailable()),
+// (Called through a non-const object: Rendering's rayTracingAvailable() is non-const; a const one matches too.)
+template <class R> struct HasRendererRayTracing<R, std::void_t<decltype(std::declval<R&>().rayTracingAvailable()),
                                                                decltype(std::declval<R&>().setRayTracingMode(0))>> : std::true_type {};
-template <class R> const char* applyRayTracing(R* r, int mode) {
-    if constexpr (HasRendererRayTracing<R>::value) { if (r) { r->setRayTracingMode(mode); return "renderer"; } }
-    (void)r; (void)mode;
+// Only offered modes go to the renderer (the row exists only when available); a bool return of false is "refused".
+template <class R> const char* applyRayTracing(R* r, int mode, bool available) {
+    if constexpr (HasRendererRayTracing<R>::value) {
+        if (!r) return "no renderer";
+        if (!available) return "not handed over (unavailable)";
+        if constexpr (std::is_same_v<decltype(r->setRayTracingMode(mode)), bool>) return r->setRayTracingMode(mode) ? "renderer" : "refused";
+        else { r->setRayTracingMode(mode); return "renderer"; }
+    }
+    (void)r; (void)mode; (void)available;
     return "stored (no renderer API yet)";
 }
+// A renderer that declares the members must satisfy the traits (a signature mismatch would hide the rows silently).
+template <class R, class = void> struct DeclaresRtNames : std::false_type {};
+template <class R> struct DeclaresRtNames<R, std::void_t<decltype(&R::rayTracingAvailable)>> : std::true_type {};
+template <class R, class = void> struct DeclaresHdLevelNames : std::false_type {};
+template <class R> struct DeclaresHdLevelNames<R, std::void_t<decltype(&R::setHdTextureLevel)>> : std::true_type {};
+static_assert(!DeclaresRtNames<render::IRenderer>::value || HasRendererRayTracing<render::IRenderer>::value,
+              "IRenderer declares rayTracingAvailable but HasRendererRayTracing does not match its signatures");
+static_assert(!DeclaresHdLevelNames<render::IRenderer>::value || HasRendererHdLevel<render::IRenderer>::value,
+              "IRenderer declares setHdTextureLevel but HasRendererHdLevel does not match its signatures");
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -198,6 +219,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
         }
     }
     if constexpr (HasRendererHdPack<R>::value) { if (r) f.hdTexturePack = r->hdTexturesAvailable(); }
+    if constexpr (HasRendererHdLevel<R>::value) { if (r) { f.hdTexturePack = r->hdTextureLevelAvailable(1); f.hdEnhanced = r->hdTextureLevelAvailable(2); } }
     if constexpr (HasRendererUpscalingAvail<R>::value) { if (r) f.fsr3 = r->upscalingModeAvailable(4); }
     if constexpr (HasRendererFrameGen<R>::value) {
         if (r) { f.frameGen = r->frameGenerationAvailable(); f.frameGenActive = r->frameGenerationActive(); }
@@ -408,17 +430,18 @@ void Application::attachPresenter() {
         pacingHz_ = cap;
         frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
         appliedUpscaling_ = d.upscaling;
-        appliedHdTextures_ = d.hdTextures;
+        appliedHdTextures_ = frontend_->hdTexturesEffectiveLevel();
         appliedAnisotropy_ = d.anisotropy;
         int up = d.upscaling, af = d.anisotropy;
-        bool hd = d.hdTextures, env = false;
+        int hd = appliedHdTextures_;
+        bool env = false;
         const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
-        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+        frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
                                                                  {"anisotropy", std::to_string(af)},
                                                                  {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
                                                                  {"provenance", "PC EXTENSION"}});
         appliedRayTracing_ = d.rayTracing;
-        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing)},
+        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, frontend_->rayTracingAvailable())},
                                                          {"when", "boot"}, {"provenance", "PC EXTENSION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
@@ -452,20 +475,22 @@ void Application::attachPresenter() {
             const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_, pacingFg_);
             frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
         }
-        if (p.display.upscaling != appliedUpscaling_ || p.display.hdTextures != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
+        const int hdNow = frontend_->hdTexturesEffectiveLevel();
+        if (p.display.upscaling != appliedUpscaling_ || hdNow != appliedHdTextures_ || p.display.anisotropy != appliedAnisotropy_) {
             appliedUpscaling_ = p.display.upscaling;
-            appliedHdTextures_ = p.display.hdTextures;
+            appliedHdTextures_ = hdNow;
             appliedAnisotropy_ = p.display.anisotropy;
             int up = appliedUpscaling_, af = appliedAnisotropy_;
-            bool hd = appliedHdTextures_, env = false;
+            int hd = appliedHdTextures_;
+            bool env = false;
             const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
-            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
+            frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
                                                                      {"anisotropy", std::to_string(af)},
                                                                      {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
         }
         if (p.display.rayTracing != appliedRayTracing_) {
             appliedRayTracing_ = p.display.rayTracing;
-            frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_)},
+            frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_, frontend_->rayTracingAvailable())},
                                                              {"when", "apply"}, {"provenance", "PC EXTENSION"}});
         }
         if (applyLookSettings(world_.player().controller(), p))

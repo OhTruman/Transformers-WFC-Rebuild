@@ -77,7 +77,6 @@ GraphicsPreset GraphicsPresetTable::pick(const HardwareFacts& f) const {
     p.frameLimit = t.frameLimit < 0 ? (f.nativeHz > 0 ? f.nativeHz : 0) : t.frameLimit;
     p.anisotropy = t.anisotropy >= 16 ? 16 : t.anisotropy >= 8 ? 8 : 4;
     p.textureQuality = t.textureQuality < 0 ? 0 : t.textureQuality > 2 ? 2 : t.textureQuality;
-    p.hdTextures = hdTexturesDefault(f);   // every tier: the pack + the VRAM floor
     // Auto-detect picks FSR 1 at most (0-3): FSR 3.1 (upscaling 4-6) is only ever an explicit user choice (Integration
     // 2026-10-12), whatever graphics_presets.json says.
     p.upscaling = (long long)w * h > t.nativePixelBudget ? std::clamp(t.upscalingOverBudget, 0, 3) : 0;

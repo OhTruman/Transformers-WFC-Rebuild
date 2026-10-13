@@ -64,7 +64,7 @@ private:
     int pacingFg_ = 1;
     void pacingCheckFrameGeneration();
     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
-    bool appliedHdTextures_ = false;
+    int appliedHdTextures_ = 0;
     int appliedAnisotropy_ = -1;
     int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
     void qaTick(const platform::InputFrame& in);

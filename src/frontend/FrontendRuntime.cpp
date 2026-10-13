@@ -745,10 +745,8 @@ GraphicsPreset FrontendRuntime::applyRecommendedGraphics(const char* why) {
     p.display.frameLimit = g.frameLimit;
     p.display.anisotropy = g.anisotropy;
     p.display.upscaling = g.upscaling;
-    p.display.hdTextures = g.hdTextures;
-    p.display.hdTexturesUserSet = false;   // back to following the default
     p.display.textureQuality = g.textureQuality;
-    // Ray tracing / frame generation stay as they are (off by default; never enabled by auto-detect).
+    // HD textures / ray tracing / frame generation stay as they are (off by default; never enabled by auto-detect).
     p.autoDetectGpu = hardware_.gpuId();
     p.save();
     const HardwareFacts& f = hardware_;
@@ -761,9 +759,21 @@ GraphicsPreset FrontendRuntime::applyRecommendedGraphics(const char* why) {
                                             {"resolution", std::to_string(g.width) + "x" + std::to_string(g.height)},
                                             {"fullscreen", FlowTrace::boolean(g.fullscreen)}, {"frameLimit", std::to_string(g.frameLimit)},
                                             {"anisotropy", std::to_string(g.anisotropy)}, {"upscaling", std::to_string(g.upscaling)},
-                                            {"hdTextures", FlowTrace::boolean(g.hdTextures)}, {"textureQuality", std::to_string(g.textureQuality)},
+                                            {"textureQuality", std::to_string(g.textureQuality)},
                                             {"reason", g.why}, {"source", "autodetect"}, {"provenance", "PC EXTENSION"}});
     return g;
+}
+
+void FrontendRuntime::updateHdPackHint() {
+    // Once, on the main menu with nothing else open (PC EXTENSION; automated runs never get here: see autoDetectGraphicsAtBoot).
+    if (!hdPackHintPending_ || flow_.level() != LevelKind::FrontEnd || !flow_.frontEndStarted() || flow_.ui().state() != UIState::FrontEnd ||
+        flow_.popup().open || !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty())
+        return;
+    hdPackHintPending_ = false;
+    flow_.showMessage("HD Textures", "HD texture pack found. Turn it on in Settings > Graphics > HD Textures.");
+    flow_.profile().display.hdPackHintShown = true;
+    flow_.profile().save();
+    FlowTrace::emit("settings.hdPackHint", {{"vramMB", std::to_string(hardware_.vramMB)}, {"provenance", "PC EXTENSION"}});
 }
 
 void FrontendRuntime::applyDisplaySettings() {
@@ -774,8 +784,6 @@ void FrontendRuntime::applyDisplaySettings() {
 }
 
 bool FrontendRuntime::autoDetectGraphicsAtBoot() {
-    // Without the HD pack the setting reads (and is handed over) as Off this session; the saved choice is not rewritten.
-    if (!hdTexturesAvailable()) flow_.profile().display.hdTextures = false;
     const char* force = std::getenv("WFC_AUTODETECT");
     if (force && std::string(force) == "0") return false;
     if (!force && std::getenv("WFC_FRONTEND_SCRIPT")) return false;   // automated runs keep their seeded settings
@@ -787,14 +795,17 @@ bool FrontendRuntime::autoDetectGraphicsAtBoot() {
     // user's settings and just record the GPU.
     const bool changed = !p.autoDetectGpu.empty() && !hardware_.gpuName.empty() && p.autoDetectGpu != id;
     const bool forced = force && std::string(force) == "1";
-    // HD textures follow their default (the pack + 6 GB: on) until the user picks a value in the menu, so a pack
-    // installed later turns them on at its first boot (the row's hint says so that session).
-    if (!p.display.hdTexturesUserSet && p.display.hdTextures != hdTexturesDefault(hardware_)) {
-        p.display.hdTextures = hdTexturesDefault(hardware_);
-        hdTexturesTurnedOn_ = p.display.hdTextures;
-        p.save();
-        FlowTrace::emit("settings.hdTexturesDefault", {{"on", FlowTrace::boolean(p.display.hdTextures)}, {"hdPack", FlowTrace::boolean(hardware_.hdTexturePack)},
-                                                       {"vramMB", std::to_string(hardware_.vramMB)}, {"provenance", "PC EXTENSION"}});
+    // HD textures stay Off unless the user turns them on; a pack found on a GPU that can hold it is mentioned once.
+    {
+        const char* reason = !hardware_.hdTexturePack && !hardware_.hdEnhanced ? "no pack"
+                           : hardware_.vramMB < kHdTexturesMinVramMB           ? "vram below 6000 MB"
+                           : p.display.hdTextures                              ? "hd already on"
+                           : p.display.hdTexturesUserSet                       ? "user set the row"
+                           : p.display.hdPackHintShown                         ? "already shown"
+                                                                               : "pending";
+        hdPackHintPending_ = std::string(reason) == "pending";
+        FlowTrace::emit("settings.hdPack", {{"faithful", FlowTrace::boolean(hardware_.hdTexturePack)}, {"enhanced", FlowTrace::boolean(hardware_.hdEnhanced)},
+                                            {"vramMB", std::to_string(hardware_.vramMB)}, {"hint", reason}, {"provenance", "PC EXTENSION"}});
     }
     if (!first && !changed && !forced) {
         if (p.autoDetectGpu.empty() && !hardware_.gpuName.empty()) { p.autoDetectGpu = id; p.save(); }
@@ -1270,6 +1281,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
     { core::prof::Scope prof("shims"); runNativeShims(); }
     { core::prof::Scope prof("movie.player"); updateMoviePlayer(dt, in); }
+    updateHdPackHint();
     // Full-screen movie mode (BeginMovieMode: UI event 12, the UI hidden) takes all input; after the movie the menus
     // see input again once the skip key is released, so the skip press does not also act on the menu [HIGH].
     bool fullScreenMovie = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();
