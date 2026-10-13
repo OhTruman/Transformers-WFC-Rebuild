@@ -2411,8 +2411,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                     while ((w >> levels) > 0) ++levels;
                 }
                 // (the cube's mips are box-filtered, not GGX-prefiltered: the blur approximates the lobe)
-                fs += "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
-                      std::to_string(levels - 1) + ".0); }\n";
+                // (RT Realistic: the ray-traced reflection replaces the cube here too - Modern strips the cube from the base,
+                // so this environment term is where pbr materials consume the RT reflections; blurred by the roughness over
+                // the reflection target's mips, WFC_RT_REFLECT_ROUGHLOD levels at roughness 1)
+                static const std::string roughLod = [] { const char* e = std::getenv("WFC_RT_REFLECT_ROUGHLOD"); return std::string(e ? e : "8.0"); }();
+                fs += rtRefl ? "vec4 wfcSCR_" + n + "(vec3 d, float r) { return wfcRtRefl(textureLod(uTex" + n + ", d, r * " +
+                               std::to_string(levels - 1) + ".0), r * " + roughLod + "); }\n"
+                             : "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
+                               std::to_string(levels - 1) + ".0); }\n";
                 replaceAll(code, "wfcSampleCubeRough(" + n + ", ", "wfcSCR_" + n + "(");
             }
             if (code.find("wfcSampleCubeMean(" + n + ")") != std::string::npos) {   // (M6 pbr rule 3: the cube's mean colour)
