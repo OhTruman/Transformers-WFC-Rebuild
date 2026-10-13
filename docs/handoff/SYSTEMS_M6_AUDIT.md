@@ -86,7 +86,7 @@ Shipped here:
 
 | master | texture | channel |
 |---|---|---|
-| ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat | the TEXSET Masks (..._Masks_NormY) | **B** (Cust A / B blend; G is the gloss / spec mask, R the emissive mask, A the normal's Y) |
+| ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat | the TEXSET Masks (..._Masks_NormY) | **B, only in materials with Enable_CustomColorTint** (234 of 662): diffuse = mix(albedo x CustA, albedo x CustB, B), both colours designer constants that multiply the albedo (73 have CustA white, so B = 0 is untinted there; 82 have both non-white, so every texel is tinted). With the switch off (427 materials, e.g. Rust MPYFloor, WallPanelSign) B is the **detail-normal mask** (vec2(B) x the detail normal's xy), not a tint. Per mask texture: SYSTEMS_M6_TINT_AB.json. G is the gloss / spec mask, R the emissive mask, A the normal's Y |
 | WEP_Rocket_p.WEP_Projectile_MAT | ..._Masks_NormY | **B** |
 | WEP_Shared_p.WEP_PhongMain_MAT | the weapon's _MASK texture | **B** |
 | TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat, TR_Defrag_MAT | the separate CustAB_AuxGlow(Map) texture | **R** (the whole texture is mask data: leave it untouched) |
