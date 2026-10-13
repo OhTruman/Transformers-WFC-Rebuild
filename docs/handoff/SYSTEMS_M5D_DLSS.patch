@@ -1,14 +1,14 @@
 diff --git a/.gitignore b/.gitignore
-index e707e05..44e2b16 100644
+index 28f1dee..a6d10b7 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -37,3 +37,4 @@ wfc_profile.ini
- third_party/ffx_sdk/
+@@ -38,3 +38,4 @@ third_party/ffx_sdk/
  third_party/d3d12_agility/
  third_party/dxc/
+ third_party/ffx_denoiser/
 +third_party/streamline/
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index cba259a..b3c7e47 100644
+index 7ddfd7b..870b2c5 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -60,6 +60,17 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include/ffx_api
@@ -30,7 +30,7 @@ index cba259a..b3c7e47 100644
  # the exe exports D3D12SDKVersion / D3D12SDKPath (src/render/d3d12/D3D12Agility.cpp) and D3D12Core.dll goes to bin/D3D12
  if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core.dll")
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
-index fcef999..c805b28 100644
+index 87741e1..9b604ec 100644
 --- a/src/core/Application.cpp
 +++ b/src/core/Application.cpp
 @@ -9,6 +9,7 @@
@@ -49,7 +49,7 @@ index fcef999..c805b28 100644
          // [Rendering M09] PC ADAPTATION: presented-frame limiter slot, before the frame's clock read and input pump
          // (lowest latency; the simulation's fixed step is unaffected). No-op when the limit is 0 (unlimited).
          pacingCheckFrameGeneration();   // [Systems, M5 item 10] frame generation on / off / factor: the limiter paces the rendered rate
-@@ -963,6 +965,8 @@ Application::MatchExit Application::runMatch() {
+@@ -984,6 +986,8 @@ Application::MatchExit Application::runMatch() {
                  else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
              }
          }
@@ -58,7 +58,7 @@ index fcef999..c805b28 100644
          renderer_->beginFrame(camera_, window_->width(), window_->height());
          world_.draw(*renderer_);
          if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
-@@ -1148,6 +1152,7 @@ Application::MatchExit Application::runMatch() {
+@@ -1169,6 +1173,7 @@ Application::MatchExit Application::runMatch() {
              }
          }
  
@@ -183,10 +183,10 @@ index 785d487..6f51313 100644
 +void notifyDisplayModeChange() { if (g_modeHook) g_modeHook(); }
  } // namespace platform
 diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
-index 897dc9c..8d1ad4a 100644
+index 558e554..cba5e93 100644
 --- a/src/platform/win32/Win32Window.cpp
 +++ b/src/platform/win32/Win32Window.cpp
-@@ -285,6 +285,7 @@ public:
+@@ -286,6 +286,7 @@ public:
                  // while our mode is active (a re-apply or a resolution change in fullscreen sees our own mode in `cur`)
                  desktopModeKeeper().setRestoreFile(displayRestoreFilePath());   // (written at the switch: kill-path repair)
                  desktopModeKeeper().saveBeforeSwitch(mi.szDevice, cur);
@@ -194,7 +194,7 @@ index 897dc9c..8d1ad4a 100644
                  ok = ChangeDisplaySettingsExW(mi.szDevice, &best, nullptr, CDS_FULLSCREEN, nullptr) == DISP_CHANGE_SUCCESSFUL;
                  if (ok) {
                      desktopModeKeeper().switched();
-@@ -308,6 +309,7 @@ public:
+@@ -309,6 +310,7 @@ public:
          // registry mode, which can differ: a 144 Hz desktop could come back at 60 Hz); the registry mode only if refused
          if (!modeChanged_) return;
          const DEVMODEW want = desktopModeKeeper().saved();
@@ -1502,7 +1502,7 @@ index 0000000..1df5043
 +
 +}  // namespace render
 diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
-index 3029e12..4d53417 100644
+index 370f798..dc3d19b 100644
 --- a/src/render/gl/GLRenderer.cpp
 +++ b/src/render/gl/GLRenderer.cpp
 @@ -18,6 +18,8 @@
@@ -1514,7 +1514,7 @@ index 3029e12..4d53417 100644
  #include "render/d3d12/D3D12FrameGen.h"
  #include "platform/FileCompression.h"
  #include "render/gl/RenderWatchdog.h"
-@@ -1579,17 +1581,25 @@ public:
+@@ -1598,17 +1600,25 @@ public:
          static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};
          static const char* kName[7] = {"off", "FSR 1 Quality", "FSR 1 Balanced", "FSR 1 Performance", "FSR 3.1 Quality",
                                         "FSR 3.1 Balanced", "FSR 3.1 Performance"};
@@ -1609,30 +1609,46 @@ index acf6191..ea50abb 100644
  }
  
 diff --git a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
-index 262d838..38ba0d3 100644
+index 00bd42d..2ebf46a 100644
 --- a/src/render/gl/WfcPipeline.cpp
 +++ b/src/render/gl/WfcPipeline.cpp
-@@ -1018,6 +1018,7 @@ void Pipeline::release() {
-     const int keepAniso = anisotropy_;
-     const bool keepHd = hdTextures_;
-     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
+@@ -1029,6 +1029,7 @@ void Pipeline::release() {
+     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
+                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
 +    const int keepDlss = dlssMode_; const bool keepDlssFailed = dlssFailed_;   // [Systems M5 D] (the same for DLSS)
      *this = Pipeline();
      loadYield_ = std::move(keepYield);
      displayGamma_ = keepGamma;
-@@ -1025,6 +1026,7 @@ void Pipeline::release() {
-     anisotropy_ = keepAniso;
-     hdTextures_ = keepHd;
+@@ -1038,6 +1039,7 @@ void Pipeline::release() {
      fsr3On_ = keepFsr3;
+     modern_ = keepModern;
+     rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
 +    dlssMode_ = keepDlss; dlssFailed_ = keepDlssFailed;
  }
  
- // ------------------------------------------------------------------------- loading
+ // WFC_SETTINGSTEST=1 (at init, before any map): every caller setting set to a non-default value survives release() -
+@@ -1048,11 +1050,15 @@ void Pipeline::runSettingsSelfTest() {
+     const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
+     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+     const int rm = rtMode_;
++    const int dm = dlssMode_; const bool df = dlssFailed_;
+     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+     rtMode_ = 2;
++    dlssMode_ = 2; dlssFailed_ = true;                 // [Systems M5 D]
+     release();
+     check(rtMode_ == 2, "Ray Tracing mode");
+     rtMode_ = rm;
++    check(dlssMode_ == 2 && dlssFailed_, "DLSS mode / failed latch");
++    dlssMode_ = dm; dlssFailed_ = df;
+     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
+     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
 diff --git a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
-index ad0da2b..1aa107f 100644
+index 2da0ce3..4bd46b2 100644
 --- a/src/render/gl/WfcPipeline.h
 +++ b/src/render/gl/WfcPipeline.h
-@@ -478,6 +478,10 @@ private:
+@@ -480,6 +480,10 @@ private:
      std::chrono::steady_clock::time_point fsr3LastFrame_{};
      double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
      bool fsr3Mode() const;
@@ -1643,13 +1659,11 @@ index ad0da2b..1aa107f 100644
      // optional FSR 3 frame generation (WfcFrameGen.cpp): HUD-less / depth / motion inputs for the presenter's FG swapchain
      GLuint fgDepthProg_ = 0, fgVelProg_ = 0, fgFbo_ = 0;
      std::chrono::steady_clock::time_point fgLastFrame_{};
-@@ -981,7 +985,8 @@ public:
-     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
+@@ -1059,6 +1063,7 @@ public:
      void setUpscaling(float scale, float sharpness);
      void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
--    void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
-+    void setFsr3(bool on) { fsr3On_ = on; }
-+    void setDlss(int mode) { dlssMode_ = mode; }       // [Systems M5 D] -1 off; 0-4 DLSS Q / B / P / UP / DLAA (with setFsr3(true))            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
+     void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
++    void setDlss(int mode) { dlssMode_ = mode; }       // [Systems M5 D] -1 off; 0-4 DLSS Q / B / P / UP / DLAA (with setFsr3(true))
      static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
      void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
      static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
