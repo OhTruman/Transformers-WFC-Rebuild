@@ -13,6 +13,8 @@ function Add-WfcHarnessEnv([hashtable]$Env) {
     if (-not $e.ContainsKey("WFC_AUTODETECT")) { $e.WFC_AUTODETECT = "0" }
     if (-not $e.ContainsKey("WFC_AUTODETECT_WINDOWED")) { $e.WFC_AUTODETECT_WINDOWED = "1" }
     if (-not $e.ContainsKey("WFC_HDTEXTURES")) { $e.WFC_HDTEXTURES = "0" }
+    # integration 45a8b9c0+: a GPU driver reset ends the process with a message box; a harness run must never wait on it
+    if (-not $e.ContainsKey("WFC_GPULOST_DIALOG_S")) { $e.WFC_GPULOST_DIALOG_S = "0" }
     Assert-WfcHdRoot $e
     return $e
 }
