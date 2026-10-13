@@ -436,7 +436,8 @@ void main() {
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
-        vec3 F0 = mix(vec3(0.04), wfcPbrF0, metal);       // (dielectric 0.04; metals tint their reflection)
+        vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
+        o.DiffuseColor = min(o.DiffuseColor, vec3(1.0));                  // (a base colour is a reflectance: <= 1)
         c += o.DiffuseColor * (1.0 - metal) * L;
         float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough;
         float aL = clamp(a + kPbrLmLobe, 0.0, 1.0), a2L = aL * aL;
@@ -498,7 +499,8 @@ void main() {
         float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;
         float S = (1.0 - mask) * (1.0 - uDSLS);
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
-        vec3 F0 = mix(vec3(0.04), wfcPbrF0, metal);
+        vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);
+        o.DiffuseColor = min(o.DiffuseColor, vec3(1.0));
         vec3 ambient = o.DiffuseColor * amb;
         ambient *= 1.0 - metal;
         vec3 direct = vec3(0.0);
@@ -2769,6 +2771,13 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
         lmSpecBuild_ = true; pbrBuild_ = pbr;
         int r = buildProgram(key, body, slotsUse, cubeUse, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
         lmSpecBuild_ = false; pbrBuild_ = false;
+        if (r < 0 && pbr) {                              // (a Modern body that fails to build: the Original material, not the glTF fallback)
+            LOG_WARN("wfc: Modern program failed for %s: the original material", matName.c_str());
+            pbr = false; body = s.glsl; slotsUse = slots; cubeUse = s.cube;
+            lmSpecBuild_ = true;
+            r = buildProgram(key, body, slotsUse, cubeUse, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+            lmSpecBuild_ = false;
+        }
         if (r >= 0) {
             progs_[(size_t)r].original = true;
             // UE3 (shipped exe Function_83052228): a translucent material used with fog volumes is drawn only by

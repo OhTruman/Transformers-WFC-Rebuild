@@ -286,6 +286,38 @@ def _parse(rhs, S):
     return node
 
 
+def glsl_hash(glsl):
+    """A material body's hash for Systems' hook rows (which name its temporaries by number): sha1 of the UTF-8 text."""
+    import hashlib
+    return hashlib.sha1(glsl.encode('utf-8')).hexdigest()
+
+
+def check_hook(hook, glsl, S, defs, diff_line):
+    """True, or why the hook row is rejected: its glsl hash (when the row has one) must match this body; each expression
+    must parse, name only temporaries defined before the base-colour line, and have the right type."""
+    h = hook.get('glsl_hash') or hook.get('glsl_sha1')
+    if h and h != glsl_hash(glsl): return 'glsl hash mismatch (the row was made for another body)'
+    want = {'metallic': (1,), 'f0': (3, 4), 'baseColor': (3, 4)}
+    for key, tys in want.items():
+        e = hook.get(key)
+        if e is None or (key == 'baseColor' and not e):
+            if key == 'baseColor': continue
+            return '%s missing' % key
+        try:
+            node = _parse(str(e), S)
+        except TranslateError as ex:
+            return '%s does not parse: %s' % (key, ex)
+        for t in _TMP.findall(str(e)):
+            if t not in defs or defs[t][0] >= diff_line: return '%s names %s, not defined before the base colour' % (key, t)
+        bad = [w for w in re.findall(r'\b[A-Za-z_]\w*\b', str(e))
+               if not _TMP.fullmatch(w) and w not in GL_T and w not in ('clamp', 'max', 'min', 'mix', 'dot', 'abs', 'saturate')
+               and not re.fullmatch(r'[xyzwrgba]{1,4}', w) and not re.fullmatch(r'\d', w)]
+        if bad: return '%s names unknown identifiers %s' % (key, bad)
+        ty = S.w(node)[1]
+        if ty not in tys: return '%s has type %s (expected %s)' % (key, ty, ' / '.join('vec%d' % x if x > 1 else 'float' for x in tys))
+    return True
+
+
 def pbr_body(glsl, info, hook=None):
     lines = glsl.splitlines()
     stmts = []                                  # (index, indent, decl, lhs, rhs)
@@ -294,6 +326,7 @@ def pbr_body(glsl, info, hook=None):
         if m: stmts.append((k,) + m.groups())
     defs = {s[3]: s for s in stmts if s[2]}
     S = Strip()
+    hook_rejected = None
     nodes, stext = S.nodes, {}
     out = list(lines)
     base_rule = 0
@@ -348,6 +381,12 @@ def pbr_body(glsl, info, hook=None):
         # Systems' metallic hook rows (m6_mapping.json pbr_hooks: metallic_paint / weapon_metal_mask): metallic, F0
         # (unmixed; the shading mixes F0 = mix(0.04, f0, metallic) and scales the diffuse by 1 - metallic) and, where
         # given, the base colour (the robots' tinted-paint temporary instead of the stripped base)
+        hook_ok = None
+        if hook:
+            hook_ok = check_hook(hook, glsl, S, defs, diff[-1][0])
+        if hook and hook_ok is not True:
+            hook_rejected = hook_ok
+            hook = None                                  # (rejected: the material keeps the dielectric Modern mapping)
         if hook:
             def v3(e):                                   # (a vec4 temporary as the vec3 the hooks mean)
                 e = e.strip()
@@ -393,8 +432,10 @@ def pbr_body(glsl, info, hook=None):
             env_slot = int(a[0])
             out.append('    wfcPbrEnv = wfcSampleCubeRough(%d, %s, wfcPbrRoughness(o.SpecularPower)).rgb;' % (env_slot, a[1]))
         break
-    return '\n'.join(out), dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule,
-                                env_slot=env_slot, hook=bool(hook))
+    meta = dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule, env_slot=env_slot)
+    if hook: meta['hook'] = True                         # (only when true: output without --hooks stays byte-identical)
+    if hook_rejected: meta['hook_rejected'] = hook_rejected
+    return '\n'.join(out), meta
 
 
 def load_hooks(mapping_path):
@@ -465,6 +506,8 @@ if __name__ == '__main__':
     a = [x for i, x in enumerate(sys.argv[1:], 1) if not x.startswith('--') and sys.argv[i - 1] not in ('--hooks', '--check', '--emu')]
     res, skipped = build_map(a[0], a[1], hooks)
     cnt = {r: sum(1 for x in res.values() if x['base_rule'] == r) for r in (0, 1, 2)}
+    for k, v in res.items():
+        if v.get('hook_rejected'): print('  WARNING hook rejected for %s: %s' % (k, v['hook_rejected']))
     print('%d materials (base colour: %d unchanged, %d additive view terms dropped, %d view mean); %d with a roughness-map hook; %d metallic hooks; %d skipped'
           % (len(res), cnt[0], cnt[1], cnt[2], sum(1 for r in res.values() if r['rough_slot'] is not None),
              sum(1 for r in res.values() if r.get('hook')), len(skipped)))
