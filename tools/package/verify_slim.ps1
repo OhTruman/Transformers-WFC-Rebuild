@@ -245,6 +245,9 @@ $setTest = [pscustomobject]@{ Status = $(if ($NoSettingsTest -or $StaticOnly) { 
 $rtGate = [pscustomobject]@{ Status = $(if ($NoRtCheck -or $StaticOnly) { 'SKIP' } else { 'FAIL' }); Lines = @(); Note = $(if ($NoRtCheck) { '-NoRtCheck' } elseif ($StaticOnly) { '-StaticOnly' } else { 'not run' }) }
 $saved = @{}
 Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
+# every verify run is silent (user 2026-10-13: Integration's WFC_MUTE=1 - the device gets silence, the mix / cue logic / PCM
+# stats unchanged, so the checks still see the audio); env-only, never a package default
+$env:WFC_MUTE = '1'
 try {
     foreach ($entry in $(if ($StaticOnly) { @() } else { $Maps.Split(',') })) {
         $id, $name = $entry.Split(':')
@@ -432,6 +435,7 @@ try {
         Copy-Item -Path (Join-Path $pkgBin '*') -Destination $stBin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*', 'filelog*.txt'
         if ($ExeBin) { Copy-Item -Path (Join-Path $ExeBin '*.exe'), (Join-Path $ExeBin '*.dll') -Destination $stBin -Force }
         Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
+        $env:WFC_MUTE = '1'
         foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
         $env:WFC_SETTINGSTEST = '1'; $env:WFC_AUTODETECT = '0'; $env:WFC_SKIPINTRO = '1'; $env:WFC_NOMOUSE = '1'; $env:WFC_BOOT = 'frontend'
         $env:WFC_GPULOST_DIALOG_S = '0'; $env:WFC_FRONTEND_SCRIPT = 'wait:frontend;wait:t=1;quit'
@@ -469,6 +473,7 @@ try {
             Copy-Item -Path (Join-Path $pkgBin '*') -Destination $rtBin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*', 'filelog*.txt'
             if ($ExeBin) { Copy-Item -Path (Join-Path $ExeBin '*.exe'), (Join-Path $ExeBin '*.dll') -Destination $rtBin -Force }
             Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
+            $env:WFC_MUTE = '1'
             foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
             $env:WFC_GPULOST_DIALOG_S = '0'
             $env:WFC_RT_MODE = '2'   # (the start mode of a direct boot: the frontend, which applies the profile row, does not run - Rendering)
