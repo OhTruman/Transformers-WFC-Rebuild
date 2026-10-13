@@ -180,7 +180,7 @@ public:
     // baked lighting), 1 Faithful (RT shadows / AO only where the original had dynamic shadowing), 2 Realistic (RT
     // lighting, shadows, AO and reflections for everything). Available = a DXR 1.1 device + the D3D12 runtime; this
     // build has no RT renderer yet (the RT branch fills these in), so the row reports unavailable and stays Off.
-    virtual bool rayTracingAvailable() { return false; }
+    virtual bool rayTracingAvailable() const { return false; }
     virtual int rayTracingMode() const { return 0; }
     // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
     virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
