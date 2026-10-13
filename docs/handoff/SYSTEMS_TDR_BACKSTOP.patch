@@ -1,0 +1,113 @@
+diff --git a/src/render/gl/RenderWatchdog.cpp b/src/render/gl/RenderWatchdog.cpp
+index c3a3545..371af72 100644
+--- a/src/render/gl/RenderWatchdog.cpp
++++ b/src/render/gl/RenderWatchdog.cpp
+@@ -16,6 +16,8 @@
+ #ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
++#include <d3d11.h>
++#include <dxgi.h>
+ #endif
+ 
+ namespace render::watchdog {
+@@ -199,7 +201,53 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
+ }
+ #endif
+ 
++#ifdef _WIN32
++// ---- GPU-loss evidence (Experimental's review): a TDR resets the adapter and removes every D3D device on it, in every
++// process. The watchdog keeps one tiny D3D11 device per hardware adapter (no GL on this thread; the GL context's adapter is
++// not known here, so all of them) and asks GetDeviceRemovedReason: a stalled render thread is only ended when one says
++// removed. Created on the watchdog thread at start (d3d11 / dxgi loaded at run time: no link dependency); a few MB each.
++ID3D11Device* gProbe[4] = {};
++int gProbes = 0;
++
++void createProbes() {
++    HMODULE dxgi = LoadLibraryA("dxgi.dll"), d3d = LoadLibraryA("d3d11.dll");
++    typedef HRESULT(WINAPI* FactoryFn)(REFIID, void**);
++    auto mkFactory = dxgi ? (FactoryFn)(void*)GetProcAddress(dxgi, "CreateDXGIFactory1") : nullptr;
++    auto mkDevice = d3d ? (PFN_D3D11_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D11CreateDevice") : nullptr;
++    IDXGIFactory1* f = nullptr;
++    if (!mkFactory || !mkDevice || FAILED(mkFactory(__uuidof(IDXGIFactory1), (void**)&f)) || !f) {
++        LOG_WARN("watchdog: no GPU-loss probe (dxgi / d3d11 unavailable): a stall is logged and dumped, never ended");
++        return;
++    }
++    IDXGIAdapter1* a = nullptr;
++    for (UINT i = 0; gProbes < 4 && f->EnumAdapters1(i, &a) != DXGI_ERROR_NOT_FOUND; ++i) {
++        DXGI_ADAPTER_DESC1 d{};
++        a->GetDesc1(&d);
++        if (!(d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
++            ID3D11Device* dev = nullptr;
++            if (SUCCEEDED(mkDevice(a, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev, nullptr, nullptr)) && dev)
++                gProbe[gProbes++] = dev;
++        }
++        a->Release();
++    }
++    f->Release();
++    LOG_INFO("watchdog: GPU-loss probe on %d adapter(s)", gProbes);
++}
++
++// the first probe that reports removal (its reason), or S_OK. WFC_SIMHANG=removed simulates DXGI_ERROR_DEVICE_REMOVED.
++HRESULT gpuRemovedReason() {
++    static const bool sim = [] { const char* e = std::getenv("WFC_SIMHANG"); return e && std::strcmp(e, "removed") == 0; }();
++    if (sim) return DXGI_ERROR_DEVICE_REMOVED;
++    for (int i = 0; i < gProbes; ++i)
++        if (HRESULT hr = gProbe[i]->GetDeviceRemovedReason(); hr != S_OK) return hr;
++    return S_OK;
++}
++#endif
++
+ void loop() {
++#ifdef _WIN32
++    createProbes();
++#endif
+     int dumps = 0;
+     bool reported = false;
+     bool displayRestored = false;
+@@ -222,10 +270,23 @@ void loop() {
+             std::thread([] { platform::restoreDesktopDisplayMode(); }).detach();
+         }
+ #endif
+-        // [Systems] backstop: a render thread blocked in the driver (a lost context after a TDR) never comes back - after the
+-        // dump and WFC_HANG_EXIT_S more seconds (default 10), end the process with a report instead of hanging forever.
+-        // Default OFF (-1) until it keys on evidence of GPU loss (Experimental review 2026-10-13: legitimate stalls run up to
+-        // ~310 s building RT reflection hit data, ~15 s on cold program prewarm; 9 of 14 historical stalls recovered).
++        // [Systems] backstop: a render thread blocked in the driver (a lost context after a TDR: glGetQueryObjectiv spinning,
++        // SwapBuffers never returning) never comes back. It is ended only on EVIDENCE of GPU loss - stalled >= kStallSeconds and
++        // a probe device removed - never on time alone: legitimate stalls run minutes (Experimental's review 2026-10-13: ~310 s
++        // building RT reflection hit data, ~15 s cold program prewarm; 9 of 14 historical stalls recovered). Not under a
++        // debugger. WFC_HANG_EXIT_S (default -1 = off) remains an opt-in time-only cap for harness runs.
++#ifdef _WIN32
++        if (!IsDebuggerPresent()) {
++            if (const HRESULT hr = gpuRemovedReason(); hr != S_OK) {
++                static char why[192];
++                std::snprintf(why, sizeof why, "the GPU device was removed (reason 0x%08lx) and no frame completed for %.1f s "
++                              "(render thread last at '%s', frame %d)", (unsigned long)hr, stalled, gPhase.load(), gFrame.load());
++                if (!reported) LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d",
++                                         stalled, gPhase.load(), gFrame.load());
++                gpuLost(why);
++            }
++        }
++#endif
+         static const double exitAfter = [] { const char* e = std::getenv("WFC_HANG_EXIT_S"); return e ? std::atof(e) : -1.0; }();
+         if (reported && exitAfter >= 0 && stalled >= kStallSeconds + exitAfter) {
+             static char why[192];
+diff --git a/src/render/gl/RenderWatchdog.h b/src/render/gl/RenderWatchdog.h
+index 65a5026..08d4567 100644
+--- a/src/render/gl/RenderWatchdog.h
++++ b/src/render/gl/RenderWatchdog.h
+@@ -22,8 +22,11 @@ void stop();
+ // scripted runs: WFC_FRONTEND_SCRIPT / WFC_PLAYERBOT; 0 = none) and terminates with exit code 3 (no atexit / DLL teardown: the
+ // driver may hold its locks; harness runners treat 3 as "GPU reset: rerun"). Never returns.
+ [[noreturn]] void gpuLost(const char* why);
+-// The watchdog's backstop: after the stall dump, a further WFC_HANG_EXIT_S seconds (default -1 = never, until it keys on
+-// evidence of GPU loss: legitimate stalls run minutes) with no progress call gpuLost("..."). WFC_SIMHANG=1 blocks the render thread for good once (frame 60) to test this path;
++// The watchdog's backstop: a stalled render thread (>= 5 s) is ended through gpuLost only on evidence of GPU loss - a tiny
++// D3D11 probe device per hardware adapter reports removed (a TDR removes every device on the adapter) - never on time alone
++// (legitimate stalls run minutes); not under a debugger. WFC_HANG_EXIT_S (default -1 = off) adds an opt-in time-only cap.
++// WFC_SIMHANG=1 blocks the render thread for good once (frame 60): with no removal it is logged and dumped only;
++// WFC_SIMHANG=removed also makes the probe report a removed device (the evidence path, which must exit).
+ // WFC_SIMRESET=N makes GLRenderer::beginFrame's reset poll report a reset at its N-th call (the direct path).
+ 
+ // Unhandled-exception report (any thread): wfc_crash_<pid>.txt in the working directory - exception code / address,
