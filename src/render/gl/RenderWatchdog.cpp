@@ -224,7 +224,9 @@ void loop() {
 #endif
         // [Systems] backstop: a render thread blocked in the driver (a lost context after a TDR) never comes back - after the
         // dump and WFC_HANG_EXIT_S more seconds (default 10), end the process with a report instead of hanging forever.
-        static const double exitAfter = [] { const char* e = std::getenv("WFC_HANG_EXIT_S"); return e ? std::atof(e) : 10.0; }();
+        // Default OFF (-1) until it keys on evidence of GPU loss (Experimental review 2026-10-13: legitimate stalls run up to
+        // ~310 s building RT reflection hit data, ~15 s on cold program prewarm; 9 of 14 historical stalls recovered).
+        static const double exitAfter = [] { const char* e = std::getenv("WFC_HANG_EXIT_S"); return e ? std::atof(e) : -1.0; }();
         if (reported && exitAfter >= 0 && stalled >= kStallSeconds + exitAfter) {
             static char why[192];
             std::snprintf(why, sizeof why, "no frame completed for %.1f s (render thread last at '%s', frame %d): GPU driver "
@@ -288,7 +290,12 @@ void gpuLost(const char* why) {
     }
     // a visible message: a message box on its own thread, shown for at most WFC_GPULOST_DIALOG_S seconds (the process then
     // ends whether or not it was closed: a harness run is never held)
-    static const double dialogS = [] { const char* e = std::getenv("WFC_GPULOST_DIALOG_S"); return e ? std::atof(e) : 20.0; }();
+    // Default 20 s; 0 in scripted runs (WFC_FRONTEND_SCRIPT / WFC_PLAYERBOT: no topmost box over the desktop holding a harness
+    // slot - Rendering's review)
+    static const double dialogS = [] {
+        if (const char* e = std::getenv("WFC_GPULOST_DIALOG_S")) return std::atof(e);
+        return (std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_PLAYERBOT")) ? 0.0 : 20.0;
+    }();
     if (dialogS > 0) {
         std::atomic<bool> closed{false};
         std::thread([&closed] {

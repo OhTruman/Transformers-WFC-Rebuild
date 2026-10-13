@@ -81,7 +81,13 @@ const DebugCounts& debugCounts() { return gDebug; }
 
 GLenum pollResetStatus() {
     if (!GetGraphicsResetStatus) return GL_NO_ERROR;
+    // Latched (Rendering review 2026-10-13): ARB/KHR_robustness reports a reset only once, "since the last call", so a TDR
+    // landing between beginFrame's poll and endFrame's log-only poll was consumed there and the next beginFrame saw
+    // GL_NO_ERROR; once lost, every later GL call is undefined, so the status stays lost for the process' lifetime
+    static GLenum latched = GL_NO_ERROR;
+    if (latched != GL_NO_ERROR) return latched;
     GLenum s = GetGraphicsResetStatus();
+    if (s != GL_NO_ERROR) latched = s;
     static bool logged = false;
     if (s != GL_NO_ERROR && !logged) {
         logged = true;
