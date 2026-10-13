@@ -15,6 +15,7 @@
 #include "platform/PresentHook.h"
 #include "render/d3d12/D3D12FrameGen.h"
 #include "render/d3d12/D3D12Adapter.h"
+#include "render/d3d12/D3D12Device.h"
 #include "core/Log.h"
 #if defined(WFC_FFX_SDK)
 #include "ffx_api.h"
@@ -178,15 +179,11 @@ public:
         if (!gl_.load()) { LOG_WARN("D3D12 present: GL external-object entry points missing: GL present kept"); return false; }
         hwnd_ = WindowFromDC(wglGetCurrentDC());
         if (!hwnd_) { LOG_WARN("D3D12 present: no window: GL present kept"); return false; }
-        d3d12SelectAgility();                        // (D3D12Agility.cpp: the Agility runtime when shipped)
-        HMODULE d3d = LoadLibraryW(L"d3d12.dll"), dxgi = LoadLibraryW(L"dxgi.dll");
-        auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+        HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
-        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
-        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
-                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
-        if (adapter) adapter->Release();
+        // the shared device (D3D12Device.h: Agility, GL's adapter; FSR 3.1 and RT use the same one)
+        const bool made = cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) && (dev_ = d3d12SharedDevice()) != nullptr;
         if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
         BOOL tear = FALSE;
         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
@@ -946,7 +943,7 @@ bool presentHook() {
     while (g_recoveries < 3) {
         ++g_recoveries;
         if (startPresenter()) {
-            LOG_WARN("D3D12 present: recovered with a new device + swapchain (attempt %d of 3)", g_recoveries);
+            LOG_WARN("D3D12 present: recovered with a new swapchain (a new device after a real removal; attempt %d of 3)", g_recoveries);
             return g_presenter->present();
         }
     }

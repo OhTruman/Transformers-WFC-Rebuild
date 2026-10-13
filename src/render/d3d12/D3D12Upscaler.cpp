@@ -13,6 +13,7 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include "render/d3d12/D3D12Adapter.h"
+#include "render/d3d12/D3D12Device.h"
 #include <GL/gl.h>
 
 #include "render/d3d12/D3D12Upscaler.h"
@@ -82,6 +83,7 @@ void ffxMessage(uint32_t type, const wchar_t* msg) {
 
 class Upscaler {
 public:
+    bool deviceRemoved() const { return d3d12DeviceRemoved(dev_); }
     bool init() {
         if (!gl_.load()) { LOG_WARN("FSR3: GL external-object entry points missing"); return false; }
         ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
@@ -95,13 +97,8 @@ public:
             LOG_INFO("FSR3: before device creation: D3D12Core %s, d3d12.dll %s", core ? p8 : "not loaded",
                      GetModuleHandleW(L"d3d12.dll") ? "loaded" : "not loaded");
         }
-        d3d12SelectAgility();                        // (D3D12Agility.cpp: SM 6.6+ runtime when shipped)
-        HMODULE d3d = LoadLibraryW(L"d3d12.dll");
-        auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
-        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
-        const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
-        if (adapter) adapter->Release();
-        if (FAILED(hr)) { LOG_WARN("FSR3: no D3D12 device (D3D12CreateDevice 0x%08lx)", (unsigned long)hr); return false; }
+        dev_ = d3d12SharedDevice();                  // (D3D12Device.h: the presenter's and RT's device; Agility, GL's adapter)
+        if (!dev_) { LOG_WARN("FSR3: no D3D12 device"); return false; }
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
         for (auto& a : alloc_)
@@ -309,6 +306,10 @@ bool g_failed = false;
 
 bool fsr3Prepare(int inW, int inH, int outW, int outH, Fsr3Targets* t) {
     if (g_failed) return false;
+    if (g_up && g_up->deviceRemoved()) {                 // removed (a GPU reset): rebuilt on the new shared device; the old
+        LOG_WARN("FSR3: its D3D12 device was removed: rebuilding on a new device");   // instance is abandoned, not destroyed
+        g_up = nullptr;                                  // (tearing FFX down on a removed device can block)
+    }
     if (!g_up) {
         g_up = new Upscaler();
         if (!g_up->init()) { delete g_up; g_up = nullptr; g_failed = true; return false; }
