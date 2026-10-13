@@ -58,11 +58,13 @@
 namespace render {
 bool probeD3D12Interop(std::string& detail);   // D3D12InteropProbe.cpp
 void initD3D12PresentIfRequested();            // d3d12/D3D12Presenter.cpp
+void rtBridgeShutdown();                       // d3d12/D3D12RtBridge.cpp
 namespace {
 
 class GLRenderer final : public IRenderer {
 public:
     ~GLRenderer() override {
+        rtBridgeShutdown();                   // RT: the last D3D12 job done and the GL imports released while the context lives
         shutdownD3D12Present();               // presenter worker / FG / swapchain before the window and its GL context go
         watchdog::stop();
         wfc::Pipeline::clearProgramCache();   // M54: cached programs belong to this context
