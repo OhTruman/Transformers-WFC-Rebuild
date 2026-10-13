@@ -1593,6 +1593,10 @@ public:
     int rayTracingMode() const override { return wfc_.rtMode(); }
     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
+    bool hdTextureLevelAvailable(int level) const override {
+        return level == 0 || (level == 1 && wfc::Pipeline::hdTexturesAvailable());   // (level 2: no Enhanced root yet)
+    }
+    void setHdTextureLevel(int level) override { wfc_.setHdTextures(level == 1); }
     GpuFacts gpuFacts() override {
         if (!gpuFactsRead_) { gpuFacts_ = readGpuFacts(); gpuFactsRead_ = true; }
         return gpuFacts_;
