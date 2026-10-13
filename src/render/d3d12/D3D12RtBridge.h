@@ -10,7 +10,7 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0; };   // render size: depth / mask R32F,
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0; };   // render size: depth / mask R32F,
                                                                  // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
                                                                  // (denoised sun), worldDepth R32F (before the dynamic draws)
 
@@ -36,6 +36,9 @@ struct RtFrame {
     bool reflectShade = true; // ... with hit shading (false: hit distance only - the A / B for the shading cost)
     float time = 0.0f;        // (reflection hits) the materials' time, s
     float pixelSpread = 0.0f; // (reflection hits) a pixel's angle (radians): the ray cone's spread
+    bool softShadow = false;  // (R2) contact-hardening penumbrae after the denoiser -> RtTargets::shadowSoft
+    float penumbraTan = 0.0f; // (R2) tan(the sun's half angle) for the penumbra width
+    float softMaxRadius = 24.0f;   // (R2) the widest penumbra, pixels
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 

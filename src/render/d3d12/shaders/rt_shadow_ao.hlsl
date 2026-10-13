@@ -22,6 +22,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     uint rays = 0;
     float2 outv = float2(1.0, 1.0);
     float3 n = float3(0, 0, 1);
+    float blockT = 0.0;                                  // (R2) the sun ray's blocker distance, m (0 = lit)
     // dynamic pixels (characters, movers: drawn after the world) are shadowed by everything. World pixels only by the
     // characters, and only where the sun would otherwise reach them: their world shadows are baked into the lightmaps
     // (indoors, under a roof, a character casts no sun shadow). AO on world pixels: the characters' contact occlusion.
@@ -54,10 +55,15 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             // pixels, the per-object light visibility on dynamic objects - so RT darkens only where characters (and not the
             // world) block the sun: character shadows on everything, self-shadowing included. ToSun.w = 2 (WFC_RT_WORLDSHADOWS,
             // the later modern mode): dynamic pixels shadowed by the world too.
-            if (dynamicPx && ToSun.w > 1.5) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z) ? 0.0 : 1.0; ++rays; }
+            if (dynamicPx && ToSun.w > 1.5) {
+                float t; outv.x = occludedT(o, sd, 10000.0, (uint)Params.z, t) ? 0.0 : 1.0; ++rays;
+                if (outv.x < 0.5) blockT = t;
+            }
             else {
                 const bool any = occluded(o, sd, 10000.0, (uint)Params.z); ++rays;
                 if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x4u) ? 1.0 : 0.0; ++rays; }
+                // (R2) the character's distance (only where a character is the sun's blocker)
+                if (outv.x < 0.5) { float t; if (occludedT(o, sd, 10000.0, 0x4u, t)) blockT = t; ++rays; }
             }
         }
         const uint nAo = (uint)Size.w;
@@ -77,7 +83,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     }
     if (inside) {
         Mask[px] = float4(outv, dynamicPx ? 1.0 : 0.0, 0.0);
-        Normal[px] = float4(n, 0.0);
+        Normal[px] = float4(n, blockT);
         const float2 uv = (float2(px) + 0.5) / Size.xy;
         const float4 clip = mul(Reproj, float4(uv.x * 2.0 - 1.0, 1.0 - 2.0 * uv.y, d, 1.0));
         const float2 prev = clip.xy / clip.w;

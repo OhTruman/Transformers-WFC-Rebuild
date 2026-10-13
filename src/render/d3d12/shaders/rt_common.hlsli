@@ -54,6 +54,20 @@ bool maskedOpaque(uint set, uint prim, float2 bc) {
     return MaskAtlas.SampleLevel(PointClamp, tile.xy + t * tile.zw, 0) > 0.5;
 }
 
+// an occlusion ray that also reports its accepted hit's distance (the first found: a blocker distance estimate)
+bool occludedT(float3 o, float3 dir, float tMax, uint mask, out float t) {
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
+    RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;
+    q.TraceRayInline(Scene, RAY_FLAG_NONE, mask, r);
+    while (q.Proceed()) {
+        if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+            maskedOpaque(q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateTriangleBarycentrics()))
+            q.CommitNonOpaqueTriangleHit();
+    }
+    t = q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? q.CommittedRayT() : 0.0;
+    return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
 bool occluded(float3 o, float3 dir, float tMax, uint mask) {
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
     RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;

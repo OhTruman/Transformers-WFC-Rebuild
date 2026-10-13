@@ -6764,7 +6764,7 @@ void Pipeline::writeFrameReport() {
 // texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
 GLuint Pipeline::shadowMaskTexFor(bool character) {
     maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
-    if (rtMaskActive_) return rtTargets_.shadowDn;     // (M7 stage 1: the denoised RT sun visibility, screen-sized)
+    if (rtMaskActive_) return rtSoftActive_ ? rtTargets_.shadowSoft : rtTargets_.shadowDn;   // (M7: the RT sun visibility, screen-sized)
     if (character && maskDrawnFrame_ == frameNo_ && maskBlurTex_) {
         maskTexelOffset_[0] = 0.5f / (float)maskW_;
         maskTexelOffset_[1] = 0.5f / (float)maskH_;

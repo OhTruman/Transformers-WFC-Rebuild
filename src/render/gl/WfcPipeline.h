@@ -509,6 +509,7 @@ private:
     GLuint rtReflPrev_ = 0;
     int rtReflPrevW_ = 0, rtReflPrevH_ = 0;
     bool rtReflValid_ = false;
+    bool rtSoftActive_ = false;                        // (R2) this frame's sun visibility = the contact-hardening target
     float rtReflVP_[16] = {};
     void rtReflKeep();
     bool rtDynBegin();

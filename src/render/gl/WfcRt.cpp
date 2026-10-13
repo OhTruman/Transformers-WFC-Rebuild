@@ -714,7 +714,7 @@ void Pipeline::rtDynMid() {
     BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
     UseProgram(rtCompositeProg_);
-    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, t.shadowDn);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, rtSoftActive_ ? t.shadowSoft : t.shadowDn);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, t.shadowAo);
     ActiveTexture(GL_TEXTURE0);
     Uniform1i(cachedUniformLocation(rtCompositeProg_, "uVis"), 0);
@@ -828,6 +828,15 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         static const float coneTan = [] { const char* e = std::getenv("WFC_RT_SUNCONE"); const float deg = e ? (float)std::atof(e) : 0.27f;
                                           return std::tan(deg * 3.14159265f / 180.0f); }();
         fr.sunConeTan = coneTan;
+        // (R2) contact-hardening penumbrae (WFC_RT_SOFT=0: off): hard rays, the width from the blocker distance and the
+        // sun's half angle - the real sun's 0.27 degrees, or an "area light" (WFC_RT_SUNAREA degrees)
+        static const bool soft = [] { const char* e = std::getenv("WFC_RT_SOFT"); return !e || std::atoi(e) != 0; }();
+        static const float areaTan = [] { const char* e = std::getenv("WFC_RT_SUNAREA"); const float deg = e ? (float)std::atof(e) : 0.27f;
+                                          return std::tan(deg * 3.14159265f / 180.0f); }();
+        static const float softMax = [] { const char* e = std::getenv("WFC_RT_SOFTMAX"); return e ? (float)std::atof(e) : 24.0f; }();
+        fr.softShadow = soft; fr.penumbraTan = areaTan; fr.softMaxRadius = softMax;
+        if (soft) fr.sunConeTan = 0.0f;
+        rtSoftActive_ = soft;
         const Light* sun = nullptr;                      // the brightest enabled directional light
         for (const Light& L : lights_)
             if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;

@@ -28,6 +28,7 @@
 #include "rt_shadow_ao.h"
 #include "rt_ao_filter.h"
 #include "rt_reflect.h"
+#include "rt_shadow_soft.h"
 #endif
 #if defined(WFC_RT_DENOISER)
 #include "render/d3d12/D3D12RtDenoise.h"
@@ -145,13 +146,13 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
-            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_);
+            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_); free(soft_);
             rel(hit_); rel(nrm_); rel(vel_);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
             nrm_ = localTex(w, h, DXGI_FORMAT_R16G16B16A16_FLOAT);
             vel_ = localTex(w, h, DXGI_FORMAT_R16G16_FLOAT);
             if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(wdepth_, w, h) ||
-                !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !make(refl_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !hit_ || !nrm_ || !vel_) {
+                !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !make(refl_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(soft_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !hit_ || !nrm_ || !vel_) {
                 LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
             }
             if (heap_) writeDescriptors();
@@ -162,7 +163,7 @@ public:
             }
 #endif
         }
-        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex; t->shadowSoft = soft_.tex;
         return true;
     }
 
@@ -570,9 +571,9 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[7] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, atlas_.tex};
-        GLenum ly[7] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutShaderRead};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 7 : 6, tx, ly);
+        GLuint tx[8] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex, atlas_.tex};
+        GLenum ly[8] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead};
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 8 : 7, tx, ly);
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
@@ -606,8 +607,9 @@ public:
         allocDone_[a] = done;
         const clk::time_point t2 = clk::now();
         GLuint64_ w = done; semParam_(sem_, kFenceValue, &w);
-        GLuint wt[4] = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex}; GLenum wl[4] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
-        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 4, wt, wl);
+        GLuint wt[5] = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex, soft_.tex};
+        GLenum wl[5] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
+        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 5, wt, wl);
         const clk::time_point t3 = clk::now();
         auto ms = [](clk::time_point a_, clk::time_point b_) { return std::chrono::duration<double, std::milli>(b_ - a_).count(); };
         const double ph[3] = {ms(t0, t1), ms(t1, t2), ms(t2, t3)};
@@ -713,6 +715,8 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSao_))) { LOG_WARN("RT bridge: shadow / AO PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_ao_filter; pd.CS.BytecodeLength = sizeof g_rt_ao_filter;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoAoF_))) { LOG_WARN("RT bridge: AO filter PSO failed"); return false; }
+        pd.CS.pShaderBytecode = g_rt_shadow_soft; pd.CS.BytecodeLength = sizeof g_rt_shadow_soft;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSoft_))) { LOG_WARN("RT bridge: soft shadow PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_reflect; pd.CS.BytecodeLength = sizeof g_rt_reflect;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoRefl_))) { LOG_WARN("RT bridge: reflection PSO failed"); return false; }
         D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 12;
@@ -726,7 +730,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -758,12 +762,17 @@ private:
             D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = f; u.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
             dev_->CreateUnorderedAccessView(r, nullptr, &u, h); h.ptr += inc;
         };
-        for (int table = 0; table < 3; ++table) {        // A (depth check): u0 = mask; B (shadow / AO): the RGBA target; C: reflection
+        for (int table = 0; table < 4; ++table) {        // A (depth check): u0 = mask; B (shadow / AO): the RGBA target; C: reflection; D: soft shadows
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
             sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
             sbuf(hMatTex_, hMatTexN_, 48); sbuf(hVtx_, hVerts_ * 2, 16);
+            if (table == 3) {                            // D: u0 the soft output, u1 the denoised visibility, u2 the normals
+                uav(soft_.res, DXGI_FORMAT_R8_UNORM); uav(dnOut_.res, DXGI_FORMAT_R8_UNORM);
+                uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
+                continue;
+            }
             if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT);
             else uav(table == 1 ? ao_.res : refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
@@ -859,6 +868,25 @@ private:
             }
         }
 #endif
+        if (fr.softShadow && psoSoft_) {                 // (R2) contact-hardening penumbrae: denoised visibility -> soft (table D)
+            D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
+            list_->SetComputeRootSignature(rs_);
+            list_->SetPipelineState(psoSoft_);
+            list_->SetDescriptorHeaps(1, &heap_);
+            float c3[52] = {};
+            std::memcpy(c3, c, sizeof(float) * 48);
+            c3[49] = fr.pixelSpread; c3[50] = fr.penumbraTan; c3[51] = fr.softMaxRadius;
+            list_->SetComputeRoot32BitConstants(0, 52, c3, 0);
+            list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
+            D3D12_GPU_DESCRIPTOR_HANDLE t4 = heap_->GetGPUDescriptorHandleForHeapStart();
+            t4.ptr += 3ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            list_->SetComputeRootDescriptorTable(2, t4);
+            list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+            D3D12_GPU_DESCRIPTOR_HANDLE lm = heap_->GetGPUDescriptorHandleForHeapStart();
+            lm.ptr += 4ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            list_->SetComputeRootDescriptorTable(4, lm);
+            list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
+        }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
         tsShade_[slot] = fr.reflectShade;
         if (fr.reflect && psoRefl_) {                    // stage 2 prototype: the reflection rays (table C)
@@ -876,7 +904,7 @@ private:
             list_->SetComputeRootDescriptorTable(2, t3);
             list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE lm = heap_->GetGPUDescriptorHandleForHeapStart();
-            lm.ptr += 3ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            lm.ptr += 4ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             list_->SetComputeRootDescriptorTable(4, lm);
             list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
         }
@@ -1015,7 +1043,7 @@ private:
     GLuint sem_ = 0;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_;
     std::vector<ID3D12Resource*> mBlas_;                   // masked world: BLAS per set, lookup buffers
     ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;
     ID3D12Resource* mSubs_ = nullptr; ID3D12Resource* mInst_ = nullptr;
@@ -1041,7 +1069,7 @@ private:
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> dynInst_;
     UINT64 totalBlas_ = 0;
     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
-    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12PipelineState* psoRefl_ = nullptr; ID3D12PipelineState* psoReflMat_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
+    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12PipelineState* psoRefl_ = nullptr; ID3D12PipelineState* psoReflMat_ = nullptr; ID3D12PipelineState* psoSoft_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
     IDXGIAdapter3* adapter_ = nullptr; UINT64 tsFreq_ = 0; int rbMode_[2] = {};
     std::vector<double> saoMs_; unsigned long long saoRaySum_ = 0; int saoRays_ = 0; float saoRadius_ = 0.0f;
     ID3D12Resource* stats_ = nullptr; ID3D12Resource* zeros_ = nullptr; ID3D12Resource* readback_[2] = {};
