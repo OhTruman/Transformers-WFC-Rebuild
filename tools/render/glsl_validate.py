@@ -20,7 +20,7 @@ def raw(src, name):
     return m.group(1)
 
 
-def compose(src, body, ncube_slots, n2d_slots, pbr, rt_params):
+def compose(src, body, ncube_slots, n2d_slots, pbr, rt_params, uber=False):
     fs = raw(src, 'kFSHead')
     fs += 'vec3 wfcNormalNode(MatIn m) { return tangentToWorldUE(m, m.normal); }\n'
     for n in rt_params: fs += 'uniform vec4 uRT_%s; uniform int uRTSet_%s;\n' % (n, n)
@@ -31,6 +31,9 @@ def compose(src, body, ncube_slots, n2d_slots, pbr, rt_params):
             fs += 'uniform samplerCube uTex%s;\nvec4 wfcSC_%s(vec3 d) { return texture(uTex%s, d); }\n' % (n, n, n)
             fs += 'vec4 wfcSCB_%s(vec3 d, float b) { return texture(uTex%s, d, b); }\n' % (n, n)
             code = code.replace('wfcSampleCube(%s, ' % n, 'wfcSC_%s(' % n).replace('wfcSampleCubeBias(%s, ' % n, 'wfcSCB_%s(' % n)
+            if 'wfcSampleCubeRough(%s, ' % n in code:    # (as buildProgram, with a 7-level cube)
+                fs += 'vec4 wfcSCR_%s(vec3 d, float r) { return textureLod(uTex%s, d, r * 7.0); }\n' % (n, n)
+                code = code.replace('wfcSampleCubeRough(%s, ' % n, 'wfcSCR_%s(' % n)
             if 'wfcSampleCubeMean(%s)' % n in code:     # (as buildProgram: the cube's mean colour, six 1 x 1 faces)
                 fs += 'vec4 wfcSCM_%s() { return (%s) / 6.0; }\n' % (n, ' + '.join('textureLod(uTex%s, vec3(%s), 16.0)' % (n, d) for d in
                       ('1.0, 0.0, 0.0', '-1.0, 0.0, 0.0', '0.0, 1.0, 0.0', '0.0, -1.0, 0.0', '0.0, 0.0, 1.0', '0.0, 0.0, -1.0')))
@@ -42,7 +45,8 @@ def compose(src, body, ncube_slots, n2d_slots, pbr, rt_params):
     if pbr: fs += raw(src, 'kFSPbrHelpers')
     fs += 'void wfcMaterial(in MatIn m, out MatOut o) {\n' + code + '\n}\n'
     fs += raw(src, 'kFSPrologue')
-    fs += raw(src, 'kFSMainLMModern').replace('@SPECOCC@', '4.0') if pbr else raw(src, 'kFSMainLM')
+    if pbr: fs += (raw(src, 'kFSMainUberModern') if uber else raw(src, 'kFSMainLMModern')).replace('@SPECOCC@', '4.0').replace('@LMLOBE@', '0.35')
+    else: fs += raw(src, 'kFSMainUber') if uber else raw(src, 'kFSMainLM')
     return fs
 
 
@@ -74,7 +78,7 @@ def main():
         used = {int(x) for x in re.findall(r'wfcSample(?:2D|Cube|CubeBias)\((\d+),', body)}
         d2 |= {s for s in used if s not in cube}
         rtp = sorted(set(re.findall(r'uRTSet_(\w+)', body)))
-        fs = compose(src, body, cube, d2, pbr, rtp)
+        fs = compose(src, body, cube, d2, pbr, rtp, '--uber' in sys.argv)
         with tempfile.NamedTemporaryFile('w', suffix='.frag', delete=False, encoding='utf-8') as f:
             f.write(fs); path = f.name
         r = subprocess.run([GLSLANG, path], capture_output=True, text=True)

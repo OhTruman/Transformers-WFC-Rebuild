@@ -382,7 +382,6 @@ vec3 wfcPbrF0 = vec3(0.04);
 float wfcPbrRoughness(float sp) {
     return wfcPbrRoughMap >= 0.0 ? clamp(wfcPbrRoughMap, 0.02, 1.0) : clamp(sqrt(2.0 / (max(sp, 0.0) + 2.0)), 0.02, 1.0);
 }
-float wfcPbrEnvLod(float sp) { return wfcPbrRoughness(sp) * 6.0; }
 )";
 // The Modern lightmapped base pass: the original's diffuse lighting (base colour = the pbr body's DiffuseColor, the cube
 // reflection stripped; x (1 - metallic)) + GGX / Smith specular (F0 = mix(0.04, the body's wfcPbrF0, its wfcPbrMetallic);
@@ -399,6 +398,10 @@ const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
 const vec3 LMB1 = vec3(-0.70710678, -0.40824829, 0.57735027);
 const vec3 LMB2 = vec3(0.70710678, -0.40824829, 0.57735027);
 const float kPbrSpecOcc = @SPECOCC@;
+// each directional-lightmap coefficient is irradiance from a broad region, not a point: its GGX lobe is widened as a
+// sphere light (Karis 2013, alpha' = alpha + tan(source half angle) / 2; ~35 degrees -> +0.35) so glossy materials do not
+// show point glints that shimmer under TAA / FSR; the sharp reflections stay in the image-based term
+const float kPbrLmLobe = @LMLOBE@;
 float wfcGgxD(float NoH, float a2) { float d = NoH * NoH * (a2 - 1.0) + 1.0; return a2 / (3.14159265 * d * d); }
 float wfcSmithVis(float NoV, float NoL, float a2) {
     float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2), gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
@@ -435,13 +438,99 @@ void main() {
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
         vec3 F0 = mix(vec3(0.04), wfcPbrF0, metal);       // (dielectric 0.04; metals tint their reflection)
         c += o.DiffuseColor * (1.0 - metal) * L;
-        float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough, a2 = a * a;
+        float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough;
+        float aL = clamp(a + kPbrLmLobe, 0.0, 1.0), a2L = aL * aL;
         vec3 V = normalize(m.cameraVector);
         float NoV = clamp(dot(n, V), 1e-4, 1.0);
-        c += wfcPbrSpec(n, V, LMB0, a2, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2, NoV, F0) * l1 * uLMScale[1]
-           + wfcPbrSpec(n, V, LMB2, a2, NoV, F0) * l2 * uLMScale[2];
+        c += wfcPbrSpec(n, V, LMB0, a2L, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2L, NoV, F0) * l1 * uLMScale[1]
+           + wfcPbrSpec(n, V, LMB2, a2L, NoV, F0) * l2 * uLMScale[2];
         vec2 ab = wfcEnvBrdf(rough, NoV);
         float occ = clamp(dot(L, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
+        c += wfcPbrEnv * (F0 * ab.x + ab.y) * occ;
+    }
+    wfcTranslucentOut(c, o.Opacity);
+    c = wfcCanvasOut(wfcFog(c));
+    oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
+}
+)";
+
+// The Modern dynamic-object pass (characters, held weapons, movers: kFSMainUber's inputs). Same declarations and the same
+// shadow-mask / ambient / light-term lines as kFSMainUber (the instanced / MDI / RT text rewrites apply unchanged):
+// the six-axis ambient as the diffuse irradiance (x the base colour x (1 - metallic)), the lights as Lambert + GGX / Smith
+// with Schlick F(F0) (punctual: no lobe widening), the material's environment as split-sum image-based specular,
+// occluded by the ambient brightness (kPbrSpecOcc).
+const char* kFSMainUberModern = R"(
+uniform vec3 uAmb[6];
+uniform int uNumLights;
+uniform vec4 uLPos[3];   // xyz position (m), w = 1/radius (0 = directional)
+uniform vec4 uLDir[3];   // xyz: directional -> towards light; spot -> spot axis (forward); w = isSpot
+uniform vec4 uLCol[3];   // rgb linear colour * brightness, w = falloff exponent
+uniform vec4 uLSpot[3];  // x cos(outer), y 1/(cos(inner)-cos(outer)), w = visibility (shadow) term
+uniform sampler2D uShadowMask;
+uniform float uDSLS;
+uniform vec3 uDLAC;
+uniform vec2 uShadowMaskTexelOffset;
+const float kPbrSpecOcc = @SPECOCC@;
+float wfcGgxD(float NoH, float a2) { float d = NoH * NoH * (a2 - 1.0) + 1.0; return a2 / (3.14159265 * d * d); }
+float wfcSmithVis(float NoV, float NoL, float a2) {
+    float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2), gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    return 0.5 / max(gv + gl, 1e-5);
+}
+vec2 wfcEnvBrdf(float r, float NoV) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022), c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 q = r * c0 + c1;
+    float a004 = min(q.x * q.x, exp2(-9.28 * NoV)) * q.x + q.y;
+    return vec2(-1.04, 1.04) * a004 + q.zw;
+}
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
+    MatOut o; wfcMaterial(m, o);
+    if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
+    if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
+    if (uDebug == 2) { oColor = vec4(o.DiffuseColor, 1.0); return; }
+    vec3 c = o.EmissiveColor;
+    if (uLit != 0) {
+        vec3 Nw = normalize(tbn * normalize(o.Normal));
+        vec3 n2 = Nw * Nw;
+        vec3 amb = n2.x * (Nw.x >= 0.0 ? uAmb[0] : uAmb[1]) + n2.y * (Nw.y >= 0.0 ? uAmb[2] : uAmb[3])
+                 + n2.z * (Nw.z >= 0.0 ? uAmb[4] : uAmb[5]);
+        float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;
+        float S = (1.0 - mask) * (1.0 - uDSLS);
+        float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
+        vec3 F0 = mix(vec3(0.04), wfcPbrF0, metal);
+        vec3 ambient = o.DiffuseColor * amb;
+        ambient *= 1.0 - metal;
+        vec3 direct = vec3(0.0);
+        vec3 V = normalize(uCamPos - vPos);
+        float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough, a2 = a * a;
+        float NoV = clamp(dot(Nw, V), 1e-4, 1.0);
+        for (int i = 0; i < 3; ++i) {
+            if (i >= uNumLights) break;
+            vec3 L; float att = 1.0;
+            if (uLPos[i].w > 0.0) {
+                vec3 d = uLPos[i].xyz - vPos;
+                L = normalize(d);
+                vec3 dn = d * uLPos[i].w;
+                att = pow(clamp(1.0 - dot(dn, dn), 0.0, 1.0), uLCol[i].w);
+                if (uLDir[i].w > 0.5) {
+                    float s = clamp((dot(L, -uLDir[i].xyz) - uLSpot[i].x) * uLSpot[i].y, 0.0, 1.0);
+                    att *= s * s;
+                }
+            } else {
+                L = uLDir[i].xyz;
+            }
+            float NoL = clamp(dot(Nw, L), 0.0, 1.0);
+            vec3 H = normalize(L + V);
+            float NoH = clamp(dot(Nw, H), 0.0, 1.0), VoH = clamp(dot(V, H), 0.0, 1.0);
+            vec3 F = F0 + (vec3(1.0) - F0) * pow(1.0 - VoH, 5.0);
+            vec3 spec = wfcGgxD(NoH, a2) * wfcSmithVis(NoV, NoL, a2) * F * NoL * 3.14159265;
+            direct += (o.DiffuseColor * (1.0 - metal) * NoL + spec) * uLCol[i].rgb * att * uLSpot[i].w;
+        }
+        c += ambient * (1.0 - uDLAC * S);
+        c += direct * (1.0 - S);
+        vec2 ab = wfcEnvBrdf(rough, NoV);
+        float occ = clamp(dot(amb, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
         c += wfcPbrEnv * (F0 * ab.x + ab.y) * occ;
     }
     wfcTranslucentOut(c, o.Opacity);
@@ -2298,6 +2387,21 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
             fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
             replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
+            if (code.find("wfcSampleCubeRough(" + n + ", ") != std::string::npos) {   // (M6 Modern: the env at the roughness level)
+                int levels = 1;
+                if (slots[k].tex) {
+                    GLint w = 0;
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, slots[k].tex);
+                    glGetTexLevelParameteriv(0x8515 /*GL_TEXTURE_CUBE_MAP_POSITIVE_X*/, 0, GL_TEXTURE_WIDTH, &w);
+                    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+                    glx::textureCacheInvalidate();
+                    while ((w >> levels) > 0) ++levels;
+                }
+                // (the cube's mips are box-filtered, not GGX-prefiltered: the blur approximates the lobe)
+                fs += "vec4 wfcSCR_" + n + "(vec3 d, float r) { return textureLod(uTex" + n + ", d, r * " +
+                      std::to_string(levels - 1) + ".0); }\n";
+                replaceAll(code, "wfcSampleCubeRough(" + n + ", ", "wfcSCR_" + n + "(");
+            }
             if (code.find("wfcSampleCubeMean(" + n + ")") != std::string::npos) {   // (M6 pbr rule 3: the cube's mean colour)
                 fs += "vec4 wfcSCM_" + n + "() { return (textureLod(uTex" + n + ", vec3(1.0, 0.0, 0.0), 16.0) + textureLod(uTex" + n +
                       ", vec3(-1.0, 0.0, 0.0), 16.0) + textureLod(uTex" + n + ", vec3(0.0, 1.0, 0.0), 16.0) + textureLod(uTex" + n +
@@ -2331,9 +2435,12 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     std::string mainLM;
     if (pbrBuild_ && lightmapped && !mainOverride_) {      // M6 Modern (its specular replaces the lightmap Phong term)
         static const std::string specOcc = [] { const char* e = std::getenv("WFC_PBR_SPECOCC"); return std::string(e ? e : "4.0"); }();
+        static const std::string lmLobe = [] { const char* e = std::getenv("WFC_PBR_LMLOBE"); return std::string(e ? e : "0.35"); }();
         mainLM = kFSMainLMModern;
-        const size_t at = mainLM.find("@SPECOCC@");
+        size_t at = mainLM.find("@SPECOCC@");
         if (at != std::string::npos) mainLM.replace(at, 9, specOcc);
+        at = mainLM.find("@LMLOBE@");
+        if (at != std::string::npos) mainLM.replace(at, 8, lmLobe);
     }
     else if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
         code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
@@ -2352,7 +2459,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                 "        c += o.SpecularColor * Ls;\n");
         if (at == std::string::npos) mainLM.clear();
     }
-    fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
+    std::string mainUber = kFSMainUber;
+    if (pbrBuild_ && !lightmapped && !mainOverride_) {     // M6 Modern dynamic objects
+        static const std::string specOccU = [] { const char* e = std::getenv("WFC_PBR_SPECOCC"); return std::string(e ? e : "4.0"); }();
+        mainUber = kFSMainUberModern;
+        const size_t at = mainUber.find("@SPECOCC@");
+        if (at != std::string::npos) mainUber.replace(at, 9, specOccU);
+    }
+    fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
@@ -2585,7 +2699,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     std::string matName = matNameIn;
     if (matName.empty()) matName = resolveBySourceName(gm);
     std::string key = (matName.empty() ? std::string("<gltf>") : matName) + (lightmapped ? "|LM" : "|UBER");
-    if (modernActive_ && lightmapped) key += "|PBR";     // (M6 Modern: a separate program; non-pbr materials build as before)
+    if (modernActive_) key += "|PBR";                    // (M6 Modern: a separate program; non-pbr materials build as before)
     static const bool gltfOnly = std::getenv("WFC_GLTFMATERIALS") != nullptr;   // A/B: AssetTools bakes
     auto mit = (gltfOnly && !lightmapped) ? mats_.end() : mats_.find(matName);
     if (mit == mats_.end() && gm) {
@@ -2619,7 +2733,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
         std::vector<Program::Slot> slotsUse = slots;
         std::vector<bool> cubeUse = s.cube;
         bool pbr = false;
-        if (modernActive_ && lightmapped && s.lit && s.blend <= 1) {
+        if (modernActive_ && s.lit && s.blend <= 1) {
             auto pi = pbr_.find(matName);
             if (pi != pbr_.end()) {
                 pbr = true;
@@ -2688,9 +2802,9 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             static const bool noInst = std::getenv("WFC_INSTANCING") == nullptr || std::getenv("WFC_NOINSTANCING") != nullptr;
             if (instWanted_ && !noInst && !lightmapped && s.blend <= 1 && progs_[(size_t)r].distProg < 0 &&
                 !progs_[(size_t)r].sceneDepth && !progs_[(size_t)r].sceneColor && DrawElementsInstanced) {
-                instBuild_ = true;
-                int in = buildProgram(key + "|INST", s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, false, s.rtParams);
-                instBuild_ = false;
+                instBuild_ = true; pbrBuild_ = pbr;
+                int in = buildProgram(key + "|INST", body, slotsUse, cubeUse, s.blend, s.twoSided, s.lit, s.clip, false, s.rtParams);
+                instBuild_ = false; pbrBuild_ = false;
                 if (in >= 0) { progs_[(size_t)in].original = true; progs_[(size_t)in].material = progs_[(size_t)r].material;
                                progs_[(size_t)r].instProg = in; }
             }
