@@ -332,6 +332,9 @@ public:
     // core::loadYield while the load blocks (the startup movie keeps animating).
     std::function<void(const std::function<void()>&)> sceneLoadWrapper;
     bool fullScreenMovie() const { return fullScreenMovie_; }
+    // The boot start-up movie is on screen (the boot loading underlay or its hold); a movie is open (PackageCredits).
+    bool startupMovieUp() const { return video_ && !bootDone_ && !bootUnderlay_.empty() && videoName_ == bootUnderlay_; }
+    bool movieOpen() const { return video_ != nullptr; }
 private:
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;

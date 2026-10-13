@@ -13,6 +13,14 @@ if(WFC_DEV_TOOLS)
 else()
     add_compile_definitions(WFC_DEV_TOOLS=0)
 endif()
+# DLSS package builds (Systems' build_slim --dlss configures -DWFC_DLSS_PACKAGE=ON): the NVIDIA DLSS credit line on the
+# start-up movie and the credits movie (src/frontend/PackageCredits.h). OFF: no credit line, the original frontend.
+option(WFC_DLSS_PACKAGE "Show the NVIDIA DLSS credit (DLSS package builds)" OFF)
+if(WFC_DLSS_PACKAGE)
+    add_compile_definitions(WFC_DLSS_PACKAGE=1)
+else()
+    add_compile_definitions(WFC_DLSS_PACKAGE=0)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
