@@ -297,6 +297,8 @@ def check_hook(hook, glsl, S, defs, diff_line):
     must parse, name only temporaries defined before the base-colour line, and have the right type."""
     h = hook.get('glsl_hash') or hook.get('glsl_sha1')
     if h and h != glsl_hash(glsl): return 'glsl hash mismatch (the row was made for another body)'
+    if not h:   # (rows name temporaries by number: without a hash a changed body is not detected - warned, still used)
+        print('  WARNING hook row without glsl_hash (unverified against this body)', file=sys.stderr)
     want = {'metallic': (1,), 'f0': (3, 4), 'baseColor': (3, 4)}
     for key, tys in want.items():
         e = hook.get(key)
@@ -388,9 +390,9 @@ def pbr_body(glsl, info, hook=None):
             hook_rejected = hook_ok
             hook = None                                  # (rejected: the material keeps the dielectric Modern mapping)
         if hook:
-            def v3(e):                                   # (a vec4 temporary as the vec3 the hooks mean)
-                e = e.strip()
-                return '(%s).xyz' % e if e in defs and defs[e][2] == 'vec4' else e
+            def v3(e):                                   # (any vec4-typed expression as the vec3 the hooks mean)
+                e = str(e).strip()
+                return '(%s).xyz' % e if S.w(_parse(e, S))[1] == 4 else e
             if hook.get('baseColor'):
                 lines_out.append('%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, v3(hook['baseColor'])))
             lines_out.append('%swfcPbrMetallic = %s;' % (ind, hook['metallic']))
