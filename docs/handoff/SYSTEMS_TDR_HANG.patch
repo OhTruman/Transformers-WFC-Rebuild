@@ -1,0 +1,123 @@
+diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+index d67f466..a3f0f68 100644
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -251,6 +251,20 @@ public:
+ 
+     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+         watchdog::phase("beginFrame");
++        // [Systems] a lost context (TDR): checked before this frame's first query read-back - after a reset AMD's
++        // glGetQueryObjectiv spins in the driver (pawnOcclusionResults / gpuTimerBegin) instead of returning
++        // WFC_SIMRESET=N (diagnostics): report a reset at the N-th beginFrame, to prove this exit path
++        static const int simReset = WFC_ENV("WFC_SIMRESET") ? std::atoi(WFC_ENV("WFC_SIMRESET")) : 0;
++        static int begun = 0;
++        const bool fakeReset = simReset > 0 && ++begun == simReset;
++        if (glx::GetGraphicsResetStatus || fakeReset) {
++            const GLenum rs = fakeReset ? (GLenum)0x8255 /*GL_UNKNOWN_CONTEXT_RESET*/ : glx::pollResetStatus();
++            if (rs != GL_NO_ERROR) {
++                static char why[96];
++                std::snprintf(why, sizeof why, "the GL context was lost (reset status 0x%04X)", (unsigned)rs);
++                watchdog::gpuLost(why);
++            }
++        }
+         glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
+         glx::textureCacheInvalidate();               // ... and textures
+         if (const char* hf = WFC_ENV("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
+@@ -391,6 +405,10 @@ public:
+           if (frames == 60 && WFC_ENV("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
+               watchdog::phase("WFC_HANGTEST stall");
+               std::this_thread::sleep_for(std::chrono::seconds(7));
++          }
++          if (frames == 60 && WFC_ENV("WFC_SIMHANG")) {    // [Systems] diagnostics: blocked for good (a driver that never
++              watchdog::phase("WFC_SIMHANG blocked");        // returns): the watchdog's backstop must end the process
++              for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
+           } }
+         watchdog::phase("after endFrame (buffer swap / game update)");
+         if (WFC_ENV("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
+diff --git a/src/render/gl/RenderWatchdog.cpp b/src/render/gl/RenderWatchdog.cpp
+index 5adbfa6..6a0a5ff 100644
+--- a/src/render/gl/RenderWatchdog.cpp
++++ b/src/render/gl/RenderWatchdog.cpp
+@@ -222,6 +222,15 @@ void loop() {
+             std::thread([] { platform::restoreDesktopDisplayMode(); }).detach();
+         }
+ #endif
++        // [Systems] backstop: a render thread blocked in the driver (a lost context after a TDR) never comes back - after the
++        // dump and WFC_HANG_EXIT_S more seconds (default 10), end the process with a report instead of hanging forever.
++        static const double exitAfter = [] { const char* e = std::getenv("WFC_HANG_EXIT_S"); return e ? std::atof(e) : 10.0; }();
++        if (reported && exitAfter >= 0 && stalled >= kStallSeconds + exitAfter) {
++            static char why[192];
++            std::snprintf(why, sizeof why, "no frame completed for %.1f s (render thread last at '%s', frame %d): GPU driver "
++                          "reset or hang", stalled, gPhase.load(), gFrame.load());
++            gpuLost(why);
++        }
+         if (reported) continue;
+         reported = true;
+         LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d", stalled,
+@@ -256,6 +265,45 @@ void frameDone(int frame) {
+     gLastProgressMs.store(nowMs(), std::memory_order_relaxed);
+ }
+ 
++void gpuLost(const char* why) {
++    static std::atomic<bool> once{false};
++    if (once.exchange(true)) for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));   // the other caller exits
++    LOG_ERROR("GPU driver reset / hang: exiting (%s)", why);
++#ifdef _WIN32
++    const DWORD pid = GetCurrentProcessId();
++    char path[96];
++    std::snprintf(path, sizeof path, "wfc_gpu_lost_%lu.txt", (unsigned long)pid);
++    if (HANDLE f = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); f != INVALID_HANDLE_VALUE) {
++        put(f, "wfc_rebuild stopped: the graphics driver was reset or stopped responding.\n%s\nrender phase '%s', frame %d; "
++               "hang minidump (if written): wfc_hang_%lu_0.dmp\n", why, gPhase.load(), gFrame.load(), (unsigned long)pid);
++        CloseHandle(f);
++    }
++    core::logTryFlush();
++    // the desktop mode on its own thread (ChangeDisplaySettingsEx notifies every top-level window; ours may not answer),
++    // waited for at most 3 s
++    if (platform::desktopModeKeeper().active()) {
++        std::atomic<bool> done{false};
++        std::thread([&done] { platform::restoreDesktopDisplayMode(); done = true; }).detach();
++        for (int i = 0; i < 30 && !done.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
++    }
++    // a visible message: a message box on its own thread, shown for at most WFC_GPULOST_DIALOG_S seconds (the process then
++    // ends whether or not it was closed: a harness run is never held)
++    static const double dialogS = [] { const char* e = std::getenv("WFC_GPULOST_DIALOG_S"); return e ? std::atof(e) : 20.0; }();
++    if (dialogS > 0) {
++        std::atomic<bool> closed{false};
++        std::thread([&closed] {
++            MessageBoxA(nullptr, "The graphics driver was reset or stopped responding, so Transformers: War for Cybertron "
++                        "(rebuild) has to close.\n\nPlease start the game again. Details are in wfc.log and wfc_gpu_lost_*.txt.",
++                        "Graphics driver reset", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
++            closed = true;
++        }).detach();
++        for (int i = 0; i < (int)(dialogS * 10) && !closed.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
++    }
++    TerminateProcess(GetCurrentProcess(), 3);
++#endif
++    std::_Exit(3);
++}
++
+ void installCrashHandler() {
+ #ifdef _WIN32
+     if (std::getenv("WFC_NOCRASHHANDLER")) return;
+diff --git a/src/render/gl/RenderWatchdog.h b/src/render/gl/RenderWatchdog.h
+index 11c4207..93bc221 100644
+--- a/src/render/gl/RenderWatchdog.h
++++ b/src/render/gl/RenderWatchdog.h
+@@ -15,6 +15,16 @@ void phase(const char* where);     // static-lifetime string
+ void frameDone(int frame);
+ void stop();
+ 
++// [Systems] GPU driver reset / unrecoverable hang (AMD TDR, 2026-10-13: after a reset the main thread blocked in the driver -
++// glGetQueryObjectiv spinning in atio6axx, or SwapBuffers never returning - and the process hung forever). Ends the process
++// cleanly from any thread: logs `why`, writes wfc_gpu_lost_<pid>.txt (working directory), flushes the log, puts back the
++// desktop display mode (a fullscreen run), shows a message box for at most WFC_GPULOST_DIALOG_S seconds (default 20; 0 = none)
++// and terminates with exit code 3 (no atexit / DLL teardown: the driver may hold its locks). Never returns.
++[[noreturn]] void gpuLost(const char* why);
++// The watchdog's backstop: after the stall dump, a further WFC_HANG_EXIT_S seconds (default 10; < 0 = never) with no
++// progress call gpuLost("..."). WFC_SIMHANG=1 blocks the render thread for good once (frame 60) to test this path;
++// WFC_SIMRESET=N makes GLRenderer::beginFrame's reset poll report a reset at its N-th call (the direct path).
++
+ // Unhandled-exception report (any thread): wfc_crash_<pid>.txt in the working directory - exception code / address,
+ // the render phase and frame, and the faulting thread's stack (RVAs, named from wfc_rebuild.map beside the exe when
+ // present) - plus a minidump wfc_crash_<pid>.dmp with the exception context. No behaviour change otherwise: the
