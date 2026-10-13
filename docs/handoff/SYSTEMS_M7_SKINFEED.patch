@@ -1,0 +1,818 @@
+diff --git a/src/render/d3d12/D3D12RtDynamic.h b/src/render/d3d12/D3D12RtDynamic.h
+--- a/src/render/d3d12/D3D12RtDynamic.h
++++ b/src/render/d3d12/D3D12RtDynamic.h
+@@ -0,0 +1,56 @@
++// Clean-room reconstruction — M7 RT, the skinned characters' dynamic geometry (PC ADAPTATION; OFF by default; Systems).
++// GL skins the selected characters with a compute pass into ONE buffer shared with D3D12 (float3 per vertex, a region per
++// instance slot; render/gl/WfcRtSkin.cpp); the bridge's job (D3D12RtBridge.cpp) records this frame's per-slot BLAS
++// builds / refits (rtDynamicRecord) before its TLAS build and appends the characters as instances (rtDynamicAppendInstances).
++// BLAS in model space (the model matrix is the instance transform), so a character that moves without a new pose costs
++// no refit. All calls on the main thread (the round trip's thread).
++#pragma once
++#include <cstdint>
++#include <vector>
++
++struct ID3D12Device5;
++struct ID3D12GraphicsCommandList4;
++struct D3D12_RAYTRACING_INSTANCE_DESC;
++
++namespace render {
++
++// ---- the GL side (Pipeline::rtSkinFeed) ----
++struct RtDynamicBuffer {
++    void* handle = nullptr;       // NT handle of the shared D3D12 buffer (GL imports it: GL_EXT_memory_object_win32)
++    uint64_t bytes = 0;           // the allocation size the import takes
++    uint32_t capacity = 0;        // float3 vertices
++};
++bool rtDynamicAvailable();                                // attached to a DXR 1.1 device
++// the shared positions buffer (created on first use; stays until shutdown); false: unavailable
++bool rtDynamicBuffer(RtDynamicBuffer* out);
++// clears (map unload) discard every model and slot: the GL side re-registers when this changes
++uint32_t rtDynamicEpoch();
++// a skinned model's triangle list (copied; uploaded by the next record); -1: unavailable
++int rtDynamicModel(const uint32_t* indices, uint32_t indexCount, uint32_t vertexCount);
++void rtDynamicReleaseModel(int model);                   // (its slots released first)
++// an instance slot of a model: its BLAS + a region of the shared buffer; -1: the buffer is full
++int rtDynamicSlot(int model);
++uint32_t rtDynamicFirstVertex(int slot);
++void rtDynamicReleaseSlot(int slot);
++struct RtDynamicInstance {
++    int slot = -1;
++    float transform[12];          // model -> world, row-major 3x4 (D3D12_RAYTRACING_INSTANCE_DESC::Transform)
++    bool update = false;          // the slot's positions were rewritten this frame: build (first time) or refit its BLAS
++};
++// this frame's characters in the TLAS (replaces the last call's list); the next record consumes the updates
++void rtDynamicFrame(const RtDynamicInstance* inst, int n);
++// statistics of the records since the last call: GPU ms of the builds / refits (timestamps, read two records late)
++struct RtDynamicStats { int records = 0; long instances = 0, refits = 0, builds = 0; double gpuMs = 0; int gpuSamples = 0;
++                        uint32_t slots = 0, verticesUsed = 0, capacity = 0; double blasMB = 0; };
++RtDynamicStats rtDynamicTakeStats();
++// (WFC_RT_CHARCHECK) the next record copies the slot's first `vertices` positions as D3D12 reads them and, two records
++// later, logs whether their FNV-1a 64 hash equals `glHash` (the same bytes as GL read them back after its compute pass)
++void rtDynamicCheck(int slot, uint32_t vertices, uint64_t glHash);
++
++// ---- the D3D12 side (the bridge) ----
++void rtDynamicAttach(ID3D12Device5* dev, uint64_t timestampFrequency);   // after the bridge's device exists
++void rtDynamicRecord(ID3D12GraphicsCommandList4* cl);                     // in the job, before the TLAS build
++void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask);   // mask 0x4
++void rtDynamicClear();                                    // map unload, after the bridge's queue is idle
++
++}  // namespace render
+diff --git a/src/render/d3d12/D3D12RtDynamic.cpp b/src/render/d3d12/D3D12RtDynamic.cpp
+--- a/src/render/d3d12/D3D12RtDynamic.cpp
++++ b/src/render/d3d12/D3D12RtDynamic.cpp
+@@ -0,0 +1,364 @@
++// Clean-room reconstruction — M7 RT, the skinned characters' dynamic geometry, D3D12 side (PC ADAPTATION; OFF by default;
++// Systems; render/d3d12/D3D12RtDynamic.h). The shared positions buffer (a committed DEFAULT buffer in COMMON with a shared
++// handle: GL writes it, the BLAS builds read it after implicit promotion), per model an index buffer (DEFAULT, copied from
++// an upload buffer by the first record), per instance slot a BLAS (ALLOW_UPDATE) over its region of the shared buffer:
++// built the first time, refit (PERFORM_UPDATE in place) when GL rewrote its positions. Scratch: one arena per record,
++// sub-allocated (256-byte aligned), grown on demand. Released resources wait three records (the bridge's two-allocator
++// ring has finished the record two back by then).
++#if defined(_WIN32)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <d3d12.h>
++
++#include "render/d3d12/D3D12RtDynamic.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cstdlib>
++#include <cstring>
++#include <utility>
++#include <vector>
++
++namespace render {
++namespace {
++template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
++
++ID3D12Resource* makeBuf(ID3D12Device* dev, UINT64 bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
++                        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_FLAGS heapFlags = D3D12_HEAP_FLAG_NONE) {
++    D3D12_HEAP_PROPERTIES hp{}; hp.Type = heap;
++    D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; rd.Width = std::max<UINT64>(bytes, 256);
++    rd.Height = 1; rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.SampleDesc.Count = 1; rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
++    rd.Flags = flags;
++    ID3D12Resource* r = nullptr;
++    if (FAILED(dev->CreateCommittedResource(&hp, heapFlags, &rd, state, nullptr, __uuidof(ID3D12Resource), (void**)&r))) return nullptr;
++    return r;
++}
++constexpr UINT64 kAlign = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT;   // 256
++UINT64 alignUp(UINT64 v) { return (v + kAlign - 1) & ~(kAlign - 1); }
++constexpr int kRing = 3;
++
++struct Model { ID3D12Resource* ib = nullptr; ID3D12Resource* upload = nullptr; uint32_t indices = 0, vertices = 0; bool ready = false; bool live = false; };
++struct Slot { int model = -1; uint32_t first = 0, count = 0; ID3D12Resource* blas = nullptr; UINT64 blasBytes = 0, scratch = 0;
++              bool built = false, live = false, pending = false; };
++
++class Dynamic {
++public:
++    void attach(ID3D12Device5* dev, uint64_t tsFreq) {
++        if (dev_ == dev) return;
++        dev_ = dev; tsFreq_ = tsFreq;
++        static const long capEnv = [] { const char* e = std::getenv("WFC_RT_CHARVERTS"); return e ? std::atol(e) : 0L; }();
++        capacity_ = capEnv > 0 ? (uint32_t)capEnv : (1u << 21);           // 2 M vertices, 24 MB
++        free_.assign(1, {0u, capacity_});
++    }
++    bool available() const { return dev_ != nullptr; }
++    bool buffer(RtDynamicBuffer* out) {
++        if (!dev_) return false;
++        if (!pos_) {
++            pos_ = makeBuf(dev_, (UINT64)capacity_ * 12, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON,
++                           D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_FLAG_SHARED);
++            if (!pos_ || FAILED(dev_->CreateSharedHandle(pos_, nullptr, GENERIC_ALL, nullptr, &posHandle_))) {
++                LOG_WARN("RT characters: shared positions buffer failed"); rel(pos_); dev_ = nullptr; return false;
++            }
++            const D3D12_RESOURCE_DESC rd = pos_->GetDesc();
++            posBytes_ = dev_->GetResourceAllocationInfo(0, 1, &rd).SizeInBytes;
++            LOG_INFO("RT characters: shared positions buffer %u vertices (%.1f MB)", capacity_, (double)posBytes_ / 1048576.0);
++        }
++        out->handle = posHandle_; out->bytes = posBytes_; out->capacity = capacity_;
++        return true;
++    }
++    uint32_t epoch() const { return epoch_; }
++    int model(const uint32_t* idx, uint32_t n, uint32_t verts) {
++        if (!dev_ || !n || n % 3) return -1;
++        Model m; m.indices = n; m.vertices = verts; m.live = true;
++        m.upload = makeBuf(dev_, (UINT64)n * 4, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);
++        m.ib = makeBuf(dev_, (UINT64)n * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST);
++        void* p = nullptr;
++        if (!m.upload || !m.ib || FAILED(m.upload->Map(0, nullptr, &p))) { rel(m.upload); rel(m.ib); return -1; }
++        std::memcpy(p, idx, (size_t)n * 4); m.upload->Unmap(0, nullptr);
++        for (size_t k = 0; k < models_.size(); ++k) if (!models_[k].live) { models_[k] = m; return (int)k; }
++        models_.push_back(m);
++        return (int)models_.size() - 1;
++    }
++    void releaseModel(int k) {
++        if (k < 0 || k >= (int)models_.size() || !models_[(size_t)k].live) return;
++        later(models_[(size_t)k].ib); later(models_[(size_t)k].upload);
++        models_[(size_t)k] = Model{};
++    }
++    void check(int slot, uint32_t n, uint64_t hash) {
++        if (chkRecord_ || slot < 0 || slot >= (int)slots_.size() || !slots_[(size_t)slot].live || !n) return;
++        chkSlot_ = slot; chkN_ = std::min(n, slots_[(size_t)slot].count); chkHash_ = hash; chkArmed_ = true;
++    }
++    int slot(int model) {
++        if (!dev_ || model < 0 || model >= (int)models_.size() || !models_[(size_t)model].live) return -1;
++        const Model& m = models_[(size_t)model];
++        Slot s; s.model = model; s.count = m.vertices;
++        if (!allocRange(s.count, s.first)) return -1;
++        D3D12_RAYTRACING_GEOMETRY_DESC gd = geometry(s, m);
++        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS in = inputs(&gd, false);
++        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO pi{};
++        dev_->GetRaytracingAccelerationStructurePrebuildInfo(&in, &pi);
++        s.blasBytes = alignUp(pi.ResultDataMaxSizeInBytes);
++        s.scratch = alignUp(std::max(pi.ScratchDataSizeInBytes, pi.UpdateScratchDataSizeInBytes));
++        s.blas = makeBuf(dev_, s.blasBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
++                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
++        if (!s.blas) { freeRange(s.first, s.count); return -1; }
++        s.live = true;
++        blasTotal_ += s.blasBytes;
++        for (size_t k = 0; k < slots_.size(); ++k) if (!slots_[k].live) { slots_[k] = s; return (int)k; }
++        slots_.push_back(s);
++        return (int)slots_.size() - 1;
++    }
++    uint32_t firstVertex(int s) const { return s >= 0 && s < (int)slots_.size() ? slots_[(size_t)s].first : 0; }
++    void releaseSlot(int si) {
++        if (si < 0 || si >= (int)slots_.size() || !slots_[(size_t)si].live) return;
++        Slot& s = slots_[(size_t)si];
++        later(s.blas); blasTotal_ -= s.blasBytes;
++        freeRange(s.first, s.count);
++        s = Slot{};
++    }
++    void frame(const RtDynamicInstance* inst, int n) {
++        frame_.assign(inst, inst + std::max(n, 0));
++        for (const RtDynamicInstance& i : frame_)
++            if (i.update && i.slot >= 0 && i.slot < (int)slots_.size()) slots_[(size_t)i.slot].pending = true;
++    }
++    void record(ID3D12GraphicsCommandList4* cl) {
++        if (!dev_ || !cl) return;
++        ++records_;
++        for (size_t k = 0; k < deferred_.size();)            // (the record three back has finished on the GPU)
++            if (deferred_[k].second + kRing <= records_) { deferred_[k].first->Release(); deferred_[k] = deferred_.back(); deferred_.pop_back(); }
++            else ++k;
++        readTimestamps();
++        readCheck();
++        if (chkArmed_ && pos_) {                           // (WFC_RT_CHARCHECK) the positions as D3D12 sees them
++            chkArmed_ = false;
++            const UINT64 bytes = (UINT64)chkN_ * 12;
++            if (bytes > chkBytes_) { later(chkReadback_); chkBytes_ = bytes; chkReadback_ = makeBuf(dev_, bytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST); }
++            if (chkReadback_) { cl->CopyBufferRegion(chkReadback_, 0, pos_, (UINT64)slots_[(size_t)chkSlot_].first * 12, bytes); chkRecord_ = records_; }
++            else chkBytes_ = 0;
++        }
++        // index uploads of new models
++        for (Model& m : models_) {
++            if (!m.live || m.ready || !m.upload) continue;
++            cl->CopyBufferRegion(m.ib, 0, m.upload, 0, (UINT64)m.indices * 4);
++            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = m.ib;
++            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
++            b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
++            cl->ResourceBarrier(1, &b);
++            m.ready = true; later(m.upload);
++        }
++        // this frame's builds / refits: the scratch arena first
++        UINT64 need = 0;
++        for (const RtDynamicInstance& i : frame_) if (pendingSlot(i)) need += slots_[(size_t)i.slot].scratch;
++        if (need > scratchBytes_) {
++            later(scratch_);
++            scratchBytes_ = alignUp(need + need / 2);
++            scratch_ = makeBuf(dev_, scratchBytes_, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
++                               D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
++            if (!scratch_) { scratchBytes_ = 0; return; }
++        }
++        if (!need) return;
++        const int r = (int)(records_ % kRing);
++        timestamps();
++        if (tsHeap_) cl->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)(2 * r));
++        UINT64 off = 0;
++        for (RtDynamicInstance& i : frame_) {
++            if (!pendingSlot(i)) continue;
++            Slot& s = slots_[(size_t)i.slot];
++            const Model& m = models_[(size_t)s.model];
++            D3D12_RAYTRACING_GEOMETRY_DESC gd = geometry(s, m);
++            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
++            bd.Inputs = inputs(&gd, s.built);
++            bd.DestAccelerationStructureData = s.blas->GetGPUVirtualAddress();
++            if (s.built) bd.SourceAccelerationStructureData = bd.DestAccelerationStructureData;
++            bd.ScratchAccelerationStructureData = scratch_->GetGPUVirtualAddress() + off;
++            off += s.scratch;
++            cl->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
++            ++(s.built ? stats_.refits : stats_.builds);
++            s.built = true; s.pending = false;
++        }
++        D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;   // the BLAS writes before the TLAS build reads them
++        cl->ResourceBarrier(1, &ub);
++        if (tsHeap_) {
++            cl->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)(2 * r + 1));
++            cl->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)(2 * r), 2, tsReadback_, (UINT64)r * 16);
++            tsRecord_[r] = records_;
++        }
++    }
++    void append(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask) {
++        ++stats_.records;
++        for (const RtDynamicInstance& i : frame_) {
++            if (i.slot < 0 || i.slot >= (int)slots_.size()) continue;
++            const Slot& s = slots_[(size_t)i.slot];
++            if (!s.live || !s.built) continue;
++            D3D12_RAYTRACING_INSTANCE_DESC d{};
++            std::memcpy(d.Transform, i.transform, sizeof d.Transform);
++            d.InstanceID = (UINT)i.slot;
++            d.InstanceMask = mask & 0xFF;
++            // closed meshes, but a mirrored model matrix or a refit's degenerate triangles must not let shadow rays through
++            d.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
++            d.AccelerationStructure = s.blas->GetGPUVirtualAddress();
++            out.push_back(d);
++            ++stats_.instances;
++        }
++    }
++    void clear() {                                        // (the bridge's queue is idle)
++        for (auto& d : deferred_) d.first->Release();
++        deferred_.clear();
++        chkRecord_ = 0; chkArmed_ = false;
++        for (Slot& s : slots_) rel(s.blas);
++        for (Model& m : models_) { rel(m.ib); rel(m.upload); }
++        slots_.clear(); models_.clear(); frame_.clear();
++        free_.assign(1, {0u, capacity_});
++        blasTotal_ = 0;
++        ++epoch_;
++    }
++    RtDynamicStats takeStats() {
++        RtDynamicStats s = stats_;
++        s.slots = 0; s.verticesUsed = 0;
++        for (const Slot& x : slots_) if (x.live) { ++s.slots; s.verticesUsed += x.count; }
++        s.capacity = capacity_; s.blasMB = (double)blasTotal_ / 1048576.0;
++        stats_ = RtDynamicStats{};
++        return s;
++    }
++
++private:
++    bool pendingSlot(const RtDynamicInstance& i) const {
++        if (i.slot < 0 || i.slot >= (int)slots_.size()) return false;
++        const Slot& s = slots_[(size_t)i.slot];
++        return s.live && s.pending && models_[(size_t)s.model].ready && pos_;
++    }
++    D3D12_RAYTRACING_GEOMETRY_DESC geometry(const Slot& s, const Model& m) const {
++        D3D12_RAYTRACING_GEOMETRY_DESC gd{};
++        gd.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES; gd.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
++        gd.Triangles.VertexBuffer.StartAddress = pos_ ? pos_->GetGPUVirtualAddress() + (UINT64)s.first * 12 : 0;
++        gd.Triangles.VertexBuffer.StrideInBytes = 12;
++        gd.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT; gd.Triangles.VertexCount = m.vertices;
++        gd.Triangles.IndexBuffer = m.ib ? m.ib->GetGPUVirtualAddress() : 0; gd.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
++        gd.Triangles.IndexCount = m.indices;
++        return gd;
++    }
++    static D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs(const D3D12_RAYTRACING_GEOMETRY_DESC* gd, bool update) {
++        static const bool fastBuild = std::getenv("WFC_RT_CHARFASTBUILD") != nullptr;   // (A/B: trace vs build / refit speed)
++        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS in{};
++        in.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
++        in.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
++                   (fastBuild ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD
++                              : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE);
++        if (update) in.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
++        in.NumDescs = 1; in.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY; in.pGeometryDescs = gd;
++        return in;
++    }
++    bool allocRange(uint32_t n, uint32_t& first) {        // first fit over the sorted free ranges
++        for (size_t k = 0; k < free_.size(); ++k) {
++            if (free_[k].second < n) continue;
++            first = free_[k].first;
++            free_[k].first += n; free_[k].second -= n;
++            if (!free_[k].second) free_.erase(free_.begin() + (long)k);
++            return true;
++        }
++        return false;
++    }
++    void freeRange(uint32_t first, uint32_t n) {
++        auto it = std::lower_bound(free_.begin(), free_.end(), std::make_pair(first, 0u));
++        it = free_.insert(it, {first, n});
++        size_t k = (size_t)(it - free_.begin());
++        if (k + 1 < free_.size() && free_[k].first + free_[k].second == free_[k + 1].first) {
++            free_[k].second += free_[k + 1].second; free_.erase(free_.begin() + (long)k + 1);
++        }
++        if (k > 0 && free_[k - 1].first + free_[k - 1].second == free_[k].first) {
++            free_[k - 1].second += free_[k].second; free_.erase(free_.begin() + (long)k);
++        }
++    }
++    void readCheck() {
++        if (!chkRecord_ || chkRecord_ + 2 > records_) return;
++        chkRecord_ = 0;
++        void* p = nullptr;
++        D3D12_RANGE rg{0, (SIZE_T)chkN_ * 12};
++        if (FAILED(chkReadback_->Map(0, &rg, &p))) return;
++        uint64_t h = 1469598103934665603ull;
++        const unsigned char* b = (const unsigned char*)p;
++        for (size_t k = 0; k < (size_t)chkN_ * 12; ++k) { h ^= b[k]; h *= 1099511628211ull; }
++        D3D12_RANGE none{0, 0}; chkReadback_->Unmap(0, &none);
++        LOG_INFO("RT characters check: slot %d, %u vertices as D3D12 reads them %s GL's (hash %016llx / %016llx)", chkSlot_, chkN_,
++                 h == chkHash_ ? "EQUAL" : "DIFFER from", (unsigned long long)h, (unsigned long long)chkHash_);
++    }
++    void later(ID3D12Resource*& r) { if (r) deferred_.push_back({r, records_}); r = nullptr; }
++    void timestamps() {
++        if (tsHeap_ || tsFailed_ || !tsFreq_) return;
++        D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 2 * kRing;
++        tsReadback_ = makeBuf(dev_, 16 * kRing, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
++        if (!tsReadback_ || FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) { tsFailed_ = true; rel(tsReadback_); }
++    }
++    void readTimestamps() {                               // the record two back (finished: the bridge waited for its allocator)
++        if (!tsHeap_) return;
++        for (int r = 0; r < kRing; ++r) {
++            if (!tsRecord_[r] || tsRecord_[r] + 2 > records_) continue;
++            D3D12_RANGE rg{(SIZE_T)r * 16, (SIZE_T)r * 16 + 16};
++            void* p = nullptr;
++            if (SUCCEEDED(tsReadback_->Map(0, &rg, &p))) {
++                uint64_t t[2]; std::memcpy(t, (const char*)p + r * 16, 16);
++                D3D12_RANGE none{0, 0}; tsReadback_->Unmap(0, &none);
++                if (t[1] > t[0]) { stats_.gpuMs += (double)(t[1] - t[0]) * 1000.0 / (double)tsFreq_; ++stats_.gpuSamples; }
++            }
++            tsRecord_[r] = 0;
++        }
++    }
++
++    ID3D12Device5* dev_ = nullptr;
++    uint64_t tsFreq_ = 0;
++    uint32_t capacity_ = 0, epoch_ = 1;
++    ID3D12Resource* pos_ = nullptr; HANDLE posHandle_ = nullptr; UINT64 posBytes_ = 0;
++    std::vector<std::pair<uint32_t, uint32_t>> free_;     // (first, count), sorted by first
++    std::vector<Model> models_;
++    std::vector<Slot> slots_;
++    std::vector<RtDynamicInstance> frame_;
++    ID3D12Resource* scratch_ = nullptr; UINT64 scratchBytes_ = 0;
++    std::vector<std::pair<ID3D12Resource*, uint64_t>> deferred_;
++    uint64_t records_ = 0;
++    UINT64 blasTotal_ = 0;
++    ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_ = nullptr; bool tsFailed_ = false;
++    uint64_t tsRecord_[kRing] = {0, 0, 0};
++    RtDynamicStats stats_;
++    ID3D12Resource* chkReadback_ = nullptr; UINT64 chkBytes_ = 0; uint64_t chkRecord_ = 0, chkHash_ = 0;
++    int chkSlot_ = -1; uint32_t chkN_ = 0; bool chkArmed_ = false;
++};
++Dynamic g_dyn;
++}  // namespace
++
++bool rtDynamicAvailable() { return g_dyn.available(); }
++bool rtDynamicBuffer(RtDynamicBuffer* out) { return g_dyn.buffer(out); }
++uint32_t rtDynamicEpoch() { return g_dyn.epoch(); }
++int rtDynamicModel(const uint32_t* indices, uint32_t indexCount, uint32_t vertexCount) { return g_dyn.model(indices, indexCount, vertexCount); }
++void rtDynamicReleaseModel(int model) { g_dyn.releaseModel(model); }
++void rtDynamicCheck(int slot, uint32_t vertices, uint64_t glHash) { g_dyn.check(slot, vertices, glHash); }
++int rtDynamicSlot(int model) { return g_dyn.slot(model); }
++uint32_t rtDynamicFirstVertex(int slot) { return g_dyn.firstVertex(slot); }
++void rtDynamicReleaseSlot(int slot) { g_dyn.releaseSlot(slot); }
++void rtDynamicFrame(const RtDynamicInstance* inst, int n) { g_dyn.frame(inst, n); }
++RtDynamicStats rtDynamicTakeStats() { return g_dyn.takeStats(); }
++void rtDynamicAttach(ID3D12Device5* dev, uint64_t timestampFrequency) { g_dyn.attach(dev, timestampFrequency); }
++void rtDynamicRecord(ID3D12GraphicsCommandList4* cl) { g_dyn.record(cl); }
++void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask) { g_dyn.append(out, mask); }
++void rtDynamicClear() { g_dyn.clear(); }
++
++}  // namespace render
++#else
++#include "render/d3d12/D3D12RtDynamic.h"
++namespace render {
++bool rtDynamicAvailable() { return false; }
++bool rtDynamicBuffer(RtDynamicBuffer*) { return false; }
++uint32_t rtDynamicEpoch() { return 0; }
++int rtDynamicModel(const uint32_t*, uint32_t, uint32_t) { return -1; }
++int rtDynamicSlot(int) { return -1; }
++void rtDynamicReleaseModel(int) {}
++void rtDynamicCheck(int, uint32_t, uint64_t) {}
++uint32_t rtDynamicFirstVertex(int) { return 0; }
++void rtDynamicReleaseSlot(int) {}
++void rtDynamicFrame(const RtDynamicInstance*, int) {}
++RtDynamicStats rtDynamicTakeStats() { return {}; }
++void rtDynamicAttach(ID3D12Device5*, uint64_t) {}
++void rtDynamicRecord(ID3D12GraphicsCommandList4*) {}
++void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>&, unsigned) {}
++void rtDynamicClear() {}
++}  // namespace render
++#endif
+diff --git a/src/render/gl/WfcRtSkin.cpp b/src/render/gl/WfcRtSkin.cpp
+--- a/src/render/gl/WfcRtSkin.cpp
++++ b/src/render/gl/WfcRtSkin.cpp
+@@ -0,0 +1,342 @@
++// Clean-room reconstruction — M7 RT characters, the GL side (PC ADAPTATION; OFF by default; Systems). WFC_RT_CHARS=1 (with
++// the round trip on): every GPU-skinned instance drawSkinned prepares is noted (bone-texture row, palette serial, blend,
++// model matrix, model-space bounds); just before the round trip's GL signal, rtSkinFeed selects the instances the RT
++// passes need and skins them with a compute pass that mirrors the vertex shader's wfcSkin (same bone texture rows, the
++// uSkin 2 blend with the previous palette) into their regions of a buffer shared with D3D12, in model space. D3D12's job
++// then refits their BLAS and the TLAS gets them as instances with the model matrix as the transform
++// (render/d3d12/D3D12RtDynamic.h).
++// Selection (the plan's refit culling): a character is in the TLAS when its world box is on screen or within
++// WFC_RT_CHARRANGE metres of the camera (default 30: the sun-shadow reach); beyond WFC_RT_CHARFAR (default 20) a changed
++// pose is re-skinned / refit only every second frame (alternating by slot), and an unchanged pose (same palette serial,
++// blend and alpha) is never redone. Instances not drawn for 300 frames give their slot back.
++// WFC_RT_CHARCHECK=1: every 300 feeds one updated instance is read back and compared with a CPU evaluation of the same
++// bone-texture palettes (and, unblended, with drawSkinned's exact skinPose bounds); D3D12 hashes the same region as it
++// reads it (rtDynamicCheck).
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++
++#include "render/gl/WfcPipeline.h"
++#include "render/d3d12/D3D12RtDynamic.h"
++#include "render/d3d12/D3D12RtBridge.h"
++#include "core/Log.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdlib>
++#include <cstring>
++#include <map>
++#include <vector>
++
++namespace render {
++namespace wfc {
++using namespace glx;
++
++namespace {
++const char* kSkinCS = R"(#version 430
++layout(local_size_x = 64) in;
++layout(std430, binding = 0) readonly buffer BindV { float bv[]; };   // the bind vertices: 14 floats, position first
++layout(std430, binding = 1) readonly buffer JW { vec4 jw[]; };       // per vertex: 4 joints (as float), 4 weights
++layout(std430, binding = 2) writeonly buffer Out { float outp[]; };  // the shared buffer: float3 per vertex
++uniform sampler2D uBoneTex;           // RGBA32F: row per instance; cur palette at x = 4j, prev at x = 512 + 4j
++uniform int uSkin, uSkinRow, uSkinBones, uVerts, uFirst;
++uniform float uSkinAlpha;
++mat4 wfcBone(int base, int j) {
++    return mat4(texelFetch(uBoneTex, ivec2(base + j * 4, uSkinRow), 0), texelFetch(uBoneTex, ivec2(base + j * 4 + 1, uSkinRow), 0),
++                texelFetch(uBoneTex, ivec2(base + j * 4 + 2, uSkinRow), 0), texelFetch(uBoneTex, ivec2(base + j * 4 + 3, uSkinRow), 0));
++}
++vec3 wfcSkinPos(int base, vec3 aPos, vec4 aJoints, vec4 aWeights) {   // the vertex shader's wfcSkin, positions only
++    vec3 p = vec3(0.0);
++    for (int k = 0; k < 4; ++k) {
++        float w = aWeights[k];
++        int j = int(aJoints[k] + 0.5);
++        if (w <= 0.0 || j >= uSkinBones) continue;
++        p += (wfcBone(base, j) * vec4(aPos, 1.0)).xyz * w;
++    }
++    return p;
++}
++void main() {
++    int i = int(gl_GlobalInvocationID.x);
++    if (i >= uVerts) return;
++    vec3 aPos = vec3(bv[i * 14], bv[i * 14 + 1], bv[i * 14 + 2]);
++    vec4 aJoints = jw[i * 2], aWeights = jw[i * 2 + 1];
++    vec3 p = wfcSkinPos(0, aPos, aJoints, aWeights);
++    if (uSkin == 2) { vec3 pp = wfcSkinPos(512, aPos, aJoints, aWeights); p = pp + (p - pp) * uSkinAlpha; }
++    int o = (uFirst + i) * 3;
++    outp[o] = p.x; outp[o + 1] = p.y; outp[o + 2] = p.z;
++}
++)";
++
++bool on() { static const bool v = std::getenv("WFC_RT_CHARS") != nullptr; return v; }
++float envF(const char* n, float d) { const char* e = std::getenv(n); return e ? (float)std::atof(e) : d; }
++
++typedef uint64_t GLuint64_;
++typedef void(APIENTRY* PFN_CreateMemoryObjectsEXT)(GLsizei, GLuint*);
++typedef void(APIENTRY* PFN_ImportMemoryWin32HandleEXT)(GLuint, GLuint64_, GLenum, void*);
++typedef void(APIENTRY* PFN_MemoryObjectParameterivEXT)(GLuint, GLenum, const GLint*);
++typedef void(APIENTRY* PFN_BufferStorageMemEXT)(GLenum, GLsizeiptr, GLuint, GLuint64_);
++constexpr GLenum kSSBO = 0x90D2, kHandleD3D12Resource = 0x958A, kDedicated = 0x9581;
++
++struct GlModel { int id = -1; const float* posData = nullptr; size_t verts = 0, idx = 0; GLuint vbo = 0; };
++struct GlInst { int slot = -1, model = -1, row = -1, mode = 0, lastSeen = 0; float alpha = -1.0f; uint64_t serial = 0; bool updated = false; };
++struct State {
++    bool failed = false;
++    uint32_t epoch = 0;
++    GLuint prog = 0, mem = 0, buf = 0;
++    uint32_t capacity = 0;
++    GLint uSkin = -1, uRow = -1, uBones = -1, uVerts = -1, uFirst = -1, uAlpha = -1, uTex = -1;
++    std::map<const void*, GlModel> models;                // key: the bind mesh (skinModels_'s key)
++    std::map<const void*, GlInst> insts;                  // key: drawSkinned's instance key
++    GLuint q[3][2] = {}; bool qUsed[3] = {}; int qi = 0;  // GL timestamps around the dispatches (ring of 3)
++    long feeds = 0, recs = 0, inTlas = 0, skinned = 0, farSkipped = 0, unchanged = 0, full = 0, vertsSkinned = 0;
++    double glMs = 0; int glSamples = 0;
++} S;
++
++GLuint linkCS(const char* src) {
++    GLuint sh = CreateShader(0x91B9 /*GL_COMPUTE_SHADER*/);
++    ShaderSource(sh, 1, &src, nullptr);
++    CompileShader(sh);
++    GLint ok = 0; GetShaderiv(sh, GL_COMPILE_STATUS, &ok);
++    if (!ok) { char log[2048] = {}; GetShaderInfoLog(sh, sizeof log, nullptr, log); LOG_WARN("RT characters: skin.cs compile failed: %s", log); DeleteShader(sh); return 0; }
++    GLuint p = CreateProgram(); AttachShader(p, sh); LinkProgram(p); DeleteShader(sh);
++    GetProgramiv(p, GL_LINK_STATUS, &ok);
++    if (!ok) { char log[2048] = {}; GetProgramInfoLog(p, sizeof log, nullptr, log); LOG_WARN("RT characters: skin.cs link failed: %s", log); DeleteProgram(p); return 0; }
++    return p;
++}
++// the shared buffer, imported once (it lives until shutdown)
++bool importBuffer() {
++    if (S.buf) return true;
++    RtDynamicBuffer b;
++    if (!rtDynamicBuffer(&b)) return false;
++    auto g = [](const char* n) { return (void*)wglGetProcAddress(n); };
++    auto createMem = (PFN_CreateMemoryObjectsEXT)g("glCreateMemoryObjectsEXT");
++    auto importMem = (PFN_ImportMemoryWin32HandleEXT)g("glImportMemoryWin32HandleEXT");
++    auto memParam = (PFN_MemoryObjectParameterivEXT)g("glMemoryObjectParameterivEXT");
++    auto storageMem = (PFN_BufferStorageMemEXT)g("glBufferStorageMemEXT");
++    if (!createMem || !importMem || !storageMem) { LOG_WARN("RT characters: glBufferStorageMemEXT missing"); return false; }
++    while (glGetError() != GL_NO_ERROR) {}
++    createMem(1, &S.mem);
++    const GLint ded = 1; if (memParam) memParam(S.mem, kDedicated, &ded);
++    importMem(S.mem, b.bytes, kHandleD3D12Resource, b.handle);
++    GenBuffers(1, &S.buf);
++    BindBuffer(kSSBO, S.buf);
++    storageMem(kSSBO, (GLsizeiptr)b.capacity * 12, S.mem, 0);
++    BindBuffer(kSSBO, 0);
++    if (glGetError() != GL_NO_ERROR) { LOG_WARN("RT characters: importing the shared positions buffer failed"); return false; }
++    S.capacity = b.capacity;
++    return true;
++}
++// a new clear (map unload) discarded D3D12's models / slots: forget ours
++void syncEpoch() {
++    const uint32_t e = rtDynamicEpoch();
++    if (e != S.epoch) { S.models.clear(); S.insts.clear(); S.epoch = e; }
++}
++uint64_t fnv(const void* p, size_t n) {
++    uint64_t h = 1469598103934665603ull;
++    for (size_t k = 0; k < n; ++k) { h ^= ((const unsigned char*)p)[k]; h *= 1099511628211ull; }
++    return h;
++}
++}  // namespace
++
++void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
++                          const core::Vec3& mn, const core::Vec3& mx) {
++    if (!on()) return;
++    if (rtSkinFrame_ != frameNo_) {                       // the first note of a frame: the previous frame's list moves back
++        rtSkinPrevFrame_ = rtSkinFrame_; rtSkinPrev_.swap(rtSkinCur_); rtSkinCur_.clear(); rtSkinIdx_.clear();
++        rtSkinFrame_ = frameNo_;
++    }
++    // the model's triangle list goes to D3D12 while the bind mesh is certainly alive (here)
++    if (rtDynamicAvailable()) {
++        syncEpoch();
++        GlModel& m = S.models[&bind];
++        if (m.id < 0 || m.posData != sm.posData || m.verts != sm.verts || m.idx != sm.idx || m.vbo != sm.vbo) {
++            if (m.id >= 0) {
++                for (auto& it : S.insts) if (it.second.model == m.id) { rtDynamicReleaseSlot(it.second.slot); it.second = GlInst{}; }
++                rtDynamicReleaseModel(m.id);
++            }
++            m = GlModel{};
++            if (bind.indices.size() == sm.idx && !bind.indices.empty())
++                m.id = rtDynamicModel(bind.indices.data(), (uint32_t)bind.indices.size(), (uint32_t)sm.verts);
++            m.posData = sm.posData; m.verts = sm.verts; m.idx = sm.idx; m.vbo = sm.vbo;
++        }
++    }
++    RtSkinRec r;
++    r.key = key; r.bindKey = &bind; r.row = skinRow_; r.mode = skinMode_; r.bones = skinBones_; r.alpha = skinAlpha_;
++    r.serial = serial; r.model = model; r.mn = mn; r.mx = mx;
++    auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins)
++    if (it != rtSkinIdx_.end()) rtSkinCur_[it->second] = r;
++    else { rtSkinIdx_[key] = rtSkinCur_.size(); rtSkinCur_.push_back(r); }
++}
++
++void Pipeline::rtSkinFeed(bool afterCharacters) {
++    if (!on() || S.failed || !rtDynamicAvailable()) return;
++    syncEpoch();
++    if (!S.prog) {
++        S.prog = linkCS(kSkinCS);
++        if (!S.prog || !importBuffer()) { S.failed = true; LOG_WARN("RT characters: off (no compute skinning / shared buffer)"); return; }
++        S.uSkin = GetUniformLocation(S.prog, "uSkin"); S.uRow = GetUniformLocation(S.prog, "uSkinRow");
++        S.uBones = GetUniformLocation(S.prog, "uSkinBones"); S.uVerts = GetUniformLocation(S.prog, "uVerts");
++        S.uFirst = GetUniformLocation(S.prog, "uFirst"); S.uAlpha = GetUniformLocation(S.prog, "uSkinAlpha");
++        S.uTex = GetUniformLocation(S.prog, "uBoneTex");
++        static const float range = envF("WFC_RT_CHARRANGE", 30.0f), farD = envF("WFC_RT_CHARFAR", 20.0f);
++        LOG_INFO("RT characters: on (%s; in the TLAS on screen or within %.0f m, refit every second frame beyond %.0f m; %u shared vertices)",
++                 afterCharacters ? "this frame's poses" : "last frame's poses", range, farD, S.capacity);
++    }
++    static const float range = envF("WFC_RT_CHARRANGE", 30.0f), farD = envF("WFC_RT_CHARFAR", 20.0f);
++    static const bool check = std::getenv("WFC_RT_CHARCHECK") != nullptr;
++    // the instances whose palettes the bone texture holds now
++    const std::vector<RtSkinRec>* recs = nullptr;
++    if (afterCharacters) { if (rtSkinFrame_ == frameNo_) recs = &rtSkinCur_; flushSkinUploads(); }
++    else if (rtSkinFrame_ == frameNo_ - 1) recs = &rtSkinCur_;          // (no skinned draw yet this frame)
++    else if (rtSkinFrame_ == frameNo_ && rtSkinPrevFrame_ == frameNo_ - 1) recs = &rtSkinPrev_;
++    std::vector<RtDynamicInstance> out;
++    struct Job { const RtSkinRec* r; const SkinModel* sm; uint32_t first; };
++    std::vector<Job> jobs;
++    if (recs) {
++        out.reserve(recs->size());
++        for (const RtSkinRec& r : *recs) {
++            ++S.recs;
++            auto smIt = skinModels_.find(r.bindKey);
++            auto gmIt = S.models.find(r.bindKey);
++            if (smIt == skinModels_.end() || gmIt == S.models.end() || gmIt->second.id < 0 || gmIt->second.vbo != smIt->second.vbo) continue;
++            const SkinModel& sm = smIt->second;
++            // the world box: on screen (all corners outside one clip plane: off), the distance from the camera to it
++            core::Vec3 wmn{1e30f, 1e30f, 1e30f}, wmx{-1e30f, -1e30f, -1e30f};
++            unsigned outAll = 0x3F;
++            for (int c = 0; c < 8; ++c) {
++                const core::Vec3 p{(c & 1) ? r.mx.x : r.mn.x, (c & 2) ? r.mx.y : r.mn.y, (c & 4) ? r.mx.z : r.mn.z};
++                const core::Vec3 w = core::transformPoint(r.model, p);
++                wmn = {std::min(wmn.x, w.x), std::min(wmn.y, w.y), std::min(wmn.z, w.z)};
++                wmx = {std::max(wmx.x, w.x), std::max(wmx.y, w.y), std::max(wmx.z, w.z)};
++                const float* m = viewProj_.m;
++                const float cx = m[0] * w.x + m[4] * w.y + m[8] * w.z + m[12], cy = m[1] * w.x + m[5] * w.y + m[9] * w.z + m[13];
++                const float cz = m[2] * w.x + m[6] * w.y + m[10] * w.z + m[14], cw = m[3] * w.x + m[7] * w.y + m[11] * w.z + m[15];
++                outAll &= (cx < -cw ? 1u : 0u) | (cx > cw ? 2u : 0u) | (cy < -cw ? 4u : 0u) | (cy > cw ? 8u : 0u) |
++                          (cz < -cw ? 16u : 0u) | (cz > cw ? 32u : 0u);
++            }
++            const core::Vec3 q{std::clamp(camPos_.x, wmn.x, wmx.x), std::clamp(camPos_.y, wmn.y, wmx.y), std::clamp(camPos_.z, wmn.z, wmx.z)};
++            const float dist = core::length(q - camPos_);
++            if (outAll && dist > range) continue;                     // neither visible nor within shadow reach
++            GlInst& gi = S.insts[r.key];
++            gi.lastSeen = frameNo_;
++            if (gi.slot >= 0 && gi.model != gmIt->second.id) { rtDynamicReleaseSlot(gi.slot); gi = GlInst{}; gi.lastSeen = frameNo_; }
++            if (gi.slot < 0) {
++                gi.slot = rtDynamicSlot(gmIt->second.id); gi.model = gmIt->second.id;
++                if (gi.slot < 0) { ++S.full; gi = GlInst{}; continue; }
++            }
++            const bool changed = !gi.updated || gi.serial != r.serial || r.serial == 0 || gi.mode != r.mode || gi.alpha != r.alpha || gi.row != r.row;
++            bool update = changed;
++            if (changed && gi.updated && dist > farD && ((frameNo_ + gi.slot) & 1)) { update = false; ++S.farSkipped; }
++            if (!changed) ++S.unchanged;
++            RtDynamicInstance di;
++            di.slot = gi.slot; di.update = update;
++            for (int row = 0; row < 3; ++row)
++                for (int c = 0; c < 4; ++c) di.transform[row * 4 + c] = r.model.m[c * 4 + row];
++            out.push_back(di);
++            if (update) {
++                jobs.push_back({&r, &sm, rtDynamicFirstVertex(gi.slot)});
++                gi.updated = true; gi.serial = r.serial; gi.mode = r.mode; gi.alpha = r.alpha; gi.row = r.row;
++            }
++        }
++    }
++    // the compute pass (state saved / restored around it; the bone texture is on its own unit 18)
++    if (!jobs.empty()) {
++        const int qs = S.qi;
++        if (S.qUsed[qs]) {                                    // (this ring slot's last pair: three feeds ago)
++            GLint rdy = 0; GetQueryObjectiv(S.q[qs][1], 0x8867 /*GL_QUERY_RESULT_AVAILABLE*/, &rdy);
++            if (rdy) {
++                unsigned long long t0 = 0, t1 = 0;
++                GetQueryObjectui64v(S.q[qs][0], 0x8866, &t0); GetQueryObjectui64v(S.q[qs][1], 0x8866, &t1);
++                if (t1 > t0) { S.glMs += (double)(t1 - t0) * 1e-6; ++S.glSamples; }
++            }
++            S.qUsed[qs] = false;
++        }
++        if (!S.q[0][0]) for (auto& p : S.q) GenQueries(2, p);
++        QueryCounter(S.q[qs][0], 0x8E28 /*GL_TIMESTAMP*/);
++        GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
++        GLint unit = GL_TEXTURE0; glGetIntegerv(0x84E0 /*GL_ACTIVE_TEXTURE*/, &unit);
++        ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture((GLenum)unit);
++        UseProgram(S.prog);
++        Uniform1i(S.uTex, 18);
++        BindBufferBase(kSSBO, 2, S.buf);
++        for (const Job& j : jobs) {
++            Uniform1i(S.uSkin, j.r->mode); Uniform1i(S.uRow, j.r->row); Uniform1i(S.uBones, j.r->bones);
++            Uniform1f(S.uAlpha, j.r->alpha); Uniform1i(S.uVerts, (GLint)j.sm->verts); Uniform1i(S.uFirst, (GLint)j.first);
++            BindBufferBase(kSSBO, 0, j.sm->vbo); BindBufferBase(kSSBO, 1, j.sm->jwVbo);
++            DispatchCompute((GLuint)((j.sm->verts + 63) / 64), 1, 1);
++            S.vertsSkinned += (long)j.sm->verts;
++        }
++        for (GLuint k = 0; k < 3; ++k) BindBufferBase(kSSBO, k, 0);
++        MemoryBarrier(0x2000 /*GL_SHADER_STORAGE_BARRIER_BIT*/ | 0x200 /*GL_BUFFER_UPDATE_BARRIER_BIT*/);
++        UseProgram((GLuint)prevProg);
++        QueryCounter(S.q[qs][1], 0x8E28);
++        S.qUsed[qs] = true; S.qi = (S.qi + 1) % 3;
++        S.skinned += (long)jobs.size();
++        // (WFC_RT_CHARCHECK) one instance per 300 feeds: GL's result vs the CPU on the same palettes; D3D12 hashes it too
++        if (check && S.feeds % 300 == 0) {
++            const Job& j = jobs.front();
++            const size_t n = j.sm->verts;
++            std::vector<float> gpu(n * 3), bv(n * 14), jw(n * 8);
++            BindBuffer(kSSBO, S.buf); GetBufferSubData(kSSBO, (GLintptr)j.first * 12, (GLsizeiptr)(n * 12), gpu.data());
++            BindBuffer(kSSBO, j.sm->vbo); GetBufferSubData(kSSBO, 0, (GLsizeiptr)(n * 14 * 4), bv.data());
++            BindBuffer(kSSBO, j.sm->jwVbo); GetBufferSubData(kSSBO, 0, (GLsizeiptr)(n * 8 * 4), jw.data());
++            BindBuffer(kSSBO, 0);
++            const int slot = S.insts[j.r->key].slot;
++            rtDynamicCheck(slot, (uint32_t)n, fnv(gpu.data(), n * 12));
++            double maxErr = -1.0, scale = 0.0;
++            if (!skinMirror_.empty()) {                         // (the batched upload path: the mirror holds the rows)
++                maxErr = 0.0;
++                const float* row = &skinMirror_[(size_t)j.r->row * 1024 * 4];
++                auto skin = [&](int base, size_t i) {
++                    core::Vec3 s{0, 0, 0};
++                    const core::Vec3 p{bv[i * 14], bv[i * 14 + 1], bv[i * 14 + 2]};
++                    for (int k = 0; k < 4; ++k) {
++                        const float w = jw[i * 8 + 4 + k];
++                        const int jj = (int)(jw[i * 8 + k] + 0.5f);
++                        if (w <= 0.0f || jj >= j.r->bones) continue;
++                        core::Mat4 M; std::memcpy(M.m, row + (size_t)(base + jj * 4) * 4, sizeof M.m);
++                        s += core::transformPoint(M, p) * w;
++                    }
++                    return s;
++                };
++                for (size_t i = 0; i < n; ++i) {
++                    core::Vec3 c = skin(0, i);
++                    if (j.r->mode == 2) { const core::Vec3 pp = skin(512, i); c = pp + (c - pp) * j.r->alpha; }
++                    maxErr = std::max({maxErr, (double)std::fabs(c.x - gpu[i * 3]), (double)std::fabs(c.y - gpu[i * 3 + 1]), (double)std::fabs(c.z - gpu[i * 3 + 2])});
++                    scale = std::max({scale, (double)std::fabs(c.x), (double)std::fabs(c.y), (double)std::fabs(c.z)});
++                }
++            }
++            core::Vec3 gmn{1e30f, 1e30f, 1e30f}, gmx{-1e30f, -1e30f, -1e30f};
++            for (size_t i = 0; i < n; ++i) {
++                gmn = {std::min(gmn.x, gpu[i * 3]), std::min(gmn.y, gpu[i * 3 + 1]), std::min(gmn.z, gpu[i * 3 + 2])};
++                gmx = {std::max(gmx.x, gpu[i * 3]), std::max(gmx.y, gpu[i * 3 + 1]), std::max(gmx.z, gpu[i * 3 + 2])};
++            }
++            const double bErr = std::max({std::fabs(gmn.x - j.r->mn.x), std::fabs(gmn.y - j.r->mn.y), std::fabs(gmn.z - j.r->mn.z),
++                                          std::fabs(gmx.x - j.r->mx.x), std::fabs(gmx.y - j.r->mx.y), std::fabs(gmx.z - j.r->mx.z)});
++            LOG_INFO("RT characters check: slot %d, %zu vertices, mode %d (alpha %.3f): max |GPU - CPU| %.3g (coordinates up to %.3g), "
++                     "box vs drawSkinned's skinPose bounds %.3g%s", slot, n, j.r->mode, j.r->alpha, maxErr, scale, bErr,
++                     j.r->mode == 2 ? " (blended: drawSkinned's box is interpolated, not exact)" : "");
++        }
++    }
++    rtDynamicFrame(out.data(), (int)out.size());
++    if (S.buf) rtBridgeSetSignalBuffers(&S.buf, 1);
++    S.inTlas += (long)out.size();
++    // slots of instances not drawn for 300 frames go back
++    for (auto it = S.insts.begin(); it != S.insts.end();)
++        if (frameNo_ - it->second.lastSeen > 300) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
++        else ++it;
++    if (++S.feeds % 300 == 0) {
++        const RtDynamicStats d = rtDynamicTakeStats();
++        const double f = 300.0;
++        LOG_INFO("RT characters (per frame over 300): noted %.1f, in TLAS %.1f, skinned %.1f (%.0f vertices; far-alternate skipped %.1f, "
++                 "unchanged %.1f), slot failures %ld | GL skin %.3f ms GPU | D3D12: in TLAS %.1f, refits %.1f, builds %ld, %.3f ms GPU | "
++                 "%u slots, %u / %u shared vertices, BLAS %.1f MB",
++                 S.recs / f, S.inTlas / f, S.skinned / f, S.vertsSkinned / f, S.farSkipped / f, S.unchanged / f, S.full,
++                 S.glSamples ? S.glMs / S.glSamples : 0.0, d.records ? (double)d.instances / d.records : 0.0,
++                 d.records ? (double)d.refits / d.records : 0.0, d.builds, d.gpuSamples ? d.gpuMs / d.gpuSamples : 0.0,
++                 d.slots, d.verticesUsed, d.capacity, d.blasMB);
++        S.recs = S.inTlas = S.skinned = S.farSkipped = S.unchanged = S.full = S.vertsSkinned = 0; S.glMs = 0; S.glSamples = 0;
++    }
++}
++
++}  // namespace wfc
++}  // namespace render
+diff --git a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h
++++ b/src/render/gl/WfcPipeline.h
+@@ -486,6 +486,18 @@
+     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
+     int rtFrame_ = -1;
+     void rtBuildWorld(int meshId);
++    // M7 RT characters (WfcRtSkin.cpp, Systems; WFC_RT_CHARS=1): drawSkinned notes each instance (rtSkinNote); the round
++    // trip calls rtSkinFeed just before its GL signal: a compute pass skins the selected instances into the buffer shared
++    // with D3D12 (D3D12RtDynamic.h), whose job refits their BLAS. afterCharacters false: last frame's instances / palettes
++    // (the round trip runs before this frame's characters), true: this frame's (after the opaque characters)
++    struct RtSkinRec { const void* key = nullptr; const void* bindKey = nullptr; int row = 0, mode = 1, bones = 0; float alpha = 1.0f;
++                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; };
++    std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
++    std::map<const void*, size_t> rtSkinIdx_;
++    int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
++    void rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
++                    const core::Vec3& mn, const core::Vec3& mx);
++    void rtSkinFeed(bool afterCharacters);
+     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
+     bool fsr3Run(int outW, int outH);
+     // optional motion vectors (WfcMotion.cpp; OFF by default)
+diff --git a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp
++++ b/src/render/gl/WfcPipeline.cpp
+@@ -4572,6 +4572,7 @@
+     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
+     skinDraw_ = &d;
+     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
++    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx);   // (WFC_RT_CHARS: M7 RT characters; otherwise returns at once)
+     if (motion) {
+         MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
+                       skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};
+diff --git a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp
++++ b/src/render/gl/WfcRt.cpp
+@@ -192,6 +192,7 @@
+         LOG_INFO("RT depth check: frame %d znear %g zfar %g proj diag %g %g %g %g, proj[14] %g, view row2 %g %g %g %g", frameNo_, znear_, zfar_,
+                  camProj_.m[0], camProj_.m[5], camProj_.m[10], camProj_.m[11], camProj_.m[14], camView_.m[2], camView_.m[6], camView_.m[10], camView_.m[14]);
+     fr.viewRow2[0] = camView_.m[2]; fr.viewRow2[1] = camView_.m[6]; fr.viewRow2[2] = camView_.m[10]; fr.viewRow2[3] = camView_.m[14];
++    if (frameOk) rtSkinFeed(endOfOpaque);                 // (WFC_RT_CHARS: the characters' positions, before the signal)
+     rtBridgeRoundTrip(frameOk ? &fr : nullptr);            // GL -> D3D12 job -> GL (the shading below waits for the mask)
+     // (diagnostics) WFC_RT_DUMPFRAME=<n>: the raster depth and the ray's view depth of that frame as raw R32F files
+     static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
