@@ -494,5 +494,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   in tools/fidelity (eef42f10) and every lane runner; a Windows session muter (Core Audio, scratchpad script) mutes any
   wfc_rebuild.exe session within 2 s for builds without the switch (running 17:27-03:27). Systems' light calibration
   merged 13b29545 (fit_lights.json x10, shipped by build_slim --vbake).
+  18:45 NAVQ ABLATION (Gameplay, 3 seeds x 4 maps): Smart's movement deficit comes from SQUADS - squadSize=0 brings Smart
+  to ~Classic (Streets 4.0/4.3/3.5/1.26 vs 5.4/3.7/5.1/1.55; Molten 2.2/2.1/2.0/0.73 vs 2.1/2.3/1.6/1.04; Debris
+  3.7/1.8/2.5/0.79 vs 3.2/0.8/1.9/0.82; Gorge 8.4/5.3/6.7/2.43 vs 6.9/3.8/7.2/2.15). Route noise HELPS (removing it
+  doubles Gorge reversals); exposure / flank mixed; no single squad sub-feature explains it (squadSize also gates
+  respawn-near-squad). Next: squads off / spawn-near off / per-member slots 5 m around the shared destination / Classic
+  at 6 seeds; the fix keeps squads and removes the crowding mechanism.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
