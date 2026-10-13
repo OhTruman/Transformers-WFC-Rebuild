@@ -1,0 +1,174 @@
+diff --git a/src/render/d3d12/D3D12Device.cpp b/src/render/d3d12/D3D12Device.cpp
+new file mode 100644
+index 0000000..83e5f0f
+--- /dev/null
++++ b/src/render/d3d12/D3D12Device.cpp
+@@ -0,0 +1,60 @@
++// Clean-room reconstruction — see D3D12Device.h.
++#if defined(_WIN32)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <d3d12.h>
++#include <dxgi1_4.h>
++
++#include "render/d3d12/D3D12Device.h"
++#include "render/d3d12/D3D12Adapter.h"
++#include "core/Log.h"
++
++#include <mutex>
++
++namespace render {
++void d3d12SelectAgility();   // D3D12Agility.cpp
++
++namespace {
++std::mutex g_mx;
++ID3D12Device* g_dev = nullptr;      // the shared device (one reference held here)
++int g_created = 0;
++bool g_failedLogged = false;
++}  // namespace
++
++bool d3d12DeviceRemoved(ID3D12Device* dev) { return dev && dev->GetDeviceRemovedReason() != S_OK; }
++
++ID3D12Device* d3d12SharedDevice() {
++    std::lock_guard<std::mutex> lk(g_mx);
++    if (g_dev && d3d12DeviceRemoved(g_dev)) {          // removed: dropped (its holders release their own references)
++        LOG_WARN("D3D12: the shared device was removed (reason 0x%08lx): a new one for the next caller",
++                 (unsigned long)g_dev->GetDeviceRemovedReason());
++        g_dev->Release();
++        g_dev = nullptr;
++    }
++    if (!g_dev) {
++        d3d12SelectAgility();
++        HMODULE d3d = LoadLibraryW(L"d3d12.dll");
++        auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
++        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // GL's adapter (hybrid laptops); nullptr = the default
++        const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&g_dev) : E_FAIL;
++        if (adapter) adapter->Release();
++        if (FAILED(hr) || !g_dev) {
++            g_dev = nullptr;
++            if (!g_failedLogged) { g_failedLogged = true; LOG_WARN("D3D12: no device (D3D12CreateDevice 0x%08lx)", (unsigned long)hr); }
++            return nullptr;
++        }
++        ++g_created;
++        LOG_INFO("D3D12: shared device %s (presenter, FSR 3.1 and RT share it)", g_created == 1 ? "created" : "re-created after a removal");
++    }
++    g_dev->AddRef();
++    return g_dev;
++}
++
++}  // namespace render
++#else
++#include "render/d3d12/D3D12Device.h"
++namespace render {
++ID3D12Device* d3d12SharedDevice() { return nullptr; }
++bool d3d12DeviceRemoved(ID3D12Device*) { return false; }
++}  // namespace render
++#endif
+diff --git a/src/render/d3d12/D3D12Device.h b/src/render/d3d12/D3D12Device.h
+new file mode 100644
+index 0000000..3e5a150
+--- /dev/null
++++ b/src/render/d3d12/D3D12Device.h
+@@ -0,0 +1,15 @@
++// Clean-room reconstruction — the one D3D12 device the optional D3D12 paths share (PC ADAPTATION; Rendering): the
++// presenter (D3D12 present / FSR 3 frame generation), FSR 3.1 and the RT bridge used to create a device each. Created on
++// first use, after the Agility selection, on GL's adapter (d3d12AdapterForGL: hybrid laptops); every caller gets its own
++// reference (AddRef'ed) and releases it. A removed device is never handed out again: the next caller gets a new one (the
++// presenter's device-loss recovery, FSR 3.1 rebuilding on it). The GL context must be current for the first call.
++#pragma once
++
++struct ID3D12Device;
++
++namespace render {
++
++ID3D12Device* d3d12SharedDevice();          // AddRef'ed; nullptr = no D3D12 device (logged once)
++bool d3d12DeviceRemoved(ID3D12Device* dev); // GetDeviceRemovedReason() != S_OK (nullptr: false)
++
++}  // namespace render
+diff --git a/src/render/d3d12/D3D12Presenter.cpp b/src/render/d3d12/D3D12Presenter.cpp
+index 0b07162..2acea0a 100644
+--- a/src/render/d3d12/D3D12Presenter.cpp
++++ b/src/render/d3d12/D3D12Presenter.cpp
+@@ -15,6 +15,7 @@
+ #include "platform/PresentHook.h"
+ #include "render/d3d12/D3D12FrameGen.h"
+ #include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12Device.h"
+ #include "core/Log.h"
+ #if defined(WFC_FFX_SDK)
+ #include "ffx_api.h"
+@@ -178,15 +179,11 @@ public:
+         if (!gl_.load()) { LOG_WARN("D3D12 present: GL external-object entry points missing: GL present kept"); return false; }
+         hwnd_ = WindowFromDC(wglGetCurrentDC());
+         if (!hwnd_) { LOG_WARN("D3D12 present: no window: GL present kept"); return false; }
+-        d3d12SelectAgility();                        // (D3D12Agility.cpp: the Agility runtime when shipped)
+-        HMODULE d3d = LoadLibraryW(L"d3d12.dll"), dxgi = LoadLibraryW(L"dxgi.dll");
+-        auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
++        HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
+         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
+         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
+-        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+-        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
+-                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
+-        if (adapter) adapter->Release();
++        // the shared device (D3D12Device.h: Agility, GL's adapter; FSR 3.1 and RT use the same one)
++        const bool made = cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) && (dev_ = d3d12SharedDevice()) != nullptr;
+         if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
+         BOOL tear = FALSE;
+         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
+@@ -946,7 +943,7 @@ bool presentHook() {
+     while (g_recoveries < 3) {
+         ++g_recoveries;
+         if (startPresenter()) {
+-            LOG_WARN("D3D12 present: recovered with a new device + swapchain (attempt %d of 3)", g_recoveries);
++            LOG_WARN("D3D12 present: recovered with a new swapchain (a new device after a real removal; attempt %d of 3)", g_recoveries);
+             return g_presenter->present();
+         }
+     }
+diff --git a/src/render/d3d12/D3D12Upscaler.cpp b/src/render/d3d12/D3D12Upscaler.cpp
+index 45c63b2..9463e5e 100644
+--- a/src/render/d3d12/D3D12Upscaler.cpp
++++ b/src/render/d3d12/D3D12Upscaler.cpp
+@@ -13,6 +13,7 @@
+ #include <d3d12.h>
+ #include <dxgi1_4.h>
+ #include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12Device.h"
+ #include <GL/gl.h>
+ 
+ #include "render/d3d12/D3D12Upscaler.h"
+@@ -82,6 +83,7 @@ void ffxMessage(uint32_t type, const wchar_t* msg) {
+ 
+ class Upscaler {
+ public:
++    bool deviceRemoved() const { return d3d12DeviceRemoved(dev_); }
+     bool init() {
+         if (!gl_.load()) { LOG_WARN("FSR3: GL external-object entry points missing"); return false; }
+         ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
+@@ -95,13 +97,8 @@ public:
+             LOG_INFO("FSR3: before device creation: D3D12Core %s, d3d12.dll %s", core ? p8 : "not loaded",
+                      GetModuleHandleW(L"d3d12.dll") ? "loaded" : "not loaded");
+         }
+-        d3d12SelectAgility();                        // (D3D12Agility.cpp: SM 6.6+ runtime when shipped)
+-        HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+-        auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
+-        IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+-        const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_) : E_FAIL;
+-        if (adapter) adapter->Release();
+-        if (FAILED(hr)) { LOG_WARN("FSR3: no D3D12 device (D3D12CreateDevice 0x%08lx)", (unsigned long)hr); return false; }
++        dev_ = d3d12SharedDevice();                  // (D3D12Device.h: the presenter's and RT's device; Agility, GL's adapter)
++        if (!dev_) { LOG_WARN("FSR3: no D3D12 device"); return false; }
+         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+         if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
+         for (auto& a : alloc_)
+@@ -309,6 +306,10 @@ bool g_failed = false;
+ 
+ bool fsr3Prepare(int inW, int inH, int outW, int outH, Fsr3Targets* t) {
+     if (g_failed) return false;
++    if (g_up && g_up->deviceRemoved()) {                 // removed (a GPU reset): rebuilt on the new shared device; the old
++        LOG_WARN("FSR3: its D3D12 device was removed: rebuilding on a new device");   // instance is abandoned, not destroyed
++        g_up = nullptr;                                  // (tearing FFX down on a removed device can block)
++    }
+     if (!g_up) {
+         g_up = new Upscaler();
+         if (!g_up->init()) { delete g_up; g_up = nullptr; g_failed = true; return false; }
