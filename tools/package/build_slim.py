@@ -174,7 +174,9 @@ def main():
                     hd_rows.append((os.path.join(hd_src, extra), HD_DEST + '/' + extra))
         if tsv_hd:
             mine = {norm(s) for s, _ in hd_rows}
-            if mine != tsv_hd:
+            if mine != tsv_hd and arg('--hd-label'):        # (an explicitly chosen pack, e.g. the frozen D batches: the tsv lists the default)
+                print('HD: pack %s (%d files) chosen over the slim_files.tsv HD rows (%d files)' % (arg('--hd-label'), len(mine), len(tsv_hd)))
+            elif mine != tsv_hd:
                 problems.append('HD selection differs from slim_files.tsv: %d only here, %d only in the tsv (e.g. %s)' % (
                     len(mine - tsv_hd), len(tsv_hd - mine), sorted(mine ^ tsv_hd)[:3]))
 
