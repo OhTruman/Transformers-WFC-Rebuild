@@ -419,6 +419,7 @@ void VehicleFx::draw(render::IRenderer& r) const {
             float br, bg, bb, scale;
             hdr(d->color, d->colorMul, br, bg, bb, scale);
             if (d->mesh >= 0) {
+                if ((size_t)d->mesh >= meshes_.size()) continue;   // load() not run (graybox fallback: no map): no meshes
                 render::MeshHandle h = meshes_[(size_t)d->mesh];
                 if (h == render::kInvalidMesh) continue;
                 for (const Part& p : parts_) {
