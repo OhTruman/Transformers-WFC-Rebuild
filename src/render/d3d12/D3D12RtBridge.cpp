@@ -15,6 +15,10 @@
 #include "render/d3d12/D3D12RtBridge.h"
 #include "render/d3d12/D3D12RtDynamic.h"
 #include "core/Log.h"
+#if __has_include("render/d3d12/D3D12Device.h")
+#include "render/d3d12/D3D12Device.h"             // (the presenter's / FSR 3.1's shared device, when the tree has it)
+#define WFC_RT_SHARED_DEVICE 1
+#endif
 #if __has_include("render/d3d12/D3D12Adapter.h")
 #include "render/d3d12/D3D12Adapter.h"
 #define WFC_RT_GL_ADAPTER 1
@@ -87,6 +91,12 @@ public:
         if (!createMem_ || !importMem_ || !texStorageMem_ || !genSem_ || !importSem_ || !semParam_ || !waitSem_ || !signalSem_) {
             LOG_WARN("RT bridge: GL external-object entry points missing"); return false;
         }
+#if defined(WFC_RT_SHARED_DEVICE)
+        dev_ = d3d12SharedDevice();                      // one device with the presenter and FSR 3.1 (D3D12Device.h)
+        const bool made = dev_ != nullptr;
+        HMODULE d3d = LoadLibraryW(L"d3d12.dll");
+        serializeRs_ = d3d ? (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)(void*)GetProcAddress(d3d, "D3D12SerializeRootSignature") : nullptr;
+#else
         d3d12SelectAgility();
         HMODULE d3d = LoadLibraryW(L"d3d12.dll");
         auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
@@ -98,6 +108,7 @@ public:
 #endif
         const bool made = create && SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
         if (adapter) adapter->Release();
+#endif
         if (!made) { LOG_WARN("RT bridge: no D3D12 device"); return false; }
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 o5{};
         dev_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &o5, sizeof o5);
