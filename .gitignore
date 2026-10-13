@@ -37,3 +37,4 @@ wfc_profile.ini
 third_party/ffx_sdk/
 third_party/d3d12_agility/
 third_party/dxc/
+third_party/ffx_denoiser/

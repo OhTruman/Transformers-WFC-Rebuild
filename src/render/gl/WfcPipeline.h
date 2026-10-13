@@ -30,6 +30,7 @@
 #include "render/Mesh.h"
 #include "render/Renderer.h"
 #include "render/LightVisibilityVolume.h"
+#include "render/d3d12/D3D12RtBridge.h"
 #include "assets/SkinnedModel.h"
 
 namespace render {
@@ -286,6 +287,7 @@ private:
         float lmCoord[4] = {1, 1, 0, 0};
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
+        bool noShadow = false;    // authored: CastShadow false (left out of the RT scene)
         bool dynChannel = false;  // authored LightingChannels = Dynamic only: Dynamic-channel lights, per frame
         int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
         core::Vec3 bmin, bmax;
@@ -483,6 +485,80 @@ private:
     std::chrono::steady_clock::time_point fgLastFrame_{};
     bool framegenOn() const;
     void framegenCapture(int outW, int outH);
+    // M7 stage 0 (WfcRt.cpp; WFC_RT_ROUNDTRIP=1): the mid-frame GL -> D3D12 -> GL round trip after the depth prepass
+    GLuint rtDepthProg_ = 0, rtFbo_ = 0;
+    bool rtFailed_ = false;
+    void rtRoundTrip(bool bspSet, bool endOfOpaque = false);
+    core::Mat4 rtPrevVP_; bool rtHavePrevVP_ = false;
+    GLuint rtLastDepthTex_ = 0;
+    // stage 1 option b (WfcRt.cpp): flushDynQueue's RT path - the world depth, a depth-only pass of the dynamic draws, the
+    // round trip + world composite, then the dynamic draws shaded with the RT mask (uShadowMask) and AO (unit 25)
+    bool rtShadowAoOn() const;
+    // The Ray Tracing row (M7): 0 Off (baked), 1 Faithful, 2 Realistic. The RT scene (BLAS, RT shader text) exists when
+    // the map loaded with RT on (a non-Off mode, WFC_RT_SHADOWAO or WFC_RT_TOGGLE); then switches are live. Off -> on on a
+    // map loaded without it takes effect from the next map load.
+public:
+    bool rtAvailable() const;
+    int rtMode() const { return rtMode_; }
+    bool rtLoadedThisMap() const { return rtInfra_ && !rtFailed_; }
+    bool rtSetMode(int mode);
+private:
+    int rtMode_ = -1;                                  // (-1: from the environment on first use)
+    bool rtInfra_ = false;
+    mutable int rtAvailKnown_ = -1;                    // (the probe runs once)
+    void rtInitMode();
+    bool rtReflLive() const;
+    bool rtReflPass() const;
+    // M7 stage 2 modern mode (WFC_RT_REFLECT_COMPOSITE, with WFC_RT_REFLECT): the materials' authored cube reflections
+    // sample the ray-traced reflection instead (the previous frame's, reprojected; blurred by their LOD bias)
+    bool rtReflComposite() const;
+    GLuint rtReflPrev_ = 0;
+    int rtReflPrevW_ = 0, rtReflPrevH_ = 0;
+    bool rtReflValid_ = false;
+    bool rtSoftActive_ = false;                        // (R2) this frame's sun visibility = the contact-hardening target
+    float rtReflVP_[16] = {};
+    void rtReflKeep();
+    bool rtDynBegin();
+    void rtDynMid();
+    void rtDynEnd();
+    void rtCopyDepth(GLuint tex);
+    GLuint rtAoTexture();
+    RtTargets rtTargets_;
+    GLuint rtCompositeProg_ = 0, rtWhiteTex_ = 0;
+    bool rtDepthOnly_ = false, rtMaskActive_ = false;
+    // masked (alpha-tested) world geometry in the TLAS (WfcRt.cpp): an opacity atlas rendered once per map in UV space
+    bool rtUvAtlas_ = false, rtMaskedBuilt_ = false;
+    float rtUvSpace_[4] = {0, 0, 0, 0};                // the atlas pass: uv min, 1 / uv extent
+    int rtUvMode_ = 0;                                 // 0 opacity, 1 albedo, 2 emissive
+    // stage 2 prototype (WFC_RT_REFLECT): the static BLAS' triangles -> subs and the sets' lightmap UVs, kept from
+    // rtBuildWorld for the reflection hits' shading (rtBuildHit, on the first RT frame)
+    struct RtHitKeep { int mesh = 0, set = 0; std::vector<uint32_t> idx[2]; std::vector<uint32_t> sub[2]; std::vector<float> uv1, vtx; };
+    std::vector<RtHitKeep> rtHitKeep_;
+    bool rtHitBuilt_ = false;
+    void rtBuildHit();
+    std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
+    GLuint rtAtlasFbo_ = 0;
+    void rtBuildMasked();
+    float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
+    int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
+    int rtFrame_ = -1;
+    void rtBuildWorld(int meshId);
+    // M7 RT characters (WfcRtSkin.cpp, Systems; WFC_RT_CHARS=1): drawSkinned notes each instance (rtSkinNote); the round
+    // trip calls rtSkinFeed just before its GL signal: a compute pass skins the selected instances into the buffer shared
+    // with D3D12 (D3D12RtDynamic.h), whose job refits their BLAS. afterCharacters false: last frame's instances / palettes
+    // (the round trip runs before this frame's characters), true: this frame's (after the opaque characters)
+    struct RtSkinRec { const void* key = nullptr; const void* bindKey = nullptr; int row = 0, mode = 1, bones = 0; float alpha = 1.0f;
+                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; };
+    std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
+    std::map<const void*, size_t> rtSkinIdx_;
+    int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
+    // row / mode / bones / alpha: what the bone texture holds for the instance (drawSkinned's prepared palette, or the last
+    // prepared one for a pawn whose prep the occlusion test skipped)
+    void rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
+                    const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha);
+    void rtSkinFeed(bool afterCharacters);
+    void rtSkinForget(const void* bindKey);              // a skinned model's buffers go (nullptr: all - map unload)
+    void rtSkinMissed(const char* why);                  // a skinned draw the feed cannot see (logged once per reason)
     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
@@ -750,6 +826,7 @@ private:
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
     std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
     std::set<std::string> hiddenComponents_, noLightComponents_;   // authored render flags (lower-case keys)
+    std::set<std::string> noShadowComponents_;          // (CastShadow false: M7 RT)
     std::set<std::string> dynChannelComponents_;
     LightVisibilityVolume lvv_;   // WFC LightsVisibilitiesVolume (native layout, b52dca9)
     // WFC DirectLightEnv per character form (0 robot, 1 vehicle): WfcDirectLightEnv.cpp
