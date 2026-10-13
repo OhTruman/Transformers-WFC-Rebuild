@@ -155,10 +155,21 @@ The interface was agreed with Rendering on 2026-10-12. Rendering owns the bridge
   - Per frame: about 13 skinned instances noted, 6 - 9 in the TLAS, 3 - 4 refits (far-alternate and unchanged skips about 3.5), D3D12 refits 0.025 ms GPU, about 10 MB BLAS for 11 slots.
   - The GL timestamp pair around the dispatches reads about 0.001 ms. Not trusted: to recheck with the frame profiler.
   - 64-player numbers are still to come; the stage-0 probe estimated 0.97 ms for 64 at full refit.
+- **Experimental's review (SYSTEMS_M7_SKINFEED_REVIEW.patch, on Rendering's fd231d2)**
+  - Fixed:
+    - Pawns whose prep the occlusion test skipped are fed at their last prepared pose.
+    - A BLAS is rebuilt after 120 refits (WFC_RT_CHARREBUILD) or when the pose's box outgrows its build box by a quarter.
+    - Slots go back 60 frames after the last note (WFC_RT_CHARDROP) and at once when a model's buffers go.
+    - The first slot failure is logged with the capacity.
+    - Warm-up draws are not noted; a key drawn twice with another matrix is counted in the log.
+    - sm.fp is part of the model identity.
+    - The map-unload clear waits idle when dynamic work exists, else it abandons (leaks) instead of freeing.
+  - Item 6 (the allocator wait result) was already in Rendering's fe343de.
+  - CPU-skinned fallbacks (more bones than the GPU skin supports, bone rows full) are logged once and stay out of the TLAS: none occur on the shipped characters (max 106 joints of 128; 512 rows).
+  - Rerun (Streets 5v5): 106/106 hash checks equal, 0 GL errors, about 1 rebuild per 100 refits, 17-22 skipped preps per 600 frames now in the TLAS, 0 double draws.
 - **Open**
   - The world box ignores weapon attachments.
   - The full index list is used: hidden / translucent sub-meshes are not filtered yet.
-  - Pawns skipped by the occlusion prepass are not fed.
   - A reduced-LOD RT proxy is still an option.
 
 ## 4. Denoising (licences checked 2026-10-12)
