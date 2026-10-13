@@ -360,5 +360,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   environment, wants it pushed further, shadows good; verify reflections (cannot tell); shadow alignment bug on the
   tested map; check the main-menu globe. Working: menus, loading, XP (43 per kill), bots die properly. Overall: 'the game
   is getting closer ... a lot is working'.
+  15:50 progress on the playtest items: Frontend merged - Bot AI row removed (b82f7b30 / e6a79334), map name centred above
+  the frame (4ba0897c / 2a2ff00d; headless check PASS on all 13 names), FPS Counter row Off / On with a top-right fps + ms
+  readout (425efb7e); Game Mode Options merge in progress (~3 h). Root causes found by code reading (Gameplay +
+  Experimental agree): #2 phantom fire = one shared WeaponFx re-anchored to the LOCAL muzzle every tick (fix: per-owner
+  anchors) and the vehicle HUD mixing the vehicle clip with the ROBOT capacity (fix: both from the HUD weapon; reload tap
+  routed to the vehicle weapon); #1 judder = the gun drawn at the current-step hand bone while the body blends prev / cur
+  pose at alpha (Rendering fix: blend the socket; captures running); #4 lead = OnRespawn dropped while PausedSpectating
+  (Change Character open) -> Resume lands in Spectating with input blanked. Added 15:45: semi-transparent gun on the jet
+  character (Rendering). Shadow misalignment map = Molten. User done playing 15:30; lanes resumed (slot A Rendering,
+  slot B Experimental baselines, DML off until the P0 proofs).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
