@@ -938,7 +938,9 @@ void Pipeline::release() {
         delTex(opaqueCopyTex_); delTex(reactiveTex_); delProg(reactiveProg_);
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delProg(rtDepthProg_);                         // (M7 RT: the depth -> R32F program and its FBO)
+        delProg(rtCompositeProg_); delTex(rtWhiteTex_); delTex(rtReflPrev_);   // (the composite, AO white, kept reflections)
         if (rtFbo_) { DeleteFramebuffers(1, &rtFbo_); rtFbo_ = 0; }
+        if (rtAtlasFbo_) { DeleteFramebuffers(1, &rtAtlasFbo_); rtAtlasFbo_ = 0; }
         for (GLuint* p : {&fsr3DepthProg_, &fgDepthProg_, &fgVelProg_}) delProg(*p);   // (fsr3Out_ is the upscaler's)
         for (GLuint* f : {&fsr3DepthFbo_, &fgFbo_}) if (*f) { DeleteFramebuffers(1, f); *f = 0; }
         delTex(touchTex_); delTex(instTex_);
@@ -1022,6 +1024,7 @@ void Pipeline::release() {
     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+    const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
@@ -1030,6 +1033,7 @@ void Pipeline::release() {
     hdTextures_ = keepHd;
     fsr3On_ = keepFsr3;
     modern_ = keepModern;
+    rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
 }
 
 // WFC_SETTINGSTEST=1 (at init, before any map): every caller setting set to a non-default value survives release() -
@@ -1039,8 +1043,12 @@ void Pipeline::runSettingsSelfTest() {
     auto check = [&](bool ok, const char* what) { (ok ? pass : fail)++; LOG_INFO("settings-test %s: %s", ok ? "PASS" : "FAIL", what); };
     const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+    const int rm = rtMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+    rtMode_ = 2;
     release();
+    check(rtMode_ == 2, "Ray Tracing mode");
+    rtMode_ = rm;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
