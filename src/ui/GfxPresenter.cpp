@@ -1106,6 +1106,8 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         : !hdAvailable && !hdEnhancedAvailable                                ? "The HD texture pack is not installed."
         : vramMB > 0 && vramMB < frontend::kHdTexturesMinVramMB                ? "May exceed this GPU's memory on large maps."
         : hdEnhancedAvailable && vramMB > 0 && vramMB < frontend::kHdEnhancedMinVramMB ? "Enhanced may exceed this GPU's memory on large maps."
+        : hdEnhancedAvailable && rtAvailable && vramMB > 0 && vramMB < frontend::kHdEnhancedRtMinVramMB
+            ? "Enhanced with Ray Tracing may exceed this GPU's memory."
         : hdEnhancedAvailable ? "Faithful: the original, sharper. Enhanced: new materials."
                               : "HD textures use more video memory. Applies on next map.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
