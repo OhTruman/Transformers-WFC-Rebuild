@@ -107,5 +107,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   USER 2026-10-12: stage 1 on the hybrid GL + D3D12 path (architecture A); collect real performance, VRAM, sync and ray-budget
   numbers first. Port the renderer to D3D12 (option C; never Vulkan) only if those show the hybrid limits RT quality / performance
   or grows overly complicated. OpenGL stays the Classic / reference / default renderer regardless.
+  USER 2026-10-12: yes to a later separate optional "RT lighting" mode where ray-traced GI replaces the baked lightmaps
+  (modern look); the faithful baked lighting stays the default. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
+  dynamic-light term only (option b: end of the opaque pass), lightmapped statics untouched except character contact AO.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
