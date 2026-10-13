@@ -184,7 +184,9 @@ void World::load(render::IRenderer& renderer) {
         const bool projectile = d && d->projSpeed > 0.0f;
         const core::Vec3 from{muzzle.m[12], muzzle.m[13], muzzle.m[14]};
         const bool firstPellet = shot.pellet == 0;   // RE 9a776fb: muzzle flash + tracer once per fire event (shot index 0)
-        if (firstPellet && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle);
+        // Anchored to the shooter's own socket (WeaponFx owner = participant), never to the local held weapon: the shared fx_
+        // drew bot flashes at the player's muzzle (playtest 2026-10-13 "my gun appears to randomly fire").
+        if (firstPellet && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle, shot.player);
         if (!projectile) {
             if (firstPellet) fx_.spawnTracer(wfx->tracer, from, shot.to);
             // [integration 09c] Pawn.EffectIsRelevant for a non-local shooter's impact (RE 4cce28f / Gameplay): the shooter's mesh
@@ -221,6 +223,7 @@ void World::load(render::IRenderer& renderer) {
         }
     };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
+    fx_.setParticipantMuzzleSource([this](int player, core::Mat4& out) { return participantMuzzleWorld(player, out); });
     // [integration 09c] Gameplay's bot-ability hook (called once at each successful bot trigger, WorldBots botTryAbility) ->
     // Systems M09d onParticipantAbility (OnTriggerSound + the ability clip's notifies, attached to the caster). Bound here
     // instead of editing botTryAbility, so exactly one sound path exists.
@@ -1442,6 +1445,16 @@ bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
     return true;
 }
 
+bool World::participantMuzzleWorld(int player, core::Mat4& out) const {
+    const MatchOpponent* o = player >= 0 && (size_t)player < oppByPlayer_.size() ? oppByPlayer_[(size_t)player] : nullptr;
+    if (!o || !o->spawned() || !o->pawn().hasWeapon()) return false;
+    auto it = partWeapons_.find(player);
+    core::Mat4 local;
+    if (it == partWeapons_.end() || !it->second.anim.valid() || !it->second.anim.socketLocal("MuzzleFlash", local)) return false;
+    out = o->pawn().weaponWorld() * local;
+    return true;
+}
+
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
     if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
     core::Mat4 local;
@@ -1545,14 +1558,7 @@ void World::tickParticipantWeapons(float dt) {
         if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
         // Pellets after the first: impact only (the hook gets them with s.pellet > 0; the fallback below draws muzzle / tracer only).
         core::Mat4 muzzle = core::Mat4::identity();
-        bool have = false;
-        if (const MatchOpponent* o = (size_t)s.player < oppByPlayer_.size() ? oppByPlayer_[(size_t)s.player] : nullptr; o && o->spawned()) {
-            auto it = partWeapons_.find(s.player);
-            core::Mat4 local;
-            if (o->pawn().hasWeapon() && it != partWeapons_.end() && it->second.anim.valid() && it->second.anim.socketLocal("MuzzleFlash", local)) {
-                muzzle = o->pawn().weaponWorld() * local; have = true;
-            }
-        }
+        const bool have = participantMuzzleWorld(s.player, muzzle);
         if (!have) {
             const core::Vec3 f = core::normalize(s.to - s.from);
             const core::Vec3 rt = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
@@ -2555,7 +2561,9 @@ void World::fillPresented(PresentedFrame& p) {
     p.localHealth = pc.health().current; p.localHealthMax = pc.health().max;
     p.localSegmentTops.clear();
     for (int i = 0; i < pc.health().segmentCount; ++i) p.localSegmentTops.push_back(pc.health().segmentTop(i));
-    p.localMag = pc.weapon().magSize; p.localReserveMax = pc.weapon().reserveMax;
+    // Capacities of the SAME weapon hudState() reports the clip / reserve of (the vehicle weapon in vehicle form): the robot
+    // weapon's here showed e.g. TankCannon 1 / Ion 50 -> the HUD's low-ammo state + reload prompt (playtest 2026-10-13).
+    p.localMag = p.hud.clipMax; p.localReserveMax = p.hud.reserveMax;
     p.localWeaponId = pc.weapon().def ? pc.weapon().def->id : "";
     p.localChassis = localPlayer_ >= 0 && (size_t)localPlayer_ < n ? p.players[(size_t)localPlayer_].chassis : std::string();
     p.aim = player_.controller().hudAimState();

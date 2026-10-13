@@ -202,6 +202,7 @@ bool Application::init() {
     if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding
     if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
     if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
+    if (std::getenv("WFC_FXOWNERTEST")) { runFxOwnerTest(); return false; }      // bot flashes stay on the bot; vehicle HUD capacity + reload
     if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
@@ -552,7 +553,12 @@ Application::MatchExit Application::runMatch() {
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
         static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
         if (WFC_ENV("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
-        if (WFC_ENV("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
+        if (const char* as = WFC_ENV("WFC_AUTOSTRAFE")) {
+            // =alt: left / right alternating every 90 loop frames (gun-judder harness); any other value: right.
+            static long strafeFrames = 0;
+            const bool left = std::strcmp(as, "alt") == 0 && (strafeFrames++ / 90) % 2 == 1;
+            input.down[(int)(left ? platform::Button::Left : platform::Button::Right)] = true;
+        }
         if (WFC_ENV("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (WFC_ENV("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
         // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
@@ -4554,6 +4560,100 @@ void Application::runRobotMuzzleTest() {
         check(have && fired && dMuzzle <= travel && dHand < 3.0f && ahead > 0.0f, std::string(c.id) + ": projectile spawns at the weapon MuzzleFlash socket");
     }
     LOG_INFO("RMUZZLE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_FXOWNERTEST (playtest 2026-10-13 P0 #2 / #3): a participant's shot never presents on the local weapon, and the HUD's
+// clip capacity is the shown weapon's. (a) A bot shot 3 m beside the idle player: no local-space particle anchored to the
+// held weapon, the bot's flash on the bot's MuzzleFlash socket at spawn and after 6 ticks (the flash lives 0.15-0.25 s),
+// the player's clip / reserve / reload state unchanged. (b) Vehicle form: presented localMag / localReserveMax = the
+// vehicle weapon's, and a reload tap after one shot starts the vehicle weapon's reload.
+void Application::runFxOwnerTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("FXOWNER %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::MatchOpponent* A = world_.addMatchOpponent("FxBot", true);
+    game::CharacterSelection sa; sa.type = 0; sa.specialty = game::Specialty::Soldier;
+    world_.match().selectCharacter(A->matchPlayer(), sa);
+    game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.weapons = {"IonBlaster", "HeavyPistol"};
+    world_.match().selectCharacter(world_.localMatchPlayer(), me);
+    run(11.0f);
+    game::Character& pc = world_.player().pawn();
+    const game::WeaponFx& fx = world_.weaponFxForTest();
+    // (a) the bot beside the player, both idle; the shot goes through the same hook the step's participant shots use.
+    const core::Vec3 side = core::normalize(core::cross(core::forwardFromYawPitch(world_.player().controller().camYaw(), 0.0f), core::Vec3{0, 1, 0}));
+    if (A->spawned()) { A->pawn().setPosition(pc.position() + side * 3.0f); A->pawn().velocity() = core::Vec3{0, 0, 0}; }
+    run(0.2f);
+    core::Mat4 botSock; core::Vec3 heldMuzzle{0, 0, 0};
+    const bool botHas = world_.participantMuzzleWorld(A->matchPlayer(), botSock);
+    const bool heldHas = world_.heldWeaponMuzzle(heldMuzzle);
+    const int clip0 = pc.weapon().ammo, res0 = pc.weapon().reserve;
+    const bool rel0 = pc.weapon().reloading();
+    const int held0 = fx.anchoredParticles(game::WeaponFx::kHeldOwner);
+    bool hooked = false;
+    if (botHas && world_.participantShotFxHook) {
+        game::World::ParticipantShot s;
+        s.player = A->matchPlayer(); s.weapon = "IonBlaster";
+        s.from = core::Vec3{botSock.m[12], botSock.m[13], botSock.m[14]};
+        s.to = s.from + core::Vec3{botSock.m[0], botSock.m[1], botSock.m[2]} * 20.0f; s.impact = false;
+        world_.participantShotFxHook(s, botSock);
+        hooked = true;
+    }
+    auto at = [](const core::Mat4& m) { return core::Vec3{m.m[12], m.m[13], m.m[14]}; };
+    core::Vec3 p0{0, 0, 0};
+    const int heldAfter = fx.anchoredParticles(game::WeaponFx::kHeldOwner);
+    const int bot0 = fx.anchoredParticles(A->matchPlayer(), &p0);
+    LOG_INFO("FXOWNER shot: bot socket %d held socket %d hook %d; held-anchored particles %d -> %d, bot-anchored %d, first %.2f m from the bot muzzle, %.2f m from the held muzzle",
+             (int)botHas, (int)heldHas, (int)hooked, held0, heldAfter, bot0, core::length(p0 - at(botSock)), heldHas ? core::length(p0 - heldMuzzle) : -1.0f);
+    check(hooked && heldAfter == held0, "a bot's flash adds no particle anchored to the local held weapon");
+    check(bot0 > 0 && core::length(p0 - at(botSock)) < 1.0f, "the bot's flash spawns on the bot's MuzzleFlash socket");
+    if (A->spawned()) A->pawn().setPosition(A->pawn().position() + side * 1.0f);   // the bot steps aside: its flash follows it
+    for (int i = 0; i < 6; ++i) step(idle);
+    core::Mat4 botNow; core::Vec3 p1{0, 0, 0};
+    const bool botNowHas = world_.participantMuzzleWorld(A->matchPlayer(), botNow);
+    const int bot1 = fx.anchoredParticles(A->matchPlayer(), &p1);
+    LOG_INFO("FXOWNER +6 ticks: bot-anchored %d, first %.2f m from the bot's current muzzle (socket %d), held-anchored %d",
+             bot1, core::length(p1 - at(botNow)), (int)botNowHas, fx.anchoredParticles(game::WeaponFx::kHeldOwner));
+    check(bot1 > 0 && botNowHas && core::length(p1 - at(botNow)) < 1.5f, "after 6 ticks the bot's flash stays on the bot's (moved) socket");
+    check(pc.weapon().ammo == clip0 && pc.weapon().reserve == res0 && pc.weapon().reloading() == rel0,
+          "the player's clip / reserve / reload state are unchanged by the bot's shot");
+    // (b) vehicle form: HUD capacities from the vehicle weapon; the reload tap reloads it.
+    {
+        platform::InputFrame tin; tin.down[(int)platform::Button::Transform] = tin.pressed[(int)platform::Button::Transform] = true;
+        step(tin);
+        run(2.0f);
+    }
+    const game::Weapon* vw = pc.vehicleWeapon();
+    const bool veh = pc.moveForm() == game::Form::Vehicle && !pc.isTransforming() && vw;
+    const auto& pf = world_.presented();
+    LOG_INFO("FXOWNER vehicle: form %s, vehicle weapon %s clip %d/%d reserve %d/%d; presented localMag %d localReserveMax %d (robot weapon mag %d)",
+             game::formName(pc.moveForm()), vw && vw->def ? vw->def->id : "?", vw ? vw->ammo : -1, vw ? vw->magSize : -1, vw ? vw->reserve : -1,
+             vw ? vw->reserveMax : -1, pf.localMag, pf.localReserveMax, pc.weapon().magSize);
+    check(veh && pf.localMag == vw->magSize && pf.localReserveMax == vw->reserveMax && pf.hud.clipAmmo <= pf.localMag,
+          "vehicle form: the HUD clip capacity / reserve capacity are the vehicle weapon's");
+    if (veh) {
+        platform::InputFrame fire; fire.pressed[(int)platform::Button::Fire] = fire.down[(int)platform::Button::Fire] = true;
+        const int a0 = vw->ammo;
+        for (int i = 0; i < 30 && vw->ammo == a0; ++i) step(fire);
+        run(0.5f);
+        const int a1 = vw->ammo, r1 = vw->reserve;
+        platform::InputFrame tap; tap.pressed[(int)platform::Button::Reload] = tap.down[(int)platform::Button::Reload] = true;
+        step(tap); step(idle);   // the reload activates on the release of a short tap
+        const bool started = vw->reloading() || (vw->ammo > a1);
+        run(vw->reloadTime + 0.5f);
+        LOG_INFO("FXOWNER vehicle reload: clip %d -> %d after the shot, reload started %d, clip %d reserve %d -> %d after %.1f s",
+                 a0, a1, (int)started, vw->ammo, r1, vw->reserve, vw->reloadTime + 0.5f);
+        // A one-round clip empties on the shot and reloads by itself (the old path): the tap is only exercised when a1 > 0.
+        if (a1 == 0) LOG_INFO("FXOWNER vehicle reload: %s empties on one shot (auto reload) - the tap path is not exercised", vw->def ? vw->def->id : "?");
+        check(a1 < a0 && a1 > 0 && started && vw->ammo == std::min(vw->magSize, a1 + r1), "vehicle form: a reload tap reloads the vehicle weapon");
+    } else {
+        check(false, "vehicle form: a reload tap reloads the vehicle weapon (not in vehicle form)");
+    }
+    LOG_INFO("FXOWNER SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

@@ -733,6 +733,9 @@ public:
     std::function<bool(core::Vec3&)> heldWeaponMuzzleHook;   // installed by World::load (stub harnesses still link)
     bool heldWeaponMuzzle(core::Vec3& out) const { return heldWeaponMuzzleHook && heldWeaponMuzzleHook(out); }
     bool heldWeaponMuzzleImpl(core::Vec3& out) const;
+    // A spawned participant's shown weapon MuzzleFlash socket in world space (false: not spawned / no shown weapon / no socket).
+    bool participantMuzzleWorld(int player, core::Mat4& out) const;
+    const WeaponFx& weaponFxForTest() const { return fx_; }   // WFC_FXOWNERTEST probes
     void fireWeapon(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) {
         if (weaponFireHook) weaponFireHook(w, origin, dir); else fireHitscan(origin, dir);
     }

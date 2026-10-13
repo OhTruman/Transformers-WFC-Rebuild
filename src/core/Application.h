@@ -101,6 +101,7 @@ private:
     void runProjectileFxTest();
     void runMuzzleTest();
     void runRobotMuzzleTest();
+    void runFxOwnerTest();
     void runChargeTest();
     void runDropTest();
     void runRiserTest();

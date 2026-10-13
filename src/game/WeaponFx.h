@@ -27,7 +27,11 @@ public:
     void load(render::IRenderer& r, const std::string& contentRoot);
 
     // `socketWorld`: MuzzleFlash socket world matrix (columns: X = barrel forward).
-    void spawnMuzzleFlash(const core::Mat4& socketWorld);
+    // `owner`: whose muzzle socket the flash's local-space emitters (and a generic template's follow) stay on.
+    // kHeldOwner = the LOCAL held weapon (the socket tick() gets); a participant index = that shooter's socket, refreshed
+    // each tick through setParticipantMuzzleSource (playtest 2026-10-13: bot shots were anchored to the player's own gun).
+    static constexpr int kHeldOwner = -1;
+    void spawnMuzzleFlash(const core::Mat4& socketWorld, int owner = kHeldOwner);
     void spawnTracer(const core::Vec3& muzzle, const core::Vec3& hit);
     // Returns false when the squib was culled (percentage / distance / max-count rules).
     bool spawnImpact(const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
@@ -43,7 +47,11 @@ public:
     static constexpr const char* kTracerTemplate = "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX";
     static constexpr const char* kImpactTemplate = "FX_IonBlaster_p.FX.Impact_IonBlaster_FX";
     static bool reconstructs(const std::string& psTemplate);
-    bool spawnMuzzleFlash(const std::string& psTemplate, const core::Mat4& socketWorld);
+    bool spawnMuzzleFlash(const std::string& psTemplate, const core::Mat4& socketWorld, int owner = kHeldOwner);
+    // A participant's current MuzzleFlash socket world matrix (false: not posed now - its effects keep the last socket).
+    void setParticipantMuzzleSource(std::function<bool(int, core::Mat4&)> fn) { participantMuzzle_ = std::move(fn); }
+    // Self-test probe (WFC_FXOWNERTEST): live local-space particles anchored to `owner`, and the world position of the first.
+    int anchoredParticles(int owner, core::Vec3* firstWorld = nullptr) const;
     bool spawnTracer(const std::string& psTemplate, const core::Vec3& muzzle, const core::Vec3& hit);
     bool spawnImpact(const std::string& psTemplate, const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
 
@@ -65,7 +73,7 @@ public:
 
     size_t liveParticles() const { return parts_.size(); }
     // Lifecycle (match reset / map unload): drop every live particle, mesh, smoke trail and stream.
-    void clearParticles() { parts_.clear(); meshParts_.clear(); smoke_.clear(); streams_.clear(); follow_.clear(); haveMuzzle_ = false; }
+    void clearParticles() { parts_.clear(); meshParts_.clear(); smoke_.clear(); streams_.clear(); follow_.clear(); haveMuzzle_ = false; anchors_.clear(); }
     int liveImpacts() const;
 
     // One authored emitter, LOD 0, values converted to metres / seconds.
@@ -127,23 +135,31 @@ public:
 private:
     bool unreconstructed(const char* kind, const std::string& psTemplate);
     bool spawnGenericAt(const char* kind, const std::string& t, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up,
-                        bool followMuzzle);
+                        int followOwner);   // kWorldSpace: stays where spawned
     std::set<std::string> missing_;
     GenericRuntime generic_;
     int genericSpawned_ = 0;
-    struct Follow { int handle; float age; };
-    std::vector<Follow> follow_;          // generic muzzle effects kept on the socket (setParticleEffectTransform)
+    struct Follow { int handle; float age; int owner; };
+    std::vector<Follow> follow_;          // generic muzzle effects kept on their owner's socket (setParticleEffectTransform)
+    // Participant muzzle anchors, indexed by participant: the socket at the last refresh (spawn or tick).
+    struct Anchor { core::Mat4 m = core::Mat4::identity(); bool have = false; };
+    std::vector<Anchor> anchors_;
+    std::function<bool(int, core::Mat4&)> participantMuzzle_;
+    static constexpr int kWorldSpace = -2;   // Part::anchor: world-space particle
+    bool anchorOf(int owner, core::Mat4& m) const;   // kHeldOwner: muzzleNow_ (if held); else anchors_[owner]
     struct Part {
         const EmitterDef* def;
-        core::Vec3 pos, vel;            // world, or socket space when def->localSpace
+        core::Vec3 pos, vel;            // world, or socket space when anchored
         float age, life;
         float w, h, rot;
         float u0, v0, u1, v1;
         int effect;                     // impact instance id (-1 otherwise)
+        int anchor;                     // kWorldSpace, or the owner whose socket a localSpace emitter follows
     };
     struct TracerSmoke { core::Vec3 a, b; float age; };
 
-    void emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap = 1e9f, int count = -1);
+    // `owner`: whose socket a localSpace emitter's particles follow (kHeldOwner = the local held weapon).
+    void emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap = 1e9f, int count = -1, int owner = kHeldOwner);
 
     // Continuous emitter (SpawnRate over EmitterDuration) following the muzzle socket.
     struct Stream { const EmitterDef* def; float age, duration, rate, acc; };

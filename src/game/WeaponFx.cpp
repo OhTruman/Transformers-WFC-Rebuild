@@ -260,7 +260,7 @@ void WeaponFx::load(render::IRenderer& r, const std::string& contentRoot) {
     LOG_INFO("weapon fx: %d/%d original FX textures loaded", ok, (int)kTexCount);
 }
 
-void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap, int count) {
+void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap, int count, int owner) {
     Vec3 fx = col(frame, 0), fy = col(frame, 1), fz = col(frame, 2), o = col(frame, 3);
     int n = count >= 0 ? count : d.burst;
     for (int i = 0; i < n; ++i) {
@@ -273,7 +273,8 @@ void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, fl
         p.w = sz.x; p.h = sz.y > 0 ? sz.y : sz.x;
         p.rot = d.randomRot ? frand() * 2.0f * core::PI : 0.0f;
         Vec3 lv = lerpRand(d.velMin, d.velMax), ll = lerpRand(d.locMin, d.locMax);
-        if (d.localSpace) {                       // socket space (x = forward)
+        p.anchor = d.localSpace ? owner : kWorldSpace;
+        if (p.anchor != kWorldSpace) {            // socket space (x = forward)
             p.pos = ll; p.vel = lv;
         } else {
             p.pos = o + fx * ll.x + fy * ll.y + fz * ll.z;
@@ -364,13 +365,31 @@ bool WeaponFx::unreconstructed(const char* kind, const std::string& t) {
     return false;
 }
 
-bool WeaponFx::spawnGenericAt(const char* kind, const std::string& t, const Vec3& pos, const Vec3& fwd, const Vec3& up, bool followMuzzle) {
+bool WeaponFx::spawnGenericAt(const char* kind, const std::string& t, const Vec3& pos, const Vec3& fwd, const Vec3& up, int followOwner) {
     if (t.empty()) return false;
     const int h = generic_.spawnAt ? generic_.spawnAt(t, pos, fwd, up) : -1;
     if (h < 0) return unreconstructed(kind, t);
     ++genericSpawned_;
-    if (followMuzzle) follow_.push_back({h, 0.0f});
+    if (followOwner != kWorldSpace) follow_.push_back({h, 0.0f, followOwner});
     return true;
+}
+
+bool WeaponFx::anchorOf(int owner, core::Mat4& m) const {
+    if (owner == kHeldOwner) { m = muzzleNow_; return haveMuzzle_; }
+    if (owner < 0 || (size_t)owner >= anchors_.size() || !anchors_[(size_t)owner].have) return false;
+    m = anchors_[(size_t)owner].m;
+    return true;
+}
+
+int WeaponFx::anchoredParticles(int owner, Vec3* firstWorld) const {
+    int n = 0;
+    core::Mat4 m;
+    const bool have = anchorOf(owner, m);
+    for (const Part& p : parts_) {
+        if (p.anchor != owner) continue;
+        if (n++ == 0 && firstWorld && have) *firstWorld = core::transformPoint(m, p.pos);
+    }
+    return n;
 }
 
 static Vec3 anyUp(const Vec3& f) {                     // an up vector perpendicular to f
@@ -378,12 +397,16 @@ static Vec3 anyUp(const Vec3& f) {                     // an up vector perpendic
     return core::normalize(core::cross(core::cross(f, ref), f) * -1.0f);
 }
 
-bool WeaponFx::spawnMuzzleFlash(const std::string& t, const core::Mat4& socketWorld) {
+bool WeaponFx::spawnMuzzleFlash(const std::string& t, const core::Mat4& socketWorld, int owner) {
     if (t != kMuzzleFlashTemplate) {
+        if (owner != kHeldOwner && owner >= 0) {
+            if ((size_t)owner >= anchors_.size()) anchors_.resize((size_t)owner + 1);
+            anchors_[(size_t)owner] = {socketWorld, true};
+        }
         const core::Mat4 f = orthonormal(socketWorld);
-        return spawnGenericAt("muzzle", t, col(f, 3), col(f, 0), col(f, 2), true);   // socket X = barrel forward, Z = up
+        return spawnGenericAt("muzzle", t, col(f, 3), col(f, 0), col(f, 2), owner);   // socket X = barrel forward, Z = up
     }
-    spawnMuzzleFlash(socketWorld);
+    spawnMuzzleFlash(socketWorld, owner);
     return true;
 }
 
@@ -408,11 +431,15 @@ bool WeaponFx::spawnImpact(const std::string& t, const Vec3& pos, const Vec3& no
     return spawnImpact(pos, normal, viewPos);
 }
 
-void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld) {
-    muzzleNow_ = socketWorld; haveMuzzle_ = true;
-    emit(kFlashLong, socketWorld, -1);
-    emit(kFlashTop, socketWorld, -1);
-    emit(kFlashSparks, socketWorld, -1);
+void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld, int owner) {
+    if (owner == kHeldOwner) { muzzleNow_ = socketWorld; haveMuzzle_ = true; }
+    else if (owner >= 0) {
+        if ((size_t)owner >= anchors_.size()) anchors_.resize((size_t)owner + 1);
+        anchors_[(size_t)owner] = {socketWorld, true};
+    }
+    emit(kFlashLong, socketWorld, -1, 1e9f, -1, owner);
+    emit(kFlashTop, socketWorld, -1, 1e9f, -1, owner);
+    emit(kFlashSparks, socketWorld, -1, 1e9f, -1, owner);
 }
 
 void WeaponFx::spawnTracer(const Vec3& muzzle, const Vec3& hit) {
@@ -450,13 +477,26 @@ bool WeaponFx::spawnImpact(const Vec3& pos, const Vec3& normal, const Vec3& view
 
 void WeaponFx::tick(float dt, const core::Mat4* muzzleNow, const CollisionWorld* colw) {
     if (muzzleNow) { muzzleNow_ = *muzzleNow; haveMuzzle_ = true; } else haveMuzzle_ = false;
-    // Generic muzzle effects follow the socket while they can live (local-space emitters move with it; dead handles
-    // are no-ops in the runtime). 2 s covers every weapon muzzle template's emitter duration [HIGH].
+    // Participant anchors with live effects follow their shooter's socket; one the source cannot pose now (dead, holstered,
+    // transformed) keeps its last frame, so the short-lived flash finishes where it was.
+    if (!anchors_.empty()) {
+        std::vector<char> used(anchors_.size(), 0);
+        for (const Part& p : parts_) if (p.anchor >= 0 && (size_t)p.anchor < used.size()) used[(size_t)p.anchor] = 1;
+        for (const Follow& f : follow_) if (f.owner >= 0 && (size_t)f.owner < used.size()) used[(size_t)f.owner] = 1;
+        for (size_t o = 0; o < anchors_.size(); ++o) {
+            if (!used[o]) { anchors_[o].have = false; continue; }
+            core::Mat4 m;
+            if (participantMuzzle_ && participantMuzzle_((int)o, m)) anchors_[o].m = m;
+        }
+    }
+    // Generic muzzle effects follow their owner's socket while they can live (local-space emitters move with it; dead
+    // handles are no-ops in the runtime). 2 s covers every weapon muzzle template's emitter duration [HIGH].
     for (size_t i = 0; i < follow_.size();) {
         follow_[i].age += dt;
-        if (follow_[i].age > 2.0f || !haveMuzzle_) { follow_[i] = follow_.back(); follow_.pop_back(); continue; }
+        core::Mat4 at;
+        if (follow_[i].age > 2.0f || !anchorOf(follow_[i].owner, at)) { follow_[i] = follow_.back(); follow_.pop_back(); continue; }
         if (generic_.setTransform) {
-            const core::Mat4 f = orthonormal(muzzleNow_);
+            const core::Mat4 f = orthonormal(at);
             generic_.setTransform(follow_[i].handle, col(f, 3), col(f, 0), col(f, 2));
         }
         ++i;
@@ -494,7 +534,8 @@ void WeaponFx::tick(float dt, const core::Mat4* muzzleNow, const CollisionWorld*
     for (size_t i = 0; i < parts_.size();) {
         Part& p = parts_[i];
         p.age += dt;
-        if (p.age >= p.life || (p.def->localSpace && !haveMuzzle_)) {
+        core::Mat4 at;
+        if (p.age >= p.life || (p.anchor != kWorldSpace && !anchorOf(p.anchor, at))) {
             parts_[i] = parts_.back(); parts_.pop_back(); continue;
         }
         if (p.def->gravity > 0.0f) p.vel.y -= p.def->gravity * dt;
@@ -557,10 +598,11 @@ void WeaponFx::draw(render::IRenderer& r) const {
             float t = p.life > 0 ? p.age / p.life : 1.0f;
             render::Particle o;
             Vec3 pos = p.pos, vel = p.vel;
-            if (d->localSpace) {
-                if (!haveMuzzle_) continue;
-                pos = core::transformPoint(muzzleNow_, p.pos);
-                vel = core::transformDir(muzzleNow_, p.vel);
+            if (p.anchor != kWorldSpace) {
+                core::Mat4 at;
+                if (!anchorOf(p.anchor, at)) continue;
+                pos = core::transformPoint(at, p.pos);
+                vel = core::transformDir(at, p.vel);
             }
             o.pos = pos;
             // Size-by-life: velocity-aligned streaks stretch in length only; sprites scale uniformly.

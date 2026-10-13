@@ -789,6 +789,11 @@ void PlayerController::applyToPawn(World& world, float dt) {
     bool usable = pawn_->weaponUsable() && !pawn_->isMeleeing() && pawn_->carryingHeavy_ == 0;   // the flag / bomb is the held weapon
     if (wantReload_) {                       // latched tap; consumed by this step
         if (usable) w.beginReload();
+        // Vehicle form: the reload exec acts on Pawn.Weapon, which is the vehicle weapon there (the same weapon the HUD
+        // observers read) [INFERRED, no RE note forbids it]. Before, the tap was dropped and only an empty clip reloaded
+        // (playtest 2026-10-13: "I cannot reload in vehicle mode").
+        else if (pawn_->moveForm() == Form::Vehicle && !pawn_->isTransforming())
+            if (Weapon* vw = pawn_->vehicleWeapon()) vw->beginReload();
         wantReload_ = false;
     }
     // Vehicle form: the vehicle weapon (CharacterData.VehicleWeapons, first active) fires from the vehicle's
