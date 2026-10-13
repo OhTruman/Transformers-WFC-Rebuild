@@ -122,7 +122,8 @@ foreach ($r in $rows) {
     elseif ($r.hd_on) { $occNote += " HD on: {0} textures ({1})" -f $r.hd_pack, $r.hd_root }
     # Ray Tracing (5d1aecd0+): the arm's mode must be the one it asked for (WFC_RT_MODE, written into its profile, which wins at
     # boot), an RT-on arm must have built its RT scene with the RT shaders - else the arms drew different things: UNKNOWN.
-    if (($r.rt_req -eq 0 -and $r.rt_mode -ne 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -eq 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -ne $r.rt_req -and $r.rt_modeLogged)) {   # (a mode set at init is inferred: Faithful vs Realistic only when logged) $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
+    # (a mode set at init is inferred from the scene: Faithful vs Realistic is compared only when the renderer logged the mode)
+    if (($r.rt_req -eq 0 -and $r.rt_mode -ne 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -eq 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -ne $r.rt_req -and $r.rt_modeLogged)) { $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
     elseif ($r.rt_req -gt 0 -and ($r.rt_noshaders -or -not $r.rt_scene)) { $hdOk = $false; $occNote += " Ray Tracing requested but no RT scene{0}" -f $(if ($r.rt_noshaders) { " (build without the RT shaders)" } else { "" }) }
     elseif ($r.rt_req -gt 0) { $occNote += " Ray Tracing mode {0}, scene built" -f $r.rt_req }
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
