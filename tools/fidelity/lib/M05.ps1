@@ -123,7 +123,7 @@ function FlatGreyFraction([string]$bmp) {
 $script:MouseParkCache = @{}
 function Get-MousePark([string]$Root) {
     if (-not $Root) { return "wait:t=0" }
-    if (-not $script:MouseParkCache.ContainsKey($Root)) { $script:MouseParkCache[$Root] = [bool](Get-ChildItem (Join-Path $Root "srcrontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("mouse:"' -SimpleMatch -List | Select-Object -First 1) }
+    if (-not $script:MouseParkCache.ContainsKey($Root)) { $script:MouseParkCache[$Root] = [bool](Get-ChildItem (Join-Path $Root "src\frontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("mouse:"' -SimpleMatch -List | Select-Object -First 1) }
     if ($script:MouseParkCache[$Root]) { return "mouse:2,2" } else { return "wait:t=0" }
 }
 function Test-QuitBox([string]$Root) { return [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1) }
@@ -132,4 +132,14 @@ function Convert-QuitRouting([string]$Script, [bool]$QuitBox) {
     $s = $Script.Replace("call:Game.QuitToMainMenu;wait:level=FrontEnd", "call:Game.QuitToMainMenu;wait:t=1.5;ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd")
     $s = $s.Replace("ui:Back;wait:t=1;wait:level=FrontEnd", "ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd")
     return $s
+}
+
+# Private Match Bot Settings for a run's profile. Writes BOTH key sets: BotsFriendly / BotsEnemy (8c2b6e3 and older; FFA uses
+# BotsEnemy) and the per-faction BotsAutobot / BotsDecepticon that team modes read from 09c (Frontend; the old keys are ignored
+# there - 2026-10-07 harness defect: zero bots). Convention: Autobot = $Friendly count, Decepticon = $Enemy count.
+# BotsEdited=1: newer 09c builds apply the map's RECOMMENDED bot counts unless the profile marks them as player-edited.
+# HDTextures + HDTexturesUserSet=1 (9116e4ff+): a seeded value counts as the user's choice, so the HD default never rewrites it
+# (WFC_HDTEXTURES from Add-WfcHarnessEnv still wins at run time; older builds ignore the keys).
+function Get-BotProfile([int]$Friendly, [int]$Enemy, [int]$Difficulty = 1, [switch]$Extended, [int]$Width = 1280, [int]$Height = 720, [int]$HdTextures = 0) {
+    return "[PCSettings]`nWidth=$Width`nHeight=$Height`nFullscreen=0`nVSync=0`nFrameLimit=0`nHDTextures=$(if ($HdTextures) { 1 } else { 0 })`nHDTexturesUserSet=1`nBotsFriendly=$Friendly`nBotsEnemy=$Enemy`nBotsAutobot=$Friendly`nBotsDecepticon=$Enemy`nBotDifficulty=$Difficulty`nBotsExtended=$(if ($Extended) { 1 } else { 0 })`nBotsEdited=1`n"
 }

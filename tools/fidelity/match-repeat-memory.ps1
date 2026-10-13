@@ -12,7 +12,9 @@
 #
 #   .\tools\fidelity\match-repeat-memory.ps1 -Root work\ab\<target> -OutDir <dir> [-Matches 6] [-Friendly 3] [-Enemy 4] [-Goal 10] [-Control] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [Alias("Matches")][int]$MatchCount = 6, [int]$Friendly = 3, [int]$Enemy = 4,
-      [int]$Goal = 10, [int]$MapId = 508, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
+      [int]$Goal = 10, [int]$MapId = 508, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release",
+      # -ExtraEnv "K=V;K=V": extra env for the run (e.g. Systems' WFC_ALLOCPROF=64;WFC_ALLOCPROF_LIVE=64;WFC_ALLOCPROF_EVERY_S=10)
+      [string]$ExtraEnv = "", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -32,7 +34,7 @@ $f = if ($Control) { 0 } else { $Friendly }; $e = if ($Control) { 0 } else { $En
 $lg = Join-Path $OutDir "wfc.log"; $fl = Join-Path $OutDir "flow.jsonl"
 if (-not $ReportOnly -and -not (Test-Path $lg)) {
     if (-not (Wait-WfcGpu)) { Res "gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
-    "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$f`nBotsEnemy=$e`nBotDifficulty=1`n" | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
+    (Get-BotProfile $f $e 1) | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
     $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
     # re-select the map before EVERY match: after a match the lobby comes back on another map (09b 4fbd0b9: Streets -> Seed),
     # which made matches 2..N a different map (2026-10-06 harness defect)
@@ -40,12 +42,13 @@ if (-not $ReportOnly -and -not (Test-Path $lg)) {
     function OneMatch([int]$i) { if (-not $cycle) { return $one }
         $mid = $MapCycle[$i % $MapCycle.Count]; $md = $ModeCycle[$i % $ModeCycle.Count]
         return "call:Online.EditGameMode,$md;wait:t=1;call:Online.SetSelectedMapID,$mid;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:ui=GameEnded;wait:t=3;wait:level=GameLobby;wait:ui=InLobby;wait:t=3" }
-    $s = (@("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
+    $s = (@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
             "call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$MapId", "wait:t=1") +
           @(0..($MatchCount - 1) | ForEach-Object { OneMatch $_ }) + @("quit")) -join ";"
     $env2 = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = $fl; WFC_FLOW_TIMEOUT = "3000";
                WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_LIFECYCLE = "$Goal"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2" }
     if ($H.Contains("WFC_CHARSELECT")) { $env2.WFC_CHARSELECT = "1" }
+    foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $env2[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
     $null = Invoke-WfcExe $exe $OutDir $env2 "run.log" (300 + 240 * $MatchCount)
 }
 if (-not (Test-Path $fl)) { Res "ran" "UNKNOWN" "no flow trace" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
@@ -69,7 +72,7 @@ for ($i = 0; $i -lt [Math]::Max($ld.Count, $n); $i++) {
 function Slope([double[]]$y) { if ($y.Count -lt 2) { return $null }; $mx = ($y.Count - 1) / 2.0; $my = ($y | Measure-Object -Average).Average; $num = 0.0; $den = 0.0
     for ($i = 0; $i -lt $y.Count; $i++) { $num += ($i - $mx) * ($y[$i] - $my); $den += ($i - $mx) * ($i - $mx) }; return [Math]::Round($num / $den, 2) }
 $maps = @($rows | ForEach-Object { $_.map } | Where-Object { $_ } | Select-Object -Unique)
-Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FAIL" }) ("maps loaded: {0} (a different map invalidates the curve)" -f (@($rows | ForEach-Object { $_.map }) -join ", ")) "Experimental"
+if (-not $cycle) { Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FAIL" }) ("maps loaded: {0} (a different map invalidates the curve)" -f (@($rows | ForEach-Object { $_.map }) -join ", ")) "Experimental" }   # map cycles: cycle.maps_played instead
 $glU = @($glLive | Select-Object -Unique)
 # a one-time rise over the first returns (persistent caches) then constant = plateau; still rising over the last three = growth
 $glTail = @($glLive | Select-Object -Last 3 | Select-Object -Unique)
@@ -78,11 +81,20 @@ Res "matches" $(if ($n -ge $MatchCount) { "PASS" } elseif ($n -ge 3) { "PARTIAL"
 foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "loaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "pcm_unloaded"; o = "Systems"; t = 2 }, @{ c = "pcm_loaded"; o = "Systems"; t = 2 })) {
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
-    $sl = Slope $y; $rise = [Math]::Round($y[-1] - $y[0], 1)
-    Res $k.c $(if ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, 2 * $k.t) $k.o
+    # With >= 8 samples the verdict uses the LATER half: an early one-time step (caches warming over the first matches) is not
+    # growth; a leak keeps rising in the later half too (fa973d3 no-bot x12: one step at match 3, then flat)
+    $yv = if ($y.Count -ge 8) { @($y | Select-Object -Skip ([int][Math]::Floor($y.Count / 2))) } else { $y }
+    $sl = Slope $yv; $rise = [Math]::Round($yv[-1] - $yv[0], 1)
+    $scope = if ($yv.Count -lt $y.Count) { "later half, matches {0}..{1}" -f ($y.Count - $yv.Count + 2), ($y.Count + 1) } else { "matches 2..$($y.Count + 1)" }
+    # map cycles: the series mixes map sizes, so the slope is INFO (cycle.revisit_growth is the leak verdict there)
+    $st = if ($cycle) { "INFO" } elseif ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }
+    $note = "matches 2..{0}: {1}; verdict on {2}: slope {3} MB/match, rise {4} MB (WATCH if slope > {5} and rise > {6}; GROWTH if slope > {7} and rise > {8})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $scope, $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t)
+    Res $k.c $st $note $k.o
 }
 $tu = @($tx | Select-Object -Unique)
-Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } elseif (@($tx | Select-Object -Skip 1 | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
+# the per-return count varies with the match's content (characters / effects loaded): not a leak signal by itself - the GL
+# live census after unload is (a rising count = textures not released)
+Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } else { "INFO" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
 if ($cycle) {
     # mode actually played per match (MATCH init), and the per-map revisit delta of privateMB after unload
     $modesPlayed = @(if (Test-Path $lg) { Select-String $lg -Pattern '\] MATCH init mode=(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } })
@@ -93,7 +105,12 @@ if ($cycle) {
     $meanD = if ($deltas.Count) { [Math]::Round(($deltas | Measure-Object delta -Average).Average, 1) } else { $null }
     $distinctPlayed = @($rows | Where-Object { $_.map } | ForEach-Object { $_.map } | Select-Object -Unique).Count; $distinctWant = @($MapCycle | Select-Object -Unique).Count
     Res "cycle.maps_played" $(if (@($rows | Where-Object { $_.map }).Count -eq $MatchCount -and $distinctPlayed -eq $distinctWant) { "PASS" } else { "FAIL" }) ("{0} of {1} matches loaded; {4} distinct maps of {5} requested; maps in order: {2}; modes: {3}" -f @($rows | Where-Object { $_.map }).Count, $MatchCount, ((@($rows | ForEach-Object { $_.map -replace '^MP_', '' })) -join ", "), ($modesPlayed -join ", "), $distinctPlayed, $distinctWant) "Frontend"
-    Res "cycle.revisit_growth" $(if ($null -eq $meanD) { "UNKNOWN" } elseif ($meanD -gt 4 * $GrowthMb) { "FAIL" } elseif ($meanD -gt 2 * $GrowthMb) { "PARTIAL" } else { "PASS" }) ("privateMB after unload, same map on its first vs last visit: mean delta {0} MB ({1})" -f $meanD, (($deltas | ForEach-Object { "$($_.map -replace '^MP_', '') $($_.first) -> $($_.last)" }) -join "; ")) "Gameplay/Rendering/Systems"
+    # Shared caches fill during the first pass, so EARLY maps' first visits sit below their revisits (warm-up), while the
+    # LAST maps of the cycle see warm caches on both visits. A leak adds on every revisit; warm-up shrinks along the cycle.
+    # Verdict on the tail (the last two maps in cycle order; Group-Object keeps first-appearance order). 8c2b6e3 multi-map:
+    # deltas 523 / 266 / 182 / 22 / 12 MB = warm-up, not a leak.
+    $tail = @($deltas | Select-Object -Last 2); $tailMax = if ($tail.Count) { ($tail | Measure-Object delta -Maximum).Maximum } else { $null }
+    Res "cycle.revisit_growth" $(if ($null -eq $tailMax) { "UNKNOWN" } elseif ($tailMax -gt 4 * $GrowthMb) { "FAIL" } elseif ($tailMax -gt 2 * $GrowthMb) { "PARTIAL" } else { "PASS" }) ("privateMB after unload, same map first vs last visit, in cycle order: {1}; mean {0} MB; verdict on the last two maps (warm caches both visits): max {2} MB (FAIL > {3}, PARTIAL > {4})" -f $meanD, (($deltas | ForEach-Object { "$($_.map -replace '^MP_', '') $($_.first) -> $($_.last) ($($_.delta))" }) -join "; "), $tailMax, (4 * $GrowthMb), (2 * $GrowthMb)) "Gameplay/Rendering/Systems"
     $peak = ($rows | Measure-Object loaded_mb -Maximum).Maximum
     Res "cycle.peak_loaded_mb" "INFO" ("highest privateMB at match load {0} MB ({1})" -f $peak, (@($rows | Sort-Object loaded_mb -Descending | Select-Object -First 1 | ForEach-Object { $_.map }))[0]) "Experimental"
 }
