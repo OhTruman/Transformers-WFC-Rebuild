@@ -153,6 +153,9 @@ static void testPackageCredits() {
     check(frontend::packageCreditShown(true, true, false, "") && frontend::packageCreditShown(true, false, true, "FMV_credits") &&
           !frontend::packageCreditShown(true, false, false, "FMV_credits") && !frontend::packageCreditShown(true, false, true, "FMV_Intro") &&
           !frontend::packageCreditShown(false, true, true, "FMV_credits"), "credits.dlss_line_moments");
+    check(frontend::packageCreditShown(true, false, true, "Logo_Activision") && frontend::packageCreditShown(true, false, true, "Logo_HighMoon") &&
+          !frontend::packageCreditShown(true, false, true, "FMV_intro") && !frontend::packageCreditShown(true, false, false, "Logo_Hasbro"),
+          "credits.dlss_line_boot_logos");
     check(std::string(frontend::kDlssCreditText).rfind("NVIDIA DLSS: Copyright (c) NVIDIA Corporation.", 0) == 0, "credits.dlss_text");
 }
 
