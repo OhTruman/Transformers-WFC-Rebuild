@@ -57,7 +57,8 @@ typedef void(APIENTRY* PFN_WaitSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLui
 typedef void(APIENTRY* PFN_SignalSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutShaderRead = 0x958F, kLayoutGeneral = 0x958D;
-constexpr int kSrvN = 8, kTableN = kSrvN + 4;   // descriptor table: t1 .. t8, u0 .. u3
+constexpr int kSrvN = 13, kTableN = kSrvN + 4;  // descriptor table: t1 .. t13, u0 .. u3
+constexpr int kMaxLm = 512;                      // lightmap pages (root table 4: t0 .. space1)
 constexpr int kStatN = 23;   // rt_depthcheck.hlsl's classes (7) + its ratio histogram (16)
 template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
@@ -215,6 +216,7 @@ public:
             D3D12_RAYTRACING_INSTANCE_DESC in{};
             in.Transform[0][0] = in.Transform[1][1] = in.Transform[2][2] = 1.0f;
             in.InstanceMask = mask & 0xFF;
+            in.InstanceID = W.idBase + (UINT)k;             // (0x10000 + set * 2 + side: the reflection hits' lookups)
             // GL's counter-clockwise front faces are DXR's default (clockwise) front with these world-space positions:
             // measured, FRONT_COUNTERCLOCKWISE culled the visible faces (depth check 10 % -> 99.98 %); two-sided: no culling
             in.Flags = k == 0 ? D3D12_RAYTRACING_INSTANCE_FLAG_NONE : D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
@@ -334,7 +336,7 @@ public:
             mBlas_.push_back(bl); totalBlas_ += pi.ResultDataMaxSizeInBytes;
             D3D12_RAYTRACING_INSTANCE_DESC in{};
             in.Transform[0][0] = in.Transform[1][1] = in.Transform[2][2] = 1.0f;
-            in.InstanceID = (UINT)k;                     // -> mInst_[k]: this set's uv / triangle bases
+            in.InstanceID = 0x20000u + (UINT)k;          // -> mInst_[k]: this set's uv / triangle bases
             in.InstanceMask = 0x8;                       // masked world: its own bit (the depth check leaves it out)
             in.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;   // (cards / grates: both sides)
             in.AccelerationStructure = bl->GetGPUVirtualAddress();
@@ -384,6 +386,89 @@ public:
         rel(tlas_); tlas_ = t;
         return true;
     }
+    bool addHitData(const RtHitData& D) {
+#if !defined(WFC_RT_SHADERS)
+        (void)D; return false;
+#else
+        if (!dev_ || !waitIdle()) return false;
+        releaseHit();
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&cl))) {
+            rel(al); return false;
+        }
+        std::vector<ID3D12Resource*> temp;
+        auto toDefault = [&](const void* d, size_t bytes) -> ID3D12Resource* {
+            bytes = std::max<size_t>(bytes, 16);
+            ID3D12Resource* up = uploadBuffer(dev_, d, bytes);
+            ID3D12Resource* r = makeBuffer(dev_, bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST);
+            if (up) temp.push_back(up);
+            if (!up || !r) { rel(r); return nullptr; }
+            cl->CopyBufferRegion(r, 0, up, 0, bytes);
+            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = r;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            cl->ResourceBarrier(1, &b);
+            return r;
+        };
+        // per BLAS (index = set * 2 + side): uv1 base (its set's), triangle base, index base
+        std::vector<uint32_t> inst, idx, triSub; std::vector<float> uv1; std::vector<uint32_t> setBase;
+        for (const auto& S : D.sets) { setBase.push_back((uint32_t)(uv1.size() / 2)); uv1.insert(uv1.end(), S.uv1.begin(), S.uv1.end()); }
+        for (const auto& B : D.blas) {
+            inst.insert(inst.end(), {B.setIndex < (int)setBase.size() ? setBase[(size_t)B.setIndex] : 0u, (uint32_t)triSub.size(), (uint32_t)idx.size(), 0u});
+            idx.insert(idx.end(), B.idx.begin(), B.idx.end());
+            triSub.insert(triSub.end(), B.triSub.begin(), B.triSub.end());
+        }
+        hInst_ = toDefault(inst.data(), inst.size() * 4); hIdx_ = toDefault(idx.data(), idx.size() * 4);
+        hUv1_ = toDefault(uv1.data(), uv1.size() * 4); hTriSub_ = toDefault(triSub.data(), triSub.size() * 4);
+        hSubs_ = toDefault(D.subs.data(), D.subs.size() * 4);
+        hBlasN_ = (UINT)D.blas.size(); hTris_ = (UINT)triSub.size(); hVerts_ = (UINT)(uv1.size() / 2); hSubN_ = (UINT)(D.subs.size() / 32);
+        bool ok = hInst_ && hIdx_ && hUv1_ && hTriSub_ && hSubs_;
+        UINT64 lmBytes = 0;
+        for (size_t k = 0; k < D.lightmaps.size() && k < (size_t)kMaxLm && ok; ++k) {   // the lightmap pages
+            const RtLightmap& L = D.lightmaps[k];
+            if (L.w <= 0 || L.h <= 0) { hLm_.push_back({nullptr, false}); continue; }
+            D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+            D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)L.w; rd.Height = (UINT)L.h;
+            rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; rd.SampleDesc.Count = 1;
+            ID3D12Resource* t = nullptr;
+            if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                     __uuidof(ID3D12Resource), (void**)&t))) { ok = false; break; }
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT64 total = 0;
+            dev_->GetCopyableFootprints(&rd, 0, 1, 0, &fp, nullptr, nullptr, &total);
+            std::vector<unsigned char> staged((size_t)total);
+            for (int y = 0; y < L.h; ++y) std::memcpy(&staged[(size_t)y * fp.Footprint.RowPitch], &L.rgba[(size_t)y * L.w * 4], (size_t)L.w * 4);
+            ID3D12Resource* up = uploadBuffer(dev_, staged.data(), staged.size());
+            if (!up) { rel(t); ok = false; break; }
+            temp.push_back(up);
+            D3D12_TEXTURE_COPY_LOCATION dst{}; dst.pResource = t; dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            D3D12_TEXTURE_COPY_LOCATION src{}; src.pResource = up; src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT; src.PlacedFootprint = fp;
+            cl->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = t;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            cl->ResourceBarrier(1, &b);
+            hLm_.push_back({t, L.srgb});
+            lmBytes += (UINT64)L.w * L.h * 4;
+        }
+        cl->Close();
+        if (ok) { ID3D12CommandList* lists[] = {cl}; queue_->ExecuteCommandLists(1, lists); }
+        const bool idle = waitIdle();
+        rel(cl); rel(al);
+        if (idle) for (auto* r : temp) r->Release();
+        if (!ok) { releaseHit(); return false; }
+        if (heap_) writeDescriptors();
+        hitBytes_ = (UINT64)(inst.size() + idx.size() + triSub.size() + uv1.size() + D.subs.size()) * 4 + lmBytes;
+        LOG_INFO("RT bridge: reflection hit data: %u BLAS, %u triangles, %u subs, %zu lightmap pages; %.1f MB", hBlasN_, hTris_, hSubN_,
+                 hLm_.size(), (double)hitBytes_ / 1048576.0);
+        return true;
+#endif
+    }
+    void releaseHit() {
+        rel(hInst_); rel(hIdx_); rel(hUv1_); rel(hTriSub_); rel(hSubs_);
+        for (auto& l : hLm_) rel(l.first);
+        hLm_.clear(); hBlasN_ = hTris_ = hVerts_ = hSubN_ = 0; hitBytes_ = 0;
+    }
     void releaseMasked() {
         for (auto* b : mBlas_) b->Release();
         mBlas_.clear();
@@ -401,6 +486,7 @@ public:
         }
         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)
         releaseMasked();
+        releaseHit();
         for (auto& d : dyn_) { rel(d.tlas); rel(d.scratch); rel(d.inst); d = DynTlas{}; }
         rel(tlas_);
         for (auto* b : blas_) b->Release();
@@ -523,15 +609,22 @@ private:
         rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = kSrvN; rg[0].BaseShaderRegister = 1;
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 4; rg[1].BaseShaderRegister = 0;
         rg[1].OffsetInDescriptorsFromTableStart = kSrvN;
-        D3D12_ROOT_PARAMETER rp[4]{};
+        D3D12_DESCRIPTOR_RANGE lmRange{};               // the lightmap pages (reflection hits): t0 .. space1
+        lmRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; lmRange.NumDescriptors = kMaxLm; lmRange.BaseShaderRegister = 0;
+        lmRange.RegisterSpace = 1;
+        D3D12_ROOT_PARAMETER rp[5]{};
         rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 48;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
         rp[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[2].DescriptorTable.NumDescriptorRanges = 2; rp[2].DescriptorTable.pDescriptorRanges = rg;
         rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV; rp[3].Descriptor.ShaderRegister = 4;
-        D3D12_STATIC_SAMPLER_DESC ss{};                  // s0: the opacity atlas (point, clamp)
-        ss.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; ss.AddressU = ss.AddressV = ss.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        ss.MaxLOD = D3D12_FLOAT32_MAX; ss.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 4; rd.pParameters = rp; rd.NumStaticSamplers = 1; rd.pStaticSamplers = &ss;
+        rp[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[4].DescriptorTable.NumDescriptorRanges = 1; rp[4].DescriptorTable.pDescriptorRanges = &lmRange;
+        D3D12_STATIC_SAMPLER_DESC ss[2]{};               // s0: the opacity atlas (point, clamp); s1: lightmaps (linear, clamp)
+        for (int k = 0; k < 2; ++k) {
+            ss[k].Filter = k ? D3D12_FILTER_MIN_MAG_MIP_LINEAR : D3D12_FILTER_MIN_MAG_MIP_POINT;
+            ss[k].AddressU = ss[k].AddressV = ss[k].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            ss[k].MaxLOD = D3D12_FLOAT32_MAX; ss[k].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; ss[k].ShaderRegister = (UINT)k;
+        }
+        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 5; rd.pParameters = rp; rd.NumStaticSamplers = 2; rd.pStaticSamplers = ss;
         ID3DBlob* blob = nullptr; ID3DBlob* err = nullptr;
         if (FAILED(serializeRs_(&rd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) {
             LOG_WARN("RT bridge: root signature: %s", err ? (const char*)err->GetBufferPointer() : "?"); rel(err); return false;
@@ -559,7 +652,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN + kMaxLm;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -595,10 +688,14 @@ private:
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
+            sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
             if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT);
             else uav(table == 1 ? ao_.res : refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
+        for (int k = 0; k < kMaxLm; ++k)                 // the lightmap pages (null past the uploaded ones)
+            tex(k < (int)hLm_.size() ? hLm_[(size_t)k].first : nullptr, k < (int)hLm_.size() && hLm_[(size_t)k].second ?
+                DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM);
     }
     void depthCheck(const RtFrame& fr, int slot) {
         static const bool flip = std::getenv("WFC_RT_FLIPWINDING") != nullptr;   // (diagnostics: the other winding)
@@ -641,7 +738,7 @@ private:
         c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = (float)fr.frameIndex; c[23] = (float)fr.aoRays;
         c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF); c[27] = fr.sunConeTan;
         std::memcpy(c + 28, fr.ffxReproj, 64);
-        c[44] = fr.znear; c[45] = fr.zfar;
+        c[44] = fr.znear; c[45] = fr.zfar; c[46] = fr.reflectShade ? 1.0f : 0.0f;
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
         list_->SetDescriptorHeaps(1, &heap_);
@@ -677,6 +774,7 @@ private:
         }
 #endif
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
+        tsShade_[slot] = fr.reflectShade;
         if (fr.reflect && psoRefl_) {                    // stage 2 prototype: the reflection rays (table C)
             D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
             list_->SetComputeRootSignature(rs_);
@@ -688,6 +786,9 @@ private:
             t3.ptr += 2ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             list_->SetComputeRootDescriptorTable(2, t3);
             list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+            D3D12_GPU_DESCRIPTOR_HANDLE lm = heap_->GetGPUDescriptorHandleForHeapStart();
+            lm.ptr += 3ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            list_->SetComputeRootDescriptorTable(4, lm);
             list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
         }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 3);
@@ -719,6 +820,7 @@ private:
         const double dnMs = tsFreq_ && ts[2] > ts[1] ? (double)(ts[2] - ts[1]) * 1000.0 / (double)tsFreq_ : 0.0;
         const double rfMs = tsFreq_ && ts[3] > ts[2] ? (double)(ts[3] - ts[2]) * 1000.0 / (double)tsFreq_ : 0.0;
         saoMs_.push_back(ms); saoRaySum_ += rays; dnSum_ += dnMs; dnMax_ = std::max(dnMax_, dnMs); rfSum_ += rfMs; rfMax_ = std::max(rfMax_, rfMs);
+        rfAb_[tsShade_[slot] ? 1 : 0] += rfMs; rfAbN_[tsShade_[slot] ? 1 : 0] += 1;
         if (saoMs_.size() < 300) return;
         std::vector<double> v = saoMs_;
         std::sort(v.begin(), v.end());
@@ -734,6 +836,10 @@ private:
         if (dnSum_ > 0) LOG_INFO("RT shadow denoiser (FidelityFX, 5 passes + depth copy): GPU %.3f ms avg, %.3f max", dnSum_ / (double)v.size(), dnMax_);
         if (rfSum_ > 0) LOG_INFO("RT reflections (1 ray / pixel, closest hit): GPU %.3f ms avg, %.3f max (rays counted with shadow / AO above)",
                                  rfSum_ / (double)v.size(), rfMax_);
+        if (rfAbN_[0] > 0 && rfAbN_[1] > 0)
+            LOG_INFO("RT reflections A / B (alternating 30-frame blocks): hit shading on %.3f ms (%d frames), off %.3f ms (%d frames)",
+                     rfAb_[1] / rfAbN_[1], rfAbN_[1], rfAb_[0] / rfAbN_[0], rfAbN_[0]);
+        rfAb_[0] = rfAb_[1] = 0; rfAbN_[0] = rfAbN_[1] = 0;
         saoMs_.clear(); saoRaySum_ = 0; dnSum_ = dnMax_ = 0; rfSum_ = rfMax_ = 0;
     }
     void readStats(int slot) {
@@ -825,10 +931,15 @@ private:
     ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;
     ID3D12Resource* mSubs_ = nullptr; ID3D12Resource* mInst_ = nullptr;
     UINT mVerts_ = 0, mTris_ = 0, mSubN_ = 0, mSetN_ = 0;
+    ID3D12Resource* hInst_ = nullptr; ID3D12Resource* hIdx_ = nullptr; ID3D12Resource* hUv1_ = nullptr;   // reflection hits
+    ID3D12Resource* hTriSub_ = nullptr; ID3D12Resource* hSubs_ = nullptr;
+    std::vector<std::pair<ID3D12Resource*, bool>> hLm_;  // lightmap pages (sRGB?)
+    UINT hBlasN_ = 0, hTris_ = 0, hVerts_ = 0, hSubN_ = 0; UINT64 hitBytes_ = 0;
     ID3D12Resource* hit_ = nullptr; ID3D12Resource* nrm_ = nullptr; ID3D12Resource* vel_ = nullptr;
     std::vector<GLuint> sigBufs_;
     ID3D12Resource* dbgRb_ = nullptr; int dbgSlot_ = -1;
-    double dnSum_ = 0, dnMax_ = 0, rfSum_ = 0, rfMax_ = 0;
+    double dnSum_ = 0, dnMax_ = 0, rfSum_ = 0, rfMax_ = 0, rfAb_[2] = {0, 0}; int rfAbN_[2] = {0, 0};
+    bool tsShade_[4] = {true, true, true, true};
 #if defined(WFC_RT_DENOISER)
     RtShadowDenoiser dn_; bool dnInit_ = false;
 #endif
@@ -862,6 +973,7 @@ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return 
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
 bool rtBridgeRoundTrip(const RtFrame* frame) { return g_bridge && g_bridge->roundTrip(frame); }
 GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w, h) : 0; }
+bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
 bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
 
@@ -874,6 +986,7 @@ bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}
 bool rtBridgeRoundTrip(const RtFrame*) { return false; }
 GLuint rtBridgeMaskAtlas(int, int) { return 0; }
+bool rtBridgeAddHitData(const RtHitData&) { return false; }
 bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 }  // namespace render

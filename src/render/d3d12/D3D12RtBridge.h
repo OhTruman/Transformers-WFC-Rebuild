@@ -16,7 +16,7 @@ struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, world
 
 // the static world as GL's depth prepass draws it: positions (xyz, world space), triangle lists for one-sided
 // (back faces culled, GL counter-clockwise front) and two-sided geometry
-struct RtStaticWorld { std::vector<float> pos; std::vector<uint32_t> oneSided, twoSided; };
+struct RtStaticWorld { std::vector<float> pos; std::vector<uint32_t> oneSided, twoSided; unsigned idBase = 0; };   // InstanceID = idBase + side
 
 struct RtFrame {
     float invViewProj[16];    // GL clip -> world, column-major
@@ -33,6 +33,7 @@ struct RtFrame {
     bool resetHistory = false;
     float znear = 0.1f, zfar = 1000.0f;   // (the AO filter's depth linearisation)
     bool reflect = false;     // stage 2 prototype: the reflection pass (WFC_RT_REFLECT)
+    bool reflectShade = true; // ... with hit shading (false: hit distance only - the A / B for the shading cost)
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 
@@ -45,6 +46,14 @@ bool rtBridgeRoundTrip(const RtFrame* frame);
 // per vertex, each triangle's sub; per sub (8 floats): uv min, 1 / uv extent, its atlas tile (u, v, width, height in 0..1)
 struct RtMaskedSet { int set = 0; std::vector<float> pos, uv; std::vector<uint32_t> idx, triSub; };
 struct RtMaskedWorld { std::vector<RtMaskedSet> sets; std::vector<float> subs; };
+// stage 2 prototype - the reflection hits' shading: per static BLAS (InstanceID - 0x10000 = set * 2 + side) its triangles
+// (indices into the set's vertices, as built) and their subs; per set the lightmap UV per vertex; per sub 8 float4
+// (lightmap pages, lightmap UV transform, 3 scales, albedo, emissive, 0); the lightmap pages (RGBA8, sRGB or not)
+struct RtHitBlas { int setIndex = 0; std::vector<uint32_t> idx, triSub; };
+struct RtHitSet { std::vector<float> uv1; };
+struct RtLightmap { int w = 0, h = 0; bool srgb = true; std::vector<unsigned char> rgba; };
+struct RtHitData { std::vector<RtHitSet> sets; std::vector<RtHitBlas> blas; std::vector<float> subs; std::vector<RtLightmap> lightmaps; };
+bool rtBridgeAddHitData(const RtHitData& d);
 GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
 bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
 // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with

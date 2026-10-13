@@ -2124,10 +2124,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
     if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
         const size_t nl1 = fs.find('\n');
-        if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\n");
+        if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\nuniform int uRtUvMode;\n");
         const std::string dl = "if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;";
         for (size_t at = fs.find(dl); at != std::string::npos; at = fs.find(dl, at + dl.size()))
-            fs.insert(at + dl.size(), " if (uRtUvSpace.z > 0.0) { oColor = vec4(1.0); return; }");
+            fs.insert(at + dl.size(), " if (uRtUvSpace.z > 0.0) { oColor = uRtUvMode == 1 ? vec4(o.DiffuseColor, 1.0) :"
+                                      " uRtUvMode == 2 ? vec4(o.EmissiveColor, 1.0) : vec4(1.0); return; }");
     }
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
@@ -3568,6 +3569,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (rtShadowAoOn()) {                          // (M7 RT, RT-on programs only: the masked-opacity atlas pass)
                 static const float zero[4] = {0, 0, 0, 0};
                 Uniform4fv(ULOC(P, "uRtUvSpace"), 1, rtUvAtlas_ ? rtUvSpace_ : zero);
+                if (rtUvAtlas_) Uniform1i(ULOC(P, "uRtUvMode"), rtUvMode_);
                 if (rtUvAtlas_) glDisable(GL_CULL_FACE);
             }
             Uniform1i(ULOC(P, "uDecalClip"), g.decal ? 1 : 0);

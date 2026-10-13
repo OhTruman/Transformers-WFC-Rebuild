@@ -14,6 +14,14 @@ StructuredBuffer<uint> MaskTriSub : register(t6);    // the triangle's sub
 StructuredBuffer<float4> MaskSub : register(t7);     // 2 per sub: (uv min, 1 / uv extent), atlas tile (u, v, w, h)
 StructuredBuffer<uint4> MaskInst : register(t8);     // per set: uv base, triangle base
 SamplerState PointClamp : register(s0);
+SamplerState LinearClamp : register(s1);
+// stage 2 prototype (reflection hits): static BLAS (InstanceID 0x10000 + set * 2 + side) -> triangles -> subs
+StructuredBuffer<uint4> HitInst : register(t9);       // per BLAS: uv1 base, triangle base, index base
+StructuredBuffer<uint> HitIdx : register(t10);
+StructuredBuffer<float2> HitUv1 : register(t11);
+StructuredBuffer<uint> HitTriSub : register(t12);
+StructuredBuffer<float4> HitSub : register(t13);      // 8 per sub: pages, lightmap UV transform, 3 scales, albedo, emissive, 0
+Texture2D<float4> Lightmaps[512] : register(t0, space1);
 
 cbuffer Frame : register(b0) {
     float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)
@@ -21,6 +29,7 @@ cbuffer Frame : register(b0) {
     float4 Size;            // width, height, frame index, AO rays per pixel
     float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), instance mask, sun cone tan(half angle)
     float4x4 Reproj;        // FidelityFX ndc (x, 1 - 2v, depth) now -> FidelityFX clip space of the previous frame
+    float4 Extra;           // znear, zfar, reflection hit shading (1 / 0), 0
 };
 
 float3 worldAt(int2 px, float d) {
@@ -34,7 +43,7 @@ float rnd(inout uint s) { s = hash(s); return (s >> 8) * (1.0 / 16777216.0); }
 
 // a masked triangle's candidate hit: kept where its material's opacity (the atlas tile at the hit's UV0) passed the clip
 bool maskedOpaque(uint set, uint prim, float2 bc) {
-    const uint4 inst = MaskInst[set];
+    const uint4 inst = MaskInst[set - 0x20000u];
     const uint tri = inst.y + prim;
     const float2 uv = MaskUv[inst.x + MaskIdx[tri * 3]] * (1.0 - bc.x - bc.y) + MaskUv[inst.x + MaskIdx[tri * 3 + 1]] * bc.x
                     + MaskUv[inst.x + MaskIdx[tri * 3 + 2]] * bc.y;

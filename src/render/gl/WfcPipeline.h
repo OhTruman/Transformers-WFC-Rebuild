@@ -500,6 +500,13 @@ private:
     // masked (alpha-tested) world geometry in the TLAS (WfcRt.cpp): an opacity atlas rendered once per map in UV space
     bool rtUvAtlas_ = false, rtMaskedBuilt_ = false;
     float rtUvSpace_[4] = {0, 0, 0, 0};                // the atlas pass: uv min, 1 / uv extent
+    int rtUvMode_ = 0;                                 // 0 opacity, 1 albedo, 2 emissive
+    // stage 2 prototype (WFC_RT_REFLECT): the static BLAS' triangles -> subs and the sets' lightmap UVs, kept from
+    // rtBuildWorld for the reflection hits' shading (rtBuildHit, on the first RT frame)
+    struct RtHitKeep { int mesh = 0, set = 0; std::vector<uint32_t> idx[2]; std::vector<uint32_t> sub[2]; std::vector<float> uv1; };
+    std::vector<RtHitKeep> rtHitKeep_;
+    bool rtHitBuilt_ = false;
+    void rtBuildHit();
     std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
     GLuint rtAtlasFbo_ = 0;
     void rtBuildMasked();

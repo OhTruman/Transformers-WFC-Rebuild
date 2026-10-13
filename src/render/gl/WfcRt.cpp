@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <map>
 
 namespace render {
 namespace wfc {
@@ -55,6 +56,7 @@ void main() {
 bool depthCheckOn() { static const bool on = std::getenv("WFC_RT_DEPTHCHECK") != nullptr; return on; }
 // stage 1 (measurement): sun shadow + AO rays per pixel (WFC_RT_AORAYS, default 2; WFC_RT_AORADIUS metres, default 1)
 bool shadowAoOn() { static const bool on = std::getenv("WFC_RT_SHADOWAO") != nullptr; return on; }
+bool reflectOn() { static const bool on = std::getenv("WFC_RT_REFLECT") != nullptr; return on; }
 
 bool invert(const float* m, float* out) {             // general 4x4 inverse (column-major in and out), in double
     double a[16], inv[16];
@@ -113,6 +115,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     if (nVert) GetBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(v.size() * 4), v.data());
     BindBuffer(GL_ARRAY_BUFFER, 0);
     RtStaticWorld W;
+    RtHitKeep keep;
     W.pos.resize(v.size() / 14 * 3);
     for (size_t i = 0, n = v.size() / 14; i < n; ++i) std::memcpy(&W.pos[i * 3], &v[i * 14], 12);
     size_t subs = 0, skipped = 0, noShadow = 0;
@@ -146,6 +149,7 @@ void Pipeline::rtBuildWorld(int meshId) {
         largest.push_back({size, s.matName + (M.lit ? "" : " (unlit)")});
         std::vector<uint32_t>& out = M.twoSided ? W.twoSided : W.oneSided;
         out.insert(out.end(), idx.begin() + s.first, idx.begin() + s.first + s.count);
+        if (reflectOn()) keep.sub[M.twoSided ? 1 : 0].insert(keep.sub[M.twoSided ? 1 : 0].end(), s.count / 3, (uint32_t)(&s - g.subs.data()));
         ++subs;
     }
     std::sort(largest.begin(), largest.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -155,7 +159,16 @@ void Pipeline::rtBuildWorld(int meshId) {
     static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
     LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)", subs, set ? "level BSP" : "world", meshId, skipped, noShadow);
-    if (rtBridgeAddStaticWorld(W, 1u << set)) { ++rtWorldSets_; rtSets_.push_back({meshId, set}); }
+    W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
+    if (reflectOn()) {
+        keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
+        keep.uv1.resize(v.size() / 14 * 2);
+        for (size_t i = 0, n = v.size() / 14; i < n; ++i) { keep.uv1[i * 2] = v[i * 14 + 12]; keep.uv1[i * 2 + 1] = v[i * 14 + 13]; }
+    }
+    if (rtBridgeAddStaticWorld(W, 1u << set)) {
+        ++rtWorldSets_; rtSets_.push_back({meshId, set});
+        if (reflectOn()) rtHitKeep_.push_back(std::move(keep));
+    }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
 
@@ -288,6 +301,159 @@ void Pipeline::rtBuildMasked() {
              jobs.size(), tris, kAtlas, kAtlas, skipped, ok ? "ok" : "FAILED");
 }
 
+// stage 2 prototype: what the reflection hits are shaded with - per sub its lightmap (pages, UV transform, scales) and an
+// average albedo / emissive evaluated by its own material in UV0 space (8 x 8 tiles, averaged where the material keeps
+// fragments); the lightmap pages read back from GL. View-independent, diffuse only: a radiance proxy for the B / C data.
+void Pipeline::rtBuildHit() {
+    rtHitBuilt_ = true;
+    LOG_INFO("RT hit shading: %zu world sets kept, GetBufferSubData %s", rtHitKeep_.size(), GetBufferSubData ? "yes" : "no");
+    if (rtHitKeep_.empty() || !GetBufferSubData) return;
+    RtHitData D;
+    std::vector<std::pair<int, size_t>> subRef;                // global sub -> (mesh, local sub)
+    std::map<std::pair<int, size_t>, uint32_t> subId;
+    std::map<int, int> lmIndex;                                 // GL lightmap page -> D3D12 page
+    for (size_t k = 0; k < rtHitKeep_.size(); ++k) {
+        RtHitKeep& K = rtHitKeep_[k];
+        RtHitSet hs; hs.uv1 = K.uv1; D.sets.push_back(std::move(hs));
+        for (int side = 0; side < 2; ++side) {
+            RtHitBlas b; b.setIndex = (int)k; b.idx = K.idx[side];
+            for (uint32_t local : K.sub[side]) {
+                auto key = std::make_pair(K.mesh, (size_t)local);
+                auto it = subId.find(key);
+                if (it == subId.end()) { it = subId.emplace(key, (uint32_t)subRef.size()).first; subRef.push_back(key); }
+                b.triSub.push_back(it->second);
+            }
+            D.blas.push_back(std::move(b));                     // (blas index = set * 2 + side = InstanceID - 0x10000)
+        }
+    }
+    // albedo + emissive: two 8 x 8 tiles per sub in a 1024 x 1024 RGBA16F target, drawn by the sub's own program
+    const int kTile = 8, kSize = 1024, perRow = kSize / kTile;
+    const size_t nSub = subRef.size();
+    if (nSub * 2 > (size_t)perRow * perRow) { LOG_WARN("RT hit: %zu subs exceed the albedo atlas", nSub); return; }
+    GLuint tex = 0, fbo = 0;
+    glGenTextures(1, &tex); glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, kSize, kSize, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    GenFramebuffers(1, &fbo);
+    GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+    GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
+    GLfloat cc[4]; glGetFloatv(GL_COLOR_CLEAR_VALUE, cc);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    glViewport(0, 0, kSize, kSize); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+    const core::Mat4 identity;
+    // every sub's UV0 box, from one read of each mesh's buffers
+    std::vector<float> box(nSub * 4);
+    {
+        std::map<int, std::pair<std::vector<uint32_t>, std::vector<float>>> data;
+        for (size_t i = 0; i < nSub; ++i) {
+            const int mesh = subRef[i].first;
+            auto it = data.find(mesh);
+            if (it == data.end()) {
+                const GpuMesh& g = meshes_[(size_t)mesh];
+                size_t nIdx = 0;
+                for (const Sub& s : g.subs) nIdx = std::max(nIdx, (size_t)s.first + s.count);
+                std::vector<uint32_t> ix(nIdx);
+                BindVertexArray(g.vao);
+                if (nIdx) GetBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, (GLsizeiptr)(nIdx * 4), ix.data());
+                BindVertexArray(0);
+                size_t nVert = 0; for (uint32_t vi : ix) nVert = std::max(nVert, (size_t)vi + 1);
+                std::vector<float> vv(nVert * 14);
+                BindBuffer(GL_ARRAY_BUFFER, g.vbo);
+                if (nVert) GetBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(vv.size() * 4), vv.data());
+                BindBuffer(GL_ARRAY_BUFFER, 0);
+                it = data.emplace(mesh, std::make_pair(std::move(ix), std::move(vv))).first;
+            }
+            const Sub& s = meshes_[(size_t)mesh].subs[subRef[i].second];
+            float u0 = 1e30f, v0 = 1e30f, u1 = -1e30f, v1 = -1e30f;
+            for (uint32_t k = 0; k < s.count; ++k) {
+                const float* q = &it->second.second[(size_t)it->second.first[s.first + k] * 14];
+                u0 = std::min(u0, q[10]); u1 = std::max(u1, q[10]); v0 = std::min(v0, q[11]); v1 = std::max(v1, q[11]);
+            }
+            box[i * 4] = u0; box[i * 4 + 1] = v0; box[i * 4 + 2] = 1.0f / std::max(u1 - u0, 1e-4f); box[i * 4 + 3] = 1.0f / std::max(v1 - v0, 1e-4f);
+        }
+    }
+    for (int mode = 1; mode <= 2; ++mode)
+        for (size_t i = 0; i < nSub; ++i) {
+            const size_t tile = (size_t)(mode - 1) * nSub + i;
+            const int tx = (int)(tile % perRow) * kTile, ty = (int)(tile / perRow) * kTile;
+            glViewport(tx, ty, kTile, kTile);
+            glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND);
+            std::memcpy(rtUvSpace_, &box[i * 4], 16);
+            rtUvAtlas_ = true; rtUvMode_ = mode;
+            drawSubs(meshes_[(size_t)subRef[i].first], identity, false, (int)subRef[i].second);
+            rtUvAtlas_ = false; rtUvMode_ = 0;
+        }
+    std::vector<float> px((size_t)kSize * kSize * 4);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, px.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFb);
+    DeleteFramebuffers(1, &fbo); glDeleteTextures(1, &tex);
+    glViewport(vp[0], vp[1], vp[2], vp[3]); glClearColor(cc[0], cc[1], cc[2], cc[3]);
+    if (depthOn) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (blendOn) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cullOn) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    glx::uniformCacheForgetCurrent(); glx::textureCacheInvalidate();
+    auto average = [&](size_t tile, float* rgb) {
+        const int tx = (int)(tile % perRow) * kTile, ty = (int)(tile / perRow) * kTile;
+        double s3[3] = {0, 0, 0}; double n = 0;
+        for (int y = 0; y < kTile; ++y)
+            for (int x = 0; x < kTile; ++x) {
+                const float* q = &px[(((size_t)(ty + y)) * kSize + (size_t)(tx + x)) * 4];
+                if (q[3] <= 0.0f) continue;
+                for (int c = 0; c < 3; ++c) s3[c] += std::max(0.0f, q[c]);
+                n += 1;
+            }
+        for (int c = 0; c < 3; ++c) rgb[c] = n > 0 ? (float)(s3[c] / n) : 0.0f;
+    };
+    // the sub table: 8 float4 per sub
+    for (size_t i = 0; i < nSub; ++i) {
+        const Sub& s = meshes_[(size_t)subRef[i].first].subs[subRef[i].second];
+        float r[32] = {};
+        for (int k = 0; k < 3; ++k) {
+            int page = -1;
+            if (s.lmTex[k] >= 0 && (size_t)s.lmTex[k] < lmTextures_.size() && lmTextures_[(size_t)s.lmTex[k]]) {
+                auto it = lmIndex.find(s.lmTex[k]);
+                if (it == lmIndex.end()) it = lmIndex.emplace(s.lmTex[k], (int)lmIndex.size()).first;
+                page = it->second;
+            }
+            r[k] = (float)page;
+            r[8 + k * 4] = s.lmScale[k][0]; r[8 + k * 4 + 1] = s.lmScale[k][1]; r[8 + k * 4 + 2] = s.lmScale[k][2];
+        }
+        std::memcpy(r + 4, s.lmCoord, 16);
+        average(i, r + 20);
+        average(nSub + i, r + 24);
+        D.subs.insert(D.subs.end(), r, r + 32);
+    }
+    // the lightmap pages (read back as RGBA8; sRGB kept as the GL texture's format said)
+    D.lightmaps.resize(lmIndex.size());
+    for (const auto& kv : lmIndex) {
+        RtLightmap& L = D.lightmaps[(size_t)kv.second];
+        const GLuint t = lmTextures_[(size_t)kv.first];
+        glBindTexture(GL_TEXTURE_2D, t);
+        GLint w = 0, h = 0, fmt = 0;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x1003 /*GL_TEXTURE_INTERNAL_FORMAT*/, &fmt);
+        L.w = w; L.h = h;
+        L.srgb = fmt == 0x8C43 || fmt == 0x8C41 || (fmt >= 0x8C4C && fmt <= 0x8C4F);   // SRGB8(_ALPHA8), sRGB S3TC
+        L.rgba.resize((size_t)w * h * 4);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        if (w > 0 && h > 0) glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, L.rgba.data());
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glx::textureCacheInvalidate();
+    size_t bytes = 0; for (const auto& L : D.lightmaps) bytes += L.rgba.size();
+    const bool ok = rtBridgeAddHitData(D);
+    LOG_INFO("RT hit shading: %zu subs (albedo / emissive from their materials), %zu lightmap pages (%.1f MB) -> D3D12 %s",
+             nSub, D.lightmaps.size(), (double)bytes / 1048576.0, ok ? "ok" : "FAILED");
+    rtHitKeep_.clear(); rtHitKeep_.shrink_to_fit();
+}
+
 // flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
 // begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
 bool Pipeline::rtDynBegin() {
@@ -308,6 +474,7 @@ bool Pipeline::rtDynBegin() {
         if (!rtDepthProg_ || !rtCompositeProg_) { rtFailed_ = true; return false; }
     }
     if (!rtMaskedBuilt_) rtBuildMasked();                // (once per map, textures resident by now)
+    if (!rtHitBuilt_ && reflectOn()) rtBuildHit();
     rtCopyDepth(t.worldDepth);
     rtTargets_ = t;
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -426,6 +593,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
         static const bool reflect = std::getenv("WFC_RT_REFLECT") != nullptr;   // (M7 stage 2 prototype)
         fr.reflect = reflect;
+        static const bool shadeAb = std::getenv("WFC_RT_REFLECT_AB") != nullptr;   // (hit shading off in every other 30-frame block)
+        fr.reflectShade = !shadeAb || (frameNo_ / 30) % 2 == 0;
         // the sun's angular radius (WFC_RT_SUNCONE degrees; default 0.27, the real sun's): soft shadows for the denoiser
         static const float coneTan = [] { const char* e = std::getenv("WFC_RT_SUNCONE"); const float deg = e ? (float)std::atof(e) : 0.27f;
                                           return std::tan(deg * 3.14159265f / 180.0f); }();
