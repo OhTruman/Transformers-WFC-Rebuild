@@ -537,7 +537,7 @@ private:
 
     // PC ADAPTATION (RX 7900 XTX driver-reset hardening, Rendering request): recreate the context through
     // WGL_ARB_create_context with WGL_ARB_create_context_robustness - the same GL version and the compatibility profile
-    // as the legacy context, plus robust buffer access (out-of-bounds buffer reads return 0, not undefined behaviour) and
+    // as the legacy context (no robust buffer access: it can cost GPU time), plus
     // LOSE_CONTEXT_ON_RESET, so glGetGraphicsResetStatus (the renderer polls it per frame) reports a reset. Any failure
     // keeps the legacy context. WFC_GL_LEGACY_CONTEXT=1 skips it (A/B).
     void upgradeToRobustContext() {
@@ -561,9 +561,12 @@ private:
             }
             return false;
         };
-        if (!create || !ext || !hasExt(ext, "WGL_ARB_create_context_robustness")) {
-            LOG_INFO("OpenGL context: legacy (WGL_ARB_create_context_robustness unavailable: getExt %d create %d ext %d)",
-                     getExt != nullptr, create != nullptr, ext && hasExt(ext, "WGL_ARB_create_context_robustness"));
+        // (AMD's WGL extension string omits WGL_ARB_create_context_robustness although the driver creates robust contexts -
+        // the GL side has GL_KHR_robustness: 2026-10-13, RX 7900 XTX. So without the token the creation is still tried; a
+        // driver that rejects the attributes returns no context and the legacy one stays.)
+        const bool advertised = ext && hasExt(ext, "WGL_ARB_create_context_robustness");
+        if (!create) {
+            LOG_INFO("OpenGL context: legacy (wglCreateContextAttribsARB unavailable: getExt %d ext %d)", getExt != nullptr, advertised);
             if (ext && GetEnvironmentVariableA("WFC_GL_EXTLOG", legacy, sizeof legacy) > 0) LOG_INFO("WGL extensions: %s", ext);
             return;
         }
@@ -575,7 +578,7 @@ private:
             0x2091 /* WGL_CONTEXT_MAJOR_VERSION_ARB */, major,
             0x2092 /* WGL_CONTEXT_MINOR_VERSION_ARB */, minor,
             0x9126 /* WGL_CONTEXT_PROFILE_MASK_ARB */, 0x00000002 /* WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB */,
-            0x2094 /* WGL_CONTEXT_FLAGS_ARB */, 0x00000004 /* WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB */,
+            // (no WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB: bounds-checked buffer access can cost GPU time; only the reset notification)
             0x8256 /* WGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_ARB */, 0x8252 /* WGL_LOSE_CONTEXT_ON_RESET_ARB */,
             0};
         HGLRC robust = create(hdc_, nullptr, attribs);
@@ -585,9 +588,19 @@ private:
             LOG_WARN("OpenGL context: robust creation failed (GL %d.%d compatibility) - keeping the legacy context", major, minor);
             return;
         }
+        GLint strategy = 0;                              // what the driver actually gave (GL_RESET_NOTIFICATION_STRATEGY)
+        glGetIntegerv(0x8256, &strategy);
+        if (strategy != 0x8252 /* GL_LOSE_CONTEXT_ON_RESET */) {
+            wglMakeCurrent(hdc_, hglrc_);
+            wglDeleteContext(robust);
+            LOG_WARN("OpenGL context: the robust context reports reset strategy 0x%x, not LOSE_CONTEXT_ON_RESET - keeping the legacy context "
+                     "(WGL robustness %s)", strategy, advertised ? "advertised" : "not advertised");
+            return;
+        }
         wglDeleteContext(hglrc_);
         hglrc_ = robust;
-        LOG_INFO("OpenGL context: robust (GL %d.%d compatibility, ROBUST_ACCESS, LOSE_CONTEXT_ON_RESET) [PC ADAPTATION]", major, minor);
+        LOG_INFO("OpenGL context: robust (GL %d.%d compatibility, LOSE_CONTEXT_ON_RESET%s) [PC ADAPTATION]", major, minor,
+                 advertised ? "" : "; WGL_ARB_create_context_robustness not advertised, created anyway");
     }
 
     POINT centerScreen() const {
