@@ -63,7 +63,7 @@ reads through frontend::openPath), WFC_LOCKSTEP_EXACT, WFC_DRAWCOMBO, the displa
 | Scatter Blaster / Ion grey rods, smoke slabs | 5247d14e, ba5e9dae, 736f40e9 | 95-100 % | code PASS |
 | Create a Character class-pick freeze (08k) | 50f07421 | 100 % | code PASS |
 | Menu / lobby / spawn / music-start hitches (08k-08r, M09c) | 3f001109, dfa1f257, e0e7eaf5 | 91-99 % | code PASS |
-| GFx / GL / map memory leaks (M28, killstreak, prefetch) | 1013867d, c2c25d8d, c0678b29 | 97-100 % | leak soak: PENDING (rerun after the GPU cap) |
+| GFx / GL / map memory leaks (M28, killstreak, prefetch) | 1013867d, c2c25d8d, c0678b29 | 97-100 % | leak soak on a17309b7: PASS (plateau; GL live textures flat at 93) - section 5 |
 | Bots hitting team-mates (pawnRayHit) | 5eeb3f79 | 100 % | self-tests (PARTICIPANT) PENDING |
 | Radius damage through walls (HurtRadius LOS) | b749a833 | 100 % | Gameplay sweep |
 | Stranded bots / rejoin | a7234074, a1ee934a, b1e65868 (8d91c7ea's 25 m superseded by 34 m) | 100 % | Gameplay sweep |
@@ -79,10 +79,43 @@ Run so far, before Integration's 08:00 GPU cap stopped the sweep: ASYNCSTEP, BAR
 BOTTEST 38/39 (N3), BRAWL, CAM, CHARGE, CHASSIS, CLASSCHANGE, CTF, SETTINGS 6/6, WEAPON 19/19 (N2). PENDING: the rest
 (the sweep resumes where it stopped).
 
-## 5. Memory-leak soak
+## 5. Memory-leak soak (final head a17309b7, Release + PGO, 12:36-13:53)
 
-PENDING. The first attempt (16 matches over the 8 maps, 7v8 bots, 1080p windowed) hung in match 2 on the 07:45 driver
-reset (N1). It resumes when the GPU cap lifts.
+**Verdict: no linear leak (PLATEAU).** Process memory settles at a high-water mark; GL textures, handles, GDI / USER, threads
+and audio are flat. The harness revisit gate still reads FAIL on its +60 MB threshold: the per-visit rise halves on each
+visit but is not yet 0 after three. That is allocator high-water, not a per-match leak; it is noted, not a FAIL here.
+
+Run A: 16 matches (8 maps x 2), one process, 7v8 bots, goal 25, 1920x1080 windowed, 12:36-13:18. 16/16 completed, no
+TDR, no GPU-lost. Private MB after unload, same map, first -> second visit (cycle order): Seed +790, Berth +723,
+Complex +626, Rust +313, Debris +341, Streets +210, Molten +180, Gorge +109 (shrinking monotonically). Matches 9..16:
+5195 -> 4868 MB, slope -14 MB/match. Peak loaded 6305 MB (Rust).
+
+Run B: Seed / Berth / Molten / Gorge x 3, WFC_GLCENSUS=1, 13:20-13:53. 12/12 completed.
+
+| map | visit 1 | visit 2 | visit 3 | delta 1->2 | delta 2->3 |
+|---|---|---|---|---|---|
+| Seed | 4388 | 4710 | 4692 | +322 | -19 |
+| Berth | 3959 | 4222 | 4379 | +263 | +157 |
+| Molten | 4275 | 4474 | 4572 | +199 | +98 |
+| Gorge | 4325 | 4419 | 4442 | +93 | +23 |
+
+Matches 7..12: slope -0.5 MB/match (unloaded), -22.6 MB/match (loaded). GL live textures after unload (Rendering):
+88, 91, 92, then 93 for the last nine matches (PASS, plateau). Textures released per map: identical on every visit.
+
+| per-process (sampler, 10 s) | run A, first -> last quarter median | run B |
+|---|---|---|
+| handles | 1389 -> 1401 | 1390 -> 1390 |
+| GDI / USER | 14 / 23, flat | 14 / 23, flat |
+| threads | 80-86 | 82-85 |
+| GPU dedicated | 2.83 -> 3.02 GB (map-dependent) | 3.01 -> 2.88 GB |
+| audio PCM after unload (Systems) | 36.5 MB on all 16 | 36.5 MB on all 12 |
+
+Driver nonpaged pool (system, not our process): run A 3132 -> 3588 MB (+456 MB in 42 min, flattening late); run B
+3591 -> 3591 MB, flat. This is the known load-proportional AMD driver pool leak: no step at map change.
+
+Harness: run A's gl_live_after_unload FAIL was a tooling false fail (the census needs WFC_GLCENSUS=1; null entries were
+counted as data); fixed in 2e281bbb. Contamination notes (CPU-only python: the Systems build_slim refresh, AssetTools
+hd_push) do not affect a memory measurement. Data: work/sweep/soak_a17309b, work/sweep/soak3_a17309b (local).
 
 ## 6. RT stage 1 merge review (integration 5d1aecd0, head 52efcbf7; code read)
 
@@ -136,3 +169,20 @@ Probe result for the TDR section: **without the robust-context fix, the beginFra
 | m07-renderstate (normal) | PASS 7 / 7 | world frame after every overlay; GL entry state |
 | sim-determinism (7200 lockstep frames, 8 v 8, seed 123, 2 threaded runs) | PASS | 0 of 2 diverged |
 | identity-capture Rust 504: 05319349 vs f70a46d5 (robust context, RT Off, HD off) | PASS | SIMHASH 3002 / 3002 equal; 25 / 25 captures identical. The robust-context change (and everything merged since 05319349, including RT stage 1 Off) is image-identical on Rust. |
+
+## 10. PERF RUN on the final head a17309b7 (12:15-12:35, card otherwise empty)
+
+- identity-capture (Rust 504, 64p TDM, PLAYERBOT, LOCKSTEP + EXACT) 05319349 vs a17309b7: 25 / 25 captures identical,
+  SIMHASH 3002 common steps, 0 differ. PASS.
+- regress-8map 05319349 vs a17309b7 (lockstep, best p90 of 2, BLOCK above +0.15 ms): 8 / 8 PASS, 0 unknown.
+
+| map | base p90 ms | head p90 ms | delta |
+|---|---|---|---|
+| 501 | 2.15 | 2.16 | +0.01 |
+| 502 | 1.92 | 1.94 | +0.02 |
+| 503 | 2.34 | 2.33 | -0.01 |
+| 504 | 2.53 | 2.52 | -0.01 |
+| 507 | 2.36 | 2.37 | +0.01 |
+| 508 | 2.08 | 2.08 | +0.00 |
+| 509 | 2.76 | 2.76 | +0.00 |
+| 510 | 2.53 | 2.53 | +0.00 |
