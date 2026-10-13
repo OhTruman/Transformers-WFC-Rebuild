@@ -60,13 +60,13 @@ endif()
 if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
     set(WFC_RT_SHADER_DIR "${CMAKE_BINARY_DIR}/generated/rt")
     set(WFC_RT_SHADER_HEADERS "")
-    foreach(sh rt_depthcheck rt_shadow_ao rt_ao_filter)
+    foreach(sh rt_depthcheck rt_shadow_ao rt_ao_filter rt_reflect)
         set(out "${WFC_RT_SHADER_DIR}/${sh}.h")
         add_custom_command(OUTPUT "${out}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"
             COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_5 -E main -O3 -Fh "${out}" -Vn g_${sh}
                 "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/${sh}.hlsl"
-            DEPENDS "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/${sh}.hlsl"
+            DEPENDS "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/${sh}.hlsl" "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/rt_common.hlsli"
             COMMENT "DXC ${sh}.hlsl")
         list(APPEND WFC_RT_SHADER_HEADERS "${out}")
     endforeach()

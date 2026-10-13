@@ -3,63 +3,12 @@
 // normal). Writes the raw mask (R = sun visibility 0 / 1, G = AO openness 0 .. 1; sky 1, 1) and the FidelityFX shadow
 // denoiser's inputs: the hit mask (one uint per 8 x 4 tile, bit (y % 4) * 8 + x % 8 set = occluded), world normals and
 // the camera-reprojection velocity (previous uv - uv, FidelityFX's top-down uv). Compiled at build time by DXC (cs_6_5).
-RaytracingAccelerationStructure Scene : register(t0);
-Texture2D<float> RasterDepth : register(t1);
-Texture2D<float> WorldDepth : register(t2);     // the depth before the dynamic draws (dynamic pixel = closer now)
-// masked (alpha-tested) world geometry (instance mask 0x8, InstanceID = its set): the opacity atlas + lookups
-Texture2D<float> MaskAtlas : register(t3);
-StructuredBuffer<float2> MaskUv : register(t4);      // UV0 per vertex, all masked sets
-StructuredBuffer<uint> MaskIdx : register(t5);       // 3 per masked triangle (vertex indices within its set)
-StructuredBuffer<uint> MaskTriSub : register(t6);    // the triangle's sub
-StructuredBuffer<float4> MaskSub : register(t7);     // 2 per sub: (uv min, 1 / uv extent), atlas tile (u, v, w, h)
-StructuredBuffer<uint4> MaskInst : register(t8);     // per set: uv base, triangle base
-SamplerState PointClamp : register(s0);
+#include "rt_common.hlsli"
 RWTexture2D<float4> Mask : register(u0);        // sun visibility, AO openness, dynamic pixel (1 / 0), 0
 RWTexture2D<uint> HitMask : register(u1);
 RWTexture2D<float4> Normal : register(u2);
 RWTexture2D<float2> Velocity : register(u3);
 RWByteAddressBuffer Stats : register(u4);     // [0] rays traced this frame
-
-cbuffer Frame : register(b0) {
-    float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)
-    float4 ToSun;           // xyz: unit vector towards the sun (-light forward); w: 1 = a sun exists
-    float4 Size;            // width, height, frame index, AO rays per pixel
-    float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), instance mask, sun cone tan(half angle)
-    float4x4 Reproj;        // FidelityFX ndc (x, 1 - 2v, depth) now -> FidelityFX clip space of the previous frame
-};
-
-float3 worldAt(int2 px, float d) {
-    const float2 ndc = (float2(px) + 0.5) / Size.xy * 2.0 - 1.0;
-    float4 p = mul(InvViewProj, float4(ndc, d * 2.0 - 1.0, 1.0));
-    return p.xyz / p.w;
-}
-
-uint hash(uint x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
-float rnd(inout uint s) { s = hash(s); return (s >> 8) * (1.0 / 16777216.0); }
-
-// a masked triangle's candidate hit: kept where its material's opacity (the atlas tile at the hit's UV0) passed the clip
-bool maskedOpaque(uint set, uint prim, float2 bc) {
-    const uint4 inst = MaskInst[set];
-    const uint tri = inst.y + prim;
-    const float2 uv = MaskUv[inst.x + MaskIdx[tri * 3]] * (1.0 - bc.x - bc.y) + MaskUv[inst.x + MaskIdx[tri * 3 + 1]] * bc.x
-                    + MaskUv[inst.x + MaskIdx[tri * 3 + 2]] * bc.y;
-    const uint sub = MaskTriSub[tri];
-    const float4 box = MaskSub[sub * 2], tile = MaskSub[sub * 2 + 1];
-    const float2 t = saturate((uv - box.xy) * box.zw);
-    return MaskAtlas.SampleLevel(PointClamp, tile.xy + t * tile.zw, 0) > 0.5;
-}
-
-bool occluded(float3 o, float3 dir, float tMax, uint mask) {
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
-    RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;
-    q.TraceRayInline(Scene, RAY_FLAG_NONE, mask, r);
-    while (q.Proceed()) {                                 // (opaque geometry commits by itself; masked candidates here)
-        if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            maskedOpaque(q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateTriangleBarycentrics()))
-            q.CommitNonOpaqueTriangleHit();
-    }
-    return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
-}
 
 groupshared uint gTileMask;
 

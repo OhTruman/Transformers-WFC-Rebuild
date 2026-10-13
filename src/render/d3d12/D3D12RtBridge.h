@@ -10,7 +10,7 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0; };   // render size: depth / mask R32F,
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0; };   // render size: depth / mask R32F,
                                                                  // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
                                                                  // (denoised sun), worldDepth R32F (before the dynamic draws)
 
@@ -32,6 +32,7 @@ struct RtFrame {
     float ffxProjInv[16] = {}, ffxReproj[16] = {}, ffxViewProjInv[16] = {};
     bool resetHistory = false;
     float znear = 0.1f, zfar = 1000.0f;   // (the AO filter's depth linearisation)
+    bool reflect = false;     // stage 2 prototype: the reflection pass (WFC_RT_REFLECT)
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 

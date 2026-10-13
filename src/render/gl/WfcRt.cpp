@@ -424,6 +424,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         static const int aoRays = [] { const char* e = std::getenv("WFC_RT_AORAYS"); return e ? std::max(0, std::atoi(e)) : 2; }();
         static const float aoRadius = [] { const char* e = std::getenv("WFC_RT_AORADIUS"); return e ? (float)std::atof(e) : 1.0f; }();
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
+        static const bool reflect = std::getenv("WFC_RT_REFLECT") != nullptr;   // (M7 stage 2 prototype)
+        fr.reflect = reflect;
         // the sun's angular radius (WFC_RT_SUNCONE degrees; default 0.27, the real sun's): soft shadows for the denoiser
         static const float coneTan = [] { const char* e = std::getenv("WFC_RT_SUNCONE"); const float deg = e ? (float)std::atof(e) : 0.27f;
                                           return std::tan(deg * 3.14159265f / 180.0f); }();
@@ -486,6 +488,12 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             glGetTexImage(GL_TEXTURE_2D, 0, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE, dn.data());
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
             if (FILE* f = std::fopen("rt_dump_shadowdn.bin", "wb")) { std::fwrite(dn.data(), 1, dn.size(), f); std::fclose(f); }
+            {                                            // the reflection target (hit distance, hit, ...)
+                std::vector<float> rf((size_t)vpW_ * vpH_ * 4);
+                glBindTexture(GL_TEXTURE_2D, t.refl);
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, rf.data());
+                if (FILE* f = std::fopen("rt_dump_refl.bin", "wb")) { std::fwrite(rf.data(), 4, rf.size(), f); std::fclose(f); }
+            }
             if (rtAtlasFbo_) {                           // the masked-opacity atlas (4096 x 4096 R8)
                 std::vector<unsigned char> at((size_t)4096 * 4096);
                 glBindTexture(GL_TEXTURE_2D, rtBridgeMaskAtlas(4096, 4096));

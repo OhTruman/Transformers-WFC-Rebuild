@@ -27,6 +27,7 @@
 #include "rt_depthcheck.h"
 #include "rt_shadow_ao.h"
 #include "rt_ao_filter.h"
+#include "rt_reflect.h"
 #endif
 #if defined(WFC_RT_DENOISER)
 #include "render/d3d12/D3D12RtDenoise.h"
@@ -142,13 +143,13 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
-            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_);
+            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_);
             rel(hit_); rel(nrm_); rel(vel_);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
             nrm_ = localTex(w, h, DXGI_FORMAT_R16G16B16A16_FLOAT);
             vel_ = localTex(w, h, DXGI_FORMAT_R16G16_FLOAT);
             if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(wdepth_, w, h) ||
-                !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !hit_ || !nrm_ || !vel_) {
+                !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !make(refl_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !hit_ || !nrm_ || !vel_) {
                 LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
             }
             if (heap_) writeDescriptors();
@@ -159,7 +160,7 @@ public:
             }
 #endif
         }
-        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex;
         return true;
     }
 
@@ -412,9 +413,9 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[6] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, atlas_.tex};
-        GLenum ly[6] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutShaderRead};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 6 : 5, tx, ly);
+        GLuint tx[7] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, atlas_.tex};
+        GLenum ly[7] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutShaderRead};
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 7 : 6, tx, ly);
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
@@ -448,8 +449,8 @@ public:
         allocDone_[a] = done;
         const clk::time_point t2 = clk::now();
         GLuint64_ w = done; semParam_(sem_, kFenceValue, &w);
-        GLuint wt[3] = {mask_.tex, ao_.tex, dnOut_.tex}; GLenum wl[3] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
-        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 3, wt, wl);
+        GLuint wt[4] = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex}; GLenum wl[4] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
+        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 4, wt, wl);
         const clk::time_point t3 = clk::now();
         auto ms = [](clk::time_point a_, clk::time_point b_) { return std::chrono::duration<double, std::milli>(b_ - a_).count(); };
         const double ph[3] = {ms(t0, t1), ms(t1, t2), ms(t2, t3)};
@@ -545,9 +546,11 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSao_))) { LOG_WARN("RT bridge: shadow / AO PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_ao_filter; pd.CS.BytecodeLength = sizeof g_rt_ao_filter;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoAoF_))) { LOG_WARN("RT bridge: AO filter PSO failed"); return false; }
-        D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 8;
+        pd.CS.pShaderBytecode = g_rt_reflect; pd.CS.BytecodeLength = sizeof g_rt_reflect;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoRefl_))) { LOG_WARN("RT bridge: reflection PSO failed"); return false; }
+        D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 12;
         if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
-        for (auto& r : tsReadback_) r = makeBuffer(dev_, 32, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
+        for (auto& r : tsReadback_) r = makeBuffer(dev_, 48, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
 #if defined(WFC_RT_DENOISER)
         dnInit_ = dn_.init(dev_);
         if (!dnInit_) LOG_WARN("RT bridge: no shadow denoiser (raw RT shadow)");
@@ -556,7 +559,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 2 * kTableN;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -588,11 +591,12 @@ private:
             D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = f; u.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
             dev_->CreateUnorderedAccessView(r, nullptr, &u, h); h.ptr += inc;
         };
-        for (int table = 0; table < 2; ++table) {        // A (depth check): u0 = mask; B (shadow / AO): u0 = the RGBA target
+        for (int table = 0; table < 3; ++table) {        // A (depth check): u0 = mask; B (shadow / AO): the RGBA target; C: reflection
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
-            if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT); else uav(ao_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT);
+            else uav(table == 1 ? ao_.res : refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
     }
@@ -647,7 +651,7 @@ private:
         t2.ptr += (UINT64)kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         list_->SetComputeRootDescriptorTable(2, t2);
         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
-        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4);
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6);
         list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 3) / 4, 1);     // one 8 x 4 group per denoiser tile
         {   // the AO filter (same root signature and table): raw AO (.y) -> filtered AO (.w)
             D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
@@ -655,7 +659,7 @@ private:
             list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
             list_->SetPipelineState(psoSao_);
         }
-        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4 + 1);
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 1);
 #if defined(WFC_RT_DENOISER)
         if (dn_.ready()) {
             D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
@@ -672,8 +676,22 @@ private:
             }
         }
 #endif
-        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4 + 2);
-        list_->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4, 3, tsReadback_[slot], 0);
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
+        if (fr.reflect && psoRefl_) {                    // stage 2 prototype: the reflection rays (table C)
+            D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
+            list_->SetComputeRootSignature(rs_);
+            list_->SetPipelineState(psoRefl_);
+            list_->SetDescriptorHeaps(1, &heap_);
+            list_->SetComputeRoot32BitConstants(0, 48, c, 0);
+            list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
+            D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();
+            t3.ptr += 2ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            list_->SetComputeRootDescriptorTable(2, t3);
+            list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+            list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
+        }
+        list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 3);
+        list_->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6, 4, tsReadback_[slot], 0);
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         list_->ResourceBarrier(1, &b);
         list_->CopyBufferRegion(readback_[slot], 0, stats_, 0, 4);
@@ -692,14 +710,15 @@ private:
             }
             dbgRb_->Release(); dbgRb_ = nullptr;
         }
-        uint32_t rays = 0; uint64_t ts[3] = {};
+        uint32_t rays = 0; uint64_t ts[4] = {};
         void* p = nullptr; D3D12_RANGE r{0, 4}, none{0, 0};
         if (SUCCEEDED(readback_[slot]->Map(0, &r, &p))) { rays = *(const uint32_t*)p; readback_[slot]->Unmap(0, &none); }
-        D3D12_RANGE r2{0, 24};
-        if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 24); tsReadback_[slot]->Unmap(0, &none); }
+        D3D12_RANGE r2{0, 32};
+        if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 32); tsReadback_[slot]->Unmap(0, &none); }
         const double ms = tsFreq_ && ts[1] > ts[0] ? (double)(ts[1] - ts[0]) * 1000.0 / (double)tsFreq_ : 0.0;
         const double dnMs = tsFreq_ && ts[2] > ts[1] ? (double)(ts[2] - ts[1]) * 1000.0 / (double)tsFreq_ : 0.0;
-        saoMs_.push_back(ms); saoRaySum_ += rays; dnSum_ += dnMs; dnMax_ = std::max(dnMax_, dnMs);
+        const double rfMs = tsFreq_ && ts[3] > ts[2] ? (double)(ts[3] - ts[2]) * 1000.0 / (double)tsFreq_ : 0.0;
+        saoMs_.push_back(ms); saoRaySum_ += rays; dnSum_ += dnMs; dnMax_ = std::max(dnMax_, dnMs); rfSum_ += rfMs; rfMax_ = std::max(rfMax_, rfMs);
         if (saoMs_.size() < 300) return;
         std::vector<double> v = saoMs_;
         std::sort(v.begin(), v.end());
@@ -713,7 +732,9 @@ private:
                  depth_.w, depth_.h, saoRays_, saoRadius_, avg, p95, v.back(), raysPerFrame / 1e6, avg > 0 ? raysPerFrame / (avg * 1e6) : 0.0,
                  (double)vram / 1048576.0, (double)totalBlas_ / 1048576.0);
         if (dnSum_ > 0) LOG_INFO("RT shadow denoiser (FidelityFX, 5 passes + depth copy): GPU %.3f ms avg, %.3f max", dnSum_ / (double)v.size(), dnMax_);
-        saoMs_.clear(); saoRaySum_ = 0; dnSum_ = dnMax_ = 0;
+        if (rfSum_ > 0) LOG_INFO("RT reflections (1 ray / pixel, closest hit): GPU %.3f ms avg, %.3f max (rays counted with shadow / AO above)",
+                                 rfSum_ / (double)v.size(), rfMax_);
+        saoMs_.clear(); saoRaySum_ = 0; dnSum_ = dnMax_ = 0; rfSum_ = rfMax_ = 0;
     }
     void readStats(int slot) {
         if (rbMode_[slot] == 2) { readSao(slot); return; }
@@ -799,7 +820,7 @@ private:
     GLuint sem_ = 0;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_;
     std::vector<ID3D12Resource*> mBlas_;                   // masked world: BLAS per set, lookup buffers
     ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;
     ID3D12Resource* mSubs_ = nullptr; ID3D12Resource* mInst_ = nullptr;
@@ -807,7 +828,7 @@ private:
     ID3D12Resource* hit_ = nullptr; ID3D12Resource* nrm_ = nullptr; ID3D12Resource* vel_ = nullptr;
     std::vector<GLuint> sigBufs_;
     ID3D12Resource* dbgRb_ = nullptr; int dbgSlot_ = -1;
-    double dnSum_ = 0, dnMax_ = 0;
+    double dnSum_ = 0, dnMax_ = 0, rfSum_ = 0, rfMax_ = 0;
 #if defined(WFC_RT_DENOISER)
     RtShadowDenoiser dn_; bool dnInit_ = false;
 #endif
@@ -818,7 +839,7 @@ private:
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> dynInst_;
     UINT64 totalBlas_ = 0;
     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
-    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
+    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12PipelineState* psoRefl_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
     IDXGIAdapter3* adapter_ = nullptr; UINT64 tsFreq_ = 0; int rbMode_[2] = {};
     std::vector<double> saoMs_; unsigned long long saoRaySum_ = 0; int saoRays_ = 0; float saoRadius_ = 0.0f;
     ID3D12Resource* stats_ = nullptr; ID3D12Resource* zeros_ = nullptr; ID3D12Resource* readback_[2] = {};
