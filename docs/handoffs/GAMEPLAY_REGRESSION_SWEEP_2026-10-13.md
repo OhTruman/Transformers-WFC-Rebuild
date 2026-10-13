@@ -1,4 +1,4 @@
-# Gameplay regression sweep, 2026-10-13 (state: partial — essentials done, full harness sweep pending)
+# Gameplay regression sweep, 2026-10-13 (state: complete — 2 bugs found and fixed, no open gameplay FAIL)
 
 **User request:** "hunt for bugs, memory leaks, and any problems I have ever resolved or caught".
 
@@ -24,10 +24,22 @@
 | Stranded 30 s → suicide; no-path / open-air rejoin (8845aeb, a723407, b749a83) | Gorge 5v5 Smart seeds 1-3, WFC_STUCKWATCH | b6b6e38 vs 51260f56 | **PASS**, identical on both builds: STUCKWATCH 0 / 0 / 0; stranded suicides 0; rejoin walks 3 / 3 / 12; out-of-bounds notes 3 / 1 / 1; every match ended |
 | Bot movement / stuck regression (playtest build vs head) | WFC_BOTTEST classic + smart | b6b6e38 vs 51260f56 | **PASS**: 39/39 both AIs on 51260f56; repaths, stuck events and longest idle identical (deterministic) |
 | BOTTEST "AI cost per step" FAIL (Smart max 13.85 / 7.58 ms vs 6 ms on b6b6e38; Experimental saw 8.9 ms on 05319349) | WFC_BOTTEST smart | 51260f56 | **Not a code issue**: 0.67 / 4.59 ms max on a quieter machine, same simulated match. The spikes were machine load |
-| Memory | runner samples per run | all of the above | No growth seen. Gorge 5v5 private ~4.5-5.4 GB at the end of 150 s; the 10-minute leak run is pending (below) |
+| QA "freeze bots" tool let a vehicle-form bot coast ~5.4 m (QABOT 6/7, both AIs, deterministic) | WFC_QA=1 WFC_QABOTTEST=1 | 51260f56 fail; 51260f56 + 1c34ad56 7/7 both AIs (max 0.01 m) | **FIXED** (1c34ad56): the freeze zeroes the bots' horizontal speed when it starts (DEV / QA path only) |
+| Memory | private bytes sampled every 30 s; one long Gorge 5v5 Smart match | 51260f56 | **No leak**: flat at 4.50 GB from 30 s to 870 s (≈ 383 s of match, then a TDR stalled the run, see below). Every run's peak 4-6 GB during load |
+
+## Harness sweep (integration 51260f56, shipped renderer)
+
+| Result | Harnesses |
+|---|---|
+| **PASS** (all checks) | WEAPON 19/19, SWITCH 32/32, PARTICIPANT 22/22, TDM 43/43, CTF 12/12, SCORE 9/9, FINEAIM 3/3, MUZZLE 5/5, RMUZZLE 4/4, CHARGE 9/9, PROJFX 3/3, XFORMVIS 16/16, VEHPHYS 27/27, QA 8/8, CHASSIS 14/14, PRELOAD 1/1, MODEPLAY 21/21, BOTNAV 7/7, BOTOBJ 12/12 (Classic and Smart), DETERMINISM 2/2 (Classic and Smart), XP 16/16 (progression), CLASSCHANGE 22/22, DOUBLEJUMP 3/3, SPAWNFILL 10/10, ENGAGE 3/3, BARRIERWALK 3/3, EVENT 16/16, MARKERS 5/5, BOTTEST 39/39 (both AIs) |
+| **FIXED in this sweep** | QABOT 6/7 → 7/7 (1c34ad56) |
+| Measurement only, ran clean | MATCH (state machine: 20 kills → MatchOver), MODE (per-mode objectives), PICKUP (24 factories), HEIGHT, RISER, VEH, DROP; XFORM: 0/76 transforms under the map |
+| Not a direct-boot harness (ran until timeout; not gameplay pass / fail) | DLETEST (sits in the frontend), MARKERTEST (visual tag diagnostic), RELOADTEST (Rendering's map-reload diagnostic, `=<frame>`) |
 
 ## Found during the sweep (not gameplay code)
-- **Driver resets (Display 4101) at 07:45, 07:55, 08:02, 08:14, 08:29.** Cause, per Integration: aggregate GPU oversubscription across lanes.
+- **Driver resets (Display 4101) at 07:45, 07:55, 08:02, 08:14, 08:29, 10:29, 11:06.** Cause, per Integration: aggregate GPU oversubscription across lanes.
+  - The 10:29 and 11:06 resets stalled two runs on 51260f56, which is older than the 14c3ffca device-removed backstop: the DLETEST frontend run, and the leak run at match t ≈ 383 s ("watchdog: no frame completed ... 'beginFrame'").
+- **GL API error in the frontend:** "GL debug [ERROR] type 0x824C src 0x8246 id 1001" logged 13000+ times while DLETEST sat in the menus. Routed to Rendering / Frontend.
   - The GPU is now limited to two exes at a time.
   - Integration 45a8b9c0 / 14c3ffca end a stalled exe with exit 3 instead of hanging.
 - **Legacy-renderer GPU hang:** DM lockstep on Streets, 10 pawns, ~45 s in, when no render data is found.
@@ -37,18 +49,13 @@
   - The runner is fixed.
   - Deletion is blocked for agents; the user can delete it.
 
-## Pending (runs from ~14:30 in slot B, pausing while the user plays)
+## Left to the playtest (not automatable)
+- How Smart vs Classic feels.
+- Fine-aim feel.
+- Vehicle handling feel.
+- On-screen marker presentation (MARKERTEST is visual only).
 
-**Harness sweep on 51260f56:**
-- Weapons and combat: WEAPON, SWITCH, TDM, CTF, SCORE, FINEAIM, MUZZLE, RMUZZLE, CHARGE, PROJFX.
-- Vehicles and transforms: XFORMVIS, VEHPHYS, VEH, XFORM, RISER, DROP.
-- QA tools: QA, QABOT.
-- Loading and spawning: CHASSIS, PRELOAD, PICKUP, SPAWNFILL.
-- Modes and match: MODE, MODEPLAY, MATCH, DLE.
-- Bots: BOTNAV, BOTOBJ ×2, DETERMINISM ×2.
-- Progression and player actions: XP (progression persistence), CLASSCHANGE, DOUBLEJUMP, ENGAGE, BARRIERWALK.
-- Markers and misc: EVENT, MARKER, MARKERS, HEIGHT, RELOAD.
-
-**Memory:** a 10-minute Gorge 5v5 run sampled every 30 s.
-
-Not automatable (left to the playtest): feel of Smart vs Classic, fine-aim feel, vehicle handling feel.
+## Commits from this sweep (agents/gameplay)
+- 1bac7bfb: VehicleFx graybox guard (integration b1363fca).
+- 1c34ad56: the QA freeze parks the bots.
+- 194bf420 and this update: this document.
