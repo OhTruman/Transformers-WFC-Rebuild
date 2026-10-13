@@ -553,6 +553,8 @@ void Pipeline::rtBuildHit() {
             case 0x8C4C: case 0x8C4D: fmt = 3; break;       // sRGB DXT1
             case 0x83F2: fmt = 4; break; case 0x8C4E: fmt = 5; break;
             case 0x83F3: fmt = 6; break; case 0x8C4F: fmt = 7; break;
+            case 0x8DBB: fmt = 11; break;                    // RGTC1 = BC4 (M6 roughness / height)
+            case 0x8E8C: fmt = 12; break;                    // BPTC unorm = BC7 (M6 ORM)
             default: compressed = 0; break;                  // (other block formats: decoded to RGBA8)
             }
         }
@@ -564,7 +566,7 @@ void Pipeline::rtBuildHit() {
             else if (ifmt == 0x881A) { fmt = 10; rt = 0x140B /*GL_HALF_FLOAT*/; bpp = 8; }          // RGBA16F
         }
         // (BC needs a top level of whole blocks)
-        if (compressed && (((w0 >> first) & 3) || ((h0 >> first) & 3))) { compressed = 0; fmt = (fmt == 3 || fmt == 5 || fmt == 7) ? 1 : 0; }
+        if (compressed && (((w0 >> first) & 3) || ((h0 >> first) & 3))) { compressed = 0; fmt = (fmt == 3 || fmt == 5 || fmt == 7) ? 1 : 0; }   // (BC4 / BC7 too: RGBA8)
         X.w = std::max(1, w0 >> first); X.h = std::max(1, h0 >> first); X.levels = levels; X.format = fmt;
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         for (int f = 0; f < (cube ? 6 : 1) && levels > 0; ++f)
@@ -573,7 +575,7 @@ void Pipeline::rtBuildHit() {
                 GLint lw = 0, lh = 0; glGetTexLevelParameteriv(face, l, GL_TEXTURE_WIDTH, &lw); glGetTexLevelParameteriv(face, l, GL_TEXTURE_HEIGHT, &lh);
                 std::vector<unsigned char> buf;
                 if (compressed) {
-                    const int bs = (fmt == 2 || fmt == 3) ? 8 : 16;
+                    const int bs = (fmt == 2 || fmt == 3 || fmt == 11) ? 8 : 16;
                     buf.resize((size_t)((lw + 3) / 4) * (size_t)((lh + 3) / 4) * (size_t)bs);
                     GetCompressedTexImage(face, l, buf.data());
                 }

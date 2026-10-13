@@ -59,7 +59,7 @@ struct RtHitBlas { int setIndex = 0; std::vector<uint32_t> idx, triSub; };
 struct RtHitSet { std::vector<float> uv1; std::vector<float> vtx; };   // vtx (materials): 8 floats per vertex, see rt_reflect
 // (materials) a texture copied from GL, mips from the cap down: data[face * levels + level], tightly packed rows
 // (blocks for BC). format: 0 RGBA8, 1 RGBA8 sRGB, 2 BC1, 3 BC1 sRGB, 4 BC2, 5 BC2 sRGB, 6 BC3, 7 BC3 sRGB,
-// 8 RGB10A2, 9 RGBA16, 10 RGBA16F
+// 8 RGB10A2, 9 RGBA16, 10 RGBA16F, 11 BC4, 12 BC7 (M6 modern maps, linear)
 struct RtHitTexture { bool cube = false; int w = 0, h = 0, levels = 0, format = 0; std::vector<std::vector<unsigned char>> data; };
 struct RtLightmap { int w = 0, h = 0; bool srgb = true; std::vector<unsigned char> rgba; };
 struct RtHitData {

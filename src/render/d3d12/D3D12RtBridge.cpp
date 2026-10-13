@@ -436,9 +436,10 @@ public:
             hVtx_ = toDefault(vtx.data(), vtx.size() * 4); hMatTex_ = toDefault(D.matTex.data(), D.matTex.size() * 4);
             hMatTexN_ = (UINT)(D.matTex.size() / 12);
             matBytes += (UINT64)(vtx.size() + D.matTex.size()) * 4;
-            static const DXGI_FORMAT kFmt[11] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM,
+            static const DXGI_FORMAT kFmt[13] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM,
                 DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC2_UNORM, DXGI_FORMAT_BC2_UNORM_SRGB, DXGI_FORMAT_BC3_UNORM, DXGI_FORMAT_BC3_UNORM_SRGB,
-                DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT};
+                DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_BC4_UNORM,
+                DXGI_FORMAT_BC7_UNORM};
             for (int cube = 0; cube < 2 && ok; ++cube) {
                 const auto& list = cube ? D.cubes : D.textures;
                 auto& out = cube ? hTexCube_ : hTex2D_;
@@ -446,7 +447,7 @@ public:
                     if ((int)out.size() >= (cube ? kMaxTexCube : kMaxTex2D)) break;
                     const int faces = cube ? 6 : 1;
                     ID3D12Resource* t = nullptr;
-                    if (X.w > 0 && X.h > 0 && X.levels > 0 && X.format >= 0 && X.format <= 10 && (int)X.data.size() == faces * X.levels) {
+                    if (X.w > 0 && X.h > 0 && X.levels > 0 && X.format >= 0 && X.format <= 12 && (int)X.data.size() == faces * X.levels) {
                         D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
                         D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)X.w; rd.Height = (UINT)X.h;
                         rd.DepthOrArraySize = (UINT16)faces; rd.MipLevels = (UINT16)X.levels; rd.Format = kFmt[X.format]; rd.SampleDesc.Count = 1;
