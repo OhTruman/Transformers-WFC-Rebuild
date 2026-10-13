@@ -228,3 +228,26 @@ A **graphics preset** row could bundle these later: "Original" (the faithful loo
   - R1 needs the lightmap UV layout per component, already in the render data, and the lightmap scale per page.
   - Systems can write the offline V_bake / k tool (AssetTools-style, outputs beside the lightmaps) once R1 is agreed.
 - **Integration**: R1 and M6's audit can start in parallel with HD, as docs and tools. Code stays on the held RT branch per the user's HD-first order.
+
+**R1 V_bake, first bake (2026-10-13, tools/systems/vbake/run_all.sh, 8 threads; output work/vbake/<map>/).** All 10 MP maps took about 2 minutes in total, 2-8 s of tracing and 4-10 s of fitting per map.
+
+| map | texels | lit | k | p | residual | trace lit / bake dark | trace shadowed / bake lit | clamped indirect |
+|---|---|---|---|---|---|---|---|---|
+| UND_Gorge | 524,908 | 1.8 % | 1.023 | 1.0 | 0.16 | 5.2 % | 0.3 % | 19.1 % |
+| ESC_BrokenHope | 1,366,179 | 2.5 % | 0.819 | 1.0 | 0.44 | 7.4 % | 0.8 % | 24.7 % |
+| ESC_Remnant | 2,303,235 | 1.9 % | 0.792 | 1.0 | 0.65 | 7.9 % | 0.2 % | 30.5 % |
+| IAC_Berth | 811,234 | 4.1 % | 0.894 | 1.0 | 0.26 | 6.5 % | 0.4 % | 28.2 % |
+| IAC_Rust | 1,367,380 | 4.4 % | 0.874 | 1.0 | 0.25 | 6.7 % | 1.1 % | 23.3 % |
+| IAC_Seed | 1,307,470 | 5.0 % | 0.853 | 1.0 | 0.31 | 11.0 % | 0.5 % | 21.2 % |
+| IAC_Streets | 1,159,744 | 3.7 % | 0.734 | 1.0 | 0.63 | 3.5 % | 5.6 % | 11.2 % |
+| KON_Molten | 823,523 | 3.2 % | 0.895 | 1.0 | 0.16 | 3.2 % | 0.1 % | 12.4 % |
+| ORB_Debris | 1,263,732 | 3.2 % | 0.842 | 1.5 | 0.69 | 4.3 % | 0.5 % | 21.1 % |
+| UND_Complex | 994,279 | 1.2 % | 0.829 | 1.0 | 0.49 | 4.5 % | 0.1 % | 26.1 % |
+
+Reading:
+- The traced sun patches line up with the lightmaps' sunlit areas (previews checked on Gorge and Streets).
+- Most lightmap energy on these maps is local lights, so few texels are sunlit.
+- The fit is good on Gorge, Molten, Rust and Berth (residual 0.16-0.26), and weak on Remnant, Streets, Debris and Complex (0.49-0.69).
+- The clamp removes 11-30 % of the sun energy on every map. That is above the 10 % sanity line: k is likely high where the lightmap's penumbra is softer than the traced cone, or where local lights sit on the lit side of a pair.
+- Vertex-lightmapped (LMT_1D) components have no V_bake yet; they keep the original lightmap.
+- Next: Rendering's full-frame pairs decide whether k needs a per-map scale-down or a softer cone.
