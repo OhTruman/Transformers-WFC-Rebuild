@@ -22,8 +22,11 @@ void stop();
 // scripted runs: WFC_FRONTEND_SCRIPT / WFC_PLAYERBOT; 0 = none) and terminates with exit code 3 (no atexit / DLL teardown: the
 // driver may hold its locks; harness runners treat 3 as "GPU reset: rerun"). Never returns.
 [[noreturn]] void gpuLost(const char* why);
-// The watchdog's backstop: after the stall dump, a further WFC_HANG_EXIT_S seconds (default -1 = never, until it keys on
-// evidence of GPU loss: legitimate stalls run minutes) with no progress call gpuLost("..."). WFC_SIMHANG=1 blocks the render thread for good once (frame 60) to test this path;
+// The watchdog's backstop: a stalled render thread (>= 5 s) is ended through gpuLost only on evidence of GPU loss - a tiny
+// D3D11 probe device per hardware adapter reports removed (a TDR removes every device on the adapter) - never on time alone
+// (legitimate stalls run minutes); not under a debugger. WFC_HANG_EXIT_S (default -1 = off) adds an opt-in time-only cap.
+// WFC_SIMHANG=1 blocks the render thread for good once (frame 60): with no removal it is logged and dumped only;
+// WFC_SIMHANG=removed also makes the probe report a removed device (the evidence path, which must exit).
 // WFC_SIMRESET=N makes GLRenderer::beginFrame's reset poll report a reset at its N-th call (the direct path).
 
 // Unhandled-exception report (any thread): wfc_crash_<pid>.txt in the working directory - exception code / address,
