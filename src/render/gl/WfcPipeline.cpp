@@ -372,6 +372,58 @@ void main() {
 }
 )";
 
+// R1 sun swap (RT Realistic, maps with V_bake): every world program declares the sun-share target (location 1) and writes
+// "not covered" (alpha -1); a lightmapped main also re-evaluates its lit block with each coefficient replaced by the sun's
+// share of it (Systems' fit: s_i = k max(B_i . L_t, 0)^p sun, L_t the sun in the vertex tangent frame, y x tangent_y_sign;
+// clamped to lm_i / V_bake so a coefficient never loses more than it holds - the bake's lm_i - V_bake s_i >= 0), and
+// writes (that sun radiance x the fog transmittance, V_bake) where its page has V_bake. The lit block is linear in the
+// coefficients (diffuse and the lightmap specular), so this is the radiance a fully visible sun adds; the Modern
+// environment term (occlusion from the lightmap brightness) is left out.
+static void r1ShaderText(std::string& fs, size_t mainStart, bool lm) {
+    const std::string oc = "layout(location=0) out vec4 oColor;";
+    const size_t od = fs.find(oc);
+    if (od == std::string::npos) return;
+    fs.insert(od + oc.size(), "\nlayout(location=1) out vec4 oSun;");
+    mainStart += std::strlen("\nlayout(location=1) out vec4 oSun;");
+    const size_t mainAt = fs.find("void main() {", mainStart);
+    if (mainAt == std::string::npos) return;
+    fs.insert(mainAt + 13, "\n    oSun = vec4(0.0, 0.0, 0.0, -1.0);");
+    if (!lm) return;
+    const std::string open = "    if (uLit != 0) {";
+    const size_t a = fs.find(open, mainAt);
+    const size_t e = a == std::string::npos ? a : fs.find("\n    }\n    wfcTranslucentOut", a);
+    static int told = 0;
+    if (e == std::string::npos) { if (told++ < 3) LOG_WARN("RT R1: a lightmapped main without the expected lit block (%s): no swap", a == std::string::npos ? "no 'if (uLit != 0) {'" : "no closing before wfcTranslucentOut"); return; }
+    std::string blk = fs.substr(a + open.size(), e - a - open.size());
+    for (int i = 0; i < 3; ++i) {
+        const std::string I = std::to_string(i);
+        replaceAll(blk, "l" + I + " * uLMScale[" + I + "]", "wfcR1s" + I);
+    }
+    replaceAll(blk, "c += wfcPbrEnv", "wfcR1S += 0.0 * wfcPbrEnv");
+    replaceAll(blk, "c += ", "wfcR1S += ");
+    const std::string l2 = "texture(uLM2, vUV1).rgb;";
+    const size_t p2 = blk.find(l2);
+    if (p2 == std::string::npos) { if (told++ < 3) LOG_WARN("RT R1: the lit block has no uLM2 sample: no swap"); return; }
+    static int ok = 0;
+    if (ok++ < 1) LOG_INFO("RT R1: sun-swap text added to a lightmapped main (%zu chars of lit block)", blk.size());
+    blk.insert(p2 + l2.size(), "\n        vec3 wfcR1s0 = wfcR1Share(LMB0, l0 * uLMScale[0], tbn, wfcR1Vb);"
+                               "\n        vec3 wfcR1s1 = wfcR1Share(LMB1, l1 * uLMScale[1], tbn, wfcR1Vb);"
+                               "\n        vec3 wfcR1s2 = wfcR1Share(LMB2, l2 * uLMScale[2], tbn, wfcR1Vb);");
+    fs.insert(e + 6, "\n    if (uR1On != 0 && uLit != 0 && uVertexLM == 0 && uBlend <= 1) {"
+                     "\n        vec2 wfcR1V = texture(uVB, vUV1).rg;"
+                     "\n        if (wfcR1V.y > 0.5) {"
+                     "\n        float wfcR1Vb = clamp(wfcR1V.x / wfcR1V.y, 0.0, 1.0); vec3 wfcR1S = vec3(0.0);"
+                     "\n        {" + blk + "\n        }"
+                     "\n        oSun = vec4(max(wfcR1S, vec3(0.0)) * vFog.a, wfcR1Vb);"
+                     "\n        }\n    }");
+    fs.insert(mainAt, "uniform int uR1On; uniform vec4 uR1Fit; uniform vec3 uR1Sun; uniform vec3 uR1SunDir;\n"
+                      "uniform sampler2D uVB; uniform sampler2DArray uVBArr;\n"
+                      "vec3 wfcR1Share(vec3 B, vec3 lm, mat3 tbn, float vb) {\n"
+                      "    vec3 Lt = vec3(dot(uR1SunDir, tbn[0]), dot(uR1SunDir, tbn[1]) * uR1Fit.z, dot(uR1SunDir, tbn[2]));\n"
+                      "    vec3 s = uR1Fit.x * pow(max(dot(B, Lt), 0.0), uR1Fit.y) * uR1Sun;\n"
+                      "    return min(s, lm / max(vb, 1e-3));\n}\n");
+}
+
 // M6 Modern materials (PC ADAPTATION, HD + Modern only): the globals the matc "pbr" body sets (the HD roughness map's
 // value, -1 none; the material's own cube map along its own direction at the roughness mip) and the roughness mapping
 // (Systems' SYSTEMS_M6_AUDIT.md: clamp(sqrt(2 / (SpecularPower + 2)), 0.02, 1); the map replaces it where present).
@@ -943,6 +995,9 @@ void Pipeline::release() {
         for (GLuint* p : {&fsrEasuProg_, &fsrRcasProg_}) delProg(*p);
         delProg(rtDepthProg_);                         // (M7 RT: the depth -> R32F program and its FBO)
         delProg(rtCompositeProg_); delTex(rtWhiteTex_); delTex(rtReflPrev_);   // (the composite, AO white, kept reflections)
+        delProg(rtCompositeR1Prog_); delTex(r1SunTex_);                       // (R1: its composite and the sun-share target)
+        for (GLuint& t : vbTex_) delTex(t);
+        for (GLuint& t : vbArrays_) delTex(t);
         if (rtFbo_) { DeleteFramebuffers(1, &rtFbo_); rtFbo_ = 0; }
         if (rtAtlasFbo_) { DeleteFramebuffers(1, &rtAtlasFbo_); rtAtlasFbo_ = 0; }
         for (GLuint* p : {&fsr3DepthProg_, &fgDepthProg_, &fgVelProg_}) delProg(*p);   // (fsr3Out_ is the upscaler's)
@@ -1072,6 +1127,22 @@ bool Pipeline::load(const std::string& mapName) {
     yieldLoad();
     std::string lj = readText(dataDir_ + "/lighting.json");
     yieldLoad();
+    if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
+        const char* vb = std::getenv("WFC_RT_VBAKE");
+        r1Dir_ = vb ? std::string(vb) + "/" + mapName : dataDir_ + "/vbake";
+        assets::Json F;
+        const std::string ft = readText(r1Dir_ + "/fit.json");
+        if (!ft.empty() && assets::Json::parse(ft, F)) {
+            r1Fit_[0] = F["k"].asFloat(0.0f); r1Fit_[1] = F["p"].asFloat(1.0f); r1Fit_[2] = F["tangent_y_sign"].asFloat(1.0f);
+            static const float kScale = [] { const char* e = std::getenv("WFC_RT_R1K"); return e ? (float)std::atof(e) : 1.0f; }();
+            r1Fit_[0] *= kScale;                       // (WFC_RT_R1K: a scale on the fitted k, for tuning)
+            const assets::Json& s = F["sun_linear"];
+            for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
+            r1Map_ = r1Fit_[0] > 0.0f && DrawBuffers && ColorMaski && ClearBufferfv;
+            LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
+                     r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (GL entry points / k)");
+        }
+    }
     loadMovers(dataDir_ + "/movers.json");
     yieldLoad();
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
@@ -2523,7 +2594,10 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         const size_t at = mainUber.find("@SPECOCC@");
         if (at != std::string::npos) mainUber.replace(at, 9, specOccU);
     }
+    const size_t mainStart = fs.size();
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
+    const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
+    if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
     if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
         const size_t nl1 = fs.find('\n');
         if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\nuniform int uRtUvMode;\n");
@@ -2670,6 +2744,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             replaceAll(fs, "texture(uLM0, vUV1)", "wfcLMTex(0, uLM0, vUV1)");
             replaceAll(fs, "texture(uLM1, vUV1)", "wfcLMTex(1, uLM1, vUV1)");
             replaceAll(fs, "texture(uLM2, vUV1)", "wfcLMTex(2, uLM2, vUV1)");
+            replaceAll(fs, "texture(uVB, vUV1).rg", "(uLMUseArr != 0 ? texture(uVBArr, vec3(vUV1, wfcLMLayer[0])).rg : texture(uVB, vUV1).rg)");
         }
         replaceAll(fs, "void main()", "void wfcMainBody()");
         std::string ld = "flat in int vRow;\nuniform sampler2D uRowTex;\n"
@@ -2692,6 +2767,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     } else {
         const auto tc0 = std::chrono::steady_clock::now();
         GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
+        if (!f && r1Text) {                              // (R1: a sun-swap text that does not compile - this program without it)
+            LOG_WARN("RT R1: program %s failed with the sun-swap text: built without it (no swap on its pixels)", key.c_str());
+            r1Suppress_ = true;
+            const int r = buildProgram(key, body, slots, slotIsCube, blend, twoSided, lit, clip, lightmapped, rtParams);
+            r1Suppress_ = false;
+            return r;
+        }
         if (!vsUse || !f) return -1;
         id = link(vsUse, f, key);
         DeleteShader(f);
@@ -2739,6 +2821,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
     Uniform1i(U("uLMArr"), 21);
+    Uniform1i(U("uVB"), 27); Uniform1i(U("uVBArr"), 28);   // (R1: V_bake, page / array)
     Uniform1i(U("uSceneDepth"), 12);
     Uniform1i(U("uSceneColor"), 16);
     Uniform1i(U("uVLM"), 11);
@@ -4034,6 +4117,10 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
                 default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
             }
+            if (r1WorldMrt_) {                           // (R1: blended draws - decals - leave the sun-share target alone)
+                const GLboolean w = P.blend >= 2 ? GL_FALSE : GL_TRUE;
+                ColorMaski(1, w, w, w, w);
+            }
             if (s.vlmTex) {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
@@ -4044,6 +4131,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             } else if (s.lmTex[0] >= 0) {
                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
+                if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
                 for (int i = 0; i < 3; ++i) {
                     ActiveTexture(GL_TEXTURE0 + 13 + i);
                     glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)s.lmTex[i]] ? lmTextures_[(size_t)s.lmTex[i]] : blackTex_);
@@ -4202,6 +4290,9 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
     if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
+    const bool r1 = g.world && r1Active() && !warmup_ && !rtUvAtlas_ && !rtDepthOnly_;
+    if (r1) r1WorldBegin();
+    struct R1End { Pipeline* p; bool on; ~R1End() { if (on) p->r1WorldEnd(); } } r1End{this, r1};
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
     if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
@@ -4358,6 +4449,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
     logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
@@ -6155,6 +6247,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
             glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, b.lm[0] == -2 && b.lm[1] > 0 ? lmArrays_[(size_t)b.lm[1]] : lmArray_);
         }
         if (mdiVlmTex_) { ActiveTexture(GL_TEXTURE0 + 22); glBindTexture(0x8C2A /*GL_TEXTURE_BUFFER*/, mdiVlmTex_); }
+        if (r1Map_) r1BindDraw(progs_[(size_t)b.prog].mdiProg, b.lm[0], b.lm[0] == -2 && b.lm[1] > 0 ? b.lm[1] : 0);   // (the MDI variant bound above)
         ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
         ActiveTexture(GL_TEXTURE0);
         MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
@@ -7967,6 +8060,152 @@ void Pipeline::endFrame() {
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+}
+
+
+// ------------------------------------------------------------------------- R1 sun swap (RT Realistic + V_bake)
+bool Pipeline::r1Active() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_RT_R1"); return e && std::atoi(e) == 0; }();
+    return r1Map_ && !off && rtInfra_ && !rtFailed_ && rtMode_ == 2;
+}
+
+// V_bake per lightmap page (Systems' vbake_<coefficient-0 page>.png, 8-bit linear) as RG8: R = V_bake, G = 1 where the
+// page has data (0 elsewhere: the shader keeps the bake there), mipmapped like the lightmaps; the arrays mirror the
+// lightmap arrays layer for layer (the MDI rows' layer indices stay valid)
+void Pipeline::r1Build() {
+    r1Built_ = true;
+    vbTex_.assign(lmTextures_.size(), 0);
+    std::vector<std::string> nameOf(lmTextures_.size());
+    for (const auto& kv : lmIndex_) if (kv.second >= 0 && (size_t)kv.second < nameOf.size()) nameOf[(size_t)kv.second] = kv.first;
+    auto params = [](GLenum target) {
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    };
+    constexpr GLenum kRG8 = 0x822B, kRG = 0x8227, kArr = 0x8C1A;
+    std::vector<std::vector<uint8_t>> rgOf(lmTextures_.size());
+    std::vector<std::pair<int, int>> sizeOf(lmTextures_.size(), {0, 0});
+    int pages = 0, arrays = 0;
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    for (size_t k = 0; k < nameOf.size(); ++k) {
+        if (nameOf[k].empty()) continue;
+        ImageData im;
+        if (!platform::decodeImage(r1Dir_ + "/vbake_" + nameOf[k] + ".png", im) || !im.valid()) continue;
+        std::vector<uint8_t>& rg = rgOf[k];
+        rg.resize((size_t)im.w * (size_t)im.h * 2);
+        for (size_t i = 0; i < (size_t)im.w * (size_t)im.h; ++i) { rg[i * 2] = im.rgba[i * 4]; rg[i * 2 + 1] = 255; }
+        sizeOf[k] = {im.w, im.h};
+        GLuint t = 0;
+        glGenTextures(1, &t);
+        glBindTexture(GL_TEXTURE_2D, t);
+        glTexImage2D(GL_TEXTURE_2D, 0, (GLint)kRG8, im.w, im.h, 0, kRG, GL_UNSIGNED_BYTE, rg.data());
+        GenerateMipmap(GL_TEXTURE_2D);
+        params(GL_TEXTURE_2D);
+        vbTex_[k] = t;
+        ++pages;
+    }
+    vbArrays_.assign(lmArrays_.size(), 0);
+    for (size_t a = 0; a < lmArrays_.size(); ++a) {
+        if (!lmArrays_[a]) continue;
+        glBindTexture(kArr, lmArrays_[a]);
+        GLint w = 0, h = 0, d = 0;
+        glGetTexLevelParameteriv(kArr, 0, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(kArr, 0, GL_TEXTURE_HEIGHT, &h);
+        glGetTexLevelParameteriv(kArr, 0, 0x8071 /*GL_TEXTURE_DEPTH*/, &d);
+        if (w <= 0 || h <= 0 || d <= 0) continue;
+        std::vector<uint8_t> buf((size_t)w * (size_t)h * (size_t)d * 2, 0);
+        int filled = 0;
+        for (size_t k = 0; k < rgOf.size() && k < lmArrOf_.size() && k < lmLayer_.size(); ++k) {
+            if (rgOf[k].empty() || lmArrOf_[k] != (int)a || lmLayer_[k] < 0 || lmLayer_[k] >= d) continue;
+            if (sizeOf[k].first != w || sizeOf[k].second != h) continue;
+            std::copy(rgOf[k].begin(), rgOf[k].end(), buf.begin() + (std::ptrdiff_t)((size_t)lmLayer_[k] * (size_t)w * (size_t)h * 2));
+            ++filled;
+        }
+        if (!filled) continue;
+        GLuint t = 0;
+        glGenTextures(1, &t);
+        glBindTexture(kArr, t);
+        TexImage3D(kArr, 0, (GLint)kRG8, w, h, d, 0, kRG, GL_UNSIGNED_BYTE, buf.data());
+        GenerateMipmap(kArr);
+        params(kArr);
+        vbArrays_[a] = t;
+        ++arrays;
+    }
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glBindTexture(kArr, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glx::textureCacheInvalidate();
+    const Light* sun = nullptr;                        // the fit's sun: the brightest enabled directional light
+    for (const Light& L : lights_) if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
+    if (sun) { const core::Vec3 d = core::normalize(sun->dir); r1SunDir_[0] = -d.x; r1SunDir_[1] = -d.y; r1SunDir_[2] = -d.z; }
+    LOG_INFO("RT R1 sun swap: %d V_bake pages (%zu lightmap pages), %d of %zu lightmap arrays mirrored, sun %s", pages,
+             lmTextures_.size(), arrays, lmArrays_.size(), sun ? sun->name.c_str() : "none");
+}
+
+// the world mesh's draws also write the sun-share target (cleared once per frame: alpha -1 = no swap)
+void Pipeline::r1WorldBegin() {
+    GLint fb = 0;
+    glGetIntegerv(0x8CA6 /*GL_DRAW_FRAMEBUFFER_BINDING*/, &fb);
+    static int toldFb = 0;
+    if (toldFb < 3 && (!fbo_ || (GLuint)fb != fbo_ || fbW_ <= 0 || fbH_ <= 0)) {
+        ++toldFb; LOG_INFO("RT R1: world drawn into framebuffer %d, not the scene target %u (%dx%d): no sun-share target this draw", fb, fbo_, fbW_, fbH_);
+    }
+    if (!fbo_ || (GLuint)fb != fbo_ || fbW_ <= 0 || fbH_ <= 0) return;
+    if (!r1Built_) r1Build();
+    if (!r1SunTex_ || r1SunW_ != fbW_ || r1SunH_ != fbH_) {
+        if (!r1SunTex_) glGenTextures(1, &r1SunTex_);
+        glBindTexture(GL_TEXTURE_2D, r1SunTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, fbW_, fbH_, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glx::textureCacheInvalidate();
+        r1SunW_ = fbW_; r1SunH_ = fbH_;
+    }
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + 1, GL_TEXTURE_2D, r1SunTex_, 0);
+    const GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT0 + 1};
+    DrawBuffers(2, bufs);
+    ColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    if (r1ClearedFrame_ != frameNo_) {
+        const GLfloat c[4] = {0.0f, 0.0f, 0.0f, -1.0f};
+        ClearBufferfv(GL_COLOR, 1, c);
+        r1ClearedFrame_ = frameNo_;
+    }
+    r1WorldMrt_ = true;
+}
+
+void Pipeline::r1WorldEnd() {
+    if (!r1WorldMrt_) return;
+    r1WorldMrt_ = false;
+    ColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    const GLenum b0 = GL_COLOR_ATTACHMENT0;
+    DrawBuffers(1, &b0);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + 1, GL_TEXTURE_2D, 0, 0);
+}
+
+// per draw (a sub or an MDI bucket): the R1 switch, fit and V_bake page / array; programs without the R1 text skip
+void Pipeline::r1BindDraw(int prog, int lm0, int arr) {
+    if (prog < 0 || (size_t)prog >= progs_.size()) return;
+    const Program& P = progs_[(size_t)prog];
+    const GLint on = ULOC(P, "uR1On");
+    static int toldOn = 0, toldOff = 0;
+    if (on < 0) { if (r1WorldMrt_ && toldOff++ < 3) LOG_INFO("RT R1: program %d has no uR1On (no sun-swap text)", prog); return; }
+    if (r1WorldMrt_ && toldOn++ < 6) LOG_INFO("RT R1: draw with program %d: swap %s, page %d (V_bake %s), array %d", prog, r1WorldMrt_ ? "on" : "off", lm0,
+                               lm0 >= 0 && (size_t)lm0 < vbTex_.size() && vbTex_[(size_t)lm0] ? "yes" : "no", arr);
+    Uniform1i(on, r1WorldMrt_ ? 1 : 0);
+    if (!r1WorldMrt_) return;
+    Uniform4f(ULOC(P, "uR1Fit"), r1Fit_[0], r1Fit_[1], r1Fit_[2], 0.0f);
+    Uniform3f(ULOC(P, "uR1Sun"), r1Sun_[0], r1Sun_[1], r1Sun_[2]);
+    Uniform3f(ULOC(P, "uR1SunDir"), r1SunDir_[0], r1SunDir_[1], r1SunDir_[2]);
+    ActiveTexture(GL_TEXTURE0 + 27);
+    const GLuint vb = lm0 >= 0 && (size_t)lm0 < vbTex_.size() ? vbTex_[(size_t)lm0] : 0;
+    glBindTexture(GL_TEXTURE_2D, vb ? vb : blackTex_);
+    if (arr >= 0) {
+        ActiveTexture(GL_TEXTURE0 + 28);
+        glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, (size_t)arr < vbArrays_.size() ? vbArrays_[(size_t)arr] : 0);
+    }
+    ActiveTexture(GL_TEXTURE0);
 }
 
 } // namespace wfc
