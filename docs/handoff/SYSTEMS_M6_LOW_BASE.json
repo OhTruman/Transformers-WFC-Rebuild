@@ -1,0 +1,78 @@
+[
+ {
+  "material": "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
+  "base_share": -0.08200185970242427
+ },
+ {
+  "material": "ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile1_MATINST",
+  "base_share": 0.0
+ },
+ {
+  "material": "ENV_IAC_CleanMaterials_p.Materials.D1_FloorTile2_MATINST",
+  "base_share": 0.0
+ },
+ {
+  "material": "TR_Barricade_VEH_p.VH_Barricade_NormSpec_Cust_B_Mat_INST",
+  "base_share": 0.08330406066907414
+ },
+ {
+  "material": "TR_Deadend_VEH_p.VH_Deadend_NormSpec_Cust_E_Mat_INST",
+  "base_share": 0.09614101393477519
+ },
+ {
+  "material": "TR_Warpath_ROBO_p.RB_Warpath1_Cust_Mat_INST_B",
+  "base_share": 0.10940688756160179
+ },
+ {
+  "material": "WEP_Shotgun_p.WEP_Shotgun_MATINST",
+  "base_share": 0.11335545278622036
+ },
+ {
+  "material": "FX_IonBlaster_p.IonBlaster_Mag_MATINST",
+  "base_share": 0.1336648084329081
+ },
+ {
+  "material": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_MATINST",
+  "base_share": 0.137126900681061
+ },
+ {
+  "material": "TR_SilverBolt_ROBO_p.RB_Silverbolt_Cust_Mat_INST_B",
+  "base_share": 0.14428832756069035
+ },
+ {
+  "material": "WEP_EMPShotgun_p.WEP_EMPShotgun_MATINST",
+  "base_share": 0.15727180537502045
+ },
+ {
+  "material": "WEP_TurretIonGun_p.WEP_TurretIonGun01_MATINST",
+  "base_share": 0.1732771447504186
+ },
+ {
+  "material": "WEP_IonBlaster_p.WEP_IonBlaster_MATINST",
+  "base_share": 0.17715142154203953
+ },
+ {
+  "material": "WEP_BurstRifle_p.Materials.WEP_BurstRifle_MATINST",
+  "base_share": 0.17753680386476853
+ },
+ {
+  "material": "TR_Jazz_ROBO_p.RB_Jazz_NormSpec_Cust_E_Mat_INST",
+  "base_share": 0.18328477030741308
+ },
+ {
+  "material": "TR_Jazz_VEH_p.VH_Jazz_NormSpec_Cust_E_Mat_INST",
+  "base_share": 0.18880599015924407
+ },
+ {
+  "material": "ENV_KON_Prison_p.Materials.PrisonCell_Plane_MATINST",
+  "base_share": 0.22863300401324152
+ },
+ {
+  "material": "WEP_BazookaTemp1_p.WEP_Bazooka_MATINST",
+  "base_share": 0.2360260524688688
+ },
+ {
+  "material": "TR_Deadend_ROBO_p.RB_Deadend_NormSpec_Cust_E_Mat_INST",
+  "base_share": 0.2384918025262466
+ }
+]

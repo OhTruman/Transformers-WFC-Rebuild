@@ -1,0 +1,191 @@
+[
+ {
+  "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+  "texture_role": "Masks_NormY",
+  "channel": "B",
+  "materials": 487,
+  "example": "ENV_ArchiveInterior_p.ArchiveWall_Off_MATINST"
+ },
+ {
+  "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+  "texture_role": "Mask",
+  "channel": "B",
+  "materials": 1,
+  "example": "TPRO_IAC_ElevatoriPod_p.Material.ElevatorShere_MATINST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat",
+  "texture_role": "CustAB_AuxGlow",
+  "channel": "R",
+  "materials": 550,
+  "example": "TR_BumbleBee_ROBO_p.RB_BumbleBee2_Cust2_MatINST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat",
+  "texture_role": "CustAB_AuxGlowMap",
+  "channel": "R",
+  "materials": 100,
+  "example": "TR_Sideswipe_ROBO_p.RB_Sideswipe_Cust_Mat_INST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat",
+  "texture_role": "CUSTAB_AUXGLOW",
+  "channel": "R",
+  "materials": 10,
+  "example": "TR_Arcee_ROBO_p.RB_Arcee_Mat_INST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.TR_Defrag_MAT",
+  "texture_role": "CustAB_AuxGlow",
+  "channel": "R",
+  "materials": 470,
+  "example": "TR_AirRaid_VEH_p.VH_AirRaid_Defrag_MATINST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.TR_Defrag_MAT",
+  "texture_role": "CustAB_AuxGlowMap",
+  "channel": "R",
+  "materials": 100,
+  "example": "TR_Barricade_ROBO_p.RB_Barricade_Defrag_MATINST"
+ },
+ {
+  "master": "TR_AllShader_p.Release.TR_Defrag_MAT",
+  "texture_role": "CUSTAB_AUXGLOW",
+  "channel": "R",
+  "materials": 10,
+  "example": "TR_Arcee_ROBO_p.RB_Arcee_Defrag_MATINST"
+ },
+ {
+  "master": "WEP_Rocket_p.WEP_Projectile_MAT",
+  "texture_role": "Masks_NormY",
+  "channel": "B",
+  "materials": 30,
+  "example": "WEP_Rocket_p.WEP_StandardRocket_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "TurretIonGun_MASK",
+  "channel": "B",
+  "materials": 20,
+  "example": "WEP_TurretIonGun_p.WEP_TurretIonGun_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "IonBlaster_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_IonBlaster_p.WEP_IonBlaster_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "AssaultRifle_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_AssaultRifle_p.WEP_AssaultRifle_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "Bazooka_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_BazookaTemp1_p.WEP_Bazooka_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "BurstRifle_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_BurstRifle_p.Materials.WEP_BurstRifle_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "EMPShotgun_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_EMPShotgun_p.WEP_EMPShotgun_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "GrenadeLauncher_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "HeavyMG_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_HeavyMG_p.WEP_HeavyMG_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "HeavyPistol_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_HeavyPistol_p.WEP_HeavyPistol_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "TurretGun01_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_TurretIonGun_p.WEP_TurretIonGun01_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "TurretRocket_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_TurretRocket_p.WEP_TurretRocket_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "RocketLauncher_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_RocketLauncher_p.WEP_RocketLauncher_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "PlasmaCannon_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_PlasmaCannon_p.WEP_PlasmaCannon_A_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "RepairBeam_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_RepairBeam_p.WEP_RepairBeam_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "Shotgun_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_Shotgun_p.WEP_Shotgun_MATINST"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "SniperRifle_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_SniperRifle_p.WEP_SniperRifle_MAT"
+ },
+ {
+  "master": "WEP_Shared_p.WEP_PhongMain_MAT",
+  "texture_role": "Grenade_MASK",
+  "channel": "B",
+  "materials": 10,
+  "example": "WEP_Grenade_p.WEP_Grenade_Flak_MATINST"
+ },
+ {
+  "master": "WEP_TurretIonGun_p.WEP_TurretIonGun_MAT",
+  "texture_role": "TurretIonGun_CLR",
+  "channel": "G",
+  "materials": 10,
+  "example": "WEP_TurretRepairRay_p.WEP_TurretRepairRay_MATINST"
+ }
+]
