@@ -125,7 +125,19 @@ def pbr_body(glsl, info):
             rough_slot = 1 + max([t.get('slot', -1) for t in texs] or [-1])
             # (sampled at the end: every temporary the UV uses is defined by then)
             out.append('    wfcPbrRoughMap = uPbrRoughOn != 0 ? wfcSample2D(%d, %s).r : -1.0;' % (rough_slot, rough_uv))
-    return '\n'.join(out), dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_stripped=stripped)
+    # the environment for the Modern image-based specular: the material's own (first) cube map, along its own reflection
+    # direction expression, at a mip from the Modern roughness (wfcPbrEnvLod, after the roughness hook above)
+    env_slot = None
+    for k, ind, decl, lhs, rhs in stmts:
+        mc = _CUBE.search(rhs)
+        if not mc: continue
+        a = _first_call_args(rhs[mc.start():], rhs[mc.start():mc.end() - 1])
+        if a and len(a) >= 2:
+            env_slot = int(a[0])
+            out.append('    wfcPbrEnv = wfcSampleCubeBias(%d, %s, wfcPbrEnvLod(o.SpecularPower)).rgb;' % (env_slot, a[1]))
+        break
+    return '\n'.join(out), dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_stripped=stripped,
+                                env_slot=env_slot)
 
 
 def build_map(render_dir, out_dir):
@@ -151,7 +163,7 @@ def check(res, vectors_path, emu_dir, map_name):
         if vv.get('map') != map_name or name not in res: continue
         body = res[name]['glsl']
         # the emulator has no wfcPbrRoughMap: the hook is a separate line (checked by its presence, not numerically)
-        body = '\n'.join(l for l in body.splitlines() if 'wfcPbrRoughMap' not in l)
+        body = '\n'.join(l for l in body.splitlines() if 'wfcPbr' not in l)
         for vec in vv['vectors']:
             s2 = {int(k): v for k, v in vec['samples2d'].items()}; sc = {int(k): v for k, v in vec['samples_cube'].items()}
             o = E.run(body, E.Material(s2, sc))
