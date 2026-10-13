@@ -405,5 +405,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   M1 queue, interpolation or skin upload. Experimental's independent after-run pending. #2 cross-talk REPRODUCED
   objectively on a17309b7 (21 flashes / 60 s on the idle player's gun, HUD ammo unchanged). Repackage head candidate
   a44aa6db; final after #1b (jet gun under RT).
+  17:25 Frontend slot-B captures on 0507891d ALL PASS (map name centred inside the frame; TDM Host Options with the 4
+  bot rows + Create Game; Graphics page fits with FPS Counter; counter top-right clear of the HUD); sent to the user.
+  Gameplay proofs on a44aa6db: CLASSCHANGE 26/26 incl. the respawn-wait cases (#4 PROVEN: spawned, UI InGame, moved
+  12 m); RMUZZLE 4/4, MUZZLE 5/5, PROJFX 3/3, WEAPON 19/19; XPTEST identical classic vs smart (#7 PROVEN at runtime);
+  FXOWNER: both fix checks PASS (0 held-anchored particles after a bot shot; clip / reserve / reload unchanged), 4 other
+  rows are test-geometry bugs (streak starts 1.9 m ahead of the socket; Soldier's 1-round TankCannon) being corrected.
+  Experimental after-runs (wobble + crosstalk incl. vehicle row) on a44aa6db running.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
