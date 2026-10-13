@@ -123,3 +123,16 @@ Proposed fix: try the robust creation whenever WGL_ARB_create_context exists; ke
 
 rt-build-check: direct boots apply the profile's Ray Tracing row only on frontend boots, so the -Exe check now also sets WFC_RT_MODE=2 (Systems).
 Probe result for the TDR section: **without the robust-context fix, the beginFrame reset poll is dead on this driver** (legacy context = NO_RESET_NOTIFICATION). rt-build-check -Exe now requires "OpenGL context: robust ... LOSE_CONTEXT_ON_RESET / 0x8252" (result rtcheck.context). Before the 12:30 timed rows, a lockstep identity capture (tools/fidelity/identity-capture.sh, one map, RT Off, HD off, 25 captures + SIMHASH) compares the final head with 05319349, to show the context change is image-identical.
+
+## 9. Slot-B essentials on f70a46d5 (robust context; 09:46-)
+
+| check | result | detail |
+|---|---|---|
+| WFC_SIMRESET=300 (direct reset poll) | PASS | exit 3 after 36 s, wfc_gpu_lost report written ("the GL context was lost (reset status 0x8255)") |
+| WFC_SIMHANG=removed (evidence backstop) | PASS | exit 3, "the GPU device was removed (reason 0x887a0005) and no frame completed for 7.1 s" |
+| WFC_SIMHANG=1, no removal evidence | PASS | NOT ended by the product (still running at the harness' 75 s timeout, no report): no false kill |
+| rt-build-check (build + -Exe, Streets, WFC_RT_MODE=2) | PASS 3 / 3 | WFC_RT_SHADERS + DENOISER, 10 / 10 headers; "OpenGL context: robust (GL 4.6 compatibility, LOSE_CONTEXT_ON_RESET; WGL_ARB_create_context_robustness not advertised, created anyway)"; RT scene built |
+| map-loss-gate (Streets -> lobby -> Berth -> lobby -> Streets) | PASS (gate false positive on Berth) | Streets both visits PASS against the known-good reference. Berth reported FAIL (black 0.47-0.72), but the frames show the environment drawn and lit: Berth is a dark interior and the gate has no Berth reference (b_1spawn / b_2move inspected). Process clean, no display-driver events, render data root resolved. Gate improvement: a Berth reference frame. |
+| m07-renderstate (normal) | PASS 7 / 7 | world frame after every overlay; GL entry state |
+| sim-determinism (7200 lockstep frames, 8 v 8, seed 123, 2 threaded runs) | PASS | 0 of 2 diverged |
+| identity-capture Rust 504: 05319349 vs f70a46d5 (robust context, RT Off, HD off) | PASS | SIMHASH 3002 / 3002 equal; 25 / 25 captures identical. The robust-context change (and everything merged since 05319349, including RT stage 1 Off) is image-identical on Rust. |
