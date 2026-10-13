@@ -251,3 +251,24 @@ Reading:
 - The clamp removes 11-30 % of the sun energy on every map. That is above the 10 % sanity line: k is likely high where the lightmap's penumbra is softer than the traced cone, or where local lights sit on the lit side of a pair.
 - Vertex-lightmapped (LMT_1D) components have no V_bake yet; they keep the original lightmap.
 - Next: Rendering's full-frame pairs decide whether k needs a per-map scale-down or a softer cone.
+
+**R1 V_bake refit (2026-10-13, Rendering: Realistic read "a touch strong" on Rust).**
+
+`vbake_fit.py --k-quantile 0.3`: k is the 30 % quantile of the per-pair estimates (lit minus shadowed over the unit-k model share). p and the handedness stay from the least-squares fit; fit.json keeps it as k_fit, and k is what the runtime reads.
+
+| map | k (q30) | k_fit | share of the fit | clamp after |
+|---|---|---|---|---|
+| UND_Gorge | 0.844 | 1.023 | 83 % | 16.2 % |
+| ESC_BrokenHope | 0.468 | 0.819 | 57 % | 19.8 % |
+| ESC_Remnant | 0.208 | 0.792 | 26 % | 16.9 % |
+| IAC_Berth | 0.687 | 0.894 | 77 % | 23.8 % |
+| IAC_Rust | 0.662 | 0.874 | 76 % | 19.9 % |
+| IAC_Seed | 0.541 | 0.853 | 63 % | 17.0 % |
+| IAC_Streets | 0.354 | 0.734 | 48 % | 7.6 % |
+| KON_Molten | 0.746 | 0.895 | 83 % | 11.0 % |
+| ORB_Debris | 0.466 | 0.842 | 55 % | 15.1 % |
+| UND_Complex | 0.427 | 0.829 | 52 % | 18.1 % |
+
+Reading:
+- **The clamp is not a k problem.** `--max-clamp 0.10` (bisect k until the >= 0 clamp removes at most 10 % of the sun energy) needed k at 1-27 % of the fit on 8 of 10 maps, which effectively disables the swap. The clamp comes from the 4-11 % of texels the trace calls lit but the bake has dark (UV / occluder mismatch), not from k.
+- **The cone is not the lever either.** A 0.5° retrace of Rust (work/vbake/MP_IAC_Rust_cone05) gives 4.4 % lit (the same as 0.27°) and k(q30) 0.665 vs 0.662.
