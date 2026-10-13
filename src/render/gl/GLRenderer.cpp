@@ -1592,6 +1592,7 @@ public:
     bool rayTracingAvailable() const override { return wfc_.rtAvailable(); }
     int rayTracingMode() const override { return wfc_.rtMode(); }
     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
+    bool rayTracingLoadedThisMap() const override { return wfc_.rtLoadedThisMap(); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
     bool modernMaterialsAvailable() const override { return wfc::Pipeline::hdTexturesAvailable(); }
     void setModernMaterials(bool on) override { wfc_.setModernMaterials(on); }

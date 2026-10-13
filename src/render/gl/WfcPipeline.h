@@ -500,6 +500,7 @@ private:
 public:
     bool rtAvailable() const;
     int rtMode() const { return rtMode_; }
+    bool rtLoadedThisMap() const { return rtInfra_ && !rtFailed_; }
     bool rtSetMode(int mode);
 private:
     int rtMode_ = -1;                                  // (-1: from the environment on first use)
