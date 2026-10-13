@@ -376,6 +376,11 @@ public:
     }
     bool hasWeapon() const { return weaponBone_ >= 0 && weaponValid_; }   // robot mesh shown (either slot)
     const core::Mat4& weaponWorld() const { return weaponWorld_; }
+    // The held weapon's DRAW transform, built like the body's: the CURRENT mesh frame x the socket bone blended between the
+    // previous and this step's pose at the pose alpha (the skinning's linear palette blend), so the gun stays in the drawn
+    // hand. Gameplay (muzzle, traces) keeps weaponWorld(). (weaponWorld_ is world space from the socket update in the step's
+    // background part: on each step frame the gun was drawn one step behind the body - the user's strafing flicker.)
+    core::Mat4 weaponDrawWorld() const;
 
     core::Vec3& velocity() { return velocity_; }
     const core::Vec3& velocity() const { return velocity_; }
@@ -726,6 +731,8 @@ private:
     core::Mat4 weaponOffset_ = core::Mat4::identity();
     core::Mat4 weaponWorld_ = core::Mat4::identity();
     bool weaponValid_ = false;
+    core::Mat4 weaponBoneCur_ = core::Mat4::identity(), weaponBonePrev_ = core::Mat4::identity();   // the socket bone (mesh space)
+    int weaponCurKey_ = -1, weaponPrevKey_ = -1;      // bone + pose source (robot / partner) of each: a blend only within one
     void updateWeaponSocket();
 };
 
