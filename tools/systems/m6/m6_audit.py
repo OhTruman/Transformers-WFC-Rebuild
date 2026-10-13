@@ -80,6 +80,25 @@ def palette():
 
 
 PALETTE = palette()
+# two reviewed metal decisions (Integration / Experimental, 2026-10-12):
+#  - robot bodies (CHR_Transformer_NormSpec_Cust_E): "metallic paint" - baseColor = the tinted paint (rule 3's colour
+#    operand), metallic = M_PAINT (0.6 - 0.8; per-family sheets decide; 0.8 matched best in chr_paint_check.py),
+#    F0 = mix(0.04, paint, m), the diffuse share paint x (1 - m) kept; EnergonColor emissive untouched
+#  - player weapons (WEP_PhongMain): per-pixel metallic = 1 - (the weapon _MASK texture's B, the tint mask); the metal F0
+#    = the reflection's constant factor per unit cube light (clamped to [0, 1]); baseColor = mix(stripped base, F0_metal,
+#    metallic): gun metal is metal, the tinted paint stays dielectric (gate 1 holds per pixel)
+MASTER_PAINT = 'TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat'
+MASTER_WEP = 'WEP_Shared_p.WEP_PhongMain_MAT'
+M_PAINT = 0.8
+
+
+def wep_mask_temp(glsl, slot):
+    """The temporary of the mask-slot sample whose B channel is read (the tint mask), or None."""
+    tns = re.findall(r'vec4 (t\d+) = wfcSample2D\w*\(%d,' % slot, glsl)
+    for tn in tns:
+        if re.search(r'\b%s\.(?:b|z)\b' % tn, glsl):
+            return tn
+    return tns[0] if tns else None                                 # (no Cust tint path in this instance: the mask's B still marks the paint)
 
 
 def arg(name, default=None):
@@ -177,7 +196,28 @@ def audit_material(mname, mat, imgs, npoints):
     row['roughness_parent'] = pick_parent(row['spec_power_sources'] or row['spec_color_sources'] or row['diffuse_sources'])
     rng = np.random.default_rng(seed_of(mname))                       # (deterministic per material: Experimental 1d)
     emu, vecs = dict(ok=True), []
+    master = info.get('master', '')
+    mask_slot = next((sl for sl, t in slot2d.items() if str(t.get('object', '')).lower().endswith('_mask')), None)
+    f0_metal = None
     try:
+        if master == MASTER_WEP and mask_slot is not None:        # the weapon metal F0: the reflection term per unit cube light
+            ones = {sl: [1.0, 1.0, 1.0, 1.0] for sl in slot2d}
+            cubes1 = {sl: [1.0, 1.0, 1.0, 1.0] for sl in slotcube}
+            rr = E.run(glsl, E.Material(ones, cubes1, strip_view=True))
+            f0_metal = np.maximum(rr['_diffuse_original'][:3] - rr['DiffuseColor'][:3], 0.0)
+            if f0_metal.max() > 1.0:                               # (keep the hue: scale into [0, 1] rather than clip to white)
+                f0_metal = f0_metal / f0_metal.max()
+            row['f0_metal'] = f0_metal.tolist(); row['metal_mask'] = '%s B (metallic = 1 - B)' % slot2d[mask_slot]['object']
+            mt = wep_mask_temp(glsl, mask_slot)
+            if mt is None or f0_metal.max() < 0.04:                # (no reflection to carry: stays dielectric)
+                f0_metal = None
+            else:
+                row['pbr_hooks'] = dict(metallic='clamp(1.0 - %s.b, 0.0, 1.0)' % mt,
+                                        f0='vec3(%r, %r, %r)' % tuple(float(x) for x in f0_metal), baseColor=None)
+        if master == MASTER_PAINT:                                 # metallic paint: the paint temporary (rule 3's colour operand)
+            rp = E.run(glsl, E.Material({sl: [0.5, 0.5, 0.5, 1.0] for sl in slot2d}, {sl: [0.5, 0.5, 0.5, 1.0] for sl in slotcube}, strip_view=True))
+            if rp.get('_paint_expr'):
+                row['pbr_hooks'] = dict(metallic='%r' % M_PAINT, f0=rp['_paint_expr'], baseColor=rp['_paint_expr'])
         # ---- the oracle vectors: 3 fixed-seed sample tables + 1 with the runtime parameters set
         for k in range(4):
             s2 = {s: rng.uniform(0.05, 0.95, 4).tolist() for s in slot2d}
@@ -188,10 +228,19 @@ def audit_material(mname, mat, imgs, npoints):
             D, B = full.get('DiffuseColor', np.zeros(3))[:3], r.get('DiffuseColor', np.zeros(3))[:3]
             SP = float(full.get('SpecularPower', np.array([15.0]))[0])
             br = int(r.get('_base_rule', [0])[0])
+            # Rendering's shading: diffuse = baseColor x (1 - metallic), F0 = mix(0.04, f0, metallic); expect.f0 is the
+            # hook's f0 (unmixed), [0.04]*3 with metallic 0 when the material has no hook
+            metal, base_pbr, f0 = 0.0, B, np.array([0.04, 0.04, 0.04])
+            hooks = row.get('pbr_hooks')
+            if hooks and master == MASTER_PAINT and '_paint' in r:
+                metal, base_pbr = M_PAINT, np.asarray(r['_paint'][:3]); f0 = base_pbr
+            elif hooks and f0_metal is not None:
+                metal = float(np.clip(1.0 - float(s2[mask_slot][2]), 0.0, 1.0)); f0 = f0_metal
             vecs.append(dict(samples2d={str(s): v for s, v in s2.items()}, samples_cube={str(s): v for s, v in sc.items()},
                              runtime_params_set=rt is not None,
-                             expect=dict(baseColor=B.tolist(), base_rule=br, diffuseOriginal=D.tolist(),
-                                         roughness=float(E.roughness_from_power(SP)), metallic=0.0, f0=[0.04, 0.04, 0.04],
+                             expect=dict(baseColor=np.asarray(base_pbr).tolist(), baseStripped=B.tolist(), base_rule=br,
+                                         diffuseOriginal=D.tolist(), roughness=float(E.roughness_from_power(SP)), metallic=metal,
+                                         f0=np.asarray(f0).tolist(),
                                          emissive=full.get('EmissiveColor', np.zeros(3))[:3].tolist(), specularPower=SP)))
             emu['base_rule'] = max(emu.get('base_rule', 0), br)
             if br == 1:                                               # (rule 1 only removes terms: never brighter)
@@ -241,6 +290,10 @@ def audit_material(mname, mat, imgs, npoints):
         if cls == 'metal_candidate':
             why = 'tint consumer: forced dielectric (was a metal candidate: %s)' % why
         cls = 'dielectric_tint'
+    if master == MASTER_PAINT and row.get('pbr_hooks'):
+        cls, why = 'metallic_paint', 'reviewed: robot body, baseColor = tinted paint, metallic %.1f (sheets: 0.6 - 0.8)' % M_PAINT
+    elif master == MASTER_WEP and row.get('pbr_hooks'):
+        cls, why = 'weapon_metal_mask', 'reviewed: metallic = 1 - %s; metal F0 %s' % (row.get('metal_mask'), np.round(f0_metal, 3).tolist())
     row['class'], row['why'] = cls, why
     row['mapping'] = dict(baseColor='DiffuseColor under the base-colour strip' + (' (view / cube terms present)' if row['view_in_diffuse'] else ''),
                           roughness='derived: clamp(sqrt(2/(SpecularPower+2)), 0.02, 1)', metallic=0.0, f0='0.04',
