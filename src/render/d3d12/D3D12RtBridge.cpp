@@ -57,7 +57,8 @@ typedef void(APIENTRY* PFN_WaitSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLui
 typedef void(APIENTRY* PFN_SignalSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutShaderRead = 0x958F, kLayoutGeneral = 0x958D;
-constexpr int kSrvN = 13, kTableN = kSrvN + 4;  // descriptor table: t1 .. t13, u0 .. u3
+constexpr int kSrvN = 15, kTableN = kSrvN + 4;  // descriptor table: t1 .. t15, u0 .. u3
+constexpr int kMaxTex2D = 2048, kMaxTexCube = 256;   // reflection-hit material textures (space2 / space3)
 constexpr int kMaxLm = 512;                      // lightmap pages (root table 4: t0 .. space1)
 constexpr int kStatN = 23;   // rt_depthcheck.hlsl's classes (7) + its ratio histogram (16)
 template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
@@ -412,8 +413,13 @@ public:
             return r;
         };
         // per BLAS (index = set * 2 + side): uv1 base (its set's), triangle base, index base
-        std::vector<uint32_t> inst, idx, triSub; std::vector<float> uv1; std::vector<uint32_t> setBase;
-        for (const auto& S : D.sets) { setBase.push_back((uint32_t)(uv1.size() / 2)); uv1.insert(uv1.end(), S.uv1.begin(), S.uv1.end()); }
+        std::vector<uint32_t> inst, idx, triSub; std::vector<float> uv1, vtx; std::vector<uint32_t> setBase;
+        bool haveVtx = !D.materialShader.empty();
+        for (const auto& S : D.sets) haveVtx = haveVtx && S.vtx.size() == S.uv1.size() / 2 * 8;
+        for (const auto& S : D.sets) {
+            setBase.push_back((uint32_t)(uv1.size() / 2)); uv1.insert(uv1.end(), S.uv1.begin(), S.uv1.end());
+            if (haveVtx) vtx.insert(vtx.end(), S.vtx.begin(), S.vtx.end());
+        }
         for (const auto& B : D.blas) {
             inst.insert(inst.end(), {B.setIndex < (int)setBase.size() ? setBase[(size_t)B.setIndex] : 0u, (uint32_t)triSub.size(), (uint32_t)idx.size(), 0u});
             idx.insert(idx.end(), B.idx.begin(), B.idx.end());
@@ -424,6 +430,66 @@ public:
         hSubs_ = toDefault(D.subs.data(), D.subs.size() * 4);
         hBlasN_ = (UINT)D.blas.size(); hTris_ = (UINT)triSub.size(); hVerts_ = (UINT)(uv1.size() / 2); hSubN_ = (UINT)(D.subs.size() / 32);
         bool ok = hInst_ && hIdx_ && hUv1_ && hTriSub_ && hSubs_;
+        UINT64 matBytes = 0;
+        if (ok && haveVtx && !D.matTex.empty()) {        // materials: per-vertex frame / UV0, the slot table, the textures
+            hVtx_ = toDefault(vtx.data(), vtx.size() * 4); hMatTex_ = toDefault(D.matTex.data(), D.matTex.size() * 4);
+            hMatTexN_ = (UINT)(D.matTex.size() / 12);
+            matBytes += (UINT64)(vtx.size() + D.matTex.size()) * 4;
+            static const DXGI_FORMAT kFmt[11] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM,
+                DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC2_UNORM, DXGI_FORMAT_BC2_UNORM_SRGB, DXGI_FORMAT_BC3_UNORM, DXGI_FORMAT_BC3_UNORM_SRGB,
+                DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT};
+            for (int cube = 0; cube < 2 && ok; ++cube) {
+                const auto& list = cube ? D.cubes : D.textures;
+                auto& out = cube ? hTexCube_ : hTex2D_;
+                for (const RtHitTexture& X : list) {
+                    if ((int)out.size() >= (cube ? kMaxTexCube : kMaxTex2D)) break;
+                    const int faces = cube ? 6 : 1;
+                    ID3D12Resource* t = nullptr;
+                    if (X.w > 0 && X.h > 0 && X.levels > 0 && X.format >= 0 && X.format <= 10 && (int)X.data.size() == faces * X.levels) {
+                        D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+                        D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)X.w; rd.Height = (UINT)X.h;
+                        rd.DepthOrArraySize = (UINT16)faces; rd.MipLevels = (UINT16)X.levels; rd.Format = kFmt[X.format]; rd.SampleDesc.Count = 1;
+                        if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                                 __uuidof(ID3D12Resource), (void**)&t))) t = nullptr;
+                        if (t) {
+                            const UINT nsub = (UINT)(faces * X.levels);
+                            std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> fp(nsub); std::vector<UINT> rows(nsub); std::vector<UINT64> rowBytes(nsub);
+                            UINT64 total = 0;
+                            dev_->GetCopyableFootprints(&rd, 0, nsub, 0, fp.data(), rows.data(), rowBytes.data(), &total);
+                            std::vector<unsigned char> staged((size_t)total);
+                            bool fits = true;
+                            for (UINT k = 0; k < nsub; ++k) {     // (subresource = face * levels + level, as data)
+                                const auto& src = X.data[k];
+                                if ((UINT64)src.size() < rowBytes[k] * rows[k]) { fits = false; break; }
+                                for (UINT y = 0; y < rows[k]; ++y)
+                                    std::memcpy(&staged[(size_t)(fp[k].Offset + (UINT64)y * fp[k].Footprint.RowPitch)], &src[(size_t)(y * rowBytes[k])], (size_t)rowBytes[k]);
+                            }
+                            ID3D12Resource* up = fits ? uploadBuffer(dev_, staged.data(), staged.size()) : nullptr;
+                            if (!up) { rel(t); }
+                            else {
+                                temp.push_back(up);
+                                for (UINT k = 0; k < nsub; ++k) {
+                                    D3D12_TEXTURE_COPY_LOCATION dst{}; dst.pResource = t; dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX; dst.SubresourceIndex = k;
+                                    D3D12_TEXTURE_COPY_LOCATION src{}; src.pResource = up; src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT; src.PlacedFootprint = fp[k];
+                                    cl->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+                                }
+                                D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = t;
+                                b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+                                b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+                                cl->ResourceBarrier(1, &b);
+                                matBytes += total;
+                            }
+                        }
+                    }
+                    out.push_back(t);                    // (null keeps the index: the slot samples black)
+                }
+            }
+            D3D12_COMPUTE_PIPELINE_STATE_DESC pd{}; pd.pRootSignature = rs_;
+            pd.CS.pShaderBytecode = D.materialShader.data(); pd.CS.BytecodeLength = D.materialShader.size();
+            if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoReflMat_))) {
+                psoReflMat_ = nullptr; LOG_WARN("RT bridge: the map's material reflection PSO failed (the proxy shades)");
+            }
+        }
         UINT64 lmBytes = 0;
         for (size_t k = 0; k < D.lightmaps.size() && k < (size_t)kMaxLm && ok; ++k) {   // the lightmap pages
             const RtLightmap& L = D.lightmaps[k];
@@ -458,14 +524,19 @@ public:
         if (idle) for (auto* r : temp) r->Release();
         if (!ok) { releaseHit(); return false; }
         if (heap_) writeDescriptors();
-        hitBytes_ = (UINT64)(inst.size() + idx.size() + triSub.size() + uv1.size() + D.subs.size()) * 4 + lmBytes;
-        LOG_INFO("RT bridge: reflection hit data: %u BLAS, %u triangles, %u subs, %zu lightmap pages; %.1f MB", hBlasN_, hTris_, hSubN_,
-                 hLm_.size(), (double)hitBytes_ / 1048576.0);
+        hitBytes_ = (UINT64)(inst.size() + idx.size() + triSub.size() + uv1.size() + D.subs.size()) * 4 + lmBytes + matBytes;
+        LOG_INFO("RT bridge: reflection hit data: %u BLAS, %u triangles, %u subs, %zu lightmap pages; %.1f MB (of it materials %.1f MB:"
+                 " %zu + %zu cube textures, %u slots, vertex frames; material PSO %s)", hBlasN_, hTris_, hSubN_, hLm_.size(),
+                 (double)hitBytes_ / 1048576.0, (double)matBytes / 1048576.0, hTex2D_.size(), hTexCube_.size(), hMatTexN_,
+                 psoReflMat_ ? "yes" : "no");
         return true;
 #endif
     }
     void releaseHit() {
-        rel(hInst_); rel(hIdx_); rel(hUv1_); rel(hTriSub_); rel(hSubs_);
+        rel(hInst_); rel(hIdx_); rel(hUv1_); rel(hTriSub_); rel(hSubs_); rel(hVtx_); rel(hMatTex_); rel(psoReflMat_);
+        for (auto* t : hTex2D_) rel(t);
+        for (auto* t : hTexCube_) rel(t);
+        hTex2D_.clear(); hTexCube_.clear(); hMatTexN_ = 0;
         for (auto& l : hLm_) rel(l.first);
         hLm_.clear(); hBlasN_ = hTris_ = hVerts_ = hSubN_ = 0; hitBytes_ = 0;
     }
@@ -609,22 +680,25 @@ private:
         rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = kSrvN; rg[0].BaseShaderRegister = 1;
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 4; rg[1].BaseShaderRegister = 0;
         rg[1].OffsetInDescriptorsFromTableStart = kSrvN;
-        D3D12_DESCRIPTOR_RANGE lmRange{};               // the lightmap pages (reflection hits): t0 .. space1
-        lmRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; lmRange.NumDescriptors = kMaxLm; lmRange.BaseShaderRegister = 0;
-        lmRange.RegisterSpace = 1;
+        D3D12_DESCRIPTOR_RANGE lmRange[3]{};            // reflection hits: lightmap pages (space1), material 2D / cube textures (space2 / 3)
+        const UINT lmN[3] = {(UINT)kMaxLm, (UINT)kMaxTex2D, (UINT)kMaxTexCube};
+        for (int k = 0; k < 3; ++k) {
+            lmRange[k].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; lmRange[k].NumDescriptors = lmN[k]; lmRange[k].BaseShaderRegister = 0;
+            lmRange[k].RegisterSpace = (UINT)(1 + k); lmRange[k].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        }
         D3D12_ROOT_PARAMETER rp[5]{};
-        rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 48;
+        rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 52;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
         rp[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[2].DescriptorTable.NumDescriptorRanges = 2; rp[2].DescriptorTable.pDescriptorRanges = rg;
         rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV; rp[3].Descriptor.ShaderRegister = 4;
-        rp[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[4].DescriptorTable.NumDescriptorRanges = 1; rp[4].DescriptorTable.pDescriptorRanges = &lmRange;
-        D3D12_STATIC_SAMPLER_DESC ss[2]{};               // s0: the opacity atlas (point, clamp); s1: lightmaps (linear, clamp)
-        for (int k = 0; k < 2; ++k) {
+        rp[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[4].DescriptorTable.NumDescriptorRanges = 3; rp[4].DescriptorTable.pDescriptorRanges = lmRange;
+        D3D12_STATIC_SAMPLER_DESC ss[3]{};               // s0: the opacity atlas (point, clamp); s1: linear, clamp; s2: linear, wrap
+        for (int k = 0; k < 3; ++k) {
             ss[k].Filter = k ? D3D12_FILTER_MIN_MAG_MIP_LINEAR : D3D12_FILTER_MIN_MAG_MIP_POINT;
-            ss[k].AddressU = ss[k].AddressV = ss[k].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            ss[k].AddressU = ss[k].AddressV = ss[k].AddressW = k == 2 ? D3D12_TEXTURE_ADDRESS_MODE_WRAP : D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
             ss[k].MaxLOD = D3D12_FLOAT32_MAX; ss[k].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; ss[k].ShaderRegister = (UINT)k;
         }
-        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 5; rd.pParameters = rp; rd.NumStaticSamplers = 2; rd.pStaticSamplers = ss;
+        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 5; rd.pParameters = rp; rd.NumStaticSamplers = 3; rd.pStaticSamplers = ss;
         ID3DBlob* blob = nullptr; ID3DBlob* err = nullptr;
         if (FAILED(serializeRs_(&rd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) {
             LOG_WARN("RT bridge: root signature: %s", err ? (const char*)err->GetBufferPointer() : "?"); rel(err); return false;
@@ -652,7 +726,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN + kMaxLm;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 3 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -689,6 +763,7 @@ private:
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
             sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
+            sbuf(hMatTex_, hMatTexN_, 48); sbuf(hVtx_, hVerts_ * 2, 16);
             if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT);
             else uav(table == 1 ? ao_.res : refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
@@ -696,6 +771,17 @@ private:
         for (int k = 0; k < kMaxLm; ++k)                 // the lightmap pages (null past the uploaded ones)
             tex(k < (int)hLm_.size() ? hLm_[(size_t)k].first : nullptr, k < (int)hLm_.size() && hLm_[(size_t)k].second ?
                 DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM);
+        for (int cube = 0; cube < 2; ++cube) {           // the material textures (full mip chains; null past the uploaded ones)
+            const auto& v = cube ? hTexCube_ : hTex2D_;
+            for (int k = 0; k < (cube ? kMaxTexCube : kMaxTex2D); ++k) {
+                ID3D12Resource* r = k < (int)v.size() ? v[(size_t)k] : nullptr;
+                D3D12_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                sd.Format = r ? r->GetDesc().Format : DXGI_FORMAT_R8G8B8A8_UNORM;
+                if (cube) { sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE; sd.TextureCube.MipLevels = (UINT)-1; }
+                else { sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = (UINT)-1; }
+                dev_->CreateShaderResourceView(r, &sd, h); h.ptr += inc;
+            }
+        }
     }
     void depthCheck(const RtFrame& fr, int slot) {
         static const bool flip = std::getenv("WFC_RT_FLIPWINDING") != nullptr;   // (diagnostics: the other winding)
@@ -778,9 +864,12 @@ private:
         if (fr.reflect && psoRefl_) {                    // stage 2 prototype: the reflection rays (table C)
             D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
             list_->SetComputeRootSignature(rs_);
-            list_->SetPipelineState(psoRefl_);
+            list_->SetPipelineState(psoReflMat_ ? psoReflMat_ : psoRefl_);
             list_->SetDescriptorHeaps(1, &heap_);
-            list_->SetComputeRoot32BitConstants(0, 48, c, 0);
+            float c2[52] = {};
+            std::memcpy(c2, c, sizeof(float) * 48);
+            c2[48] = fr.time; c2[49] = fr.pixelSpread;
+            list_->SetComputeRoot32BitConstants(0, 52, c2, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();
             t3.ptr += 2ull * kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -934,6 +1023,8 @@ private:
     ID3D12Resource* hInst_ = nullptr; ID3D12Resource* hIdx_ = nullptr; ID3D12Resource* hUv1_ = nullptr;   // reflection hits
     ID3D12Resource* hTriSub_ = nullptr; ID3D12Resource* hSubs_ = nullptr;
     std::vector<std::pair<ID3D12Resource*, bool>> hLm_;  // lightmap pages (sRGB?)
+    ID3D12Resource* hVtx_ = nullptr; ID3D12Resource* hMatTex_ = nullptr; UINT hMatTexN_ = 0;   // materials
+    std::vector<ID3D12Resource*> hTex2D_, hTexCube_;
     UINT hBlasN_ = 0, hTris_ = 0, hVerts_ = 0, hSubN_ = 0; UINT64 hitBytes_ = 0;
     ID3D12Resource* hit_ = nullptr; ID3D12Resource* nrm_ = nullptr; ID3D12Resource* vel_ = nullptr;
     std::vector<GLuint> sigBufs_;
@@ -950,7 +1041,7 @@ private:
     std::vector<D3D12_RAYTRACING_INSTANCE_DESC> dynInst_;
     UINT64 totalBlas_ = 0;
     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
-    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12PipelineState* psoRefl_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
+    ID3D12PipelineState* psoSao_ = nullptr; ID3D12PipelineState* psoAoF_ = nullptr; ID3D12PipelineState* psoRefl_ = nullptr; ID3D12PipelineState* psoReflMat_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};
     IDXGIAdapter3* adapter_ = nullptr; UINT64 tsFreq_ = 0; int rbMode_[2] = {};
     std::vector<double> saoMs_; unsigned long long saoRaySum_ = 0; int saoRays_ = 0; float saoRadius_ = 0.0f;
     ID3D12Resource* stats_ = nullptr; ID3D12Resource* zeros_ = nullptr; ID3D12Resource* readback_[2] = {};

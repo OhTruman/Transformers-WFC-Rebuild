@@ -57,6 +57,9 @@ bool depthCheckOn() { static const bool on = std::getenv("WFC_RT_DEPTHCHECK") !=
 // stage 1 (measurement): sun shadow + AO rays per pixel (WFC_RT_AORAYS, default 2; WFC_RT_AORADIUS metres, default 1)
 bool shadowAoOn() { static const bool on = std::getenv("WFC_RT_SHADOWAO") != nullptr; return on; }
 bool reflectOn() { static const bool on = std::getenv("WFC_RT_REFLECT") != nullptr; return on; }
+// stage 2 step 2b: the maps' compiled material reflection shaders (tools/render/matc_hlsl.py --compile output,
+// <dir>/<map>/reflect_mat.cso + materials_rt.txt); unset = the proxy shading
+const char* matDir() { static const char* d = std::getenv("WFC_RT_MATDIR"); return d; }
 
 bool invert(const float* m, float* out) {             // general 4x4 inverse (column-major in and out), in double
     double a[16], inv[16];
@@ -164,6 +167,16 @@ void Pipeline::rtBuildWorld(int meshId) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
         keep.uv1.resize(v.size() / 14 * 2);
         for (size_t i = 0, n = v.size() / 14; i < n; ++i) { keep.uv1[i * 2] = v[i * 14 + 12]; keep.uv1[i * 2 + 1] = v[i * 14 + 13]; }
+        if (matDir()) {                                  // (materials) normal + UV0.x, tangent (x 2 where its sign is negative) + UV0.y
+            keep.vtx.resize(v.size() / 14 * 8);
+            for (size_t i = 0, n = v.size() / 14; i < n; ++i) {
+                const float* q = &v[i * 14];
+                float tx = q[6], ty = q[7], tz = q[8];
+                const float tl = std::sqrt(tx * tx + ty * ty + tz * tz), k = (tl > 1e-12f ? 1.0f / tl : 0.0f) * (q[9] < 0.0f ? 2.0f : 1.0f);
+                float* o = &keep.vtx[i * 8];
+                o[0] = q[3]; o[1] = q[4]; o[2] = q[5]; o[3] = q[10]; o[4] = tx * k; o[5] = ty * k; o[6] = tz * k; o[7] = q[11];
+            }
+        }
     }
     if (rtBridgeAddStaticWorld(W, 1u << set)) {
         ++rtWorldSets_; rtSets_.push_back({meshId, set});
@@ -314,7 +327,7 @@ void Pipeline::rtBuildHit() {
     std::map<int, int> lmIndex;                                 // GL lightmap page -> D3D12 page
     for (size_t k = 0; k < rtHitKeep_.size(); ++k) {
         RtHitKeep& K = rtHitKeep_[k];
-        RtHitSet hs; hs.uv1 = K.uv1; D.sets.push_back(std::move(hs));
+        RtHitSet hs; hs.uv1 = K.uv1; hs.vtx = K.vtx; D.sets.push_back(std::move(hs));
         for (int side = 0; side < 2; ++side) {
             RtHitBlas b; b.setIndex = (int)k; b.idx = K.idx[side];
             for (uint32_t local : K.sub[side]) {
@@ -344,7 +357,7 @@ void Pipeline::rtBuildHit() {
     glViewport(0, 0, kSize, kSize); glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
     const core::Mat4 identity;
     // every sub's UV0 box, from one read of each mesh's buffers
-    std::vector<float> box(nSub * 4);
+    std::vector<float> box(nSub * 4), uvPerM(nSub, 1.0f);
     {
         std::map<int, std::pair<std::vector<uint32_t>, std::vector<float>>> data;
         for (size_t i = 0; i < nSub; ++i) {
@@ -371,6 +384,17 @@ void Pipeline::rtBuildHit() {
                 const float* q = &it->second.second[(size_t)it->second.first[s.first + k] * 14];
                 u0 = std::min(u0, q[10]); u1 = std::max(u1, q[10]); v0 = std::min(v0, q[11]); v1 = std::max(v1, q[11]);
             }
+            double uvA = 0, wA = 0;                      // (materials) UV0 area per world area: the ray cone's texel scale
+            for (uint32_t k = 0; k + 2 < s.count; k += 3) {
+                const float* a = &it->second.second[(size_t)it->second.first[s.first + k] * 14];
+                const float* b = &it->second.second[(size_t)it->second.first[s.first + k + 1] * 14];
+                const float* c = &it->second.second[(size_t)it->second.first[s.first + k + 2] * 14];
+                uvA += 0.5 * std::fabs((double)(b[10] - a[10]) * (c[11] - a[11]) - (double)(c[10] - a[10]) * (b[11] - a[11]));
+                const double ex = b[0] - a[0], ey = b[1] - a[1], ez = b[2] - a[2], fx = c[0] - a[0], fy = c[1] - a[1], fz = c[2] - a[2];
+                const double cx = ey * fz - ez * fy, cy = ez * fx - ex * fz, cz = ex * fy - ey * fx;
+                wA += 0.5 * std::sqrt(cx * cx + cy * cy + cz * cz);
+            }
+            uvPerM[i] = wA > 1e-9 && uvA > 0 ? (float)std::sqrt(uvA / wA) : 1.0f;
             box[i * 4] = u0; box[i * 4 + 1] = v0; box[i * 4 + 2] = 1.0f / std::max(u1 - u0, 1e-4f); box[i * 4 + 3] = 1.0f / std::max(v1 - v0, 1e-4f);
         }
     }
@@ -409,6 +433,106 @@ void Pipeline::rtBuildHit() {
             }
         for (int c = 0; c < 3; ++c) rgb[c] = n > 0 ? (float)(s3[c] / n) : 0.0f;
     };
+    // (materials) the map's compiled reflection shader + material ids; per program its slot table; textures read back
+    // from GL from the cap level down (WFC_RT_TEXCAP, default 256)
+    std::map<std::string, int> matId;
+    if (matDir()) {
+        std::string dir = dataDir_;
+        const size_t sl = dir.find_last_of("/\\");
+        const std::string mapName = sl == std::string::npos ? dir : dir.substr(sl + 1);
+        const std::string base = std::string(matDir()) + "/" + mapName + "/";
+        if (FILE* f = std::fopen((base + "reflect_mat.cso").c_str(), "rb")) {
+            std::fseek(f, 0, SEEK_END); const long n = std::ftell(f); std::fseek(f, 0, SEEK_SET);
+            D.materialShader.resize(n > 0 ? (size_t)n : 0);
+            if (n > 0 && std::fread(D.materialShader.data(), 1, (size_t)n, f) != (size_t)n) D.materialShader.clear();
+            std::fclose(f);
+        }
+        if (FILE* f = std::fopen((base + "materials_rt.txt").c_str(), "rb")) {
+            char line[1024];
+            while (std::fgets(line, sizeof line, f)) {
+                char* tab = std::strchr(line, '\t');
+                if (!tab) continue;
+                std::string nm(tab + 1);
+                while (!nm.empty() && (nm.back() == '\n' || nm.back() == '\r')) nm.pop_back();
+                std::transform(nm.begin(), nm.end(), nm.begin(), ::tolower);
+                matId[nm] = std::atoi(line);
+            }
+            std::fclose(f);
+        }
+        if (D.materialShader.empty() || matId.empty()) { LOG_WARN("RT hit: no material reflection shader in %s (the proxy shades)", base.c_str()); matId.clear(); D.materialShader.clear(); }
+    }
+    std::map<GLuint, int> tex2dIndex, cubeIndex;
+    std::map<int, int> progTexBase;
+    static const int texCap = [] { const char* e = std::getenv("WFC_RT_TEXCAP"); return e ? std::max(4, std::atoi(e)) : 256; }();
+    auto copyTexture = [&](GLuint t, bool cube) -> int {
+        auto& idx = cube ? cubeIndex : tex2dIndex;
+        auto it = idx.find(t);
+        if (it != idx.end()) return it->second;
+        const int k = (int)(cube ? D.cubes.size() : D.textures.size());
+        idx.emplace(t, k);
+        RtHitTexture X; X.cube = cube;
+        const GLenum target = cube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+        const GLenum face0 = cube ? 0x8515 /*GL_TEXTURE_CUBE_MAP_POSITIVE_X*/ : GL_TEXTURE_2D;
+        glBindTexture(target, t);
+        GLint w0 = 0, h0 = 0, ifmt = 0, compressed = 0, maxLevel = 1000;
+        glGetTexLevelParameteriv(face0, 0, GL_TEXTURE_WIDTH, &w0);
+        glGetTexLevelParameteriv(face0, 0, GL_TEXTURE_HEIGHT, &h0);
+        glGetTexLevelParameteriv(face0, 0, 0x1003 /*GL_TEXTURE_INTERNAL_FORMAT*/, &ifmt);
+        glGetTexLevelParameteriv(face0, 0, 0x86A1 /*GL_TEXTURE_COMPRESSED*/, &compressed);
+        glGetTexParameteriv(target, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, &maxLevel);
+        int first = 0;
+        while (std::max(w0 >> first, h0 >> first) > texCap) ++first;
+        int levels = 0;
+        for (int l = first; l <= maxLevel; ++l) {
+            GLint lw = 0; glGetTexLevelParameteriv(face0, l, GL_TEXTURE_WIDTH, &lw);
+            if (lw <= 0) break;
+            ++levels;
+            if (std::max(w0 >> l, h0 >> l) <= 1) break;
+        }
+        // format: the GL storage kept where D3D12 has it (blocks, sRGB, 10:10:10:2, 16-bit), else read back as RGBA8
+        int fmt = 0; GLenum rf = GL_RGBA, rt = GL_UNSIGNED_BYTE; int bpp = 4;
+        if (compressed && GetCompressedTexImage) {
+            switch (ifmt) {
+            case 0x83F0: case 0x83F1: fmt = 2; break;       // S3TC DXT1 (RGB / RGBA)
+            case 0x8C4C: case 0x8C4D: fmt = 3; break;       // sRGB DXT1
+            case 0x83F2: fmt = 4; break; case 0x8C4E: fmt = 5; break;
+            case 0x83F3: fmt = 6; break; case 0x8C4F: fmt = 7; break;
+            default: compressed = 0; break;                  // (other block formats: decoded to RGBA8)
+            }
+        }
+        else compressed = 0;
+        if (!compressed) {
+            if (ifmt == 0x8C43 || ifmt == 0x8C41) fmt = 1;                                           // SRGB8(_ALPHA8)
+            else if (ifmt == 0x8059) { fmt = 8; rt = 0x8368 /*GL_UNSIGNED_INT_2_10_10_10_REV*/; }   // RGB10_A2
+            else if (ifmt == 0x805B) { fmt = 9; rt = GL_UNSIGNED_SHORT; bpp = 8; }                   // RGBA16
+            else if (ifmt == 0x881A) { fmt = 10; rt = 0x140B /*GL_HALF_FLOAT*/; bpp = 8; }          // RGBA16F
+        }
+        // (BC needs a top level of whole blocks)
+        if (compressed && (((w0 >> first) & 3) || ((h0 >> first) & 3))) { compressed = 0; fmt = (fmt == 3 || fmt == 5 || fmt == 7) ? 1 : 0; }
+        X.w = std::max(1, w0 >> first); X.h = std::max(1, h0 >> first); X.levels = levels; X.format = fmt;
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        for (int f = 0; f < (cube ? 6 : 1) && levels > 0; ++f)
+            for (int l = first; l < first + levels; ++l) {
+                const GLenum face = cube ? (GLenum)(0x8515 + f) : GL_TEXTURE_2D;
+                GLint lw = 0, lh = 0; glGetTexLevelParameteriv(face, l, GL_TEXTURE_WIDTH, &lw); glGetTexLevelParameteriv(face, l, GL_TEXTURE_HEIGHT, &lh);
+                std::vector<unsigned char> buf;
+                if (compressed) {
+                    const int bs = (fmt == 2 || fmt == 3) ? 8 : 16;
+                    buf.resize((size_t)((lw + 3) / 4) * (size_t)((lh + 3) / 4) * (size_t)bs);
+                    GetCompressedTexImage(face, l, buf.data());
+                }
+                else {
+                    buf.resize((size_t)lw * (size_t)lh * (size_t)bpp);
+                    glGetTexImage(face, l, rf, rt, buf.data());
+                }
+                X.data.push_back(std::move(buf));
+            }
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glBindTexture(target, 0);
+        if (cube) D.cubes.push_back(std::move(X)); else D.textures.push_back(std::move(X));
+        return k;
+    };
+    size_t matSubs = 0;
     // the sub table: 8 float4 per sub
     for (size_t i = 0; i < nSub; ++i) {
         const Sub& s = meshes_[(size_t)subRef[i].first].subs[subRef[i].second];
@@ -426,6 +550,33 @@ void Pipeline::rtBuildHit() {
         std::memcpy(r + 4, s.lmCoord, 16);
         average(i, r + 20);
         average(nSub + i, r + 24);
+        r[28] = -1.0f;                                   // (materials) id, texture base, log2(uv per metre), flags
+        if (!matId.empty() && s.prog >= 0 && (size_t)s.prog < progs_.size() && progs_[(size_t)s.prog].original) {
+            std::string ml = s.matName;
+            std::transform(ml.begin(), ml.end(), ml.begin(), ::tolower);
+            auto mi = matId.find(ml);
+            if (mi != matId.end()) {
+                const Program& P = progs_[(size_t)s.prog];
+                auto pb = progTexBase.find(s.prog);
+                if (pb == progTexBase.end()) {
+                    pb = progTexBase.emplace(s.prog, (int)(D.matTex.size() / 12)).first;
+                    for (const Program::Slot& sl : P.slots) {
+                        float e[12] = {};
+                        int ti = sl.tex ? copyTexture(sl.tex, sl.cube) : -1;
+                        uint32_t idxBits = ti >= 0 ? (uint32_t)ti : 0xFFFFFFFFu, flags = (sl.cube ? 1u : 0u) | (!sl.cube && srgbBlockTex_.count(sl.tex) ? 2u : 0u);
+                        std::memcpy(&e[0], &idxBits, 4); std::memcpy(&e[1], &flags, 4);
+                        const RtHitTexture* X = ti < 0 ? nullptr : sl.cube ? &D.cubes[(size_t)ti] : &D.textures[(size_t)ti];
+                        e[2] = X ? std::log2((float)std::max(X->w, X->h)) : 0.0f;
+                        for (int c = 0; c < 4; ++c) { e[4 + c] = sl.umin[c]; e[8 + c] = sl.uscale[c]; }
+                        D.matTex.insert(D.matTex.end(), e, e + 12);
+                    }
+                }
+                const bool lightmapped = s.lmTex[0] >= 0 && !s.vlmTex;
+                r[28] = (float)mi->second; r[29] = (float)pb->second; r[30] = std::log2(std::max(uvPerM[i], 1e-6f));
+                r[31] = (float)((P.lit ? 1 : 0) | (P.twoSided ? 2 : 0) | (lightmapped ? 4 : 0));
+                ++matSubs;
+            }
+        }
         D.subs.insert(D.subs.end(), r, r + 32);
     }
     // the lightmap pages (read back as RGBA8; sRGB kept as the GL texture's format said)
@@ -449,8 +600,12 @@ void Pipeline::rtBuildHit() {
     glx::textureCacheInvalidate();
     size_t bytes = 0; for (const auto& L : D.lightmaps) bytes += L.rgba.size();
     const bool ok = rtBridgeAddHitData(D);
-    LOG_INFO("RT hit shading: %zu subs (albedo / emissive from their materials), %zu lightmap pages (%.1f MB) -> D3D12 %s",
-             nSub, D.lightmaps.size(), (double)bytes / 1048576.0, ok ? "ok" : "FAILED");
+    size_t texBytes = 0;
+    for (const auto* L : {&D.textures, &D.cubes}) for (const auto& X : *L) for (const auto& d : X.data) texBytes += d.size();
+    LOG_INFO("RT hit shading: %zu subs (albedo / emissive from their materials), %zu lightmap pages (%.1f MB) -> D3D12 %s;"
+             " materials: %zu subs with a translated material (%zu ids), %zu + %zu cube textures copied (cap %d, %.1f MB), %zu slots",
+             nSub, D.lightmaps.size(), (double)bytes / 1048576.0, ok ? "ok" : "FAILED", matSubs, matId.size(), D.textures.size(),
+             D.cubes.size(), texCap, (double)texBytes / 1048576.0, D.matTex.size() / 12);
     rtHitKeep_.clear(); rtHitKeep_.shrink_to_fit();
 }
 
@@ -595,6 +750,24 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         fr.reflect = reflect;
         static const bool shadeAb = std::getenv("WFC_RT_REFLECT_AB") != nullptr;   // (hit shading off in every other 30-frame block)
         fr.reflectShade = !shadeAb || (frameNo_ / 30) % 2 == 0;
+        fr.time = time_;
+        {                                                // a pixel's angle at the screen centre (the ray cone's spread)
+            auto unproj = [&](float x, float y, float* o) {
+                const float* M = fr.invViewProj; float q[4];
+                for (int r = 0; r < 4; ++r) q[r] = M[r] * x + M[4 + r] * y + M[8 + r] * 1.0f + M[12 + r];
+                for (int r = 0; r < 3; ++r) o[r] = q[r] / q[3];
+            };
+            float a[3], b[3], e0[3];
+            unproj(0.0f, 0.0f, a); unproj(2.0f / (float)std::max(vpH_, 1), 0.0f, b);
+            const float* Mi = fr.invViewProj; float qe[4];
+            for (int r = 0; r < 4; ++r) qe[r] = -Mi[8 + r] + Mi[12 + r];
+            for (int r = 0; r < 3; ++r) e0[r] = qe[r] / qe[3];
+            float da[3], db[3], la = 0, lb = 0;
+            for (int r = 0; r < 3; ++r) { da[r] = a[r] - e0[r]; db[r] = b[r] - e0[r]; la += da[r] * da[r]; lb += db[r] * db[r]; }
+            float d2 = 0;
+            for (int r = 0; r < 3; ++r) { const float x = da[r] / std::sqrt(la) - db[r] / std::sqrt(lb); d2 += x * x; }
+            fr.pixelSpread = std::sqrt(d2);
+        }
         // the sun's angular radius (WFC_RT_SUNCONE degrees; default 0.27, the real sun's): soft shadows for the denoiser
         static const float coneTan = [] { const char* e = std::getenv("WFC_RT_SUNCONE"); const float deg = e ? (float)std::atof(e) : 0.27f;
                                           return std::tan(deg * 3.14159265f / 180.0f); }();

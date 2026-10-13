@@ -30,6 +30,7 @@ cbuffer Frame : register(b0) {
     float4 Params;          // AO radius (m), normal-offset bias (m per m of distance), instance mask, sun cone tan(half angle)
     float4x4 Reproj;        // FidelityFX ndc (x, 1 - 2v, depth) now -> FidelityFX clip space of the previous frame
     float4 Extra;           // znear, zfar, reflection hit shading (1 / 0), 0
+    float4 Extra2;          // (reflections) material time (s), pixel spread angle (radians per metre of distance), 0, 0
 };
 
 float3 worldAt(int2 px, float d) {

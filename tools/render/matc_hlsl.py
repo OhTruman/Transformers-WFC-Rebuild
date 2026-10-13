@@ -16,7 +16,9 @@ Output per map: one HLSL file with   void wfcMat_<i>(inout MatIn m, out MatOut o
 (inline RayQuery has no callable shaders), plus a JSON manifest (id -> material name, texture slots, blend / lighting).
 The struct / helper definitions the functions use live in src/render/d3d12/shaders/rt_material.hlsli.
 
-  python tools/render/matc_hlsl.py <map render dir> <out dir> [--world-only]
+  python tools/render/matc_hlsl.py <map render dir> <out dir> [--world-only] [--compile <dxc.exe> <shader dir>]
+(--compile: the reflection pass with this map's materials, rt_reflect.hlsl -DWFC_RT_MATERIALS -> reflect_mat.cso,
+ loaded at runtime from WFC_RT_MATDIR/<map>/ with materials_rt.txt)
 """
 import json, os, re, sys
 
@@ -281,11 +283,28 @@ def build_map(render_dir, out_dir, world_only=False):
                                                  ', opaque / masked only' if world_only else ''))
     open(os.path.join(out_dir, 'materials_rt.hlsl'), 'w', encoding='utf-8', newline='\n').write(hdr + '\n'.join(funcs) + '\n' + '\n'.join(sw) + '\n')
     json.dump({'materials': manifest, 'failed': failed}, open(os.path.join(out_dir, 'materials_rt.json'), 'w', encoding='utf-8'), indent=1)
+    # the runtime's lookup (render/gl/WfcRt.cpp rtBuildHit): one 'id<TAB>material name' line per material
+    open(os.path.join(out_dir, 'materials_rt.txt'), 'w', encoding='utf-8', newline='\n').write(
+        ''.join('%d\t%s\n' % (k, n) for k, n in enumerate(names)))
     return len(names), failed
+
+
+def compile_reflect(out_dir, dxc, shader_dir):
+    """The map's reflection pass with its materials (rt_reflect.hlsl, WFC_RT_MATERIALS) -> <out>/reflect_mat.cso."""
+    import subprocess
+    cso = os.path.join(out_dir, 'reflect_mat.cso')
+    r = subprocess.run([dxc, '-nologo', '-T', 'cs_6_5', '-E', 'main', '-O3', '-DWFC_RT_MATERIALS=1', '-I', out_dir,
+                        '-I', shader_dir, '-Fo', cso, os.path.join(shader_dir, 'rt_reflect.hlsl')],
+                       capture_output=True, text=True)
+    if r.returncode != 0: raise RuntimeError('DXC failed:\n' + (r.stderr or r.stdout)[-4000:])
+    return os.path.getsize(cso)
 
 
 if __name__ == '__main__':
     a = [x for x in sys.argv[1:] if not x.startswith('--')]
     n, failed = build_map(a[0], a[1], '--world-only' in sys.argv)
     print('%d materials translated, %d failed' % (n, len(failed)))
+    if '--compile' in sys.argv:          # --compile <dxc.exe> <shader dir>
+        i = sys.argv.index('--compile')
+        print('reflect_mat.cso: %d bytes' % compile_reflect(a[1], sys.argv[i + 1], sys.argv[i + 2]))
     for k, v in list(failed.items())[:20]: print('  FAILED %s: %s' % (k, v))

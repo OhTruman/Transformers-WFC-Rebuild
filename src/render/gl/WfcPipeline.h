@@ -503,7 +503,7 @@ private:
     int rtUvMode_ = 0;                                 // 0 opacity, 1 albedo, 2 emissive
     // stage 2 prototype (WFC_RT_REFLECT): the static BLAS' triangles -> subs and the sets' lightmap UVs, kept from
     // rtBuildWorld for the reflection hits' shading (rtBuildHit, on the first RT frame)
-    struct RtHitKeep { int mesh = 0, set = 0; std::vector<uint32_t> idx[2]; std::vector<uint32_t> sub[2]; std::vector<float> uv1; };
+    struct RtHitKeep { int mesh = 0, set = 0; std::vector<uint32_t> idx[2]; std::vector<uint32_t> sub[2]; std::vector<float> uv1, vtx; };
     std::vector<RtHitKeep> rtHitKeep_;
     bool rtHitBuilt_ = false;
     void rtBuildHit();

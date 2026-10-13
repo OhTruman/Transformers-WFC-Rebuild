@@ -34,6 +34,8 @@ struct RtFrame {
     float znear = 0.1f, zfar = 1000.0f;   // (the AO filter's depth linearisation)
     bool reflect = false;     // stage 2 prototype: the reflection pass (WFC_RT_REFLECT)
     bool reflectShade = true; // ... with hit shading (false: hit distance only - the A / B for the shading cost)
+    float time = 0.0f;        // (reflection hits) the materials' time, s
+    float pixelSpread = 0.0f; // (reflection hits) a pixel's angle (radians): the ray cone's spread
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
 };
 
@@ -50,9 +52,18 @@ struct RtMaskedWorld { std::vector<RtMaskedSet> sets; std::vector<float> subs; }
 // (indices into the set's vertices, as built) and their subs; per set the lightmap UV per vertex; per sub 8 float4
 // (lightmap pages, lightmap UV transform, 3 scales, albedo, emissive, 0); the lightmap pages (RGBA8, sRGB or not)
 struct RtHitBlas { int setIndex = 0; std::vector<uint32_t> idx, triSub; };
-struct RtHitSet { std::vector<float> uv1; };
+struct RtHitSet { std::vector<float> uv1; std::vector<float> vtx; };   // vtx (materials): 8 floats per vertex, see rt_reflect
+// (materials) a texture copied from GL, mips from the cap down: data[face * levels + level], tightly packed rows
+// (blocks for BC). format: 0 RGBA8, 1 RGBA8 sRGB, 2 BC1, 3 BC1 sRGB, 4 BC2, 5 BC2 sRGB, 6 BC3, 7 BC3 sRGB,
+// 8 RGB10A2, 9 RGBA16, 10 RGBA16F
+struct RtHitTexture { bool cube = false; int w = 0, h = 0, levels = 0, format = 0; std::vector<std::vector<unsigned char>> data; };
 struct RtLightmap { int w = 0, h = 0; bool srgb = true; std::vector<unsigned char> rgba; };
-struct RtHitData { std::vector<RtHitSet> sets; std::vector<RtHitBlas> blas; std::vector<float> subs; std::vector<RtLightmap> lightmaps; };
+struct RtHitData {
+    std::vector<RtHitSet> sets; std::vector<RtHitBlas> blas; std::vector<float> subs; std::vector<RtLightmap> lightmaps;
+    // materials (WFC_RT_MATDIR): the map's reflection shader (reflect_mat.cso), the 2D / cube textures (separate
+    // index spaces), per material slot 12 floats (index, flags, lod bias, 0, unpack min, unpack scale)
+    std::vector<unsigned char> materialShader; std::vector<RtHitTexture> textures, cubes; std::vector<float> matTex;
+};
 bool rtBridgeAddHitData(const RtHitData& d);
 GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
 bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
