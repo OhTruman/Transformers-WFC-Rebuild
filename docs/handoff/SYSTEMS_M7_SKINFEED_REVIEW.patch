@@ -1,0 +1,384 @@
+diff --git a/src/render/d3d12/D3D12RtDynamic.h b/src/render/d3d12/D3D12RtDynamic.h
+--- a/src/render/d3d12/D3D12RtDynamic.h
++++ b/src/render/d3d12/D3D12RtDynamic.h
+@@ -36,11 +36,12 @@
+     int slot = -1;
+     float transform[12];          // model -> world, row-major 3x4 (D3D12_RAYTRACING_INSTANCE_DESC::Transform)
+     bool update = false;          // the slot's positions were rewritten this frame: build (first time) or refit its BLAS
++    bool rebuild = false;         // (with update) a full build instead of a refit: a refit's quality decays over many poses
+ };
+ // this frame's characters in the TLAS (replaces the last call's list); the next record consumes the updates
+ void rtDynamicFrame(const RtDynamicInstance* inst, int n);
+ // statistics of the records since the last call: GPU ms of the builds / refits (timestamps, read two records late)
+-struct RtDynamicStats { int records = 0; long instances = 0, refits = 0, builds = 0; double gpuMs = 0; int gpuSamples = 0;
++struct RtDynamicStats { int records = 0; long instances = 0, refits = 0, builds = 0, rebuilds = 0; double gpuMs = 0; int gpuSamples = 0;
+                         uint32_t slots = 0, verticesUsed = 0, capacity = 0; double blasMB = 0; };
+ RtDynamicStats rtDynamicTakeStats();
+ // (WFC_RT_CHARCHECK) the next record copies the slot's first `vertices` positions as D3D12 reads them and, two records
+@@ -52,5 +53,9 @@
+ void rtDynamicRecord(ID3D12GraphicsCommandList4* cl);                     // in the job, before the TLAS build
+ void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask);   // mask 0x4
+ void rtDynamicClear();                                    // map unload, after the bridge's queue is idle
++bool rtDynamicHasWork();                                  // slots, models or deferred releases exist (the clear must wait idle)
++void rtDynamicAbandon();                                  // map unload while the queue is NOT idle: forget (leak), never free
++bool rtDynamicHasWork();                                  // slots, models or deferred releases exist (the clear must wait idle)
++void rtDynamicAbandon();                                  // map unload while the queue is NOT idle: forget (leak), never free
+ 
+ }  // namespace render
+diff --git a/src/render/d3d12/D3D12RtDynamic.cpp b/src/render/d3d12/D3D12RtDynamic.cpp
+--- a/src/render/d3d12/D3D12RtDynamic.cpp
++++ b/src/render/d3d12/D3D12RtDynamic.cpp
+@@ -39,7 +39,7 @@
+ 
+ struct Model { ID3D12Resource* ib = nullptr; ID3D12Resource* upload = nullptr; uint32_t indices = 0, vertices = 0; bool ready = false; bool live = false; };
+ struct Slot { int model = -1; uint32_t first = 0, count = 0; ID3D12Resource* blas = nullptr; UINT64 blasBytes = 0, scratch = 0;
+-              bool built = false, live = false, pending = false; };
++              bool built = false, live = false, pending = false, rebuild = false; };
+ 
+ class Dynamic {
+ public:
+@@ -119,7 +119,10 @@
+     void frame(const RtDynamicInstance* inst, int n) {
+         frame_.assign(inst, inst + std::max(n, 0));
+         for (const RtDynamicInstance& i : frame_)
+-            if (i.update && i.slot >= 0 && i.slot < (int)slots_.size()) slots_[(size_t)i.slot].pending = true;
++            if (i.update && i.slot >= 0 && i.slot < (int)slots_.size()) {
++                slots_[(size_t)i.slot].pending = true;
++                if (i.rebuild) slots_[(size_t)i.slot].rebuild = true;
++            }
+     }
+     void record(ID3D12GraphicsCommandList4* cl) {
+         if (!dev_ || !cl) return;
+@@ -166,15 +169,16 @@
+             Slot& s = slots_[(size_t)i.slot];
+             const Model& m = models_[(size_t)s.model];
+             D3D12_RAYTRACING_GEOMETRY_DESC gd = geometry(s, m);
++            const bool refit = s.built && !s.rebuild;
+             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
+-            bd.Inputs = inputs(&gd, s.built);
++            bd.Inputs = inputs(&gd, refit);
+             bd.DestAccelerationStructureData = s.blas->GetGPUVirtualAddress();
+-            if (s.built) bd.SourceAccelerationStructureData = bd.DestAccelerationStructureData;
++            if (refit) bd.SourceAccelerationStructureData = bd.DestAccelerationStructureData;
+             bd.ScratchAccelerationStructureData = scratch_->GetGPUVirtualAddress() + off;
+             off += s.scratch;
+             cl->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
+-            ++(s.built ? stats_.refits : stats_.builds);
+-            s.built = true; s.pending = false;
++            ++(refit ? stats_.refits : s.built ? stats_.rebuilds : stats_.builds);
++            s.built = true; s.pending = false; s.rebuild = false;
+         }
+         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;   // the BLAS writes before the TLAS build reads them
+         cl->ResourceBarrier(1, &ub);
+@@ -212,6 +216,20 @@
+         blasTotal_ = 0;
+         ++epoch_;
+     }
++    bool hasWork() const {
++        for (const Slot& s : slots_) if (s.live) return true;
++        for (const Model& m : models_) if (m.live) return true;
++        return !deferred_.empty() || scratch_ != nullptr;
++    }
++    void abandon() {                                      // (the queue may still use them: dropped, not released)
++        deferred_.clear(); slots_.clear(); models_.clear(); frame_.clear();
++        scratch_ = nullptr; scratchBytes_ = 0;
++        chkRecord_ = 0; chkArmed_ = false;
++        free_.assign(1, {0u, capacity_});
++        blasTotal_ = 0;
++        ++epoch_;
++        LOG_WARN("RT characters: map unload while the D3D12 queue was busy: dynamic BLAS dropped without release");
++    }
+     RtDynamicStats takeStats() {
+         RtDynamicStats s = stats_;
+         s.slots = 0; s.verticesUsed = 0;
+@@ -340,6 +358,8 @@
+ void rtDynamicRecord(ID3D12GraphicsCommandList4* cl) { g_dyn.record(cl); }
+ void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask) { g_dyn.append(out, mask); }
+ void rtDynamicClear() { g_dyn.clear(); }
++bool rtDynamicHasWork() { return g_dyn.hasWork(); }
++void rtDynamicAbandon() { g_dyn.abandon(); }
+ 
+ }  // namespace render
+ #else
+@@ -360,5 +380,7 @@
+ void rtDynamicRecord(ID3D12GraphicsCommandList4*) {}
+ void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>&, unsigned) {}
+ void rtDynamicClear() {}
++bool rtDynamicHasWork() { return false; }
++void rtDynamicAbandon() {}
+ }  // namespace render
+ #endif
+diff --git a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp
++++ b/src/render/d3d12/D3D12RtBridge.cpp
+@@ -252,9 +252,10 @@
+ #endif
+     }
+     void clearStaticWorld() {
+-        if ((tlas_ || !blas_.empty()) && !waitIdle()) {   // (still in flight: dropped, not freed)
++        if ((tlas_ || !blas_.empty() || rtDynamicHasWork()) && !waitIdle()) {   // (still in flight: dropped, not freed)
+             tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
+             for (auto& d : dyn_) d = DynTlas{};
++            rtDynamicAbandon();
+             return;
+         }
+         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)
+diff --git a/src/render/gl/WfcRtSkin.cpp b/src/render/gl/WfcRtSkin.cpp
+--- a/src/render/gl/WfcRtSkin.cpp
++++ b/src/render/gl/WfcRtSkin.cpp
+@@ -8,7 +8,11 @@
+ // Selection (the plan's refit culling): a character is in the TLAS when its world box is on screen or within
+ // WFC_RT_CHARRANGE metres of the camera (default 30: the sun-shadow reach); beyond WFC_RT_CHARFAR (default 20) a changed
+ // pose is re-skinned / refit only every second frame (alternating by slot), and an unchanged pose (same palette serial,
+-// blend and alpha) is never redone. Instances not drawn for 300 frames give their slot back.
++// blend and alpha) is never redone. A refit BLAS is rebuilt after WFC_RT_CHARREBUILD refits (default 120) or when the pose's
++// box outgrows the one it was built for by more than a quarter of its extent (a refit keeps the build's topology: its
++// quality decays as the pose moves away). Instances not noted for WFC_RT_CHARDROP frames (default 60: dead / despawned)
++// give their slot back; a model whose buffers go (rtSkinForget) gives back its slots at once. Pawns whose skinning prep the
++// occlusion test skipped stay in, at their last prepared pose (hidden from the camera, not from the sun).
+ // WFC_RT_CHARCHECK=1: every 300 feeds one updated instance is read back and compared with a CPU evaluation of the same
+ // bone-texture palettes (and, unblended, with drawSkinned's exact skinPose bounds); D3D12 hashes the same region as it
+ // reads it (rtDynamicCheck).
+@@ -76,8 +80,9 @@
+ typedef void(APIENTRY* PFN_BufferStorageMemEXT)(GLenum, GLsizeiptr, GLuint, GLuint64_);
+ constexpr GLenum kSSBO = 0x90D2, kHandleD3D12Resource = 0x958A, kDedicated = 0x9581;
+ 
+-struct GlModel { int id = -1; const float* posData = nullptr; size_t verts = 0, idx = 0; GLuint vbo = 0; };
+-struct GlInst { int slot = -1, model = -1, row = -1, mode = 0, lastSeen = 0; float alpha = -1.0f; uint64_t serial = 0; bool updated = false; };
++struct GlModel { int id = -1; const float* posData = nullptr; float fp[6] = {0, 0, 0, 0, 0, 0}; size_t verts = 0, idx = 0; GLuint vbo = 0; };
++struct GlInst { int slot = -1, model = -1, row = -1, mode = 0, lastSeen = 0, refits = 0; float alpha = -1.0f; uint64_t serial = 0;
++                bool updated = false; core::Vec3 bmn, bmx; };   // (bmn / bmx: the model-space box its BLAS was built for)
+ struct State {
+     bool failed = false;
+     uint32_t epoch = 0;
+@@ -87,7 +92,8 @@
+     std::map<const void*, GlModel> models;                // key: the bind mesh (skinModels_'s key)
+     std::map<const void*, GlInst> insts;                  // key: drawSkinned's instance key
+     GLuint q[3][2] = {}; bool qUsed[3] = {}; int qi = 0;  // GL timestamps around the dispatches (ring of 3)
+-    long feeds = 0, recs = 0, inTlas = 0, skinned = 0, farSkipped = 0, unchanged = 0, full = 0, vertsSkinned = 0;
++    long feeds = 0, recs = 0, inTlas = 0, skinned = 0, farSkipped = 0, unchanged = 0, full = 0, vertsSkinned = 0, rebuilds = 0, renoted = 0;
++    bool fullLogged = false;
+     double glMs = 0; int glSamples = 0;
+ } S;
+ 
+@@ -138,8 +144,8 @@
+ }  // namespace
+ 
+ void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
+-                          const core::Vec3& mn, const core::Vec3& mx) {
+-    if (!on()) return;
++                          const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha) {
++    if (!on() || warmup_ || !key) return;                 // (warm-up draws and prewarms are not scene characters)
+     if (rtSkinFrame_ != frameNo_) {                       // the first note of a frame: the previous frame's list moves back
+         rtSkinPrevFrame_ = rtSkinFrame_; rtSkinPrev_.swap(rtSkinCur_); rtSkinCur_.clear(); rtSkinIdx_.clear();
+         rtSkinFrame_ = frameNo_;
+@@ -148,7 +154,8 @@
+     if (rtDynamicAvailable()) {
+         syncEpoch();
+         GlModel& m = S.models[&bind];
+-        if (m.id < 0 || m.posData != sm.posData || m.verts != sm.verts || m.idx != sm.idx || m.vbo != sm.vbo) {
++        if (m.id < 0 || m.posData != sm.posData || std::memcmp(m.fp, sm.fp, sizeof m.fp) != 0 || m.verts != sm.verts ||
++            m.idx != sm.idx || m.vbo != sm.vbo) {
+             if (m.id >= 0) {
+                 for (auto& it : S.insts) if (it.second.model == m.id) { rtDynamicReleaseSlot(it.second.slot); it.second = GlInst{}; }
+                 rtDynamicReleaseModel(m.id);
+@@ -156,14 +163,17 @@
+             m = GlModel{};
+             if (bind.indices.size() == sm.idx && !bind.indices.empty())
+                 m.id = rtDynamicModel(bind.indices.data(), (uint32_t)bind.indices.size(), (uint32_t)sm.verts);
+-            m.posData = sm.posData; m.verts = sm.verts; m.idx = sm.idx; m.vbo = sm.vbo;
++            m.posData = sm.posData; std::memcpy(m.fp, sm.fp, sizeof m.fp); m.verts = sm.verts; m.idx = sm.idx; m.vbo = sm.vbo;
+         }
+     }
+     RtSkinRec r;
+-    r.key = key; r.bindKey = &bind; r.row = skinRow_; r.mode = skinMode_; r.bones = skinBones_; r.alpha = skinAlpha_;
++    r.key = key; r.bindKey = &bind; r.row = row; r.mode = mode; r.bones = bones; r.alpha = alpha;
+     r.serial = serial; r.model = model; r.mn = mn; r.mx = mx;
+-    auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins)
+-    if (it != rtSkinIdx_.end()) rtSkinCur_[it->second] = r;
++    auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins; a second
++    if (it != rtSkinIdx_.end()) {                         //  draw elsewhere - another matrix - is counted in the log)
++        if (std::memcmp(rtSkinCur_[it->second].model.m, model.m, sizeof model.m) != 0) ++S.renoted;
++        rtSkinCur_[it->second] = r;
++    }
+     else { rtSkinIdx_[key] = rtSkinCur_.size(); rtSkinCur_.push_back(r); }
+ }
+ 
+@@ -221,7 +231,16 @@
+             if (gi.slot >= 0 && gi.model != gmIt->second.id) { rtDynamicReleaseSlot(gi.slot); gi = GlInst{}; gi.lastSeen = frameNo_; }
+             if (gi.slot < 0) {
+                 gi.slot = rtDynamicSlot(gmIt->second.id); gi.model = gmIt->second.id;
+-                if (gi.slot < 0) { ++S.full; gi = GlInst{}; continue; }
++                if (gi.slot < 0) {
++                    ++S.full; gi = GlInst{};
++                    if (!S.fullLogged) {
++                        S.fullLogged = true;
++                        const RtDynamicStats d = rtDynamicTakeStats();   // (the slot / vertex counts; this window's counters are lost)
++                        LOG_WARN("RT characters: no slot for a %zu-vertex instance (%u slots, %u / %u shared vertices in use): "
++                                 "WFC_RT_CHARVERTS raises the capacity", sm.verts, d.slots, d.verticesUsed, d.capacity);
++                    }
++                    continue;
++                }
+             }
+             const bool changed = !gi.updated || gi.serial != r.serial || r.serial == 0 || gi.mode != r.mode || gi.alpha != r.alpha || gi.row != r.row;
+             bool update = changed;
+@@ -229,6 +248,19 @@
+             if (!changed) ++S.unchanged;
+             RtDynamicInstance di;
+             di.slot = gi.slot; di.update = update;
++            if (update) {                                 // refit, or rebuild: after many refits / when the box outgrew the build's
++                static const int maxRefits = [] { const char* e = std::getenv("WFC_RT_CHARREBUILD"); return e ? std::max(1, std::atoi(e)) : 120; }();
++                bool rebuild = false;
++                if (gi.updated) {
++                    const core::Vec3 ext = gi.bmx - gi.bmn;
++                    const float gx = std::max(gi.bmn.x - r.mn.x, r.mx.x - gi.bmx.x), gy = std::max(gi.bmn.y - r.mn.y, r.mx.y - gi.bmx.y),
++                                gz = std::max(gi.bmn.z - r.mn.z, r.mx.z - gi.bmx.z);
++                    rebuild = ++gi.refits >= maxRefits || gx > 0.25f * ext.x || gy > 0.25f * ext.y || gz > 0.25f * ext.z;
++                }
++                if (!gi.updated || rebuild) { gi.bmn = r.mn; gi.bmx = r.mx; gi.refits = 0; }
++                di.rebuild = rebuild;
++                S.rebuilds += rebuild ? 1 : 0;
++            }
+             for (int row = 0; row < 3; ++row)
+                 for (int c = 0; c < 4; ++c) di.transform[row * 4 + c] = r.model.m[c * 4 + row];
+             out.push_back(di);
+@@ -320,22 +352,51 @@
+     rtDynamicFrame(out.data(), (int)out.size());
+     if (S.buf) rtBridgeSetSignalBuffers(&S.buf, 1);
+     S.inTlas += (long)out.size();
+-    // slots of instances not drawn for 300 frames go back
++    // slots of instances not noted for WFC_RT_CHARDROP frames go back (dead / despawned / out of the draw distance; hidden
++    // pawns are still noted)
++    static const int dropAfter = [] { const char* e = std::getenv("WFC_RT_CHARDROP"); return e ? std::max(2, std::atoi(e)) : 60; }();
+     for (auto it = S.insts.begin(); it != S.insts.end();)
+-        if (frameNo_ - it->second.lastSeen > 300) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
++        if (frameNo_ - it->second.lastSeen > dropAfter) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
+         else ++it;
+     if (++S.feeds % 300 == 0) {
+         const RtDynamicStats d = rtDynamicTakeStats();
+         const double f = 300.0;
+         LOG_INFO("RT characters (per frame over 300): noted %.1f, in TLAS %.1f, skinned %.1f (%.0f vertices; far-alternate skipped %.1f, "
+-                 "unchanged %.1f), slot failures %ld | GL skin %.3f ms GPU | D3D12: in TLAS %.1f, refits %.1f, builds %ld, %.3f ms GPU | "
+-                 "%u slots, %u / %u shared vertices, BLAS %.1f MB",
+-                 S.recs / f, S.inTlas / f, S.skinned / f, S.vertsSkinned / f, S.farSkipped / f, S.unchanged / f, S.full,
++                 "unchanged %.1f), slot failures %ld, drawn twice with another matrix %ld | GL skin %.3f ms GPU | D3D12: in TLAS %.1f, "
++                 "refits %.1f, builds %ld, rebuilds %ld (asked %ld), %.3f ms GPU | %u slots, %u / %u shared vertices, BLAS %.1f MB",
++                 S.recs / f, S.inTlas / f, S.skinned / f, S.vertsSkinned / f, S.farSkipped / f, S.unchanged / f, S.full, S.renoted,
+                  S.glSamples ? S.glMs / S.glSamples : 0.0, d.records ? (double)d.instances / d.records : 0.0,
+-                 d.records ? (double)d.refits / d.records : 0.0, d.builds, d.gpuSamples ? d.gpuMs / d.gpuSamples : 0.0,
++                 d.records ? (double)d.refits / d.records : 0.0, d.builds, d.rebuilds, S.rebuilds, d.gpuSamples ? d.gpuMs / d.gpuSamples : 0.0,
+                  d.slots, d.verticesUsed, d.capacity, d.blasMB);
+-        S.recs = S.inTlas = S.skinned = S.farSkipped = S.unchanged = S.full = S.vertsSkinned = 0; S.glMs = 0; S.glSamples = 0;
++        S.recs = S.inTlas = S.skinned = S.farSkipped = S.unchanged = S.full = S.vertsSkinned = S.rebuilds = S.renoted = 0;
++        S.glMs = 0; S.glSamples = 0;
++    }
++}
++
++void Pipeline::rtSkinForget(const void* bindKey) {
++    if (!on()) return;
++    if (!bindKey) {                                       // (map unload: D3D12's clear drops its side; the epoch resyncs)
++        S.models.clear(); S.insts.clear();
++        rtSkinCur_.clear(); rtSkinPrev_.clear(); rtSkinIdx_.clear();
++        return;
++    }
++    auto m = S.models.find(bindKey);
++    if (m == S.models.end()) return;
++    if (m->second.id >= 0) {
++        for (auto it = S.insts.begin(); it != S.insts.end();)
++            if (it->second.model == m->second.id) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
++            else ++it;
++        rtDynamicReleaseModel(m->second.id);
+     }
++    S.models.erase(m);
++}
++
++void Pipeline::rtSkinMissed(const char* why) {
++    if (!on()) return;
++    static std::vector<const char*> told;
++    if (std::find(told.begin(), told.end(), why) != told.end()) return;
++    told.push_back(why);
++    LOG_WARN("RT characters: a skinned character is not in the TLAS: %s", why);
+ }
+ 
+ }  // namespace wfc
+diff --git a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h
++++ b/src/render/gl/WfcPipeline.h
+@@ -496,9 +496,13 @@
+     std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
+     std::map<const void*, size_t> rtSkinIdx_;
+     int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
++    // row / mode / bones / alpha: what the bone texture holds for the instance (drawSkinned's prepared palette, or the last
++    // prepared one for a pawn whose prep the occlusion test skipped)
+     void rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
+-                    const core::Vec3& mn, const core::Vec3& mx);
++                    const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha);
+     void rtSkinFeed(bool afterCharacters);
++    void rtSkinForget(const void* bindKey);              // a skinned model's buffers go (nullptr: all - map unload)
++    void rtSkinMissed(const char* why);                  // a skinned draw the feed cannot see (logged once per reason)
+     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
+     bool fsr3Run(int outW, int outH);
+     // optional motion vectors (WfcMotion.cpp; OFF by default)
+diff --git a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp
++++ b/src/render/gl/WfcPipeline.cpp
+@@ -4306,7 +4306,7 @@
+                            const core::Mat4& model, const void* key, uint64_t serial) {
+     const size_t n = bind.vertexCount();
+     if (n == 0 || joints.size() != n * 4 || weights.size() != n * 4 || palette.empty() || (int)palette.size() > kMaxBones)
+-        return false;
++        { if (!palette.empty() && (int)palette.size() > kMaxBones) rtSkinMissed("more bones than the GPU skin supports (CPU-skinned)"); return false; }
+     struct SkinTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+         ~SkinTimer() { gStats.skinMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinCalls; } } skinTimer;
+     // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
+@@ -4379,7 +4379,7 @@
+     if (si.row < 0) {
+         if (!freeSkinRows_.empty()) { si.row = freeSkinRows_.back(); freeSkinRows_.pop_back(); }
+         else if (skinRowsUsed_ < kSkinRows) si.row = skinRowsUsed_++;
+-        else { skinInsts_.erase(key); return false; }
++        else { skinInsts_.erase(key); rtSkinMissed("bone-texture rows full (CPU-skinned)"); return false; }
+     }
+     const bool usePrev = prevPalette && alpha < 1.0f && prevPalette->size() == palette.size();
+     // exact bounds (pixel-identical lighting / shadow fit): the skinned positions of assets::skinPose, positions only,
+@@ -4487,6 +4487,8 @@
+     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
+         SkinDraw d0;
+         d0.vao = sm.vao; d0.mn = si.mn; d0.mx = si.mx;   // the last exact bounds (pose of the last prepared frame)
++        // (M7 RT: hidden from the camera, not from the sun - the last prepared pose stays in the TLAS, unchanged serial)
++        rtSkinNote(bind, sm, key, si.serial, model, si.mn, si.mx, si.row, 1, (int)palette.size(), 1.0f);
+         skinDraw_ = &d0;
+         skinPrepSkipped_ = true;
+         ++statOccPrepSkipped_;
+@@ -4568,7 +4570,7 @@
+     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
+     skinDraw_ = &d;
+     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
+-    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx);   // (WFC_RT_CHARS: M7 RT characters; otherwise returns at once)
++    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx, si.row, skinMode_, skinBones_, skinAlpha_);   // (WFC_RT_CHARS: M7 RT)
+     if (motion) {
+         MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
+                       skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};
+@@ -5750,6 +5752,7 @@
+     for (const Material& mt : m->mats) dynProgMemo_.erase(&mt);   // memo keyed by these materials' addresses
+     auto sm = skinModels_.find(m);
+     if (sm != skinModels_.end()) {
++        rtSkinForget(m);
+         if (sm->second.vao) DeleteVertexArrays(1, &sm->second.vao);
+         for (GLuint* b : {&sm->second.vbo, &sm->second.jwVbo, &sm->second.ibo}) if (*b) DeleteBuffers(1, b);
+         skinModels_.erase(sm);
+@@ -5793,6 +5796,7 @@
+ }
+ 
+ void Pipeline::evictSkin(bool all) {
++    if (all) rtSkinForget(nullptr);                     // (M7 RT characters: the feed forgets every model / slot)
+     for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
+         if (all || frameNo_ - it->second.lastFrame > 600) {
+             if (it->second.row >= 0 && !all) freeSkinRows_.push_back(it->second.row);
+@@ -5803,6 +5807,7 @@
+         // models (static buffers + bounds sets per bind mesh) are kept ~60 s at 300 fps: a body that is dead for its
+         // respawn delay must not be rebuilt (vertex build + upload + per-joint hulls) when it spawns again
+         if (all || (!it->second.pinned && frameNo_ - it->second.lastFrame > 18000)) {
++            if (!all) rtSkinForget(it->first);
+             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
+             for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
+             it = skinModels_.erase(it);

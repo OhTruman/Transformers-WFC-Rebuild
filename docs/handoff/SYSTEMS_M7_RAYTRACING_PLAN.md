@@ -155,10 +155,21 @@ The interface was agreed with Rendering on 2026-10-12. Rendering owns the bridge
   - Per frame: about 13 skinned instances noted, 6 - 9 in the TLAS, 3 - 4 refits (far-alternate and unchanged skips about 3.5), D3D12 refits 0.025 ms GPU, about 10 MB BLAS for 11 slots.
   - The GL timestamp pair around the dispatches reads about 0.001 ms. Not trusted: to recheck with the frame profiler.
   - 64-player numbers are still to come; the stage-0 probe estimated 0.97 ms for 64 at full refit.
+- **Experimental's review (SYSTEMS_M7_SKINFEED_REVIEW.patch, on Rendering's fd231d2)**
+  - Fixed:
+    - Pawns whose prep the occlusion test skipped are fed at their last prepared pose.
+    - A BLAS is rebuilt after 120 refits (WFC_RT_CHARREBUILD) or when the pose's box outgrows its build box by a quarter.
+    - Slots go back 60 frames after the last note (WFC_RT_CHARDROP) and at once when a model's buffers go.
+    - The first slot failure is logged with the capacity.
+    - Warm-up draws are not noted; a key drawn twice with another matrix is counted in the log.
+    - sm.fp is part of the model identity.
+    - The map-unload clear waits idle when dynamic work exists, else it abandons (leaks) instead of freeing.
+  - Item 6 (the allocator wait result) was already in Rendering's fe343de.
+  - CPU-skinned fallbacks (more bones than the GPU skin supports, bone rows full) are logged once and stay out of the TLAS: none occur on the shipped characters (max 106 joints of 128; 512 rows).
+  - Rerun (Streets 5v5): 106/106 hash checks equal, 0 GL errors, about 1 rebuild per 100 refits, 17-22 skipped preps per 600 frames now in the TLAS, 0 double draws.
 - **Open**
   - The world box ignores weapon attachments.
   - The full index list is used: hidden / translucent sub-meshes are not filtered yet.
-  - Pawns skipped by the occlusion prepass are not fed.
   - A reduced-LOD RT proxy is still an option.
 
 ## 4. Denoising (licences checked 2026-10-12)
@@ -226,6 +237,8 @@ CheckFeatureSupport OPTIONS5, else the row is greyed); auto-detect never enables
 - B vs C at stage 2 (needs stage 1's round-trip cost).
 - NRD licence read (with the DLSS / Streamline read), only if FidelityFX quality is short.
 - RT GI vs Brixelizer GI at stage 3, for both the calibrated add-on and the user-approved "RT lighting" mode (§6 stage 3).
+- 2026-10-12: superseded by SYSTEMS_RT_REALISTIC_M6_PLAN.md (the user's "brand new" goal): R1-R5 order, a probe-volume RT GI
+  first, Brixelizer as a fallback, light sources / calibration, and how M6 Modern materials combine with it.
 
 ## 8. Sources
 
