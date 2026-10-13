@@ -63,6 +63,7 @@ param(
     [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
     [int]$SettingsExpected = 0,  # WFC_SETTINGSTEST: the number of renderer settings checks expected (0 = any count; all must pass)
     [switch]$NoSettingsTest,     # skip the settings self-test run
+    [string]$RtHoldFile = "",    # the RT gate (only) waits while this file exists: the RT-off steps run first, the gate starts once the RT slot is granted and the file is removed
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
@@ -436,6 +437,10 @@ try {
         if (-not (Test-Path -LiteralPath $rtScript)) { $rtGate.Status = 'FAIL'; $rtGate.Note = "rt-build-check.ps1 not found at $rtScript (-RtCheck <path>, or -NoRtCheck)" }
         else {
             WaitHold
+            if ($RtHoldFile -and (Test-Path -LiteralPath $RtHoldFile)) {
+                Write-Host "RT hold file present ($RtHoldFile): the RT gate waits for the RT slot"
+                while (Test-Path -LiteralPath $RtHoldFile) { Start-Sleep -Seconds 2 }
+            }
             $rtRun = Join-Path $WorkDir 'rt'
             if (Test-Path -LiteralPath $rtRun) { Remove-Item -LiteralPath $rtRun -Recurse -Force }
             $rtBin = Join-Path $rtRun 'bin'
