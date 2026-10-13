@@ -58,6 +58,9 @@ param(
     [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=1): the pack's textures load (else the first launch must keep HD off)
     [switch]$StaticOnly,         # file checks only (HD pack), no game runs
     [string]$ExeBin = "",           # candidate exe tree: its *.exe / *.dll replace the package's in the run copy (the package stays as is)
+    [string]$RtBuildDir = "",    # the cmake build tree the package's exe came from: rt-build-check's build half (build.ninja, generated/rt)
+    [string]$RtCheck = "",       # Experimental's tools/fidelity/rt-build-check.ps1 (default: beside this repo's tools/package)
+    [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
@@ -227,6 +230,7 @@ function PkgTwin([string]$n) {
 }
 
 $results = @()
+$rtGate = [pscustomobject]@{ Status = $(if ($NoRtCheck -or $StaticOnly) { 'SKIP' } else { 'FAIL' }); Lines = @(); Note = $(if ($NoRtCheck) { '-NoRtCheck' } elseif ($StaticOnly) { '-StaticOnly' } else { 'not run' }) }
 $saved = @{}
 Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { $saved[$_.Name] = $_.Value; Remove-Item -LiteralPath "env:$($_.Name)" }
 try {
@@ -386,6 +390,33 @@ try {
         }
         Write-Host ("[{0}] {1} in {2} s: {3}" -f $name, $(if ($reasons.Count) { 'FAIL' } else { 'PASS' }), $secs, ($reasons -join '; '))
     }
+    # ---- the Ray Tracing gate (Integration 2026-10-13; Experimental's rt-build-check.ps1): a direct-boot Streets match with the
+    # profile's Ray Tracing row = Realistic must build its RT scene (a TLAS line) and never log "without the RT shaders" - an exe
+    # built without third_party/dxc + ffx_denoiser shows the row and does nothing. Run from a copy of the package's bin with the
+    # package's data roots (as the maps above). FAIL blocks the package; UNKNOWN (no DXR 1.1 device here) is reported, not a fail.
+    if (-not $NoRtCheck -and -not $StaticOnly) {
+        $rtScript = if ($RtCheck) { $RtCheck } else { Join-Path $PSScriptRoot '..\fidelity\rt-build-check.ps1' }
+        if (-not (Test-Path -LiteralPath $rtScript)) { $rtGate.Status = 'FAIL'; $rtGate.Note = "rt-build-check.ps1 not found at $rtScript (-RtCheck <path>, or -NoRtCheck)" }
+        else {
+            WaitHold
+            $rtRun = Join-Path $WorkDir 'rt'
+            if (Test-Path -LiteralPath $rtRun) { Remove-Item -LiteralPath $rtRun -Recurse -Force }
+            $rtBin = Join-Path $rtRun 'bin'
+            New-Item -ItemType Directory -Force -Path $rtBin | Out-Null
+            Copy-Item -Path (Join-Path $pkgBin '*') -Destination $rtBin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*', 'filelog*.txt'
+            if ($ExeBin) { Copy-Item -Path (Join-Path $ExeBin '*.exe'), (Join-Path $ExeBin '*.dll') -Destination $rtBin -Force }
+            Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
+            foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
+            $env:WFC_GPULOST_DIALOG_S = '0'
+            $rtArgs = @{ Exe = (Join-Path $rtBin 'wfc_rebuild.exe'); OutDir = (Join-Path $rtRun 'check') }
+            if ($RtBuildDir) { $rtArgs.BuildDir = $RtBuildDir }
+            $rtOut = @(& $rtScript @rtArgs 2>&1 | ForEach-Object { "$_" })
+            $rtGate.Lines = @($rtOut | Where-Object { $_ -match '^(PASS|FAIL|UNKNOWN|SKIP) rtcheck\.' })
+            $rtGate.Status = if ($rtGate.Lines | Where-Object { $_ -like 'FAIL *' }) { 'FAIL' } elseif ($rtGate.Lines | Where-Object { $_ -like 'UNKNOWN *' }) { 'UNKNOWN' } elseif ($rtGate.Lines.Count) { 'PASS' } else { 'FAIL' }
+            if (-not $rtGate.Lines.Count) { $rtGate.Note = 'rt-build-check printed no result lines: ' + (($rtOut | Select-Object -Last 3) -join ' / ') }
+            Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
+        }
+    }
 } finally {
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     foreach ($k in $saved.Keys) { Set-Item -LiteralPath "env:$k" -Value $saved[$k] }
@@ -393,7 +424,7 @@ try {
 }
 
 # ---- report ----
-$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count -and -not $pk.Problems.Count
+$overall = -not ($results | Where-Object { -not $_.Pass }) -and -not $hd.Problems.Count -and -not $pk.Problems.Count -and $rtGate.Status -ne 'FAIL'
 $md = @()
 $md += "# Slim package isolation check: $(if ($overall) { 'PASS' } else { 'FAIL' })"
 $md += ''
@@ -431,6 +462,9 @@ foreach ($r in $results) {
     foreach ($w in $r.WarnRows) { $md += "- warning: ``$($w.Path)``: $($w.Note)" }
     if ($r.OtherRows.Count) { $md += "- other paths (not failing): " + (($r.OtherRows | Select-Object -First 10 | ForEach-Object { "``$($_.Path)``" }) -join ', ') }
 }
+$md += ''
+$md += "Ray Tracing gate (rt-build-check.ps1, profile RayTracing=2, direct-boot Streets): $($rtGate.Status)$(if ($rtGate.Note) { " - $($rtGate.Note)" })"
+foreach ($x in $rtGate.Lines) { $md += "- $x" }
 $md += ''
 $md += 'Per-map detail: <map>\opens.csv (every open, classified), <map>\bin\wfc.log, <map>\filelog.txt.'
 $reportPath = Join-Path $WorkDir 'REPORT.md'
