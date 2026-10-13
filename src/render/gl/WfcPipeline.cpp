@@ -4294,7 +4294,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
                            const core::Mat4& model, const void* key, uint64_t serial) {
     const size_t n = bind.vertexCount();
     if (n == 0 || joints.size() != n * 4 || weights.size() != n * 4 || palette.empty() || (int)palette.size() > kMaxBones)
-        return false;
+        { if (!palette.empty() && (int)palette.size() > kMaxBones) rtSkinMissed("more bones than the GPU skin supports (CPU-skinned)"); return false; }
     struct SkinTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
         ~SkinTimer() { gStats.skinMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.skinCalls; } } skinTimer;
     // ---- the model: static bind-pose vertices (raw normals: renormalised after skinning, as skinPose), influences
@@ -4367,7 +4367,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     if (si.row < 0) {
         if (!freeSkinRows_.empty()) { si.row = freeSkinRows_.back(); freeSkinRows_.pop_back(); }
         else if (skinRowsUsed_ < kSkinRows) si.row = skinRowsUsed_++;
-        else { skinInsts_.erase(key); return false; }
+        else { skinInsts_.erase(key); rtSkinMissed("bone-texture rows full (CPU-skinned)"); return false; }
     }
     const bool usePrev = prevPalette && alpha < 1.0f && prevPalette->size() == palette.size();
     // exact bounds (pixel-identical lighting / shadow fit): the skinned positions of assets::skinPose, positions only,
@@ -4475,6 +4475,8 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     if (skipPrep) {                                     // hidden body + shadow: light env tick + query box only
         SkinDraw d0;
         d0.vao = sm.vao; d0.mn = si.mn; d0.mx = si.mx;   // the last exact bounds (pose of the last prepared frame)
+        // (M7 RT: hidden from the camera, not from the sun - the last prepared pose stays in the TLAS, unchanged serial)
+        rtSkinNote(bind, sm, key, si.serial, model, si.mn, si.mx, si.row, 1, (int)palette.size(), 1.0f);
         skinDraw_ = &d0;
         skinPrepSkipped_ = true;
         ++statOccPrepSkipped_;
@@ -4556,7 +4558,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
     skinDraw_ = &d;
     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
-    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx);   // (WFC_RT_CHARS: M7 RT characters; otherwise returns at once)
+    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx, si.row, skinMode_, skinBones_, skinAlpha_);   // (WFC_RT_CHARS: M7 RT)
     if (motion) {
         MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
                       skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};
@@ -5738,6 +5740,7 @@ void Pipeline::releaseMeshCaches(const MeshData* m) {
     for (const Material& mt : m->mats) dynProgMemo_.erase(&mt);   // memo keyed by these materials' addresses
     auto sm = skinModels_.find(m);
     if (sm != skinModels_.end()) {
+        rtSkinForget(m);
         if (sm->second.vao) DeleteVertexArrays(1, &sm->second.vao);
         for (GLuint* b : {&sm->second.vbo, &sm->second.jwVbo, &sm->second.ibo}) if (*b) DeleteBuffers(1, b);
         skinModels_.erase(sm);
@@ -5781,6 +5784,7 @@ void Pipeline::setAnisotropy(int level) {
 }
 
 void Pipeline::evictSkin(bool all) {
+    if (all) rtSkinForget(nullptr);                     // (M7 RT characters: the feed forgets every model / slot)
     for (auto it = skinInsts_.begin(); it != skinInsts_.end();) {
         if (all || frameNo_ - it->second.lastFrame > 600) {
             if (it->second.row >= 0 && !all) freeSkinRows_.push_back(it->second.row);
@@ -5791,6 +5795,7 @@ void Pipeline::evictSkin(bool all) {
         // models (static buffers + bounds sets per bind mesh) are kept ~60 s at 300 fps: a body that is dead for its
         // respawn delay must not be rebuilt (vertex build + upload + per-joint hulls) when it spawns again
         if (all || (!it->second.pinned && frameNo_ - it->second.lastFrame > 18000)) {
+            if (!all) rtSkinForget(it->first);
             if (it->second.vao) DeleteVertexArrays(1, &it->second.vao);
             for (GLuint* b : {&it->second.vbo, &it->second.jwVbo, &it->second.ibo}) if (*b) DeleteBuffers(1, b);
             it = skinModels_.erase(it);

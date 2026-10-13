@@ -36,11 +36,12 @@ struct RtDynamicInstance {
     int slot = -1;
     float transform[12];          // model -> world, row-major 3x4 (D3D12_RAYTRACING_INSTANCE_DESC::Transform)
     bool update = false;          // the slot's positions were rewritten this frame: build (first time) or refit its BLAS
+    bool rebuild = false;         // (with update) a full build instead of a refit: a refit's quality decays over many poses
 };
 // this frame's characters in the TLAS (replaces the last call's list); the next record consumes the updates
 void rtDynamicFrame(const RtDynamicInstance* inst, int n);
 // statistics of the records since the last call: GPU ms of the builds / refits (timestamps, read two records late)
-struct RtDynamicStats { int records = 0; long instances = 0, refits = 0, builds = 0; double gpuMs = 0; int gpuSamples = 0;
+struct RtDynamicStats { int records = 0; long instances = 0, refits = 0, builds = 0, rebuilds = 0; double gpuMs = 0; int gpuSamples = 0;
                         uint32_t slots = 0, verticesUsed = 0, capacity = 0; double blasMB = 0; };
 RtDynamicStats rtDynamicTakeStats();
 // (WFC_RT_CHARCHECK) the next record copies the slot's first `vertices` positions as D3D12 reads them and, two records
@@ -52,5 +53,9 @@ void rtDynamicAttach(ID3D12Device5* dev, uint64_t timestampFrequency);   // afte
 void rtDynamicRecord(ID3D12GraphicsCommandList4* cl);                     // in the job, before the TLAS build
 void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask);   // mask 0x4
 void rtDynamicClear();                                    // map unload, after the bridge's queue is idle
+bool rtDynamicHasWork();                                  // slots, models or deferred releases exist (the clear must wait idle)
+void rtDynamicAbandon();                                  // map unload while the queue is NOT idle: forget (leak), never free
+bool rtDynamicHasWork();                                  // slots, models or deferred releases exist (the clear must wait idle)
+void rtDynamicAbandon();                                  // map unload while the queue is NOT idle: forget (leak), never free
 
 }  // namespace render

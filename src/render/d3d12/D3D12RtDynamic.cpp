@@ -39,7 +39,7 @@ constexpr int kRing = 3;
 
 struct Model { ID3D12Resource* ib = nullptr; ID3D12Resource* upload = nullptr; uint32_t indices = 0, vertices = 0; bool ready = false; bool live = false; };
 struct Slot { int model = -1; uint32_t first = 0, count = 0; ID3D12Resource* blas = nullptr; UINT64 blasBytes = 0, scratch = 0;
-              bool built = false, live = false, pending = false; };
+              bool built = false, live = false, pending = false, rebuild = false; };
 
 class Dynamic {
 public:
@@ -119,7 +119,10 @@ public:
     void frame(const RtDynamicInstance* inst, int n) {
         frame_.assign(inst, inst + std::max(n, 0));
         for (const RtDynamicInstance& i : frame_)
-            if (i.update && i.slot >= 0 && i.slot < (int)slots_.size()) slots_[(size_t)i.slot].pending = true;
+            if (i.update && i.slot >= 0 && i.slot < (int)slots_.size()) {
+                slots_[(size_t)i.slot].pending = true;
+                if (i.rebuild) slots_[(size_t)i.slot].rebuild = true;
+            }
     }
     void record(ID3D12GraphicsCommandList4* cl) {
         if (!dev_ || !cl) return;
@@ -166,15 +169,16 @@ public:
             Slot& s = slots_[(size_t)i.slot];
             const Model& m = models_[(size_t)s.model];
             D3D12_RAYTRACING_GEOMETRY_DESC gd = geometry(s, m);
+            const bool refit = s.built && !s.rebuild;
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
-            bd.Inputs = inputs(&gd, s.built);
+            bd.Inputs = inputs(&gd, refit);
             bd.DestAccelerationStructureData = s.blas->GetGPUVirtualAddress();
-            if (s.built) bd.SourceAccelerationStructureData = bd.DestAccelerationStructureData;
+            if (refit) bd.SourceAccelerationStructureData = bd.DestAccelerationStructureData;
             bd.ScratchAccelerationStructureData = scratch_->GetGPUVirtualAddress() + off;
             off += s.scratch;
             cl->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
-            ++(s.built ? stats_.refits : stats_.builds);
-            s.built = true; s.pending = false;
+            ++(refit ? stats_.refits : s.built ? stats_.rebuilds : stats_.builds);
+            s.built = true; s.pending = false; s.rebuild = false;
         }
         D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;   // the BLAS writes before the TLAS build reads them
         cl->ResourceBarrier(1, &ub);
@@ -211,6 +215,20 @@ public:
         free_.assign(1, {0u, capacity_});
         blasTotal_ = 0;
         ++epoch_;
+    }
+    bool hasWork() const {
+        for (const Slot& s : slots_) if (s.live) return true;
+        for (const Model& m : models_) if (m.live) return true;
+        return !deferred_.empty() || scratch_ != nullptr;
+    }
+    void abandon() {                                      // (the queue may still use them: dropped, not released)
+        deferred_.clear(); slots_.clear(); models_.clear(); frame_.clear();
+        scratch_ = nullptr; scratchBytes_ = 0;
+        chkRecord_ = 0; chkArmed_ = false;
+        free_.assign(1, {0u, capacity_});
+        blasTotal_ = 0;
+        ++epoch_;
+        LOG_WARN("RT characters: map unload while the D3D12 queue was busy: dynamic BLAS dropped without release");
     }
     RtDynamicStats takeStats() {
         RtDynamicStats s = stats_;
@@ -340,6 +358,8 @@ void rtDynamicAttach(ID3D12Device5* dev, uint64_t timestampFrequency) { g_dyn.at
 void rtDynamicRecord(ID3D12GraphicsCommandList4* cl) { g_dyn.record(cl); }
 void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>& out, unsigned mask) { g_dyn.append(out, mask); }
 void rtDynamicClear() { g_dyn.clear(); }
+bool rtDynamicHasWork() { return g_dyn.hasWork(); }
+void rtDynamicAbandon() { g_dyn.abandon(); }
 
 }  // namespace render
 #else
@@ -360,5 +380,7 @@ void rtDynamicAttach(ID3D12Device5*, uint64_t) {}
 void rtDynamicRecord(ID3D12GraphicsCommandList4*) {}
 void rtDynamicAppendInstances(std::vector<D3D12_RAYTRACING_INSTANCE_DESC>&, unsigned) {}
 void rtDynamicClear() {}
+bool rtDynamicHasWork() { return false; }
+void rtDynamicAbandon() {}
 }  // namespace render
 #endif

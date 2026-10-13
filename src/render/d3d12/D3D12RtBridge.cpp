@@ -252,9 +252,10 @@ public:
 #endif
     }
     void clearStaticWorld() {
-        if ((tlas_ || !blas_.empty()) && !waitIdle()) {   // (still in flight: dropped, not freed)
+        if ((tlas_ || !blas_.empty() || rtDynamicHasWork()) && !waitIdle()) {   // (still in flight: dropped, not freed)
             tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
             for (auto& d : dyn_) d = DynTlas{};
+            rtDynamicAbandon();
             return;
         }
         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)

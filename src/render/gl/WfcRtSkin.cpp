@@ -8,7 +8,11 @@
 // Selection (the plan's refit culling): a character is in the TLAS when its world box is on screen or within
 // WFC_RT_CHARRANGE metres of the camera (default 30: the sun-shadow reach); beyond WFC_RT_CHARFAR (default 20) a changed
 // pose is re-skinned / refit only every second frame (alternating by slot), and an unchanged pose (same palette serial,
-// blend and alpha) is never redone. Instances not drawn for 300 frames give their slot back.
+// blend and alpha) is never redone. A refit BLAS is rebuilt after WFC_RT_CHARREBUILD refits (default 120) or when the pose's
+// box outgrows the one it was built for by more than a quarter of its extent (a refit keeps the build's topology: its
+// quality decays as the pose moves away). Instances not noted for WFC_RT_CHARDROP frames (default 60: dead / despawned)
+// give their slot back; a model whose buffers go (rtSkinForget) gives back its slots at once. Pawns whose skinning prep the
+// occlusion test skipped stay in, at their last prepared pose (hidden from the camera, not from the sun).
 // WFC_RT_CHARCHECK=1: every 300 feeds one updated instance is read back and compared with a CPU evaluation of the same
 // bone-texture palettes (and, unblended, with drawSkinned's exact skinPose bounds); D3D12 hashes the same region as it
 // reads it (rtDynamicCheck).
@@ -76,8 +80,9 @@ typedef void(APIENTRY* PFN_MemoryObjectParameterivEXT)(GLuint, GLenum, const GLi
 typedef void(APIENTRY* PFN_BufferStorageMemEXT)(GLenum, GLsizeiptr, GLuint, GLuint64_);
 constexpr GLenum kSSBO = 0x90D2, kHandleD3D12Resource = 0x958A, kDedicated = 0x9581;
 
-struct GlModel { int id = -1; const float* posData = nullptr; size_t verts = 0, idx = 0; GLuint vbo = 0; };
-struct GlInst { int slot = -1, model = -1, row = -1, mode = 0, lastSeen = 0; float alpha = -1.0f; uint64_t serial = 0; bool updated = false; };
+struct GlModel { int id = -1; const float* posData = nullptr; float fp[6] = {0, 0, 0, 0, 0, 0}; size_t verts = 0, idx = 0; GLuint vbo = 0; };
+struct GlInst { int slot = -1, model = -1, row = -1, mode = 0, lastSeen = 0, refits = 0; float alpha = -1.0f; uint64_t serial = 0;
+                bool updated = false; core::Vec3 bmn, bmx; };   // (bmn / bmx: the model-space box its BLAS was built for)
 struct State {
     bool failed = false;
     uint32_t epoch = 0;
@@ -87,7 +92,8 @@ struct State {
     std::map<const void*, GlModel> models;                // key: the bind mesh (skinModels_'s key)
     std::map<const void*, GlInst> insts;                  // key: drawSkinned's instance key
     GLuint q[3][2] = {}; bool qUsed[3] = {}; int qi = 0;  // GL timestamps around the dispatches (ring of 3)
-    long feeds = 0, recs = 0, inTlas = 0, skinned = 0, farSkipped = 0, unchanged = 0, full = 0, vertsSkinned = 0;
+    long feeds = 0, recs = 0, inTlas = 0, skinned = 0, farSkipped = 0, unchanged = 0, full = 0, vertsSkinned = 0, rebuilds = 0, renoted = 0;
+    bool fullLogged = false;
     double glMs = 0; int glSamples = 0;
 } S;
 
@@ -138,8 +144,8 @@ uint64_t fnv(const void* p, size_t n) {
 }  // namespace
 
 void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
-                          const core::Vec3& mn, const core::Vec3& mx) {
-    if (!on()) return;
+                          const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha) {
+    if (!on() || warmup_ || !key) return;                 // (warm-up draws and prewarms are not scene characters)
     if (rtSkinFrame_ != frameNo_) {                       // the first note of a frame: the previous frame's list moves back
         rtSkinPrevFrame_ = rtSkinFrame_; rtSkinPrev_.swap(rtSkinCur_); rtSkinCur_.clear(); rtSkinIdx_.clear();
         rtSkinFrame_ = frameNo_;
@@ -148,7 +154,8 @@ void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void*
     if (rtDynamicAvailable()) {
         syncEpoch();
         GlModel& m = S.models[&bind];
-        if (m.id < 0 || m.posData != sm.posData || m.verts != sm.verts || m.idx != sm.idx || m.vbo != sm.vbo) {
+        if (m.id < 0 || m.posData != sm.posData || std::memcmp(m.fp, sm.fp, sizeof m.fp) != 0 || m.verts != sm.verts ||
+            m.idx != sm.idx || m.vbo != sm.vbo) {
             if (m.id >= 0) {
                 for (auto& it : S.insts) if (it.second.model == m.id) { rtDynamicReleaseSlot(it.second.slot); it.second = GlInst{}; }
                 rtDynamicReleaseModel(m.id);
@@ -156,14 +163,17 @@ void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void*
             m = GlModel{};
             if (bind.indices.size() == sm.idx && !bind.indices.empty())
                 m.id = rtDynamicModel(bind.indices.data(), (uint32_t)bind.indices.size(), (uint32_t)sm.verts);
-            m.posData = sm.posData; m.verts = sm.verts; m.idx = sm.idx; m.vbo = sm.vbo;
+            m.posData = sm.posData; std::memcpy(m.fp, sm.fp, sizeof m.fp); m.verts = sm.verts; m.idx = sm.idx; m.vbo = sm.vbo;
         }
     }
     RtSkinRec r;
-    r.key = key; r.bindKey = &bind; r.row = skinRow_; r.mode = skinMode_; r.bones = skinBones_; r.alpha = skinAlpha_;
+    r.key = key; r.bindKey = &bind; r.row = row; r.mode = mode; r.bones = bones; r.alpha = alpha;
     r.serial = serial; r.model = model; r.mn = mn; r.mx = mx;
-    auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins)
-    if (it != rtSkinIdx_.end()) rtSkinCur_[it->second] = r;
+    auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins; a second
+    if (it != rtSkinIdx_.end()) {                         //  draw elsewhere - another matrix - is counted in the log)
+        if (std::memcmp(rtSkinCur_[it->second].model.m, model.m, sizeof model.m) != 0) ++S.renoted;
+        rtSkinCur_[it->second] = r;
+    }
     else { rtSkinIdx_[key] = rtSkinCur_.size(); rtSkinCur_.push_back(r); }
 }
 
@@ -221,7 +231,16 @@ void Pipeline::rtSkinFeed(bool afterCharacters) {
             if (gi.slot >= 0 && gi.model != gmIt->second.id) { rtDynamicReleaseSlot(gi.slot); gi = GlInst{}; gi.lastSeen = frameNo_; }
             if (gi.slot < 0) {
                 gi.slot = rtDynamicSlot(gmIt->second.id); gi.model = gmIt->second.id;
-                if (gi.slot < 0) { ++S.full; gi = GlInst{}; continue; }
+                if (gi.slot < 0) {
+                    ++S.full; gi = GlInst{};
+                    if (!S.fullLogged) {
+                        S.fullLogged = true;
+                        const RtDynamicStats d = rtDynamicTakeStats();   // (the slot / vertex counts; this window's counters are lost)
+                        LOG_WARN("RT characters: no slot for a %zu-vertex instance (%u slots, %u / %u shared vertices in use): "
+                                 "WFC_RT_CHARVERTS raises the capacity", sm.verts, d.slots, d.verticesUsed, d.capacity);
+                    }
+                    continue;
+                }
             }
             const bool changed = !gi.updated || gi.serial != r.serial || r.serial == 0 || gi.mode != r.mode || gi.alpha != r.alpha || gi.row != r.row;
             bool update = changed;
@@ -229,6 +248,19 @@ void Pipeline::rtSkinFeed(bool afterCharacters) {
             if (!changed) ++S.unchanged;
             RtDynamicInstance di;
             di.slot = gi.slot; di.update = update;
+            if (update) {                                 // refit, or rebuild: after many refits / when the box outgrew the build's
+                static const int maxRefits = [] { const char* e = std::getenv("WFC_RT_CHARREBUILD"); return e ? std::max(1, std::atoi(e)) : 120; }();
+                bool rebuild = false;
+                if (gi.updated) {
+                    const core::Vec3 ext = gi.bmx - gi.bmn;
+                    const float gx = std::max(gi.bmn.x - r.mn.x, r.mx.x - gi.bmx.x), gy = std::max(gi.bmn.y - r.mn.y, r.mx.y - gi.bmx.y),
+                                gz = std::max(gi.bmn.z - r.mn.z, r.mx.z - gi.bmx.z);
+                    rebuild = ++gi.refits >= maxRefits || gx > 0.25f * ext.x || gy > 0.25f * ext.y || gz > 0.25f * ext.z;
+                }
+                if (!gi.updated || rebuild) { gi.bmn = r.mn; gi.bmx = r.mx; gi.refits = 0; }
+                di.rebuild = rebuild;
+                S.rebuilds += rebuild ? 1 : 0;
+            }
             for (int row = 0; row < 3; ++row)
                 for (int c = 0; c < 4; ++c) di.transform[row * 4 + c] = r.model.m[c * 4 + row];
             out.push_back(di);
@@ -320,22 +352,51 @@ void Pipeline::rtSkinFeed(bool afterCharacters) {
     rtDynamicFrame(out.data(), (int)out.size());
     if (S.buf) rtBridgeSetSignalBuffers(&S.buf, 1);
     S.inTlas += (long)out.size();
-    // slots of instances not drawn for 300 frames go back
+    // slots of instances not noted for WFC_RT_CHARDROP frames go back (dead / despawned / out of the draw distance; hidden
+    // pawns are still noted)
+    static const int dropAfter = [] { const char* e = std::getenv("WFC_RT_CHARDROP"); return e ? std::max(2, std::atoi(e)) : 60; }();
     for (auto it = S.insts.begin(); it != S.insts.end();)
-        if (frameNo_ - it->second.lastSeen > 300) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
+        if (frameNo_ - it->second.lastSeen > dropAfter) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
         else ++it;
     if (++S.feeds % 300 == 0) {
         const RtDynamicStats d = rtDynamicTakeStats();
         const double f = 300.0;
         LOG_INFO("RT characters (per frame over 300): noted %.1f, in TLAS %.1f, skinned %.1f (%.0f vertices; far-alternate skipped %.1f, "
-                 "unchanged %.1f), slot failures %ld | GL skin %.3f ms GPU | D3D12: in TLAS %.1f, refits %.1f, builds %ld, %.3f ms GPU | "
-                 "%u slots, %u / %u shared vertices, BLAS %.1f MB",
-                 S.recs / f, S.inTlas / f, S.skinned / f, S.vertsSkinned / f, S.farSkipped / f, S.unchanged / f, S.full,
+                 "unchanged %.1f), slot failures %ld, drawn twice with another matrix %ld | GL skin %.3f ms GPU | D3D12: in TLAS %.1f, "
+                 "refits %.1f, builds %ld, rebuilds %ld (asked %ld), %.3f ms GPU | %u slots, %u / %u shared vertices, BLAS %.1f MB",
+                 S.recs / f, S.inTlas / f, S.skinned / f, S.vertsSkinned / f, S.farSkipped / f, S.unchanged / f, S.full, S.renoted,
                  S.glSamples ? S.glMs / S.glSamples : 0.0, d.records ? (double)d.instances / d.records : 0.0,
-                 d.records ? (double)d.refits / d.records : 0.0, d.builds, d.gpuSamples ? d.gpuMs / d.gpuSamples : 0.0,
+                 d.records ? (double)d.refits / d.records : 0.0, d.builds, d.rebuilds, S.rebuilds, d.gpuSamples ? d.gpuMs / d.gpuSamples : 0.0,
                  d.slots, d.verticesUsed, d.capacity, d.blasMB);
-        S.recs = S.inTlas = S.skinned = S.farSkipped = S.unchanged = S.full = S.vertsSkinned = 0; S.glMs = 0; S.glSamples = 0;
+        S.recs = S.inTlas = S.skinned = S.farSkipped = S.unchanged = S.full = S.vertsSkinned = S.rebuilds = S.renoted = 0;
+        S.glMs = 0; S.glSamples = 0;
     }
+}
+
+void Pipeline::rtSkinForget(const void* bindKey) {
+    if (!on()) return;
+    if (!bindKey) {                                       // (map unload: D3D12's clear drops its side; the epoch resyncs)
+        S.models.clear(); S.insts.clear();
+        rtSkinCur_.clear(); rtSkinPrev_.clear(); rtSkinIdx_.clear();
+        return;
+    }
+    auto m = S.models.find(bindKey);
+    if (m == S.models.end()) return;
+    if (m->second.id >= 0) {
+        for (auto it = S.insts.begin(); it != S.insts.end();)
+            if (it->second.model == m->second.id) { rtDynamicReleaseSlot(it->second.slot); it = S.insts.erase(it); }
+            else ++it;
+        rtDynamicReleaseModel(m->second.id);
+    }
+    S.models.erase(m);
+}
+
+void Pipeline::rtSkinMissed(const char* why) {
+    if (!on()) return;
+    static std::vector<const char*> told;
+    if (std::find(told.begin(), told.end(), why) != told.end()) return;
+    told.push_back(why);
+    LOG_WARN("RT characters: a skinned character is not in the TLAS: %s", why);
 }
 
 }  // namespace wfc

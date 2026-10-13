@@ -496,9 +496,13 @@ private:
     std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
     std::map<const void*, size_t> rtSkinIdx_;
     int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
+    // row / mode / bones / alpha: what the bone texture holds for the instance (drawSkinned's prepared palette, or the last
+    // prepared one for a pawn whose prep the occlusion test skipped)
     void rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
-                    const core::Vec3& mn, const core::Vec3& mx);
+                    const core::Vec3& mn, const core::Vec3& mx, int row, int mode, int bones, float alpha);
     void rtSkinFeed(bool afterCharacters);
+    void rtSkinForget(const void* bindKey);              // a skinned model's buffers go (nullptr: all - map unload)
+    void rtSkinMissed(const char* why);                  // a skinned draw the feed cannot see (logged once per reason)
     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)
