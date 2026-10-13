@@ -61,7 +61,7 @@ static void testProfileBotMigration() {
     check(g.display.upscaling == 0 && !g.display.hdTextures && g.display.anisotropy == 4 && g.display.frameGeneration == 0 && !g.display.rayTracing,
           "profile.graphics_extensions_default_off");
     g.display.upscaling = 2;
-    g.display.hdTextures = true;
+    g.display.hdTextures = 2;
     g.display.anisotropy = 16;
     g.save();
     std::ifstream back("wfc_profile.ini");
@@ -74,6 +74,12 @@ static void testProfileBotMigration() {
         check(a.display.rayTracing == 2 && b.display.rayTracing == 2 && d.display.rayTracing == 0 && a.display.hdTexturesUserSet &&
               a.display.hdPackHintShown && !d.display.hdTexturesUserSet && !d.display.hdPackHintShown && !d.display.hdTextures,
               "profile.ray_tracing_0_2_hd_user_set");
+    }
+    {   // HD textures 0 Off / 1 Faithful / 2 Enhanced: an old On (1) is Faithful; past the range clamps to Enhanced
+        std::istringstream one("[PCSettings]\nHDTextures=1\n"), big("[PCSettings]\nHDTextures=7\n");
+        frontend::LocalProfile a, b;
+        a.loadFrom(one); b.loadFrom(big);
+        check(a.display.hdTextures == 1 && b.display.hdTextures == 2, "profile.hd_textures_levels");
     }
     {   // Frame generation: 0 / 1 (any non-zero is On); default Off
         std::istringstream on("[PCSettings]\nFrameGeneration=7\n");
@@ -88,7 +94,7 @@ static void testProfileBotMigration() {
         check(a.display.upscaling == 5 && b.display.upscaling == 6, "profile.upscaling_fsr31_range",
               std::to_string(a.display.upscaling) + "/" + std::to_string(b.display.upscaling));
     }
-    check(r.display.upscaling == 2 && r.display.hdTextures && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
+    check(r.display.upscaling == 2 && r.display.hdTextures == 2 && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
           std::to_string(r.display.upscaling) + "/" + std::to_string(r.display.hdTextures));
     back.close();
     std::remove("wfc_profile.ini");
@@ -96,6 +102,46 @@ static void testProfileBotMigration() {
     frontend::LocalProfile o;
     o.loadFrom(odd);
     check(o.display.anisotropy == 8, "profile.anisotropy_snaps_to_4_8_16", std::to_string(o.display.anisotropy));
+}
+
+static void setEnv(const char* k, const char* v) {
+#ifdef _WIN32
+    _putenv_s(k, v ? v : "");
+#else
+    if (v) setenv(k, v, 1); else unsetenv(k);
+#endif
+}
+
+static void testHdTexturesBoot() {
+    {   // Pre-key profiles: an HD level that is on was the user's choice; Off (always written then) is not
+        std::istringstream on("[PCSettings]\nHDTextures=1\n"), off("[PCSettings]\nHDTextures=0\n"),
+            keyed("[PCSettings]\nHDTextures=2\nHDTexturesUserSet=0\n");
+        frontend::LocalProfile a, b, c;
+        a.loadFrom(on); b.loadFrom(off); c.loadFrom(keyed);
+        check(a.display.hdTexturesUserSet && !b.display.hdTexturesUserSet && !c.display.hdTexturesUserSet, "profile.hd_user_set_pre_key_migration");
+    }
+    // The effective level falls to the next lower installed one, never up.
+    check(frontend::hdTexturesEffective(2, true, true) == 2 && frontend::hdTexturesEffective(2, true, false) == 1 &&
+          frontend::hdTexturesEffective(2, false, false) == 0 && frontend::hdTexturesEffective(1, false, true) == 0 &&
+          frontend::hdTexturesEffective(0, true, true) == 0, "hd.effective_level_falls_back");
+    // Boot with automated-run settings (WFC_AUTODETECT=0, or a script): no change to the stored values, no save, even
+    // with the stored level's root missing (the session uses the effective level instead).
+    const char* modes[][2] = {{"WFC_AUTODETECT", "0"}, {"WFC_FRONTEND_SCRIPT", "quit"}};
+    for (auto& m : modes) {
+        std::remove("wfc_profile.ini");
+        setEnv(m[0], m[1]);
+        FrontendRuntime rt;
+        frontend::HardwareFacts f;
+        f.gpuName = "Test GPU"; f.vramMB = 16384; f.hdTexturePack = false; f.hdEnhanced = false;
+        rt.setHardwareFacts(f);
+        rt.flow().profile().display.hdTextures = 2;
+        const bool changed = rt.autoDetectGraphicsAtBoot();
+        std::ifstream saved("wfc_profile.ini");
+        check(!changed && rt.flow().profile().display.hdTextures == 2 && rt.hdTexturesEffectiveLevel() == 0 && !saved,
+              (std::string("hd.boot_no_change_no_save_") + m[0]).c_str());
+        setEnv(m[0], nullptr);
+    }
+    std::remove("wfc_profile.ini");
 }
 
 static void testGraphicsAutoDetect() {
@@ -116,7 +162,9 @@ static void testGraphicsAutoDetect() {
         six.vramMB = 5900;
         const bool lowVram = frontend::hdTexturesSuggested(six);
         six.vramMB = 16384; six.hdTexturePack = false;
-        check(yes && !lowVram && !frontend::hdTexturesSuggested(six), "autodetect.hd_pack_hint_pack_and_6gb");
+        const bool none = frontend::hdTexturesSuggested(six);
+        six.hdEnhanced = true;
+        check(yes && !lowVram && !none && frontend::hdTexturesSuggested(six), "autodetect.hd_pack_hint_pack_and_6gb");
     }
     frontend::HardwareFacts mid = big;
     mid.gpuName = "NVIDIA GeForce RTX 3060 Ti"; mid.vramMB = 8192; mid.cpuCores = 8;
@@ -579,6 +627,7 @@ int main() {
     testProfileBotMigration();
     testRecommendedBots();
     testGraphicsAutoDetect();
+    testHdTexturesBoot();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);

@@ -146,8 +146,16 @@ public:
     void setDisplayHooks(DisplayHooks h) { display_ = std::move(h); }
     // Graphics auto-detect (PC EXTENSION): the boot-time hardware facts, kept for Graphics -> Recommended Settings.
     void setHardwareFacts(const HardwareFacts& f) { hardware_ = f; hardwareKnown_ = true; }
-    // The HD texture pack is installed and complete (Rendering's hdTexturesAvailable at boot).
-    bool hdTexturesAvailable() const { return hardwareKnown_ && hardware_.hdTexturePack; }
+    // The HD texture levels installed (Rendering at boot): 1 Faithful (hdTexturesAvailable), 2 Enhanced.
+    bool hdTextureLevelAvailable(int level) const {
+        return hardwareKnown_ && (level == 1 ? hardware_.hdTexturePack : level == 2 ? hardware_.hdEnhanced : level == 0);
+    }
+    bool hdTexturesAvailable() const { return hdTextureLevelAvailable(1) || hdTextureLevelAvailable(2); }
+    int vramMB() const { return hardwareKnown_ ? hardware_.vramMB : 0; }
+    // The HD level the renderer gets this session (hdTexturesEffective of the stored one; the profile is not changed).
+    int hdTexturesEffectiveLevel() const {
+        return hdTexturesEffective(flow_.profile().display.hdTextures, hdTextureLevelAvailable(1), hdTextureLevelAvailable(2));
+    }
     // FSR 3.1 upscaling (modes 4-6) can run: its runtime ships beside the exe (Rendering's upscalingModeAvailable at boot).
     bool fsr3Available() const { return hardwareKnown_ && hardware_.fsr3; }
     // FSR frame generation: its runtime ships (the row is offered) / it started this session (set at launch only).

@@ -784,8 +784,6 @@ void FrontendRuntime::applyDisplaySettings() {
 }
 
 bool FrontendRuntime::autoDetectGraphicsAtBoot() {
-    // Without the HD pack the setting reads (and is handed over) as Off this session; the saved choice is not rewritten.
-    if (!hdTexturesAvailable()) flow_.profile().display.hdTextures = false;
     const char* force = std::getenv("WFC_AUTODETECT");
     if (force && std::string(force) == "0") return false;
     if (!force && std::getenv("WFC_FRONTEND_SCRIPT")) return false;   // automated runs keep their seeded settings
@@ -798,7 +796,17 @@ bool FrontendRuntime::autoDetectGraphicsAtBoot() {
     const bool changed = !p.autoDetectGpu.empty() && !hardware_.gpuName.empty() && p.autoDetectGpu != id;
     const bool forced = force && std::string(force) == "1";
     // HD textures stay Off unless the user turns them on; a pack found on a GPU that can hold it is mentioned once.
-    hdPackHintPending_ = hdTexturesSuggested(hardware_) && !p.display.hdTextures && !p.display.hdTexturesUserSet && !p.display.hdPackHintShown;
+    {
+        const char* reason = !hardware_.hdTexturePack && !hardware_.hdEnhanced ? "no pack"
+                           : hardware_.vramMB < kHdTexturesMinVramMB           ? "vram below 6000 MB"
+                           : p.display.hdTextures                              ? "hd already on"
+                           : p.display.hdTexturesUserSet                       ? "user set the row"
+                           : p.display.hdPackHintShown                         ? "already shown"
+                                                                               : "pending";
+        hdPackHintPending_ = std::string(reason) == "pending";
+        FlowTrace::emit("settings.hdPack", {{"faithful", FlowTrace::boolean(hardware_.hdTexturePack)}, {"enhanced", FlowTrace::boolean(hardware_.hdEnhanced)},
+                                            {"vramMB", std::to_string(hardware_.vramMB)}, {"hint", reason}, {"provenance", "PC EXTENSION"}});
+    }
     if (!first && !changed && !forced) {
         if (p.autoDetectGpu.empty() && !hardware_.gpuName.empty()) { p.autoDetectGpu = id; p.save(); }
         return false;

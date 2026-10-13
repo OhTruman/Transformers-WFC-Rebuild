@@ -59,7 +59,7 @@ private:
     // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
     int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
-    bool appliedHdTextures_ = false;
+    int appliedHdTextures_ = 0;
     int appliedAnisotropy_ = -1;
     int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
     void qaTick(const platform::InputFrame& in);

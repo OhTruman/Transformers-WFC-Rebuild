@@ -12,7 +12,8 @@ struct HardwareFacts {
     std::string gpuVendor, gpuName;   // GL vendor / renderer strings (Rendering's gpuFacts)
     unsigned gpuVendorId = 0;         // PCI vendor (0x10DE NVIDIA, 0x1002 AMD, 0x8086 Intel), 0 unknown
     int vramMB = 0;
-    bool rayTracing = false, hdTexturePack = false;
+    bool rayTracing = false, hdTexturePack = false;   // hdTexturePack: the Faithful HD root (Rendering's hdTexturesAvailable)
+    bool hdEnhanced = false;          // the Enhanced HD root (Rendering's hdTextureLevelAvailable(2))
     bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
     bool frameGen = false, frameGenActive = false;   // FSR frame generation can run / did start this session (Rendering)
     bool rtAvailable = false;         // ray-traced shadows / lighting can run (Rendering's rayTracingAvailable(): DXR 1.1 +
@@ -25,8 +26,17 @@ struct HardwareFacts {
 // HD textures are Off by default and never set by auto-detect (user decision 2026-10-12, reversed the same day: "HD
 // texture's should be off my default too"). Where the pack is installed and the GPU has at least ~6 GB of video memory
 // (the pack adds up to ~2 GB per map; 6 GB cards report 6000-6144 MB), a one-time message points to the row.
+// Below a level's floor the row only warns (Experimental's review): it never blocks. kHdEnhancedMinVramMB is provisional
+// until Systems' per-map memory table gives the figure.
 constexpr int kHdTexturesMinVramMB = 6000;
-inline bool hdTexturesSuggested(const HardwareFacts& f) { return f.hdTexturePack && f.vramMB >= kHdTexturesMinVramMB; }
+constexpr int kHdEnhancedMinVramMB = 8000;
+// The level handed to the renderer this session: a stored level whose root is missing falls to the next lower installed
+// one (Enhanced -> Faithful -> Off, never up). The stored choice is kept as it is.
+inline int hdTexturesEffective(int stored, bool faithful, bool enhanced) {
+    if (stored >= 2 && enhanced) return 2;
+    return stored >= 1 && faithful ? 1 : 0;
+}
+inline bool hdTexturesSuggested(const HardwareFacts& f) { return (f.hdTexturePack || f.hdEnhanced) && f.vramMB >= kHdTexturesMinVramMB; }
 
 struct GraphicsPreset {
     std::string tier, why;

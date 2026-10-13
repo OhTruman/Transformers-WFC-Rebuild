@@ -60,7 +60,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     // PC ADAPTATION: the frame-rate limit entry the frontend adds to the PC graphics menu (Hz, 0 = unlimited).
     if (markup == "<PCSettings:FrameLimit>") return std::to_string(flow_.profile().display.frameLimit);
     if (markup == "<PCSettings:Upscaling>") return std::to_string(flow_.profile().display.upscaling);    // PC EXTENSION
-    if (markup == "<PCSettings:HDTextures>") return flow_.profile().display.hdTextures ? "1" : "0";      // PC EXTENSION
+    if (markup == "<PCSettings:HDTextures>") return std::to_string(flow_.profile().display.hdTextures);   // PC EXTENSION
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
@@ -335,13 +335,13 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         FlowTrace::emit("settings.rayTracing", {{"mode", std::to_string(flow_.profile().display.rayTracing)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
-    if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION (the row offers On only with the pack)
-        // Commit writes every row: only a changed value counts as the user's choice (then the default stops applying).
+    if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION (the row offers only the installed levels)
+        // Commit writes every row: only a changed value counts as the user's choice.
         LocalProfile::Display& d = flow_.profile().display;
-        const bool on = arg(1) == "1" || arg(1) == "true";
-        if (on != d.hdTextures) d.hdTexturesUserSet = true;
-        d.hdTextures = on;
-        FlowTrace::emit("settings.hdTextures", {{"on", FlowTrace::boolean(d.hdTextures)}, {"userSet", FlowTrace::boolean(d.hdTexturesUserSet)},
+        const int level = arg(1) == "true" ? 1 : std::clamp(std::atoi(arg(1).c_str()), 0, LocalProfile::Display::kHdTexturesMax);
+        if (level != d.hdTextures) d.hdTexturesUserSet = true;
+        d.hdTextures = level;
+        FlowTrace::emit("settings.hdTextures", {{"level", std::to_string(d.hdTextures)}, {"userSet", FlowTrace::boolean(d.hdTexturesUserSet)},
                                                 {"provenance", "PC EXTENSION"}});
         return {};
     }

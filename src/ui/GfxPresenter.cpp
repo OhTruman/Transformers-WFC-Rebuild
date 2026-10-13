@@ -1035,7 +1035,7 @@ namespace {
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
-                       bool frameGenAvailable, bool frameGenActive, bool rtAvailable) {
+                       bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1087,7 +1087,10 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     for (int m = 4; m <= 6; ++m)
         if (fsr3Available || m == upscalingCurrent) add(up, m, kFsr3[m - 4]);
     add(hd, 0, "Off");
-    if (hdAvailable) add(hd, 1, "On");   // without the pack the row has the single value Off (cannot be changed)
+    // HD levels, each where its root is installed (without either the row has the single value Off, cannot be changed).
+    const bool hdMissing = (hdCurrent == 1 && !hdAvailable) || (hdCurrent == 2 && !hdEnhancedAvailable);
+    if (hdAvailable || hdCurrent == 1) add(hd, 1, "Faithful");
+    if (hdEnhancedAvailable || hdCurrent == 2) add(hd, 2, "Enhanced");
     add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
     // Hints: one line, no wrap - at most ~58 characters stay over the title rule (measured; longer runs off the panel).
     // Facts measured by Rendering / Integration: FSR 1 costs almost nothing; FSR 3.1 gives the best image when the GPU
@@ -1098,8 +1101,13 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
                         : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
     row(hd, "<PCSettings:HDTextures>",
-        hdAvailable ? "HD textures use more video memory. Applies on next map."
-                    : "The HD texture pack is not installed.", "HD Textures");
+        // below a level's memory floor: a warning only (VRAM unknown = no warning)
+        hdMissing                                                             ? "That HD level is not installed: a lower one is used."
+        : !hdAvailable && !hdEnhancedAvailable                                ? "The HD texture pack is not installed."
+        : vramMB > 0 && vramMB < frontend::kHdTexturesMinVramMB                ? "May exceed this GPU's memory on large maps."
+        : hdEnhancedAvailable && vramMB > 0 && vramMB < frontend::kHdEnhancedMinVramMB ? "Enhanced may exceed this GPU's memory on large maps."
+        : hdEnhancedAvailable ? "Faithful: the original, sharper. Enhanced: new materials."
+                              : "HD textures use more video memory. Applies on next map.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
     if (frameGenAvailable) {   // decided at start-up: a value different from this session's state says so
         std::vector<gfx::avm1::Value> fg;
@@ -1376,9 +1384,10 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
-                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
+                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTextureLevelAvailable(1),
                                  rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
-                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable());
+                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
+                                 rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures);
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

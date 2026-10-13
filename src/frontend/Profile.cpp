@@ -73,7 +73,7 @@ void LocalProfile::load() {
 
 bool LocalProfile::loadFrom(std::istream& f) {
     std::string line, section;
-    bool factionKeys = false, oldKeys = false;
+    bool factionKeys = false, oldKeys = false, hdUserSetKey = false;
     while (std::getline(f, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == ';') continue;
@@ -95,11 +95,11 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "VSync") display.vsync = v == "1";
             else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
             else if (k == "Upscaling") display.upscaling = std::clamp(std::atoi(v.c_str()), 0, Display::kUpscalingMax);
-            else if (k == "HDTextures") display.hdTextures = v == "1";
+            else if (k == "HDTextures") display.hdTextures = std::clamp(std::atoi(v.c_str()), 0, Display::kHdTexturesMax);
             else if (k == "Anisotropy") display.anisotropy = Display::clampAnisotropy(std::atoi(v.c_str()));
             else if (k == "FrameGeneration") display.frameGeneration = std::atoi(v.c_str()) != 0 ? 1 : 0;
             else if (k == "RayTracing") display.rayTracing = std::clamp(std::atoi(v.c_str()), 0, Display::kRayTracingMax);
-            else if (k == "HDTexturesUserSet") display.hdTexturesUserSet = v == "1";
+            else if (k == "HDTexturesUserSet") { display.hdTexturesUserSet = v == "1"; hdUserSetKey = true; }
             else if (k == "HDPackHintShown") display.hdPackHintShown = v == "1";
             else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
@@ -125,6 +125,9 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k.rfind("Stat.", 0) == 0) progression.stats[std::atoi(k.c_str() + 5)] = std::atol(v.c_str());
         } else if (section == "[ProfileData]") values_[k] = v;
     }
+    // Profiles saved before HDTexturesUserSet (2026-10-12): an HD level that is on was the user's own choice (the row
+    // defaulted Off then); written with the key at the next save.
+    if (!hdUserSetKey && display.hdTextures > 0) display.hdTexturesUserSet = true;
     // Profiles saved before the faction bot counts (09b, 8c2b6e3) hold only BotsFriendly / BotsEnemy: the team-mode
     // Bot Settings would read 0 / 0. Migrated once, as 09b launched them (no faction is known before the match: the
     // human on the Autobot side), within the original 5 v 5 limits (the human's side 4 bots, the other 5).
@@ -150,7 +153,7 @@ void LocalProfile::save() const {
     }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
-      << "\nFrameLimit=" << display.frameLimit << "\nUpscaling=" << display.upscaling << "\nHDTextures=" << (display.hdTextures ? 1 : 0)
+      << "\nFrameLimit=" << display.frameLimit << "\nUpscaling=" << display.upscaling << "\nHDTextures=" << display.hdTextures
       << "\nHDTexturesUserSet=" << (display.hdTexturesUserSet ? 1 : 0) << "\nHDPackHintShown=" << (display.hdPackHintShown ? 1 : 0)
       << "\nAnisotropy=" << display.anisotropy
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
