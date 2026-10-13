@@ -49,6 +49,8 @@
 #include <map>
 #include <sstream>
 
+namespace render { IRenderer* createNullRenderer(); }   // src/core/NullRenderer.cpp
+
 namespace core {
 
 namespace {   // WFC_BRAWLTEST state (dev tool, main thread only): the arena, the pinned eye, active while the test window runs
@@ -105,12 +107,21 @@ bool Application::init() {
         }
         return false;
     }
-    window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
-    if (!window_) { LOG_ERROR("window creation failed"); return false; }
+    // WFC_NULLRENDER=1 (direct-boot sim harnesses only: NAVQ, BOTTEST, DETERMINISM, ...): no window, no GL context, nothing on the
+    // GPU - the harness runs on the CPU outside GPU slots. A frontend boot or the interactive loop needs the real renderer.
+    const bool nullRender = std::getenv("WFC_NULLRENDER") && std::strcmp(std::getenv("WFC_NULLRENDER"), "0") != 0;
+    if (nullRender && wantsFrontendBoot()) { LOG_ERROR("WFC_NULLRENDER: only for direct-boot harnesses (set the harness variable)"); return false; }
+    if (nullRender) {
+        renderer_ = render::createNullRenderer();
+        LOG_INFO("WFC_NULLRENDER: no window, no GL context, no GPU upload (sim-only harness boot)");
+    } else {
+        window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
+        if (!window_) { LOG_ERROR("window creation failed"); return false; }
 
-    applyStartupGraphics();   // PC EXTENSION (Application_Frontend.cpp): frame generation is fixed when the renderer starts
-    renderer_ = render::createGLRenderer();
-    if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
+        applyStartupGraphics();   // PC EXTENSION (Application_Frontend.cpp): frame generation is fixed when the renderer starts
+        renderer_ = render::createGLRenderer();
+        if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
+    }
 
     audio_ = audio::createAudio();
     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
@@ -266,6 +277,7 @@ bool Application::init() {
     }
     gameMode_.begin(world_);
 
+    if (!window_) { LOG_ERROR("WFC_NULLRENDER: no harness ran; the interactive loop needs a window"); return false; }
     window_->setMouseCaptured(true);
     mouseCaptured_ = true;
 
@@ -6000,6 +6012,11 @@ void Application::runDeterminismTest() {
     size_t same = 0;
     while (same < a.size() && same < b.size() && a[same] == b[same]) ++same;
     LOG_INFO("DETERMINISM %zu / %zu events (A 60 fps) vs %zu (B 240 fps + FX randomness); first difference at %zu", a.size(), a.size(), b.size(), same);
+    {   // Event-log digest (FNV-1a over run A): equal across boots = the same simulation (WFC_NULLRENDER vs the GL boot).
+        unsigned long long h = 1469598103934665603ULL;
+        for (const std::string& line : a) { for (unsigned char c : line) { h ^= c; h *= 1099511628211ULL; } h ^= '\n'; h *= 1099511628211ULL; }
+        LOG_INFO("DETERMINISM digest %016llx over %zu events (%s boot)", h, a.size(), std::getenv("WFC_NULLRENDER") ? "null-renderer" : "GL");
+    }
     if (same < a.size() || same < b.size())
         LOG_INFO("DETERMINISM   A: %s | B: %s", same < a.size() ? a[same].c_str() : "-", same < b.size() ? b[same].c_str() : "-");
     check(a.size() > 20, "the match produced events (" + std::to_string(a.size()) + ")");
