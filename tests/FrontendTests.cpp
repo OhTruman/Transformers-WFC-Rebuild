@@ -8,6 +8,7 @@
 #include "frontend/GameFlow.h"
 #include "frontend/Hud.h"
 #include "frontend/InputPrompts.h"
+#include "frontend/PackageCredits.h"
 #include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
@@ -142,6 +143,17 @@ static void testHdTexturesBoot() {
         setEnv(m[0], nullptr);
     }
     std::remove("wfc_profile.ini");
+}
+
+static void testPackageCredits() {
+    // The DLSS credit line: start-up movie or the credits movie, only in a DLSS package build; this test build is not one.
+    check(!frontend::kDlssPackage, "credits.dlss_off_by_default");
+    check(frontend::isCreditsMovie("FMV_credits") && frontend::isCreditsMovie("FMV_Credits_INT") && !frontend::isCreditsMovie("FMV_Intro"),
+          "credits.movie_name");
+    check(frontend::packageCreditShown(true, true, false, "") && frontend::packageCreditShown(true, false, true, "FMV_credits") &&
+          !frontend::packageCreditShown(true, false, false, "FMV_credits") && !frontend::packageCreditShown(true, false, true, "FMV_Intro") &&
+          !frontend::packageCreditShown(false, true, true, "FMV_credits"), "credits.dlss_line_moments");
+    check(std::string(frontend::kDlssCreditText).rfind("NVIDIA DLSS: Copyright (c) NVIDIA Corporation.", 0) == 0, "credits.dlss_text");
 }
 
 static void testGraphicsAutoDetect() {
@@ -628,6 +640,7 @@ int main() {
     testRecommendedBots();
     testGraphicsAutoDetect();
     testHdTexturesBoot();
+    testPackageCredits();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);

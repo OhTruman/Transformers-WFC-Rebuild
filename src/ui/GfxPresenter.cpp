@@ -1349,6 +1349,9 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                 if (op.object == c.movie) op.movie->invoke(c.path, {Value((double)sx), Value((double)sy)});
     }
     if (cursor_) cursor_->advance(dt);
+#if WFC_DLSS_PACKAGE
+    syncPackageCredit();
+#endif
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
     if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
@@ -1470,9 +1473,65 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
         for (Extra& e : extras_) drawMovie(*e.movie);
     }
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
+#if WFC_DLSS_PACKAGE
+    if (credit_ && creditShown_) drawMovie(*credit_);
+#endif
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
     gl_.end();
 }
+
+#if WFC_DLSS_PACKAGE
+// PC EXTENSION (DLSS package builds): one small grey line in the bottom-right corner while the start-up movie or the
+// credits movie is up; no timing of its own. Sized from the window: ~1.3 % of its height (14 px at 1080p), a 2 % margin.
+void GfxPresenter::syncPackageCredit() {
+    const bool shown = frontend::packageCreditShown(frontend::kDlssPackage, rt_.startupMovieUp(),
+                                                    rt_.fullScreenMovie() && rt_.movieOpen(), rt_.flow().scriptMovie());
+    if (shown != creditShown_) {
+        creditShown_ = shown;
+        frontend::FlowTrace::emit("package.credit", {{"line", "NVIDIA DLSS"}, {"shown", frontend::FlowTrace::boolean(shown)},
+                                                     {"movie", rt_.startupMovieUp() ? "startup" : rt_.flow().scriptMovie()},
+                                                     {"provenance", "PC EXTENSION"}});
+    }
+    if (!shown || creditFailed_) return;
+    if (!credit_) {
+        credit_ = std::make_unique<GfxMovie>();
+        if (!credit_->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",
+                           [](GfxMovie&, const std::string&, gfx::avm1::Args&) { return gfx::avm1::Value(); },
+                           [](GfxMovie&, const std::string&, const std::string&) {})) {
+            credit_.reset();
+            creditFailed_ = true;
+            return;
+        }
+        credit_->advance(1.0f / credit_->frameRate());   // frame 1 (the root script object); never advanced again
+        creditW_ = creditH_ = 0;
+    }
+    gfx::Player& p = credit_->player();
+    gfx::MovieClip* root = p.root();
+    if (!root || !root->script) return;
+    for (auto& c : root->children) if (c.second && c.second->name != "dlss_txt") c.second->visible = false;   // the cursor art
+    if (creditW_ == viewW_ && creditH_ == viewH_) return;
+    creditW_ = viewW_; creditH_ = viewH_;
+    p.setViewport((float)viewW_, (float)viewH_);
+    const gfx::Matrix m = GfxRendererGL::movieMatrix(p, viewW_, viewH_);
+    const gfx::Matrix inv = m.inverse();
+    const float px = std::max(11.0f, (float)viewH_ * 0.013f), margin = (float)viewH_ * 0.02f;
+    const float lineH = px * 1.6f;
+    const gfx::Point a = inv.apply({margin, (float)viewH_ - margin - lineH}), b = inv.apply({(float)viewW_ - margin, (float)viewH_ - margin});
+    const double perUnit = std::max(1e-3, (double)m.a * 20.0);   // window pixels per stage unit
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    V t = vm.callMethod(V(root->script), "createTextField", {V("dlss_txt"), V(1000), V(a.x / 20.0), V(a.y / 20.0),
+                                                              V((b.x - a.x) / 20.0), V((b.y - a.y) / 20.0)});
+    if (!t.isObject()) return;
+    vm.setV(t, "html", V(true));
+    vm.setV(t, "embedFonts", V(true));
+    vm.setV(t, "selectable", V(false));
+    vm.setV(t, "_alpha", V(75.0));
+    const int size = (int)std::lround(px / perUnit);
+    vm.setV(t, "htmlText", V(std::string("<p align='right'><font face='$NormalFont' size='") + std::to_string(std::max(1, size)) +
+                             "' color='#C8C8C8'>" + frontend::kDlssCreditText + "</font></p>"));
+}
+#endif
 
 void GfxPresenter::recommendedSettingsPressed() {
     rt_.applyRecommendedGraphics("recommended");

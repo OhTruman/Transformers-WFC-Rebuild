@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "frontend/FrontendRuntime.h"
+#include "frontend/PackageCredits.h"
 #include "ui/GfxHost.h"
 #include "ui/gl/GfxRendererGL.h"
 
@@ -43,6 +44,9 @@ public:
     void advanceLoading(float dt) override {
         if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
         if (cursor_) cursor_->advance(dt);
+#if WFC_DLSS_PACKAGE
+        syncPackageCredit();
+#endif
     }
     // Automation (clickclip:): the window position of a clip's centre in the focused movie.
     bool clipWindowCenter(const std::string& path, int& x, int& y);
@@ -136,6 +140,14 @@ private:
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;
+#if WFC_DLSS_PACKAGE
+    // PackageCredits: the NVIDIA DLSS credit line, a text field on its own instance of the cursor movie (the font
+    // library's $NormalFont), drawn above the full-screen movie.
+    std::unique_ptr<GfxMovie> credit_;
+    bool creditShown_ = false, creditFailed_ = false;
+    int creditW_ = 0, creditH_ = 0;   // the window size the line was laid out for
+    void syncPackageCredit();
+#endif
 };
 
 } // namespace ui
