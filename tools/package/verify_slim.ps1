@@ -350,6 +350,10 @@ try {
             $hdOn = $log | Select-String -SimpleMatch 'renderer: HD textures on' | Select-Object -Last 1
             if (-not $hdOn) { $reasons += 'HD textures forced on (WFC_HDTEXTURES=1) but the renderer did not turn them on' }
         }
+        # Modern materials (HD Enhanced): the loader falls back to the original materials per map when materials_pbr.json is
+        # missing / unparsable / empty (Rendering a2067e5d) - a package that ships the file must never log the fallback
+        $pbrBad = $log | Select-String -SimpleMatch 'wfc: Modern materials unavailable for' | Select-Object -First 1
+        if ($pbrBad) { $reasons += "Modern materials fell back: $($pbrBad.Line.Trim())" }
         # ray tracing stays off unless switched on (user 2026-10-12)
         $rtOn = $log | Select-String -Pattern 'RT round trip: on|RT shadow \+ AO: on|RT characters: on' | Select-Object -First 1
         if ($rtOn) { $reasons += "ray tracing ran without being switched on: $($rtOn.Line.Trim())" }
