@@ -789,7 +789,7 @@ template <class Rn> std::optional<frontend::HudFrame::LockOnMarker> lockOnMarker
     } else { (void)r; (void)p; return std::nullopt; }
 }
 
-// Playtest bot overlay (PC EXTENSION playtest tool, not a QA-panel feature): F9 or WFC_BOTOVERLAY=1. Gameplay's
+// Playtest bot overlay (PC EXTENSION playtest tool, not a QA-panel feature): F12 or WFC_BOTOVERLAY=1. Gameplay's
 // World::setBotOverlay(bool) turns its qaBotLabels on outside QA mode (detected; without it the QA toggle is used,
 // which shows labels only with WFC_QA).
 template <class W, class = void> struct HasSetBotOverlay : std::false_type {};
@@ -831,7 +831,7 @@ template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const s
 }
 }
 
-// Playtest bot overlay (every build, not only dev-tool builds): F9 / WFC_BOTOVERLAY=1 toggles Gameplay's bot labels;
+// Playtest bot overlay (every build, not only dev-tool builds): F12 / WFC_BOTOVERLAY=1 toggles Gameplay's bot labels;
 // the labels (theirs, or the QA panel's when it drives the overlay) go to the HUD every frame in a match.
 void Application::playtestOverlayTick(const platform::InputFrame& in) {
     if (!frontend_) return;
@@ -841,7 +841,7 @@ void Application::playtestOverlayTick(const platform::InputFrame& in) {
         static bool botOverlay = std::getenv("WFC_BOTOVERLAY") != nullptr && std::string(std::getenv("WFC_BOTOVERLAY")) != "0";
         static bool applied = false;
         for (uint16_t vk : in.keyPresses)
-            if (vk == 0x78) {   // F9
+            if (vk == 0x7B) {   // F12 (was F9: it collided with the RT mode cycle, which keeps F9)
                 botOverlay = !botOverlay;
                 frontend::FlowTrace::emit("playtest.botOverlay", {{"on", frontend::FlowTrace::boolean(botOverlay)}, {"by", applyBotOverlay(world_, botOverlay)}});
             }

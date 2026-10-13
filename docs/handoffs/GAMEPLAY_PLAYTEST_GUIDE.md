@@ -11,11 +11,20 @@ Decide whether Smart feels smarter and fair. The Smart AI milestone stays open u
   2. **Streets**: compact lanes, easy to watch flanks and cover.
   3. **Gorge**: long sightlines. The edge is smaller here, so it's a fairness check.
   4. Optionally **Debris**: the smallest edge (54 %).
-- **Bot overlay:** **F9** toggles a label over every bot. It works in every build.
+- **Bot overlay:** **F12** toggles a label over every bot (F9 cycles the Ray Tracing mode, F11 the debug wire boxes). It works in every build.
   - Label format: `name [Smart|Classic difficulty] goal ACTION tgt <id> hp <n>% wp <i>/<n>`.
   - ACTION is `HUNT`, `RETREAT`, `TO-COVER` or `IN-COVER` (Smart only). `STUCK` appears when a bot is stuck.
   - Lines point to each bot's target and to where its action is headed.
   - Play a round without it too: the point is how the bots *feel*.
+
+## Keys for the graphics A/B (same build)
+- **F9** cycles the Ray Tracing mode live: Off -> Faithful -> Realistic -> Off. It only works on a map that was loaded with the
+  Settings row **Ray Tracing** set to Faithful or Realistic (set the row BEFORE loading the map; on a map loaded with the row
+  Off, F9 only takes effect from the next map). F9 changes the renderer, not the saved setting: the Settings row keeps showing
+  the value you chose, and it is not saved.
+- **HD textures** (Settings row, Off by default): Off / Faithful / Enhanced. Enhanced also turns on the Modern materials. Needs a
+  map reload.
+- **F11** = debug wire boxes (ignore), **F12** = the bot overlay below.
 
 ## What to look for
 

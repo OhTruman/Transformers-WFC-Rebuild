@@ -52,7 +52,7 @@ int vkFor(Button b) {
         case Button::Sprint:       return 0;        // no sprint in WFC (no binding)
         case Button::Reload:       return 'R';
         case Button::CameraToggle: return VK_F8;    // rebuild debug (C / B belong to WFC: Hover Up, Look At)
-        case Button::Debug:        return VK_F9;
+        case Button::Debug:        return VK_F11;   // rebuild debug wire boxes (was F9: it collided with the RT mode cycle + the bot overlay)
         case Button::Ascend:       return 'C';
         case Button::Descend:      return 'V';
         case Button::NextWeapon:   return VK_PRIOR;

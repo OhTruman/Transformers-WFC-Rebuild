@@ -3617,7 +3617,7 @@ void World::draw(render::IRenderer& r) const {
     r.setReticle(reticle);
 
     drawQaBotOverlay(r);   // DEV / QA TOOLING (off unless the panel turns it on)
-    // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
+    // Debug overlay (Button::Debug, F11 on PC): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
         auto wireBox = [&](core::Vec3 c, core::Vec3 half, core::Vec3 col) {
             core::Vec3 k[8];
