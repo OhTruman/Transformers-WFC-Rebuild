@@ -26,11 +26,17 @@ if ($Exe) {
     $Exe = (Resolve-Path $Exe).Path; $d = Join-Path $OutDir "rt_on"; New-Item -ItemType Directory -Force $d | Out-Null; $lg = Join-Path $d "wfc.log"
     if (-not (Test-Path $lg)) {
         (Get-BotProfile 0 0 1 -Width 1920 -Height 1080 -RayTracing 2) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
-        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_MATCH_URL = "${Map}?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
+        $null = Invoke-WfcExe $Exe $d @{ WFC_BOOT = "match"; WFC_RT_MODE = "2"; WFC_MATCH_URL = "${Map}?GameModeTag=TDM"; WFC_SMOKE_FRAMES = "$Frames"; WFC_NOMOUSE = "1"; WFC_SKIPINTRO = "1" } "run.log" 600
     }
     if (-not (Test-Path $lg)) { Res "runtime" "UNKNOWN" "no log" "Experimental" }
     else {
         $rs = Get-WfcRtState $lg
+        # GL context (2026-10-13, Experimental's WGL probe: AMD 26.6.4 does not list WGL_ARB_create_context_robustness, so the legacy
+        # context had NO_RESET_NOTIFICATION and the TDR reset poll could never fire): the shipped exe must log a robust context with
+        # LOSE_CONTEXT_ON_RESET (strategy 0x8252)
+        $ctx = @(Select-String -Path $lg -Pattern 'OpenGL context: ' | ForEach-Object { $_.Line })
+        $robust = @($ctx | Where-Object { $_ -match 'OpenGL context: robust' -and ($_ -match '8252|LOSE_CONTEXT_ON_RESET') })
+        Res "context" $(if ($robust.Count) { "PASS" } elseif ($ctx.Count) { "FAIL" } else { "UNKNOWN" }) ("GL context line: {0}" -f $(if ($ctx.Count) { ($ctx[-1] -replace '^\S+\s+', '') } else { "(none)" })) "Systems"
         # (a map that did not load is the harness' fault, not the build's: 2026-10-13 "$Map?..." expanded an undefined variable and
         #  the run fell back to the graybox arena - Systems)
         $noMap = Select-String -Path $lg -Pattern 'render data not found' -Quiet
