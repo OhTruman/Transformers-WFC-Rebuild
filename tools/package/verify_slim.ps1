@@ -63,6 +63,7 @@ param(
     [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
     [int]$SettingsExpected = 0,  # WFC_SETTINGSTEST: the number of renderer settings checks expected (0 = any count; all must pass)
     [switch]$NoSettingsTest,     # skip the settings self-test run
+    [switch]$ForeignCwd,         # start the map runs from a NOT writable working directory (<map>\cwd, write denied to this user): wfc.log / wfc_profile.ini must land beside the exe instead (needs Systems' log-dir patch; the writable-cwd case keeps the cwd for harnesses)
     [string]$RtHoldFile = "",    # the RT gate (only) waits while this file exists: the RT-off steps run first, the gate starts once the RT slot is granted and the file is removed
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
@@ -197,6 +198,13 @@ if (Test-Path -LiteralPath $manPath) {
     }
     if ($have.ContainsKey('d3d12/d3d12sdklayers.dll')) { $pk.Problems += 'D3D12\d3d12SDKLayers.dll (the D3D12 debug layer) must not ship' }
     $pk.Files = $have.Count
+    $playBat = Join-Path $pkgTop 'Play.bat'
+    if (-not (Test-Path -LiteralPath $playBat)) { $pk.Problems += 'no Play.bat' }
+    else {
+        $pb = Get-Content -LiteralPath $playBat -Raw
+        if ($pb -match 'goto run') { $pk.Problems += 'Play.bat is the old template (runs any F:\...\wfc_rebuild.exe it finds, not the package exe)' }
+        if ($pb -notmatch 'pushd "%L%:\\Transformers Rebuild\\Rebuild\\build\\release\\bin"') { $pk.Problems += 'Play.bat does not start the package exe from its own bin' }
+    }
     Write-Host ("package bin: {0} files vs build_slim.json {1}; M5 runtime {2}; {3} problems" -f $have.Count, $want.Count, $(if ($pk.M5) { 'shipped' } else { 'not shipped' }), $pk.Problems.Count)
 } else {
     $pk.Note = 'no build_slim.json (a package made before tools/package/build_slim.py wrote one): bin contents and the M5 runtime not checked'
@@ -269,7 +277,12 @@ try {
 
         Write-Host "[$name] map ${id}: starting $exe"
         $t0 = Get-Date
-        $p = Start-Process -FilePath $exe -WorkingDirectory $bin -PassThru
+        $cwd = $bin
+        if ($ForeignCwd) {
+            $cwd = Join-Path $run 'cwd'; New-Item -ItemType Directory -Force -Path $cwd | Out-Null
+            $null = icacls $cwd /deny "$($env:USERNAME):(W)"   # (a start folder the game cannot write: a shortcut's System32, say)
+        }
+        $p = Start-Process -FilePath $exe -WorkingDirectory $cwd -PassThru
         $killed = $false
         if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
             $killed = $true
@@ -340,6 +353,14 @@ try {
 
         $reasons = @()
         if (-not (Test-Path -LiteralPath $fileLog)) { $reasons += 'no file log (WFC_FILELOG not active?)' }
+        # the playtest's log must be findable (2026-10-13: a playtest left no wfc.log anywhere): wfc.log beside the exe, and
+        # with -ForeignCwd nothing written into the working directory instead
+        if (-not (Test-Path -LiteralPath $logPath)) { $reasons += 'no wfc.log beside the exe' }
+        if ($ForeignCwd) {
+            $null = icacls $cwd /remove:d "$($env:USERNAME)"
+            foreach ($f in 'wfc.log', 'wfc_profile.ini') { if (Test-Path -LiteralPath (Join-Path $cwd $f)) { $reasons += "$f written to the not-writable working directory" } }
+            if (-not ($log | Select-String -SimpleMatch "the working directory is not writable" | Select-Object -First 1)) { $reasons += "no 'log file: ... (the working directory is not writable: the exe's folder)' line (exe before the log-dir patch?)" }
+        }
         if ($killed) { $reasons += "killed after $TimeoutSeconds s" }
         if (-not $matchLine -or -not $inGame) { $reasons += 'match not reached' }
         if (-not $shutdown) { $reasons += 'no clean shutdown' }
