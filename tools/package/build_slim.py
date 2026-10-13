@@ -212,7 +212,7 @@ def main():
         t = t.replace('09c 37eec59, Release + PGO', version).replace('09c b898c75 slim', '09c %s slim' % head)
         if n == 'README.txt' and hd_src:                 # (user 2026-10-12: everything new is opt-in; the original look is the default)
             t = t.rstrip('\r\n') + ('\n\nGraphics: the game starts with its original look. The optional HD pack (new textures and, where the pack\n'
-                                    'has them, modern material maps) is included but OFF by default: Settings > Graphics > HD Textures: On\n'
+                                    'has them, modern material maps) is included but OFF by default: Settings > Graphics > HD Textures: Faithful or Enhanced\n'
                                     '(applies on the next map load). Ray-traced shadows / lighting, where the build has them, are also OFF\n'
                                     'by default and only run when switched on in the same menu.\n')
         if n == 'README.txt' and m5:

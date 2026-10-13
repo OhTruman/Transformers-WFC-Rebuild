@@ -1,11 +1,24 @@
 """A numeric emulator for matc's generated material GLSL (M6, Systems; tools/render/matc.py emits one wfcMaterial body
 per material instance: SSA lines "TYPE tN = EXPR;", "o.Output = EXPR;", wfcSample2D / cube samples, mix / dot / clamp /
-pow ...). Used as the oracle for the M6 "pbr" mapping: evaluate a material's original body with chosen texture samples,
-evaluate a mapped variant on the same inputs, compare.
+pow ...). It is the oracle for the M6 "pbr" mapping: evaluate a material's original body with chosen inputs, evaluate the
+mapped variant on the same inputs, compare.
 
 Not a GLSL compiler: the subset matc emits, evaluated in float64 with numpy. Anything outside the subset raises
-Unsupported (the caller records the material as not emulated). Texture samples come from a table the caller provides
-(slot -> 4 floats), so a test is reproducible; tangent / world transforms are identity (the mapping does not change them).
+Unsupported (the caller records the material as not emulated). Inputs:
+  - texture samples: a table (slot -> 4 floats), or real images (slot -> image array, sampled at the UV, wrap, nearest);
+  - the view inputs (m.cameraVector, m.reflectionVector, m.lightVector) and cube samples: non-degenerate defaults;
+  - runtime parameters (uRTSet_X ? uRT_X : default): unset (the default branch) or set (uRT_X = a given value).
+Tangent / world transforms are identity (the mapping does not change them).
+
+**The base-colour strip** (the M6 contract for matc's "pbr" mode; strip_view=True):
+  every value carries a flag "depends on the view" (set at m.cameraVector / m.reflectionVector / m.lightVector and every
+  cube sample, propagated through every operation and function). Two rules:
+  1. additive view terms are zeroed: at a + / - whose one operand depends on the view and the other does not, the result
+     is the view-independent operand alone (the cube reflection added into DiffuseColor, the anisotropic camera specular
+     of WEP_PhongMain / ENV_PhongMain_NS: pow(sqrt(1 - dot(V, T)^2), n) * colour * k, added to the diffuse chain);
+  2. a view dependence still present at o.DiffuseColor (a multiplicative Fresnel / view factor) is replaced by its
+     view-independent mean: DiffuseColor averaged over the fixed direction set VIEW_SET (cube samples held fixed).
+  Only DiffuseColor (the base colour) is stripped; EmissiveColor and every other output keep the view terms.
 """
 import math
 import re
@@ -18,45 +31,89 @@ class Unsupported(Exception):
 
 
 _SW = {'x': 0, 'y': 1, 'z': 2, 'w': 3, 'r': 0, 'g': 1, 'b': 2, 'a': 3, 's': 0, 't': 1, 'p': 2, 'q': 3}
+_STRIP = [False]                     # (set by run() while evaluating with strip_view)
+
+# the fixed view-direction set for rule 2's mean: 32 directions on the upper hemisphere (golden spiral), deterministic
+VIEW_SET = []
+for _i in range(32):
+    _z = 1.0 - (_i + 0.5) / 32.0
+    _r = math.sqrt(max(0.0, 1.0 - _z * _z))
+    _phi = 2.399963229728653 * _i
+    VIEW_SET.append((_r * math.cos(_phi), _r * math.sin(_phi), _z))
+DEFAULT_CAMERA = (0.28, -0.42, 0.86)
+DEFAULT_REFLECTION = (-0.33, 0.21, 0.92)
+DEFAULT_LIGHT = (0.45, 0.30, 0.84)
 
 
 class G:
-    """A GLSL value: float (size 1) or vecN, with swizzles and broadcasting arithmetic."""
-    __slots__ = ('v',)
+    """A GLSL value: float (size 1) or vecN, with swizzles, broadcasting arithmetic and the view-dependence flag."""
+    __slots__ = ('v', 'view')
 
-    def __init__(self, v):
+    def __init__(self, v, view=False):
         self.v = np.atleast_1d(np.asarray(v, dtype=np.float64))
+        self.view = view
 
     def __getattr__(self, name):
         if name and all(c in _SW for c in name):
             idx = [_SW[c] for c in name]
             if max(idx) >= self.v.size:
                 if self.v.size == 1:
-                    return G(np.repeat(self.v, len(idx)))           # (scalar.xxx)
+                    return G(np.repeat(self.v, len(idx)), self.view)     # (scalar.xxx)
                 raise Unsupported('swizzle .%s of a vec%d' % (name, self.v.size))
-            return G(self.v[idx])
+            return G(self.v[idx], self.view)
         raise AttributeError(name)
 
-    def _o(self, other):
+    @staticmethod
+    def _o(other):
         return other.v if isinstance(other, G) else np.float64(other)
 
-    def __add__(self, o): return G(self.v + self._o(o))
-    def __radd__(self, o): return G(self._o(o) + self.v)
-    def __sub__(self, o): return G(self.v - self._o(o))
-    def __rsub__(self, o): return G(self._o(o) - self.v)
-    def __mul__(self, o): return G(self.v * self._o(o))
-    def __rmul__(self, o): return G(self._o(o) * self.v)
+    @staticmethod
+    def _vw(other):
+        return isinstance(other, G) and other.view
+
+    def _add(self, other, sign, reverse=False):
+        """reverse False: self + sign * other; reverse True: other + sign * self."""
+        ov = self._vw(other)
+        o = self._o(other)
+        # rule 1 applies at colour sums (both operands vec3 / vec4): scalar arithmetic inside a view term (1 - dot^2, the
+        # N.H falloff) is not a boundary
+        if _STRIP[0] and self.view != ov and self.v.size >= 3 and isinstance(other, G) and other.v.size >= 3:
+            if self.view:                                              # (self is the view term: keep the other operand)
+                return G(o if reverse else sign * o, False)
+            return G(sign * self.v if reverse else self.v, False)     # (other is the view term)
+        return G(o + sign * self.v if reverse else self.v + sign * o, self.view or ov)
+
+    def __add__(self, o): return self._add(o, 1)
+    def __radd__(self, o): return self._add(o, 1, reverse=True)
+    def __sub__(self, o): return self._add(o, -1)
+    def __rsub__(self, o): return self._add(o, -1, reverse=True)
+    def __mul__(self, o): return G(self.v * self._o(o), self.view or self._vw(o))
+    def __rmul__(self, o): return G(self._o(o) * self.v, self.view or self._vw(o))
     def __truediv__(self, o):
         with np.errstate(divide='ignore', invalid='ignore'):
-            return G(self.v / self._o(o))
+            return G(self.v / self._o(o), self.view or self._vw(o))
     def __rtruediv__(self, o):
         with np.errstate(divide='ignore', invalid='ignore'):
-            return G(self._o(o) / self.v)
-    def __neg__(self): return G(-self.v)
+            return G(self._o(o) / self.v, self.view or self._vw(o))
+    def __neg__(self): return G(-self.v, self.view)
     def __float__(self): return float(self.v[0])
 
     def __repr__(self):
-        return 'G(%s)' % np.array2string(self.v, precision=6)
+        return 'G(%s%s)' % (np.array2string(self.v, precision=6), ', view' if self.view else '')
+
+
+def _anyview(args):
+    return any(isinstance(a, G) and a.view for a in args)
+
+
+def _vf(fn):
+    """A GLSL function on G values: the result depends on the view when any argument does."""
+    def w(*args):
+        r = fn(*args)
+        if isinstance(r, G):
+            r.view = r.view or _anyview(args)
+        return r
+    return w
 
 
 def _flat(args):
@@ -73,7 +130,7 @@ def _ctor(n):
             vals = vals * n
         if len(vals) < n:
             raise Unsupported('vec%d from %d values' % (n, len(vals)))
-        return G(vals[:n])
+        return G(vals[:n], _anyview(args))
     return f
 
 
@@ -81,7 +138,10 @@ def _v(x):
     return x.v if isinstance(x, G) else np.float64(x)
 
 
-def _mix(a, b, t): return G(_v(a) * (1.0 - _v(t)) + _v(b) * _v(t))
+def _mix(a, b, t):
+    if _STRIP[0]:                                                       # (a view-dependent blend: rule 2, via the mean)
+        pass
+    return G(_v(a) * (1.0 - _v(t)) + _v(b) * _v(t))
 def _dot(a, b): return G([float(np.dot(_v(a), _v(b)))])
 def _clamp(x, lo, hi): return G(np.clip(_v(x), _v(lo), _v(hi)))
 def _pow(a, b):
@@ -113,43 +173,60 @@ def _cross(a, b): return G(np.cross(_v(a), _v(b)))
 def _sign(x): return G(np.sign(_v(x)))
 def _mod(a, b): return G(np.mod(_v(a), _v(b)))
 def _reflect(i, n): return G(_v(i) - 2.0 * np.dot(_v(n), _v(i)) * _v(n))
+def _float(x): return G([float(np.atleast_1d(_v(x))[0])])
 
 
 class Mat2:
     """GLSL mat2 (column-major constructor: a, b = column 0; c, d = column 1); only mat2 * vec2 is needed."""
     def __init__(self, a, b, c, d):
-        self.m = np.array([[float(_v(a)[0]) if isinstance(a, G) else float(a), float(_v(c)[0]) if isinstance(c, G) else float(c)],
-                           [float(_v(b)[0]) if isinstance(b, G) else float(b), float(_v(d)[0]) if isinstance(d, G) else float(d)]])
+        f = lambda x: float(np.atleast_1d(_v(x))[0])
+        self.m = np.array([[f(a), f(c)], [f(b), f(d)]])
+        self.view = _anyview((a, b, c, d))
     def __mul__(self, o):
-        return G(self.m @ _v(o)[:2])
+        return G(self.m @ _v(o)[:2], self.view or (isinstance(o, G) and o.view))
 
 
 def _mat2(a, b, c, d): return Mat2(a, b, c, d)
 
 
-class Material:
-    """One emulation context: m (inputs), o (outputs), the sample tables."""
+def srgb_to_linear(c):
+    c = np.asarray(c, dtype=np.float64)
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
 
-    def __init__(self, samples2d, samples_cube, uv0=(0.25, 0.75), refl=(0.0, 0.0, 1.0), vertex_color=(1, 1, 1, 1),
-                 time=0.0, cube_scale=1.0):
-        self.samples2d, self.samples_cube, self.cube_scale = samples2d, samples_cube, cube_scale
+
+class Material:
+    """One emulation context: m (inputs), o (outputs), the samples / images, the view, the runtime parameters."""
+
+    def __init__(self, samples2d=None, samples_cube=None, uv0=(0.25, 0.75), camera=DEFAULT_CAMERA, refl=DEFAULT_REFLECTION,
+                 light=DEFAULT_LIGHT, vertex_color=(1, 1, 1, 1), time=0.0, images=None, rt_value=None, strip_view=False):
+        self.samples2d, self.samples_cube = samples2d or {}, samples_cube or {}
+        self.images = images or {}           # slot -> (h, w, 4) float array (already decoded / unpacked)
+        self.rt_value = rt_value             # None: runtime parameters unset; a float: every uRT_* = that value
+        self.strip_view = strip_view
 
         class M:
             def __getattr__(self, name):                                  # (inputs this emulator does not model: 0)
                 return G((0.0, 0.0, 0.0))
         m = M()
-        m.uv0 = G(uv0); m.uv1 = G(uv0); m.reflectionVector = G(refl); m.vertexColor = G(vertex_color)
-        m.cameraVector = G((0.0, 0.0, 1.0)); m.worldPosition = G((0.0, 0.0, 0.0)); m.time = G([time])
-        m.screenPos = G((0.5, 0.5, 0.0, 1.0)); m.worldNormal = G((0.0, 0.0, 1.0)); m.lightVector = G((0.0, 0.0, 1.0))
-        m.normal = G((0.0, 0.0, 1.0)); m.worldPosUE = G((0.0, 0.0, 0.0))
+        m.uv0 = G(uv0); m.uv1 = G(uv0); m.vertexColor = G(vertex_color)
+        m.cameraVector = G(camera, True); m.reflectionVector = G(refl, True); m.lightVector = G(light, True)
+        m.worldPosition = G((0.0, 0.0, 0.0)); m.time = G([time]); m.screenPos = G((0.5, 0.5, 0.0, 1.0))
+        m.worldNormal = G((0.0, 0.0, 1.0)); m.normal = G((0.0, 0.0, 1.0)); m.worldPosUE = G((0.0, 0.0, 0.0))
         self.m = m
 
         class O:
             pass
         self.o = O()
 
-    def sample2d(self, slot, *rest):
+    def sample2d(self, slot, uv=None, *rest):
         s = int(float(slot))
+        if s in self.images and uv is not None:
+            img = self.images[s]
+            h, w = img.shape[:2]
+            u, v = _v(uv)[:2]
+            x = int(math.floor((u - math.floor(u)) * w)) % w
+            y = int(math.floor((v - math.floor(v)) * h)) % h
+            return G(img[y, x])
         if s not in self.samples2d:
             raise Unsupported('no sample for 2D slot %d' % s)
         return G(self.samples2d[s])
@@ -158,7 +235,7 @@ class Material:
         s = int(float(slot))
         if s not in self.samples_cube:
             raise Unsupported('no sample for cube slot %d' % s)
-        return G(np.asarray(self.samples_cube[s], dtype=np.float64) * self.cube_scale)
+        return G(np.asarray(self.samples_cube[s], dtype=np.float64), True)   # (a cube sample depends on the view)
 
 
 _DECL = re.compile(r'^\s*(?:float|vec[234]|int|bool|mat[34])\s+(t\d+)\s*=\s*(.*);\s*$')
@@ -169,58 +246,100 @@ _ALLOWED_FUNCS = {'vec2', 'vec3', 'vec4', 'float', 'mix', 'dot', 'clamp', 'pow',
                   'fract', 'min', 'max', 'step', 'smoothstep', 'exp2', 'log2', 'sin', 'cos', 'cross', 'sign', 'mod', 'reflect',
                   'wfcSample2D', 'wfcSample2DBias', 'wfcSample2DLevel', 'wfcSampleCube', 'wfcSampleCubeBias', 'wfcSampleCubeLevel',
                   'tangentToWorldUE', 'worldToTangentUE', 'mat2', 'wfcNormalNode'}
-# a runtime parameter's "set ? value : default" (customisation tints): emulated as unset - the material's own default
-_RT_TERNARY = re.compile(r'\(\s*uRTSet_\w+\s*!=\s*0\s*\?\s*uRT_\w+\s*:\s*(vec[234]\([^()]*\)|[-\d.e]+)\s*\)')
+# a runtime parameter's "set ? value : default" (customisation tints, overheat, defrag ...): unset -> the default branch,
+# set -> uRT_X (a scalar broadcast to the use)
+_RT_TERNARY = re.compile(r'\(\s*uRTSet_\w+\s*!=\s*0\s*\?\s*(uRT_\w+(?:\.\w+)?)\s*:\s*(vec[234]\([^()]*\)|[-\d.e]+)\s*\)')
+_RT_NAME = re.compile(r'\buRT_\w+')
+
+
+def _env(ctx):
+    w = _vf
+    return {'m': ctx.m, 'o': ctx.o, 'vec2': _ctor(2), 'vec3': _ctor(3), 'vec4': _ctor(4), 'float': w(_float), 'mat2': _mat2,
+            'wfcNormalNode': lambda m: m.normal, 'mix': w(_mix), 'dot': w(_dot), 'clamp': w(_clamp), 'pow': w(_pow),
+            'sqrt': w(_sqrt), 'normalize': w(_normalize), 'length': w(_length), 'abs': w(_abs), 'floor': w(_floor),
+            'fract': w(_fract), 'min': w(_min), 'max': w(_max), 'step': w(_step), 'smoothstep': w(_smoothstep),
+            'exp2': w(_exp2), 'log2': w(_log2), 'sin': w(_sin), 'cos': w(_cos), 'cross': w(_cross), 'sign': w(_sign),
+            'mod': w(_mod), 'reflect': w(_reflect), 'wfcSample2D': ctx.sample2d, 'wfcSample2DBias': ctx.sample2d,
+            'wfcSample2DLevel': ctx.sample2d, 'wfcSampleCube': ctx.sample_cube, 'wfcSampleCubeBias': ctx.sample_cube,
+            'wfcSampleCubeLevel': ctx.sample_cube, 'tangentToWorldUE': lambda m, v: v, 'worldToTangentUE': lambda m, v: v,
+            '__builtins__': {}}
+
+
+def _run_once(glsl, ctx):
+    env = _env(ctx)
+    _STRIP[0] = ctx.strip_view
+    try:
+        for raw in glsl.split('\n'):
+            line = raw.strip()
+            if not line or line.startswith('//'):
+                continue
+            mc = _CALL.match(line)
+            if mc and mc.group(1) in ('wfcSetNormal', 'wfcSetCustomUV', 'wfcClip'):
+                continue                                               # (state calls: no effect on the outputs)
+            md = _DECL.match(line) or _ASSIGN.match(line)
+            if not md:
+                raise Unsupported('statement: %s' % line[:80])
+            target, expr = md.group(1), md.group(2)
+            if ctx.rt_value is None:
+                expr = _RT_TERNARY.sub(lambda mm: '(' + mm.group(2) + ')', expr)
+            else:
+                expr = _RT_TERNARY.sub(lambda mm: '(' + mm.group(1) + ')', expr)
+                for n in _RT_NAME.findall(expr):
+                    env.setdefault(n, G([float(ctx.rt_value)]))
+            for fn in _IDENT.findall(expr):
+                if fn not in _ALLOWED_FUNCS:
+                    raise Unsupported('function %s' % fn)
+            if '?' in expr or '[' in expr:
+                raise Unsupported('ternary / index: %s' % expr[:60])
+            py = re.sub(r'(?<![\w.])(\d+)\.(?![\w])', r'\1.0', expr)    # (GLSL "1." literals; not t31.rgb)
+            try:
+                val = eval(py, env)                                        # (matc's own output, local data)
+            except Unsupported:
+                raise
+            except Exception as e:                                         # noqa: BLE001
+                raise Unsupported('%s: %s' % (type(e).__name__, line[:80]))
+            if not isinstance(val, G):
+                val = G(val)
+            if target.startswith('o.'):
+                setattr(ctx.o, target[2:], val)
+            else:
+                env[target] = val
+    finally:
+        _STRIP[0] = False
+    return {k: v for k, v in vars(ctx.o).items()}
 
 
 def run(glsl, ctx):
-    """Evaluates a wfcMaterial body; returns ctx.o's attributes as a dict of numpy arrays."""
-    env = {'m': ctx.m, 'o': ctx.o, 'vec2': _ctor(2), 'vec3': _ctor(3), 'vec4': _ctor(4),
-           'float': lambda x: G([float(np.atleast_1d(_v(x))[0])]), 'mat2': _mat2, 'wfcNormalNode': lambda m: m.normal,
-           'mix': _mix, 'dot': _dot, 'clamp': _clamp, 'pow': _pow, 'sqrt': _sqrt, 'normalize': _normalize, 'length': _length,
-           'abs': _abs, 'floor': _floor, 'fract': _fract, 'min': _min, 'max': _max, 'step': _step, 'smoothstep': _smoothstep,
-           'exp2': _exp2, 'log2': _log2, 'sin': _sin, 'cos': _cos, 'cross': _cross, 'sign': _sign, 'mod': _mod,
-           'reflect': _reflect, 'wfcSample2D': ctx.sample2d, 'wfcSample2DBias': ctx.sample2d, 'wfcSample2DLevel': ctx.sample2d,
-           'wfcSampleCube': ctx.sample_cube, 'wfcSampleCubeBias': ctx.sample_cube, 'wfcSampleCubeLevel': ctx.sample_cube,
-           'tangentToWorldUE': lambda m, v: v, 'worldToTangentUE': lambda m, v: v, '__builtins__': {}}
-    for raw in glsl.split('\n'):
-        line = raw.strip()
-        if not line or line.startswith('//'):
-            continue
-        mc = _CALL.match(line)
-        if mc and mc.group(1) in ('wfcSetNormal', 'wfcSetCustomUV', 'wfcClip'):
-            continue                                                   # (state calls: no effect on the outputs)
-        md = _DECL.match(line) or _ASSIGN.match(line)
-        if not md:
-            raise Unsupported('statement: %s' % line[:80])
-        target, expr = md.group(1), md.group(2)
-        expr = _RT_TERNARY.sub(lambda mm: '(' + mm.group(1) + ')', expr)
-        for fn in _IDENT.findall(expr):
-            if fn not in _ALLOWED_FUNCS:
-                raise Unsupported('function %s' % fn)
-        if '?' in expr or '[' in expr:
-            raise Unsupported('ternary / index: %s' % expr[:60])
-        py = re.sub(r'(?<![\w.])(\d+)\.(?![\w])', r'\1.0', expr)        # (GLSL "1." literals; not t31.rgb)
-        try:
-            val = eval(py, env)                                            # (matc's own output, local data)
-        except Unsupported:
-            raise
-        except Exception as e:                                             # noqa: BLE001
-            raise Unsupported('%s: %s' % (type(e).__name__, line[:80]))
-        if not isinstance(val, G):
-            val = G(val)
-        if target.startswith('o.'):
-            setattr(ctx.o, target[2:], val)
-        else:
-            env[target] = val
-    return {k: v.v.copy() for k, v in vars(ctx.o).items()}
+    """Evaluates a wfcMaterial body; returns {output: numpy array}. With ctx.strip_view, DiffuseColor follows the base-colour
+    strip (rules 1 and 2 above); the other outputs are evaluated normally."""
+    outs = _run_once(glsl, _clone(ctx, strip_view=False))
+    res = {k: v.v.copy() for k, v in outs.items()}
+    if ctx.strip_view and 'DiffuseColor' in outs:
+        s = _run_once(glsl, _clone(ctx, strip_view=True))['DiffuseColor']
+        if s.view:                                                     # rule 2: the mean over VIEW_SET
+            acc = np.zeros_like(s.v)
+            for d in VIEW_SET:
+                acc += _run_once(glsl, _clone(ctx, strip_view=True, camera=d, refl=d, light=d))['DiffuseColor'].v
+            res['DiffuseColor'] = acc / len(VIEW_SET)
+            res['_base_rule'] = np.array([2.0])
+        else:                                                          # (1: an additive view term was dropped; 0: none)
+            res['_base_rule'] = np.array([1.0 if not np.allclose(s.v, res['DiffuseColor']) else 0.0])
+            res['DiffuseColor'] = s.v.copy()
+    return res
+
+
+def _clone(ctx, **over):
+    m = ctx.m
+    kw = dict(samples2d=ctx.samples2d, samples_cube=ctx.samples_cube, uv0=tuple(m.uv0.v), camera=tuple(m.cameraVector.v),
+              refl=tuple(m.reflectionVector.v), light=tuple(m.lightVector.v), vertex_color=tuple(m.vertexColor.v),
+              time=float(m.time.v[0]), images=ctx.images, rt_value=ctx.rt_value, strip_view=ctx.strip_view)
+    kw.update(over)
+    return Material(**kw)
 
 
 def deps(glsl):
-    """Static dataflow: for each output (o.X) and temporary, the set of 2D / cube sample slots it depends on, and whether a
-    cube (reflection) sample reaches it. Returns {output: {'2d': set, 'cube': set}}."""
-    dep = {}
-    out = {}
+    """Static dataflow: for each output (o.X), the 2D / cube sample slots it depends on, and whether a view input reaches it."""
+    dep, out = {}, {}
     for raw in glsl.split('\n'):
         line = raw.strip()
         md = _DECL.match(line) or _ASSIGN.match(line)
@@ -228,14 +347,15 @@ def deps(glsl):
             continue
         target, expr = md.group(1), md.group(2)
         d2, dc = set(), set()
+        view = bool(re.search(r'm\.(cameraVector|reflectionVector|lightVector)', expr))
         for m in re.finditer(r'wfcSample2D\w*\(\s*(\d+)', expr):
             d2.add(int(m.group(1)))
         for m in re.finditer(r'wfcSampleCube\w*\(\s*(\d+)', expr):
             dc.add(int(m.group(1)))
         for t in re.findall(r'\bt\d+\b', expr):
             if t in dep:
-                d2 |= dep[t]['2d']; dc |= dep[t]['cube']
-        rec = {'2d': d2, 'cube': dc}
+                d2 |= dep[t]['2d']; dc |= dep[t]['cube']; view = view or dep[t]['view']
+        rec = {'2d': d2, 'cube': dc, 'view': view}
         if target.startswith('o.'):
             out[target[2:]] = rec
         else:
