@@ -1,8 +1,12 @@
 // wfc_gfxdump: runs one original GFx movie headlessly (AVM1 + display list) and prints its display tree.
 // Usage: wfc_gfxdump <movie object, e.g. UI_GFxFrontEnd_p.FrontEnd_GFX_1> [frames=60] [keys="30:114,40:13"]
 //        keys = frame:flashKeyCode pairs (down on that frame, up the next). Bridge calls go to a FrontendRuntime.
+// WFC_DUMP_MAPLABELS=1 (GameLobby_GFX, after a PRESCRIPT into a Private Match lobby): every catalog map's label attached
+// to the selected-map panel and centred (ui/MapLabel.h); prints its text box against frame_mc and FAILs any name that
+// leaves the frame's inner 8 px margin or sits below frame_mc.
 #include "frontend/FrontendRuntime.h"
 #include "ui/GfxHost.h"
+#include "ui/MapLabel.h"
 #include "core/Log.h"
 
 #include <cstdio>
@@ -62,6 +66,41 @@ int main(int argc, char** argv) {
         movie.advance(1.0f / movie.frameRate());
     }
     std::printf("%s", movie.dumpTree().c_str());
+    if (std::getenv("WFC_DUMP_MAPLABELS")) {
+        gfx::Player& p = movie.player();
+        gfx::MovieClip* anchor = ui::findMapLabelAnchor(p.root());
+        if (!anchor || !anchor->script) { std::printf("MAPLABELS FAIL no labelAnchor_mc / frame_mc panel\n"); return 5; }
+        VM& vm = p.vm();
+        int fails = 0, n = 0;
+        for (const auto& m : rt.catalog().maps()) {
+            if (m.mapId <= 0) continue;
+            const std::string name = m.friendlyName.empty() ? m.mapFilename : m.friendlyName;
+            Object* init = vm.newPlain();
+            vm.set(init, "MapFriendlyName", Value(name));
+            vm.set(init, "MapId", Value((double)m.mapId));
+            vm.set(init, "MapLabelColor", Value(16749363.0));
+            const Value lab = vm.callMethod(Value(anchor->script), "attachMovie",
+                                            {Value("mc_mapLabelMultiplayer"), Value("check_mc"), Value(500), Value(init)});
+            if (!lab.isObject()) { std::printf("MAPLABELS FAIL attach %s\n", name.c_str()); return 6; }
+            movie.advance(1.0f / movie.frameRate());
+            const ui::MapLabelResult r = ui::centreMapLabels(p);
+            anchor = ui::findMapLabelAnchor(p.root());
+            const Value t = vm.get(lab.o, "mapName_txt");
+            const double tw = t.isObject() ? vm.toNumber(vm.get(t.o, "textWidth")) : 0.0;
+            const double x0 = r.anchorX + vm.toNumber(vm.get(lab.o, "_x")) + (t.isObject() ? vm.toNumber(vm.get(t.o, "_x")) : 0.0);
+            const double left = x0 - r.frameX, right = r.frameX + r.frameW - (x0 + tw);
+            gfx::DisplayObject* frameD = p.resolveTarget("frame_mc", anchor ? anchor->parent : nullptr);
+            const bool above = anchor && frameD && anchor->depth > frameD->depth;
+            const bool ok = tw > 0 && left >= 8.0 && right >= 8.0 && std::fabs(left - right) < 1.0 && above;
+            std::printf("MAPLABEL %s %-12s \"%s\" text %.1f..%.1f (w %.1f) frame %.1f..%.1f margins %.1f / %.1f above=%d\n",
+                        ok ? "PASS" : "FAIL", std::to_string(m.mapId).c_str(), vm.toString(vm.get(t.o, "text")).c_str(), x0, x0 + tw, tw,
+                        r.frameX, r.frameX + r.frameW, left, right, above ? 1 : 0);
+            fails += ok ? 0 : 1; ++n;
+            vm.callMethod(lab, "removeMovieClip", {});
+        }
+        std::printf("MAPLABELS %s %d maps, %d failed\n", fails ? "FAIL" : "PASS", n, fails);
+        return fails ? 7 : 0;
+    }
     // WFC_DUMP_SHAPE=<id>: the fill / line styles of one shape of the root movie.
     if (const char* sid = std::getenv("WFC_DUMP_SHAPE")) {
         const gfx::MovieDef* def = movie.player().rootDef();
