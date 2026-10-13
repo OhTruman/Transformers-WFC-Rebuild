@@ -4971,6 +4971,62 @@ void Application::runClassChangeTest() {
             verify(next, std::string("match ") + std::to_string(match + 1) + " change " + std::to_string(k) + " -> " + next.name);
         }
     }
+    // Playtest 2026-10-13 P0 #4: Change Character WHILE WAITING TO RESPAWN (the pawn is already dead). A mirror UIController gets
+    // the events Application's routeMatchToFrontend sends (OnSpectating 3 s after the death, OnRespawn at the spawn); the player
+    // opens the pause menu (Change Character) as spectating starts and picks (a) at once, (b) on the step the respawn lands.
+    // The replacement pawn must be alive, the new class, the UI back InGame after the menu closes (input reaches the pawn), and
+    // it must move under Forward / Back input.
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel(classes[0]));
+        run(11.0f);
+        frontend::UIController ui;
+        ui.initialize(frontend::UIControllerClass::Multiplayer, [](const std::string&) {}, [] {}, [](bool) {}, nullptr);
+        ui.setGRIAvailable(true);
+        ui.onUIEvent((int)frontend::UIEvent::BeginGame);
+        for (int c = 0; c < 2; ++c) {
+            const Cls& next = classes[(c + 1) % 4];
+            const std::string tag = c == 0 ? "respawn wait (pick in the menu)" : "respawn wait (pick on the respawn step)";
+            if (ui.state() != frontend::UIState::InGame) ui.onUIEvent((int)frontend::UIEvent::Respawn);
+            world_.killLocalPlayer(world_.localMatchPlayer(), true);
+            float deadT = 0.0f; bool spectating = false, menu = false, picked = false;
+            int guard = 0;
+            for (; world_.localPlayerDead() && guard < 60 * 20; ++guard) {
+                const float ttr = world_.hudState().timeToRespawn;
+                if (!spectating && (deadT += dt) >= 3.0f) { ui.onUIEvent((int)frontend::UIEvent::Spectating); spectating = true; }
+                if (spectating && !menu) { ui.onUIEvent((int)frontend::UIEvent::Pause); menu = true; }
+                const bool pickNow = c == 0 ? menu : (ttr >= 0.0f && ttr <= dt * 1.5f);
+                if (pickNow && !picked) { world_.match().selectCharacter(world_.localMatchPlayer(), sel(next)); picked = true; }
+                step(idle);
+            }
+            if (!picked) { world_.match().selectCharacter(world_.localMatchPlayer(), sel(next)); picked = true; }   // spawned before the 3 s
+            const bool spawned = !world_.localPlayerDead();
+            ui.onUIEvent((int)frontend::UIEvent::Respawn);                     // RestartPlayer -> OnRespawn (menu may be open)
+            run(0.3f);
+            if (menu) ui.onCurrentUIClosed();                                     // the player closes Change Character / pause
+            const bool uiInGame = ui.state() == frontend::UIState::InGame;
+            game::Character& pc = world_.player().pawn();
+            // Application blanks input whenever the UI is not InGame: mirror that, then try Forward and Back (a wall on one side).
+            platform::InputFrame fwd, back;
+            fwd.down[(int)platform::Button::Forward] = true; back.down[(int)platform::Button::Back] = true;
+            const platform::InputFrame none;
+            float moved = 0.0f;
+            for (const platform::InputFrame* in : {&fwd, &back}) {
+                const core::Vec3 p0 = pc.position();
+                for (int i = 0; i < 60; ++i) step(uiInGame ? *in : none);
+                core::Vec3 d = pc.position() - p0; d.y = 0.0f;
+                moved = std::max(moved, core::length(d));
+            }
+            const bool newClass = pc.specialty() == next.name;
+            LOG_INFO("CLASSCHANGE %s: dead %.1f s, spectating %d, menu %d, spawned %d, ui %s, specialty %s (want %s), moved %.2f m in 1 s",
+                     tag.c_str(), guard * dt, (int)spectating, (int)menu, (int)spawned, frontend::uiStateName(ui.state()),
+                     pc.specialty().c_str(), next.name, moved);
+            // (b) may spawn the old class when the pick lands after RestartPlayer resolved the selection; it must still be playable.
+            check(spawned && uiInGame && moved > 1.0f && (c == 1 || newClass), tag + ": the replacement pawn spawns, the UI returns to InGame, it moves");
+            if (c == 0) verify(next, tag);
+        }
+    }
     LOG_INFO("CLASSCHANGE SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

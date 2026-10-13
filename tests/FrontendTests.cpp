@@ -487,6 +487,21 @@ static void testUIController() {
     ui2.onCurrentUIClosed();
     check(ui2.state() == UIState::InGame && hud2, "ui.resume_shows_hud");
     check(open2.empty() && ui2.openMovie().empty(), "ui.resume_closes_pause_movie");
+
+    // Playtest 2026-10-13 P0 #4: dead -> Spectating -> pause menu (Change Character) -> the respawn lands under the menu ->
+    // resume must reach InGame (it went back to Spectating: live pawn, input blanked). And the reverse: death under the menu.
+    ui2.onUIEvent(4);
+    ui2.onUIEvent(6);
+    check(ui2.state() == UIState::PausedSpectating, "ui.spectating_pause");
+    ui2.onUIEvent(5);
+    check(ui2.state() == UIState::Paused && ui2.openMovie() == "UI_GFxPause_p.PauseMenu_GFX_1", "ui.respawn_under_pause_keeps_menu");
+    ui2.onCurrentUIClosed();
+    check(ui2.state() == UIState::InGame && hud2, "ui.respawn_under_pause_resumes_ingame");
+    ui2.onUIEvent(6);
+    ui2.onUIEvent(4);
+    check(ui2.state() == UIState::PausedSpectating, "ui.death_under_pause");
+    ui2.onUIEvent(7);
+    check(ui2.state() == UIState::Spectating && ui2.openMovie() == "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "ui.death_under_pause_resumes_spectating");
 }
 
 // Runs the runtime (flow + shims + script) until `pred` or a frame budget.

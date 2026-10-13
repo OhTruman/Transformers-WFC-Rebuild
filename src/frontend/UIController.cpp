@@ -167,6 +167,16 @@ void UIController::onUIEvent(int code) {
     case UIState::Paused: case UIState::PausedSpectating:
         if (code == 11) gotoState(UIState::NotInGame);
         else if (code == 7) gotoState(state_ == UIState::Paused ? UIState::InGame : UIState::Spectating);
+        // [RECONSTRUCTION, playtest 2026-10-13 P0 #4] The MP world keeps running under the pause menu (bPauseable false), so the
+        // pawn can spawn or die while it is open. OnRespawn / OnSpectating were dropped here: a respawn under the menu (e.g.
+        // Change Character while waiting to respawn) resumed into Spectating - a live pawn with input blanked. They now switch
+        // the paused child state in place (the open menu stays; resume then reaches InGame / Spectating).
+        else if ((code == 5 && state_ == UIState::PausedSpectating) || (code == 4 && state_ == UIState::Paused)) {
+            const UIState from = state_;
+            state_ = code == 5 ? UIState::Paused : UIState::PausedSpectating;
+            LOG_INFO("FLOW uistate %s -> %s (%s) [under the pause menu]", uiStateName(from), uiStateName(state_), uiControllerClassName(cls_));
+            if (onState_) onState_(from, state_);
+        }
         break;
     case UIState::WaitingOnNextRound:
         if (code == 3) gotoState(UIState::InGame);
