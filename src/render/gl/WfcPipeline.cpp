@@ -375,13 +375,16 @@ void main() {
 const char* kFSPbrHelpers = R"(
 float wfcPbrRoughMap = -1.0;
 vec3 wfcPbrEnv = vec3(0.0);
+float wfcPbrMetallic = 0.0;      // (Systems' per-master metallic / F0 rows, when the pbr body sets them; else dielectric)
+vec3 wfcPbrF0 = vec3(0.04);
 float wfcPbrRoughness(float sp) {
     return wfcPbrRoughMap >= 0.0 ? clamp(wfcPbrRoughMap, 0.02, 1.0) : clamp(sqrt(2.0 / (max(sp, 0.0) + 2.0)), 0.02, 1.0);
 }
 float wfcPbrEnvLod(float sp) { return wfcPbrRoughness(sp) * 6.0; }
 )";
 // The Modern lightmapped base pass: the original's diffuse lighting (base colour = the pbr body's DiffuseColor, the cube
-// reflection stripped) + GGX / Smith specular (F0 0.04) from the three directional-lightmap coefficients taken as light
+// reflection stripped; x (1 - metallic)) + GGX / Smith specular (F0 = mix(0.04, the body's wfcPbrF0, its wfcPbrMetallic);
+// defaults: dielectric 0.04) from the three directional-lightmap coefficients taken as light
 // from their basis directions + image-based specular from the material's environment (split-sum, Karis' analytic
 // environment BRDF), occluded by the lightmap's brightness (kPbrSpecOcc). Same declarations as kFSMainLM (the MDI
 // rewrite applies unchanged).
@@ -405,11 +408,11 @@ vec2 wfcEnvBrdf(float r, float NoV) {
     float a004 = min(q.x * q.x, exp2(-9.28 * NoV)) * q.x + q.y;
     return vec2(-1.04, 1.04) * a004 + q.zw;
 }
-float wfcPbrSpec(vec3 n, vec3 V, vec3 Lb, float a2, float NoV) {
+vec3 wfcPbrSpec(vec3 n, vec3 V, vec3 Lb, float a2, float NoV, vec3 F0) {
     float NoL = clamp(dot(n, Lb), 0.0, 1.0);
     vec3 H = normalize(Lb + V);
     float NoH = clamp(dot(n, H), 0.0, 1.0), VoH = clamp(dot(V, H), 0.0, 1.0);
-    float F = 0.04 + 0.96 * pow(1.0 - VoH, 5.0);
+    vec3 F = F0 + (vec3(1.0) - F0) * pow(1.0 - VoH, 5.0);
     return wfcGgxD(NoH, a2) * wfcSmithVis(NoV, NoL, a2) * F * NoL * 3.14159265;
 }
 void main() {
@@ -427,15 +430,17 @@ void main() {
         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
-        c += o.DiffuseColor * L;
+        float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
+        vec3 F0 = mix(vec3(0.04), wfcPbrF0, metal);       // (dielectric 0.04; metals tint their reflection)
+        c += o.DiffuseColor * (1.0 - metal) * L;
         float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough, a2 = a * a;
         vec3 V = normalize(m.cameraVector);
         float NoV = clamp(dot(n, V), 1e-4, 1.0);
-        c += wfcPbrSpec(n, V, LMB0, a2, NoV) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2, NoV) * l1 * uLMScale[1]
-           + wfcPbrSpec(n, V, LMB2, a2, NoV) * l2 * uLMScale[2];
+        c += wfcPbrSpec(n, V, LMB0, a2, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2, NoV, F0) * l1 * uLMScale[1]
+           + wfcPbrSpec(n, V, LMB2, a2, NoV, F0) * l2 * uLMScale[2];
         vec2 ab = wfcEnvBrdf(rough, NoV);
         float occ = clamp(dot(L, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
-        c += wfcPbrEnv * (0.04 * ab.x + ab.y) * occ;
+        c += wfcPbrEnv * (F0 * ab.x + ab.y) * occ;
     }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
