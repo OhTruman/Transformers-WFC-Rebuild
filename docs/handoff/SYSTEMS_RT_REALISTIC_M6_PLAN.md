@@ -272,3 +272,48 @@ Reading:
 Reading:
 - **The clamp is not a k problem.** `--max-clamp 0.10` (bisect k until the >= 0 clamp removes at most 10 % of the sun energy) needed k at 1-27 % of the fit on 8 of 10 maps, which effectively disables the swap. The clamp comes from the 4-11 % of texels the trace calls lit but the bake has dark (UV / occluder mismatch), not from k.
 - **The cone is not the lever either.** A 0.5° retrace of Rust (work/vbake/MP_IAC_Rust_cone05) gives 4.4 % lit (the same as 0.27°) and k(q30) 0.665 vs 0.662.
+
+## Local lights and sky calibrated against the bake (fit_lights.json, 2026-10-13)
+
+For Rendering's runtime RT lightmap (S1 sky, S2 / S4 point and spot lights). Tools: `vbake_trace --lights 2 --sky-rays 128` (sky visibility per lightmap coefficient + per-light visibility, distance and tangent-frame direction on every second texel) and `tools/systems/vbake/vbake_lights_fit.py`. One `fit_lights.json` per map, beside `fit.json` (work/vbake/<map>/; `build_slim --vbake` ships it as `<render data>/<map>/vbake/fit_lights.json`; copies in docs/handoff/fit_lights/).
+
+Which lights: `docs/handoff/SYSTEMS_BAKE_LIGHTS_AUDIT.json` (bake_lights_audit.py). Every light any lightmap lists is in lighting.json on all 10 maps. The bake was **Beast**, and its global settings (sky, bounce, falloff mode) were not cooked, so everything below is measured from the lightmaps.
+
+Model (the fit.json decode and conventions; d in metres; colour = sRGB-decoded LightColor x Brightness, as sun_linear):
+- coefficient i share of a light = scale x b x col x F(d) x cone² (spots) x V x max(B_i · L_t, 0)^p;
+- sky: color_linear x S_i, where S_i = (1/π) ∫ over the visible upper sky of max(B_i · ω, 0) dω;
+- the rest is `bounce_residual` (S3).
+
+Estimator:
+- each light's scale is the q25 of (lightmap − sky) / its unit term, over texels where it gives ≥ 80 % of the local light (the lower envelope, because bounce only adds);
+- the class scale is the median over the lights with a stable ratio;
+- lights more than 2× off the class are `overrides`, those with an unstable ratio `overrides_unreliable`;
+- sky is the q25 of lightmap / S on texels no light reaches;
+- the falloff form is the one whose per-light ratio stays flattest. UE3 is kept unless another form is > 15 % flatter.
+- Lighting channels are respected (BSP elements only see BSP-channel lights, static meshes only Static-channel lights).
+
+| map | falloff | point scale | spot scale | sky (linear rgb) | ratio spread ue3 (linear) | overrides / unreliable | bounce residual | model over bake |
+|---|---|---|---|---|---|---|---|---|
+| MP_KON_Molten | ue3 | 0.817 | 0.862 | 0.078 0.095 0.076 | 0.83 (lin 0.73) | 15 / 11 | 74 % | 13 % |
+| MP_IAC_Streets | ue3 | 0.942 | 0.987 | 0.031 0.016 0.056 | 0.62 (lin 0.58) | 7 / 14 | 57 % | 11 % |
+| MP_IAC_Rust | ue3 | 0.832 | 0.842 | 0.000 0.000 0.000 | 1.26 (lin 1.36) | 11 / 30 | 89 % | 11 % |
+| MP_UND_Gorge | ue3 | 0.696 | 1.039 | 0.000 0.000 0.000 | 1.19 (lin 1.24) | 14 / 16 | 77 % | 8 % |
+| MP_ESC_BrokenHope | ue3 | 0.892 | 0.967 | 0.016 0.047 0.047 | 0.96 (lin 1.00) | 7 / 7 | 83 % | 9 % |
+| MP_ESC_Remnant | linear | 0.855 | 0.713 | 0.192 0.182 0.204 | 1.85 (lin 0.98) | 25 / 12 | 88 % | 6 % |
+| MP_IAC_Berth | ue3 | 0.874 | 0.874 | 0.000 0.000 0.000 | 0.77 (lin 0.76) | 8 / 5 | 79 % | 15 % |
+| MP_IAC_Seed | ue3 | 0.940 | 0.933 | 0.029 0.040 0.040 | 0.77 (lin 0.77) | 8 / 15 | 71 % | 13 % |
+| MP_ORB_Debris | ue3 | 1.068 | 1.029 | 0.032 0.025 0.062 | 0.75 (lin 0.71) | 10 / 8 | 90 % | 5 % |
+| MP_UND_Complex | linear | 0.855 | 0.899 | 0.130 0.161 0.166 | 0.80 (lin 0.68) | 9 / 1 | 73 % | 9 % |
+
+Reading:
+- **The bake's local lights are the UE3 runtime formula at ~0.85-0.95 x.** Under F = max(0, 1 − (d/R)²)^FalloffExponent the point scale is 0.70-1.07 on every map (median 0.88), and spots are the same.
+  - Inverse-square (with or without a range window) needs scales of 15-160, different per map: rejected.
+  - Linear falloff is marginally flatter on Remnant and Complex. On Remnant UE3 scores much worse (1.85 vs 0.98), so treat Remnant as linear; elsewhere UE3.
+- **Sky is small or absent.**
+  - None measurable on Rust, Gorge and Berth (enclosed, or no Beast sky).
+  - 0.02-0.10 elsewhere; 0.13-0.20 on Complex and Remnant (bluish-grey).
+- **Bounce dominates: 57-90 % of the lightmap's mean flat luminance** is not direct light (sun, sky or lamps).
+  - Beast's GI (and any emissive surfaces, lava on Molten) is the larger part of the look, so S3 matters more than S2.
+- **Model over bake 5-15 %** is where the trace and the bake disagree on a shadow (the same texel mismatch the sun fit sees).
+- **Seed PointLight_1865** (12 km radius, no static shadows, BSP channel off: a fill light) bakes at 0.04 x: it is an override.
+- **Not in lighting.json:** Remnant's PointLightToggleable_1918 is listed under `extra` (dynamic, class defaults).

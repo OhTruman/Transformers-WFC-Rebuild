@@ -1,0 +1,383 @@
+{
+ "map": "MP_UND_Gorge",
+ "generated_by": "tools/systems/vbake/vbake_lights_fit.py",
+ "samples": 131613,
+ "trace": {
+  "stride": 2,
+  "sky_rays": 128,
+  "light_range": 1.5
+ },
+ "conventions": "lightmap decode as fit.json (sRGB-decoded page x the component scale vector, HL2 basis, tangent y sign from fit.json); distances in metres; light colour = sRGB-decoded LightColor x Brightness (as sun_linear); a coefficient share = scale x b x col x F(d) x cone^2 (spots) x V x max(B_i . L_t, 0)^p (p from fit.json)",
+ "sun": {
+  "k": 0.8441414268171568,
+  "p": 1.0,
+  "tangent_y_sign": 1.0,
+  "from_fit_json": true
+ },
+ "sky": {
+  "color_linear": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "definition": "coefficient i share = color_linear x S_i, S_i = (1/pi) integral over the visible sky (above the horizon, unoccluded) of max(B_i . w, 0) dw",
+  "open_sky_samples": 9099
+ },
+ "point": {
+  "scale": 0.6957718825902943,
+  "falloff": "ue3",
+  "exp": "per light FalloffExponent",
+  "range_clamp": null,
+  "fit_q": 1.191473111497928,
+  "n_texels": 33941
+ },
+ "spot": {
+  "scale": 1.039490115274123,
+  "falloff": "ue3",
+  "exp": "per light FalloffExponent",
+  "range_clamp": null,
+  "cone": "UE3: saturate((cos - cos O) / (cos I - cos O))^2",
+  "fit_q": 1.191473111497928,
+  "n_texels": 1282
+ },
+ "falloff_forms": {
+  "ue3": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 0.6957718825902943,
+   "s_spot": 1.039490115274123,
+   "median_ratio_spread": 1.191473111497928,
+   "lights_with_ratio": 145,
+   "sky_samples": 2901,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.3037681648006138,
+    "local_on_lit_set": 0.6291697988433981,
+    "ambient": 0.0
+   }
+  },
+  "invsq": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 35.33890879573052,
+   "s_spot": 42.7478489912622,
+   "median_ratio_spread": 1.3271668541759833,
+   "lights_with_ratio": 174,
+   "sky_samples": 3162,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.6779114980652126,
+    "local_on_lit_set": 1.4041018457325007,
+    "ambient": 0.0
+   }
+  },
+  "invsq_w": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 52.78553174675645,
+   "s_spot": 45.180800086744455,
+   "median_ratio_spread": 1.28415082127105,
+   "lights_with_ratio": 185,
+   "sky_samples": 3167,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.7779984500148996,
+    "local_on_lit_set": 1.6114036459931258,
+    "ambient": 0.0
+   }
+  },
+  "ue3_e1": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 0.4060793840777101,
+   "s_spot": 0.8663325230380199,
+   "median_ratio_spread": 1.2175431089646662,
+   "lights_with_ratio": 134,
+   "sky_samples": 2901,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.30146751680879735,
+    "local_on_lit_set": 0.6244046575219868,
+    "ambient": 0.0
+   }
+  },
+  "linear": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 0.6358379575724901,
+   "s_spot": 1.210039073624202,
+   "median_ratio_spread": 1.2426000121531267,
+   "lights_with_ratio": 139,
+   "sky_samples": 2901,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.2998225922698877,
+    "local_on_lit_set": 0.6209976617891139,
+    "ambient": 0.0
+   }
+  },
+  "const": {
+   "sky": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "s_point": 0.22977885011600208,
+   "s_spot": 0.7342320091890882,
+   "median_ratio_spread": 1.523402760186191,
+   "lights_with_ratio": 127,
+   "sky_samples": 2901,
+   "mean_share": {
+    "sky": 0.0,
+    "local": 0.37440396396835457,
+    "local_on_lit_set": 0.7754718696436108,
+    "ambient": 0.0
+   }
+  }
+ },
+ "fit_q_definition": "median over lights of the spread (q75 - q25) / q50 of the per-texel ratio (lightmap - sky) / unit term on texels where that light gives >= 80 % of the local light: a falloff that matches the bake keeps the ratio flat over distance and angle; lower is better",
+ "estimator": "scale = median over lights of each light's q25 ratio (the lower envelope: the bake's bounce only adds); sky = q25 of lightmap / sky integral per channel on texels no local light reaches (< 2 %) with S > 0.1",
+ "overrides": {
+  "PointLight_4452_LC": {
+   "scale": 0.3083805890802957,
+   "ratio_to_class": 0.44322082682074376,
+   "n_texels": 42,
+   "spread": 1.4529393768579058
+  },
+  "PointLight_13902_LC": {
+   "scale": 0.2962833010351249,
+   "ratio_to_class": 0.4258339672078866,
+   "n_texels": 51,
+   "spread": 1.1998458657098616
+  },
+  "PointLight_1513_LC": {
+   "scale": 2.5926316801703004,
+   "ratio_to_class": 3.7262668196912077,
+   "n_texels": 53,
+   "spread": 1.341474643854349
+  },
+  "PointLight_8018_LC": {
+   "scale": 1.595183539439369,
+   "ratio_to_class": 2.292681810452944,
+   "n_texels": 33,
+   "spread": 0.8026433607701008
+  },
+  "PointLight_8839_LC": {
+   "scale": 1.7026499248934175,
+   "ratio_to_class": 2.4471381605054368,
+   "n_texels": 107,
+   "spread": 1.357693688522809
+  },
+  "PointLight_9524_LC": {
+   "scale": 2.466129936139279,
+   "ratio_to_class": 3.544451849589129,
+   "n_texels": 126,
+   "spread": 1.4142473998252096
+  },
+  "PointLight_13983_LC": {
+   "scale": 10.476727462543144,
+   "ratio_to_class": 15.057704579177958,
+   "n_texels": 32,
+   "spread": 0.6638941472235238
+  },
+  "PointLight_1969_LC": {
+   "scale": 11.680665032780768,
+   "ratio_to_class": 16.788067073499338,
+   "n_texels": 111,
+   "spread": 1.0647167440189849
+  },
+  "PointLight_503_LC": {
+   "scale": 0.2712568233441308,
+   "ratio_to_class": 0.38986459518063127,
+   "n_texels": 50,
+   "spread": 1.2058003382768645
+  },
+  "PointLight_15952_LC": {
+   "scale": 1.7610688876756688,
+   "ratio_to_class": 2.5311009710817465,
+   "n_texels": 34,
+   "spread": 0.7618356561457078
+  },
+  "PointLight_5957_LC": {
+   "scale": 2.06414854183406,
+   "ratio_to_class": 2.966703015001736,
+   "n_texels": 46,
+   "spread": 0.4415978856801302
+  },
+  "PointLight_457_LC": {
+   "scale": 1.9140044431409409,
+   "ratio_to_class": 2.750908007399321,
+   "n_texels": 45,
+   "spread": 0.4588970912730162
+  },
+  "PointLight_6115_LC": {
+   "scale": 0.06921248724881539,
+   "ratio_to_class": 0.09947583249720254,
+   "n_texels": 34,
+   "spread": 1.263282971638751
+  },
+  "PointLight_8491_LC": {
+   "scale": 0.2577887545052761,
+   "ratio_to_class": 0.37050757720411526,
+   "n_texels": 47,
+   "spread": 0.9645945121122234
+  }
+ },
+ "overrides_unreliable": {
+  "PointLight_4536_LC": {
+   "q25": 0.09804464031755374,
+   "spread": 3.509511008659494,
+   "n_texels": 34
+  },
+  "PointLight_5518_LC": {
+   "q25": 1.8313417358900073,
+   "spread": 121.39273749895561,
+   "n_texels": 35
+  },
+  "PointLight_15011_LC": {
+   "q25": 1.8212052665905532,
+   "spread": 1.6693608124734194,
+   "n_texels": 77
+  },
+  "PointLight_12029_LC": {
+   "q25": 1.7887280615646408,
+   "spread": 1.6361755342589928,
+   "n_texels": 32
+  },
+  "PointLight_5326_LC": {
+   "q25": 1.4175627895567413,
+   "spread": 2.192953515903071,
+   "n_texels": 116
+  },
+  "PointLight_15439_LC": {
+   "q25": 3.197986543740888,
+   "spread": 1.7316120908268575,
+   "n_texels": 84
+  },
+  "PointLight_897_LC": {
+   "q25": 1.4578451586387398,
+   "spread": 1.7344883168283272,
+   "n_texels": 43
+  },
+  "PointLight_1114_LC": {
+   "q25": 1.5031169274842189,
+   "spread": 2.595496763054798,
+   "n_texels": 77
+  },
+  "PointLight_13400_LC": {
+   "q25": 2.1179407513702184,
+   "spread": 3.809284790744126,
+   "n_texels": 164
+  },
+  "PointLight_15004_LC": {
+   "q25": 2.6571459384897813,
+   "spread": 7.4853014208404085,
+   "n_texels": 40
+  },
+  "PointLight_6352_LC": {
+   "q25": 0.0,
+   "spread": 1.9620335605296984,
+   "n_texels": 59
+  },
+  "PointLight_7721_LC": {
+   "q25": 1.7138275305560833,
+   "spread": 1.5479947757854482,
+   "n_texels": 67
+  },
+  "PointLight_9145_LC": {
+   "q25": 2.224730822275858,
+   "spread": 1.5610649524762108,
+   "n_texels": 103
+  },
+  "PointLight_13464_LC": {
+   "q25": 1.419880119522188,
+   "spread": 2.775350545394363,
+   "n_texels": 82
+  },
+  "PointLight_12797_LC": {
+   "q25": 0.30488032190468767,
+   "spread": 1.8127467633306407,
+   "n_texels": 115
+  },
+  "PointLight_13658_LC": {
+   "q25": 0.21177813821918853,
+   "spread": 2.422044066794565,
+   "n_texels": 45
+  }
+ },
+ "channels": "records dropped where the light's lighting channel excludes the receiver (BSP channel for BSP elements, Static for static meshes), as UE3 lights only reach overlapping channels",
+ "bounce_residual_mean": [
+  0.09306793522013625,
+  0.05826108284896373,
+  0.062269424712018955
+ ],
+ "bounce_residual_fraction": 0.7689491814470674,
+ "model_over_bake_fraction": 0.0826220044998802,
+ "exclude": [
+  {
+   "name": "PointLight_6862_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": false,
+   "reason": "disabled"
+  },
+  {
+   "name": "PointLight_2572_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": false,
+   "reason": "disabled"
+  },
+  {
+   "name": "PointLight_8934_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": false,
+   "reason": "disabled"
+  },
+  {
+   "name": "PointLight_4185_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": false,
+   "reason": "disabled"
+  },
+  {
+   "name": "PointLight_480_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": false,
+   "reason": "disabled"
+  },
+  {
+   "name": "PointLight_13861_LC",
+   "class": "PointLightComponent",
+   "built_into_lightmap": false,
+   "enabled": true,
+   "reason": "never built into a lightmap"
+  },
+  {
+   "name": "DirectionalLight_12173_LC",
+   "class": "DirectionalLightComponent",
+   "built_into_lightmap": false,
+   "enabled": true,
+   "reason": "never built into a lightmap"
+  }
+ ],
+ "extra": []
+}

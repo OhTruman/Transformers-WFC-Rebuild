@@ -11,9 +11,17 @@
 // meshes excluded (a sky dome blocks every sun ray). Receivers: every node / element with a lightmap in lighting.json.
 // Vertex-lightmapped components (LMT_1D): per-vertex V into vertex_vbake.json (same rays at each vertex).
 //
+// --lights <stride> (Rendering's runtime RT lightmap, S1 / S2 / S4 calibration; 0 = off): on every stride-th covered texel
+// (x and y) also trace (a) the sky: --sky-rays stratified uniform-hemisphere directions about the normal, a ray that
+// leaves the world upward (+y) unoccluded counts, accumulated per lightmap coefficient as
+// S_i = (2 / n) sum vis * max(B_i . w_t, 0) (= (1/pi) integral of the visible upper sky weighted like the sun's share, p 1;
+// the tangent frame's y as the tracer guesses it - the fit applies fit.json's handedness), and (b) every enabled point /
+// spot light within --light-range x its radius on the texel's front side: visibility V (1 ray to the centre + 3 jittered
+// within 0.1 m; 1 without rays when the light does not cast static shadows), distance d (m), the light direction in the
+// tangent frame and the cosine to a spot's axis. Writes lights_<page>.bin per page + lights_index.json (see writeLights).
 // Build (repo root): clang++ -O2 -std=c++17 -Isrc tools/systems/vbake/vbake_trace.cpp -o work/vbake/vbake_trace.exe
 // Usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4]
-//        [--threads 2] [--bias 0.02]
+//        [--threads 2] [--bias 0.02] [--lights 4] [--sky-rays 64] [--light-range 1.5]
 #include "assets/Json.h"
 
 #include <algorithm>
@@ -229,7 +237,12 @@ struct Atlas {
     std::vector<float> V, ndl, lt;     // lt: 3 per texel (sun in the tangent frame: T, B, N)
     std::vector<int32_t> comp;
     std::vector<V3> pos, nrm, dpx, dpy; // world position / normal, world offset per texel pixel (x / y)
+    std::vector<V3> tng, btg;          // the tangent frame (B with the UV0 handedness), as lt uses
 };
+
+struct LightRec { int32_t light; float V, d, lt[3], cosAxis; };
+struct LightSrc { std::string name, cls; V3 pos, axis; float radius; bool shadows; };
+struct LightSample { int32_t x, y; float sky[6]; uint32_t start, count; };   // sky[3..5]: the tangent y mirrored
 
 bool pngSize(const std::string& p, int& w, int& h) {
     std::ifstream f(p, std::ios::binary); unsigned char b[24];
@@ -238,7 +251,10 @@ bool pngSize(const std::string& p, int& w, int& h) {
     return true;
 }
 
-struct Args { std::string world, bsp, render, out; float coneDeg = 0.27f, bias = 0.02f; int ss = 4, threads = 2; };
+struct Args { std::string world, bsp, render, out; float coneDeg = 0.27f, bias = 0.02f, lightRange = 1.5f; int ss = 4, threads = 2, lights = 0, skyRays = 64, lightShadows = 1; };
+
+inline uint32_t hash32(uint32_t x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
+inline float rnd01(uint32_t& s) { s = hash32(s + 0x9e3779b9U); return (s >> 8) * (1.0f / 16777216.0f); }
 
 std::string lower(std::string s) { for (auto& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
@@ -251,6 +267,8 @@ int main(int argc, char** argv) {
         if (k == "--world") A.world = v; else if (k == "--bsp") A.bsp = v; else if (k == "--render") A.render = v; else if (k == "--out") A.out = v;
         else if (k == "--cone") A.coneDeg = (float)std::atof(v.c_str()); else if (k == "--ss") A.ss = std::max(1, std::atoi(v.c_str()));
         else if (k == "--threads") A.threads = std::max(1, std::atoi(v.c_str())); else if (k == "--bias") A.bias = (float)std::atof(v.c_str());
+        else if (k == "--lights") A.lights = std::max(0, std::atoi(v.c_str())); else if (k == "--sky-rays") A.skyRays = std::max(4, std::atoi(v.c_str()));
+        else if (k == "--light-range") A.lightRange = (float)std::atof(v.c_str()); else if (k == "--light-shadows") A.lightShadows = std::atoi(v.c_str());
     }
     if (A.world.empty() || A.bsp.empty() || A.render.empty() || A.out.empty()) {
         std::printf("usage: vbake_trace --world <world.glb> --bsp <bsp.glb> --render <render map dir> --out <dir> [--cone 0.27] [--ss 4] [--threads 2]\n");
@@ -291,6 +309,7 @@ int main(int argc, char** argv) {
         const size_t n = (size_t)at.w * at.h;
         at.cov.assign(n, 0); at.dist.assign(n, 1e9f); at.V.assign(n, 0); at.ndl.assign(n, 0); at.lt.assign(n * 3, 0); at.comp.assign(n, -1);
         at.pos.assign(n, V3{}); at.nrm.assign(n, V3{}); at.dpx.assign(n, V3{}); at.dpy.assign(n, V3{});
+        if (A.lights > 0) { at.tng.assign(n, V3{}); at.btg.assign(n, V3{}); }
         atlases.push_back(std::move(at));
         atlasIdx[a] = (int)atlases.size() - 1;
         return (int)atlases.size() - 1;
@@ -398,6 +417,7 @@ int main(int argc, char** argv) {
                             at.cov[o] = 1; at.comp[o] = ci; at.pos[o] = P_; at.nrm[o] = N_; at.dpx[o] = dPdx; at.dpy[o] = dPdy;
                             at.lt[o * 3] = dot(sunDir, T_); at.lt[o * 3 + 1] = dot(sunDir, B_); at.lt[o * 3 + 2] = dot(sunDir, N_);
                             at.ndl[o] = dot(sunDir, N_);
+                            if (A.lights > 0) { at.tng[o] = T_; at.btg[o] = B_; }
                         }
                 }
             }
@@ -452,6 +472,115 @@ int main(int argc, char** argv) {
     for (int i = 0; i < A.threads; ++i) th.emplace_back(worker);
     for (auto& t : th) t.join();
     const auto t3 = std::chrono::steady_clock::now();
+    // ---- --lights: the sky and the point / spot lights on every stride-th covered texel (see the header)
+    if (A.lights > 0) {
+        std::vector<LightSrc> srcs;
+        for (size_t i = 0; i < L["lights"].size(); ++i) {
+            const Json& l = L["lights"][i];
+            const std::string cls = l["class"].asString();
+            if ((cls != "PointLightComponent" && cls != "SpotLightComponent") || !l["enabled"].asBool(true)) continue;
+            LightSrc ls; ls.name = l["name"].asString(); ls.cls = cls;
+            ls.pos = V3{l["position"][0u].asFloat(), l["position"][1u].asFloat(), l["position"][2u].asFloat()};
+            ls.axis = norm(V3{l["direction"][0u].asFloat(), l["direction"][1u].asFloat(), l["direction"][2u].asFloat()});
+            ls.radius = l["radius_m"].asFloat(10.24f); ls.shadows = A.lightShadows && l["cast_static_shadows"].asBool(true) && l["cast_shadows"].asBool(true);   // (--light-shadows 0: unshadowed, a diagnostic)
+            srcs.push_back(ls);
+        }
+        const float Bs[3][3] = {{0.0f, 0.81649658f, 0.57735027f}, {-0.70710678f, -0.40824829f, 0.57735027f}, {0.70710678f, -0.40824829f, 0.57735027f}};
+        size_t totSamples = 0, totRecs = 0;
+        std::atomic<uint64_t> lrays{0};
+        std::string idx = "{\n \"stride\": " + std::to_string(A.lights) + ",\n \"sky_rays\": " + std::to_string(A.skyRays) +
+                          ",\n \"light_range\": " + std::to_string(A.lightRange) + ",\n \"lights\": [";
+        for (size_t j = 0; j < srcs.size(); ++j) idx += std::string(j ? ",\n  " : "\n  ") + "{\"index\": " + std::to_string(j) + ", \"name\": \"" + srcs[j].name + "\", \"class\": \"" + srcs[j].cls + "\"}";
+        idx += "\n ]\n}\n";
+        std::ofstream(A.out + "/lights_index.json") << idx;
+        for (Atlas& at : atlases) {
+            std::vector<LightSample> samples;
+            for (int y = 0; y < at.h; y += A.lights)
+                for (int x = 0; x < at.w; x += A.lights) {
+                    const size_t o = (size_t)y * at.w + x;
+                    if (at.cov[o] == 1) samples.push_back(LightSample{x, y, {0, 0, 0, 0, 0, 0}, 0, 0});
+                }
+            std::vector<std::vector<LightRec>> recs(samples.size());
+            std::atomic<size_t> nx{0};
+            auto lw = [&]() {
+                uint64_t local = 0;
+                for (;;) {
+                    const size_t w0 = nx.fetch_add(64);
+                    if (w0 >= samples.size()) break;
+                    for (size_t si = w0; si < std::min(samples.size(), w0 + 64); ++si) {
+                        LightSample& sm = samples[si];
+                        const size_t o = (size_t)sm.y * at.w + sm.x;
+                        const V3 N = at.nrm[o], T = at.tng[o], Bt = at.btg[o], P = at.pos[o] + N * A.bias;
+                        uint32_t seed = hash32((uint32_t)o * 2654435761U ^ (uint32_t)at.w);
+                        // sky: stratified uniform hemisphere about N (cos theta uniform), rows x cols strata
+                        const int rows = std::max(2, (int)std::sqrt((float)A.skyRays / 2.0f)), cols = std::max(2, A.skyRays / rows);
+                        const int n = rows * cols;
+                        for (int r = 0; r < rows; ++r)
+                            for (int c = 0; c < cols; ++c) {
+                                const float ct = (r + rnd01(seed)) / rows, st = std::sqrt(std::max(0.0f, 1.0f - ct * ct));
+                                const float ph = 6.2831853f * (c + rnd01(seed)) / cols;
+                                const float tx = st * std::cos(ph), ty = st * std::sin(ph);
+                                const V3 d = norm(T * tx + Bt * ty + N * ct);
+                                if (d.y <= 0.0f) continue;                                   // below the horizon: not sky
+                                ++local;
+                                if (bvh.occluded(P + d * A.bias, d, 4000.0f)) continue;
+                                for (int i = 0; i < 3; ++i) { sm.sky[i] += std::max(0.0f, Bs[i][0] * tx + Bs[i][1] * ty + Bs[i][2] * ct); sm.sky[3 + i] += std::max(0.0f, Bs[i][0] * tx - Bs[i][1] * ty + Bs[i][2] * ct); }
+                            }
+                        for (int i = 0; i < 6; ++i) sm.sky[i] *= 2.0f / n;
+                        // point / spot lights
+                        for (size_t j = 0; j < srcs.size(); ++j) {
+                            const LightSrc& ls = srcs[j];
+                            const V3 toL = ls.pos - P;
+                            const float d = len(toL);
+                            if (d < 1e-3f || d > ls.radius * A.lightRange) continue;
+                            const V3 Ld = toL * (1.0f / d);
+                            if (dot(Ld, N) <= 0.0f) continue;
+                            float V = 1.0f;
+                            if (ls.shadows) {
+                                int vis = 0;
+                                for (int k = 0; k < 4; ++k) {
+                                    V3 tgt = ls.pos;
+                                    if (k) tgt = tgt + V3{rnd01(seed) - 0.5f, rnd01(seed) - 0.5f, rnd01(seed) - 0.5f} * 0.2f;
+                                    const V3 dv = tgt - P; const float dl = len(dv);
+                                    const V3 dn = dv * (1.0f / dl);
+                                    if (!bvh.occluded(P + dn * A.bias, dn, std::max(0.0f, dl - 2.0f * A.bias))) ++vis;
+                                    ++local;
+                                }
+                                V = vis / 4.0f;
+                            }
+                            if (V <= 0.0f) continue;
+                            LightRec rc; rc.light = (int32_t)j; rc.V = V; rc.d = d;
+                            rc.lt[0] = dot(Ld, T); rc.lt[1] = dot(Ld, Bt); rc.lt[2] = dot(Ld, N);
+                            rc.cosAxis = dot(ls.axis, Ld * -1.0f);
+                            recs[si].push_back(rc);
+                        }
+                    }
+                }
+                lrays += local;
+            };
+            std::vector<std::thread> lt_;
+            for (int i = 0; i < A.threads; ++i) lt_.emplace_back(lw);
+            for (auto& t : lt_) t.join();
+            // writeLights: int32 w, h, stride, nsamples; per sample int32 x, y; f32 sky[6] (as traced, tangent y mirrored); u32 start, count;
+            // int32 nrec; per record int32 light, f32 V, d, lt[3], cosAxis (lights_index.json: the light names)
+            std::vector<LightRec> flat;
+            for (size_t si = 0; si < samples.size(); ++si) {
+                samples[si].start = (uint32_t)flat.size(); samples[si].count = (uint32_t)recs[si].size();
+                flat.insert(flat.end(), recs[si].begin(), recs[si].end());
+            }
+            std::ofstream f(A.out + "/lights_" + at.name + ".bin", std::ios::binary);
+            const int32_t hd[4] = {at.w, at.h, A.lights, (int32_t)samples.size()};
+            f.write((const char*)hd, 16);
+            f.write((const char*)samples.data(), (std::streamsize)(samples.size() * sizeof(LightSample)));
+            const int32_t nr = (int32_t)flat.size();
+            f.write((const char*)&nr, 4);
+            f.write((const char*)flat.data(), (std::streamsize)(flat.size() * sizeof(LightRec)));
+            totSamples += samples.size(); totRecs += flat.size();
+        }
+        std::printf("lights: %zu point / spot lights; %zu texel samples (stride %d), %zu light records, %llu rays, %.1f s\n", srcs.size(),
+                    totSamples, A.lights, totRecs, (unsigned long long)lrays.load(),
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - t3).count());
+    }
     // ---- dilate 2 texels (bilinear sampling at chart borders reads them): neighbour average, same component kept
     for (Atlas& at : atlases)
         for (int pass = 0; pass < 2; ++pass) {
