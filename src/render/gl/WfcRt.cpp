@@ -232,6 +232,8 @@ bool Pipeline::rtReflComposite() const { return rtShadowAoOn(); }
 bool Pipeline::rtReflPass() const { return rtMode_ == 2 || (rtMode_ >= 1 && reflectOn()); }
 bool Pipeline::rtReflLive() const {
     static const bool envComposite = std::getenv("WFC_RT_REFLECT_COMPOSITE") != nullptr;
+    static const bool noRefl = std::getenv("WFC_RT_NOREFL") != nullptr;   // A/B: Realistic with the authored cubes (proof captures)
+    if (noRefl) return false;
     return rtMode_ == 2 || (rtMode_ >= 1 && reflectOn() && envComposite);
 }
 // the starting mode: WFC_RT_MODE (0 / 1 / 2), else WFC_RT_SHADOWAO = Faithful (+ WFC_RT_WORLDSHADOWS = Realistic), else Off
