@@ -1,0 +1,113 @@
+diff --git a/src/render/d3d12/D3D12RtBridge.cpp b/src/render/d3d12/D3D12RtBridge.cpp
+--- a/src/render/d3d12/D3D12RtBridge.cpp
++++ b/src/render/d3d12/D3D12RtBridge.cpp
+@@ -13,6 +13,7 @@
+ #include <GL/gl.h>
+ 
+ #include "render/d3d12/D3D12RtBridge.h"
++#include "render/d3d12/D3D12RtDynamic.h"
+ #include "core/Log.h"
+ #if __has_include("render/d3d12/D3D12Adapter.h")
+ #include "render/d3d12/D3D12Adapter.h"
+@@ -159,6 +160,7 @@
+ #else
+         if (rtTier_ < 11) { LOG_WARN("RT bridge: raytracing tier %d.%d < 1.1 (inline RayQuery): no depth check", rtTier_ / 10, rtTier_ % 10); return false; }
+         if (!dev5_ && FAILED(dev_->QueryInterface(__uuidof(ID3D12Device5), (void**)&dev5_))) return false;
++        rtDynamicAttach(dev5_, tsFreq_);                  // (M7 RT characters: D3D12RtDynamic.h)
+         if (!pipeline()) return false;
+         using clk = std::chrono::steady_clock;
+         const clk::time_point t0 = clk::now();
+@@ -251,6 +253,8 @@
+     }
+     void clearStaticWorld() {
+         if (tlas_ || !blas_.empty()) waitIdle();
++        rtDynamicClear();
++        for (auto& d : dyn_) { rel(d.tlas); rel(d.scratch); rel(d.inst); d = DynTlas{}; }
+         rel(tlas_);
+         for (auto* b : blas_) b->Release();
+         blas_.clear(); instances_.clear(); totalBlas_ = 0;
+@@ -270,6 +274,8 @@
+         if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) { fence_->SetEventOnCompletion(allocDone_[a], event_); WaitForSingleObject(event_, 1000); }
+         if (rbValid_[a]) readStats(a);
+         alloc_[a]->Reset(); list_->Reset(alloc_[a], nullptr);
++        jobTlas_ = tlas_;
++        if (fr && tlas_ && pso_) dynamicTlas(a);
+         if (fr && tlas_ && pso_ && fr->mode == 2) shadowAo(*fr, a);
+         else if (fr && tlas_ && pso_) depthCheck(*fr, a);
+         else copyJob();
+@@ -297,7 +303,46 @@
+         return true;
+     }
+ 
++
+ private:
++    // (SYSTEMS STUB until Rendering's version: the characters' BLAS records, then the static instances + the characters
++    // into a per-ring-slot TLAS; without characters the static TLAS stays)
++    struct DynTlas { ID3D12Resource* tlas = nullptr; ID3D12Resource* scratch = nullptr; ID3D12Resource* inst = nullptr;
++                     UINT64 tlasBytes = 0, scratchBytes = 0, instBytes = 0; };
++    void dynamicTlas(int a) {
++        if (!list4_ && FAILED(list_->QueryInterface(__uuidof(ID3D12GraphicsCommandList4), (void**)&list4_))) return;
++        rtDynamicRecord(list4_);
++        dynInst_ = instances_;
++        rtDynamicAppendInstances(dynInst_, 0x4);
++        if (dynInst_.size() == instances_.size()) return;
++        DynTlas& d = dyn_[a];
++        const UINT64 ib = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * dynInst_.size();
++        if (ib > d.instBytes) { rel(d.inst); d.instBytes = ib * 2; d.inst = makeBuffer(dev_, d.instBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ); }
++        void* p = nullptr;
++        if (!d.inst || FAILED(d.inst->Map(0, nullptr, &p))) { d.instBytes = 0; return; }
++        std::memcpy(p, dynInst_.data(), ib); d.inst->Unmap(0, nullptr);
++        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
++        bd.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
++        bd.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
++        bd.Inputs.NumDescs = (UINT)dynInst_.size(); bd.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
++        bd.Inputs.InstanceDescs = d.inst->GetGPUVirtualAddress();
++        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO pi{};
++        dev5_->GetRaytracingAccelerationStructurePrebuildInfo(&bd.Inputs, &pi);
++        if (pi.ResultDataMaxSizeInBytes > d.tlasBytes) {
++            rel(d.tlas); d.tlasBytes = pi.ResultDataMaxSizeInBytes * 3 / 2;
++            d.tlas = makeBuffer(dev_, d.tlasBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
++        }
++        if (pi.ScratchDataSizeInBytes > d.scratchBytes) {
++            rel(d.scratch); d.scratchBytes = pi.ScratchDataSizeInBytes * 3 / 2;
++            d.scratch = makeBuffer(dev_, d.scratchBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
++        }
++        if (!d.tlas || !d.scratch) { rel(d.tlas); rel(d.scratch); d.tlasBytes = d.scratchBytes = 0; return; }
++        bd.DestAccelerationStructureData = d.tlas->GetGPUVirtualAddress(); bd.ScratchAccelerationStructureData = d.scratch->GetGPUVirtualAddress();
++        list4_->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
++        D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
++        list4_->ResourceBarrier(1, &ub);
++        jobTlas_ = d.tlas;
++    }
+     void copyJob() {
+         D3D12_RESOURCE_BARRIER b[2]{};
+         for (auto& x : b) { x.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; x.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES; }
+@@ -392,7 +437,7 @@
+         list_->SetPipelineState(pso_);
+         list_->SetDescriptorHeaps(1, &heap_);
+         list_->SetComputeRoot32BitConstants(0, 48, c, 0);
+-        list_->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());
++        list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
+         list_->SetComputeRootDescriptorTable(2, heap_->GetGPUDescriptorHandleForHeapStart());
+         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+         list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
+@@ -421,7 +466,7 @@
+         list_->SetPipelineState(psoSao_);
+         list_->SetDescriptorHeaps(1, &heap_);
+         list_->SetComputeRoot32BitConstants(0, 48, c, 0);
+-        list_->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());
++        list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
+         D3D12_GPU_DESCRIPTOR_HANDLE t2 = heap_->GetGPUDescriptorHandleForHeapStart();
+         t2.ptr += 5ull * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+         list_->SetComputeRootDescriptorTable(2, t2);
+@@ -578,6 +623,10 @@
+     RtShadowDenoiser dn_; bool dnInit_ = false;
+ #endif
+     std::vector<ID3D12Resource*> blas_; std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instances_; ID3D12Resource* tlas_ = nullptr;
++    ID3D12Resource* jobTlas_ = nullptr;                   // this job's TLAS: tlas_, or the ring slot's with the characters
++    ID3D12GraphicsCommandList4* list4_ = nullptr;
++    DynTlas dyn_[2];
++    std::vector<D3D12_RAYTRACING_INSTANCE_DESC> dynInst_;
+     UINT64 totalBlas_ = 0;
+     ID3D12RootSignature* rs_ = nullptr; ID3D12PipelineState* pso_ = nullptr; ID3D12DescriptorHeap* heap_ = nullptr;
+     ID3D12PipelineState* psoSao_ = nullptr; ID3D12QueryHeap* tsHeap_ = nullptr; ID3D12Resource* tsReadback_[2] = {};

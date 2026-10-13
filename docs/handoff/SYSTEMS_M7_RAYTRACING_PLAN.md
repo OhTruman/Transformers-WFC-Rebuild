@@ -128,6 +128,39 @@ memory, joint matrices copied up each frame):
   cost is TLAS traversal over thousands of instances vs one merged BLAS: measure trace time both ways in stage 1 before
   choosing (memory is not the constraint on a 24 GB card; trace time may be).
 
+### Compute-skinning feed, built (2026-10-12, HELD with agents/rendering-rt: docs/handoff/SYSTEMS_M7_SKINFEED*.patch)
+
+The interface was agreed with Rendering on 2026-10-12. Rendering owns the bridge, the TLAS cadence, the passes, denoising and the composite; Systems owns the feed.
+- **GL side (render/gl/WfcRtSkin.cpp, WFC_RT_CHARS=1)**
+  - drawSkinned notes each instance: bone-texture row, palette serial, blend mode / alpha, model matrix, model-space bounds.
+  - Just before the round trip's GL signal, rtSkinFeed(afterCharacters) runs a compute pass that mirrors the vertex shader's wfcSkin (positions only; same rows; uSkin 2 blend). It writes model space into one buffer shared with D3D12 (float3, a region per instance slot, 2 M vertices / 24 MB by default, WFC_RT_CHARVERTS).
+  - The buffer is listed in the round trip's semaphore signal / wait (rtBridgeSetSignalBuffers).
+- **D3D12 side (render/d3d12/D3D12RtDynamic.{h,cpp})**
+  - One index buffer per model.
+  - One BLAS per instance slot (ALLOW_UPDATE): built once, then refit in place when GL rewrote its positions.
+  - Characters go into the TLAS with mask 0x4 and the model matrix as the instance transform, so movement without a new pose costs no refit. Cull is disabled.
+  - Hooks Rendering calls: rtDynamicAttach / rtDynamicRecord (before their TLAS build) / rtDynamicAppendInstances / rtDynamicClear.
+- **Refit culling**
+  - A character is in the TLAS only if its world box is on screen or within WFC_RT_CHARRANGE (30 m) of the camera.
+  - A changed pose beyond WFC_RT_CHARFAR (20 m) is re-skinned / refit on alternate frames by slot.
+  - An unchanged pose (same serial, blend, alpha and row) is never redone.
+  - Slots are released after 300 frames unseen.
+- **Timing**
+  - With Rendering's end-of-opaque round trip (their 57a7654), the feed uses this frame's palettes, with no lag.
+  - At the mid-map spot it would use last frame's (one frame of lag, consistent).
+- **Proof** (09c 7fd831e + Rendering a4a03df + the feed; Streets, 5v5 TDM real play, 1080p window, RX 7900 XTX):
+  - D3D12 hashes the region it reads; it matched GL's readback in 101 of 101 checks.
+  - GL output vs a CPU skinPose on the same bone-texture palettes: max error 2.4e-7 (coordinates up to 3.9).
+  - 0 GL errors.
+  - Per frame: about 13 skinned instances noted, 6 - 9 in the TLAS, 3 - 4 refits (far-alternate and unchanged skips about 3.5), D3D12 refits 0.025 ms GPU, about 10 MB BLAS for 11 slots.
+  - The GL timestamp pair around the dispatches reads about 0.001 ms. Not trusted: to recheck with the frame profiler.
+  - 64-player numbers are still to come; the stage-0 probe estimated 0.97 ms for 64 at full refit.
+- **Open**
+  - The world box ignores weapon attachments.
+  - The full index list is used: hidden / translucent sub-meshes are not filtered yet.
+  - Pawns skipped by the occlusion prepass are not fed.
+  - A reduced-LOD RT proxy is still an option.
+
 ## 4. Denoising (licences checked 2026-10-12)
 
 | Option | Effects | Licence | On the 7900 XTX |
@@ -168,6 +201,23 @@ CheckFeatureSupport OPTIONS5, else the row is greyed); auto-detect never enables
    decision taken first; budget as stage 1; reflections in the reactive mask; user review sheets.
 3. **RT GI** (or Brixelizer GI): calibrated against the baked lightmaps (per-map mean luminance within a tolerance; the
    M6 modern-materials calibration method), user review; budget restated then (GI may need FSR Balanced / Performance).
+   **User decision 2026-10-12:** yes to a later, separate, optional **"RT lighting"** mode. In it, ray-traced GI *replaces* the baked
+   lightmaps for a modern look. The faithful baked lighting stays the default; the mode is a settings choice, never auto-detected.
+   - Replace vs calibrate:
+     - The calibrated GI above stays an add-on to the baked look: it adds bounce for dynamic objects and is matched to the lightmaps' mean luminance.
+     - "RT lighting" drops the lightmaps (and the vertex lightmaps / light-environment probes for characters) and lights the world from the
+       level's own lights plus sky.
+     - Exposure / tone is set per map against the baked look only as a starting point. The user reviews both side by side per map.
+     - It needs every authored light (the LightsVisibilitiesVolume table: 268 on Streets) with its radius / falloff and a sky term.
+     - Emissive surfaces count as light sources (or the result is darker than baked).
+   - Brixelizer GI vs RT GI for it:
+     - Brixelizer GI (FidelityFX, MIT): an SDF cascade around the camera plus a radiance cache. Cheaper and stable, with coarse
+       detail (a few cm voxels near, coarser far). It needs no TLAS, but its own SDF build from the static meshes (and characters, as
+       AABB / SDF instances).
+     - RT GI: rays through the existing TLAS (static world + the skinned characters above) into a world-space radiance cache
+       (e.g. a probe grid or ReSTIR GI). Sharper contact bounce and true character contribution. Higher cost, and it needs the denoiser.
+     - Recommendation: prototype both on Gorge and Rust once stage 2 is decided. Keep whichever reaches the stage-1 budget class at 1440p
+       FSR Quality with acceptable stability. Brixelizer is the likely default on mid GPUs, and RT GI may be offered as "High".
 4. **Path-traced mode, assessed only**: a feasibility report (fps on the 7900 XTX at 1080p / 1440p with FSR 3.1
    Performance, denoise quality), no ship decision without the user.
 
@@ -175,7 +225,7 @@ CheckFeatureSupport OPTIONS5, else the row is greyed); auto-detect never enables
 
 - B vs C at stage 2 (needs stage 1's round-trip cost).
 - NRD licence read (with the DLSS / Streamline read), only if FidelityFX quality is short.
-- RT GI vs Brixelizer GI at stage 3.
+- RT GI vs Brixelizer GI at stage 3, for both the calibrated add-on and the user-approved "RT lighting" mode (§6 stage 3).
 
 ## 8. Sources
 

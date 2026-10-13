@@ -1,0 +1,564 @@
+diff --git a/src/platform/DisplayMode.h b/src/platform/DisplayMode.h
+--- a/src/platform/DisplayMode.h
++++ b/src/platform/DisplayMode.h
+@@ -2,14 +2,19 @@
+ // Fullscreen switches the monitor to the chosen resolution (Win32Window, CDS_FULLSCREEN). Leaving it must put back the mode
+ // the desktop ran BEFORE the switch, not the registry mode (ChangeDisplaySettingsEx(nullptr) restores the registry mode,
+ // which can differ - e.g. a 144 Hz desktop whose registry entry says 60 Hz). The keeper saves the current mode before the
+-// first switch (never overwritten while our mode is active) and restores exactly that, dynamically (no registry write),
+-// falling back to the registry mode only if the saved one is refused. Header-only, with the display call injected, so the
+-// sequence is unit-testable without switching modes (tools/systems/displaymode_test.cpp).
++// first switch (never overwritten while our mode is active, and never replaced by a registry fallback) and restores exactly
++// that, dynamically (no registry write), falling back to the registry mode only if the saved one is refused. Header-only,
++// with the display call injected, so the sequence is unit-testable without switching modes (tools/systems/displaymode_test.cpp).
++// A process that is killed (TerminateProcess) runs no code: Windows then reverts to the registry mode. For that case the
++// keeper writes the saved mode to a small file at switch time (deleted by a successful restore); the next start of the game
++// (or wfc_rebuild.exe --restore-display) puts it back when the display shows the registry-revert signature
++// (restoreFromFileAtStartup).
+ #pragma once
+ #ifdef _WIN32
+ #include <windows.h>
+ 
+ #include <atomic>
++#include <cstdio>
+ #include <cwchar>
+ 
+ namespace platform {
+@@ -26,39 +31,117 @@
+         m.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY | (current.dmFields & DM_DISPLAYFLAGS);
+         return m;
+     }
+-    // Before a fullscreen switch: remember `current` (ENUM_CURRENT_SETTINGS) unless our mode is already active (a re-apply
+-    // or a resolution change in fullscreen: `current` is then our own mode, not the desktop's).
++    // Before a fullscreen switch: remember `current` (ENUM_CURRENT_SETTINGS) as the desktop mode, unless
++    //  - our mode is already active (a re-apply or a resolution change in fullscreen: `current` is then our own mode), or
++    //  - a mode is already saved and the last restore did not put it back exactly (refused: the display then runs the
++    //    registry fallback, which must never become "the desktop mode"; the first saved mode stays for the process).
++    // After a successful restore the next session saves afresh: the user may have changed the desktop mode in between.
+     void saveBeforeSwitch(const wchar_t* device, const DEVMODEW& current) {
+         if (active_.load()) return;
++        if (hasSaved_ && !lastRestoreOk_) return;
+         saved_ = restorableFrom(current);
++        hasSaved_ = true;
+         std::wcsncpy(device_, device ? device : L"", 31);
+         device_[31] = 0;
+     }
+-    void switched() { active_.store(true); }   // the CDS_FULLSCREEN change succeeded
++    void switched() {                                    // the CDS_FULLSCREEN change succeeded
++        active_.store(true);
++        if (file_[0]) writeFile(file_, device_, saved_);
++    }
+     bool active() const { return active_.load(); }
++    bool hasSaved() const { return hasSaved_; }
+     const DEVMODEW& saved() const { return saved_; }
+-    // Leave fullscreen / minimise / exit / crash: the saved mode, dynamically (flags 0: no registry write); if refused, the
+-    // registry mode (the previous behaviour). Returns the ChangeDisplaySettingsEx result of the saved mode (or
+-    // DISP_CHANGE_SUCCESSFUL when nothing was active). No allocation, no locks: callable from a crash handler.
++    // where switched() records the saved mode for the next start (empty: no file); set before the first switch
++    void setRestoreFile(const wchar_t* path) { std::wcsncpy(file_, path ? path : L"", MAX_PATH - 1); file_[MAX_PATH - 1] = 0; }
++    // Leave fullscreen / minimise / exit / crash / hang: the saved mode, dynamically (flags 0: no registry write); if refused,
++    // the registry mode (the previous behaviour). Returns the ChangeDisplaySettingsEx result of the saved mode (or
++    // DISP_CHANGE_SUCCESSFUL when nothing was active). No allocation, no locks: callable from a crash handler or another
++    // thread (the atomic exchange makes exactly one caller restore).
+     LONG restore(ChangeFn change) {
+         if (!active_.exchange(false)) return DISP_CHANGE_SUCCESSFUL;
+         const wchar_t* dev = device_[0] ? device_ : nullptr;
+         DEVMODEW m = saved_;
+         const LONG r = change(dev, &m, nullptr, 0, nullptr);
+-        if (r != DISP_CHANGE_SUCCESSFUL) change(dev, nullptr, nullptr, 0, nullptr);
++        lastRestoreOk_ = r == DISP_CHANGE_SUCCESSFUL;
++        if (!lastRestoreOk_) change(dev, nullptr, nullptr, 0, nullptr);
++        if (file_[0] && lastRestoreOk_) DeleteFileW(file_);   // (refused: kept, so the next start / --restore-display retries)
+         return r;
+     }
+ 
++    // ---- the restore file: "device width height bpp hz flags" on one line (UTF-16 device name as UTF-8 is not needed:
++    // \\.\DISPLAYn is ASCII) ----
++    static bool writeFile(const wchar_t* path, const wchar_t* device, const DEVMODEW& m) {
++        HANDLE h = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
++        if (h == INVALID_HANDLE_VALUE) return false;
++        char dev[32] = {};
++        for (int i = 0; i < 31 && device[i]; ++i) dev[i] = device[i] < 128 ? (char)device[i] : '?';
++        char line[160];
++        const int n = std::snprintf(line, sizeof line, "%s %lu %lu %lu %lu %lu\r\n", dev[0] ? dev : "-", m.dmPelsWidth, m.dmPelsHeight,
++                                    m.dmBitsPerPel, m.dmDisplayFrequency, (m.dmFields & DM_DISPLAYFLAGS) ? m.dmDisplayFlags : 0ul);
++        DWORD w = 0;
++        const bool ok = n > 0 && WriteFile(h, line, (DWORD)n, &w, nullptr) && w == (DWORD)n;
++        CloseHandle(h);
++        return ok;
++    }
++    static bool readFile(const wchar_t* path, wchar_t* device, DEVMODEW& m) {
++        HANDLE h = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
++        if (h == INVALID_HANDLE_VALUE) return false;
++        char buf[160] = {};
++        DWORD got = 0;
++        ReadFile(h, buf, sizeof buf - 1, &got, nullptr);
++        CloseHandle(h);
++        char dev[32] = {};
++        unsigned long w = 0, ht = 0, bpp = 0, hz = 0, fl = 0;
++        if (std::sscanf(buf, "%31s %lu %lu %lu %lu %lu", dev, &w, &ht, &bpp, &hz, &fl) != 6 || !w || !ht || !hz) return false;
++        const bool none = dev[0] == '-' && dev[1] == 0;
++        for (int i = 0; i < 32; ++i) device[i] = none ? 0 : (wchar_t)(unsigned char)dev[i];
++        DEVMODEW d{};
++        d.dmSize = sizeof d;
++        d.dmPelsWidth = w; d.dmPelsHeight = ht; d.dmBitsPerPel = bpp; d.dmDisplayFrequency = hz; d.dmDisplayFlags = fl;
++        d.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY | (fl ? DM_DISPLAYFLAGS : 0);
++        m = d;
++        return true;
++    }
++    // At start-up (or --restore-display, force = true): a file left by a process that died in fullscreen. The mode is put
++    // back only when the display shows the registry-revert signature: the current mode IS the registry mode and differs from
++    // the saved one (otherwise the user changed the desktop since, and it is left alone). Returns the action taken:
++    // 0 no file, 1 left alone (deleted), 2 restored, 3 restore refused (file kept for --restore-display).
++    using EnumFn = BOOL(WINAPI*)(LPCWSTR, DWORD, DEVMODEW*);
++    static int restoreFromFileAtStartup(const wchar_t* path, bool force, ChangeFn change, EnumFn enumSettings, DEVMODEW* restored = nullptr) {
++        wchar_t dev[32] = {};
++        DEVMODEW m{};
++        if (!readFile(path, dev, m)) return 0;
++        const wchar_t* d = dev[0] ? dev : nullptr;
++        DEVMODEW cur{}, reg{};
++        cur.dmSize = reg.dmSize = sizeof(DEVMODEW);
++        const bool haveCur = enumSettings(d, ENUM_CURRENT_SETTINGS, &cur) != 0, haveReg = enumSettings(d, ENUM_REGISTRY_SETTINGS, &reg) != 0;
++        auto same = [](const DEVMODEW& a, const DEVMODEW& b) {
++            return a.dmPelsWidth == b.dmPelsWidth && a.dmPelsHeight == b.dmPelsHeight && a.dmDisplayFrequency == b.dmDisplayFrequency;
++        };
++        const bool reverted = haveCur && haveReg && same(cur, reg) && !same(cur, m);
++        if (!force && !reverted) { DeleteFileW(path); return 1; }
++        if (haveCur && same(cur, m)) { DeleteFileW(path); return 1; }   // (already in the saved mode)
++        DEVMODEW want = m;
++        if (change(d, &want, nullptr, 0, nullptr) != DISP_CHANGE_SUCCESSFUL) return 3;
++        DeleteFileW(path);
++        if (restored) *restored = m;
++        return 2;
++    }
++
+ private:
+     DEVMODEW saved_{};
+     wchar_t device_[32] = {};
++    wchar_t file_[MAX_PATH] = {};
++    bool hasSaved_ = false, lastRestoreOk_ = true;
+     std::atomic<bool> active_{false};
+ };
+ 
+ // The process-wide keeper (Win32Window.cpp) and its restore with the real ChangeDisplaySettingsExW; safe from a crash
+-// handler, idempotent (a no-op when no fullscreen mode is active).
++// handler and from the watchdog thread, idempotent (a no-op when no fullscreen mode is active).
+ DesktopModeKeeper& desktopModeKeeper();
+ void restoreDesktopDisplayMode();
++// The restore file's path: wfc_display_restore.txt in the working directory (the profile / log directory).
++const wchar_t* displayRestoreFilePath();
+ 
+ }  // namespace platform
+ #endif
+diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+--- a/src/platform/win32/Win32Window.cpp
++++ b/src/platform/win32/Win32Window.cpp
+@@ -27,6 +27,15 @@
+ // handler and atexit can put it back too.
+ DesktopModeKeeper& desktopModeKeeper() { static DesktopModeKeeper k; return k; }
+ void restoreDesktopDisplayMode() { desktopModeKeeper().restore(&ChangeDisplaySettingsExW); }
++const wchar_t* displayRestoreFilePath() {
++    static wchar_t path[MAX_PATH] = {};
++    if (!path[0]) {
++        const DWORD n = GetCurrentDirectoryW(MAX_PATH - 32, path);
++        if (n == 0 || n >= MAX_PATH - 32) path[0] = 0;
++        else std::wcscat(path, L"\\wfc_display_restore.txt");
++    }
++    return path;
++}
+ 
+ namespace {
+ 
+@@ -69,6 +78,14 @@
+         width_ = w; height_ = h;
+         hinst_ = GetModuleHandleW(nullptr);
+         enableDpiAwareness();
++        {   // [Systems] a previous run killed in fullscreen (no restore ran): Windows reverted the display to the registry mode
++            DEVMODEW m{};
++            const int r = DesktopModeKeeper::restoreFromFileAtStartup(displayRestoreFilePath(), false, &ChangeDisplaySettingsExW,
++                                                                      &EnumDisplaySettingsW, &m);
++            if (r == 2) LOG_INFO("window: the last run ended in fullscreen without a restore: desktop mode %lux%lu @ %lu Hz put back",
++                                 m.dmPelsWidth, m.dmPelsHeight, m.dmDisplayFrequency);
++            else if (r == 3) LOG_WARN("window: the last run's desktop mode could not be put back (wfc_display_restore.txt kept)");
++        }
+ 
+         WNDCLASSEXW wc = {};
+         wc.cbSize = sizeof(wc);
+@@ -108,6 +125,14 @@
+     }
+ 
+     bool pump(InputFrame& input) override {
++        if (fullscreen_ && modeChanged_ && !desktopModeKeeper().active()) {
++            // [Systems] the desktop mode was put back from another thread (the watchdog, during a long stall): frames run
++            // again, so take our mode back (debounced as a focus return)
++            modeChanged_ = false;
++            lastRestore_ = std::chrono::steady_clock::now();
++            LOG_INFO("window: the desktop mode was restored during a stall; re-applying the fullscreen mode");
++            if (GetForegroundWindow() == hwnd_) scheduleReapply();
++        }
+         MSG msg;
+         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+             if (msg.message == WM_QUIT) wantClose_ = true;
+@@ -197,18 +222,27 @@
+         MONITORINFOEXW mi{};
+         mi.cbSize = sizeof(mi);
+         if (!GetMonitorInfoW(mon, &mi)) return false;
++        // [Systems] the desktop as it runs: our saved desktop mode while our fullscreen mode is active, else the current
++        // mode (the registry mode can differ - a 144 Hz desktop registered at 60 Hz - and auto-detect derives the frame
++        // limit from this refresh); the registry only when the current mode cannot be read
+         DEVMODEW dm{};
+         dm.dmSize = sizeof(dm);
+-        if (!EnumDisplaySettingsW(mi.szDevice, ENUM_REGISTRY_SETTINGS, &dm) && !EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) return false;
++        if (desktopModeKeeper().active()) dm = desktopModeKeeper().saved();
++        else if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm) && !EnumDisplaySettingsW(mi.szDevice, ENUM_REGISTRY_SETTINGS, &dm)) return false;
+         w = (int)dm.dmPelsWidth; h = (int)dm.dmPelsHeight; hz = (int)dm.dmDisplayFrequency;
+         return w > 0 && h > 0;
+     }
+ 
+     std::vector<Mode> displayModes() const override {
+         std::vector<Mode> out;
++        // [Systems] the modes of the monitor the window is on (multi-monitor: not the primary's)
++        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
++        MONITORINFOEXW mi{};
++        mi.cbSize = sizeof(mi);
++        const wchar_t* dev = GetMonitorInfoW(mon, &mi) ? mi.szDevice : nullptr;
+         DEVMODEW dm{};
+         dm.dmSize = sizeof(dm);
+-        for (DWORD i = 0; EnumDisplaySettingsW(nullptr, i, &dm); ++i) {
++        for (DWORD i = 0; EnumDisplaySettingsW(dev, i, &dm); ++i) {
+             if (dm.dmBitsPerPel < 32 || dm.dmPelsWidth < 800 || dm.dmPelsHeight < 600) continue;
+             bool have = false;
+             for (const Mode& m : out) have |= m.width == (int)dm.dmPelsWidth && m.height == (int)dm.dmPelsHeight;
+@@ -233,19 +267,23 @@
+         EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
+         bool ok = false;
+         if (fsW_ > 0 && fsH_ > 0 && ((int)cur.dmPelsWidth != fsW_ || (int)cur.dmPelsHeight != fsH_ || modeChanged_)) {
+-            // The requested size at the current refresh rate when the monitor offers it, else its highest rate.
++            // The requested size at the desktop's refresh rate when the monitor offers it, else its highest rate. [Systems] the
++            // desktop's rate is the saved one once a mode is saved: in a re-apply or a resolution change `cur` is our own mode,
++            // possibly a 60 Hz fallback, which must not become the preference.
++            const DWORD wantHz = desktopModeKeeper().hasSaved() ? desktopModeKeeper().saved().dmDisplayFrequency : cur.dmDisplayFrequency;
+             DEVMODEW best{}, dm{};
+             dm.dmSize = sizeof(dm);
+             for (DWORD i = 0; EnumDisplaySettingsW(mi.szDevice, i, &dm); ++i) {
+                 if ((int)dm.dmPelsWidth != fsW_ || (int)dm.dmPelsHeight != fsH_ || dm.dmBitsPerPel < 32) continue;
+-                bool better = best.dmSize == 0 || dm.dmDisplayFrequency == cur.dmDisplayFrequency ||
+-                              (best.dmDisplayFrequency != cur.dmDisplayFrequency && dm.dmDisplayFrequency > best.dmDisplayFrequency);
++                bool better = best.dmSize == 0 || dm.dmDisplayFrequency == wantHz ||
++                              (best.dmDisplayFrequency != wantHz && dm.dmDisplayFrequency > best.dmDisplayFrequency);
+                 if (better) best = dm;
+             }
+             if (best.dmSize) {
+                 best.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+                 // [Systems] the desktop's mode as it runs now (not the registry's), kept for the way back; not overwritten
+                 // while our mode is active (a re-apply or a resolution change in fullscreen sees our own mode in `cur`)
++                desktopModeKeeper().setRestoreFile(displayRestoreFilePath());   // (written at the switch: kill-path repair)
+                 desktopModeKeeper().saveBeforeSwitch(mi.szDevice, cur);
+                 ok = ChangeDisplaySettingsExW(mi.szDevice, &best, nullptr, CDS_FULLSCREEN, nullptr) == DISP_CHANGE_SUCCESSFUL;
+                 if (ok) {
+@@ -272,6 +310,7 @@
+         const DEVMODEW want = desktopModeKeeper().saved();
+         const LONG r = desktopModeKeeper().restore(&ChangeDisplaySettingsExW);
+         modeChanged_ = false;
++        lastRestore_ = std::chrono::steady_clock::now();
+         DEVMODEW now{};
+         now.dmSize = sizeof(now);
+         EnumDisplaySettingsW(monitorDevice_.empty() ? nullptr : monitorDevice_.c_str(), ENUM_CURRENT_SETTINGS, &now);
+@@ -280,9 +319,48 @@
+                  r == DISP_CHANGE_SUCCESSFUL ? "" : "; refused, registry mode restored instead");
+     }
+ 
++    // [Systems] coming back to fullscreen after a restore: never sooner than kReapplyDelayMs after it (a restore -> reapply
++    // -> focus-loss loop, e.g. an overlay stealing focus at each mode change, would otherwise switch modes continuously),
++    // and at most kReapplyMax re-applies per kReapplyWindowMs: beyond that the window stays borderless at the desktop mode
++    // until the next fullscreen request.
++    void scheduleReapply() {
++        const auto now = std::chrono::steady_clock::now();
++        const long long since = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(now - lastRestore_).count();
++        if (lastRestore_.time_since_epoch().count() != 0 && since < kReapplyDelayMs) {
++            if (!reapplyPending_) SetTimer(hwnd_, kReapplyTimer, (UINT)(kReapplyDelayMs - since), nullptr);
++            reapplyPending_ = true;
++            return;
++        }
++        reapplyNow();
++    }
++    void reapplyNow() {
++        const auto now = std::chrono::steady_clock::now();
++        int recent = 0;
++        for (const auto& t : reapplies_)
++            if (t.time_since_epoch().count() != 0 && now - t < std::chrono::milliseconds(kReapplyWindowMs)) ++recent;
++        if (recent >= kReapplyMax) {
++            if (!reapplyGaveUp_) LOG_WARN("window: fullscreen mode re-applied %d times in %d s; staying at the desktop mode", recent, kReapplyWindowMs / 1000);
++            reapplyGaveUp_ = true;
++            applyBorderlessAtDesktop();
++            return;
++        }
++        reapplies_[reapplyNext_] = now; reapplyNext_ = (reapplyNext_ + 1) % kReapplyMax;
++        applyFullscreenMode();
++    }
++    void applyBorderlessAtDesktop() {
++        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
++        MONITORINFOEXW mi{};
++        mi.cbSize = sizeof(mi);
++        GetMonitorInfoW(mon, &mi);
++        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
++        SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
++                     mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++    }
++
+     void setDisplayMode(int w, int h, bool full) override {
+         // Windowed: a client area of w x h. Fullscreen: the monitor at w x h (applyFullscreenMode).
+         if (full) {
++            reapplyGaveUp_ = false;                          // (an explicit request: the loop guard starts afresh)
+             if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
+             fsW_ = w; fsH_ = h;
+             fullscreen_ = true;
+@@ -388,6 +466,12 @@
+     int fsW_ = 0, fsH_ = 0;
+     std::wstring monitorDevice_;
+     RECT windowedRect_{};
++    static constexpr UINT_PTR kReapplyTimer = 0x5753;
++    static constexpr int kReapplyDelayMs = 1500, kReapplyMax = 4, kReapplyWindowMs = 10000;
++    std::chrono::steady_clock::time_point lastRestore_{};   // (the re-apply debounce)
++    std::chrono::steady_clock::time_point reapplies_[kReapplyMax] = {};
++    int reapplyNext_ = 0;
++    bool reapplyPending_ = false, reapplyGaveUp_ = false;
+ 
+     static int vkByName(const std::string& n) {
+         static const struct { const char* name; int vk; } t[] = {
+@@ -601,7 +685,15 @@
+                 // Fullscreen at a changed mode: alt-tab returns the desktop to its own mode; coming back reapplies ours.
+                 if (fullscreen_) {
+                     if (!wp && modeChanged_) { restoreDesktopMode(); ShowWindow(hwnd_, SW_MINIMIZE); }
+-                    else if (wp && !modeChanged_ && fsW_ > 0) { ShowWindow(hwnd_, SW_RESTORE); applyFullscreenMode(); }
++                    else if (wp && !modeChanged_ && fsW_ > 0) { ShowWindow(hwnd_, SW_RESTORE); scheduleReapply(); }
++                }
++                break;
++            case WM_TIMER:
++                if (wp == kReapplyTimer) {
++                    KillTimer(hwnd_, kReapplyTimer);
++                    reapplyPending_ = false;
++                    if (fullscreen_ && !modeChanged_ && fsW_ > 0 && GetForegroundWindow() == hwnd_) reapplyNow();
++                    return 0;
+                 }
+                 break;
+             case WM_CHAR: {
+diff --git a/src/render/gl/RenderWatchdog.cpp b/src/render/gl/RenderWatchdog.cpp
+--- a/src/render/gl/RenderWatchdog.cpp
++++ b/src/render/gl/RenderWatchdog.cpp
+@@ -202,12 +202,26 @@
+ void loop() {
+     int dumps = 0;
+     bool reported = false;
++    bool displayRestored = false;
+     while (gRun.load()) {
+         std::this_thread::sleep_for(std::chrono::seconds(1));
+         const long long last = gLastProgressMs.load();
+         if (last == 0 || !gArmed.load()) continue;
+         const double stalled = (nowMs() - last) / 1000.0;
+-        if (stalled < kStallSeconds) { reported = false; continue; }
++        if (stalled < kStallSeconds) { reported = false; displayRestored = false; continue; }
++#ifdef _WIN32
++        // [Systems] a hang in fullscreen: after the report / dumps and WFC_HANG_RESTORE_S more seconds (default 10), the desktop
++        // gets its own mode back, so a hung game (killed later: no restore code runs) does not leave the monitor in our mode.
++        // On its own thread: ChangeDisplaySettingsEx notifies every top-level window, and ours is not answering. If frames
++        // resume, the window takes its mode back (Win32Window::pump).
++        static const double restoreAfter = [] { const char* e = std::getenv("WFC_HANG_RESTORE_S"); return e ? std::atof(e) : 10.0; }();
++        if (reported && !displayRestored && restoreAfter >= 0 && stalled >= kStallSeconds + restoreAfter &&
++            platform::desktopModeKeeper().active()) {
++            displayRestored = true;
++            LOG_ERROR("watchdog: stalled %.1f s in fullscreen: restoring the desktop display mode", stalled);
++            std::thread([] { platform::restoreDesktopDisplayMode(); }).detach();
++        }
++#endif
+         if (reported) continue;
+         reported = true;
+         LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d", stalled,
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1,8 +1,28 @@
+ // Clean-room reconstruction — entry point.
+ #include "core/Application.h"
+ #include "render/gl/RenderWatchdog.h"
++#include "platform/DisplayMode.h"
+ 
+-int main() {
++#include <cstdio>
++#include <cstring>
++
++int main(int argc, char** argv) {
++#ifdef _WIN32
++    // [Systems] wfc_rebuild.exe --restore-display: put back the desktop mode a run killed in fullscreen left behind
++    // (wfc_display_restore.txt in the working directory, written at the fullscreen switch), then exit
++    for (int i = 1; i < argc; ++i)
++        if (std::strcmp(argv[i], "--restore-display") == 0) {
++            DEVMODEW m{};
++            const int r = platform::DesktopModeKeeper::restoreFromFileAtStartup(platform::displayRestoreFilePath(), true,
++                                                                                &ChangeDisplaySettingsExW, &EnumDisplaySettingsW, &m);
++            if (r == 2) std::printf("desktop mode restored: %lux%lu @ %lu Hz\n", m.dmPelsWidth, m.dmPelsHeight, m.dmDisplayFrequency);
++            else std::printf("%s\n", r == 0 ? "no saved desktop mode (wfc_display_restore.txt) in this directory"
++                                     : r == 1 ? "the display already runs the saved mode" : "the saved desktop mode was refused");
++            return r == 3 ? 1 : 0;
++        }
++#else
++    (void)argc; (void)argv;
++#endif
+     render::watchdog::installCrashHandler();      // crash report + minidump for any unhandled exception
+     core::Application app;
+     if (!app.init()) return 1;
+diff --git a/tools/systems/displaymode_test.cpp b/tools/systems/displaymode_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/tools/systems/displaymode_test.cpp
+@@ -0,0 +1,150 @@
++// platform::DesktopModeKeeper unit test (Systems; not part of the CMake build). No display mode is ever switched: the
++// sequence runs against a fake ChangeDisplaySettingsExW that records its calls; the real display is only READ
++// (ENUM_CURRENT_SETTINGS) and the restore mode is validated with CDS_TEST, which tests a mode without setting it.
++// Build (repo root): clang++ -std=c++17 -Isrc tools/systems/displaymode_test.cpp -luser32 -o displaymode_test.exe
++#include "platform/DisplayMode.h"
++
++#include <cstdio>
++#include <cwchar>
++#include <vector>
++
++namespace {
++struct Call { bool hasMode; DWORD w, h, hz, bpp, fields, flags; };
++std::vector<Call> g_calls;
++LONG g_result = DISP_CHANGE_SUCCESSFUL;
++LONG WINAPI fakeChange(LPCWSTR, DEVMODEW* m, HWND, DWORD flags, LPVOID) {
++    g_calls.push_back({m != nullptr, m ? m->dmPelsWidth : 0, m ? m->dmPelsHeight : 0, m ? m->dmDisplayFrequency : 0, m ? m->dmBitsPerPel : 0,
++                       m ? m->dmFields : 0, flags});
++    return m ? g_result : DISP_CHANGE_SUCCESSFUL;
++}
++// fake EnumDisplaySettingsW for the start-up repair: the current and registry modes the test sets
++DEVMODEW g_cur{}, g_reg{};
++BOOL WINAPI fakeEnum(LPCWSTR, DWORD which, DEVMODEW* m) {
++    if (which == ENUM_CURRENT_SETTINGS) { *m = g_cur; return TRUE; }
++    if (which == ENUM_REGISTRY_SETTINGS) { *m = g_reg; return TRUE; }
++    return FALSE;
++}
++bool exists(const wchar_t* p) { return GetFileAttributesW(p) != INVALID_FILE_ATTRIBUTES; }
++int fails = 0;
++void check(bool ok, const char* what) { std::printf("%s  %s\n", ok ? "PASS" : "FAIL", what); if (!ok) ++fails; }
++DEVMODEW mode(DWORD w, DWORD h, DWORD hz) { DEVMODEW m{}; m.dmSize = sizeof m; m.dmPelsWidth = w; m.dmPelsHeight = h; m.dmDisplayFrequency = hz; m.dmBitsPerPel = 32;
++    m.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL | DM_POSITION; return m; }
++}  // namespace
++
++int main() {
++    using platform::DesktopModeKeeper;
++    // 1. the 144 Hz desktop is saved, our 1080p mode does not overwrite it, the restore puts 144 Hz back dynamically
++    {
++        DesktopModeKeeper k; g_calls.clear(); g_result = DISP_CHANGE_SUCCESSFUL;
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        k.switched();
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(1920, 1080, 60));   // a re-apply / resolution change while ours is active
++        const LONG r = k.restore(&fakeChange);
++        check(r == DISP_CHANGE_SUCCESSFUL && g_calls.size() == 1, "one restore call");
++        check(g_calls.size() == 1 && g_calls[0].hasMode && g_calls[0].w == 2560 && g_calls[0].h == 1440 && g_calls[0].hz == 144,
++              "restores the desktop mode saved BEFORE the switch (2560x1440 @ 144), not our mode");
++        check(g_calls.size() == 1 && g_calls[0].flags == 0, "dynamic change (flags 0: no registry write, not CDS_FULLSCREEN)");
++        check(g_calls.size() == 1 && !(g_calls[0].fields & DM_POSITION) && (g_calls[0].fields & DM_DISPLAYFREQUENCY), "sets size / depth / refresh only");
++        check(!k.active(), "inactive after the restore");
++        g_calls.clear();
++        k.restore(&fakeChange);
++        check(g_calls.empty(), "a second restore (exit after leaving fullscreen) does nothing");
++    }
++    // 2. never switched: restore is a no-op (exit / crash without fullscreen)
++    {
++        DesktopModeKeeper k; g_calls.clear();
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));   // the switch then failed: switched() not called
++        k.restore(&fakeChange);
++        check(g_calls.empty(), "no restore when our mode never became active");
++    }
++    // 3. the saved mode is refused: the registry mode as the fallback (the previous behaviour)
++    {
++        DesktopModeKeeper k; g_calls.clear(); g_result = DISP_CHANGE_BADMODE;
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        k.switched();
++        const LONG r = k.restore(&fakeChange);
++        check(r == DISP_CHANGE_BADMODE && g_calls.size() == 2 && g_calls[0].hasMode && !g_calls[1].hasMode,
++              "refused saved mode -> ChangeDisplaySettingsEx(nullptr) (registry mode) as the fallback");
++        g_result = DISP_CHANGE_SUCCESSFUL;
++    }
++    // 4. a second fullscreen session after a restore saves the desktop afresh
++    {
++        DesktopModeKeeper k; g_calls.clear();
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144)); k.switched(); k.restore(&fakeChange);
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 120)); k.switched(); g_calls.clear(); k.restore(&fakeChange);
++        check(g_calls.size() == 1 && g_calls[0].hz == 120, "the next session restores the desktop mode current at ITS switch");
++    }
++    // 4b. a refused restore (the display fell back to the registry mode): the next session keeps the FIRST saved mode
++    {
++        DesktopModeKeeper k; g_calls.clear(); g_result = DISP_CHANGE_BADMODE;
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144)); k.switched(); k.restore(&fakeChange);
++        g_result = DISP_CHANGE_SUCCESSFUL;
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 60));   // the registry fallback now runs
++        k.switched(); g_calls.clear(); k.restore(&fakeChange);
++        check(g_calls.size() == 1 && g_calls[0].hz == 144, "after a refused restore the registry fallback (60 Hz) is never saved: 144 Hz restored");
++    }
++    // 6. the restore file: written at the switch, deleted by a successful restore, kept by a refused one
++    {
++        wchar_t f[MAX_PATH]; GetTempPathW(MAX_PATH, f); wcscat(f, L"wfc_dm_test_restore.txt");
++        DeleteFileW(f);
++        DesktopModeKeeper k; g_result = DISP_CHANGE_SUCCESSFUL;
++        k.setRestoreFile(f);
++        k.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        check(!exists(f), "no file before the switch");
++        k.switched();
++        wchar_t dev[32] = {}; DEVMODEW m{};
++        const bool rd = DesktopModeKeeper::readFile(f, dev, m);
++        check(rd && m.dmPelsWidth == 2560 && m.dmPelsHeight == 1440 && m.dmDisplayFrequency == 144 && m.dmBitsPerPel == 32 &&
++              std::wcscmp(dev, L"\\\\.\\DISPLAY1") == 0, "the switch writes the saved mode + device (read back exactly)");
++        k.restore(&fakeChange);
++        check(!exists(f), "a successful restore deletes the file");
++        DesktopModeKeeper k2; k2.setRestoreFile(f); g_result = DISP_CHANGE_BADMODE;
++        k2.saveBeforeSwitch(L"\\\\.\\DISPLAY1", mode(2560, 1440, 144)); k2.switched(); k2.restore(&fakeChange);
++        check(exists(f), "a refused restore keeps the file (the next start / --restore-display retries)");
++        g_result = DISP_CHANGE_SUCCESSFUL;
++        // 7. start-up repair (a run killed in fullscreen): only on the registry-revert signature
++        g_cur = mode(2560, 1440, 60); g_reg = mode(2560, 1440, 60); g_calls.clear();
++        DEVMODEW got{};
++        int r = DesktopModeKeeper::restoreFromFileAtStartup(f, false, &fakeChange, &fakeEnum, &got);
++        check(r == 2 && g_calls.size() == 1 && g_calls[0].hz == 144 && g_calls[0].flags == 0 && !exists(f),
++              "current == registry (60) != saved (144): the saved mode is put back dynamically, file deleted");
++        DesktopModeKeeper::writeFile(f, L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        g_cur = mode(1920, 1080, 120); g_reg = mode(2560, 1440, 60); g_calls.clear();
++        r = DesktopModeKeeper::restoreFromFileAtStartup(f, false, &fakeChange, &fakeEnum);
++        check(r == 1 && g_calls.empty() && !exists(f), "current differs from the registry (the user changed the desktop): left alone, file deleted");
++        DesktopModeKeeper::writeFile(f, L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        g_calls.clear();
++        r = DesktopModeKeeper::restoreFromFileAtStartup(f, true, &fakeChange, &fakeEnum);
++        check(r == 2 && g_calls.size() == 1 && g_calls[0].hz == 144, "--restore-display (force) restores without the signature");
++        DesktopModeKeeper::writeFile(f, L"\\\\.\\DISPLAY1", mode(2560, 1440, 144));
++        g_cur = mode(2560, 1440, 144); g_reg = mode(2560, 1440, 144); g_calls.clear();
++        r = DesktopModeKeeper::restoreFromFileAtStartup(f, true, &fakeChange, &fakeEnum);
++        check(r == 1 && g_calls.empty(), "already in the saved mode: nothing switched");
++        check(DesktopModeKeeper::restoreFromFileAtStartup(f, true, &fakeChange, &fakeEnum) == 0, "no file: nothing (0)");
++        DeleteFileW(f);
++    }
++    // 5. this machine: the current desktop mode, read only, as the restore would set it - validated with CDS_TEST (no switch)
++    {
++        DEVMODEW cur{}; cur.dmSize = sizeof cur;
++        if (EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &cur)) {
++            std::printf("      current desktop %lux%lu @ %lu Hz, %lu bpp\n", cur.dmPelsWidth, cur.dmPelsHeight, cur.dmDisplayFrequency, cur.dmBitsPerPel);
++            // A display that lost its EDID (generic-monitor fallback) can run a mode its own mode list does not contain; Windows
++            // then refuses even the unmodified current mode (CDS_TEST -2), and the keeper falls back to the registry mode (the
++            // previous behaviour). The construction is then validated on the largest mode the display does list.
++            int listed = 0;
++            DEVMODEW dm{}, largest{}; dm.dmSize = sizeof dm;
++            for (DWORD i = 0; EnumDisplaySettingsW(nullptr, i, &dm); ++i) {
++                listed += dm.dmPelsWidth == cur.dmPelsWidth && dm.dmPelsHeight == cur.dmPelsHeight && dm.dmDisplayFrequency == cur.dmDisplayFrequency;
++                if (dm.dmBitsPerPel >= 32 && (dm.dmPelsWidth > largest.dmPelsWidth || (dm.dmPelsWidth == largest.dmPelsWidth && dm.dmDisplayFrequency > largest.dmDisplayFrequency))) largest = dm;
++            }
++            const DEVMODEW& base = listed ? cur : largest;
++            if (!listed) std::printf("      the current mode is not in the display's mode list (EDID fallback?): validating on %lux%lu @ %lu Hz instead\n",
++                                     largest.dmPelsWidth, largest.dmPelsHeight, largest.dmDisplayFrequency);
++            DEVMODEW m = DesktopModeKeeper::restorableFrom(base);
++            const LONG t = ChangeDisplaySettingsExW(nullptr, &m, nullptr, CDS_TEST, nullptr);
++            check(t == DISP_CHANGE_SUCCESSFUL, "a restore mode built by the keeper passes CDS_TEST (valid; CDS_TEST switches nothing)");
++        } else check(false, "EnumDisplaySettings(ENUM_CURRENT_SETTINGS)");
++    }
++    std::printf("%s (%d failed)\n", fails ? "FAIL" : "PASS", fails);
++    return fails ? 1 : 0;
++}
