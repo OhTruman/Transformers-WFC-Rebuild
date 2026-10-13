@@ -176,3 +176,20 @@ Reading:
 - The failure is lightness and chroma spread per pixel: the median dL* is small, but its sign varies across pixels. The Original diffuse chain is paint x (0.6 x gloss + cube x 0.2), then the -0.15 oversaturation mix. Modern's paint x (1 - m) + env x (F0 A + B) follows the gloss mask only through the roughness.
 - m does not fix it. The combined pass share is 9 - 17 % at 0.6 - 0.8.
 - Open: whether the gate compares the right quantities (Original's DiffuseColor is lit by the direct light; Modern's IBL term by the env only), or whether the paint's diffuse share should follow the gloss mask.
+
+Like-for-like attempt (mode "lit", Integration 2026-10-13; diagnostic only). The M6 gate is the user's in-game full-frame A/B. Both sides are under one unit directional light (5 L / V pairs, N = +Z):
+- Original: DiffuseColor x NdotL + SpecularColor x Phong(SpecularPower).
+- Modern: Lambert + pi x GGX + the env split-sum IBL.
+
+| m | lit pass | median dE00 | dH* | dL* | L*-matched pass (median) |
+|---|---|---|---|---|---|
+| 0.8 | 11 % | 34.8 | 0.3 | +45.5 | 42 % (6.5) |
+| 0.7 | 9 % | 33.8 | 0.3 | +43.2 | 44 % (6.4) |
+| 0.6 | 9 % | 33.0 | 0.4 | +41.4 | 43 % (6.0) |
+
+Modern reads much brighter here, which this model can't separate from its own energy assumptions:
+- The Original's cube term already sits inside its light-multiplied DiffuseColor.
+- Modern adds a separate env IBL on top of the direct light.
+- The unnormalised Phong and the pi-scaled GGX differ in peak energy.
+
+So the hue holds again (dH* 0.3) and the exposure is not comparable offline. That supports the full-frame A/B as the gate.

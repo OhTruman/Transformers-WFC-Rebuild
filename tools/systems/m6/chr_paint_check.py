@@ -34,7 +34,14 @@ MASTER = 'TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat'
 M_VALUES = [0.6, 0.7, 0.8]
 NOV_SET = [0.3, 0.6, 0.9]
 GATE_DE00 = 5.0
-MODES = ('diffuse', 'ibl', 'combined')
+MODES = ('diffuse', 'ibl', 'combined', 'lit')
+# 'lit' (Integration's like-for-like ask): both sides under the same unit directional light, N = +Z, averaged over LIGHTS
+# (L, V pairs); the cube at its mean on both sides.
+#   Original: DiffuseColor x NdotL + SpecularColor x pow(max(R.V, 0), SpecularPower) x NdotL (UE3 Phong; R = reflect(-L, N))
+#   Modern:   P (1 - m) x NdotL + pi x GGX(D G F) / (4 NdotL NdotV) x NdotL (Lambert without 1/pi, as the Original,
+#             so the light radiance carries pi for the specular) + env x (F0 A + B) (the split-sum IBL, NoV of the pair)
+LIGHTS = [((0.0, 0.0, 1.0), (0.5, 0.0, 0.866)), ((0.5, 0.0, 0.866), (-0.5, 0.0, 0.866)), ((0.707, 0.0, 0.707), (0.0, 0.3, 0.954)),
+          ((0.0, 0.6, 0.8), (0.6, 0.0, 0.8)), ((0.3, -0.3, 0.906), (-0.4, 0.2, 0.894))]
 
 
 def env_brdf(rough, nov):
@@ -44,6 +51,33 @@ def env_brdf(rough, nov):
     r = rough * c0 + c1
     a004 = min(r[0] * r[0], 2.0 ** (-9.28 * nov)) * r[0] + r[1]
     return -1.04 * a004 + r[2], 1.04 * a004 + r[3]
+
+
+def _n(v):
+    v = np.asarray(v, dtype=np.float64)
+    return v / np.linalg.norm(v)
+
+
+def lit_pair(D, S, SP, P, m, rough, env):
+    """(Original, Modern) under LIGHTS (see MODES)."""
+    F0 = 0.04 * (1 - m) + P * m
+    a = max(rough * rough, 1e-4)
+    o_acc, m_acc = np.zeros(3), np.zeros(3)
+    for L, V in LIGHTS:
+        L, V = _n(L), _n(V)
+        nl, nv = max(L[2], 0.0), max(V[2], 1e-4)
+        R = 2 * nl * np.array([0, 0, 1.0]) - L
+        o_acc += D * nl + S * (max(float(R @ V), 0.0) ** SP) * nl
+        H = _n(L + V)
+        nh, vh = max(H[2], 0.0), max(float(V @ H), 0.0)
+        d = a * a / (math.pi * (nh * nh * (a * a - 1) + 1) ** 2)
+        k = a / 2
+        g = (nl / (nl * (1 - k) + k)) * (nv / (nv * (1 - k) + k))
+        F = F0 + (1 - F0) * (1 - vh) ** 5
+        spec = math.pi * d * g * F / max(4 * nl * nv, 1e-4) * nl
+        A_, B_ = env_brdf(rough, nv)
+        m_acc += P * (1 - m) * nl + spec + env * (F0 * A_ + B_)
+    return o_acc / len(LIGHTS), m_acc / len(LIGHTS)
 
 
 def lab(rgb):
@@ -155,6 +189,8 @@ def main():
                         md = P * (1 - m)
                         mi = env * np.mean([F0 * a + b for a, b in ab], axis=0)
                         mod = dict(diffuse=md, ibl=mi, combined=md + mi)
+                        orig['lit'], mod['lit'] = lit_pair(o_comb, np.asarray(r1.get('SpecularColor', np.zeros(3))[:3]),
+                                                           float(r1.get('SpecularPower', np.array([15.0]))[0]), P, m, rough, env)
                         for k in MODES:
                             lo, lm = lab(orig[k]), lab(mod[k])
                             lmL = np.array([lo[0], lm[1], lm[2]])          # (Modern at Original's L*: colour without exposure)
