@@ -17,8 +17,8 @@ glsl_emu.py is the definition):
                else SpecularColor, else DiffuseColor; mask / spec / gloss-named first, then by name - Systems'
                pick_parent), the body also sets wfcPbrRoughMap = that map's .r, sampled with the parent's own UV (a new
                texture slot; the runtime replaces uPbrRoughOn != 0 by whether the map exists).
-  environment: wfcPbrEnv = the material's own first cube map along its own direction expression, at wfcPbrEnvLod (from the
-               roughness) - the Modern image-based specular (the RT composite replaces it through the cube helpers).
+  environment: wfcPbrEnv = the material's own first cube map along its own direction expression, at the roughness level
+               (wfcSampleCubeRough: textureLod at roughness x (the cube's levels - 1)) - the Modern image-based specular.
   metallic 0, F0 0.04 (no reviewed metal rows yet). HUD-marker / team-state materials (FriendlyColor, EnemyColor, ...,
   PingOpacity) are never remapped: no entry (the runtime keeps the original program).
 
@@ -377,7 +377,7 @@ def pbr_body(glsl, info):
         a = _first_call_args(rhs[mc.start():], rhs[mc.start():mc.end() - 1])
         if a and len(a) >= 2:
             env_slot = int(a[0])
-            out.append('    wfcPbrEnv = wfcSampleCubeBias(%d, %s, wfcPbrEnvLod(o.SpecularPower)).rgb;' % (env_slot, a[1]))
+            out.append('    wfcPbrEnv = wfcSampleCubeRough(%d, %s, wfcPbrRoughness(o.SpecularPower)).rgb;' % (env_slot, a[1]))
         break
     return '\n'.join(out), dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule,
                                 env_slot=env_slot)
