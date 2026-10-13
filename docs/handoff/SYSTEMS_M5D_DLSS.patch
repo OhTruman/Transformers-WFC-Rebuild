@@ -29,8 +29,28 @@ index e707e05..44e2b16 100644
  third_party/d3d12_agility/
  third_party/dxc/
 +third_party/streamline/
+diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
+index bf34cf2..5fbe57e 100644
+--- a/tests/FrontendTests.cpp
++++ b/tests/FrontendTests.cpp
+@@ -73,11 +73,11 @@ static void testProfileBotMigration() {
+         a.loadFrom(on);
+         check(a.display.frameGeneration == 1 && d.display.frameGeneration == 0, "profile.frame_generation_0_1");
+     }
+-    {   // FSR 3.1 modes (4-6) persist; values past the range clamp to the last one
+-        std::istringstream f3("[PCSettings]\nUpscaling=5\n"), big9("[PCSettings]\nUpscaling=9\n");
++    {   // FSR 3.1 (4-6) and DLSS (7-11) persist; values past the range clamp to the last one
++        std::istringstream f3("[PCSettings]\nUpscaling=5\n"), big("[PCSettings]\nUpscaling=14\n");
+         frontend::LocalProfile a, b;
+-        a.loadFrom(f3); b.loadFrom(big9);
+-        check(a.display.upscaling == 5 && b.display.upscaling == 6, "profile.upscaling_fsr31_range",
++        a.loadFrom(f3); b.loadFrom(big);
++        check(a.display.upscaling == 5 && b.display.upscaling == 11, "profile.upscaling_range",
+               std::to_string(a.display.upscaling) + "/" + std::to_string(b.display.upscaling));
+     }
+     check(r.display.upscaling == 2 && r.display.hdTextures && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
 diff --git a/src/render/Renderer.h b/src/render/Renderer.h
-index ace6500..c7fdbf1 100644
+index ace6500..fbbd8fc 100644
 --- a/src/render/Renderer.h
 +++ b/src/render/Renderer.h
 @@ -150,10 +150,13 @@ public:
@@ -47,8 +67,19 @@ index ace6500..c7fdbf1 100644
      virtual bool upscalingModeAvailable(int mode) const { return mode >= 0 && mode <= 3; }
      // The next frame's camera does not continue this one's (respawn, teleport, spectator / guided-missile view entered or
      // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
+@@ -167,6 +170,10 @@ public:
+     virtual bool frameGenerationAvailable() const { return false; }
+     virtual bool frameGenerationActive() const { return false; }
+     virtual int frameGenerationFactor() const { return 1; }
++    // [Systems M5 D] The highest factor the Frame generation row may offer here: 1 none, 2 (FSR 3 FG or DLSS-G 2x),
++    // 3 / 4 (DLSS multi frame generation, RTX 50: NVIDIA's reported maximum). The factor is chosen at start-up like the row's
++    // on / off: render::setFrameGenerationFactorAtStartup(2 / 3 / 4) before createGLRenderer (render/d3d12/D3D12FrameGen.h).
++    virtual int frameGenerationMaxFactor() const { return frameGenerationAvailable() ? 2 : 1; }
+     // The HD Textures row: textures load from the HD texture root when it exists (falls back per texture to the
+     // originals); stored until that root exists.
+     virtual void setHdTextures(bool on) { (void)on; }
 diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
-index 4e7fcc9..1590c82 100644
+index 4e7fcc9..3c150ce 100644
 --- a/src/render/gl/GLRenderer.cpp
 +++ b/src/render/gl/GLRenderer.cpp
 @@ -18,6 +18,8 @@
@@ -60,13 +91,13 @@ index 4e7fcc9..1590c82 100644
  #include "render/d3d12/D3D12FrameGen.h"
  #include "platform/FileCompression.h"
  #include "render/gl/RenderWatchdog.h"
-@@ -1579,17 +1581,24 @@ public:
+@@ -1579,17 +1581,25 @@ public:
          static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};
          static const char* kName[7] = {"off", "FSR 1 Quality", "FSR 1 Balanced", "FSR 1 Performance", "FSR 3.1 Quality",
                                         "FSR 3.1 Balanced", "FSR 3.1 Performance"};
 +        if (mode >= 7 && mode <= 11) {                                     // [Systems M5 D] 7-11 DLSS Q / B / P / UP / DLAA
 +            wfc_.setFsr3(true); wfc_.setDlss(mode - 7);                    //   (the temporal path; DLSS's per-axis ratios)
-+            wfc_.setUpscaling(dlssRenderScale(mode - 7), 0.0f);
++            wfc_.setUpscaling(dlssRenderScale(mode - 7), 0.2f);   // (DLSS ignores it; an FSR 1 fallback gets AMD's default)
 +            LOG_INFO("renderer: upscaling mode %d (%s)", mode, dlssModeName(mode - 7));
 +            return;
 +        }
@@ -82,26 +113,29 @@ index 4e7fcc9..1590c82 100644
 +    bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped() || dlssFrameGenerationAvailable(); }
      bool frameGenerationActive() const override { return framegenActive(); }
 -    int frameGenerationFactor() const override { return framegenGenerating() ? 2 : 1; }   // (menus: real frames only)
-+    int frameGenerationFactor() const override { return framegenFactor(); }   // [Systems M5 D] DLSS-G: 2 / 3 / 4   // (menus: real frames only)
++    int frameGenerationFactor() const override { return framegenFactor(); }   // [Systems M5 D] DLSS-G: 2 / 3 / 4
++    int frameGenerationMaxFactor() const override { return dlssFrameGenerationMaxFactor(); }   // (menus: real frames only)
      bool upscalingModeAvailable(int mode) const override {
 +        if (mode >= 7 && mode <= 11) return dlssAvailable();              // [Systems M5 D] NVIDIA RTX + the DLLs (probed once)
          return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
      }
      void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
 diff --git a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
-index a27dc3f..e277387 100644
+index a27dc3f..f3f27fc 100644
 --- a/src/render/gl/WfcPipeline.h
 +++ b/src/render/gl/WfcPipeline.h
-@@ -473,6 +473,8 @@ private:
+@@ -473,6 +473,10 @@ private:
      std::chrono::steady_clock::time_point fsr3LastFrame_{};
      double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
      bool fsr3Mode() const;
 +    int dlssMode_ = -1;                                // [Systems M5 D] the temporal path's evaluator: DLSS mode 0-4 (D3D12Dlss.h)
 +    bool dlssFailed_ = false;                          //   instead of FSR 3.1; on failure FSR 3.1 takes over (then FSR 1)
++    int dlssFails_ = 0;                                //   (failed evaluations in a row: 30 -> dlssFailed_)
++    bool dlssLogged_ = false;                          //   (the per-map "DLSS: <mode> active" line)
      // optional FSR 3 frame generation (WfcFrameGen.cpp): HUD-less / depth / motion inputs for the presenter's FG swapchain
      GLuint fgDepthProg_ = 0, fgVelProg_ = 0, fgFbo_ = 0;
      std::chrono::steady_clock::time_point fgLastFrame_{};
-@@ -976,7 +978,8 @@ public:
+@@ -976,7 +980,8 @@ public:
      // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
      void setUpscaling(float scale, float sharpness);
      void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
@@ -111,8 +145,28 @@ index a27dc3f..e277387 100644
      static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
      void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
      static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
+diff --git a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+index 94090e0..1031090 100644
+--- a/src/render/gl/WfcPipeline.cpp
++++ b/src/render/gl/WfcPipeline.cpp
+@@ -847,6 +847,7 @@ void Pipeline::release() {
+     const int keepAniso = anisotropy_;
+     const bool keepHd = hdTextures_;
+     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
++    const int keepDlss = dlssMode_; const bool keepDlssFailed = dlssFailed_;   // [Systems M5 D] (the same for DLSS)
+     *this = Pipeline();
+     loadYield_ = std::move(keepYield);
+     displayGamma_ = keepGamma;
+@@ -854,6 +855,7 @@ void Pipeline::release() {
+     anisotropy_ = keepAniso;
+     hdTextures_ = keepHd;
+     fsr3On_ = keepFsr3;
++    dlssMode_ = keepDlss; dlssFailed_ = keepDlssFailed;
+ }
+ 
+ // ------------------------------------------------------------------------- loading
 diff --git a/src/render/gl/WfcFsr3.cpp b/src/render/gl/WfcFsr3.cpp
-index acf6191..f76f2e9 100644
+index acf6191..ea50abb 100644
 --- a/src/render/gl/WfcFsr3.cpp
 +++ b/src/render/gl/WfcFsr3.cpp
 @@ -8,6 +8,7 @@
@@ -137,18 +191,26 @@ index acf6191..f76f2e9 100644
          LOG_WARN("FSR3: unavailable (see above): FSR 1 kept"); fsr3Failed_ = true; return false;
      }
      if (!fsr3DepthProg_) {
-@@ -122,10 +128,11 @@ bool Pipeline::fsr3Run(int outW, int outH) {
+@@ -122,10 +128,20 @@ bool Pipeline::fsr3Run(int outW, int outH) {
              fsr3InSum_ = fsr3InMax_ = 0; fsr3InN_ = 0;
          }
      }
 -    if (!fsr3Dispatch(p)) return false;
-+    if (dlss ? !dlssDispatch(p, (unsigned)frameNo_) : !fsr3Dispatch(p)) return false;
++    if (dlss) {
++        if (!dlssDispatch(p, (unsigned)frameNo_)) {     // a lost Streamline device at once, else 30 failures in a row -> FSR 3.1
++            if (dlssDeviceLost() || ++dlssFails_ >= 30) {
++                LOG_WARN("DLSS: %s: FSR 3.1 instead", dlssDeviceLost() ? "its D3D12 device was lost" : "30 evaluations failed in a row");
++                dlssFailed_ = true;
++            }
++            return false;
++        }
++        dlssFails_ = 0;
++    } else if (!fsr3Dispatch(p)) return false;
      fsr3Out_ = t.output;
--    static bool logged = false;
+     static bool logged = false;
 -    if (!logged) { LOG_INFO("FSR3: upscaling %dx%d -> %dx%d (before post; sharpness %.2f)", vpW_, vpH_, outW, outH, p.sharpness); logged = true; }
-+    static bool logged = false, loggedDlss = false;
 +    if (!dlss && !logged) { LOG_INFO("FSR3: upscaling %dx%d -> %dx%d (before post; sharpness %.2f)", vpW_, vpH_, outW, outH, p.sharpness); logged = true; }
-+    if (dlss && !loggedDlss) { LOG_INFO("DLSS: %s %dx%d -> %dx%d (before post)", dlssModeName(dlssMode_), vpW_, vpH_, outW, outH); loggedDlss = true; }
++    if (dlss && !dlssLogged_) { LOG_INFO("DLSS: %s %dx%d -> %dx%d (before post)", dlssModeName(dlssMode_), vpW_, vpH_, outW, outH); dlssLogged_ = true; }   // (each map)
      return true;
  }
  
@@ -196,7 +258,7 @@ index ee3c227..ec31a07 100644
  
  }  // namespace render
 diff --git a/src/render/d3d12/D3D12Presenter.cpp b/src/render/d3d12/D3D12Presenter.cpp
-index 0b07162..25aabc0 100644
+index 0b07162..a2bc78b 100644
 --- a/src/render/d3d12/D3D12Presenter.cpp
 +++ b/src/render/d3d12/D3D12Presenter.cpp
 @@ -15,6 +15,7 @@
@@ -207,16 +269,19 @@ index 0b07162..25aabc0 100644
  #include "core/Log.h"
  #if defined(WFC_FFX_SDK)
  #include "ffx_api.h"
-@@ -44,6 +45,8 @@ namespace render {
+@@ -44,6 +45,11 @@ namespace render {
  void d3d12SelectAgility();   // D3D12Agility.cpp
  static bool g_fgAtStartup = false;                // setFrameGenerationAtStartup (the profile's Frame Generation row)
  void setFrameGenerationAtStartup(bool on) { g_fgAtStartup = on; }
 +static int g_fgFactorAtStartup = 2;                 // [Systems M5 D] DLSS-G 2x / 3x / 4x (setFrameGenerationFactorAtStartup)
++// [Systems M5 D] a presenter running DLSS-G lost its device: Streamline's device is gone for the process (it runs one), so
++// the recovery presenters use FSR 3 FG on a fresh device instead (DLSS SR on that device fails over to FSR 3.1 likewise)
++static bool g_dlssgDeviceLost = false;
 +void setFrameGenerationFactorAtStartup(int factor) { g_fgFactorAtStartup = std::max(2, std::min(4, factor)); }
  // the FSR 3 FG runtime beside the exe: the FFX loader + frame-generation DLLs and the Agility D3D12 runtime
  bool frameGenerationRuntimeShipped() {
      static const bool shipped = [] {
-@@ -184,15 +187,27 @@ public:
+@@ -184,15 +190,33 @@ public:
          typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
          auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
          IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
@@ -227,12 +292,18 @@ index 0b07162..25aabc0 100644
 +        // The swapchain then comes from Streamline's upgraded factory, on Streamline's device (it runs one device).
 +        static const char* fgBackend = std::getenv("WFC_FG_BACKEND");
 +        if (made && (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) && !(fgBackend && std::strcmp(fgBackend, "fsr") == 0) &&
-+            dlssFrameGenerationAvailable()) {
++            !g_dlssgDeviceLost && dlssFrameGenerationAvailable()) {
 +            ID3D12Device* sd = streamlineDevice();
 +            if (sd && streamlineUpgrade((void**)&factory_) && streamlineReflexOptions(1, 0)) {   // (DLSS-G requires Reflex)
 +                dev_ = sd; dev_->AddRef(); dlssg_ = true;
 +                const char* e = std::getenv("WFC_DLSSG_FACTOR");
 +                dlssgFrames_ = std::max(1, std::min(3, (e ? std::atoi(e) : g_fgFactorAtStartup) - 1));
++                streamlineDlssgStatus();                 // (NVIDIA's maximum generated frames, when it already answers)
++                const int mx = streamlineCaps().dlssgFramesMax;
++                if (mx > 0 && dlssgFrames_ > mx) {
++                    LOG_INFO("DLSS-G: %dx asked, this GPU generates at most %d frame(s): %dx", dlssgFrames_ + 1, mx, mx + 1);
++                    dlssgFrames_ = mx;
++                }
 +            } else LOG_WARN("DLSS-G: Streamline device / factory / Reflex unavailable: FSR 3 frame generation instead");
 +        }
 +        made = made && (dev_ || SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_)));
@@ -247,7 +318,7 @@ index 0b07162..25aabc0 100644
              ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
              if (ffxDll_) { ffxLoadFunctions(&ffx_, ffxDll_); fg_ = ffx_.CreateContext && ffx_.Configure && ffx_.Dispatch && ffx_.DestroyContext; }
              if (!fg_) LOG_WARN("FRAMEGEN: amd_fidelityfx_loader_dx12.dll / entry points missing: plain D3D12 present");
-@@ -212,7 +227,8 @@ public:
+@@ -212,7 +236,8 @@ public:
          gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
          RECT rc; GetClientRect(hwnd_, &rc);
          if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
@@ -257,7 +328,7 @@ index 0b07162..25aabc0 100644
          {   // M5 item 1 diagnostics: is the WGL_NV_DX_interop2 path (lock / unlock instead of an external semaphore) offered?
              typedef const char*(WINAPI * PFN_GetExtStr)(HDC);
              auto ges = (PFN_GetExtStr)(void*)wglGetProcAddress("wglGetExtensionsStringARB");
-@@ -222,7 +238,8 @@ public:
+@@ -222,7 +247,8 @@ public:
          }
          LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
                   vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "",
@@ -267,7 +338,7 @@ index 0b07162..25aabc0 100644
          return true;
      }
      // WFC_D3D12_WORKER=1: the GL semaphore signal (~0.7 ms CPU in the AMD driver, M5 item 1) and the D3D12 copy / present
-@@ -414,6 +431,7 @@ public:
+@@ -414,6 +440,7 @@ public:
          b[1].Transition.pResource = back_[bi]; b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; b[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
          list_->ResourceBarrier(2, b);
          fgRecord(slot);                                  // FSR 3 FG: configure + prepare (depth / motion / camera) for this frame
@@ -275,7 +346,7 @@ index 0b07162..25aabc0 100644
          list_->CopyResource(back_[bi], shared_[slot]);
          // WFC_D3D12SHOT=<frame>,<file.bmp> (verification): the presented image read back from the D3D12 side
          static int shotFrame = -1; static std::string shotFile;
-@@ -449,7 +467,9 @@ public:
+@@ -449,7 +476,9 @@ public:
          ID3D12CommandList* lists[] = {list_};
          queue_->ExecuteCommandLists(1, lists);
          const clk::time_point t4 = clk::now();
@@ -285,14 +356,26 @@ index 0b07162..25aabc0 100644
          // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
          static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
          if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
-@@ -577,7 +597,47 @@ public:
+@@ -545,6 +574,11 @@ public:
+         // another reason, or WFC_D3D12_SIMLOST - must drain, or destroying the FG swapchain blocks on its present queue)
+         const bool removed = dev_ && dev_->GetDeviceRemovedReason() != S_OK;
+         if (!removed) waitIdle();
++        if (dlssg_ && !removed) streamlineDlssgRelease();   // [Systems M5 D] DLSS-G off and freed before the swapchain goes
++        if (dlssg_ && (removed || lost_)) {
++            g_dlssgDeviceLost = true;
++            LOG_WARN("DLSS-G: the device was lost: the recovery uses FSR 3 frame generation on a new device");
++        }
+ #if defined(WFC_FFX_SDK)
+         if (fgSwapCtx_ && !removed) {
+             ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wp{};
+@@ -577,7 +611,57 @@ public:
      }
  
      // ---------------------------------------------------------------- FSR 3 frame generation (M5 C)
 -    bool fgOn() const { return fg_ && fgCtx_ && !lost_ && !failed_; }
 +    bool fgOn() const { return ((fg_ && fgCtx_) || dlssg_) && !lost_ && !failed_; }
 +    bool dlssg() const { return dlssg_; }
-+    int factor() const { return fgGenerating() ? (dlssg_ ? 1 + dlssgSet_ : 2) : 1; }
++    int factor() const { return fgGenerating() ? (dlssg_ ? 1 + std::max(1, dlssgSet_) : 2) : 1; }   // (the frames actually set)
 +    // [Systems M5 D] DLSS-G per real frame: options when they change (off in menus / frames without inputs), the camera
 +    // constants and the three inputs tagged on this frame's token (the swapchain proxy interpolates at Present)
 +    void dlssgRecord(UINT slot) {
@@ -301,13 +384,23 @@ index 0b07162..25aabc0 100644
 +        fgHave_[slot] = false;
 +        fgGenFrames_ = have ? 30 : std::max(0, fgGenFrames_.load() - 1);
 +        fgGenerating_ = fgGenFrames_ > 0;
-+        if (!streamlineFrameOwned()) streamlineBeginFrame((uint32_t)mainFrame_);   // (no main-loop token: the presenter's)
++        streamlineFreshToken((uint32_t)mainFrame_);      // (one token per present: loading yields present between main frames)
 +        const FgParams& p = fgParams_[slot];
 +        const int frames = have ? dlssgFrames_ : 0;
-+        if (frames != dlssgSet_ || w_ != dlssgKey_[0] || h_ != dlssgKey_[1] || (have && (p.renderW != dlssgKey_[2] || p.renderH != dlssgKey_[3]))) {
-+            if (streamlineDlssgOptions(frames, w_, h_, have ? p.renderW : dlssgKey_[2], have ? p.renderH : dlssgKey_[3])) {
-+                dlssgSet_ = frames; dlssgKey_[0] = w_; dlssgKey_[1] = h_;
++        if (frames != dlssgAsked_ || w_ != dlssgKey_[0] || h_ != dlssgKey_[1] || (have && (p.renderW != dlssgKey_[2] || p.renderH != dlssgKey_[3]))) {
++            const int set = streamlineDlssgOptions(frames, w_, h_, have ? p.renderW : dlssgKey_[2], have ? p.renderH : dlssgKey_[3]);
++            if (set >= 0) {
++                dlssgAsked_ = frames; dlssgSet_ = set; dlssgKey_[0] = w_; dlssgKey_[1] = h_;
 +                if (have) { dlssgKey_[2] = p.renderW; dlssgKey_[3] = p.renderH; }
++                if (set > 0 && !dlssgMaxChecked_) {      // the GPU's maximum, now that DLSS-G runs: clamp the factor to it
++                    dlssgMaxChecked_ = true;
++                    streamlineDlssgStatus();
++                    const int mx = streamlineCaps().dlssgFramesMax;
++                    if (mx > 0 && dlssgFrames_ > mx) {
++                        LOG_INFO("DLSS-G: this GPU generates at most %d frame(s): %dx", mx, mx + 1);
++                        dlssgFrames_ = mx; dlssgAsked_ = -1;   // (applied with the clamped count next frame)
++                    }
++                }
 +            }
 +        }
 +        if (!have) return;
@@ -334,7 +427,16 @@ index 0b07162..25aabc0 100644
      bool fgGenerating() const { return fgOn() && fgGenerating_; }
      // the slot the next present() uses: wait (GPU side) for D3D12's last reads of it, (re)create the inputs at this size
      bool fgInputs(int rw, int rh, FgInputs* out) {
-@@ -683,7 +743,7 @@ public:
+@@ -630,7 +714,7 @@ public:
+     }
+     void fgRecord(UINT slot) {
+ #if defined(WFC_FFX_SDK)
+-        if (!fgOn()) return;
++        if (!fg_ || !fgCtx_ || !fgOn()) return;          // (FSR 3 FG only: with DLSS-G, dlssgRecord alone consumes fgHave_)
+         const bool have = fgHave_[slot];
+         fgHave_[slot] = false;
+         fgGenFrames_ = have ? 30 : std::max(0, fgGenFrames_.load() - 1);   // (frameGenerationFactor: 2 while generated
+@@ -683,7 +767,7 @@ public:
      }
      // presented frames (real + generated) from the swapchain's statistics vs real frames, per 300 real frames
      void fgCount(std::chrono::steady_clock::time_point t0) {
@@ -343,16 +445,17 @@ index 0b07162..25aabc0 100644
          if (fgCountN_ == 0) {
              fgCountT0_ = t0; DXGI_FRAME_STATISTICS st{};
              fgCountP0_ = SUCCEEDED(swap_->GetFrameStatistics(&st)) ? st.PresentCount : 0;
-@@ -759,6 +819,8 @@ public:
+@@ -759,6 +843,9 @@ public:
      double latSum_ = 0, latMax_ = 0; int latN_ = 0, fgResets_ = 0;
      UINT swapFlags_ = 0;
      int fgCountN_ = 0; UINT fgCountP0_ = 0, fgLast0_ = 0; std::chrono::steady_clock::time_point fgCountT0_;
 +    bool dlssg_ = false;                                 // [Systems M5 D] DLSS-G through Streamline's swapchain proxy
-+    int dlssgFrames_ = 1, dlssgSet_ = -1, dlssgKey_[4] = {}, dlssgStatusN_ = 0, dlssgLastStatus_ = 0;
++    int dlssgFrames_ = 1, dlssgSet_ = 0, dlssgAsked_ = -1, dlssgKey_[4] = {}, dlssgStatusN_ = 0, dlssgLastStatus_ = 0;
++    bool dlssgMaxChecked_ = false;
  #if defined(WFC_FFX_SDK)
      HMODULE ffxDll_ = nullptr;
      ffxFunctions ffx_{};
-@@ -772,7 +834,7 @@ private:
+@@ -772,7 +859,7 @@ private:
          DXGI_SWAP_CHAIN_DESC1 sd{};
          sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
          sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = buffers_; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -361,7 +464,7 @@ index 0b07162..25aabc0 100644
          sd.Flags = swapFlags_;
          IDXGISwapChain1* sc1 = nullptr;
  #if defined(WFC_FFX_SDK)
-@@ -793,7 +855,7 @@ private:
+@@ -793,7 +880,7 @@ private:
          factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
          sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
          rel(sc1);
@@ -370,7 +473,15 @@ index 0b07162..25aabc0 100644
          return resize(w, h, false);
      }
      bool resizeFail(const char* what, int w, int h) {   // logged once per kind: a failing resize falls back to GL each frame
-@@ -957,6 +1019,8 @@ bool presentHook() {
+@@ -814,6 +901,7 @@ private:
+             if (fgCtx_) { ffx_.DestroyContext(&fgCtx_, nullptr); fgCtx_ = nullptr; }
+         }
+ #endif
++        if (resizeBuffers && dlssg_) { streamlineDlssgRelease(); dlssgAsked_ = -1; dlssgSet_ = 0; }   // (DLSS-G off around ResizeBuffers)
+         if (resizeBuffers && FAILED(swap_->ResizeBuffers(buffers_, (UINT)w, (UINT)h, DXGI_FORMAT_R8G8B8A8_UNORM, swapFlags_)))
+             return resizeFail("ResizeBuffers", w, h);
+         for (UINT i = 0; i < buffers_; ++i) swap_->GetBuffer(i, __uuidof(ID3D12Resource), (void**)&back_[i]);
+@@ -957,6 +1045,8 @@ bool presentHook() {
  }  // namespace
  bool framegenActive() { return g_presenter && g_presenter->fgOn(); }
  bool framegenGenerating() { return g_presenter && g_presenter->fgGenerating(); }
@@ -502,7 +613,7 @@ index 0c23e22..821d3db 100644
      bool frameGenerationAvailable() const { return hardwareKnown_ && hardware_.frameGen; }
      bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
 diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
-index a6303af..66fafd7 100644
+index a6303af..b93fb37 100644
 --- a/src/ui/GfxPresenter.cpp
 +++ b/src/ui/GfxPresenter.cpp
 @@ -1035,7 +1035,7 @@ namespace {
@@ -514,8 +625,13 @@ index a6303af..66fafd7 100644
      if (linkage != "mc_subMenu" || !init) return;
      gfx::avm1::VM& vm = p.vm();
      gfx::avm1::Value a = vm.get(init, "buildArray");
-@@ -1086,6 +1086,11 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
-     const bool fsr3Missing = !fsr3Available && upscalingCurrent >= 4;   // a stored FSR 3.1 choice without its runtime
+@@ -1083,9 +1083,15 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+     // (Labels fit the value column: "Performance" is shortened, as a full "FSR 3.1 Performance" runs past the panel.)
+     add(up, 0, "Off"); add(up, 1, "FSR 1 Quality"); add(up, 2, "FSR 1 Balanced"); add(up, 3, "FSR 1 Perf.");
+     static const char* const kFsr3[] = {"FSR 3.1 Quality", "FSR 3.1 Balanced", "FSR 3.1 Perf."};
+-    const bool fsr3Missing = !fsr3Available && upscalingCurrent >= 4;   // a stored FSR 3.1 choice without its runtime
++    const bool fsr3Missing = !fsr3Available && upscalingCurrent >= 4 && upscalingCurrent <= 6;   // a stored FSR 3.1 choice without its runtime
++    const bool dlssMissing = !dlssAvailable && upscalingCurrent >= 7;   // a stored DLSS choice off NVIDIA RTX / without its DLLs
      for (int m = 4; m <= 6; ++m)
          if (fsr3Available || m == upscalingCurrent) add(up, m, kFsr3[m - 4]);
 +    // [Systems M5 D] DLSS (7-11): only on NVIDIA RTX with the Streamline / DLSS DLLs (never listed elsewhere; a stored DLSS
@@ -526,7 +642,18 @@ index a6303af..66fafd7 100644
      add(hd, 0, "Off");
      if (hdAvailable) add(hd, 1, "On");   // without the pack the row has the single value Off (cannot be changed)
      add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
-@@ -1373,7 +1378,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+@@ -1094,7 +1100,9 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+     // limits the frame rate and can lower fps on fast PCs; frame generation doubles the frames shown below the refresh
+     // rate and adds a little input latency.
+     row(up, "<PCSettings:Upscaling>",
+-        fsr3Missing     ? "FSR 3.1 is not installed: FSR 1 is used at the same scale."
++        dlssMissing     ? "DLSS needs NVIDIA RTX: FSR is used at the same scale."
++        : fsr3Missing   ? "FSR 3.1 is not installed: FSR 1 is used at the same scale."
++        : dlssAvailable ? "DLSS: best image on RTX GPUs. FSR 1 is nearly free."
+         : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
+                         : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
+     row(hd, "<PCSettings:HDTextures>",
+@@ -1373,7 +1381,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
              p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
                  addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
                                   rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
@@ -621,10 +748,10 @@ index f382a9e..cd938fa 100644
                                                                     time.time() - t0, len(fails)))
 diff --git a/src/render/d3d12/D3D12Streamline.h b/src/render/d3d12/D3D12Streamline.h
 new file mode 100644
-index 0000000..1cb1912
+index 0000000..bb29bc7
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Streamline.h
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,95 @@
 +// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems).
 +// Nothing here runs unless a DLSS row is selected, and nothing NVIDIA is even loaded unless GL's adapter is an NVIDIA GPU:
 +// on any other GPU the probe answers "unavailable" from the adapter's vendor id alone (no DLL loaded, no error logged), so
@@ -657,6 +784,9 @@ index 0000000..1cb1912
 +bool dlssAvailable();                       // DLSS SR can run here (the Upscaling row's DLSS modes)
 +bool dlssFrameGenerationAvailable();        // DLSS-G can run here (the Frame generation row's DLSS backend)
 +bool reflexAvailable();                     // NVIDIA Reflex low-latency mode
++// The Frame generation row's highest factor: DLSS-G -> 1 + NVIDIA's maximum generated frames (asked once on Streamline's
++// device: 2 on RTX 40, 4 on RTX 50), FSR 3 FG shipped -> 2, else 1
++int dlssFrameGenerationMaxFactor();
 +bool streamlineRuntimeShipped();            // the DLLs are beside the exe (file checks only; no load)
 +
 +// The Streamline D3D12 device (created once on GL's adapter, after slInit; registered with Streamline). nullptr: unavailable.
@@ -693,12 +823,20 @@ index 0000000..1cb1912
 +
 +// ---- the main loop (Application): the frame's token + Reflex sleep + PCL markers, when Streamline runs a latency feature
 +void streamlineFrameStart();                           // top of the frame: new token, Reflex sleep, SimulationStart
++                                                       // (only while Reflex runs: DLSS-G or WFC_REFLEX; else a no-op)
 +bool streamlineFrameOwned();                           // streamlineFrameStart runs (the per-feature callers use its token)
 +
 +// ---- DLSS frame generation (the presenter, D3D12Presenter.cpp) ----
 +// framesToGenerate 0 = off (menus / frames without inputs), 1 = 2x, 2 = 3x, 3 = 4x (clamped to the GPU's maximum);
 +// colour = the swapchain size, mvec / depth = the render size. Called when any of them changes.
-+bool streamlineDlssgOptions(int framesToGenerate, int colorW, int colorH, int mvecW, int mvecH);
++// Returns the frames actually set (clamped to the GPU's maximum once known; 0 = off), -1 on failure.
++int streamlineDlssgOptions(int framesToGenerate, int colorW, int colorH, int mvecW, int mvecH);
++// DLSS-G off + its resources freed: before ResizeBuffers / a fullscreen change / the presenter's teardown (SL 2.14
++// DLSS-G guide sections 6.4 / 12.0: DLSS-G must be off around anything that can make Present deadlock)
++void streamlineDlssgRelease();
++// A token for this present: the main loop's when it has not been presented yet, else a new one (loading-screen yields
++// present several times per main-loop frame: one token per present)
++void streamlineFreshToken(uint32_t fallbackIndex);
 +// This frame's DLSS-G inputs on the presenter's command list (states as they are when the swapchain presents: COMMON for
 +// the simultaneous-access shared textures): HUD-less colour (RGBA8, display size), depth (R32F) and motion vectors
 +// (RG16F: prevUV - curUV, +y down), render size.
@@ -711,10 +849,10 @@ index 0000000..1cb1912
 +}  // namespace render
 diff --git a/src/render/d3d12/D3D12Streamline.cpp b/src/render/d3d12/D3D12Streamline.cpp
 new file mode 100644
-index 0000000..ab30f56
+index 0000000..c52b6cc
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Streamline.cpp
-@@ -0,0 +1,444 @@
+@@ -0,0 +1,482 @@
 +// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems;
 +// render/d3d12/D3D12Streamline.h). Built only with the SDK headers (WFC_STREAMLINE_SDK, tools/render/fetch_streamline.py);
 +// the interposer is loaded at run time (LoadLibrary + GetProcAddress: no import library, no load on non-NVIDIA GPUs).
@@ -735,6 +873,7 @@ index 0000000..ab30f56
 +
 +#include "render/d3d12/D3D12Streamline.h"
 +#include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12FrameGen.h"
 +#include "core/Log.h"
 +
 +#include "sl.h"
@@ -778,6 +917,8 @@ index 0000000..ab30f56
 +    ID3D12Device* dev = nullptr; bool devFailed = false;
 +    sl::FrameToken* token = nullptr; uint32_t tokenIndex = 0;
 +    bool owned = false; uint32_t ownFrame = 0;            // (streamlineFrameStart drives the tokens)
++    bool reflexOn = false, tokenPresented = false;        // (Reflex running; the current token already presented)
++    PFun_slFreeResources* freeRes = nullptr;
 +    PFun_slDLSSGSetOptions* dlssgOptions = nullptr; PFun_slSetTagForFrame* setTag = nullptr;
 +} S;
 +
@@ -899,6 +1040,7 @@ index 0000000..ab30f56
 +        featureFn(sl::kFeatureDLSS_G, "slDLSSGGetState", f.dlssgState);
 +        featureFn(sl::kFeatureDLSS_G, "slDLSSGSetOptions", S.dlssgOptions);
 +        S.setTag = (PFun_slSetTagForFrame*)g("slSetTagForFrame");
++        S.freeRes = (PFun_slFreeResources*)g("slFreeResources");
 +        if (!S.dlssgOptions || !S.setTag) c.dlssg = false;
 +    }
 +    std::atexit([] { streamlineShutdown(); });
@@ -923,8 +1065,17 @@ index 0000000..ab30f56
 +bool dlssFrameGenerationAvailable() { return streamlineCaps().dlssg && streamlineCaps().reflex; }   // (DLSS-G requires Reflex)
 +bool reflexAvailable() { return streamlineCaps().reflex; }
 +bool streamlineRuntimeShipped() { static const bool s = shippedFiles(); return s; }
++int dlssFrameGenerationMaxFactor() {
++    if (!dlssFrameGenerationAvailable()) return frameGenerationRuntimeShipped() ? 2 : 1;
++    if (S.caps.dlssgFramesMax <= 0 && streamlineDevice()) streamlineDlssgStatus();   // (fills dlssgFramesMax when it can)
++    return 1 + std::max(1, std::min(3, S.caps.dlssgFramesMax));
++}
 +
 +ID3D12Device* streamlineDevice() {
++    if (S.dev && S.dev->GetDeviceRemovedReason() != S_OK) {   // (removed: never handed out again; Streamline runs one device)
++        LOG_WARN("Streamline: its D3D12 device was removed: DLSS stays off for this session");
++        S.devFailed = true; S.dev = nullptr;              // (not released: Streamline may still hold it until shutdown)
++    }
 +    if (S.dev || S.devFailed) return S.dev;
 +    if (!streamlineCaps().initialised) { S.devFailed = true; return nullptr; }
 +    d3d12SelectAgility();
@@ -958,12 +1109,13 @@ index 0000000..ab30f56
 +void* streamlineFrameToken() { return S.token; }
 +
 +void streamlineMarker(StreamlineMarker m) {
-+    if (!S.f.marker || !S.token) return;
++    if (!S.reflexOn || !S.owned || !S.f.marker || !S.token) return;   // (markers only feed Reflex: none while it is off)
 +    static const sl::PCLMarker map[] = {sl::PCLMarker::eSimulationStart, sl::PCLMarker::eSimulationEnd, sl::PCLMarker::eRenderSubmitStart,
 +                                        sl::PCLMarker::eRenderSubmitEnd, sl::PCLMarker::ePresentStart, sl::PCLMarker::ePresentEnd};
 +    S.f.marker(map[(int)m], *S.token);
++    if (m == StreamlineMarker::PresentEnd) S.tokenPresented = true;
 +}
-+void streamlineReflexSleep() { if (S.f.reflexSleep && S.token) S.f.reflexSleep(*S.token); }
++void streamlineReflexSleep() { if (S.reflexOn && S.f.reflexSleep && S.token) S.f.reflexSleep(*S.token); }
 +bool streamlineReflexOptions(int mode, uint32_t frameLimitUs) {
 +    if (!S.f.reflexOptions) return false;
 +    sl::ReflexOptions o{};
@@ -972,6 +1124,7 @@ index 0000000..ab30f56
 +    o.useMarkersToOptimize = true;
 +    const sl::Result r = S.f.reflexOptions(o);
 +    if (r != sl::Result::eOk) LOG_WARN("Streamline: slReflexSetOptions: %s", sl::getResultAsStr(r));
++    else { S.reflexOn = mode > 0; LOG_INFO("Reflex: %s", mode <= 0 ? "off" : mode == 1 ? "low latency" : "low latency + boost"); }
 +    return r == sl::Result::eOk;
 +}
 +
@@ -1047,18 +1200,19 @@ index 0000000..ab30f56
 +}
 +
 +void streamlineFrameStart() {
-+    if (!S.caps.initialised || !(S.caps.reflex || S.caps.dlssg)) return;
-+    sl::FrameToken* t = nullptr;
-+    const uint32_t idx = ++S.ownFrame;
-+    if (S.f.newToken(t, &idx) != sl::Result::eOk) return;
-+    S.token = t; S.tokenIndex = idx; S.owned = true;
-+    // WFC_REFLEX=0 / 1 / 2 (off / low latency / + boost): Reflex without DLSS-G (the laptop test's on / off comparison;
-+    // DLSS-G turns it on itself). Applied once, at the first frame.
++    if (!S.caps.initialised || !S.caps.reflex) return;
++    // WFC_REFLEX=1 / 2 (low latency / + boost): Reflex without DLSS-G (diagnostics; DLSS-G turns it on itself). Applied
++    // once, at the first frame. With Reflex off nothing runs per frame: no token, no sleep, no markers.
 +    static bool applied = false;
 +    if (!applied) {
 +        applied = true;
 +        if (const char* e = std::getenv("WFC_REFLEX")) streamlineReflexOptions(std::atoi(e), 0);
 +    }
++    if (!S.reflexOn) return;
++    sl::FrameToken* t = nullptr;
++    const uint32_t idx = ++S.ownFrame;
++    if (S.f.newToken(t, &idx) != sl::Result::eOk) return;
++    S.token = t; S.tokenIndex = idx; S.owned = true; S.tokenPresented = false;
 +    streamlineReflexSleep();
 +    streamlineMarker(StreamlineMarker::SimulationStart);
 +    // the driver's latency reports (Reflex), per 300 frames: simulation start -> GPU render end, and the GPU frame time
@@ -1078,8 +1232,8 @@ index 0000000..ab30f56
 +}
 +bool streamlineFrameOwned() { return S.owned; }
 +
-+bool streamlineDlssgOptions(int frames, int colorW, int colorH, int mvecW, int mvecH) {
-+    if (!S.dlssgOptions) return false;
++int streamlineDlssgOptions(int frames, int colorW, int colorH, int mvecW, int mvecH) {
++    if (!S.dlssgOptions) return -1;
 +    sl::DLSSGOptions o{};
 +    const int maxFrames = S.caps.dlssgFramesMax > 0 ? S.caps.dlssgFramesMax : 1;
 +    o.mode = frames > 0 ? sl::DLSSGMode::eOn : sl::DLSSGMode::eOff;
@@ -1092,7 +1246,25 @@ index 0000000..ab30f56
 +    if (r != sl::Result::eOk) LOG_WARN("Streamline: slDLSSGSetOptions: %s", sl::getResultAsStr(r));
 +    else LOG_INFO("DLSS-G: %s (%u generated per real frame; colour %dx%d, motion / depth %dx%d)", frames > 0 ? "on" : "off",
 +                  frames > 0 ? o.numFramesToGenerate : 0u, colorW, colorH, mvecW, mvecH);
-+    return r == sl::Result::eOk;
++    if (r != sl::Result::eOk) return -1;
++    return frames > 0 ? (int)o.numFramesToGenerate : 0;
++}
++
++void streamlineDlssgRelease() {
++    if (!S.dlssgOptions) return;
++    sl::DLSSGOptions o{};
++    o.mode = sl::DLSSGMode::eOff;
++    S.dlssgOptions(sl::ViewportHandle(0), o);
++    if (S.freeRes) S.freeRes(sl::kFeatureDLSS_G, sl::ViewportHandle(0));
++}
++
++void streamlineFreshToken(uint32_t fallbackIndex) {
++    if (!S.caps.initialised) return;
++    if (!S.owned) { streamlineBeginFrame(fallbackIndex); return; }
++    if (!S.tokenPresented && S.token) return;
++    sl::FrameToken* t = nullptr;
++    const uint32_t idx = ++S.ownFrame;
++    if (S.f.newToken(t, &idx) == sl::Result::eOk) { S.token = t; S.tokenIndex = idx; S.tokenPresented = false; }
 +}
 +
 +bool streamlineTagFrameGen(void* cmdList, ID3D12Resource* hudless, ID3D12Resource* depth, ID3D12Resource* mvec, int colorW,
@@ -1131,6 +1303,7 @@ index 0000000..ab30f56
 +}  // namespace render
 +#else
 +#include "render/d3d12/D3D12Streamline.h"
++#include "render/d3d12/D3D12FrameGen.h"
 +#include <cstdio>
 +namespace render {
 +const StreamlineCaps& streamlineCaps() {
@@ -1141,6 +1314,7 @@ index 0000000..ab30f56
 +bool dlssFrameGenerationAvailable() { return false; }
 +bool reflexAvailable() { return false; }
 +bool streamlineRuntimeShipped() { return false; }
++int dlssFrameGenerationMaxFactor() { return frameGenerationRuntimeShipped() ? 2 : 1; }
 +ID3D12Device* streamlineDevice() { return nullptr; }
 +bool streamlineUpgrade(void**) { return false; }
 +void streamlineBeginFrame(uint32_t) {}
@@ -1153,7 +1327,9 @@ index 0000000..ab30f56
 +bool streamlineCameraFromGL(const float*, const float*, const float*, StreamlineCamera&) { return false; }
 +void streamlineFrameStart() {}
 +bool streamlineFrameOwned() { return false; }
-+bool streamlineDlssgOptions(int, int, int, int, int) { return false; }
++int streamlineDlssgOptions(int, int, int, int, int) { return -1; }
++void streamlineDlssgRelease() {}
++void streamlineFreshToken(uint32_t) {}
 +bool streamlineTagFrameGen(void*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, int, int, int, int) { return false; }
 +int streamlineDlssgStatus() { return -1; }
 +void streamlineShutdown() {}
@@ -1161,10 +1337,10 @@ index 0000000..ab30f56
 +#endif
 diff --git a/src/render/d3d12/D3D12Dlss.h b/src/render/d3d12/D3D12Dlss.h
 new file mode 100644
-index 0000000..9e7ebb0
+index 0000000..ec4b3ed
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Dlss.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,23 @@
 +// Clean-room reconstruction — optional NVIDIA DLSS super resolution over D3D12 via Streamline (PC ADAPTATION, M5 D; OFF by
 +// default; Systems). The same interface and inputs as the FSR 3.1 upscaler (D3D12Upscaler.h): the renderer copies its
 +// render-size HDR colour, depth (R32F) and motion vectors into the shared targets, calls dlssDispatch, then samples the
@@ -1185,14 +1361,15 @@ index 0000000..9e7ebb0
 +// GL inputs written: GL -> DLSS -> GL (GPU waits on both sides). frameIndex: the renderer's frame counter (the Streamline
 +// frame token). p.sharpness is ignored (DLSS 3.7+ has no sharpening). False: the evaluation failed this frame.
 +bool dlssDispatch(const Fsr3Params& p, unsigned frameIndex);
++bool dlssDeviceLost();                           // Streamline's D3D12 device was removed (DLSS cannot recover in-process)
 +
 +}  // namespace render
 diff --git a/src/render/d3d12/D3D12Dlss.cpp b/src/render/d3d12/D3D12Dlss.cpp
 new file mode 100644
-index 0000000..4f84197
+index 0000000..b4195c3
 --- /dev/null
 +++ b/src/render/d3d12/D3D12Dlss.cpp
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,301 @@
 +// Clean-room reconstruction — optional NVIDIA DLSS super resolution via Streamline (PC ADAPTATION, M5 D; OFF by default;
 +// Systems; render/d3d12/D3D12Dlss.h). The FSR 3.1 upscaler's design (D3D12Upscaler.cpp) with DLSS as the evaluator: shared
 +// D3D12 textures imported into GL (GL_EXT_memory_object_win32), one shared fence (GL signals N, D3D12 waits N, evaluates,
@@ -1315,8 +1492,9 @@ index 0000000..4f84197
 +        return true;
 +    }
 +
++    bool deviceLost() const { return dev_ && dev_->GetDeviceRemovedReason() != S_OK; }
 +    bool dispatch(const Fsr3Params& p, unsigned frameIndex) {
-+        if (!inW_ || mode_ < 0) return false;
++        if (!inW_ || mode_ < 0 || deviceLost()) return false;
 +        const UINT64 n = ++value_;
 +        GLuint texs[4] = {color_.tex, depth_.tex, vel_.tex, out_.tex};
 +        GLenum lay[4] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutGeneral};
@@ -1480,6 +1658,7 @@ index 0000000..4f84197
 +    return g_dlss->prepare(mode, inW, inH, outW, outH, t);
 +}
 +bool dlssDispatch(const Fsr3Params& p, unsigned frameIndex) { return g_dlss && g_dlss->dispatch(p, frameIndex); }
++bool dlssDeviceLost() { return g_dlss && g_dlss->deviceLost(); }
 +
 +}  // namespace render
 +#else
@@ -1489,6 +1668,7 @@ index 0000000..4f84197
 +const char* dlssModeName(int) { return "DLSS (not built)"; }
 +bool dlssPrepare(int, int, int, int, int, Fsr3Targets*) { return false; }
 +bool dlssDispatch(const Fsr3Params&, unsigned) { return false; }
++bool dlssDeviceLost() { return false; }
 +}  // namespace render
 +#endif
 diff --git a/tools/render/fetch_streamline.py b/tools/render/fetch_streamline.py
@@ -1589,10 +1769,10 @@ index 0000000..de95f5f
 +    sys.exit(main())
 diff --git a/tools/package/dlss_laptop_test.ps1 b/tools/package/dlss_laptop_test.ps1
 new file mode 100644
-index 0000000..95f4cf1
+index 0000000..d698b53
 --- /dev/null
 +++ b/tools/package/dlss_laptop_test.ps1
-@@ -0,0 +1,237 @@
+@@ -0,0 +1,261 @@
 +# dlss_laptop_test.ps1 - the M5 D test on the user's NVIDIA RTX laptop (Systems; docs/handoff/SYSTEMS_M5D_DLSS_STREAMLINE_PLAN.md
 +# section 3). One click (DLSS_Laptop_Test.bat in the package root runs this); about 45 minutes, mostly unattended; results
 +# go into a zip beside the package to bring back to F:.
@@ -1605,7 +1785,8 @@ index 0000000..95f4cf1
 +#   step 1  native baseline: Gorge + Rust, 64 players, 120 s real play each (no upscaler, no frame generation)
 +#   step 2  DLSS super resolution: DLAA, Quality, Balanced, Performance, Ultra Performance (+ FSR 3.1 Quality for
 +#           comparison): 60 s real play each (fps) + a lockstep pass with screenshots at fixed match steps (image sheet)
-+#   step 3  Reflex: DLSS Quality with Reflex off, then on: the driver's PC-latency reports
++#   step 3  (none: Reflex only measures under DLSS-G, where it is always on; its latency reports are logged in step 4,
++#           as information - no latency claim is made)
 +#   step 4  DLSS frame generation 2x / 3x / 4x (4x needs RTX 50): presented vs rendered fps, then the frame-cap check
 +#           (Frame Rate Limit 120: rendered 60 / 40 / 30)
 +#   step 5  stability: 20 min DLSS-G at the highest factor; log scan; then a short manual checklist (alt-tab, fullscreen)
@@ -1650,10 +1831,25 @@ index 0000000..95f4cf1
 +$bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
 +Say "power: $(if (-not $bat) { 'no battery (desktop?)' } elseif ($bat.BatteryStatus -eq 2) { 'on AC' } else { 'ON BATTERY (plug in for valid numbers)' }); scheme $((powercfg /getactivescheme) -join ' ')"
 +$nv = $gpus | Where-Object { $_.Name -match 'NVIDIA' } | Select-Object -First 1
-+$W = 0; $H = 0
-+foreach ($g in $gpus) { if ($g.CurrentHorizontalResolution -gt $W) { $W = [int]$g.CurrentHorizontalResolution; $H = [int]$g.CurrentVerticalResolution } }
++# the primary display's current mode in physical pixels (EnumDisplaySettings: not DPI-scaled): fullscreen at exactly this
++# size switches no display mode
++Add-Type -TypeDefinition @'
++using System; using System.Runtime.InteropServices;
++public static class WfcDisp {
++    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] public struct DEVMODE {
++        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName; public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra;
++        public int dmFields, dmPositionX, dmPositionY, dmDisplayOrientation, dmDisplayFixedOutput; public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
++        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName; public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency;
++        public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight; }
++    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
++    public static int[] Current() { var d = new DEVMODE(); d.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
++        return EnumDisplaySettings(null, -1, ref d) ? new[] { d.dmPelsWidth, d.dmPelsHeight, d.dmDisplayFrequency } : new[] { 0, 0, 0 }; }
++}
++'@
++$cur = [WfcDisp]::Current()
++$W = $cur[0]; $H = $cur[1]
 +if ($W -le 0) { $W = 1920; $H = 1080 }
-+Say "test resolution: ${W}x${H} fullscreen (the display's current mode: no mode switch)"
++Say "test resolution: ${W}x${H} @ $($cur[2]) Hz fullscreen (the primary display's current mode: no mode switch)"
 +
 +$common = @{
 +    WFC_BOOT = 'frontend'; WFC_SKIPINTRO = '1'; WFC_NOMOUSE = '1'; WFC_FLOWSEED = '1'; WFC_SEED = '7'; WFC_AUTODETECT = '0';
@@ -1702,6 +1898,9 @@ index 0000000..95f4cf1
 +    return [math]::Round(1000.0 / (($ms | Measure-Object -Average).Average), 1)
 +}
 +function Errors([string]$log) { @(Lines $log '\[error\]').Count }
++# the log from the match level's start on (the frontend / lobby before it is not the measured part)
++function AfterMatch([string]$log) { $i = $log.IndexOf('FLOW level.begin level=Match'); if ($i -lt 0) { return '' } else { return $log.Substring($i) } }
++$baseErr = 0   # the native baseline's error count: the other runs are compared against it, not against zero
 +
 +Say ''
 +Say '== step 0: start-up check'
@@ -1725,7 +1924,8 @@ index 0000000..95f4cf1
 +    $s = & $secs 120
 +    $l = Run "step1_native_$($m.n)" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_FRONTEND_SCRIPT = (Script $m.id $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 0; FrameGeneration = 0 } ($s + 240)
 +    $base[$m.n] = Fps $l
-+    Result "step 1: native $($m.n)" ($base[$m.n] -gt 0 -and (Errors $l) -eq 0) ("{0} fps, {1} errors" -f $base[$m.n], (Errors $l))
++    $baseErr = [math]::Max($baseErr, (Errors $l))
++    Result "step 1: native $($m.n)" ($base[$m.n] -gt 0) ("{0} fps, {1} errors (the baseline for the other runs)" -f $base[$m.n], (Errors $l))
 +}
 +
 +# ---------------------------------------------------------------- step 2: DLSS super resolution (+ FSR 3.1 for comparison)
@@ -1736,9 +1936,11 @@ index 0000000..95f4cf1
 +    $s = & $secs 60
 +    $l = Run "step2_$($m.n)" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = $m.v; FrameGeneration = 0 } ($s + 240)
 +    $fps = Fps $l
-+    $active = if ($m.v -ge 7) { [bool](Lines $l 'DLSS: DLSS |DLSS: DLAA ') } else { [bool](Lines $l 'FSR3: upscaling') }
-+    $failed = [bool](Lines $l 'DLSS: evaluation failed|DLSS: unavailable \(see above\)')
-+    Result "step 2: $($m.n)" ($active -and -not $failed -and (Errors $l) -eq 0) ("{0} fps ({1:+0;-0}% vs native {2}); {3} errors{4}" -f $fps,
++    $inMatch = AfterMatch $l
++    $active = if ($m.v -ge 7) { [bool](Lines $inMatch 'DLSS: DLSS |DLSS: DLAA ') -and -not (Lines $inMatch 'UPSCALER: FSR 1|FSR3: upscaling') }
++              else { [bool](Lines $l 'FSR3: upscaling') -and -not (Lines $inMatch 'UPSCALER: FSR 1') }
++    $failed = [bool](Lines $l 'DLSS: evaluation failed|DLSS: unavailable \(see above\)|FSR 3.1 instead')
++    Result "step 2: $($m.n)" ($active -and -not $failed -and (Errors $l) -le $baseErr) ("{0} fps ({1:+0;-0}% vs native {2}); {3} errors{4}" -f $fps,
 +        $(if ($base['Gorge'] -gt 0) { 100.0 * ($fps - $base['Gorge']) / $base['Gorge'] } else { 0 }), $base['Gorge'], (Errors $l), $(if (-not $active) { '; NOT ACTIVE' } else { '' }))
 +    # screenshots at the same match moments (lockstep: one simulation step per frame), for the side-by-side sheet
 +    $shots = Join-Path $out "shots_$($m.n)"; New-Item -ItemType Directory -Force $shots | Out-Null
@@ -1758,16 +1960,6 @@ index 0000000..95f4cf1
 +Set-Content -Path (Join-Path $out 'image_sheet.html') -Value $sheet -Encoding UTF8
 +Say '  image sheet: image_sheet.html (open it in a browser; compare native / DLAA / DLSS modes / FSR 3.1)'
 +
-+# ---------------------------------------------------------------- step 3: Reflex
-+Say ''; Say '== step 3: Reflex at DLSS Quality'
-+foreach ($r in @(0, 1)) {
-+    $s = & $secs 60
-+    $l = Run "step3_reflex$r" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_REFLEX = "$r"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 0 } ($s + 240)
-+    $lat = (Lines $l 'Reflex: PC latency') | ForEach-Object { if ($_ -match 'GPU render end\) ([\d.]+) ms avg') { [double]$Matches[1] } }
-+    $avg = if ($lat) { [math]::Round(($lat | Measure-Object -Average).Average, 2) } else { 0 }
-+    Result "step 3: Reflex $(if ($r) { 'on' } else { 'off' })" ($avg -gt 0) ("PC latency {0} ms avg, {1} fps" -f $avg, (Fps $l))
-+}
-+
 +# ---------------------------------------------------------------- step 4: DLSS frame generation
 +Say ''; Say '== step 4: DLSS frame generation (DLSS Quality)'
 +$fgMax = 2
@@ -1781,7 +1973,9 @@ index 0000000..95f4cf1
 +    if ($gen) { $real = [math]::Round($real / @($gen).Count, 1); $shown = [math]::Round($shown / @($gen).Count, 1) }
 +    $ratio = if ($real -gt 0) { [math]::Round($shown / $real, 2) } else { 0 }
 +    $status = (Lines $l 'DLSS-G: status') | Select-Object -First 1
-+    $ok = $on -and $ratio -ge ($f - 0.4) -and (Errors $l) -eq 0
++    $ok = $on -and $ratio -ge ($f - 0.4) -and (Errors $l) -le $baseErr
++    $lat = (Lines $l 'Reflex: PC latency') | ForEach-Object { if ($_ -match 'GPU render end\) ([\d.]+) ms avg') { [double]$Matches[1] } }
++    if ($lat) { Say ("  (information) Reflex PC latency at ${f}x: {0} ms avg" -f [math]::Round(($lat | Measure-Object -Average).Average, 2)) }
 +    if ($ok) { $fgMax = $f }
 +    Result "step 4: DLSS-G ${f}x" $ok ("rendered {0} fps, presented {1} / s (x{2}); {3} errors {4}{5}" -f $real, $shown, $ratio, (Errors $l), $(if (-not $on) { '; NOT ACTIVE' } else { '' }), $(if ($status) { "; $status" } else { '' }))
 +    if ($f -eq 4 -and -not $ok) { Say '  (4x needs an RTX 50 GPU; 3x likewise)' }
@@ -1795,18 +1989,28 @@ index 0000000..95f4cf1
 +    Result "step 4: cap 120 at ${f}x" ([math]::Abs($fps - $want) -le 0.1 * $want) ("rendered {0} fps (expected {1})" -f $fps, $want)
 +}
 +
++# ---------------------------------------------------------------- step 4b: device loss with DLSS-G (simulated)
++Say ''; Say '== step 4b: a lost device with DLSS-G (simulated at the 2000th present)'
++$s = & $secs 60
++$l = Run 'step4b_devicelost' @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_D3D12_SIMLOST = '2000'; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } ($s + 240)
++$rec = [bool](Lines $l 'recovered with a new device')
++$fsrFg = [bool](Lines $l 'the recovery uses FSR 3 frame generation')
++$i = $l.IndexOf('recovered with a new device')
++$after = if ($i -ge 0) { @(Lines $l.Substring($i) 'PERF f\d+ frame=').Count } else { 0 }
++Result 'step 4b: device-loss recovery' ($rec -and $after -gt 0) ("recovered: {0}; FSR 3 FG after it: {1}; frames logged after it: {2} (the picture must keep moving)" -f $rec, $fsrFg, $after)
++
 +# ---------------------------------------------------------------- step 5: stability
 +Say ''; Say "== step 5: 20 min DLSS-G ${fgMax}x soak"
 +$s = & $secs 1200
 +$l = Run 'step5_soak' @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_DLSSG_FACTOR = "$fgMax"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } ($s + 300)
 +$bad = Lines $l 'DEVICE_REMOVED|device lost|recovered with a new device|crashed|watchdog: no frame'
-+Result 'step 5: soak' ((Errors $l) -eq 0 -and -not $bad) ("{0} errors; {1}" -f (Errors $l), $(if ($bad) { ($bad | Select-Object -First 2) -join ' | ' } else { 'no device loss / crash / hang' }))
++Result 'step 5: soak' ((Errors $l) -le $baseErr -and -not $bad) ("{0} errors; {1}" -f (Errors $l), $(if ($bad) { ($bad | Select-Object -First 2) -join ' | ' } else { 'no device loss / crash / hang' }))
 +Say ''
 +Say 'Manual check (2 minutes): Play.bat is started for you with DLSS Quality + DLSS frame generation. In a match:'
 +Say '  1. alt-tab out and back twice   2. Options > Graphics: switch Fullscreen off and on   3. change Upscaling to DLAA, then back'
 +Say '  then quit the game.'
 +Read-Host 'Enter to start the game for the manual check'
-+$l = Run 'step5_manual' @{ WFC_SKIPINTRO = '1'; WFC_LOGTIME = '1' } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } 1800 -Interactive
++$l = Run 'step5_manual' @{ WFC_SKIPINTRO = '1'; WFC_LOGTIME = '1'; WFC_AUTODETECT = '0' } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } 1800 -Interactive
 +$ans = Read-Host 'Did the picture come back correctly after each step, without a crash or a black screen? (y/n)'
 +Result 'step 5: manual alt-tab / fullscreen / mode' ($ans -match '^[yY]') ("{0} errors in its log" -f (Errors $l))
 +

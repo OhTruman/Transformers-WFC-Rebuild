@@ -181,3 +181,32 @@ Compile-tested and absence-tested on the AMD desktop only; nothing NVIDIA has ru
   - Whether Streamline needs the D3D12 device created through the interposer (we use slSetD3DDevice on a native device).
   - Reflex markers in the frontend loop (one span per frame).
 - **Not done (later)**: the HUD as a separate UI layer for DLSS-G (M5 item 6; until then the HUD is interpolated with the frame); a Reflex row; a 3x / 4x choice in the FG row (the factor is start-up / env only); the credits / splash attribution (Frontend, §6).
+
+### 7a. Review fixes (Frontend, Experimental, Rendering; same patch, re-committed)
+
+**Frontend**
+- tests profile.upscaling_range (5 -> 5, 14 -> 11); the frontend tests pass 133 / 133.
+- The "DLSS needs NVIDIA RTX: FSR is used at the same scale." hint (a stored DLSS choice without DLSS) and the "DLSS: best image on RTX GPUs. FSR 1 is nearly free." hint.
+- fsr3Missing is limited to modes 4-6.
+- New IRenderer::frameGenerationMaxFactor() (1 / 2 / 3 / 4, from NVIDIA's reported maximum) for the 2x / 3x / 4x row; render::setFrameGenerationFactorAtStartup(n) sets the factor.
+
+**Experimental**
+1. With DLSS-G, fgRecord (FFX) no longer runs, so dlssgRecord is the only consumer of fgHave_ (no null ffx_.Configure).
+2. dlssMode_ / dlssFailed_ survive Pipeline::release(). The test requires the DLSS line after "FLOW level.begin level=Match" and no FSR line there.
+3. The DLSS-G factor is clamped to numFramesToGenerateMax (at init, and again once DLSS-G runs); factor() reports the frames actually set.
+4. The manual run sets WFC_AUTODETECT=0.
+5. The Reflex-only step is dropped: GL presents there, so it measures nothing. Reflex latency is information-only under DLSS-G; no latency claim is made.
+6. The per-frame token / sleep / markers run only while Reflex runs (DLSS-G or WFC_REFLEX). DLSS SR makes its own token per dispatch.
+7. The FSR 1 fallback sharpness is 0.2. DLSS falls back to FSR 3.1 after 30 failed evaluations in a row, or at once when its device is lost.
+8. DLSS-G is turned off and its resources freed (slFreeResources) before ResizeBuffers and before teardown. There is one token per present: loading yields get fresh tokens.
+9. The test resolution is the primary display's current mode (EnumDisplaySettings, physical pixels: no mode switch). Error counts are compared against the native baseline.
+
+On the jitter sign, the SL 2.14 guides specify only "pixel space" (and no jitter in the matrices), so the sign stays FSR 3.1's. DLSS's debug overlay on the laptop is the check.
+
+**Rendering**: prevViewProj_ was confirmed to hold last frame's matrix at framegenCapture.
+- Device-loss recovery: a presenter that ran DLSS-G and lost its device sets a process flag, and the recovery uses FSR 3 FG on a fresh device.
+- streamlineDevice() never hands out a removed device; DLSS SR then fails over to FSR 3.1.
+- Laptop test step 4b: WFC_D3D12_SIMLOST=2000 with DLSS-G on must log "recovered with a new device", with frames continuing.
+
+**AMD rerun** (stored DLSS Quality, Streets 5v5): no NVIDIA / Streamline module at 46 s and 91 s; the DLSS choice kept through the match load (FSR 1 at 0.67, sharpness 0.20); 0 [error].
+
