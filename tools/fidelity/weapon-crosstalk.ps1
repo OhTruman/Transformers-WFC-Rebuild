@@ -12,7 +12,7 @@
 #   flash    large muzzle-flash EVENTS at the idle player's gun (crosstalk_flash.py: a static view, a near-camera bright warm
 #            spike vs the captures 4 before / after): PASS 0. a17309b7: every large event was a blast on the player's own gun
 #   ammo     the frame log's local ammo (ammo=clip/reserve) never drops without input on the same weapon: PASS 0 drops
-#   hudclip  HUD NotifyWeaponClipAmmoChanged (WFC_HUDTRACE) below capacity while idle (the movie's reload / low-ammo prompt
+#   hudclip  HUD NotifyWeaponClipAmmoChanged (WFC_HUDTRACE) with clip != capacity while idle (the movie's reload / low-ammo prompt
 #            reads it): PASS 0; vehicle_hudclip the same in vehicle form
 #
 #   .\tools\fidelity\weapon-crosstalk.ps1 -Exe <wfc_rebuild.exe> -OutDir <dir> [-MapId 508] [-Friendly 7] [-Enemy 8]
@@ -65,15 +65,15 @@ else {
     $rl = @($am | Where-Object { $_.rl -eq 1 }).Count
     Add-WfcResult $res "crosstalk.ammo" $(if (-not $am.Count) { "UNKNOWN" } elseif ($drops -eq 0 -and $rl -eq 0) { "PASS" } else { "FAIL" }) $drops ("{0} frame-log samples; local ammo drops without input, same weapon {1} (first {2}; a weapon swap such as the spawn loadout is not a drop); samples reloading {3}" -f $am.Count, $drops, $firstDrop, $rl) "Gameplay" 0 "drops"
     $hc = @(Select-String -Path $lg -Pattern 'HUDCALL _global\.NotifyWeaponClipAmmoChanged\(([\d.]+), ([\d.]+)\)' | ForEach-Object { $g = $_.Matches[0].Groups; [pscustomobject]@{ clip = [double]$g[1].Value; cap = [double]$g[2].Value } })
-    $low = @($hc | Where-Object { $_.clip -lt $_.cap })
-    Add-WfcResult $res "crosstalk.hudclip" $(if (-not $hc.Count) { "UNKNOWN" } elseif ($low.Count -eq 0) { "PASS" } else { "FAIL" }) $low.Count ("HUD clip calls {0}, below capacity while idle {1}{2}" -f $hc.Count, $low.Count, $(if ($low.Count) { " (first " + $low[0].clip + "/" + $low[0].cap + ")" } else { "" })) "Gameplay" 0 "calls"
+    $low = @($hc | Where-Object { $_.clip -ne $_.cap })
+    Add-WfcResult $res "crosstalk.hudclip" $(if (-not $hc.Count) { "UNKNOWN" } elseif ($low.Count -eq 0) { "PASS" } else { "FAIL" }) $low.Count ("HUD clip calls {0}, clip not equal to the capacity while idle {1}{2}" -f $hc.Count, $low.Count, $(if ($low.Count) { " (first " + $low[0].clip + "/" + $low[0].cap + ")" } else { "" })) "Gameplay" 0 "calls"
 }
 if ($veh) {
     $vl = Join-Path $veh "wfc.log"
     $vf = @(Select-String -Path $vl -Pattern 'frame \d+ pos .* form=VEHICLE' -ErrorAction SilentlyContinue).Count
     $hv = @(Select-String -Path $vl -Pattern 'HUDCALL _global\.NotifyWeaponClipAmmoChanged\(([\d.]+), ([\d.]+)\)' -ErrorAction SilentlyContinue | ForEach-Object { $g = $_.Matches[0].Groups; "{0}/{1}" -f $g[1].Value, $g[2].Value })
-    $bad = @($hv | Where-Object { $p = $_ -split '/'; [double]$p[0] -lt [double]$p[1] })
-    Add-WfcResult $res "crosstalk.vehicle_hudclip" $(if (-not $vf) { "UNKNOWN" } elseif ($bad.Count) { "FAIL" } else { "PASS" }) $bad.Count ("vehicle-form samples {0}; HUD clip calls {1} ({2}); below capacity without firing {3}" -f $vf, $hv.Count, (($hv | Select-Object -First 8) -join ", "), $bad.Count) "Gameplay" 0 "calls"
+    $bad = @($hv | Where-Object { $p = $_ -split '/'; [double]$p[0] -ne [double]$p[1] })
+    Add-WfcResult $res "crosstalk.vehicle_hudclip" $(if (-not $vf) { "UNKNOWN" } elseif ($bad.Count) { "FAIL" } else { "PASS" }) $bad.Count ("vehicle-form samples {0}; HUD clip calls {1} ({2}); not equal to the capacity without firing (a full clip; a17309b7 showed the vehicle clip over the robot capacity, 60/6) {3}" -f $vf, $hv.Count, (($hv | Select-Object -First 8) -join ", "), $bad.Count) "Gameplay" 0 "calls"
 }
 if (Test-Path (Join-Path $idle "CONTAMINATED.txt")) { Add-WfcResult $res "crosstalk.note" "INFO" $null "other lanes' processes ran during the idle run (untimed check: noted only)" "Experimental" }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")

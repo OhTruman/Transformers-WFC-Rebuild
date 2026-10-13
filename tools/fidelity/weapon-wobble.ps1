@@ -15,13 +15,13 @@
 #   weapondirect  + WFC_WEAPONDIRECT=1 (the M1 1a1fb1c1 weapon draw queue bypassed: the pre-M1 path)
 #   fsr           + WFC_FSR=0.67 WFC_FSR3=1 (temporal upscaling: needs the gun's own motion vectors)
 #   motionview    + WFC_MOTIONVIEW=1 (diagnostic images of |velocity|; not measured)
-# Verdict per variant: PASS when the worst tile's jitter is within -Tol px of the 60 Hz control's worst tile; the default
-# variant is the user's case. A fix build should PASS default (and fsr).
+# Verdict per variant: the gun tiles relative to the body tiles (see below); the default variant is the user's case. A fix
+# build should PASS default (and fsr).
 #
 #   .\tools\fidelity\weapon-wobble.ps1 -Exe <wfc_rebuild.exe> -OutDir <dir> [-Variants hz60,default,nointerp,weapondirect,fsr]
-#       [-Map MP_IAC_Streets_Base_m] [-From 1300] [-Count 480] [-Tol 0.35]
+#       [-Map MP_IAC_Streets_Base_m] [-From 1300] [-Count 480] [-RatioTol 0.25] [-ProbeTiles "7,8;8,7;6,8"]
 param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir, [string[]]$Variants = @("hz60", "default", "nointerp", "weapondirect", "fsr"),
-      [string]$Map = "MP_IAC_Streets_Base_m", [int]$From = 1300, [int]$Count = 480, [double]$Tol = 0.35, [string]$ProbeTiles = "")
+      [string]$Map = "MP_IAC_Streets_Base_m", [int]$From = 1300, [int]$Count = 480, [double]$RatioTol = 0.25, [string]$ProbeTiles = "", [string]$BodyTiles = "3,5;4,5;5,5;3,6;4,6;5,6;3,7;4,7;5,7")
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1")
 if ($Variants.Count -eq 1 -and $Variants[0] -match ',') { $Variants = $Variants[0] -split ',' }   # (-File passes "a,b" as one string)
@@ -52,22 +52,30 @@ foreach ($v in $Variants) {
     if (Test-Path (Join-Path $d "CONTAMINATED.txt")) { $rows[$v] | Add-Member -Force NoteProperty contaminated $true }
 }
 # The gun's tiles (the probe): -ProbeTiles "x,y;x,y" (64 px tile coordinates), else the 3 worst tiles of this run's
-# "default" variant (the character is at the same screen place in every variant: same spawn, same strafe). Legs also move
-# unevenly in the jog cycle, so a variant is judged on the probe tiles against the 60 Hz control on the SAME tiles.
+# "default" variant; the body's tiles (-BodyTiles, default the Streets spawn's torso). The character is at the same screen
+# place in every variant (same spawn, same strafe). Verdict (2026-10-13, after-run on a44aa6db): GUN RELATIVE TO BODY in the
+# same run, as Rendering measures it - at 144 Hz every camera-locked character tile has more tile jitter than at 60 Hz
+# (interpolated piecewise motion), so an absolute comparison with the 60 Hz control fails a correct gun. PASS when the gun /
+# body jitter ratio is within the 60 Hz control's ratio + -RatioTol AND the gun's sign-flip rate is <= the body's + 0.1
+# (the wobble's signature: the gun alone alternates left / right).
+function TilesOf([string]$spec) { return @($spec -split ';' | Where-Object { $_ } | ForEach-Object { $xy = $_ -split ','; ,@([int]$xy[0], [int]$xy[1]) }) }
 $probe = @()
-if ($ProbeTiles) { $probe = @($ProbeTiles -split ';' | ForEach-Object { $xy = $_ -split ','; ,@([int]$xy[0], [int]$xy[1]) }) }
+if ($ProbeTiles) { $probe = TilesOf $ProbeTiles }
 elseif ($rows["default"] -and $rows["default"].top) { $probe = @($rows["default"].top | Select-Object -First 3 | ForEach-Object { ,@([int]$_.tile[0], [int]$_.tile[1]) }) }
-function ProbeOf($r, [string]$grid) { if (-not $r -or -not $r.$grid -or -not $probe.Count) { return $null }; $v = @($probe | ForEach-Object { [double]$r.$grid[$_[1]][$_[0]] }); return [Math]::Round(($v | Measure-Object -Average).Average, 3) }
-$ctl = $rows["hz60"]; $cj = ProbeOf $ctl "grid_jitter"
+$body = TilesOf $BodyTiles
+function AvgOf($r, [string]$grid, $tiles) { if (-not $r -or -not $r.$grid -or -not $tiles.Count) { return $null }; $v = @($tiles | ForEach-Object { [double]$r.$grid[$_[1]][$_[0]] }); return [Math]::Round(($v | Measure-Object -Average).Average, 3) }
+$ctl = $rows["hz60"]; $cj = AvgOf $ctl "grid_jitter" $probe; $cb = AvgOf $ctl "grid_jitter" $body
+$cRatio = if ($cj -ne $null -and $cb) { [Math]::Round($cj / $cb, 2) } else { $null }
 foreach ($v in $rows.Keys) {
     $r = $rows[$v]
     if ($r.status -eq "UNKNOWN" -or $null -eq $r.max_tile_jitter_px) { Add-WfcResult $res "wobble.$v" "UNKNOWN" $null ("no measurement: {0}" -f $r.note) "Experimental"; continue }
-    $pj = ProbeOf $r "grid_jitter"; $pf = ProbeOf $r "grid_flips"
-    $note = "gun tiles ({0}) jitter {1} px, sign flips {2}; worst tile {3} px at {4}; steady {5}; background |dx| {6} px/frame" -f (($probe | ForEach-Object { $_ -join "," }) -join " "), $pj, $pf, $r.max_tile_jitter_px, ($r.top[0].px -join ","), ($r.steady -join "-"), $r.median_abs_dx_px
+    $pj = AvgOf $r "grid_jitter" $probe; $pf = AvgOf $r "grid_flips" $probe; $bj = AvgOf $r "grid_jitter" $body; $bf = AvgOf $r "grid_flips" $body
+    $ratio = if ($bj) { [Math]::Round($pj / $bj, 2) } else { $null }
+    $note = "gun tiles ({0}) jitter {1} px, flips {2}; body tiles jitter {3} px, flips {4}; gun / body {5}; steady {6}; background |dx| {7} px/frame" -f (($probe | ForEach-Object { $_ -join "," }) -join " "), $pj, $pf, $bj, $bf, $ratio, ($r.steady -join "-"), $r.median_abs_dx_px
     if ($r.contaminated) { $note += " (other lanes' processes ran: untimed, noted only)" }
-    if ($v -eq "hz60") { Add-WfcResult $res "wobble.$v" "INFO" $pj "control: $note" "Experimental"; continue }
-    $st = if ($null -eq $cj -or $null -eq $pj) { "UNKNOWN" } elseif ($pj -le $cj + $Tol) { "PASS" } else { "FAIL" }
-    Add-WfcResult $res "wobble.$v" $st $pj ("{0}; control on the same tiles {1} px + tol {2}" -f $note, $cj, $Tol) "Rendering" $(if ($null -ne $cj) { $cj + $Tol } else { $null }) "px"
+    if ($v -eq "hz60") { Add-WfcResult $res "wobble.$v" "INFO" $ratio "control: $note" "Experimental"; continue }
+    $st = if ($null -eq $cRatio -or $null -eq $ratio) { "UNKNOWN" } elseif ($ratio -le $cRatio + $RatioTol -and $pf -le $bf + 0.1) { "PASS" } else { "FAIL" }
+    Add-WfcResult $res "wobble.$v" $st $ratio ("{0}; 60 Hz control gun / body {1} + tol {2}" -f $note, $cRatio, $RatioTol) "Rendering" $(if ($null -ne $cRatio) { $cRatio + $RatioTol } else { $null }) "ratio"
 }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 "WEAPON WOBBLE: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
