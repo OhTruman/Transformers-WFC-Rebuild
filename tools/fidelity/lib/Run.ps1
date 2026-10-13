@@ -15,6 +15,9 @@ function Add-WfcHarnessEnv([hashtable]$Env) {
     if (-not $e.ContainsKey("WFC_HDTEXTURES")) { $e.WFC_HDTEXTURES = "0" }
     # integration 45a8b9c0+: a GPU driver reset ends the process with a message box; a harness run must never wait on it
     if (-not $e.ContainsKey("WFC_GPULOST_DIALOG_S")) { $e.WFC_GPULOST_DIALOG_S = "0" }
+    # (Integration 2026-10-13: the watchdog backstop is off by default in the product; harness runs opt in, so a TDR that leaves the
+    #  render thread blocked in SwapBuffers ends the run with exit 3 + wfc_gpu_lost_<pid>.txt instead of hanging the harness)
+    if (-not $e.ContainsKey("WFC_HANG_EXIT_S")) { $e.WFC_HANG_EXIT_S = "60" }
     Assert-WfcHdRoot $e
     return $e
 }
