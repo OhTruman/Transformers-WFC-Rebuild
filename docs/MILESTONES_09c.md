@@ -126,7 +126,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   agents/rendering-rt (RT stage 1 + reflections + F9), Systems skin feed, DLSS patch (laptop test).
   M6 Modern materials mode merged 4349632d (renderer side; materials_pbr.json per map); Integration decision: Modern is tied
   to HD level 2 (Enhanced = E textures + Modern), Faithful (1) keeps the original shading; calibration waits for the re-issued
-  M6 vectors (view-dependent spec stripped from base colour; cube stripped from base only, never emissive). Stage 1 composite: RT shadows / AO on dynamic surfaces + the
+  M6 vectors (view-dependent spec stripped from base colour; cube stripped from base only, never emissive).
+  M6 contract after Experimental reviews (22cd29a6): rule 3 keeps texture colour in cube x colour products (all 67 robot bodies
+  base share 1.00); tint targets use the 10 palette swatches. Integration decisions: WEP_PhongMain per-pixel metallic =
+  (1 - tint mask B); CHR robot bodies get a "metallic paint" class (F0 from the TINTED paint, dielectric share kept, Energon
+  emissive untouched); exit = custom-colour hue / lightness within a few degrees of Original across the palette. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
   dynamic-light term only (option b: end of the opaque pass), lightmapped statics untouched except character contact AO.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
