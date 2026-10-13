@@ -12,6 +12,8 @@ glsl_emu.py is the definition):
                light = the direction; cube samples held at their value), emitted unrolled. Only the base colour is stripped:
                the temporaries it needs that change are re-emitted as t<100000 + N> (rule 2's per-direction copies
                t<10000000 + 100000 i + N>, the sums t<9000000 + i>); every other output keeps the original expressions.
+               Rule 2 materials now KEEP THE ORIGINAL SHADING (contract change, 2026-10-13: Systems drops their pbr row):
+               no entry, so the runtime builds the original body and main. --view-mean emits the old rule-2 body.
   roughness  = clamp(sqrt(2 / (SpecularPower + 2)), 0.02, 1) per pixel - the Modern shading computes it from o.SpecularPower;
                where the HD pack has a roughness map for the material's roughness parent (the texture feeding SpecularPower,
                else SpecularColor, else DiffuseColor; mask / spec / gloss-named first, then by name - Systems'
@@ -25,9 +27,11 @@ glsl_emu.py is the definition):
 Output per map: <out>/materials_pbr.json {material: {glsl, roughness_parent, rough_slot, rough_uv, base_rule, env_slot}}.
 Check: --check <m6_vectors.json> --emu <glsl_emu dir>: every pbr body (the wfcPbr* hook lines aside) evaluated with the
 oracle's emulator on each vector (runtime parameters set where the vector says) - baseColor (= max(expected, 0)),
-roughness and emissive within 1e-6.
+roughness and emissive within 1e-6. Rule labels per material: (expected, emitted) must agree, except (0, 1) where the
+stripped base differs from the original only by cube -> wfcSampleCubeMean (rule 3: the oracle labels numerically, matc
+syntactically); every other mismatch - (1, 0), (2, not 2), (not 2, 2), (0, 1) with a dropped additive term - is a difference.
 
-  python tools/render/matc_pbr.py <map render dir> <out dir> [--hooks <m6_mapping.json>] [--check <m6_vectors.json> --emu <glsl_emu dir>]
+  python tools/render/matc_pbr.py <map render dir> <out dir> [--hooks <m6_mapping.json>] [--check <m6_vectors.json> --emu <glsl_emu dir>] [--view-mean]
   (--hooks: Systems' m6_audit.py output; its per-material pbr_hooks rows emit wfcPbrMetallic / wfcPbrF0 and, where given,
    the hook's base colour - the robots' metallic paint, the weapons' metal mask)
 """
@@ -38,6 +42,13 @@ import ast, json, math, os, re, sys
 # ------------------------------------------------------------------ the matc GLSL subset's expressions (as matc_hlsl.py)
 class TranslateError(Exception):
     pass
+
+
+class KeepOriginal(Exception):
+    pass
+
+
+VIEW_MEAN = '--view-mean' in sys.argv
 
 
 # ------------------------------------------------------------------ lexer / parser (expressions of the matc subset)
@@ -193,13 +204,17 @@ class Strip:
         self.meanmode = False
         self.inputs = None                         # (rule 2) view inputs replaced by a direction literal
         self.loop_name = None                      # (rule 2) the per-direction copy name of a temporary
+        self.dropped = False                       # rule 1 dropped an additive view term (vs a rule-3-only change)
+        self.tdrop, self.mean_drop = {}, {}        # per temporary: its stripped / mean text dropped one
 
     def name(self, t):
         if self.loop_name and t in self.loop_name: return self.loop_name[t]
         if self.meanmode and self.fl[t].view and not self.fl[t].cam:
             if t not in self.mean_text:
                 self.mean_text[t] = None           # (recursion guard)
+                od, self.dropped = self.dropped, False
                 self.mean_text[t] = self.w(self.nodes[t])[0]
+                self.mean_drop[t] = self.dropped; self.dropped = od or self.dropped
             return self.mean_name(t)
         return self.rename(t) if self.changed.get(t) else t
 
@@ -237,6 +252,7 @@ class Strip:
             ta, tya, fa, ca = self.w(n[2]); tb, tyb, fb, cb = self.w(n[3])
             sz = lambda ty: ty if isinstance(ty, int) else 0
             if op in '+-' and fa.g and fb.g and fa.view != fb.view and sz(tya) >= 3 and sz(tyb) >= 3:     # rule 1
+                self.dropped = True
                 if fa.view: return ('(' + tb + ')' if op == '+' else '(-(' + tb + '))'), tyb, F(tex=fb.tex), True
                 return '(' + ta + ')', tya, F(tex=fa.tex), True
             if tya == 'm2':
@@ -332,6 +348,7 @@ def pbr_body(glsl, info, hook=None):
     nodes, stext = S.nodes, {}
     out = list(lines)
     base_rule = 0
+    dropped = False
     diff = [s for s in stmts if s[3] == 'o.DiffuseColor']
     def base_of(nm):
         """a copy name -> (family, original temporary): 's' stripped, 'm' mean (rule 3), None original"""
@@ -343,11 +360,15 @@ def pbr_body(glsl, info, hook=None):
     for k, ind, decl, lhs, rhs in stmts:
         if not decl: continue
         nodes[lhs] = _parse(rhs, S)
+        S.dropped = False
         tx, ty, fl, c = S.w(nodes[lhs])
+        S.tdrop[lhs] = S.dropped
         S.ty[lhs] = GL_T[decl]; S.fl[lhs] = fl; S.changed[lhs] = c; stext[lhs] = tx
     if diff:
         dnode = _parse(diff[-1][4], S)
+        S.dropped = False
         dt, dty, dfl, dc = S.w(dnode)
+        base_dropped = S.dropped
         need, stack, seen = [], list(_TMP.findall(dt)), set()
         while stack:                                     # the copies the stripped base colour reads (both families)
             fam, tb = base_of(stack.pop())
@@ -359,7 +380,10 @@ def pbr_body(glsl, info, hook=None):
         copies = ['%s%s %s = %s;' % (ind, defs[tb][2], S.rename(tb) if fam == 's' else S.mean_name(tb),
                                       stext[tb] if fam == 's' else S.mean_text[tb])
                   for fam, tb in sorted(need, key=lambda x: defs[x[1]][0])]
-        if dfl.view:                                     # rule 2: the mean over VIEW_SET, unrolled
+        dropped = base_dropped or any(S.tdrop.get(tb) if fam == 's' else S.mean_drop.get(tb) for fam, tb in need)
+        if dfl.view and not VIEW_MEAN:                   # rule 2: keeps the original shading (no entry)
+            raise KeepOriginal('view-dependent base colour (rule 2): keeps the original shading')
+        if dfl.view:                                     # (--view-mean) rule 2: the mean over VIEW_SET, unrolled
             base_rule = 2
             chain, stack, seen = [], list(_TMP.findall(dt)), set()
             while stack:
@@ -436,6 +460,7 @@ def pbr_body(glsl, info, hook=None):
         break
     meta = dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule, env_slot=env_slot)
     if hook: meta['hook'] = True                         # (only when true: output without --hooks stays byte-identical)
+    if base_rule == 1: meta['_dropped'] = dropped         # (check only: not written)
     if hook_rejected: meta['hook_rejected'] = hook_rejected
     return '\n'.join(out), meta
 
@@ -461,10 +486,13 @@ def build_map(render_dir, out_dir, hooks=None):
             body, meta = pbr_body(m['glsl'], info, (hooks or {}).get(name))
         except TranslateError as ex:
             skipped[name] = 'not translated: %s' % ex; continue
+        except KeepOriginal as ex:
+            skipped[name] = str(ex); continue
         meta['glsl'] = body
         res[name] = meta
     os.makedirs(out_dir, exist_ok=True)
-    json.dump(res, open(os.path.join(out_dir, 'materials_pbr.json'), 'w', encoding='utf-8'), indent=0)
+    json.dump({k: {a: b for a, b in v.items() if not a.startswith('_')} for k, v in res.items()},
+              open(os.path.join(out_dir, 'materials_pbr.json'), 'w', encoding='utf-8'), indent=0)
     return res, skipped
 
 
@@ -474,7 +502,7 @@ def check(res, vectors_path, emu_dir, map_name):
     import glsl_emu as E
     V = json.load(open(vectors_path, encoding='utf-8'))
     V = V.get('materials', V) if isinstance(V, dict) and 'materials' in V else V
-    n = bad = 0; worst = []; rules = {}
+    n = bad = 0; worst = []; rules = {}; label_bad = {}
     for name, vv in V.items():
         if not isinstance(vv, dict) or vv.get('map') != map_name or name not in res: continue
         body = '\n'.join(l.replace('wfcPbrMetallic =', 'o.PbrMetallic =').replace('wfcPbrF0 =', 'o.PbrF0 =')
@@ -498,9 +526,11 @@ def check(res, vectors_path, emu_dir, map_name):
             n += 1
             rr = (ex.get('base_rule'), res[name].get('base_rule'))
             rules[rr] = rules.get(rr, 0) + 1
+            if rr[0] != rr[1] and not (rr == (0, 1) and not res[name].get('_dropped')):
+                label_bad[name] = rr
             if not err <= 1e-6: bad += 1; worst.append((err, name))
     worst.sort(reverse=True)
-    return n, bad, worst[:8], rules
+    return n, bad, worst[:8], rules, label_bad
 
 
 if __name__ == '__main__':
@@ -516,6 +546,8 @@ if __name__ == '__main__':
     for k, v in list(skipped.items())[:5]: print('  skipped %s: %s' % (k, v))
     if '--check' in sys.argv:
         vp = sys.argv[sys.argv.index('--check') + 1]; ed = sys.argv[sys.argv.index('--emu') + 1]
-        n, bad, worst, rules = check(res, vp, ed, os.path.basename(os.path.normpath(a[0])))
-        print('oracle: %d vectors, %d differ (> 1e-6); (expected rule, emitted rule) counts %s' % (n, bad, rules))
+        n, bad, worst, rules, label_bad = check(res, vp, ed, os.path.basename(os.path.normpath(a[0])))
+        print('oracle: %d vectors, %d differ (> 1e-6); (expected rule, emitted rule) counts %s; %d rule-label differences'
+              % (n, bad, rules, len(label_bad)))
+        for k, v in sorted(label_bad.items()): print('  rule label %s: expected %s, emitted %s' % (k, v[0], v[1]))
         for w in worst: print('  %.3g %s' % w)
