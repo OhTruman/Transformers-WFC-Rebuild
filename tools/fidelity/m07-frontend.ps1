@@ -42,7 +42,7 @@ $aspects = [ordered]@{ a169 = @(1280, 720); a43 = @(1024, 768); a1610 = @(1680, 
 foreach ($k in $aspects.Keys) {
     $w, $h = $aspects[$k]; $d = Join-Path $OutDir "movies_$k"
     $s = "wait:t=2;shot:$d\m1_activision.bmp;wait:t=9;shot:$d\m2_hasbro.bmp;ui:Accept;wait:t=3;shot:$d\m3_highmoon.bmp;ui:Accept;wait:t=6;shot:$d\m4_fmv.bmp;ui:Accept;wait:frontend;wait:ui=FrontEnd;wait:t=2;shot:$d\m5_title.bmp;quit"
-    RunFE $d $s @{} "[PCSettings]`r`nWidth=$w`r`nHeight=$h`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`n"
+    RunFE $d $s @{} "[PCSettings]`r`nWidth=$w`r`nHeight=$h`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`nHDTextures=0`r`nHDTexturesUserSet=1`r`n"
     foreach ($f in @(Get-ChildItem $d -Filter "m[1-4]_*.bmp" -ErrorAction SilentlyContinue | Sort-Object Name)) {
         Add-Type -AssemblyName System.Drawing; $b = [System.Drawing.Bitmap]::FromFile($f.FullName)
         try { $W = $b.Width; $Hh = $b.Height; $x0 = $W; $x1 = 0; $y0 = $Hh; $y1 = 0

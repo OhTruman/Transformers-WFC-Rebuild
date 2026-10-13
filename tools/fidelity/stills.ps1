@@ -12,6 +12,7 @@
 # carries the actual state. Output: <set>.png contact sheet + the individual PNGs.
 param([string[]]$Sets = @("transform_r2v", "transform_v2r", "vehicle_materials"), [string]$Exe = "", [string]$OutDir = "")
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib\Run.ps1")   # Add-WfcHarnessEnv (graphics pins)
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not $Exe) { $Exe = Join-Path $root "build\bin\wfc_rebuild.exe" }
 if (-not $OutDir) { $OutDir = Join-Path $root "work\fidelity\stills" }
@@ -32,6 +33,7 @@ function Shot($dir, $name, [hashtable]$envs, [int]$frames) {
     $bmp = Join-Path $dir "$name.bmp"; $log = Join-Path $dir "$name.log"
     $all = @{ WFC_SMOKE_FRAMES = "$frames"; WFC_SHOT = $bmp; WFC_LOGEVERY = "1" } + $envs
     if (-not $all.ContainsKey("WFC_BOTAI")) { $all.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
+    $all = Add-WfcHarnessEnv $all   # graphics pins (lib\Run.ps1): auto-detect off (+ windowed), HD off unless set
     $saved = @{}; foreach ($k in $all.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k, "Process"); [Environment]::SetEnvironmentVariable($k, [string]$all[$k], "Process") }
     try { $p = Start-Process -FilePath $Exe -WorkingDirectory $dir -NoNewWindow -Wait -PassThru -RedirectStandardOutput $log -RedirectStandardError "$log.err" }
     finally { foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], "Process") } }

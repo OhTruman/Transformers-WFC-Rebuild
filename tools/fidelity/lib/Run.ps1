@@ -1,12 +1,53 @@
 # Shared helpers for the fidelity scripts (dot-source: . "$PSScriptRoot\lib\Run.ps1").
 
+# Graphics pins for every harness launch (returns a copy of $Env; a key the caller sets wins, an empty value = leave the build /
+# profile default). Unknown to older builds: no effect.
+# - WFC_AUTODETECT=0 (09c d8b7a8e+): a profile without [PCSettings] and no frontend script auto-detects graphics (fullscreen native,
+#   16x AF ...), and from 9116e4ff a run without it also lets the HD default rewrite the profile's HDTextures and save it.
+# - WFC_AUTODETECT_WINDOWED=1: belt and braces - if a caller does ask for auto-detect, it stays windowed (Integration 2026-10-12: the
+#   display is degraded, no fullscreen of any kind).
+# - WFC_HDTEXTURES=0 (Integration 2026-10-12): the env override wins over the profile at boot and on apply, so neither the HD default
+#   nor a found pack can turn HD on in a timed row. HD-on rows set it explicitly and must pin WFC_HD_ROOT (Assert-WfcHdRoot).
+function Add-WfcHarnessEnv([hashtable]$Env) {
+    $e = if ($Env) { $Env.Clone() } else { @{} }
+    if (-not $e.ContainsKey("WFC_AUTODETECT")) { $e.WFC_AUTODETECT = "0" }
+    if (-not $e.ContainsKey("WFC_AUTODETECT_WINDOWED")) { $e.WFC_AUTODETECT_WINDOWED = "1" }
+    if (-not $e.ContainsKey("WFC_HDTEXTURES")) { $e.WFC_HDTEXTURES = "0" }
+    Assert-WfcHdRoot $e
+    return $e
+}
+
+# An HD-on launch must load a FROZEN pack: the default root (<AssetTools>\out\hd, \pack) is rewritten per batch by the HD pass, so
+# two arms could load different texture sets, and a half-written index or file drops the whole pack to the originals (the loader
+# verifies all or nothing). Throws unless WFC_HD_ROOT (the arm's, else the process's) names a copy outside AssetTools\out\hd that
+# holds an hd_index.json.
+function Assert-WfcHdRoot([hashtable]$Env) {
+    $hd = if ($Env.ContainsKey("WFC_HDTEXTURES")) { "$($Env.WFC_HDTEXTURES)" } else { "$env:WFC_HDTEXTURES" }
+    if (-not $hd -or [int]($hd -replace '[^\d-]', '0') -eq 0) { return }
+    $r = if ($Env.ContainsKey("WFC_HD_ROOT")) { "$($Env.WFC_HD_ROOT)" } else { "$env:WFC_HD_ROOT" }
+    if (-not $r) { throw "WFC_HDTEXTURES=$hd without a pinned WFC_HD_ROOT: HD-on runs need a frozen copy of the pack (not the live AssetTools\out\hd)" }
+    if (-not (Test-Path (Join-Path $r "hd_index.json")) -and -not (Test-Path (Join-Path $r "pack\hd_index.json"))) { throw "WFC_HD_ROOT $r has no hd_index.json (or pack\hd_index.json)" }
+    $full = (Resolve-Path $r).Path.TrimEnd('\')
+    if ($full -match '\\AssetTools\\out\\hd(\\pack)?$') { throw "WFC_HD_ROOT $full is the live AssetTools pack (rewritten per batch): copy it to a frozen folder first" }
+}
+
+# The run's HD state from its wfc.log: on (the renderer's "renderer: HD textures on"), pack = the textures the verified pack holds
+# ("wfc: HD texture pack available: N textures"; -1 = no such line, i.e. HD off or the pack was ignored). HD-on A/B arms must agree.
+function Get-WfcHdState([string]$WfcLog) {
+    $o = [pscustomobject]@{ on = $false; pack = -1; root = "" }
+    if (-not (Test-Path $WfcLog)) { return $o }
+    foreach ($l in [IO.File]::ReadLines((Resolve-Path $WfcLog).Path)) {
+        if ($l.Contains('renderer: HD textures ')) { $o.on = $l -match 'renderer: HD textures on' }
+        elseif ($l.Contains('HD texture pack available:')) { $m = [regex]::Match($l, 'HD texture pack available: (\d+) textures \((.*)\)'); if ($m.Success) { $o.pack = [int]$m.Groups[1].Value; $o.root = $m.Groups[2].Value } }
+    }
+    return $o
+}
+
 # Run an exe with temporary process environment variables; returns the exit code (-999 = killed
 # after -TimeoutSec).
 function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log = "run.log", [int]$TimeoutSec = 0) {
     New-Item -ItemType Directory -Force $Dir | Out-Null
-    # 09c d8b7a8e+: a profile without [PCSettings] and no frontend script auto-detects graphics (fullscreen native, 16x AF ...);
-    # harness runs keep their own settings unless a caller asks for auto-detect explicitly (unknown to older builds: no effect)
-    if (-not $Env.ContainsKey("WFC_AUTODETECT")) { $Env = $Env.Clone(); $Env.WFC_AUTODETECT = "0" }
+    $Env = Add-WfcHarnessEnv $Env   # graphics pins: auto-detect off (+ windowed), HD off unless the caller sets it (frozen root)
     # 09c M2 close (2026-10-11): the default bot AI flips Classic -> Smart. Harness runs pin Classic so rows stay comparable with
     # the baselines from before the flip. WFC_BOTAI wins over ?BotAI / ?BotAIAutobot / ?BotAIDecepticon and the profile's BotAI, on
     # every launch path (direct URL and frontend lobby); builds before Smart ignore it (Classic only). A caller sets WFC_BOTAI=Smart

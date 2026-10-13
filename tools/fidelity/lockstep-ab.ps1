@@ -11,6 +11,8 @@
 #   .\tools\fidelity\lockstep-ab.ps1 -OutDir <dir> -Map 510 -Arms "new|work\ab\m9c_47726bc|","old|work\ab\m9c_47726bc|WFC_NOLMARRAYS=1"
 #        [-Seed 1234] [-Steps 9000] [-From 1800] [-RenderSize 3840x2160] [-PlayerBot 1] [-Reps 1] [-Batching: the arms after the first are a
 #        declared batching / state-sort change - a binds drop <= 10 % is excused, see below]
+# HD textures: arms run HD off (lib\Run.ps1 Add-WfcHarnessEnv); an HD-on arm sets "WFC_HDTEXTURES=1;WFC_HD_ROOT=<frozen copy>" in its extra
+# (refused before any run without a frozen root), and HD-on arms of a rep must report the same verified pack, else the row is UNKNOWN.
 param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$Map, [Parameter(Mandatory)][string[]]$Arms,
       [int]$Seed = 1234, [int]$Steps = 9000, [int]$From = 1800, [string]$RenderSize = "", [int]$PlayerBot = 1, [int]$Reps = 1,
       [int]$Bots = 32, [switch]$Batching, [switch]$ReportOnly)
@@ -31,6 +33,14 @@ $rows = New-Object System.Collections.Generic.List[object]
 # the shipped path - refuse it in this timing harness rather than report its numbers.
 $sync = @($Arms | Where-Object { $_ -match 'WFC_ASYNCSTEP\s*=\s*0|WFC_LOCKSTEP_EXACT\s*=' })
 if ($sync.Count) { Res "asyncstep" "FAIL" ("WFC_ASYNCSTEP=0 / WFC_LOCKSTEP_EXACT in an arm (" + ($sync -join "; ") + ") - image comparisons only, never timing rows; not run") "Experimental"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); "image-only switch refused"; exit 1 }
+# HD textures (9116e4ff+): every arm runs HD off (lib\Run.ps1 pins WFC_HDTEXTURES=0) unless its extra sets WFC_HDTEXTURES=1, and then it must
+# pin WFC_HD_ROOT to a frozen copy of the pack - checked for all arms BEFORE the first run, so a bad arm cannot leave a half-run A/B.
+function ArmEnv([string]$extra) { $h = @{}; foreach ($kv in @($extra -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $h[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }; return $h }
+foreach ($arm in $Arms) {
+    $p = $arm -split '\|', 3
+    try { $null = Add-WfcHarnessEnv (ArmEnv $(if ($p.Count -gt 2) { $p[2] } else { "" })) }   # (the same pins + check Invoke-WfcExe applies)
+    catch { Res "hdroot" "FAIL" ("arm '{0}': {1}; not run" -f $p[0], $_.Exception.Message) "Experimental"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); "HD arm without a frozen WFC_HD_ROOT refused"; exit 1 }
+}
 for ($rep = 1; $rep -le $Reps; $rep++) {
     foreach ($arm in $Arms) {
         $p = $arm -split '\|', 3; $label = $p[0]; $root = (Resolve-Path $p[1]).Path; $extra = if ($p.Count -gt 2) { $p[2] } else { "" }
@@ -45,10 +55,11 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$Seed" }
             if ($PlayerBot -ge 0 -and $H.Contains("WFC_PLAYERBOT")) { $e.WFC_PLAYERBOT = "$PlayerBot" }
             if ($RenderSize) { $e.WFC_RENDERSIZE = $RenderSize }
-            foreach ($kv in @($extra -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $e[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
+            $ae = ArmEnv $extra; foreach ($k in $ae.Keys) { $e[$k] = $ae[$k] }
             $null = Invoke-WfcExe $exe $d $e "run.log" (1800)
         }
         if (-not (Test-Path $lg)) { Res "$label.r$rep" "UNKNOWN" "no log" "Experimental"; continue }
+        $hs = Get-WfcHdState $lg; $hdReq = [bool]((Add-WfcHarnessEnv (ArmEnv $extra)).WFC_HDTEXTURES -match '^\s*[1-9]')
         # walk the log: SIMHASH <step> <hash> marks the current sim step; PERF / SLOWFRAME lines belong to it
         $step = -1; $hash = @{}; $ft = New-Object System.Collections.Generic.List[double]; $sf = New-Object System.Collections.Generic.List[object]; $occT = 0; $occS = 0
         foreach ($l in [IO.File]::ReadLines($lg)) {
@@ -67,7 +78,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             gpu_transl = [Math]::Round((Mean (& $col 12)), 2); gpu_post = [Math]::Round((Mean (& $col 13)), 2); cpu_render = [Math]::Round((Mean (& $col 1)), 2)
             cpu_chars = [Math]::Round((Mean (& $colA 3)), 2); outside = [Math]::Round((Mean (& $col 7)), 2)
             draws = [Math]::Round((Mean (& $colA 14)), 0); draws_dyn = [Math]::Round((Mean (& $colA 15)), 0); draws_fx = [Math]::Round((Mean (& $colA 16)), 0); binds = [Math]::Round((Mean (& $colA 17)), 0)
-            occ_tested = $occT; occ_skipped = $occS
+            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root
             hashes = ($rng | ForEach-Object { $hash[$_] }) -join ',' })
     }
 }
@@ -99,8 +110,16 @@ foreach ($r in $rows) {
         $occNote += " PASS(excused): declared batching - binds {0} -> {1} ({2:+0.0;-0.0} %), dyn {3} -> {4}, non-dyn draws {5} vs {6}, pawns tested {7} vs {8}" -f $ref.binds, $r.binds,
             (100.0 * ($r.binds - $ref.binds) / $ref.binds), $ref.draws_dyn, $r.draws_dyn, ($r.draws - $r.draws_dyn), ($ref.draws - $ref.draws_dyn), $r.occ_tested, $ref.occ_tested
     }
+    # HD state (9116e4ff+): an arm that asked for HD must have it on with a verified pack, and every HD-on arm of the rep must load the
+    # same pack ("HD texture pack available: N textures (root)" equal) - else the arms drew different textures: UNKNOWN.
+    $hdOk = $true; $hdRef = @($rows | Where-Object { $_.rep -eq $r.rep -and $_.hd_on })[0]
+    if ($r.hd_req -and (-not $r.hd_on -or $r.hd_pack -le 0)) { $hdOk = $false; $occNote += " HD requested but not on (pack ignored / incomplete: no 'HD texture pack available' line)" }
+    elseif (-not $r.hd_req -and $r.hd_on) { $hdOk = $false; $occNote += " HD on although not requested" }
+    elseif ($r.hd_on -and $hdRef -and ($r.hd_pack -ne $hdRef.hd_pack -or $r.hd_root -ne $hdRef.hd_root)) {
+        $hdOk = $false; $occNote += " HD pack differs from '{0}': {1} textures ({2}) vs {3} ({4})" -f $hdRef.arm, $r.hd_pack, $r.hd_root, $hdRef.hd_pack, $hdRef.hd_root }
+    elseif ($r.hd_on) { $occNote += " HD on: {0} textures ({1})" -f $r.hd_pack, $r.hd_root }
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm
-    $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity) { "UNKNOWN" } else { "PASS" }
+    $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity -or -not $hdOk) { "UNKNOWN" } else { "PASS" }
     if ($contam) { Res "$($r.arm).r$($r.rep).contaminated" "UNKNOWN" ("foreign process during the row - rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
     Res "$($r.arm).r$($r.rep)" $st ("{0}: steps {1} ({2}-{3}), same match as '{4}' {5}, workload parity {6}$occNote; frame p50 / p90 / p99 {7} / {8} / {9} ms over {10} frames; slow frames {11}: GPU {12} (world {13}, fx {14}, transl {15}, post {16}), CPU render {17}, outside {19}; all frames: chars CPU {18}, draws {20} (dyn {21}, fx {22}), binds {23}" -f `
         $r.arm, $r.steps, $From, $Steps, $ref.arm, $sameMatch, $parity, $r.p50, $r.p90, $r.p99, $r.frames, $r.slow, $r.gpu, $r.gpu_world, $r.gpu_fx, $r.gpu_transl, $r.gpu_post, $r.cpu_render, $r.cpu_chars, $r.outside, $r.draws, $r.draws_dyn, $r.draws_fx, $r.binds) "Experimental"

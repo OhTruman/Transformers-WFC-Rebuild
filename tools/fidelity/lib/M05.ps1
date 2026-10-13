@@ -138,6 +138,8 @@ function Convert-QuitRouting([string]$Script, [bool]$QuitBox) {
 # BotsEnemy) and the per-faction BotsAutobot / BotsDecepticon that team modes read from 09c (Frontend; the old keys are ignored
 # there - 2026-10-07 harness defect: zero bots). Convention: Autobot = $Friendly count, Decepticon = $Enemy count.
 # BotsEdited=1: newer 09c builds apply the map's RECOMMENDED bot counts unless the profile marks them as player-edited.
-function Get-BotProfile([int]$Friendly, [int]$Enemy, [int]$Difficulty = 1, [switch]$Extended, [int]$Width = 1280, [int]$Height = 720) {
-    return "[PCSettings]`nWidth=$Width`nHeight=$Height`nFullscreen=0`nVSync=0`nFrameLimit=0`nBotsFriendly=$Friendly`nBotsEnemy=$Enemy`nBotsAutobot=$Friendly`nBotsDecepticon=$Enemy`nBotDifficulty=$Difficulty`nBotsExtended=$(if ($Extended) { 1 } else { 0 })`nBotsEdited=1`n"
+# HDTextures + HDTexturesUserSet=1 (9116e4ff+): a seeded value counts as the user's choice, so the HD default never rewrites it
+# (WFC_HDTEXTURES from Add-WfcHarnessEnv still wins at run time; older builds ignore the keys).
+function Get-BotProfile([int]$Friendly, [int]$Enemy, [int]$Difficulty = 1, [switch]$Extended, [int]$Width = 1280, [int]$Height = 720, [int]$HdTextures = 0) {
+    return "[PCSettings]`nWidth=$Width`nHeight=$Height`nFullscreen=0`nVSync=0`nFrameLimit=0`nHDTextures=$(if ($HdTextures) { 1 } else { 0 })`nHDTexturesUserSet=1`nBotsFriendly=$Friendly`nBotsEnemy=$Enemy`nBotsAutobot=$Friendly`nBotsDecepticon=$Enemy`nBotDifficulty=$Difficulty`nBotsExtended=$(if ($Extended) { 1 } else { 0 })`nBotsEdited=1`n"
 }
