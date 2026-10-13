@@ -8,6 +8,7 @@
 #include "frontend/GameFlow.h"
 #include "frontend/Hud.h"
 #include "frontend/InputPrompts.h"
+#include "frontend/FpsMeter.h"
 #include "frontend/PackageCredits.h"
 #include "frontend/Profile.h"
 #include "frontend/UIController.h"
@@ -144,6 +145,32 @@ static void testHdTexturesBoot() {
         setEnv(m[0], nullptr);
     }
     std::remove("wfc_profile.ini");
+}
+
+static void testFpsCounter() {
+    {   // default Off; persisted as ShowFps
+        frontend::LocalProfile d;
+        std::istringstream on("[PCSettings]\nShowFps=1\n");
+        frontend::LocalProfile a;
+        a.loadFrom(on);
+        a.save();
+        std::ifstream in("wfc_profile.ini");
+        frontend::LocalProfile b;
+        b.loadFrom(in);
+        check(!d.display.showFps && a.display.showFps && b.display.showFps, "profile.show_fps_default_off_persisted");
+        std::remove("wfc_profile.ini");
+    }
+    // 4 Hz readout over a 0.5 s window: a steady 120 Hz reads 120; a drop to 60 Hz is half-way after one window, 60 after two.
+    frontend::FpsMeter m;
+    check(m.text() == "-- FPS", "fps.before_first_readout");
+    int updates = 0;
+    for (int i = 0; i <= 120; ++i) updates += m.frame(i / 120.0) ? 1 : 0;   // exact times: windows end on frames 30/60/90/120
+    const bool steady = std::fabs(m.fps() - 120.0) < 1.0 && updates == 4;
+    for (int i = 1; i <= 16; ++i) m.frame(1.0 + i / 60.0);
+    const bool half = m.fps() > 80.0 && m.fps() < 100.0;
+    for (int i = 17; i <= 32; ++i) m.frame(1.0 + i / 60.0);
+    check(steady && half && std::fabs(m.fps() - 60.0) < 2.0 && m.text().find("FPS") != std::string::npos, "fps.window_4hz_0_5s",
+          m.text());
 }
 
 static void testPackageCredits() {
@@ -645,6 +672,7 @@ int main() {
     testGraphicsAutoDetect();
     testHdTexturesBoot();
     testPackageCredits();
+    testFpsCounter();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
     if (ok) testInputPrompts(c);

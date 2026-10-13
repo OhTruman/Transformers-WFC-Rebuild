@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "frontend/FrontendRuntime.h"
+#include "frontend/FpsMeter.h"
 #include "frontend/PackageCredits.h"
 #include "ui/GfxHost.h"
 #include "ui/gl/GfxRendererGL.h"
@@ -141,6 +142,15 @@ private:
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;
+    // Corner text overlays (the FPS counter; the DLSS credit): a text field on its own instance of the cursor movie
+    // (the font library's $NormalFont), never advanced after its first frame, drawn above everything but the cursor.
+    bool openOverlayMovie(std::unique_ptr<GfxMovie>& m, const char* keep);
+    std::unique_ptr<GfxMovie> fps_;
+    bool fpsFailed_ = false;
+    int fpsW_ = 0, fpsH_ = 0;
+    std::string fpsText_;
+    frontend::FpsMeter fpsMeter_;
+    void drawFps(int w, int h);   // Settings > Graphics > FPS Counter (PC EXTENSION)
 #if WFC_DLSS_PACKAGE
     // PackageCredits: the NVIDIA DLSS credit line, a text field on its own instance of the cursor movie (the font
     // library's $NormalFont), drawn above the full-screen movie.

@@ -45,13 +45,14 @@ public:
     //   frameGeneration: 0 Off (default) / 1 On - FSR frame generation (Rendering), decided at start-up (applies at the
     //   next launch), offered only where its runtime ships, never set by auto-detect; rayTracing: 0 Off (default) / 1 Faithful
     //   / 2 Realistic - ray-traced shadows and lighting (Rendering), offered only where the renderer reports it, never
-    //   set by auto-detect (user decision 2026-10-12: off unless enabled).
+    //   set by auto-detect (user decision 2026-10-12: off unless enabled); showFps: the FPS counter (PC EXTENSION, user
+    //   playtest 2026-10-13), default Off.
     bool pcSettingsLoaded = false;   // the profile file had a [PCSettings] section (else: first launch -> auto-detect)
     std::string autoDetectGpu;       // [PCSettings] AutoDetectGpu: the GPU the settings were detected for (PC EXTENSION)
     struct Display {
         int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
         int upscaling = 0; int hdTextures = 0; int anisotropy = 4; int frameGeneration = 0; int rayTracing = 0;
-        bool hdTexturesUserSet = false, hdPackHintShown = false;
+        bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         static constexpr int kRayTracingMax = 2;   // Realistic
         static constexpr int kHdTexturesMax = 2;   // Enhanced
         static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance
