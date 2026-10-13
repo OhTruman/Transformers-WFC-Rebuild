@@ -1165,7 +1165,6 @@ std::vector<gfx::avm1::Value> botChoices(gfx::avm1::VM& vm, const std::string& f
         vm.set(c, "Value", gfx::avm1::Value((double)v));
         std::string label = std::to_string(v);
         if (field == "difficulty") label = kDiff[std::min(v, 3)];
-        else if (field == "ai") label = v ? "SMART" : "CLASSIC";
         else if (field == "extended") label = v ? (teams ? "EXTENDED (32 V 32)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
         vm.set(c, "FriendlyName", gfx::avm1::Value(label));
         out.push_back(gfx::avm1::Value(c));
@@ -1191,7 +1190,7 @@ void placeBotHint(gfx::Player& p, int rows) {
 }
 int botValue(const frontend::LocalProfile::Bots& b, const std::string& f) {
     return f == "autobot" ? b.autobot : f == "decepticon" ? b.decepticon : f == "enemy" ? b.enemy : f == "extended" ? (b.extended ? 1 : 0)
-         : f == "ai" ? b.aiEffective() : b.difficulty;
+         : b.difficulty;
 }
 }
 
@@ -1202,7 +1201,7 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
     if (!menuD || !menuD->script) { botRowsBuilt_.erase(&p); return; }
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Object* menu = menuD->script;
-    static const char* kNames[] = {"botLimit_mc", "botAutobot_mc", "botDecepticon_mc", "botEnemy_mc", "botDifficulty_mc", "botAI_mc"};
+    static const char* kNames[] = {"botLimit_mc", "botAutobot_mc", "botDecepticon_mc", "botEnemy_mc", "botDifficulty_mc"};
     const bool teams = kind == (int)GameFlow::BotRows::Teams;
     const frontend::LocalProfile::Bots& b = flow.profile().bots;
     const int limitKey = (b.extended ? 1 : 0) * 2 + flow.humanFaction();
@@ -1259,9 +1258,8 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
         rows.push_back({kNames[3], "enemy", "Bots", "AI opponents in the match."});
     }
     rows.push_back({kNames[4], "difficulty", "Bot Difficulty", "How tough the AI plays."});
-    rows.push_back({kNames[5], "ai", "Bot AI", "Smart: the improved bot AI. Classic: the original game's bot behaviour."});   // PC EXTENSION
     const float y0 = vm.toNumber(vm.get(invite.o, "_y")) + 23.0f;
-    // The menu column has room for four rows above the original hint line; five (teams + Bot AI) sit 20 apart.
+    // The menu column has room for four rows above the original hint line; five or more sit 20 apart.
     const float pitch = rows.size() >= 5 ? 20.0f : 23.0f;
     std::string prev = "invite_mc";
     for (size_t i = 0; i < rows.size(); ++i) {
@@ -1298,7 +1296,7 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
                 gfx::avm1::Value w = v.get(menu, "HintWidget");
                 // the count rows / Player Limit add the selected map's recommendation (map-aware Extended counts)
                 std::string text = hint;
-                const std::string rec = field == "difficulty" || field == "ai" ? std::string() : flow.botRecommendationText();
+                const std::string rec = field == "difficulty" ? std::string() : flow.botRecommendationText();
                 if (!rec.empty()) text = rec + ". " + hint;
                 if (w.isObject()) v.set(w.o, "HintText", gfx::avm1::Value(text));
                 return gfx::avm1::Value();
