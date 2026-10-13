@@ -31,6 +31,10 @@ def compose(src, body, ncube_slots, n2d_slots, pbr, rt_params):
             fs += 'uniform samplerCube uTex%s;\nvec4 wfcSC_%s(vec3 d) { return texture(uTex%s, d); }\n' % (n, n, n)
             fs += 'vec4 wfcSCB_%s(vec3 d, float b) { return texture(uTex%s, d, b); }\n' % (n, n)
             code = code.replace('wfcSampleCube(%s, ' % n, 'wfcSC_%s(' % n).replace('wfcSampleCubeBias(%s, ' % n, 'wfcSCB_%s(' % n)
+            if 'wfcSampleCubeMean(%s)' % n in code:     # (as buildProgram: the cube's mean colour, six 1 x 1 faces)
+                fs += 'vec4 wfcSCM_%s() { return (%s) / 6.0; }\n' % (n, ' + '.join('textureLod(uTex%s, vec3(%s), 16.0)' % (n, d) for d in
+                      ('1.0, 0.0, 0.0', '-1.0, 0.0, 0.0', '0.0, 1.0, 0.0', '0.0, -1.0, 0.0', '0.0, 0.0, 1.0', '0.0, 0.0, -1.0')))
+                code = code.replace('wfcSampleCubeMean(%s)' % n, 'wfcSCM_%s()' % n)
         else:
             fs += 'uniform sampler2D uTex%s; uniform vec4 uUnpackMin%s; uniform vec4 uUnpackScale%s;\n' % (n, n, n)
             fs += 'vec4 wfcS2D_%s(vec2 uv) { return texture(uTex%s, uv) * uUnpackScale%s + uUnpackMin%s; }\n' % (n, n, n, n)
