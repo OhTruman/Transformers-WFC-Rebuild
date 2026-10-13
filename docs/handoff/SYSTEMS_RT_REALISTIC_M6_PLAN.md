@@ -47,6 +47,32 @@ That brings forward the approved optional "RT lighting" mode, here called **RT R
   - Calibration error: mean |final - LM| on pixels where V_rt = V_bake, below 1 / 255 after the tonemap.
   - The user's sheet.
 
+**R1 details agreed with Rendering (2026-10-12)**. These supersede the max(N.L, 0) fit above.
+
+**Owners**: the offline V_bake / fit tool is Systems'. The runtime split (lightmapped base pass, lightmap specular, HLSL hit shading) is Rendering's. This replaces Rendering's earlier idea of re-baking an indirect-only lightmap with a GPU path tracer.
+
+**Lightmap UVs**: the original cooked ones, from the 14-float world vertex in the render data:
+- layout: pos 0-2, normal 3-5, tangent 6-9 (w = handedness), UV0 10-11, UV1 12-13;
+- page coordinates = uv1 * lmCoord.xy + lmCoord.zw per sub, where lmCoord is lighting.json's per-component CoordinateScale / CoordinateBias.
+- Rasterise with conservative coverage and dilate 2 texels (texel-centre alignment against the cooked LightMapTexture2D is unverified).
+- Vertex-lightmapped components (LMT_1D) get V_bake per vertex.
+
+**Decode** (kFSMainLM): L = sum_i (n . B_i)^2 * tex_i(uv) * scale_i.
+- The basis B_i is HL2-style: (0, 0.816, 0.577), (-0.707, -0.408, 0.577), (0.707, -0.408, 0.577), with n the tangent-space material normal.
+- scale_i = Sub::lmScale[3][3], UE3's per-coefficient ScaleVectors.
+- Pages are RGBA8, some sRGB (RtLightmap.srgb). All subtraction happens in linear space after decode x scale, never in the texel encoding.
+
+**Sun fit**: per coefficient, in that basis.
+- Coefficient i's sun share = k * max(B_i . L_t, 0)^p * sunColor, with L_t the sun direction in the texel's tangent frame.
+- k and p are fitted per map on fully lit texels (UE3's projection weight is fitted, not guessed).
+- The runtime split subtracts V_bake x share per coefficient and adds V_rt x share. Clamp each channel to >= 0.
+
+**Lightmap specular** (lmSpec) uses the same three coefficients, so the split must feed it too. Otherwise the baked sun highlight stays in the new shadows.
+
+**Halo risk**: Lightmass penumbrae are soft.
+- Trace V_bake with the runtime sun cone (0.27 deg half-angle, or the area-light setting), supersampled 4x4 per texel.
+- Rendering reviews the edges on full-frame pairs.
+
 **R2: contact-hardening soft shadows + AO everywhere**
 - Penumbra from the sun cone with distance-to-occluder (the stage-1 ray already returns the hit distance): the denoiser's blur radius scales with it.
 - RT AO also multiplies the world's indirect term (from R1's split), not the direct term.
@@ -83,6 +109,8 @@ That brings forward the approved optional "RT lighting" mode, here called **RT R
 - Strengths: no ray-tracing hardware needed (compute), stable, also gives rough specular.
 - Costs for us: a second scene representation (the SDF bricks: memory + build time per map + updates for movers), its own D3D12 integration and inputs, and characters only as coarse proxies.
 - AMD quotes it in the low milliseconds at 1440p; to be measured if needed.
+
+Agreed with Rendering 2026-10-12. Probe-ray hit shading reuses rt_material.hlsli / wfcEvalMaterial (agents/rendering-rt 753689bc, 7ec68a29); the probe-update shader is compiled per map against materials_rt.hlsl, like reflect_mat.cso.
 
 **Choice**: build R4 on the probe volume first, because it shares the TLAS, hit materials and light list. Prototype Brixelizer only if the probes show leaking / cost problems that cannot be fixed, or for a non-RT fallback tier. Rendering decides with the R4 prototype numbers. This replaces M7 plan section 7's "RT GI vs Brixelizer at stage 3".
 
