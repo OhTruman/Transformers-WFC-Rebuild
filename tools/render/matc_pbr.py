@@ -27,7 +27,9 @@ Check: --check <m6_vectors.json> --emu <glsl_emu dir>: every pbr body (the wfcPb
 oracle's emulator on each vector (runtime parameters set where the vector says) - baseColor (= max(expected, 0)),
 roughness and emissive within 1e-6.
 
-  python tools/render/matc_pbr.py <map render dir> <out dir> [--check <m6_vectors.json> --emu <glsl_emu.py dir>]
+  python tools/render/matc_pbr.py <map render dir> <out dir> [--hooks <m6_mapping.json>] [--check <m6_vectors.json> --emu <glsl_emu dir>]
+  (--hooks: Systems' m6_audit.py output; its per-material pbr_hooks rows emit wfcPbrMetallic / wfcPbrF0 and, where given,
+   the hook's base colour - the robots' metallic paint, the weapons' metal mask)
 """
 import ast, json, math, os, re, sys
 
@@ -284,7 +286,7 @@ def _parse(rhs, S):
     return node
 
 
-def pbr_body(glsl, info):
+def pbr_body(glsl, info, hook=None):
     lines = glsl.splitlines()
     stmts = []                                  # (index, indent, decl, lhs, rhs)
     for k, l in enumerate(lines):
@@ -342,7 +344,19 @@ def pbr_body(glsl, info):
             dt = '(%s) / 32.0' % ' + '.join(sums)
         elif dc:
             base_rule = 1
-        out[k] = '\n'.join(copies + ['%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, dt)])
+        lines_out = copies + ['%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, dt)]
+        # Systems' metallic hook rows (m6_mapping.json pbr_hooks: metallic_paint / weapon_metal_mask): metallic, F0
+        # (unmixed; the shading mixes F0 = mix(0.04, f0, metallic) and scales the diffuse by 1 - metallic) and, where
+        # given, the base colour (the robots' tinted-paint temporary instead of the stripped base)
+        if hook:
+            def v3(e):                                   # (a vec4 temporary as the vec3 the hooks mean)
+                e = e.strip()
+                return '(%s).xyz' % e if e in defs and defs[e][2] == 'vec4' else e
+            if hook.get('baseColor'):
+                lines_out.append('%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, v3(hook['baseColor'])))
+            lines_out.append('%swfcPbrMetallic = %s;' % (ind, hook['metallic']))
+            lines_out.append('%swfcPbrF0 = max(%s, vec3(0.0));' % (ind, v3(hook['f0'])))   # (the paint can go negative: clamped like the base)
+        out[k] = '\n'.join(lines_out)
     # the roughness parent (Systems' order) and the UV its body samples it with
     texs = info.get('textures') or []
     slot_of = {t.get('object'): t.get('slot') for t in texs if t.get('kind', '2d') == '2d' and 'slot' in t and t.get('object')}
@@ -380,10 +394,17 @@ def pbr_body(glsl, info):
             out.append('    wfcPbrEnv = wfcSampleCubeRough(%d, %s, wfcPbrRoughness(o.SpecularPower)).rgb;' % (env_slot, a[1]))
         break
     return '\n'.join(out), dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule,
-                                env_slot=env_slot)
+                                env_slot=env_slot, hook=bool(hook))
 
 
-def build_map(render_dir, out_dir):
+def load_hooks(mapping_path):
+    """Systems' m6_mapping.json -> {material: pbr_hooks} (rows with a metallic hook only)."""
+    M = json.load(open(mapping_path, encoding='utf-8'))
+    rows = M['rows'] if isinstance(M, dict) and 'rows' in M else (M if isinstance(M, list) else list(M.values()))
+    return {r['material']: r['pbr_hooks'] for r in rows if isinstance(r, dict) and r.get('pbr_hooks')}
+
+
+def build_map(render_dir, out_dir, hooks=None):
     mats = json.load(open(os.path.join(render_dir, 'materials_glsl.json'), encoding='utf-8'))
     res, skipped = {}, {}
     for name, m in sorted(mats.items()):
@@ -394,7 +415,7 @@ def build_map(render_dir, out_dir):
            NEVER_REMAP_RE.search(' '.join(pr.get('Vector', []) + pr.get('Scalar', []))):
             skipped[name] = 'never remapped (HUD marker / team state)'; continue
         try:
-            body, meta = pbr_body(m['glsl'], info)
+            body, meta = pbr_body(m['glsl'], info, (hooks or {}).get(name))
         except TranslateError as ex:
             skipped[name] = 'not translated: %s' % ex; continue
         meta['glsl'] = body
@@ -413,7 +434,9 @@ def check(res, vectors_path, emu_dir, map_name):
     n = bad = 0; worst = []; rules = {}
     for name, vv in V.items():
         if not isinstance(vv, dict) or vv.get('map') != map_name or name not in res: continue
-        body = '\n'.join(l for l in res[name]['glsl'].splitlines() if 'wfcPbr' not in l)
+        body = '\n'.join(l.replace('wfcPbrMetallic =', 'o.PbrMetallic =').replace('wfcPbrF0 =', 'o.PbrF0 =')
+                         for l in res[name]['glsl'].splitlines()
+                         if 'wfcPbr' not in l or l.strip().startswith(('wfcPbrMetallic =', 'wfcPbrF0 =')))
         body = re.sub(r'wfcSampleCubeMean\((\d+)\)', r'wfcSampleCube(\1, vec3(0.0, 0.0, 1.0))', body)   # (the emulator's cube value is its mean)
         for vec in vv['vectors']:
             s2 = {int(k): v for k, v in vec['samples2d'].items()}; sc = {int(k): v for k, v in vec['samples_cube'].items()}
@@ -423,8 +446,12 @@ def check(res, vectors_path, emu_dir, map_name):
             want_base = np.maximum(np.asarray(ex['baseColor'], dtype=np.float64), 0.0)
             got_rough = float(E.roughness_from_power(float(o.get('SpecularPower', np.array([15.0]))[0])))
             got_em = o.get('EmissiveColor', np.zeros(3))[:3]
+            got_m = float(o.get('PbrMetallic', np.array([0.0]))[0])
+            got_f0 = o.get('PbrF0', np.array([0.04, 0.04, 0.04]))[:3]
             err = max(float(np.max(np.abs(got_base - want_base))), abs(got_rough - ex['roughness']),
-                      float(np.max(np.abs(got_em - np.asarray(ex['emissive'])))))
+                      float(np.max(np.abs(got_em - np.asarray(ex['emissive'])))),
+                      abs(got_m - float(ex.get('metallic', 0.0))),
+                      float(np.max(np.abs(got_f0 - np.asarray(ex.get('f0', [0.04, 0.04, 0.04]), dtype=np.float64)))))
             n += 1
             rr = (ex.get('base_rule'), res[name].get('base_rule'))
             rules[rr] = rules.get(rr, 0) + 1
@@ -434,11 +461,13 @@ def check(res, vectors_path, emu_dir, map_name):
 
 
 if __name__ == '__main__':
-    a = [x for x in sys.argv[1:] if not x.startswith('--')]
-    res, skipped = build_map(a[0], a[1])
+    hooks = load_hooks(sys.argv[sys.argv.index('--hooks') + 1]) if '--hooks' in sys.argv else None
+    a = [x for i, x in enumerate(sys.argv[1:], 1) if not x.startswith('--') and sys.argv[i - 1] not in ('--hooks', '--check', '--emu')]
+    res, skipped = build_map(a[0], a[1], hooks)
     cnt = {r: sum(1 for x in res.values() if x['base_rule'] == r) for r in (0, 1, 2)}
-    print('%d materials (base colour: %d unchanged, %d additive view terms dropped, %d view mean); %d with a roughness-map hook; %d skipped'
-          % (len(res), cnt[0], cnt[1], cnt[2], sum(1 for r in res.values() if r['rough_slot'] is not None), len(skipped)))
+    print('%d materials (base colour: %d unchanged, %d additive view terms dropped, %d view mean); %d with a roughness-map hook; %d metallic hooks; %d skipped'
+          % (len(res), cnt[0], cnt[1], cnt[2], sum(1 for r in res.values() if r['rough_slot'] is not None),
+             sum(1 for r in res.values() if r.get('hook')), len(skipped)))
     for k, v in list(skipped.items())[:5]: print('  skipped %s: %s' % (k, v))
     if '--check' in sys.argv:
         vp = sys.argv[sys.argv.index('--check') + 1]; ed = sys.argv[sys.argv.index('--emu') + 1]
