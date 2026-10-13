@@ -8,10 +8,10 @@ index 28f1dee..a6d10b7 100644
  third_party/ffx_denoiser/
 +third_party/streamline/
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 7ddfd7b..870b2c5 100644
+index 09ed42a..17debe5 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -60,6 +60,17 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include/ffx_api
+@@ -68,6 +68,17 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include/ffx_api
          "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/bin/amd_fidelityfx_framegeneration_dx12.dll"
          "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/license.md" $<TARGET_FILE_DIR:wfc_rebuild>)
  endif()
@@ -30,7 +30,7 @@ index 7ddfd7b..870b2c5 100644
  # the exe exports D3D12SDKVersion / D3D12SDKPath (src/render/d3d12/D3D12Agility.cpp) and D3D12Core.dll goes to bin/D3D12
  if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core.dll")
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
-index 87741e1..9b604ec 100644
+index da2b254..8de6fb3 100644
 --- a/src/core/Application.cpp
 +++ b/src/core/Application.cpp
 @@ -9,6 +9,7 @@
@@ -67,7 +67,7 @@ index 87741e1..9b604ec 100644
          if (latProbe && lat.phase == 2 && lat.seen) {
              const double ms = (nowSeconds() - lat.tIn) * 1000.0;
 diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
-index c06b510..fa1c729 100644
+index 844aa66..bf4b571 100644
 --- a/src/core/Application_Frontend.cpp
 +++ b/src/core/Application_Frontend.cpp
 @@ -1,6 +1,7 @@
@@ -114,7 +114,7 @@ index c06b510..fa1c729 100644
              { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
              if (!pumped) { quit = true; break; }
 diff --git a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
-index def3a17..dd4491f 100644
+index 25c4b1d..29cd539 100644
 --- a/src/frontend/FrontendRuntime.h
 +++ b/src/frontend/FrontendRuntime.h
 @@ -158,6 +158,7 @@ public:
@@ -183,7 +183,7 @@ index 785d487..6f51313 100644
 +void notifyDisplayModeChange() { if (g_modeHook) g_modeHook(); }
  } // namespace platform
 diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
-index 558e554..cba5e93 100644
+index 1973107..9a31f72 100644
 --- a/src/platform/win32/Win32Window.cpp
 +++ b/src/platform/win32/Win32Window.cpp
 @@ -286,6 +286,7 @@ public:
@@ -1668,7 +1668,7 @@ index 2da0ce3..4bd46b2 100644
      void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
      static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
 diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
-index 7f1f283..9f406bb 100644
+index 60ff70e..dab7488 100644
 --- a/src/ui/GfxPresenter.cpp
 +++ b/src/ui/GfxPresenter.cpp
 @@ -1036,7 +1036,7 @@ constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 2
@@ -1708,7 +1708,7 @@ index 7f1f283..9f406bb 100644
          : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
                          : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
      row(hd, "<PCSettings:HDTextures>",
-@@ -1396,7 +1404,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+@@ -1399,7 +1407,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
                                   rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
                                   rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
                                   rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
@@ -1718,10 +1718,10 @@ index 7f1f283..9f406bb 100644
      }
      // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
 diff --git a/tests/FrontendTests.cpp b/tests/FrontendTests.cpp
-index 78f8a6e..d9f410a 100644
+index a47f4dc..39af374 100644
 --- a/tests/FrontendTests.cpp
 +++ b/tests/FrontendTests.cpp
-@@ -87,11 +87,11 @@ static void testProfileBotMigration() {
+@@ -88,11 +88,11 @@ static void testProfileBotMigration() {
          a.loadFrom(on);
          check(a.display.frameGeneration == 1 && d.display.frameGeneration == 0, "profile.frame_generation_0_1");
      }
@@ -1738,7 +1738,7 @@ index 78f8a6e..d9f410a 100644
      }
      check(r.display.upscaling == 2 && r.display.hdTextures == 2 && r.display.anisotropy == 16, "profile.graphics_extensions_roundtrip",
 diff --git a/tools/package/build_slim.py b/tools/package/build_slim.py
-index 06f607c..e8df89f 100644
+index a6e9918..13ce220 100644
 --- a/tools/package/build_slim.py
 +++ b/tools/package/build_slim.py
 @@ -19,6 +19,11 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
@@ -1766,13 +1766,18 @@ index 06f607c..e8df89f 100644
  # render-data files shipped beside every map's materials_glsl.json, newer than slim_files.tsv
  RENDER_EXTRA = ['materials_pbr.json']
  
-@@ -127,6 +138,23 @@ def main():
+@@ -142,6 +153,28 @@ def main():
              problems.append('--m5: Microsoft Agility SDK LICENSE.txt not found: %s' % lic)
          else:
              bin_rows.append((lic, BIN_DEST + '/' + AGILITY_LICENSE_DEST))
 +    dlss = '--dlss' in sys.argv
 +    if dlss and not m5:
 +        problems.append('--dlss needs --m5 (DLSS runs on the same D3D12 path)')
++    if dlss and '--allow-no-dlss-credit' not in sys.argv:
++        cache = os.path.join(build_dir, 'CMakeCache.txt')
++        if 'WFC_DLSS_PACKAGE:BOOL=ON' not in (open(cache, encoding='utf-8', errors='replace').read() if os.path.isfile(cache) else ''):
++            problems.append('--dlss: the exe was not configured with -DWFC_DLSS_PACKAGE=ON (the in-game NVIDIA DLSS credit: splash / '
++                            'credits, Frontend); --allow-no-dlss-credit only for a private test build')
 +    if dlss:
 +        for n in DLSS_FROM_BIN:
 +            src = os.path.join(bin_dir, n)
@@ -1790,7 +1795,7 @@ index 06f607c..e8df89f 100644
      missing = [r['source'] for r in rows if not os.path.isfile(os.path.join(ROOT, r['source']))]
      problems += ['source missing: %s' % m for m in missing[:20]]
      if len(missing) > 20:
-@@ -173,7 +201,7 @@ def main():
+@@ -190,7 +223,7 @@ def main():
                        '%d files (%.2f GB)' % (len(hd_rows), hd_b / 2**30) if hd_src else 'none', 'yes' if m5 else 'no'))
      bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
      manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
@@ -1799,7 +1804,7 @@ index 06f607c..e8df89f 100644
                  'bin_dest': BIN_DEST, 'bin_files': bin_files}
      if plan:
          print('bin files (%d):' % len(bin_files))
-@@ -238,10 +266,21 @@ def main():
+@@ -255,10 +288,21 @@ def main():
              t = t.rstrip('\r\n') + ('\n\nOptional graphics runtime (Graphics menu: FSR 3.1 upscaling, frame generation; off by default): AMD FidelityFX\n'
                                      'DLLs and Microsoft D3D12 Agility SDK runtime (D3D12\\D3D12Core.dll) beside the game; their licences are in\n'
                                      'Transformers Rebuild\\Rebuild\\build\\release\\bin\\licenses\\amd_fidelityfx and \\microsoft_d3d12_agility.\n')
