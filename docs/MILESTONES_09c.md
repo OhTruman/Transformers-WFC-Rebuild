@@ -425,5 +425,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Realistic only (user: push further, beyond faithful): a Fresnel-weighted RT specular layer on glossy surfaces
   (SpecularPower-gated) + roughness gate, switchable, with before / after crops, next package. R1 confirmed ON on a direct
   boot (18 pages). Test-only Gameplay patch (FXOWNER socket-frame checks, WFC_NAVQTEST) on integration 2017eeba.
+  18:00 EXPERIMENTAL AFTER-RUNS (independent, harness 65a48ed7): both P0s FIXED on a44aa6db. Wobble (Streets strafe
+  144 Hz, gun tiles vs torso tiles in the same run): a17309b7 gun jitter 34.7 px, gun / body 7.85, flips 0.37 = FAIL;
+  a44aa6db 6.3 px, 1.38 (60 Hz control 1.26), flips 0.03 = body = PASS; same with weapondirect and FSR 3.1. Cross-talk
+  (idle player, 60 s, same bot activity): flashes at the player's gun 21 -> 0; vehicle-form HUD clip 60/6 -> 60/60;
+  ammo drops 0 / 0. Verdict rule = gun / body within the control's ratio + 0.25 and flips <= body + 0.1 (an absolute
+  px rule cannot pass at 144 Hz). Slot B -> Systems' package verify (RT gate granted, Rendering paused).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
