@@ -2285,6 +2285,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
             fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
             replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
+            if (code.find("wfcSampleCubeMean(" + n + ")") != std::string::npos) {   // (M6 pbr rule 3: the cube's mean colour)
+                fs += "vec4 wfcSCM_" + n + "() { return (textureLod(uTex" + n + ", vec3(1.0, 0.0, 0.0), 16.0) + textureLod(uTex" + n +
+                      ", vec3(-1.0, 0.0, 0.0), 16.0) + textureLod(uTex" + n + ", vec3(0.0, 1.0, 0.0), 16.0) + textureLod(uTex" + n +
+                      ", vec3(0.0, -1.0, 0.0), 16.0) + textureLod(uTex" + n + ", vec3(0.0, 0.0, 1.0), 16.0) + textureLod(uTex" + n +
+                      ", vec3(0.0, 0.0, -1.0), 16.0)) / 6.0; }\n";
+                replaceAll(code, "wfcSampleCubeMean(" + n + ")", "wfcSCM_" + n + "()");
+            }
         } else {
             fs += "uniform sampler2D uTex" + n + "; uniform vec4 uUnpackMin" + n + "; uniform vec4 uUnpackScale" + n + ";\n";
             if (srgbBlockTex_.count(slots[k].tex))
