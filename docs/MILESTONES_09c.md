@@ -342,5 +342,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   504 2.53/2.52, 507 2.36/2.37, 508 2.08/2.08, 509 2.76/2.76, 510 2.53/2.53 (worst +0.02 vs block +0.15; 0 UNKNOWN).
   Leak soak 12:36-~14:10. HD freeze for the refresh: push_full_snap_20261013_b0-6 (828 rows, 5,467 MB); live pack 0-7
   (949 textures). Systems PHASE=package started 12:40; verify after 14:15.
+  14:02 PLAYTEST REFRESH VERIFIED (Systems, work/verify_refresh_a173/REPORT.md): package work/playtest_slim (a17309b7,
+  11.16 GB; tag playtest/09c-overnight-a17309b7): HD static 828 rows 0 problems; Streets / Gorge / Debris PASS;
+  SETTINGSTEST 7/7; RT gate build + robust context + runtime PASS. ONE FAIL: R1 sun swap unused - Pipeline::load() tests
+  the GL entry points (DrawBuffers / ColorMaski / ClearBufferfv) BEFORE GLExt::load() on that boot, so r1Map_ is false
+  for the session (data shipped fine, k 0.354). Decision: ship for the playtest as is (RT Off by default; Realistic
+  without the sun swap); Rendering fixes the order (lazy check) on rt2, repackage after the playtest. Leak soak FINAL
+  PASS (Experimental 13:53): plateau ~4.9-5.4 GB, handles / GDI / threads flat, GL live textures plateau 93, PCM 36.5 MB
+  every return; driver pool +456 MB in 42 min under load, flat on the quiet run. User awake 13:54; lanes parked.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
