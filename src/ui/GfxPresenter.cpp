@@ -1,4 +1,5 @@
 #include "ui/GfxPresenter.h"
+#include "ui/MapLabel.h"
 #include "core/FrameProfile.h"
 #include "core/Log.h"
 #include "frontend/FlowTrace.h"
@@ -1388,7 +1389,15 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         pendingCalls_.erase(pendingCalls_.begin() + (long)i);
     }
     frameLimitShown_ = flow.profile().display.frameLimit;
-    for (Open& op : movies_) if (op.object.find("GameLobby_GFX") != std::string::npos) syncBotRows(op.movie->player(), flow);
+    for (Open& op : movies_) {
+        if (op.object.find("GameLobby_GFX") == std::string::npos) continue;
+        syncBotRows(op.movie->player(), flow);
+        // the selected map's name centred on its preview, above the frame (ui/MapLabel.h, user playtest 2026-10-13)
+        const ui::MapLabelResult ml = ui::centreMapLabels(op.movie->player());
+        if (ml.raisedTo >= 0)
+            frontend::FlowTrace::emit("lobby.mapLabel", {{"above", "frame_mc"}, {"depth", std::to_string(ml.raisedTo)},
+                                                         {"frameW", std::to_string((int)ml.frameW)}, {"provenance", "PC ADAPTATION"}});
+    }
     for (Open& op : movies_) {
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)
