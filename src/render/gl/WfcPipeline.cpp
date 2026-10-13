@@ -2121,6 +2121,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at == std::string::npos) mainLM.clear();
     }
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
+    if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
+        const size_t nl1 = fs.find('\n');
+        if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\n");
+        const std::string dl = "if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;";
+        for (size_t at = fs.find(dl); at != std::string::npos; at = fs.find(dl, at + dl.size()))
+            fs.insert(at + dl.size(), " if (uRtUvSpace.z > 0.0) { oColor = vec4(1.0); return; }");
+    }
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
         sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;");
@@ -2134,7 +2141,18 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
 
     static GLuint vsShared = 0;
-    if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
+    if (!vsShared) {
+        std::string vsText = kVS;
+        if (rtShadowAoOn()) {                            // (M7 RT, RT on only: the atlas pass places triangles at their UV0)
+            const size_t nl1 = vsText.find('\n');
+            if (nl1 != std::string::npos) vsText.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\n");
+            const std::string gp = "gl_Position = uViewProj * wp;";
+            const size_t at = vsText.find(gp);
+            if (at != std::string::npos)
+                vsText.insert(at + gp.size(), "\n    if (uRtUvSpace.z > 0.0) gl_Position = vec4((aUV0 - uRtUvSpace.xy) * uRtUvSpace.zw * 2.0 - 1.0, 0.0, 1.0);");
+        }
+        vsShared = compile(GL_VERTEX_SHADER, vsText, "world.vs");
+    }
     GLuint vsUse = vsShared;
     int instRt = 0;
     if (instBuild_) {   // instanced character variant: per-instance uniforms become globals loaded from the instance row
@@ -3459,7 +3477,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const bool mdiMesh = bspSet || (meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty());
     if (bspSet) { swapMdiSlot(bspMdi_); drawMdi(g); swapMdiSlot(bspMdi_); }
     else if (mdiMesh) drawMdi(g);
-    for (int pass = onlySub >= 0 ? 1 : 0; pass < (rtDepthOnly_ ? 1 : 2); ++pass) {   // 0: opaque + masked, 1: translucent
+    for (int pass = onlySub >= 0 && !rtUvAtlas_ ? 1 : 0; pass < (rtDepthOnly_ || rtUvAtlas_ ? 1 : 2); ++pass) {   // 0: opaque + masked, 1: translucent
         // one sub (a queued translucent draw): index it directly - scanning every sub of the world mesh per queued
         // item was ~10 % of the main thread at 10 v 10
         const size_t siBegin = onlySub >= 0 ? (size_t)onlySub : 0;
@@ -3529,7 +3547,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
                                         model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
             static const bool noFrustum = std::getenv("WFC_NOFRUSTUMCULL") != nullptr;   // diagnostics: culling regression test
-            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_) {
+            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_ && !rtUvAtlas_) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
@@ -3545,6 +3563,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 continue;
             }
             bindCommon(P, subModel);
+            if (rtShadowAoOn()) {                          // (M7 RT, RT-on programs only: the masked-opacity atlas pass)
+                static const float zero[4] = {0, 0, 0, 0};
+                Uniform4fv(ULOC(P, "uRtUvSpace"), 1, rtUvAtlas_ ? rtUvSpace_ : zero);
+                if (rtUvAtlas_) glDisable(GL_CULL_FACE);
+            }
             Uniform1i(ULOC(P, "uDecalClip"), g.decal ? 1 : 0);
             {
                 // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
@@ -3693,7 +3716,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 fd.fx |= frameFx_;
             }
             if (!trans) depthDirty_ = true;
-            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION")) {
+            if (P.distProg >= 0 && distFbo_ && !WFC_ENV("WFC_NODISTORTION") && !rtUvAtlas_) {
                 const Program& D = progs_[(size_t)P.distProg];
                 BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
                 if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }

@@ -496,6 +496,12 @@ private:
     RtTargets rtTargets_;
     GLuint rtCompositeProg_ = 0, rtWhiteTex_ = 0;
     bool rtDepthOnly_ = false, rtMaskActive_ = false;
+    // masked (alpha-tested) world geometry in the TLAS (WfcRt.cpp): an opacity atlas rendered once per map in UV space
+    bool rtUvAtlas_ = false, rtMaskedBuilt_ = false;
+    float rtUvSpace_[4] = {0, 0, 0, 0};                // the atlas pass: uv min, 1 / uv extent
+    std::vector<std::pair<int, int>> rtSets_;          // (mesh, set) of the static sets on D3D12
+    GLuint rtAtlasFbo_ = 0;
+    void rtBuildMasked();
     float rtSunDir_[3] = {0, 0, 0};                    // towards the traced sun (uRtSunDir; 0 = none)
     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
     int rtFrame_ = -1;

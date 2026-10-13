@@ -40,6 +40,12 @@ bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask);   // add
 void rtBridgeClearStaticWorld();                            // map unload
 // GL signal -> D3D12 job -> GL wait (GPU side). frame != nullptr and a static world: the depth check, else the copy.
 bool rtBridgeRoundTrip(const RtFrame* frame);
+// masked (alpha-tested) world geometry: per static set its masked triangles (indices into the set's vertices), the UV0
+// per vertex, each triangle's sub; per sub (8 floats): uv min, 1 / uv extent, its atlas tile (u, v, width, height in 0..1)
+struct RtMaskedSet { int set = 0; std::vector<float> pos, uv; std::vector<uint32_t> idx, triSub; };
+struct RtMaskedWorld { std::vector<RtMaskedSet> sets; std::vector<float> subs; };
+GLuint rtBridgeMaskAtlas(int w, int h);                     // the shared R8 opacity atlas (GL texture), made once
+bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (instance mask 0x8) + lookup buffers
 // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
 // the targets on every round trip until changed (n = 0 clears)
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n);

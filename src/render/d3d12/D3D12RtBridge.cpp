@@ -56,6 +56,7 @@ typedef void(APIENTRY* PFN_WaitSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLui
 typedef void(APIENTRY* PFN_SignalSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutShaderRead = 0x958F, kLayoutGeneral = 0x958D;
+constexpr int kSrvN = 8, kTableN = kSrvN + 4;   // descriptor table: t1 .. t8, u0 .. u3
 constexpr int kStatN = 23;   // rt_depthcheck.hlsl's classes (7) + its ratio histogram (16)
 template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
@@ -263,6 +264,133 @@ public:
         return true;
 #endif
     }
+    GLuint maskAtlas(int w, int h) {
+        if (!atlas_.tex || atlas_.w != w || atlas_.h != h) {
+            if (!waitIdle()) return 0;
+            free(atlas_);
+            if (!make(atlas_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/)) { free(atlas_); return 0; }
+            if (heap_) writeDescriptors();
+        }
+        return atlas_.tex;
+    }
+    bool addMasked(const RtMaskedWorld& M) {
+#if !defined(WFC_RT_SHADERS)
+        (void)M; return false;
+#else
+        if (!dev5_ || rtTier_ < 11 || M.sets.empty() || !waitIdle()) return false;
+        releaseMasked();
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList4* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList4), (void**)&cl))) {
+            rel(al); return false;
+        }
+        std::vector<ID3D12Resource*> temp;               // uploads + scratch, freed after the build
+        auto upload = [&](const void* d, size_t bytes) { ID3D12Resource* r = uploadBuffer(dev_, d, bytes); if (r) temp.push_back(r); return r; };
+        auto toDefault = [&](const void* d, size_t bytes) -> ID3D12Resource* {   // a default-heap copy the shader reads
+            ID3D12Resource* up = upload(d, std::max<size_t>(bytes, 16));
+            ID3D12Resource* r = makeBuffer(dev_, std::max<size_t>(bytes, 16), D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST);
+            if (!up || !r) { rel(r); return nullptr; }
+            cl->CopyBufferRegion(r, 0, up, 0, std::max<size_t>(bytes, 16));
+            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = r;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            cl->ResourceBarrier(1, &b);
+            return r;
+        };
+        std::vector<float> uv; std::vector<uint32_t> idx, triSub, inst;
+        bool ok = true;
+        for (size_t k = 0; k < M.sets.size() && ok; ++k) {
+            const RtMaskedSet& S = M.sets[k];
+            const uint32_t uvBase = (uint32_t)(uv.size() / 2), triBase = (uint32_t)(idx.size() / 3);
+            inst.insert(inst.end(), {uvBase, triBase, 0u, 0u});
+            uv.insert(uv.end(), S.uv.begin(), S.uv.end());
+            idx.insert(idx.end(), S.idx.begin(), S.idx.end());
+            triSub.insert(triSub.end(), S.triSub.begin(), S.triSub.end());
+            if (S.idx.empty()) continue;
+            ID3D12Resource* vb = upload(S.pos.data(), S.pos.size() * 4);
+            ID3D12Resource* ib = upload(S.idx.data(), S.idx.size() * 4);
+            if (!vb || !ib) { ok = false; break; }
+            D3D12_RAYTRACING_GEOMETRY_DESC gd{};
+            gd.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES; gd.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;   // non-opaque: alpha-tested
+            gd.Triangles.VertexBuffer.StartAddress = vb->GetGPUVirtualAddress(); gd.Triangles.VertexBuffer.StrideInBytes = 12;
+            gd.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT; gd.Triangles.VertexCount = (UINT)(S.pos.size() / 3);
+            gd.Triangles.IndexBuffer = ib->GetGPUVirtualAddress(); gd.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+            gd.Triangles.IndexCount = (UINT)S.idx.size();
+            D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
+            bd.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+            bd.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+            bd.Inputs.NumDescs = 1; bd.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY; bd.Inputs.pGeometryDescs = &gd;
+            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO pi{};
+            dev5_->GetRaytracingAccelerationStructurePrebuildInfo(&bd.Inputs, &pi);
+            ID3D12Resource* bl = makeBuffer(dev_, pi.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                                            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+            ID3D12Resource* sc = makeBuffer(dev_, pi.ScratchDataSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                                            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+            if (sc) temp.push_back(sc);
+            if (!bl || !sc) { rel(bl); ok = false; break; }
+            bd.DestAccelerationStructureData = bl->GetGPUVirtualAddress(); bd.ScratchAccelerationStructureData = sc->GetGPUVirtualAddress();
+            cl->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
+            mBlas_.push_back(bl); totalBlas_ += pi.ResultDataMaxSizeInBytes;
+            D3D12_RAYTRACING_INSTANCE_DESC in{};
+            in.Transform[0][0] = in.Transform[1][1] = in.Transform[2][2] = 1.0f;
+            in.InstanceID = (UINT)k;                     // -> mInst_[k]: this set's uv / triangle bases
+            in.InstanceMask = 0x8;                       // masked world: its own bit (the depth check leaves it out)
+            in.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;   // (cards / grates: both sides)
+            in.AccelerationStructure = bl->GetGPUVirtualAddress();
+            instances_.push_back(in);
+        }
+        if (ok) {
+            mUv_ = toDefault(uv.data(), uv.size() * 4); mIdx_ = toDefault(idx.data(), idx.size() * 4);
+            mTriSub_ = toDefault(triSub.data(), triSub.size() * 4); mSubs_ = toDefault(M.subs.data(), M.subs.size() * 4);
+            mInst_ = toDefault(inst.data(), inst.size() * 4);
+            ok = mUv_ && mIdx_ && mTriSub_ && mSubs_ && mInst_;
+            mVerts_ = (UINT)(uv.size() / 2); mTris_ = (UINT)(idx.size() / 3); mSubN_ = (UINT)(M.subs.size() / 8); mSetN_ = (UINT)M.sets.size();
+        }
+        if (ok) ok = rebuildTlas(cl, temp);
+        cl->Close();
+        if (ok) { ID3D12CommandList* lists[] = {cl}; queue_->ExecuteCommandLists(1, lists); }
+        const bool idle = waitIdle();
+        rel(cl); rel(al);
+        if (idle) for (auto* r : temp) r->Release();     // (not idle: leaked rather than freed in flight)
+        if (!ok) { releaseMasked(); return false; }
+        if (heap_) writeDescriptors();
+        LOG_INFO("RT bridge: masked world: %u triangles, %u subs, %u vertices; TLAS %zu instances", mTris_, mSubN_, mVerts_, instances_.size());
+        return true;
+#endif
+    }
+    // the TLAS over instances_ (static sets + masked sets), built on cl; the previous TLAS released (callers waited idle)
+    bool rebuildTlas(ID3D12GraphicsCommandList4* cl, std::vector<ID3D12Resource*>& temp) {
+        D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        cl->ResourceBarrier(1, &ub);
+        ID3D12Resource* ib = uploadBuffer(dev_, instances_.data(), sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * instances_.size());
+        if (!ib) return false;
+        temp.push_back(ib);
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC bd{};
+        bd.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        bd.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        bd.Inputs.NumDescs = (UINT)instances_.size(); bd.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        bd.Inputs.InstanceDescs = ib->GetGPUVirtualAddress();
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO pi{};
+        dev5_->GetRaytracingAccelerationStructurePrebuildInfo(&bd.Inputs, &pi);
+        ID3D12Resource* t = makeBuffer(dev_, pi.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                                       D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        ID3D12Resource* sc = makeBuffer(dev_, pi.ScratchDataSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        if (sc) temp.push_back(sc);
+        if (!t || !sc) { rel(t); return false; }
+        bd.DestAccelerationStructureData = t->GetGPUVirtualAddress(); bd.ScratchAccelerationStructureData = sc->GetGPUVirtualAddress();
+        cl->BuildRaytracingAccelerationStructure(&bd, 0, nullptr);
+        rel(tlas_); tlas_ = t;
+        return true;
+    }
+    void releaseMasked() {
+        for (auto* b : mBlas_) b->Release();
+        mBlas_.clear();
+        rel(mUv_); rel(mIdx_); rel(mTriSub_); rel(mSubs_); rel(mInst_);
+        mVerts_ = mTris_ = mSubN_ = mSetN_ = 0;
+        instances_.erase(std::remove_if(instances_.begin(), instances_.end(),
+                                        [](const D3D12_RAYTRACING_INSTANCE_DESC& d) { return d.InstanceMask == 0x8; }), instances_.end());
+    }
     void clearStaticWorld() {
         if ((tlas_ || !blas_.empty() || rtDynamicHasWork()) && !waitIdle()) {   // (still in flight: dropped, not freed)
             tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
@@ -271,6 +399,7 @@ public:
             return;
         }
         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)
+        releaseMasked();
         for (auto& d : dyn_) { rel(d.tlas); rel(d.scratch); rel(d.inst); d = DynTlas{}; }
         rel(tlas_);
         for (auto* b : blas_) b->Release();
@@ -283,9 +412,9 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[5] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex};
-        GLenum ly[5] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 5, tx, ly);
+        GLuint tx[6] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, atlas_.tex};
+        GLenum ly[6] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutShaderRead};
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 6 : 5, tx, ly);
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
@@ -390,15 +519,18 @@ private:
         if (pso_) return true;
         if (!serializeRs_) return false;
         D3D12_DESCRIPTOR_RANGE rg[2]{};
-        rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = 2; rg[0].BaseShaderRegister = 1;
+        rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = kSrvN; rg[0].BaseShaderRegister = 1;
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 4; rg[1].BaseShaderRegister = 0;
-        rg[1].OffsetInDescriptorsFromTableStart = 2;
+        rg[1].OffsetInDescriptorsFromTableStart = kSrvN;
         D3D12_ROOT_PARAMETER rp[4]{};
         rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 48;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
         rp[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[2].DescriptorTable.NumDescriptorRanges = 2; rp[2].DescriptorTable.pDescriptorRanges = rg;
         rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV; rp[3].Descriptor.ShaderRegister = 4;
-        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 4; rd.pParameters = rp;
+        D3D12_STATIC_SAMPLER_DESC ss{};                  // s0: the opacity atlas (point, clamp)
+        ss.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT; ss.AddressU = ss.AddressV = ss.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+        ss.MaxLOD = D3D12_FLOAT32_MAX; ss.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        D3D12_ROOT_SIGNATURE_DESC rd{}; rd.NumParameters = 4; rd.pParameters = rp; rd.NumStaticSamplers = 1; rd.pStaticSamplers = &ss;
         ID3DBlob* blob = nullptr; ID3DBlob* err = nullptr;
         if (FAILED(serializeRs_(&rd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err))) {
             LOG_WARN("RT bridge: root signature: %s", err ? (const char*)err->GetBufferPointer() : "?"); rel(err); return false;
@@ -424,7 +556,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 12;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 2 * kTableN;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -441,22 +573,28 @@ private:
     void writeDescriptors() {
         const UINT inc = dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         D3D12_CPU_DESCRIPTOR_HANDLE h = heap_->GetCPUDescriptorHandleForHeapStart();
-        D3D12_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Format = DXGI_FORMAT_R32_FLOAT; sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; sd.Texture2D.MipLevels = 1;
-        dev_->CreateShaderResourceView(depth_.res, &sd, h);
-        h.ptr += inc;
-        dev_->CreateShaderResourceView(wdepth_.res, &sd, h);          // (table A: t2, unused by the depth check)
-        h.ptr += inc;
-        D3D12_UNORDERED_ACCESS_VIEW_DESC ud{}; ud.Format = DXGI_FORMAT_R32_FLOAT; ud.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-        dev_->CreateUnorderedAccessView(mask_.res, nullptr, &ud, h);
-        auto uav = [&](ID3D12Resource* r, DXGI_FORMAT f) { h.ptr += inc; D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = f;
-                                                            u.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D; dev_->CreateUnorderedAccessView(r, nullptr, &u, h); };
-        uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);   // (A: unused)
-        h.ptr += inc;                                    // table B (shadow / AO): t1 depth, t2 world depth; u0 raw mask, u1 hit mask, u2 normal, u3 velocity
-        dev_->CreateShaderResourceView(depth_.res, &sd, h);
-        h.ptr += inc;
-        dev_->CreateShaderResourceView(wdepth_.res, &sd, h);
-        uav(ao_.res, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
+        auto tex = [&](ID3D12Resource* r, DXGI_FORMAT f) {
+            D3D12_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Format = f; sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; sd.Texture2D.MipLevels = 1;
+            dev_->CreateShaderResourceView(r, &sd, h); h.ptr += inc;
+        };
+        auto sbuf = [&](ID3D12Resource* r, UINT n, UINT stride) {   // structured buffer (null: an empty view)
+            D3D12_SHADER_RESOURCE_VIEW_DESC sd{}; sd.Format = DXGI_FORMAT_UNKNOWN; sd.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            sd.Buffer.NumElements = r ? n : 1; sd.Buffer.StructureByteStride = stride;
+            dev_->CreateShaderResourceView(r, &sd, h); h.ptr += inc;
+        };
+        auto uav = [&](ID3D12Resource* r, DXGI_FORMAT f) {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = f; u.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            dev_->CreateUnorderedAccessView(r, nullptr, &u, h); h.ptr += inc;
+        };
+        for (int table = 0; table < 2; ++table) {        // A (depth check): u0 = mask; B (shadow / AO): u0 = the RGBA target
+            tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
+            tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
+            sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
+            if (table == 0) uav(mask_.res, DXGI_FORMAT_R32_FLOAT); else uav(ao_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
+        }
     }
     void depthCheck(const RtFrame& fr, int slot) {
         static const bool flip = std::getenv("WFC_RT_FLIPWINDING") != nullptr;   // (diagnostics: the other winding)
@@ -506,7 +644,7 @@ private:
         list_->SetComputeRoot32BitConstants(0, 48, c, 0);
         list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
         D3D12_GPU_DESCRIPTOR_HANDLE t2 = heap_->GetGPUDescriptorHandleForHeapStart();
-        t2.ptr += 6ull * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        t2.ptr += (UINT64)kTableN * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         list_->SetComputeRootDescriptorTable(2, t2);
         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4);
@@ -661,7 +799,11 @@ private:
     GLuint sem_ = 0;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_, wdepth_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_;
+    std::vector<ID3D12Resource*> mBlas_;                   // masked world: BLAS per set, lookup buffers
+    ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;
+    ID3D12Resource* mSubs_ = nullptr; ID3D12Resource* mInst_ = nullptr;
+    UINT mVerts_ = 0, mTris_ = 0, mSubN_ = 0, mSetN_ = 0;
     ID3D12Resource* hit_ = nullptr; ID3D12Resource* nrm_ = nullptr; ID3D12Resource* vel_ = nullptr;
     std::vector<GLuint> sigBufs_;
     ID3D12Resource* dbgRb_ = nullptr; int dbgSlot_ = -1;
@@ -698,6 +840,8 @@ bool rtBridgePrepare(int w, int h, RtTargets* t) { return ensure() && g_bridge->
 bool rtBridgeAddStaticWorld(const RtStaticWorld& world, unsigned mask) { return ensure() && g_bridge->addStaticWorld(world, mask); }
 void rtBridgeClearStaticWorld() { if (g_bridge) g_bridge->clearStaticWorld(); }
 bool rtBridgeRoundTrip(const RtFrame* frame) { return g_bridge && g_bridge->roundTrip(frame); }
+GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w, h) : 0; }
+bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
 
 }  // namespace render
@@ -708,6 +852,8 @@ bool rtBridgePrepare(int, int, RtTargets*) { return false; }
 bool rtBridgeAddStaticWorld(const RtStaticWorld&, unsigned) { return false; }
 void rtBridgeClearStaticWorld() {}
 bool rtBridgeRoundTrip(const RtFrame*) { return false; }
+GLuint rtBridgeMaskAtlas(int, int) { return 0; }
+bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 }  // namespace render
 #endif

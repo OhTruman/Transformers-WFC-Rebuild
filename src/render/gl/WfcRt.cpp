@@ -154,7 +154,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
     LOG_INFO("RT world:%zu prepassed subs of the %s set (mesh %d) -> D3D12 (%zu sky subs left out)", subs, set ? "level BSP" : "world", meshId, skipped);
-    if (rtBridgeAddStaticWorld(W, 1u << set)) ++rtWorldSets_;
+    if (rtBridgeAddStaticWorld(W, 1u << set)) { ++rtWorldSets_; rtSets_.push_back({meshId, set}); }
     else LOG_WARN("RT depth check: no static world on D3D12 (the round trip runs the copy)");
 }
 
@@ -193,6 +193,100 @@ void Pipeline::rtCopyDepth(GLuint tex) {
     glx::uniformCacheForgetCurrent();
 }
 
+// masked (alpha-tested) world subs in the TLAS: each sub's opacity, evaluated by its own material program (the GLSL
+// OpacityMask and clip), rendered once into a tile of a shared R8 atlas in UV0 space (the tile spans the sub's UV0 box:
+// tiling materials get the cap's resolution); D3D12 tests a masked triangle's candidate hits against its tile. Built on
+// the first RT frame of the map (the materials' textures are resident then).
+void Pipeline::rtBuildMasked() {
+    rtMaskedBuilt_ = true;
+    if (!GetBufferSubData) return;
+    constexpr int kAtlas = 4096, kMaxTile = 512, kTexelsPerUv = 256;
+    struct Job { int mesh; size_t sub; float u0, v0, eu, ev; int x, y, w, h; };
+    std::vector<Job> jobs;
+    RtMaskedWorld M;
+    int shelfX = 0, shelfY = 0, shelfH = 0;
+    size_t skipped = 0;
+    for (const auto& ms : rtSets_) {
+        const GpuMesh& g = meshes_[(size_t)ms.first];
+        size_t nIdx = 0;
+        for (const Sub& s : g.subs) nIdx = std::max(nIdx, (size_t)s.first + s.count);
+        std::vector<uint32_t> idx(nIdx);
+        BindVertexArray(g.vao);
+        if (nIdx) GetBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, (GLsizeiptr)(nIdx * 4), idx.data());
+        BindVertexArray(0);
+        size_t nVert = 0;
+        for (uint32_t i : idx) nVert = std::max(nVert, (size_t)i + 1);
+        std::vector<float> v(nVert * 14);
+        BindBuffer(GL_ARRAY_BUFFER, g.vbo);
+        if (nVert) GetBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(v.size() * 4), v.data());
+        BindBuffer(GL_ARRAY_BUFFER, 0);
+        RtMaskedSet S;
+        for (size_t si = 0; si < g.subs.size(); ++si) {
+            const Sub& s = g.subs[si];
+            if (s.prog < 0 || progs_[(size_t)s.prog].blend != 1 || !s.actor.empty() || (size_t)s.first + s.count > idx.size()) continue;
+            float u0 = 1e30f, v0 = 1e30f, u1 = -1e30f, v1 = -1e30f;
+            for (uint32_t k = 0; k < s.count; ++k) {
+                const float* vv = &v[(size_t)idx[s.first + k] * 14];
+                u0 = std::min(u0, vv[10]); u1 = std::max(u1, vv[10]); v0 = std::min(v0, vv[11]); v1 = std::max(v1, vv[11]);
+            }
+            const float eu = std::max(u1 - u0, 1e-4f), ev = std::max(v1 - v0, 1e-4f);
+            const int w = std::min(kMaxTile, std::max(8, (int)std::ceil(eu * kTexelsPerUv)));
+            const int h = std::min(kMaxTile, std::max(8, (int)std::ceil(ev * kTexelsPerUv)));
+            if (shelfX + w > kAtlas) { shelfX = 0; shelfY += shelfH; shelfH = 0; }
+            if (shelfY + h > kAtlas) { ++skipped; continue; }     // (atlas full: this sub stays out of the TLAS)
+            jobs.push_back({ms.first, si, u0, v0, eu, ev, shelfX, shelfY, w, h});
+            const uint32_t subId = (uint32_t)(M.subs.size() / 8);
+            const float r[8] = {u0, v0, 1.0f / eu, 1.0f / ev, (float)shelfX / kAtlas, (float)shelfY / kAtlas, (float)w / kAtlas, (float)h / kAtlas};
+            M.subs.insert(M.subs.end(), r, r + 8);
+            S.idx.insert(S.idx.end(), idx.begin() + s.first, idx.begin() + s.first + s.count);
+            S.triSub.insert(S.triSub.end(), s.count / 3, subId);
+            shelfX += w; shelfH = std::max(shelfH, h);
+        }
+        S.pos.resize(nVert * 3); S.uv.resize(nVert * 2);
+        for (size_t i = 0; i < nVert; ++i) {
+            std::memcpy(&S.pos[i * 3], &v[i * 14], 12);
+            S.uv[i * 2] = v[i * 14 + 10]; S.uv[i * 2 + 1] = v[i * 14 + 11];
+        }
+        S.set = ms.second;
+        M.sets.push_back(std::move(S));
+    }
+    if (jobs.empty()) { LOG_INFO("RT masked: no masked world subs"); return; }
+    const GLuint atlas = rtBridgeMaskAtlas(kAtlas, kAtlas);
+    if (!atlas) { LOG_WARN("RT masked: no atlas"); return; }
+    // the atlas pass: each sub drawn alone by its own program, positions = its UV0 box -> its tile, output 1 where kept
+    GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+    GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
+    GLfloat cc[4]; glGetFloatv(GL_COLOR_CLEAR_VALUE, cc);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
+    if (!rtAtlasFbo_) GenFramebuffers(1, &rtAtlasFbo_);
+    BindFramebuffer(GL_FRAMEBUFFER, rtAtlasFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, atlas, 0);
+    glViewport(0, 0, kAtlas, kAtlas);
+    glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND);
+    const core::Mat4 identity;
+    for (const Job& j : jobs) {
+        glViewport(j.x, j.y, j.w, j.h);
+        rtUvSpace_[0] = j.u0; rtUvSpace_[1] = j.v0; rtUvSpace_[2] = 1.0f / j.eu; rtUvSpace_[3] = 1.0f / j.ev;
+        rtUvAtlas_ = true;
+        drawSubs(meshes_[(size_t)j.mesh], identity, false, (int)j.sub);
+        rtUvAtlas_ = false;
+        glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND);
+    }
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFb);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    glClearColor(cc[0], cc[1], cc[2], cc[3]);
+    if (depthOn) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (blendOn) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (cullOn) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    glx::uniformCacheForgetCurrent(); glx::textureCacheInvalidate();
+    size_t tris = 0; for (const auto& S : M.sets) tris += S.idx.size() / 3;
+    const bool ok = rtBridgeAddMasked(M);
+    LOG_INFO("RT masked: %zu masked subs (%zu triangles) in a %dx%d opacity atlas (%zu left out: atlas full) -> D3D12 %s",
+             jobs.size(), tris, kAtlas, kAtlas, skipped, ok ? "ok" : "FAILED");
+}
+
 // flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
 // begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
 bool Pipeline::rtDynBegin() {
@@ -212,6 +306,7 @@ bool Pipeline::rtDynBegin() {
         GenFramebuffers(1, &rtFbo_);
         if (!rtDepthProg_ || !rtCompositeProg_) { rtFailed_ = true; return false; }
     }
+    if (!rtMaskedBuilt_) rtBuildMasked();                // (once per map, textures resident by now)
     rtCopyDepth(t.worldDepth);
     rtTargets_ = t;
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -390,6 +485,14 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             glGetTexImage(GL_TEXTURE_2D, 0, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE, dn.data());
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
             if (FILE* f = std::fopen("rt_dump_shadowdn.bin", "wb")) { std::fwrite(dn.data(), 1, dn.size(), f); std::fclose(f); }
+            if (rtAtlasFbo_) {                           // the masked-opacity atlas (4096 x 4096 R8)
+                std::vector<unsigned char> at((size_t)4096 * 4096);
+                glBindTexture(GL_TEXTURE_2D, rtBridgeMaskAtlas(4096, 4096));
+                glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                glGetTexImage(GL_TEXTURE_2D, 0, 0x1903 /*GL_RED*/, GL_UNSIGNED_BYTE, at.data());
+                glPixelStorei(GL_PACK_ALIGNMENT, 4);
+                if (FILE* f = std::fopen("rt_dump_atlas.bin", "wb")) { std::fwrite(at.data(), 1, at.size(), f); std::fclose(f); }
+            }
         }
         glBindTexture(GL_TEXTURE_2D, 0);
         std::string m;
