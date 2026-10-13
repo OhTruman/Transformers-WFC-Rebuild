@@ -24,6 +24,9 @@ Decide whether Smart feels smarter and fair. The Smart AI milestone stays open u
   the value you chose, and it is not saved.
 - **HD textures** (Settings row, Off by default): Off / Faithful / Enhanced. Enhanced also turns on the Modern materials. Needs a
   map reload.
+- **Ray Tracing Realistic, first time on a map:** the graphics driver compiles the reflection shaders in the background
+  for a few minutes; until it finishes, reflections use a simpler stand-in shading (flatter colours). The game keeps
+  running normally. Once the driver has cached them, later loads of that map are instant.
 - **F11** = debug wire boxes (ignore), **F12** = the bot overlay below.
 
 ## What to look for
