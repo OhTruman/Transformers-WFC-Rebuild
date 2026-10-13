@@ -115,7 +115,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   shadows, runtime sun for all geometry + RT-baked indirect lightmaps, local lights, AO, lit reflections, then dynamic GI).
   Comparisons for the user: full-frame 2560x1440 pairs and an F9 live toggle, no crops.
   USER 2026-10-12: textures may go BEYOND faithful ("Yes it can go beyond faithful! I want the game to look realistic and
-  new.") -> a stronger-than-D level and the remake pass may add detail the original never had, keeping designs / layouts / palette. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
+  new.") -> a stronger-than-D level and the remake pass may add detail the original never had, keeping designs / layouts / palette.
+  USER 2026-10-12 (later, REVERSES the HD default): "HD texture's should be off my default too" -> HD textures OFF by default,
+  opt-in like RT; "materials should be hd textures too" -> M6 modern material maps ship inside the HD pack under the same switch;
+  "start the new textures now instead of waiting" -> the beyond-D "E" pilot starts at once on Rust textures already at D. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
   dynamic-light term only (option b: end of the opaque pass), lightmapped statics untouched except character contact AO.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
