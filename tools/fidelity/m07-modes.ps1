@@ -95,7 +95,7 @@ foreach ($mode in $X.modes) {
         "call:Online.SetSelectedMapID,508;wait:t=1.5;shot:$d\${n}0_lobby.bmp;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:t=2;shot:$d\${n}1_spawn.bmp;wait:t=3;shot:$d\${n}2_play.bmp;$endPart" }
     $toLobby = "call:Online.OpenPartyLobby,$(if ($mode.team) { 'GTS_TeamGame' } else { 'GTS_FreeForAllGame' });wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;call:Online.EditGameMode,$($mode.tag);call:Online.PlayPrivateGame,$($mode.tag);wait:level=GameLobby;wait:ui=InLobby;wait:t=2"
     $second = if ($versus) { & $one "b" } else { "$toLobby;" + (& $one "b") }
-    $s = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=2", $toLobby, (& $one "a"), $second, "quit") -join ";"
+    $s = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", $toLobby, (& $one "a"), $second, "quit") -join ";"
     $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "900"; WFC_LIFECYCLE = "2"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "60" }
     if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
     if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcSampled $exe $d $e 1200 1.0 }

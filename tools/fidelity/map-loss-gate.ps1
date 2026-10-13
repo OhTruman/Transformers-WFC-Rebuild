@@ -39,9 +39,9 @@ function DriverEvents([datetime]$from, [datetime]$to) {
 }
 $profiles = @{
     normal = $null
-    w1280  = "[PCSettings]`r`nWidth=1280`r`nHeight=720`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`n"
-    w1920  = "[PCSettings]`r`nWidth=1920`r`nHeight=1080`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`n"
-    lowtex = "[PCSettings]`r`nWidth=1280`r`nHeight=720`r`nFullscreen=0`r`nTextureQuality=0`r`nVSync=1`r`n"
+    w1280  = "[PCSettings]`r`nWidth=1280`r`nHeight=720`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`nHDTextures=0`r`nHDTexturesUserSet=1`r`n"
+    w1920  = "[PCSettings]`r`nWidth=1920`r`nHeight=1080`r`nFullscreen=0`r`nTextureQuality=2`r`nVSync=0`r`nHDTextures=0`r`nHDTexturesUserSet=1`r`n"
+    lowtex = "[PCSettings]`r`nWidth=1280`r`nHeight=720`r`nFullscreen=0`r`nTextureQuality=0`r`nVSync=1`r`nHDTextures=0`r`nHDTexturesUserSet=1`r`n"
 }
 $maps = @(@{ key = "s1"; id = 508; dir = "MP_IAC_Streets" }, @{ key = "b"; id = 502; dir = "MP_IAC_Berth" }, @{ key = "s2"; id = 508; dir = "MP_IAC_Streets" })
 $rows = New-Object System.Collections.Generic.List[object]; $starts = @{}

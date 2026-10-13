@@ -21,6 +21,7 @@ param(
     [string[]]$Sections = @("startup", "fire", "reload", "boost", "transform", "stills", "materials")
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib\Run.ps1")   # Add-WfcHarnessEnv (graphics pins)
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $Exe = (Resolve-Path $Exe).Path
 $out = Join-Path $root "work\fidelity\probe\$Name"
@@ -53,6 +54,8 @@ function Run-Scenario($scn, [hashtable]$envs, [int]$frames, [switch]$Shot) {
     $bmp = Join-Path $out "$scn.bmp"
     Remove-Item -LiteralPath $log, $bmp, (Join-Path $out "$scn.png") -ErrorAction SilentlyContinue
     $all = @{ WFC_SMOKE_FRAMES = "$frames"; WFC_LOCKSTEP = "1" } + $envs   # frames = simulated 1/60 s steps
+    if (-not $all.ContainsKey("WFC_BOTAI")) { $all.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
+    $all = Add-WfcHarnessEnv $all   # graphics pins (lib\Run.ps1): auto-detect off (+ windowed), HD off unless set
     if ($Shot) { $all.WFC_SHOT = $bmp }
     if ($RenderData) { $all.WFC_RENDER_DATA = $RenderData }
     $saved = @{}

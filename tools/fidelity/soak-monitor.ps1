@@ -33,6 +33,8 @@ function Fit($xs, $ys) {   # slope, R^2
 function Quart($v) { $v = @($v); $q = [Math]::Max(1, [int]($v.Count / 4)); return @((($v[0..($q - 1)] | Measure-Object -Average).Average), (($v[($v.Count - $q)..($v.Count - 1)] | Measure-Object -Average).Average)) }
 function Start-Wfc($dir, $envs) {
     New-Item -ItemType Directory -Force $dir | Out-Null
+    if (-not $envs.ContainsKey("WFC_BOTAI")) { $envs = $envs.Clone(); $envs.WFC_BOTAI = "Classic" }   # bot AI pinned (default flips to Smart; see lib\Run.ps1)
+    $envs = Add-WfcHarnessEnv $envs   # graphics pins (lib\Run.ps1): auto-detect off (+ windowed), HD off unless set
     $saved = @{}; foreach ($k in $envs.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $envs[$k]) }
     try { $p = Start-Process -FilePath $Exe -WorkingDirectory $dir -PassThru -WindowStyle Normal -RedirectStandardOutput (Join-Path $dir "run.log") -RedirectStandardError (Join-Path $dir "run.log.err") }
     finally { foreach ($k in $envs.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) } }

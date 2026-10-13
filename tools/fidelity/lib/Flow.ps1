@@ -31,6 +31,7 @@ function Read-RunLog([string]$WfcLog) {
 # Start a product process with extra environment, cwd = $Dir (stdout/stderr to run.log); returns the Process.
 function Start-WfcProcess([string]$Exe, [string]$Dir, [hashtable]$Env) {
     New-Item -ItemType Directory -Force $Dir | Out-Null
+    $Env = Add-WfcHarnessEnv $Env   # graphics pins (lib\Run.ps1): auto-detect off (+ windowed), HD off unless the caller sets it
     $saved = @{}; foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, [string]$Env[$k]) }
     try { $p = Start-Process -FilePath $Exe -WorkingDirectory $Dir -PassThru -RedirectStandardOutput (Join-Path $Dir "run.log") -RedirectStandardError (Join-Path $Dir "run.log.err"); $null = $p.Handle; return $p }   # touching Handle keeps ExitCode readable
     finally { foreach ($k in $Env.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) } }

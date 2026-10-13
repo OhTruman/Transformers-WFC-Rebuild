@@ -17,6 +17,7 @@ param(
     [string]$OutDir = ""
 )
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib\Run.ps1")   # Add-WfcHarnessEnv (graphics pins)
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not $Exe) { $Exe = Join-Path $root "build\bin\wfc_rebuild_prof.exe" }
 if (-not (Test-Path $Exe)) { throw "measurement build missing: $Exe (configure with -DWFC_BUILD_MEASURE=ON)" }
@@ -42,6 +43,8 @@ foreach ($name in $Scenarios) {
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $envs = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOGEVERY = "1"; WFC_ANIMLOG = "1"; WFC_PROF = (Join-Path $dir "samples.txt") } + $d.env
+    # graphics pins (lib\Run.ps1; Experimental review of 9116e4ff): a fresh dir without them auto-detected fullscreen native + HD on
+    $envs = Add-WfcHarnessEnv $envs
     foreach ($k in $envs.Keys) { $psi.EnvironmentVariables[$k] = [string]$envs[$k] }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $p = [System.Diagnostics.Process]::Start($psi)

@@ -20,11 +20,16 @@ function Wait-WfcGpu([int]$Minutes = 0, [switch]$Strict) {
     $maxOthers = if ($env:WFC_GATE_GPU_MAX_OTHERS) { [int]$env:WFC_GATE_GPU_MAX_OTHERS } else { 1 }   # never share with more than this many other renderers
     if ($env:WFC_GATE_GPU_POLICY -ne "shared") { $Strict = $true }   # default strict; sharing is opt-in
     $t0 = Get-Date; $deadline = $t0.AddMinutes($Minutes)
+    # PERF windows (Integration 2026-10-06): another lane announced "PERF RUN"; no GPU run may START until "PERF DONE".
+    # The lane creates <worktree>\work\PERF_HOLD on the announcement and deletes it on PERF DONE.
+    $hold = Join-Path (Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent) "work\PERF_HOLD"   # lib -> fidelity -> tools -> worktree
     while ((Get-Date) -lt $deadline) {
-        $procs = @(Get-CimInstance Win32_Process -Filter "Name='wfc_rebuild.exe'" -ErrorAction SilentlyContinue)
+        if ((Test-Path $hold) -and -not $env:WFC_GATE_IGNORE_HOLD) { Start-Sleep 15; continue }   # IGNORE_HOLD: this lane's own PERF run
+        # any wfc_rebuild*.exe (renamed check builds, e.g. wfc_rebuild_ov1.exe - 2026-10-10: one ran unseen into a timed window)
+        $procs = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe'" -ErrorAction SilentlyContinue)
         $mine = @($procs | Where-Object { "$($_.ExecutablePath)" -like "*Rebuild-Experimental*" }); $others = @($procs | Where-Object { "$($_.ExecutablePath)" -notlike "*Rebuild-Experimental*" })
         if (-not $mine.Count) {
-            if (-not $others.Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return $true } }
+            if (-not $others.Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild* -ErrorAction SilentlyContinue).Count) { return $true } }
             elseif (-not $Strict -and $others.Count -le $maxOthers -and ((Get-Date) - $t0).TotalMinutes -ge $grace) { $script:GpuShared += ("{0:HH:mm} shared with {1}" -f (Get-Date), (($others | ForEach-Object { Split-Path (Split-Path (Split-Path $_.ExecutablePath)) -Leaf }) -join ",")); return $true }
         }
         Start-Sleep 10
