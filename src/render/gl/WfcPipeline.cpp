@@ -4556,6 +4556,7 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_); ActiveTexture(GL_TEXTURE0);
     skinDraw_ = &d;
     skinMode_ = usePrev ? 2 : 1; skinRow_ = si.row; skinBones_ = (int)palette.size(); skinAlpha_ = usePrev ? alpha : 1.0f;
+    rtSkinNote(bind, sm, key, serial, model, d.mn, d.mx);   // (WFC_RT_CHARS: M7 RT characters; otherwise returns at once)
     if (motion) {
         MotionDraw md{sm.vao, (GLsizei)sm.idx, model, drawnLastFrame ? si.lastModel : model, si.row, skinMode_, skinBones_,
                       skinAlpha_, motionPrevSrc, drawnLastFrame ? si.lastMode : skinMode_, drawnLastFrame ? si.lastAlpha : skinAlpha_};

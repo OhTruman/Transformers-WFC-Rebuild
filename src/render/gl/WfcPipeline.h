@@ -487,6 +487,18 @@ private:
     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
     int rtFrame_ = -1;
     void rtBuildWorld(int meshId);
+    // M7 RT characters (WfcRtSkin.cpp, Systems; WFC_RT_CHARS=1): drawSkinned notes each instance (rtSkinNote); the round
+    // trip calls rtSkinFeed just before its GL signal: a compute pass skins the selected instances into the buffer shared
+    // with D3D12 (D3D12RtDynamic.h), whose job refits their BLAS. afterCharacters false: last frame's instances / palettes
+    // (the round trip runs before this frame's characters), true: this frame's (after the opaque characters)
+    struct RtSkinRec { const void* key = nullptr; const void* bindKey = nullptr; int row = 0, mode = 1, bones = 0; float alpha = 1.0f;
+                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; };
+    std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
+    std::map<const void*, size_t> rtSkinIdx_;
+    int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
+    void rtSkinNote(const MeshData& bind, const SkinModel& sm, const void* key, uint64_t serial, const core::Mat4& model,
+                    const core::Vec3& mn, const core::Vec3& mx);
+    void rtSkinFeed(bool afterCharacters);
     bool fsr3On_ = false;                              // the Upscaling row's FSR 3.1 modes (setFsr3); WFC_FSR3=1 forces
     bool fsr3Run(int outW, int outH);
     // optional motion vectors (WfcMotion.cpp; OFF by default)

@@ -198,6 +198,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         LOG_INFO("RT depth check: frame %d znear %g zfar %g proj diag %g %g %g %g, proj[14] %g, view row2 %g %g %g %g", frameNo_, znear_, zfar_,
                  camProj_.m[0], camProj_.m[5], camProj_.m[10], camProj_.m[11], camProj_.m[14], camView_.m[2], camView_.m[6], camView_.m[10], camView_.m[14]);
     fr.viewRow2[0] = camView_.m[2]; fr.viewRow2[1] = camView_.m[6]; fr.viewRow2[2] = camView_.m[10]; fr.viewRow2[3] = camView_.m[14];
+    if (frameOk) rtSkinFeed(endOfOpaque);                 // (WFC_RT_CHARS: the characters' positions, before the signal)
     rtBridgeRoundTrip(frameOk ? &fr : nullptr);            // GL -> D3D12 job -> GL (the shading below waits for the mask)
     // (diagnostics) WFC_RT_DUMPFRAME=<n>: the raster depth and the ray's view depth of that frame as raw R32F files
     static const int dumpAt = [] { const char* e = std::getenv("WFC_RT_DUMPFRAME"); return e ? std::atoi(e) : -1; }();
