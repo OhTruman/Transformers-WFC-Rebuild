@@ -35,7 +35,7 @@ index d67f466..a3f0f68 100644
          watchdog::phase("after endFrame (buffer swap / game update)");
          if (WFC_ENV("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
 diff --git a/src/render/gl/RenderWatchdog.cpp b/src/render/gl/RenderWatchdog.cpp
-index 5adbfa6..6a0a5ff 100644
+index 5adbfa6..5f1b980 100644
 --- a/src/render/gl/RenderWatchdog.cpp
 +++ b/src/render/gl/RenderWatchdog.cpp
 @@ -222,6 +222,15 @@ void loop() {
@@ -54,7 +54,7 @@ index 5adbfa6..6a0a5ff 100644
          if (reported) continue;
          reported = true;
          LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d", stalled,
-@@ -256,6 +265,45 @@ void frameDone(int frame) {
+@@ -256,6 +265,49 @@ void frameDone(int frame) {
      gLastProgressMs.store(nowMs(), std::memory_order_relaxed);
  }
  
@@ -80,8 +80,12 @@ index 5adbfa6..6a0a5ff 100644
 +        for (int i = 0; i < 30 && !done.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
 +    }
 +    // a visible message: a message box on its own thread, shown for at most WFC_GPULOST_DIALOG_S seconds (the process then
-+    // ends whether or not it was closed: a harness run is never held)
-+    static const double dialogS = [] { const char* e = std::getenv("WFC_GPULOST_DIALOG_S"); return e ? std::atof(e) : 20.0; }();
++    // ends whether or not it was closed). Default 20 s; 0 in scripted runs (WFC_FRONTEND_SCRIPT / WFC_PLAYERBOT: no topmost
++    // box over the desktop holding a harness slot - Rendering's review)
++    static const double dialogS = [] {
++        if (const char* e = std::getenv("WFC_GPULOST_DIALOG_S")) return std::atof(e);
++        return (std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_PLAYERBOT")) ? 0.0 : 20.0;
++    }();
 +    if (dialogS > 0) {
 +        std::atomic<bool> closed{false};
 +        std::thread([&closed] {
@@ -101,18 +105,19 @@ index 5adbfa6..6a0a5ff 100644
  #ifdef _WIN32
      if (std::getenv("WFC_NOCRASHHANDLER")) return;
 diff --git a/src/render/gl/RenderWatchdog.h b/src/render/gl/RenderWatchdog.h
-index 11c4207..93bc221 100644
+index 11c4207..4dc0347 100644
 --- a/src/render/gl/RenderWatchdog.h
 +++ b/src/render/gl/RenderWatchdog.h
-@@ -15,6 +15,16 @@ void phase(const char* where);     // static-lifetime string
+@@ -15,6 +15,17 @@ void phase(const char* where);     // static-lifetime string
  void frameDone(int frame);
  void stop();
  
 +// [Systems] GPU driver reset / unrecoverable hang (AMD TDR, 2026-10-13: after a reset the main thread blocked in the driver -
 +// glGetQueryObjectiv spinning in atio6axx, or SwapBuffers never returning - and the process hung forever). Ends the process
 +// cleanly from any thread: logs `why`, writes wfc_gpu_lost_<pid>.txt (working directory), flushes the log, puts back the
-+// desktop display mode (a fullscreen run), shows a message box for at most WFC_GPULOST_DIALOG_S seconds (default 20; 0 = none)
-+// and terminates with exit code 3 (no atexit / DLL teardown: the driver may hold its locks). Never returns.
++// desktop display mode (a fullscreen run), shows a message box for at most WFC_GPULOST_DIALOG_S seconds (default 20, 0 in
++// scripted runs: WFC_FRONTEND_SCRIPT / WFC_PLAYERBOT; 0 = none) and terminates with exit code 3 (no atexit / DLL teardown: the
++// driver may hold its locks; harness runners treat 3 as "GPU reset: rerun"). Never returns.
 +[[noreturn]] void gpuLost(const char* why);
 +// The watchdog's backstop: after the stall dump, a further WFC_HANG_EXIT_S seconds (default 10; < 0 = never) with no
 +// progress call gpuLost("..."). WFC_SIMHANG=1 blocks the render thread for good once (frame 60) to test this path;
