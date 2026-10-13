@@ -495,7 +495,6 @@ GameFlow::BotRows GameFlow::botRows() const {
 
 int GameFlow::botMax(const std::string& field) const {
     if (field == "difficulty") return 3;   // EASY / MEDIUM / HARD / EXPERT (PC EXTENSION: Expert, user decision)
-    if (field == "ai") return 1;           // Classic / Smart
     if (field == "extended") return 1;
     const bool ext = profile_.bots.extended;
     // players per side incl. the human: original 5; extended = Gameplay MatchSettings (applyExtendedSlots) only
@@ -564,8 +563,6 @@ void GameFlow::setBotSetting(const std::string& field, int value) {
     if (field == "extended") {
         b.extended = value != 0;
         if (b.extended && !b.editedSinceMap) applyRecommendedBots("extended");
-    } else if (field == "ai") {
-        b.ai = std::clamp(value, 0, 1);   // an explicit choice (persisted)
     } else {
         if (field != "difficulty") b.editedSinceMap = true;
         int& v = field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy : b.difficulty;
@@ -578,7 +575,6 @@ void GameFlow::setBotSetting(const std::string& field, int value) {
     profile_.save();
     FlowTrace::emit("lobby.bots", {{"field", field}, {"autobot", std::to_string(b.autobot)}, {"decepticon", std::to_string(b.decepticon)},
                                    {"enemy", std::to_string(b.enemy)}, {"difficulty", std::to_string(b.difficulty)},
-                                   {"ai", b.aiEffective() ? "Smart" : "Classic"},
                                    {"extended", FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
 }
 
@@ -931,11 +927,10 @@ void GameFlow::startLevel() {
         if (lobby_.playlistId < 0 && friendly + enemy > 0) {
             if (rows == BotRows::Teams) url += "?BotsAutobot=" + std::to_string(au) + "?BotsDecepticon=" + std::to_string(de);
             url += "?BotsFriendly=" + std::to_string(friendly) + "?BotsEnemy=" + std::to_string(enemy) +
-                   "?BotDifficulty=" + std::to_string(std::clamp(b.difficulty, 0, botMax("difficulty"))) + "?ExtendedPlayers=" + (b.extended ? "1" : "0") +
-                   "?BotAI=" + (b.aiEffective() ? "Smart" : "Classic");   // PC EXTENSION (Gameplay's key)
+                   "?BotDifficulty=" + std::to_string(std::clamp(b.difficulty, 0, botMax("difficulty"))) + "?ExtendedPlayers=" + (b.extended ? "1" : "0");
+            // no ?BotAI: Gameplay's default (Smart) or its WFC_BOTAI test override decides (user 2026-10-13)
             FlowTrace::emit("launch.bots", {{"autobot", std::to_string(au)}, {"decepticon", std::to_string(de)}, {"friendly", std::to_string(friendly)},
                                             {"enemy", std::to_string(enemy)}, {"difficulty", std::to_string(b.difficulty)},
-                                            {"ai", b.aiEffective() ? "Smart" : "Classic"},
                                             {"extended", FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
         }
     }

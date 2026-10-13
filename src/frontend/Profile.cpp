@@ -104,7 +104,6 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "BotsFriendly") { bots.friendly = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotsEnemy") { bots.enemy = std::max(0, std::atoi(v.c_str())); oldKeys = true; }
             else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 3);   // 3 = Expert (PC EXTENSION)
-            else if (k == "BotAI") bots.ai = v == "Smart" ? 1 : v == "Classic" ? 0 : -1;
             else if (k == "BotsAutobot") { bots.autobot = std::max(0, std::atoi(v.c_str())); factionKeys = true; }
             else if (k == "BotsDecepticon") { bots.decepticon = std::max(0, std::atoi(v.c_str())); factionKeys = true; }
             else if (k == "BotsExtended") bots.extended = v == "1";
@@ -158,7 +157,7 @@ void LocalProfile::save() const {
       << "\nAnisotropy=" << display.anisotropy
       << "\nFrameGeneration=" << display.frameGeneration << "\nRayTracing=" << display.rayTracing << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon
-      << "\nAutoDetectGpu=" << autoDetectGpu << (bots.ai >= 0 ? std::string("\nBotAI=") + (bots.ai ? "Smart" : "Classic") : std::string())
+      << "\nAutoDetectGpu=" << autoDetectGpu
       << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nBotsEdited=" << (bots.editedSinceMap ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";
     f << "\n[Progression]\n";
     for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
