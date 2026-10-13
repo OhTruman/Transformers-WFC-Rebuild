@@ -37,7 +37,7 @@ for m in $MAPS; do
   # compare over the common step range (runs quit on wall time, so the last step differs)
   awk 'NR==FNR { a[$2]=$3; next } ($2 in a) { n++; if (a[$2] != $3) { d++; if (!f) f=$2 } } END { printf "map simhash: %d common steps, %d differ, first differing step %s\n", n, d+0, f ? f : "none" }' $b/simhash.txt $h/simhash.txt
   echo "map $m: simhash lines base $(wc -l < $b/simhash.txt) head $(wc -l < $h/simhash.txt)"
-  PYTHONDONTWRITEBYTECODE=1 "$PY" "$SP/shotsdiff.py" $b $h
+  PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/shotsdiff.py $b $h
 done
 for p in $(mine); do echo "leftover $p"; done
 echo "ident done $(date +%H:%M:%S)"
