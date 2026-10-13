@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
 #include <condition_variable>
 #include <deque>
@@ -1018,9 +1019,16 @@ private:
         }
         stats_.streamPeakDb = speak > 1e-6f ? 20.0f * std::log10(speak) : -96.0f;
         stats_.streams = (int)streams_.size();
-        for (int i = 0; i < kBlockSamples; ++i) {
-            float x = dry_[i] * 32768.0f;
-            dst[i] = (int16_t)(x > 32767.0f ? 32767.0f : (x < -32768.0f ? -32768.0f : x));
+        // WFC_MUTE=1 (harness / lane runs while the user uses the PC): the whole mix runs as usual (cue logic, stats,
+        // decode timing unchanged), only the samples handed to the device are silence
+        static const bool muted = [] { const char* e = std::getenv("WFC_MUTE"); return e && *e && std::strcmp(e, "0") != 0; }();
+        if (muted) {
+            for (int i = 0; i < kBlockSamples; ++i) dst[i] = 0;
+        } else {
+            for (int i = 0; i < kBlockSamples; ++i) {
+                float x = dry_[i] * 32768.0f;
+                dst[i] = (int16_t)(x > 32767.0f ? 32767.0f : (x < -32768.0f ? -32768.0f : x));
+            }
         }
         QueryPerformanceCounter(&t1); QueryPerformanceFrequency(&fq);
         float ms = (float)(1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)fq.QuadPart);
