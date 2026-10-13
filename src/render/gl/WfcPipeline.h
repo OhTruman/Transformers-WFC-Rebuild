@@ -1270,6 +1270,7 @@ private:
     std::map<std::string, PbrSrc> pbr_;
 public:
     void setModernMaterials(bool on);
+    void runSettingsSelfTest();                        // (WFC_SETTINGSTEST=1: caller settings survive release())
 private:
     bool lmSpecBuild_ = false;                            // buildProgram: a translated original material (lightmap specular)
     void ensureSceneDepth();
