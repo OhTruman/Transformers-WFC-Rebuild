@@ -413,13 +413,29 @@ try {
             Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
             foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
             $env:WFC_GPULOST_DIALOG_S = '0'
-            $env:WFC_RT_MODE = '2'   # (direct boot skips the frontend, which applies the profile row: rt-build-check sets RayTracing=2 in the profile only)
+            $env:WFC_RT_MODE = '2'   # (the start mode of a direct boot: the frontend, which applies the profile row, does not run - Rendering)
             $rtArgs = @{ Exe = (Join-Path $rtBin 'wfc_rebuild.exe'); OutDir = (Join-Path $rtRun 'check') }
             if ($RtBuildDir) { $rtArgs.BuildDir = $RtBuildDir }
             $rtOut = @(& $rtScript @rtArgs 2>&1 | ForEach-Object { "$_" })
             $rtGate.Lines = @($rtOut | Where-Object { $_ -match '^(PASS|FAIL|UNKNOWN|SKIP) rtcheck\.' })
             $rtGate.Status = if ($rtGate.Lines | Where-Object { $_ -like 'FAIL *' }) { 'FAIL' } elseif ($rtGate.Lines | Where-Object { $_ -like 'UNKNOWN *' }) { 'UNKNOWN' } elseif ($rtGate.Lines.Count) { 'PASS' } else { 'FAIL' }
             if (-not $rtGate.Lines.Count) { $rtGate.Note = 'rt-build-check printed no result lines: ' + (($rtOut | Select-Object -Last 3) -join ' / ') }
+            # R1 sun swap (Rendering 2026-10-13): when the package ships <render data>/MP_IAC_Streets/vbake (build_slim --vbake),
+            # the gate's Realistic run must log "RT R1 sun swap data: ... (k ...)" at load and "RT R1 sun swap: <N> V_bake pages"
+            # with N > 0 after the warm-up (N 0 = the PNG names do not match the coefficient-0 pages); never "failed with the
+            # sun-swap text". Without vbake in the package: reported, not a fail (Realistic then has no swap).
+            $vbFit = Join-Path $roots['WFC_RENDER_DATA'] 'MP_IAC_Streets\vbake\fit.json'
+            $rtLogPath = Join-Path $rtRun 'check\rt_on\wfc.log'
+            if (Test-Path -LiteralPath $vbFit) {
+                $rl = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
+                $dataLine = $rl | Select-String -Pattern 'RT R1 sun swap data: .*\(k ([0-9.]+)' | Select-Object -First 1
+                $pageLine = $rl | Select-String -Pattern 'RT R1 sun swap: (\d+) V_bake pages' | Select-Object -First 1
+                $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1 .*unused' | Select-Object -First 1
+                $pages = if ($pageLine) { [int]$pageLine.Matches[0].Groups[1].Value } else { 0 }
+                $ok = $dataLine -and $pages -gt 0 -and -not $bad
+                $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r1: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages$(if ($bad) { '; ' + $bad.Line.Trim() })"
+                if (-not $ok) { $rtGate.Status = 'FAIL' }
+            } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
         }
     }
