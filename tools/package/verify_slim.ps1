@@ -343,7 +343,12 @@ try {
         $failRows = @($rows | Where-Object { $_.Fail })
         $warnRows = @($rows | Where-Object { -not $_.Fail -and $_.Class -eq 'outside' -and $_.Note -like '*resolves under*' })
         if ($failRows.Count) { $reasons += "$($failRows.Count) failing opens" }
-        if ($hd.Root -and -not ($hdLine -and $hdLine.Matches[0].Groups[2].Success -and [int]$hdLine.Matches[0].Groups[2].Value -eq $hd.Rows)) {
+        # HD off by default (user 2026-10-12): the pipeline reads the index only with HD on, so a first launch never logs the
+        # 'available' line - there the evidence is the runtime's detection ('optional runtimes: ... HD texture pack yes');
+        # -HdForced runs (HD on) must load the whole index (rows match)
+        $hdDetected = [bool]($log | Select-String -SimpleMatch 'HD texture pack yes' | Select-Object -First 1)
+        if ($hd.Root -and -not $HdForced -and -not $hdDetected) { $reasons += "HD pack not detected by the game (no 'HD texture pack yes' runtimes line; index rows $($hd.Rows))" }
+        if ($hd.Root -and $HdForced -and -not ($hdLine -and $hdLine.Matches[0].Groups[2].Success -and [int]$hdLine.Matches[0].Groups[2].Value -eq $hd.Rows)) {
             $reasons += "HD pack not accepted by the game: $hdLog (index rows $($hd.Rows))"
         }
         if ($hd.Root -and -not $HdForced -and -not $NoHd) {   # the default: the original look - HD textures stay off
@@ -408,6 +413,7 @@ try {
             Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
             foreach ($k in $roots.Keys) { Set-Item -LiteralPath "env:$k" -Value ($roots[$k] -replace '\\', '/') }
             $env:WFC_GPULOST_DIALOG_S = '0'
+            $env:WFC_RT_MODE = '2'   # (direct boot skips the frontend, which applies the profile row: rt-build-check sets RayTracing=2 in the profile only)
             $rtArgs = @{ Exe = (Join-Path $rtBin 'wfc_rebuild.exe'); OutDir = (Join-Path $rtRun 'check') }
             if ($RtBuildDir) { $rtArgs.BuildDir = $RtBuildDir }
             $rtOut = @(& $rtScript @rtArgs 2>&1 | ForEach-Object { "$_" })
