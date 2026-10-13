@@ -235,7 +235,7 @@ public:
     struct BotOption { const char* name; const char* field; const char* header; };
     std::vector<BotOption> botOptions() const;                       // for the current mode's kind (none: no rows)
     static const BotOption* botOption(const std::string& name);      // "WfcBotsAutobot" -> its row
-    std::string botChoiceLabel(const std::string& field, int v) const;   // "EASY", "ORIGINAL (5 V 5)", "3"
+    std::string botChoiceLabel(const std::string& field, int v) const;   // "Easy", "Original (5 v 5)", "3"
     // Map-aware Extended bot counts (user decision, PC ADAPTATION): AssetTools' recommended players per versus map
     // (per side incl. the human; FFA total; optional per mode).
     struct RecommendedPlayers { int perSide = 0, ffa = 0; std::map<std::string, std::pair<int, int>> modes; };

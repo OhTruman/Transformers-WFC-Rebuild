@@ -552,14 +552,14 @@ static void testFlow() {
         const bool header = ds.call("GetCollectionColumnHeader", {"<TnGameSettings:WfcBotDifficulty>", "0"}).s == "Bot Difficulty" &&
                             ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotDifficulty>"}).n == 4 &&
                             ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotsAutobot>"}).n == f.botMax("autobot") + 1 &&
-                            ds.call("ReadValue", {"<TnGameSettings:WfcPlayerLimit>"}).s == "ORIGINAL (5 V 5)";
+                            ds.call("ReadValue", {"<TnGameSettings:WfcPlayerLimit>"}).s == "Original (5 v 5)";
         LocalProfile::Bots& b = f.profile().bots;
         const LocalProfile::Bots saved = b;
         b.editedSinceMap = false;
         ds.call("WriteValue", {"<TnGameSettings:WfcBotsAutobot>", std::to_string(b.autobot)});
         const bool unchanged = !b.editedSinceMap;
         ds.call("WriteValue", {"<TnGameSettings:WfcBotsAutobot>", "2"});
-        ds.call("WriteValue", {"<TnGameSettings:WfcBotDifficulty>", "EXPERT"});
+        ds.call("WriteValue", {"<TnGameSettings:WfcBotDifficulty>", "Expert"});
         const bool applied = b.autobot == 2 && b.editedSinceMap && b.difficulty == 3 &&
                              ds.call("ReadValue", {"<TnGameSettings:WfcBotsAutobot>"}).s == "2";
         b = saved;
