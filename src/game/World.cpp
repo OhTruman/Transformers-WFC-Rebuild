@@ -3550,11 +3550,11 @@ void World::draw(render::IRenderer& r) const {
             const Weapon& hw = player_.pawn().weapon();
             const bool glow = hw.charge() && hw.chargeGlow() > 0.0f;
             if (glow) { const float g = hw.chargeGlow(); const float rgba[4] = {g, g, g, 1.0f}; fxSetDrawParam(r, "Overheat", rgba, 0); }
-            weaponAnim_.draw(r, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});   // Gameplay 151bc1f: GPU-skinned when available
+            weaponAnim_.draw(r, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponDrawWorld(), core::Vec3{1, 1, 1});   // Gameplay 151bc1f: GPU-skinned when available
             if (glow) fxClearDrawParam(r, "Overheat", 0);
         }
         else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
-            r.drawMesh(weaponMesh_, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+            r.drawMesh(weaponMesh_, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponDrawWorld(), core::Vec3{1, 1, 1});
     }
 
     // Participants' held weapons (robot form, weapon shown), at their pawn's interpolated weapon socket.
@@ -3563,7 +3563,7 @@ void World::draw(render::IRenderer& r) const {
         if (!o->spawned() || o->culled() || !o->pawn().hasWeapon()) continue;
         auto it = partWeapons_.find(o->matchPlayer());
         if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
-        it->second.anim.draw(r, core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
+        it->second.anim.draw(r, core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponDrawWorld(), core::Vec3{1, 1, 1});
     }
     if (drawProf) {
         dpWeapons += profNowMs() - dpw0;

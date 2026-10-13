@@ -787,7 +787,9 @@ void Character::updateWeaponSocket() {
     if (form_ == Form::Robot) scratch = &animScratch_;
     else if (trans_ != Transition::None && partnerVisible_ && partnerForm() == Form::Robot) scratch = &partnerScratch_;
     if (!scratch || (size_t)weaponBone_ >= scratch->size()) return;
-    weaponWorld_ = meshMatrix(Form::Robot) * (*scratch)[(size_t)weaponBone_] * weaponOffset_;
+    weaponBoneCur_ = (*scratch)[(size_t)weaponBone_];
+    weaponCurKey_ = weaponBone_ * 2 + (scratch == &animScratch_ ? 0 : 1);
+    weaponWorld_ = meshMatrix(Form::Robot) * weaponBoneCur_ * weaponOffset_;
     weaponValid_ = true;
 }
 
@@ -826,8 +828,22 @@ void Character::snapshotPalettes() {
     }
 }
 
+core::Mat4 Character::weaponDrawWorld() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_WEAPONBLEND"); return e && e[0] == '0'; }();   // A/B: the step pose
+    if (off || weaponCurKey_ < 0) return weaponWorld_;
+    // Always the CURRENT mesh frame (position / yaw), as the body: weaponWorld_ is world space from the last socket update,
+    // which runs in the step's background part, after the frame that already shows the step's new position (the gun was
+    // drawn one step behind the body on every step frame and caught up on the next: a ~30 px left / right flicker at
+    // 1280x720 when strafing, at any display rate above the step rate).
+    core::Mat4 g = weaponBoneCur_;
+    if (poseAlpha_ < 1.0f && weaponPrevKey_ == weaponCurKey_)
+        for (int i = 0; i < 16; ++i) g.m[i] = weaponBonePrev_.m[i] + (weaponBoneCur_.m[i] - weaponBonePrev_.m[i]) * poseAlpha_;
+    return meshMatrix(Form::Robot) * g * weaponOffset_;
+}
+
 void Character::beginStep() {
     snapshotPalettes();
+    weaponBonePrev_ = weaponBoneCur_; weaponPrevKey_ = weaponValid_ ? weaponCurKey_ : -1;   // (weaponDrawWorld's blend source)
     prevPos_ = pos_; havePrev_ = true;
     // The previous step's vertices exist only if that step's pose was skinned (drawn); otherwise the next frames present the
     // current pose without the vertex blend.
