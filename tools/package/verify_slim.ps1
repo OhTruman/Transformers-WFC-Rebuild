@@ -55,7 +55,7 @@ param(
     [switch]$Strict,
     [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
     [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
-    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=1) instead of requiring it as the first launch's default
+    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=1): the pack's textures load (else the first launch must keep HD off)
     [switch]$StaticOnly,         # file checks only (HD pack), no game runs
     [string]$ExeBin = "",           # candidate exe tree: its *.exe / *.dll replace the package's in the run copy (the package stays as is)
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
@@ -234,10 +234,14 @@ try {
         if ($SkipIntro) { $env:WFC_SKIPINTRO = '1' } else { Remove-Item env:WFC_SKIPINTRO -ErrorAction SilentlyContinue }
         if ($LobbyOptions) { $env:WFC_LOBBY_OPTIONS = $LobbyOptions } else { Remove-Item env:WFC_LOBBY_OPTIONS -ErrorAction SilentlyContinue }
         Remove-Item env:WFC_HDTEXTURES -ErrorAction SilentlyContinue
+        Remove-Item env:WFC_AUTODETECT, env:WFC_AUTODETECT_WINDOWED -ErrorAction SilentlyContinue
         if ($hd.Root) {
-            # user 2026-10-12: the HD textures are the default - the run is a first launch (no profile, auto-detect as
-            # shipped) and must turn them on by itself; -HdForced restores the forced check
+            # user 2026-10-12 (reversed the same day): HD is OFF by default - a first launch (no profile, auto-detect as
+            # shipped) must keep it off while the pack is accepted; -HdForced checks that the pack's textures load
             if ($HdForced) { $env:WFC_HDTEXTURES = '1' }
+            # (Frontend 391706f: a scripted boot keeps the seeded defaults unless auto-detect is asked for; windowed, so no
+            # display mode switch. The HD default needs the pack and >= 6000 MB of VRAM: frontend::hdTexturesDefault)
+            else { $env:WFC_AUTODETECT = '1'; $env:WFC_AUTODETECT_WINDOWED = '1' }
             if ((Norm $hd.Root) -ne (Norm (Join-Path $pkg 'AssetTools\out\hd'))) { $env:WFC_HD_ROOT = $hd.Root -replace '\\', '/' }
         }
         $env:WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,$id;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$MatchSeconds;quit"
@@ -325,9 +329,13 @@ try {
         if ($hd.Root -and -not ($hdLine -and $hdLine.Matches[0].Groups[2].Success -and [int]$hdLine.Matches[0].Groups[2].Value -eq $hd.Rows)) {
             $reasons += "HD pack not accepted by the game: $hdLog (index rows $($hd.Rows))"
         }
-        if ($hd.Root -and -not $HdForced -and -not $NoHd) {   # the default: HD textures on at the first launch
+        if ($hd.Root -and -not $HdForced -and -not $NoHd) {   # the default: the original look - HD textures stay off
+            $hdOn = $log | Select-String -SimpleMatch 'renderer: HD textures on' | Select-Object -First 1
+            if ($hdOn) { $reasons += 'HD textures ON at a first launch (the default is off: the original look; see settings.autodetect in the log)' }
+        }
+        if ($hd.Root -and $HdForced -and -not $NoHd) {
             $hdOn = $log | Select-String -SimpleMatch 'renderer: HD textures on' | Select-Object -Last 1
-            if (-not $hdOn) { $reasons += 'HD textures not ON by default (first launch, no profile: the profile default / auto-detect must enable them)' }
+            if (-not $hdOn) { $reasons += 'HD textures forced on (WFC_HDTEXTURES=1) but the renderer did not turn them on' }
         }
         # ray tracing stays off unless switched on (user 2026-10-12)
         $rtOn = $log | Select-String -Pattern 'RT round trip: on|RT shadow \+ AO: on|RT characters: on' | Select-Object -First 1
