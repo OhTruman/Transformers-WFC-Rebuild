@@ -1035,7 +1035,8 @@ namespace {
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
-                       bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent) {
+                       bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent,
+                       bool rtNextMap) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1121,8 +1122,12 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     if (rtAvailable) {   // PC EXTENSION; Off by default, never auto-detected (user decision 2026-10-12). Hint: Rendering /
         // Integration 2026-10-13 (Off keeps the RT data until the map changes; modes switch live on a map loaded with RT)
         std::vector<gfx::avm1::Value> rtv;
-        add(rtv, 0, "Off"); add(rtv, 1, "Faithful"); add(rtv, 2, "Realistic");
-        row(rtv, "<PCSettings:RayTracing>", "Off frees its memory (~0.2-0.5 GB) when the map changes.", "Ray Tracing");
+        // This map loaded without the RT scene: turning it on applies at the next map load (Off always applies live).
+        // "(next)" keeps the labels inside the value column ("... (next map)" runs past it, like "FSR 3.1 Performance").
+        add(rtv, 0, "Off"); add(rtv, 1, rtNextMap ? "Faithful (next)" : "Faithful"); add(rtv, 2, rtNextMap ? "Realistic (next)" : "Realistic");
+        row(rtv, "<PCSettings:RayTracing>",
+            rtNextMap ? "Turned on now, it starts with the next map."
+                      : "Off frees its memory (~0.2-0.5 GB) when the map changes.", "Ray Tracing");
     }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
@@ -1390,7 +1395,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                 addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTextureLevelAvailable(1),
                                  rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
                                  rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
-                                 rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures);
+                                 rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
+                                 rt_.rayTracingOnAppliesNextMap());
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

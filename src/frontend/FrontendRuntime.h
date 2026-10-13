@@ -163,6 +163,10 @@ public:
     bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
     // Ray-traced shadows / lighting can run (the Ray Tracing row is offered; Rendering's rayTracingAvailable at boot).
     bool rayTracingAvailable() const { return hardwareKnown_ && hardware_.rtAvailable; }
+    // Turning ray tracing on now applies from the next map (the current one loaded without the RT scene; Rendering's
+    // rayTracingLoadedThisMap). Without the query: false (the row makes no claim).
+    void setRayTracingLoadedQuery(std::function<bool()> q) { rtLoadedQuery_ = std::move(q); }
+    bool rayTracingOnAppliesNextMap() const { return rtLoadedQuery_ && !rtLoadedQuery_(); }
 
     // Picks the preset for the known facts and writes it into the profile (saved); why: "first launch", "gpu changed",
     // "recommended" (the menu action). The caller applies the display mode / renderer settings (profile apply).
@@ -270,6 +274,7 @@ private:
     DisplayHooks display_;
     HardwareFacts hardware_;
     bool hardwareKnown_ = false;
+    std::function<bool()> rtLoadedQuery_;
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu
     void updateHdPackHint();
     GraphicsPresetTable presets_;

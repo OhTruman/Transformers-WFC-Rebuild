@@ -225,6 +225,20 @@ template <class R> void applyModernMaterials(R* r, int hdLevel, const char* when
                                                           {"by", by}, {"when", when}, {"applies", "next map load"},
                                                           {"provenance", "PC EXTENSION"}});
 }
+// Rendering 786a47b1: bool rayTracingLoadedThisMap() const - the current map loaded with the RT scene (modes then switch
+// live); otherwise turning RT on applies at the next map load. Detected.
+template <class R, class = void> struct HasRendererRtLoaded : std::false_type {};
+template <class R> struct HasRendererRtLoaded<R, std::void_t<decltype(std::declval<R&>().rayTracingLoadedThisMap())>> : std::true_type {};
+template <class R, class = void> struct DeclaresRtLoadedName : std::false_type {};
+template <class R> struct DeclaresRtLoadedName<R, std::void_t<decltype(&R::rayTracingLoadedThisMap)>> : std::true_type {};
+static_assert(!DeclaresRtLoadedName<render::IRenderer>::value || HasRendererRtLoaded<render::IRenderer>::value,
+              "IRenderer declares rayTracingLoadedThisMap but HasRendererRtLoaded does not match its signature");
+namespace rt_loaded_check { struct Like786a47b1 { bool rayTracingLoadedThisMap() const { return false; } }; }   // Rendering's stub signature
+static_assert(HasRendererRtLoaded<rt_loaded_check::Like786a47b1>::value, "HasRendererRtLoaded must match Rendering's signature");
+template <class R> void setRtLoadedQuery(frontend::FrontendRuntime& fr, R* r) {
+    if constexpr (HasRendererRtLoaded<R>::value) { if (r) fr.setRayTracingLoadedQuery([r] { return r->rayTracingLoadedThisMap(); }); }
+    (void)fr; (void)r;
+}
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -424,6 +438,7 @@ void Application::attachPresenter() {
     // Graphics auto-detect: first launch (no saved PC settings) or a changed GPU -> the recommended preset, then the
     // display settings below apply it like saved ones.
     frontend_->setHardwareFacts(gatherHardwareFacts(renderer_, window_));
+    setRtLoadedQuery(*frontend_, renderer_);
     frontend_->autoDetectGraphicsAtBoot();
     {
         const auto& d = frontend_->flow().profile().display;
