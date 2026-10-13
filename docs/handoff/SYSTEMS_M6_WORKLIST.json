@@ -209,7 +209,7 @@
    "materials": [
     {
      "material": "WEP_Shared_p.WEP_PhongMain_MAT",
-     "class": "dielectric",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.6165930021824231
     },
     {
@@ -7082,7 +7082,7 @@
    "materials": [
     {
      "material": "FX_RollerMine_p.Material.FX_RollerMine_MATINST",
-     "class": "dielectric",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.24017515454203803
     }
    ]
@@ -7503,7 +7503,7 @@
    "materials": [
     {
      "material": "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_MATINST",
-     "class": "dielectric",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.2857546345039501
     }
    ]
@@ -8194,7 +8194,7 @@
    "materials": [
     {
      "material": "TR_AirRaid_ROBO_p.RB_AirRaid_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3704787042431011
     }
    ]
@@ -8211,7 +8211,7 @@
    "materials": [
     {
      "material": "TR_AirRaid_VEH_p.VH_AirRaid_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.37017106706082786
     }
    ]
@@ -8470,7 +8470,7 @@
    "materials": [
     {
      "material": "TR_Arcee_ROBO_p.RB_Arcee_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4195675098959595
     }
    ]
@@ -8487,7 +8487,7 @@
    "materials": [
     {
      "material": "TR_Arcee_VEH_p.VH_Arcee_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4234149836696792
     }
    ]
@@ -8504,7 +8504,7 @@
    "materials": [
     {
      "material": "TR_Barricade_ROBO_p.RB_Barricade_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.32777488401797683
     }
    ]
@@ -8521,7 +8521,7 @@
    "materials": [
     {
      "material": "TR_Barricade_VEH_p.VH_Barricade_NormSpec_Cust_B_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.31411152798680775
     }
    ]
@@ -8538,7 +8538,7 @@
    "materials": [
     {
      "material": "TR_Brawl_ROBO_p.RB_Brawl_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.42368550107094916
     }
    ]
@@ -8555,7 +8555,7 @@
    "materials": [
     {
      "material": "TR_Brawl_VEH_p.VH_Brawl_NormSpec_Cust_B_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.6097671999756745
     }
    ]
@@ -8572,7 +8572,7 @@
    "materials": [
     {
      "material": "TR_Breakdown_ROBO_p.RB_Breakdown_Cust_Mat_Inst_E",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4703238945107888
     }
    ]
@@ -8589,7 +8589,7 @@
    "materials": [
     {
      "material": "TR_Breakdown_VEH_p.RB_BreadownVEH_Cust_Mat_INST_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.46736124347025987
     }
    ]
@@ -8606,12 +8606,12 @@
    "materials": [
     {
      "material": "PROP_NEU_WreckedBodies_p.RB_SoldierCarAut_Robo_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.789294495539114
     },
     {
      "material": "TR_SoldierCarAut_ROBO_p.RB_SoldierCarAut_Robo_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5083156433355752
     }
    ]
@@ -8628,7 +8628,7 @@
    "materials": [
     {
      "material": "TR_BumbleBee_ROBO_p.RB_BumbleBee2_Cust2_MatINST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5661125438405888
     }
    ]
@@ -8645,7 +8645,7 @@
    "materials": [
     {
      "material": "TR_BumbleBee_VEH_p.VEH_BumbleBee2_Cust2_Mat",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5594974893062002
     }
    ]
@@ -8679,7 +8679,7 @@
    "materials": [
     {
      "material": "TR_Deadend_ROBO_p.RB_Deadend_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3799997905617285
     }
    ]
@@ -8696,7 +8696,7 @@
    "materials": [
     {
      "material": "TR_Deadend_VEH_p.VH_Deadend_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3637479844650401
     }
    ]
@@ -8713,7 +8713,7 @@
    "materials": [
     {
      "material": "TR_Demolishor_ROBO_p.RB_Demolishor_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.33875560960332163
     }
    ]
@@ -8730,7 +8730,7 @@
    "materials": [
     {
      "material": "TR_Demolishor_VEH_p.VH_Demolishor_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.2996733058864067
     }
    ]
@@ -8747,7 +8747,7 @@
    "materials": [
     {
      "material": "TR_Ironhide_ROBO_p.RB_Ironhide_NormSpec_Cust_F_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.43604940445170504
     }
    ]
@@ -8764,7 +8764,7 @@
    "materials": [
     {
      "material": "TR_Ironhide_VEH_p.VH_Ironhide_NormSpec_Cust_F_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4368341045541856
     }
    ]
@@ -8781,7 +8781,7 @@
    "materials": [
     {
      "material": "TR_Jazz_ROBO_p.RB_Jazz_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3771653714758219
     }
    ]
@@ -8798,7 +8798,7 @@
    "materials": [
     {
      "material": "TR_Jazz_VEH_p.VH_Jazz_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3934377922799658
     }
    ]
@@ -8815,7 +8815,7 @@
    "materials": [
     {
      "material": "TR_Jetfire_ROBO_p.RB_Jetfire_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4174281791696822
     }
    ]
@@ -8832,7 +8832,7 @@
    "materials": [
     {
      "material": "TR_Jetfire_VEH_p.VH_Jetfire_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4434561119200926
     }
    ]
@@ -8849,7 +8849,7 @@
    "materials": [
     {
      "material": "TR_Laserbeak_VEH_p.VH_Laserbeak_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.39713309848254663
     }
    ]
@@ -8866,7 +8866,7 @@
    "materials": [
     {
      "material": "TR_Megatron_ROBO_p.VH_Megatron_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4213549076559127
     }
    ]
@@ -8883,7 +8883,7 @@
    "materials": [
     {
      "material": "TR_Megatron_VEH_p.VH_Megatron_2Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.40780313520621125
     }
    ]
@@ -8900,7 +8900,7 @@
    "materials": [
     {
      "material": "TR_Onslaught_ROBO_p.RB_Onslaught_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.7408606396340758
     }
    ]
@@ -8917,7 +8917,7 @@
    "materials": [
     {
      "material": "TR_Onslaught_VEH_p.VH_Onslaught_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.6307960104615852
     }
    ]
@@ -8934,7 +8934,7 @@
    "materials": [
     {
      "material": "TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.41810093883485444
     }
    ]
@@ -8951,7 +8951,7 @@
    "materials": [
     {
      "material": "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.40889854362322453
     }
    ]
@@ -8968,7 +8968,7 @@
    "materials": [
     {
      "material": "TR_Ratchet_ROBO_p.RB_Ratchet_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4238265812674311
     }
    ]
@@ -8985,7 +8985,7 @@
    "materials": [
     {
      "material": "TR_Ratchet_VEH_p.VH_Ratchet_Cust2_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4020411985602277
     }
    ]
@@ -9002,12 +9002,12 @@
    "materials": [
     {
      "material": "TR_RumbleFrenzy_ROBO_p.FrenzyWeapon_MatInst",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3613167292546988
     },
     {
      "material": "TR_RumbleFrenzy_ROBO_p.RumbleWeapon_MatInst",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4431881092226591
     }
    ]
@@ -9024,12 +9024,12 @@
    "materials": [
     {
      "material": "TR_RumbleFrenzy_ROBO_p.Frenzy_MatInst",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.2559771661417989
     },
     {
      "material": "TR_RumbleFrenzy_ROBO_p.Rumble_MatInst",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.2577234056707168
     }
    ]
@@ -9046,7 +9046,7 @@
    "materials": [
     {
      "material": "TR_Scattershot_ROBO_p.RB_Scattershot_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.34845416657068773
     }
    ]
@@ -9063,7 +9063,7 @@
    "materials": [
     {
      "material": "TR_Scattershot_VEH_p.VH_Scattershot_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.36958749772885946
     }
    ]
@@ -9080,7 +9080,7 @@
    "materials": [
     {
      "material": "TR_Shockwave_ROBO_p.RB_Shockwave_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.6286062062443618
     }
    ]
@@ -9097,7 +9097,7 @@
    "materials": [
     {
      "material": "TR_Shockwave_VEH_p.VH_Shockwave_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3049971393968898
     }
    ]
@@ -9114,7 +9114,7 @@
    "materials": [
     {
      "material": "TR_Sideswipe_ROBO_p.RB_Sideswipe_Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5155008779287358
     }
    ]
@@ -9131,7 +9131,7 @@
    "materials": [
     {
      "material": "TR_Sideswipe_VEH_p.VH_Sideswipe_Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.23443529149994982
     }
    ]
@@ -9148,7 +9148,7 @@
    "materials": [
     {
      "material": "TR_SilverBolt_ROBO_p.RB_Silverbolt_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.23870864926189622
     }
    ]
@@ -9165,7 +9165,7 @@
    "materials": [
     {
      "material": "TR_SilverBolt_VEH_p.VH_Silverbolt_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.2213476732990166
     }
    ]
@@ -9182,7 +9182,7 @@
    "materials": [
     {
      "material": "TR_Skywarp_ROBO_p.RB_Skywarp_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4058852555598871
     }
    ]
@@ -9199,7 +9199,7 @@
    "materials": [
     {
      "material": "TR_Slipstream_ROBO_p.RB_Slipstream_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.45839226583174886
     }
    ]
@@ -9216,7 +9216,7 @@
    "materials": [
     {
      "material": "TR_Slipstream_VEH_p.VH_Slipstream_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4606522290041233
     }
    ]
@@ -9233,7 +9233,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarAut_ROBO_p.RB_SoldierMultiAut_Robo_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4220147548643015
     }
    ]
@@ -9250,7 +9250,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarAut_VEH_p.VH_SoldierCarAut_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5722706781077527
     }
    ]
@@ -9267,7 +9267,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarDec_ROBO_p.RB_SoldierCarDec_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.36515935123200305
     }
    ]
@@ -9284,7 +9284,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarDec_ROBO_p.RB_SoldierMultiDec_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3364092377762895
     }
    ]
@@ -9301,7 +9301,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarDec_VEH_p.VH_SniperDec_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4475170387952012
     }
    ]
@@ -9318,7 +9318,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarNeu_ROBO_p.RB_SoldierCarNeu_Robo_MatINST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.499500171210749
     }
    ]
@@ -9335,7 +9335,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarNeu_ROBO_p.RB_SoldierMultiNeu_MatINST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.42912502782311635
     }
    ]
@@ -9352,7 +9352,7 @@
    "materials": [
     {
      "material": "TR_SoldierCarNeu_VEH_p.VH_SoldierCarNeu_NormSpec_Cust_E_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3583227382647206
     }
    ]
@@ -9369,7 +9369,7 @@
    "materials": [
     {
      "material": "TR_Soundwave_ROBO_p.RB_Soundwave_Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.28802300629277655
     }
    ]
@@ -9386,7 +9386,7 @@
    "materials": [
     {
      "material": "TR_Soundwave_VEH_p.VH_Soundwave_Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.37295460055395047
     }
    ]
@@ -9403,7 +9403,7 @@
    "materials": [
     {
      "material": "TR_StarScream_ROBO_p.TR_Starscream_2Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.40503319002873983
     }
    ]
@@ -9420,12 +9420,12 @@
    "materials": [
     {
      "material": "TR_StarScream_VEH_p.CHR_Transformer_NormSpec_Cust_F_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.8591541241990641
     },
     {
      "material": "TR_Skywarp_VEH_p.VH_Skywarp_NormSpec_Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.4139260093449812
     }
    ]
@@ -9442,7 +9442,7 @@
    "materials": [
     {
      "material": "TR_Thunder_ROBO_p.TR_Thunder_2Cust_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.3696445101334358
     }
    ]
@@ -9459,7 +9459,7 @@
    "materials": [
     {
      "material": "TR_Thunder_VEH_p.VH_Thunder_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.360969290147289
     }
    ]
@@ -9476,7 +9476,7 @@
    "materials": [
     {
      "material": "TR_Warpath_ROBO_p.RB_Warpath1_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5062617186855654
     }
    ]
@@ -9493,7 +9493,7 @@
    "materials": [
     {
      "material": "TR_Warpath_VEH_p.RB_Warpath1_Cust_Mat_INST_B",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5183016128309068
     }
    ]
@@ -9510,7 +9510,7 @@
    "materials": [
     {
      "material": "TR_ZetaPrime_ROBO_p.TR_ZetaPrime_ROBO_Cust_Mat_Inst",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5424158069632453
     }
    ]
@@ -9527,7 +9527,7 @@
    "materials": [
     {
      "material": "TR_ZetaPrime_VEH_p.VH_ZetaPrime_Mat_INST",
-     "class": "dielectric_tint",
+     "class": "metallic_paint",
      "target_mean_roughness": 0.5198745941986678
     }
    ]
@@ -9544,7 +9544,7 @@
    "materials": [
     {
      "material": "WEP_AssaultRifle_p.WEP_AssaultRifle_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.36623086994709136
     }
    ]
@@ -9578,7 +9578,7 @@
    "materials": [
     {
      "material": "WEP_BazookaTemp1_p.WEP_Bazooka_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.42736578975130124
     }
    ]
@@ -9595,7 +9595,7 @@
    "materials": [
     {
      "material": "WEP_BeatDownClub_p.WEP_BeatDownClub_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.32153076593726015
     }
    ]
@@ -9612,7 +9612,7 @@
    "materials": [
     {
      "material": "WEP_BroadSword_p.WEP_BroadSword_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47656956195190703
     }
    ]
@@ -9629,7 +9629,7 @@
    "materials": [
     {
      "material": "WEP_BurstRifle_p.Materials.WEP_BurstRifle_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.5119940835578075
     }
    ]
@@ -9646,7 +9646,7 @@
    "materials": [
     {
      "material": "WEP_ButterflyAxe_p.WEP_ButterflyAxe_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4429154921933225
     }
    ]
@@ -9680,7 +9680,7 @@
    "materials": [
     {
      "material": "WEP_EMPShotgun_p.WEP_EMPShotgun_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47322390902435674
     }
    ]
@@ -9714,7 +9714,7 @@
    "materials": [
     {
      "material": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4339535837354687
     }
    ]
@@ -9731,7 +9731,7 @@
    "materials": [
     {
      "material": "WEP_Grenade_p.WEP_Grenade_Flak_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.42571049249517945
     }
    ]
@@ -9748,7 +9748,7 @@
    "materials": [
     {
      "material": "WEP_HalberdAxe_p.WEP_HalberdAxe_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47762552597359864
     }
    ]
@@ -9765,7 +9765,7 @@
    "materials": [
     {
      "material": "WEP_Hammer_p.WEP_Hammer_D_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.40016123235565193
     }
    ]
@@ -9782,7 +9782,7 @@
    "materials": [
     {
      "material": "WEP_HeavyMG_p.WEP_HeavyMG_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4606895963792188
     }
    ]
@@ -9799,7 +9799,7 @@
    "materials": [
     {
      "material": "WEP_HeavyPistol_p.WEP_HeavyPistol_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3811550245181383
     }
    ]
@@ -9833,12 +9833,12 @@
    "materials": [
     {
      "material": "WEP_IonBlaster_p.WEP_IonBlaster_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3856898834275061
     },
     {
      "material": "FX_IonBlaster_p.IonBlaster_Mag_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3907121196576715
     }
    ]
@@ -9855,7 +9855,7 @@
    "materials": [
     {
      "material": "WEP_LancingSpear_p.WEP_LancingSpear_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4607760421195638
     }
    ]
@@ -9872,7 +9872,7 @@
    "materials": [
     {
      "material": "WEP_LongSword_p.WEP_LongSword_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47860284421357296
     }
    ]
@@ -9889,7 +9889,7 @@
    "materials": [
     {
      "material": "WEP_Maul_p.WEP_Maul_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4679011603120057
     }
    ]
@@ -9906,7 +9906,7 @@
    "materials": [
     {
      "material": "WEP_PlasmaCannon_p.WEP_PlasmaCannon_A_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3878338754784302
     }
    ]
@@ -9940,7 +9940,7 @@
    "materials": [
     {
      "material": "WEP_RepairBeam_p.WEP_RepairBeam_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4802397582164882
     }
    ]
@@ -9957,7 +9957,7 @@
    "materials": [
     {
      "material": "WEP_RocketLauncher_p.WEP_RocketLauncher_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.4550897026216928
     }
    ]
@@ -9974,7 +9974,7 @@
    "materials": [
     {
      "material": "WEP_SerratedBlade_p.WEP_SerratedBlade_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.44753726757396717
     }
    ]
@@ -10073,7 +10073,7 @@
    "materials": [
     {
      "material": "WEP_ShortSword_p.WEP_ShortSword_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.48206747146150697
     }
    ]
@@ -10090,7 +10090,7 @@
    "materials": [
     {
      "material": "WEP_Shotgun_p.WEP_Shotgun_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.5458884702986148
     }
    ]
@@ -10107,7 +10107,7 @@
    "materials": [
     {
      "material": "WEP_SniperRifle_p.WEP_SniperRifle_MAT",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.2908336539863056
     }
    ]
@@ -10141,7 +10141,7 @@
    "materials": [
     {
      "material": "WEP_SpikedMace_p.WEP_SpikedMace_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.478914651302629
     }
    ]
@@ -10158,7 +10158,7 @@
    "materials": [
     {
      "material": "WEP_TortureSword_p.WEP_TortureSword_MATINST",
-     "class": "dielectric",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.46038001885556623
     }
    ]
@@ -10175,7 +10175,7 @@
    "materials": [
     {
      "material": "WEP_TurretIonGun_p.WEP_TurretIonGun01_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.2888937201454575
     }
    ]
@@ -10209,12 +10209,12 @@
    "materials": [
     {
      "material": "WEP_TurretIonGun_p.WEP_TurretIonGun_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3222864112612024
     },
     {
      "material": "WEP_TurretIonGun_p.WEP_TurretIonGun_Overshield_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.3225304383491182
     }
    ]
@@ -10231,7 +10231,7 @@
    "materials": [
     {
      "material": "WEP_TurretRocket_p.WEP_TurretRocket_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.32711926124589075
     }
    ]
@@ -10248,7 +10248,7 @@
    "materials": [
     {
      "material": "WEP_ViciousAxe_p.WEP_ViciousAxe_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47405004373753845
     }
    ]
@@ -10265,7 +10265,7 @@
    "materials": [
     {
      "material": "WEP_WarHammer_p.WEP_WarHammer_MATINST",
-     "class": "dielectric_tint",
+     "class": "weapon_metal_mask",
      "target_mean_roughness": 0.47967093010413786
     }
    ]

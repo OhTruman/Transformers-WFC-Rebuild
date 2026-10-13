@@ -34,7 +34,17 @@ Shipped here:
 - hdPbrTexture(roughness_parent, "roughness") replaces it.
 - The generated map's mean is normalised to the material's target_mean_roughness, its derived mean from its own textures.
 
-**Metallic** = 0 and **F0** = 0.04 everywhere until reviewed metal rows exist.
+**Metallic hooks (reviewed rows, Integration / Experimental 2026-10-12).** Per material, m6_mapping.json's `pbr_hooks` gives GLSL expressions over the body's own temporaries: `metallic`, `f0` (vec3) and `baseColor` (null = the stripped base). matc emits them as wfcPbrMetallic / wfcPbrF0 (and the base override). The shading uses diffuse = baseColor x (1 - metallic) and F0 = mix(0.04, f0, metallic). The vectors carry expect.metallic, expect.f0 (the hook's f0, unmixed) and expect.baseColor. Without a hook: metallic 0, f0 0.04.
+- **metallic_paint** (CHR_Transformer_NormSpec_Cust_E, 67 robot bodies): baseColor = f0 = the tinted paint, metallic = 0.8.
+  - The paint is rule 3's colour operand, the TINTED paint mix(albedo, Cust A / B, masks), never SpecularColor. The temporary varies per material (t41 in 57, t40, t34, t46).
+  - A dielectric share is kept: diffuse = paint x 0.2. EnergonColor and the emissive are untouched.
+  - Exit check (tools/systems/m6/chr_paint_check.py): all 10 palette swatches as Cust A / B, on customised pixels, in diffuse-only, IBL-only and combined lighting, with the cube at its mean. Results for m = 0.6 / 0.7 / 0.8 are below. 0.8 is the default; per-family sheets decide in 0.6 - 0.8.
+- **weapon_metal_mask** (WEP_PhongMain, 36 materials): metallic = clamp(1 - mask.b, 0, 1) per pixel, where mask is the weapon _MASK texture's sample whose B is the tint mask (t23 in tinted instances; t10, the first mask sample, in instances without the Cust path).
+  - f0 = the constant reflection colour: the cube term per unit cube light with every texture at 1, scaled into [0, 1] by its max to keep the hue.
+  - The tinted paint stays dielectric per pixel (gate 1).
+  - Weapons whose reflection colour is below 0.04 (5: the melee staves / daggers / bat) get no hook and stay dielectric.
+
+**Otherwise metallic** = 0 and **F0** = 0.04 until reviewed metal rows exist.
 - The renderer reads an ORM metal channel only for a reviewed (texture, material) row.
 - Customisation-tint consumers (403) are forced dielectric.
 - HUD-marker / team-state materials (FriendlyColor, EnemyColor, AutobotColor, DecepticonColor, TeamID, NeutralColor, Flashing, PingOpacity) are never remapped.
@@ -82,26 +92,28 @@ Maps: MP_ESC_BrokenHope, MP_ESC_Remnant, MP_IAC_Berth, MP_IAC_Rust, MP_IAC_Seed,
 
 | class | unique materials |
 |---|---|
-| dielectric | 541 |
-| dielectric_tint | 342 |
+| dielectric | 536 |
+| dielectric_tint | 244 |
 | excluded | 427 |
 | metal_candidate | 25 |
+| metallic_paint | 67 |
 | never_remap | 1 |
+| weapon_metal_mask | 36 |
 
 ## Per family
 
-| family | dielectric | dielectric_tint | excluded | metal_candidate | never_remap |
-|---|---|---|---|---|---|
-| DES | 11 | 0 | 0 | 0 | 0 |
-| DESIGNER | 3 | 0 | 0 | 0 | 0 |
-| ENGINEMATERIALS | 1 | 0 | 1 | 0 | 0 |
-| ENV | 382 | 219 | 175 | 16 | 0 |
-| FX | 1 | 1 | 130 | 0 | 1 |
-| PROP | 66 | 11 | 33 | 8 | 0 |
-| TPRO | 14 | 6 | 2 | 0 | 0 |
-| TR | 47 | 66 | 58 | 0 | 0 |
-| UI | 0 | 0 | 17 | 0 | 0 |
-| WEP | 16 | 39 | 11 | 1 | 0 |
+| family | dielectric | dielectric_tint | excluded | metal_candidate | metallic_paint | never_remap | weapon_metal_mask |
+|---|---|---|---|---|---|---|---|
+| DES | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
+| DESIGNER | 3 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ENGINEMATERIALS | 1 | 0 | 1 | 0 | 0 | 0 | 0 |
+| ENV | 382 | 219 | 175 | 16 | 0 | 0 | 0 |
+| FX | 0 | 0 | 130 | 0 | 0 | 1 | 2 |
+| PROP | 64 | 11 | 33 | 8 | 1 | 0 | 1 |
+| TPRO | 14 | 6 | 2 | 0 | 0 | 0 | 0 |
+| TR | 47 | 0 | 58 | 0 | 66 | 0 | 0 |
+| UI | 0 | 0 | 17 | 0 | 0 | 0 | 0 |
+| WEP | 14 | 8 | 11 | 1 | 0 | 0 | 33 |
 
 ## Emulation (glsl_emu; real textures for the targets)
 
@@ -145,3 +157,13 @@ Metal candidates (review list):
 - PROP_IAC_Statues_p.Materials.IAC_Statue04_red_MATINST (PROP): strong, coloured specular (sat 0.71, spec/base lum 1.49)
 - PROP_IAC_Statues_p.Texture.BB_ancestor_Statue_MATINST (PROP): strong, coloured specular (sat 0.43, spec/base lum 7.18)
 - WEP_Rocket_p.WEP_Rocket_Temp_MAT (WEP): strong, coloured specular (sat 1.00, spec/base lum 1.00)
+
+## Metallic-paint exit check (chr_paint_check.py, 67 materials x 10 swatches x 16 points; hue in degrees: worst per-material median / p90)
+
+| m | diffuse-only | IBL-only | combined | combined L* (Modern - Original): median (p10, p90) |
+|---|---|---|---|---|
+| 0.6 | 5.7 / 1.4 | 71.1 / 8.9 | 22.0 / 5.0 | +10.6 (-12.8, +21.7) |
+| 0.7 | 5.7 / 1.4 | 61.3 / 5.7 | 20.3 / 5.5 | +7.1 (-15.8, +18.2) |
+| 0.8 | 5.7 / 1.4 | 12.0 / 3.5 | 19.2 / 7.1 | +2.9 (-19.4, +14.2) |
+
+At m 0.8, the 5 saturated swatches (sat >= 0.95) and the grey hold within about 5 degrees (worst material). The 4 desaturated swatches (sat 0.36 - 0.63) reach 11 - 19 degrees worst (median 1 - 6): a low-saturation hue moves a long way for a small RGB change. The per-family sheets are the final look.

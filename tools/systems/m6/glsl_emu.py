@@ -39,6 +39,8 @@ class Unsupported(Exception):
 
 _SW = {'x': 0, 'y': 1, 'z': 2, 'w': 3, 'r': 0, 'g': 1, 'b': 2, 'a': 3, 's': 0, 't': 1, 'p': 2, 'q': 3}
 _STRIP = [False]                     # (set by run() while evaluating with strip_view)
+_PAINT = []                          # (rule 3's colour operands, in evaluation order: the "paint" of a cube x colour product)
+_LINE = [None, None, None]           # (the statement being evaluated: target, expression, env)
 
 # the fixed view-direction set for rule 2's mean: 32 directions on the upper hemisphere (golden spiral), deterministic
 VIEW_SET = []
@@ -104,6 +106,7 @@ class G:
         if _STRIP[0] and isinstance(other, G) and self.view != other.view:
             vt, ct = (self, other) if self.view else (other, self)
             if not vt.cam and not ct.view and ct.tex and not ct.bc and ct.v.size >= 3:
+                _PAINT.append((ct.v[:3].copy(), _LINE[1], _LINE[2]))
                 return G(v, False, False, True)
         return self._join(other, v)
 
@@ -332,6 +335,7 @@ def _run_once(glsl, ctx):
             if '?' in expr or '[' in expr:
                 raise Unsupported('ternary / index: %s' % expr[:60])
             py = re.sub(r'(?<![\w.])(\d+)\.(?![\w])', r'\1.0', expr)    # (GLSL "1." literals; not t31.rgb)
+            _LINE[:] = [target, expr, env]
             try:
                 val = eval(py, env)                                        # (matc's own output, local data)
             except Unsupported:
@@ -349,6 +353,15 @@ def _run_once(glsl, ctx):
     return {k: v for k, v in vars(ctx.o).items()}
 
 
+def paint_name(pv, expr, env):
+    """The GLSL temporary (with .rgb / .xyz when a vec4) whose value is rule 3's colour operand in expr, or None."""
+    for name in re.findall(r'\bt\d+\b', expr or ''):
+        g = env.get(name)
+        if isinstance(g, G) and g.v.size >= 3 and not g.view and np.allclose(g.v[:3], pv, atol=1e-12):
+            return name if g.v.size == 3 else name + '.rgb'
+    return None
+
+
 def run(glsl, ctx):
     """Evaluates a wfcMaterial body; returns {output: numpy array}. With ctx.strip_view, DiffuseColor follows the base-colour
     strip (rules 1 and 2 above); the other outputs are evaluated normally."""
@@ -356,7 +369,13 @@ def run(glsl, ctx):
     res = {k: v.v.copy() for k, v in outs.items()}
     if ctx.strip_view and 'DiffuseColor' in outs:
         res['_diffuse_original'] = res['DiffuseColor'].copy()
+        del _PAINT[:]
         s = _run_once(glsl, _clone(ctx, strip_view=True))['DiffuseColor']
+        if _PAINT:                                                     # (the last cube x colour product's colour operand)
+            pv, pexpr, penv = _PAINT[-1]
+            res['_paint'] = np.maximum(pv, 0.0)
+            res['_paint_expr'] = paint_name(pv, pexpr, penv)
+            _LINE[:] = [None, None, None]
         if s.view:                                                     # rule 2: the mean over VIEW_SET
             acc = np.zeros_like(s.v)
             for d in VIEW_SET:
