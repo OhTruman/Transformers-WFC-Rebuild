@@ -337,5 +337,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   sharper grit, same colours, subtle in full frames (Integration view of m00300 crop1 agrees). (4) E vs D: 0.7-1.7 % of
   pixels, the 20-row pilot is too small to judge; extend E to a full map. DECISION: the package ships as is (Enhanced
   clamps to Faithful, user told); the morning showcase leads with RT Realistic crops + HD D.
+  12:35 FINAL HEAD a17309b7 GATES PASS (Experimental, quiet card): identity-capture Rust 504 vs 05319349: 0 image diffs,
+  SIMHASH 3002/3002; regress-8map lockstep best p90 of 2, base / head ms: 501 2.15/2.16, 502 1.92/1.94, 503 2.34/2.33,
+  504 2.53/2.52, 507 2.36/2.37, 508 2.08/2.08, 509 2.76/2.76, 510 2.53/2.53 (worst +0.02 vs block +0.15; 0 UNKNOWN).
+  Leak soak 12:36-~14:10. HD freeze for the refresh: push_full_snap_20261013_b0-6 (828 rows, 5,467 MB); live pack 0-7
+  (949 textures). Systems PHASE=package started 12:40; verify after 14:15.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
