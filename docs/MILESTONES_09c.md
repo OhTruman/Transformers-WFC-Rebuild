@@ -370,5 +370,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (Change Character open) -> Resume lands in Spectating with input blanked. Added 15:45: semi-transparent gun on the jet
   character (Rendering). Shadow misalignment map = Molten. User done playing 15:30; lanes resumed (slot A Rendering,
   slot B Experimental baselines, DML off until the P0 proofs).
+  16:00 P0 #2 + #3 FIX APPLIED b0a22cb6 (Gameplay patch af9290f0: per-owner WeaponFx anchors; HUD mag / reserve from the
+  HUD weapon; vehicle reload tap; WFC_FXOWNERTEST; WFC_AUTOSTRAFE=alt); proof runs queued on slot B. FPS Counter merged
+  4f7a2f91. LAUNCH PITFALL (Systems): no log from the user's session - packages write wfc.log / wfc_profile.ini to the CWD,
+  and Play.bat's first test falls through to the integration exe at F:\...\build\release\bin on the dev PC (same a17309b7
+  code, integration render data); fixes: Play.bat runs the package's own exe (free drive letter when F: is taken), log +
+  profile beside the exe (patch), verify_slim checks it. Rule: the user double-clicks the package exe; no build/release
+  rebuild while they play.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
