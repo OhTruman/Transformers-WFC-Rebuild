@@ -412,5 +412,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FXOWNER: both fix checks PASS (0 held-anchored particles after a bot shot; clip / reserve / reload unchanged), 4 other
   rows are test-geometry bugs (streak starts 1.9 m ahead of the socket; Soldier's 1-round TankCannon) being corrected.
   Experimental after-runs (wobble + crosstalk incl. vehicle row) on a44aa6db running.
+  17:35 #1b CLOSED by the judder fix (Rendering): the see-through jet gun was temporal - the gun alternated between two
+  positions on step / non-step frames and at 300 fps the eye blended them into two half-opacity guns; 8-frame averages
+  show a doubled gun before, one solid gun after (jet judder 2.50 -> 0.67 px); RT Off / Faithful / Realistic standing
+  still all give a solid gun (no composite leak). FINAL REPACKAGE HEAD a44aa6db named (tag playtest/09c-fixes-a44aa6db);
+  Systems building + packaging with the b0-12+ freeze; verify (incl. -ForeignCwd, SETTINGSTEST 7, R1 sun swap ON gate)
+  after Experimental's after-runs.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
