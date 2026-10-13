@@ -6348,7 +6348,14 @@ void World::qaKillAllBots() {
     }
 }
 
-void World::qaFreezeBots(bool on) { if (qaEnabled()) qaBotsFrozen_ = on; }
+void World::qaFreezeBots(bool on) {
+    if (!qaEnabled()) return;
+    // Freezing parks the bots: an empty intent alone left a vehicle-form bot coasting ~5 m on its speed (QABOT freeze check).
+    // Horizontal speed only; gravity still settles a pawn in the air. DEV / QA tool path, not normal play.
+    if (on && !qaBotsFrozen_)
+        for (MatchOpponent* o : opponents_) { core::Vec3& v = o->pawn().velocity(); v.x = 0.0f; v.z = 0.0f; }
+    qaBotsFrozen_ = on;
+}
 void World::qaSetBotOverlay(bool on) { if (qaEnabled()) qaBotOverlay_ = on; }
 
 void World::qaTeleportToAim() {
