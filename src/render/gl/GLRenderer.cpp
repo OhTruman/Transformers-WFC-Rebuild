@@ -1588,7 +1588,7 @@ public:
         return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
     }
     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
-    bool rayTracingAvailable() override { return wfc_.rtAvailable(); }
+    bool rayTracingAvailable() const override { return wfc_.rtAvailable(); }
     int rayTracingMode() const override { return wfc_.rtMode(); }
     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }

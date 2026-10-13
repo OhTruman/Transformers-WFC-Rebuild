@@ -493,13 +493,13 @@ private:
     // the map loaded with RT on (a non-Off mode, WFC_RT_SHADOWAO or WFC_RT_TOGGLE); then switches are live. Off -> on on a
     // map loaded without it takes effect from the next map load.
 public:
-    bool rtAvailable();
+    bool rtAvailable() const;
     int rtMode() const { return rtMode_; }
     bool rtSetMode(int mode);
 private:
     int rtMode_ = -1;                                  // (-1: from the environment on first use)
     bool rtInfra_ = false;
-    int rtAvailKnown_ = -1;
+    mutable int rtAvailKnown_ = -1;                    // (the probe runs once)
     void rtInitMode();
     bool rtReflLive() const;
     bool rtReflPass() const;

@@ -205,7 +205,7 @@ void Pipeline::rtInitMode() {
     else if (shadowAoOn()) rtMode_ = std::getenv("WFC_RT_WORLDSHADOWS") ? 2 : 1;
     else rtMode_ = 0;
 }
-bool Pipeline::rtAvailable() {
+bool Pipeline::rtAvailable() const {
     if (rtAvailKnown_ < 0) rtAvailKnown_ = rtBridgeAvailable() ? 1 : 0;
     return rtAvailKnown_ == 1 && !rtFailed_;
 }
