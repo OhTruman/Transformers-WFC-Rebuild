@@ -202,12 +202,26 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* ep) {
 void loop() {
     int dumps = 0;
     bool reported = false;
+    bool displayRestored = false;
     while (gRun.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         const long long last = gLastProgressMs.load();
         if (last == 0 || !gArmed.load()) continue;
         const double stalled = (nowMs() - last) / 1000.0;
-        if (stalled < kStallSeconds) { reported = false; continue; }
+        if (stalled < kStallSeconds) { reported = false; displayRestored = false; continue; }
+#ifdef _WIN32
+        // [Systems] a hang in fullscreen: after the report / dumps and WFC_HANG_RESTORE_S more seconds (default 10), the desktop
+        // gets its own mode back, so a hung game (killed later: no restore code runs) does not leave the monitor in our mode.
+        // On its own thread: ChangeDisplaySettingsEx notifies every top-level window, and ours is not answering. If frames
+        // resume, the window takes its mode back (Win32Window::pump).
+        static const double restoreAfter = [] { const char* e = std::getenv("WFC_HANG_RESTORE_S"); return e ? std::atof(e) : 10.0; }();
+        if (reported && !displayRestored && restoreAfter >= 0 && stalled >= kStallSeconds + restoreAfter &&
+            platform::desktopModeKeeper().active()) {
+            displayRestored = true;
+            LOG_ERROR("watchdog: stalled %.1f s in fullscreen: restoring the desktop display mode", stalled);
+            std::thread([] { platform::restoreDesktopDisplayMode(); }).detach();
+        }
+#endif
         if (reported) continue;
         reported = true;
         LOG_ERROR("watchdog: no frame completed for %.1f s - render thread last at '%s', frame %d", stalled,

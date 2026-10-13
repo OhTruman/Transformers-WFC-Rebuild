@@ -27,6 +27,15 @@ namespace platform {
 // handler and atexit can put it back too.
 DesktopModeKeeper& desktopModeKeeper() { static DesktopModeKeeper k; return k; }
 void restoreDesktopDisplayMode() { desktopModeKeeper().restore(&ChangeDisplaySettingsExW); }
+const wchar_t* displayRestoreFilePath() {
+    static wchar_t path[MAX_PATH] = {};
+    if (!path[0]) {
+        const DWORD n = GetCurrentDirectoryW(MAX_PATH - 32, path);
+        if (n == 0 || n >= MAX_PATH - 32) path[0] = 0;
+        else std::wcscat(path, L"\\wfc_display_restore.txt");
+    }
+    return path;
+}
 
 namespace {
 
@@ -69,6 +78,14 @@ public:
         width_ = w; height_ = h;
         hinst_ = GetModuleHandleW(nullptr);
         enableDpiAwareness();
+        {   // [Systems] a previous run killed in fullscreen (no restore ran): Windows reverted the display to the registry mode
+            DEVMODEW m{};
+            const int r = DesktopModeKeeper::restoreFromFileAtStartup(displayRestoreFilePath(), false, &ChangeDisplaySettingsExW,
+                                                                      &EnumDisplaySettingsW, &m);
+            if (r == 2) LOG_INFO("window: the last run ended in fullscreen without a restore: desktop mode %lux%lu @ %lu Hz put back",
+                                 m.dmPelsWidth, m.dmPelsHeight, m.dmDisplayFrequency);
+            else if (r == 3) LOG_WARN("window: the last run's desktop mode could not be put back (wfc_display_restore.txt kept)");
+        }
 
         WNDCLASSEXW wc = {};
         wc.cbSize = sizeof(wc);
@@ -108,6 +125,14 @@ public:
     }
 
     bool pump(InputFrame& input) override {
+        if (fullscreen_ && modeChanged_ && !desktopModeKeeper().active()) {
+            // [Systems] the desktop mode was put back from another thread (the watchdog, during a long stall): frames run
+            // again, so take our mode back (debounced as a focus return)
+            modeChanged_ = false;
+            lastRestore_ = std::chrono::steady_clock::now();
+            LOG_INFO("window: the desktop mode was restored during a stall; re-applying the fullscreen mode");
+            if (GetForegroundWindow() == hwnd_) scheduleReapply();
+        }
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) wantClose_ = true;
@@ -197,18 +222,27 @@ public:
         MONITORINFOEXW mi{};
         mi.cbSize = sizeof(mi);
         if (!GetMonitorInfoW(mon, &mi)) return false;
+        // [Systems] the desktop as it runs: our saved desktop mode while our fullscreen mode is active, else the current
+        // mode (the registry mode can differ - a 144 Hz desktop registered at 60 Hz - and auto-detect derives the frame
+        // limit from this refresh); the registry only when the current mode cannot be read
         DEVMODEW dm{};
         dm.dmSize = sizeof(dm);
-        if (!EnumDisplaySettingsW(mi.szDevice, ENUM_REGISTRY_SETTINGS, &dm) && !EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) return false;
+        if (desktopModeKeeper().active()) dm = desktopModeKeeper().saved();
+        else if (!EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm) && !EnumDisplaySettingsW(mi.szDevice, ENUM_REGISTRY_SETTINGS, &dm)) return false;
         w = (int)dm.dmPelsWidth; h = (int)dm.dmPelsHeight; hz = (int)dm.dmDisplayFrequency;
         return w > 0 && h > 0;
     }
 
     std::vector<Mode> displayModes() const override {
         std::vector<Mode> out;
+        // [Systems] the modes of the monitor the window is on (multi-monitor: not the primary's)
+        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        const wchar_t* dev = GetMonitorInfoW(mon, &mi) ? mi.szDevice : nullptr;
         DEVMODEW dm{};
         dm.dmSize = sizeof(dm);
-        for (DWORD i = 0; EnumDisplaySettingsW(nullptr, i, &dm); ++i) {
+        for (DWORD i = 0; EnumDisplaySettingsW(dev, i, &dm); ++i) {
             if (dm.dmBitsPerPel < 32 || dm.dmPelsWidth < 800 || dm.dmPelsHeight < 600) continue;
             bool have = false;
             for (const Mode& m : out) have |= m.width == (int)dm.dmPelsWidth && m.height == (int)dm.dmPelsHeight;
@@ -233,19 +267,23 @@ public:
         EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
         bool ok = false;
         if (fsW_ > 0 && fsH_ > 0 && ((int)cur.dmPelsWidth != fsW_ || (int)cur.dmPelsHeight != fsH_ || modeChanged_)) {
-            // The requested size at the current refresh rate when the monitor offers it, else its highest rate.
+            // The requested size at the desktop's refresh rate when the monitor offers it, else its highest rate. [Systems] the
+            // desktop's rate is the saved one once a mode is saved: in a re-apply or a resolution change `cur` is our own mode,
+            // possibly a 60 Hz fallback, which must not become the preference.
+            const DWORD wantHz = desktopModeKeeper().hasSaved() ? desktopModeKeeper().saved().dmDisplayFrequency : cur.dmDisplayFrequency;
             DEVMODEW best{}, dm{};
             dm.dmSize = sizeof(dm);
             for (DWORD i = 0; EnumDisplaySettingsW(mi.szDevice, i, &dm); ++i) {
                 if ((int)dm.dmPelsWidth != fsW_ || (int)dm.dmPelsHeight != fsH_ || dm.dmBitsPerPel < 32) continue;
-                bool better = best.dmSize == 0 || dm.dmDisplayFrequency == cur.dmDisplayFrequency ||
-                              (best.dmDisplayFrequency != cur.dmDisplayFrequency && dm.dmDisplayFrequency > best.dmDisplayFrequency);
+                bool better = best.dmSize == 0 || dm.dmDisplayFrequency == wantHz ||
+                              (best.dmDisplayFrequency != wantHz && dm.dmDisplayFrequency > best.dmDisplayFrequency);
                 if (better) best = dm;
             }
             if (best.dmSize) {
                 best.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
                 // [Systems] the desktop's mode as it runs now (not the registry's), kept for the way back; not overwritten
                 // while our mode is active (a re-apply or a resolution change in fullscreen sees our own mode in `cur`)
+                desktopModeKeeper().setRestoreFile(displayRestoreFilePath());   // (written at the switch: kill-path repair)
                 desktopModeKeeper().saveBeforeSwitch(mi.szDevice, cur);
                 ok = ChangeDisplaySettingsExW(mi.szDevice, &best, nullptr, CDS_FULLSCREEN, nullptr) == DISP_CHANGE_SUCCESSFUL;
                 if (ok) {
@@ -272,6 +310,7 @@ public:
         const DEVMODEW want = desktopModeKeeper().saved();
         const LONG r = desktopModeKeeper().restore(&ChangeDisplaySettingsExW);
         modeChanged_ = false;
+        lastRestore_ = std::chrono::steady_clock::now();
         DEVMODEW now{};
         now.dmSize = sizeof(now);
         EnumDisplaySettingsW(monitorDevice_.empty() ? nullptr : monitorDevice_.c_str(), ENUM_CURRENT_SETTINGS, &now);
@@ -280,9 +319,48 @@ public:
                  r == DISP_CHANGE_SUCCESSFUL ? "" : "; refused, registry mode restored instead");
     }
 
+    // [Systems] coming back to fullscreen after a restore: never sooner than kReapplyDelayMs after it (a restore -> reapply
+    // -> focus-loss loop, e.g. an overlay stealing focus at each mode change, would otherwise switch modes continuously),
+    // and at most kReapplyMax re-applies per kReapplyWindowMs: beyond that the window stays borderless at the desktop mode
+    // until the next fullscreen request.
+    void scheduleReapply() {
+        const auto now = std::chrono::steady_clock::now();
+        const long long since = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(now - lastRestore_).count();
+        if (lastRestore_.time_since_epoch().count() != 0 && since < kReapplyDelayMs) {
+            if (!reapplyPending_) SetTimer(hwnd_, kReapplyTimer, (UINT)(kReapplyDelayMs - since), nullptr);
+            reapplyPending_ = true;
+            return;
+        }
+        reapplyNow();
+    }
+    void reapplyNow() {
+        const auto now = std::chrono::steady_clock::now();
+        int recent = 0;
+        for (const auto& t : reapplies_)
+            if (t.time_since_epoch().count() != 0 && now - t < std::chrono::milliseconds(kReapplyWindowMs)) ++recent;
+        if (recent >= kReapplyMax) {
+            if (!reapplyGaveUp_) LOG_WARN("window: fullscreen mode re-applied %d times in %d s; staying at the desktop mode", recent, kReapplyWindowMs / 1000);
+            reapplyGaveUp_ = true;
+            applyBorderlessAtDesktop();
+            return;
+        }
+        reapplies_[reapplyNext_] = now; reapplyNext_ = (reapplyNext_ + 1) % kReapplyMax;
+        applyFullscreenMode();
+    }
+    void applyBorderlessAtDesktop() {
+        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        GetMonitorInfoW(mon, &mi);
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                     mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    }
+
     void setDisplayMode(int w, int h, bool full) override {
         // Windowed: a client area of w x h. Fullscreen: the monitor at w x h (applyFullscreenMode).
         if (full) {
+            reapplyGaveUp_ = false;                          // (an explicit request: the loop guard starts afresh)
             if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
             fsW_ = w; fsH_ = h;
             fullscreen_ = true;
@@ -388,6 +466,12 @@ private:
     int fsW_ = 0, fsH_ = 0;
     std::wstring monitorDevice_;
     RECT windowedRect_{};
+    static constexpr UINT_PTR kReapplyTimer = 0x5753;
+    static constexpr int kReapplyDelayMs = 1500, kReapplyMax = 4, kReapplyWindowMs = 10000;
+    std::chrono::steady_clock::time_point lastRestore_{};   // (the re-apply debounce)
+    std::chrono::steady_clock::time_point reapplies_[kReapplyMax] = {};
+    int reapplyNext_ = 0;
+    bool reapplyPending_ = false, reapplyGaveUp_ = false;
 
     static int vkByName(const std::string& n) {
         static const struct { const char* name; int vk; } t[] = {
@@ -601,7 +685,15 @@ private:
                 // Fullscreen at a changed mode: alt-tab returns the desktop to its own mode; coming back reapplies ours.
                 if (fullscreen_) {
                     if (!wp && modeChanged_) { restoreDesktopMode(); ShowWindow(hwnd_, SW_MINIMIZE); }
-                    else if (wp && !modeChanged_ && fsW_ > 0) { ShowWindow(hwnd_, SW_RESTORE); applyFullscreenMode(); }
+                    else if (wp && !modeChanged_ && fsW_ > 0) { ShowWindow(hwnd_, SW_RESTORE); scheduleReapply(); }
+                }
+                break;
+            case WM_TIMER:
+                if (wp == kReapplyTimer) {
+                    KillTimer(hwnd_, kReapplyTimer);
+                    reapplyPending_ = false;
+                    if (fullscreen_ && !modeChanged_ && fsW_ > 0 && GetForegroundWindow() == hwnd_) reapplyNow();
+                    return 0;
                 }
                 break;
             case WM_CHAR: {
