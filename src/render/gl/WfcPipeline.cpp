@@ -369,6 +369,80 @@ void main() {
 }
 )";
 
+// M6 Modern materials (PC ADAPTATION, HD + Modern only): the globals the matc "pbr" body sets (the HD roughness map's
+// value, -1 none; the material's own cube map along its own direction at the roughness mip) and the roughness mapping
+// (Systems' SYSTEMS_M6_AUDIT.md: clamp(sqrt(2 / (SpecularPower + 2)), 0.02, 1); the map replaces it where present).
+const char* kFSPbrHelpers = R"(
+float wfcPbrRoughMap = -1.0;
+vec3 wfcPbrEnv = vec3(0.0);
+float wfcPbrRoughness(float sp) {
+    return wfcPbrRoughMap >= 0.0 ? clamp(wfcPbrRoughMap, 0.02, 1.0) : clamp(sqrt(2.0 / (max(sp, 0.0) + 2.0)), 0.02, 1.0);
+}
+float wfcPbrEnvLod(float sp) { return wfcPbrRoughness(sp) * 6.0; }
+)";
+// The Modern lightmapped base pass: the original's diffuse lighting (base colour = the pbr body's DiffuseColor, the cube
+// reflection stripped) + GGX / Smith specular (F0 0.04) from the three directional-lightmap coefficients taken as light
+// from their basis directions + image-based specular from the material's environment (split-sum, Karis' analytic
+// environment BRDF), occluded by the lightmap's brightness (kPbrSpecOcc). Same declarations as kFSMainLM (the MDI
+// rewrite applies unchanged).
+const char* kFSMainLMModern = R"(
+uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
+uniform vec3 uLMScale[3];
+uniform int uVertexLM;
+in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
+const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
+const vec3 LMB1 = vec3(-0.70710678, -0.40824829, 0.57735027);
+const vec3 LMB2 = vec3(0.70710678, -0.40824829, 0.57735027);
+const float kPbrSpecOcc = @SPECOCC@;
+float wfcGgxD(float NoH, float a2) { float d = NoH * NoH * (a2 - 1.0) + 1.0; return a2 / (3.14159265 * d * d); }
+float wfcSmithVis(float NoV, float NoL, float a2) {
+    float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2), gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+    return 0.5 / max(gv + gl, 1e-5);
+}
+vec2 wfcEnvBrdf(float r, float NoV) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022), c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 q = r * c0 + c1;
+    float a004 = min(q.x * q.x, exp2(-9.28 * NoV)) * q.x + q.y;
+    return vec2(-1.04, 1.04) * a004 + q.zw;
+}
+float wfcPbrSpec(vec3 n, vec3 V, vec3 Lb, float a2, float NoV) {
+    float NoL = clamp(dot(n, Lb), 0.0, 1.0);
+    vec3 H = normalize(Lb + V);
+    float NoH = clamp(dot(n, H), 0.0, 1.0), VoH = clamp(dot(V, H), 0.0, 1.0);
+    float F = 0.04 + 0.96 * pow(1.0 - VoH, 5.0);
+    return wfcGgxD(NoH, a2) * wfcSmithVis(NoV, NoL, a2) * F * NoL * 3.14159265;
+}
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
+    MatOut o; wfcMaterial(m, o);
+    if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
+    if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
+    if (uDebug == 2) { oColor = vec4(o.DiffuseColor, 1.0); return; }
+    vec3 c = o.EmissiveColor;
+    if (uLit != 0) {
+        vec3 n = normalize(o.Normal);
+        float w0 = dot(n, LMB0), w1 = dot(n, LMB1), w2 = dot(n, LMB2);
+        vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
+        vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
+        vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
+        c += o.DiffuseColor * L;
+        float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough, a2 = a * a;
+        vec3 V = normalize(m.cameraVector);
+        float NoV = clamp(dot(n, V), 1e-4, 1.0);
+        c += wfcPbrSpec(n, V, LMB0, a2, NoV) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2, NoV) * l1 * uLMScale[1]
+           + wfcPbrSpec(n, V, LMB2, a2, NoV) * l2 * uLMScale[2];
+        vec2 ab = wfcEnvBrdf(rough, NoV);
+        float occ = clamp(dot(L, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
+        c += wfcPbrEnv * (0.04 * ab.x + ab.y) * occ;
+    }
+    wfcTranslucentOut(c, o.Opacity);
+    c = wfcCanvasOut(wfcFog(c));
+    oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
+}
+)";
+
 // WFC TLightPixelShader<N-LightUberLightPolicy> for dynamic objects (decoded microcode).
 const char* kFSMainUber = R"(
 uniform vec3 uAmb[6];
@@ -935,6 +1009,24 @@ bool Pipeline::load(const std::string& mapName) {
             s.umin.push_back(mn); s.umax.push_back(mx);
         }
         mats_[kv.first] = std::move(s);
+    }
+    // M6 Modern materials: the matc "pbr" bodies (tools/render/matc_pbr.py) - <map>/materials_pbr.json, else
+    // WFC_PBR_DIR/<map>/; only with HD textures on and the Modern setting (or WFC_MODERN=1)
+    pbr_.clear(); modernActive_ = false;
+    if ((modern_ || std::getenv("WFC_MODERN") != nullptr) && hdTextures_) {
+        std::string pt = readText(dataDir_ + "/materials_pbr.json");
+        if (pt.empty()) if (const char* pd = std::getenv("WFC_PBR_DIR")) pt = readText(std::string(pd) + "/" + mapName + "/materials_pbr.json");
+        assets::Json PJ;
+        if (!pt.empty() && assets::Json::parse(pt, PJ))
+            for (const auto& kv : PJ.obj) {
+                PbrSrc ps;
+                ps.glsl = kv.second["glsl"].asString();
+                ps.roughParent = kv.second["roughness_parent"].asString();
+                ps.roughSlot = kv.second["rough_slot"].isNumber() ? (int)kv.second["rough_slot"].asFloat(-1.0f) : -1;
+                if (!ps.glsl.empty()) pbr_[kv.first] = std::move(ps);
+            }
+        modernActive_ = !pbr_.empty();
+        LOG_INFO("wfc: Modern materials %s (%zu pbr bodies)", modernActive_ ? "on" : "unavailable: no materials_pbr.json", pbr_.size());
     }
 
     {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
@@ -1628,6 +1720,11 @@ bool readDdsBc(const std::string& path, const std::string& fmt, int& w, int& h, 
 bool Pipeline::hdTexturesAvailable() { return hdIndexRows() && (!gHdVerified || !hdIndex().empty()); }
 // HD Textures setting: textures load from the pack (when available) from the next map / scene load on; a live
 // change does not reload the current map's textures (they are bound into its materials)
+void Pipeline::setModernMaterials(bool on) {
+    modern_ = on;
+    LOG_INFO("renderer: Modern materials %s (from the next map load%s)", on ? "on" : "off", on && !hdTextures_ ? "; needs HD textures on" : "");
+}
+
 GLuint Pipeline::hdPbrTexture(const std::string& textureObject, const std::string& role) {
     if (!hdTextures_ || !CompressedTexImage2D) return 0;
     std::string key = textureObject, r = role;
@@ -2194,6 +2291,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             replaceAll(code, "wfcSample2D(" + n + ", ", "wfcS2D_" + n + "(");
         }
     }
+    if (pbrBuild_) fs += kFSPbrHelpers;                    // (M6 Modern: the pbr body's globals / mapping)
     fs += "void wfcMaterial(in MatIn m, out MatOut o) {\n" + code + "\n}\n";
     fs += kFSPrologue;
     // Directional lightmap specular (TBasePassPixelShader<FDirectional(Interpolated)TextureLightMapPolicy> microcode, Rust /
@@ -2206,7 +2304,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     // WFC_NOLMSPEC=1) compile the unchanged diffuse-only text.
     static const bool noLmSpec = std::getenv("WFC_NOLMSPEC") != nullptr;
     std::string mainLM;
-    if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
+    if (pbrBuild_ && lightmapped && !mainOverride_) {      // M6 Modern (its specular replaces the lightmap Phong term)
+        static const std::string specOcc = [] { const char* e = std::getenv("WFC_PBR_SPECOCC"); return std::string(e ? e : "4.0"); }();
+        mainLM = kFSMainLMModern;
+        const size_t at = mainLM.find("@SPECOCC@");
+        if (at != std::string::npos) mainLM.replace(at, 9, specOcc);
+    }
+    else if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
         code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
         mainLM = kFSMainLM;
         const std::string anchor = "        c += o.DiffuseColor * L;\n";
@@ -2456,6 +2560,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     std::string matName = matNameIn;
     if (matName.empty()) matName = resolveBySourceName(gm);
     std::string key = (matName.empty() ? std::string("<gltf>") : matName) + (lightmapped ? "|LM" : "|UBER");
+    if (modernActive_ && lightmapped) key += "|PBR";     // (M6 Modern: a separate program; non-pbr materials build as before)
     static const bool gltfOnly = std::getenv("WFC_GLTFMATERIALS") != nullptr;   // A/B: AssetTools bakes
     auto mit = (gltfOnly && !lightmapped) ? mats_.end() : mats_.find(matName);
     if (mit == mats_.end() && gm) {
@@ -2484,9 +2589,29 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             for (int c = 0; c < 4; ++c) { sl.umin[c] = s.umin[k][(size_t)c]; sl.uscale[c] = s.umax[k][(size_t)c] - s.umin[k][(size_t)c]; }
             slots.push_back(sl);
         }
-        lmSpecBuild_ = true;
-        int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
-        lmSpecBuild_ = false;
+        // M6 Modern: lit opaque / masked lightmapped materials with a matc "pbr" body (+ the HD roughness map's slot)
+        std::string body = s.glsl;
+        std::vector<Program::Slot> slotsUse = slots;
+        std::vector<bool> cubeUse = s.cube;
+        bool pbr = false;
+        if (modernActive_ && lightmapped && s.lit && s.blend <= 1) {
+            auto pi = pbr_.find(matName);
+            if (pi != pbr_.end()) {
+                pbr = true;
+                body = pi->second.glsl;
+                if (pi->second.roughSlot >= 0 && (size_t)pi->second.roughSlot == slotsUse.size()) {
+                    const GLuint rm = pi->second.roughParent.empty() ? 0 : hdPbrTexture(pi->second.roughParent, "roughness");
+                    Program::Slot sl{};
+                    sl.tex = rm ? rm : blackTex_;
+                    for (int c = 0; c < 4; ++c) { sl.umin[c] = 0.0f; sl.uscale[c] = 1.0f; }
+                    slotsUse.push_back(sl); cubeUse.push_back(false);
+                    replaceAll(body, "uPbrRoughOn != 0", rm ? "true" : "false");
+                } else replaceAll(body, "uPbrRoughOn != 0", "false");
+            }
+        }
+        lmSpecBuild_ = true; pbrBuild_ = pbr;
+        int r = buildProgram(key, body, slotsUse, cubeUse, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+        lmSpecBuild_ = false; pbrBuild_ = false;
         if (r >= 0) {
             progs_[(size_t)r].original = true;
             // UE3 (shipped exe Function_83052228): a translucent material used with fog volumes is drawn only by
@@ -2528,9 +2653,9 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             if (mdiWanted_ && mdiOn && s.blend <= 1 && progs_[(size_t)r].distProg < 0 && !progs_[(size_t)r].sceneDepth &&
                 !progs_[(size_t)r].sceneColor && MultiDrawElementsIndirect && VertexAttribDivisor) {
                 mdiBuild_ = true;
-                lmSpecBuild_ = true;
-                int md = buildProgram(key + "|MDI", s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
-                lmSpecBuild_ = false;
+                lmSpecBuild_ = true; pbrBuild_ = pbr;
+                int md = buildProgram(key + "|MDI", body, slotsUse, cubeUse, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
+                lmSpecBuild_ = false; pbrBuild_ = false;
                 mdiBuild_ = false;
                 if (md >= 0) { progs_[(size_t)md].original = true; progs_[(size_t)md].material = progs_[(size_t)r].material;
                                progs_[(size_t)r].mdiProg = md; }

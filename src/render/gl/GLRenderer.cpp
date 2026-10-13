@@ -1590,6 +1590,8 @@ public:
     }
     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
+    bool modernMaterialsAvailable() const override { return wfc::Pipeline::hdTexturesAvailable(); }
+    void setModernMaterials(bool on) override { wfc_.setModernMaterials(on); }
     bool hdTextureLevelAvailable(int level) const override {
         return level == 0 || (level == 1 && wfc::Pipeline::hdTexturesAvailable());   // (level 2: no Enhanced root yet)
     }
