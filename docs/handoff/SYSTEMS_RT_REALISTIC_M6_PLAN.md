@@ -41,7 +41,7 @@ That brings forward the approved optional "RT lighting" mode, here called **RT R
   - final = indirect + V_rt * k * D_sun.
   V_rt is the RT visibility, soft and per pixel, so it is sharp where the lightmap was blurry and it includes characters and moving objects.
 - Where RT and the bake agree, the image is exactly the original's. Where they differ, the shadows are the new RT ones.
-- Cost: the stage-1 sun ray already exists for dynamic pixels; extending it to world pixels costs about +0.3 ms at 1440p. The textures add about 1/3 of the lightmap pages' memory (R8).
+- Cost: the stage-1 sun ray already exists for dynamic pixels; extending it to world pixels costs about +0.3 ms at 1440p. The R8 V_bake pages add about 1/12 of the three RGBA8 coefficient pages (one byte vs 3 x 4 per texel).
 - Exit:
   - V_bake vs the visible baked shadows: SSIM over the lightmap pages, checked for UV mismatch.
   - Calibration error: mean |final - LM| on pixels where V_rt = V_bake, below 1 / 255 after the tonemap.
@@ -134,7 +134,7 @@ Agreed with Rendering 2026-10-12. Probe-ray hit shading reuses rt_material.hlsli
 
 ## 4. M6 Modern materials (PBR variants of the original graphs)
 
-**Goal**: the same materials, shaded physically: energy-conserving GGX specular + Lambert / Burley diffuse, image-based lighting, correct Fresnel. It is optional as the "Materials: Original / Modern" row; Original stays the default.
+**Goal**: the same materials, shaded physically: energy-conserving GGX specular + Lambert / Burley diffuse, image-based lighting, correct Fresnel. It is part of the HD pack and follows its switch (user: "materials should be hd textures too"). HD off = the original materials and shading; that is the default.
 
 **Mapping, generated per material by matc in a "pbr" mode**:
 - The same graph evaluation, so textures, parameters and switches stay the original's. A mapping layer converts the outputs:
@@ -152,7 +152,7 @@ Agreed with Rendering 2026-10-12. Probe-ray hit shading reuses rt_material.hlsli
 
 **How it combines with RT Realistic**:
 - RT Realistic needs physically based materials. Direct light from hundreds of lights and GI hits must use one energy-conserving BRDF, and the reflections' roughness gate and denoiser need a real roughness.
-- So **RT Realistic implies Modern materials**: the RT row turns Materials to Modern, greys it out, and says why. Modern materials also work alone, on the baked lighting.
+- So **RT Realistic implies the HD pack's Modern materials**: switching RT Realistic on also requires HD Textures on (the RT row turns it on, greys it out while RT is on, and says why). Modern materials also work alone, as part of HD on the baked lighting.
 - The RT hit shaders get the same PBR mapping through matc's HLSL backend. One mapping table serves both raster and RT, so reflections and GI see the same albedo / roughness as the screen.
 
 **Order and owners (proposal)**:
@@ -171,18 +171,37 @@ R1-R3 do not need M6 and can ship first.
 
 ## 4b. Defaults (user 2026-10-12) and what could become default later
 
-User, verbatim: "Yes the brand new textures should be the default, and by default the Ray traced shadows and lighting should be off unless enabled."
+User, verbatim, in order:
+- "Yes the brand new textures should be the default, and by default the Ray traced shadows and lighting should be off unless enabled."
+- Then, the same day: "HD texture's should be off my default too to be honest."
+- And: "materials should be hd textures too". So the Modern-material maps ship **inside the HD pack** and follow the HD Textures switch: HD on = new textures + Modern materials. There is no separate Materials row; the M6 shading turns on with HD.
+
+**Everything new is opt-in; the original look is the default.**
 
 | Piece | Default now | Could become default later (only if the user asks) |
 |---|---|---|
-| HD textures (M4) | **ON** (the package ships the pack; the profile default and auto-detect turn it on; the originals stay one menu switch away) | - |
-| Modern materials (M6) on the baked lighting | off ("Materials: Original") | The best candidate: it needs no RT hardware and runs on every GPU the game supports. It completes the "brand new" look with the HD textures (HD normal / detail + physically based shading). It is only a candidate once calibrated (per-map luminance within 5 %) and approved on the per-family sheets. |
+| HD pack: textures (M4) + Modern materials (M6: PBR mapping, roughness / ORM maps) | **off** (the package ships it; Settings > Graphics > HD Textures: On) | The best candidate if the user changes their mind: it needs no RT hardware and runs on every GPU the game supports. Only once calibrated (per-map luminance within 5 % of Original) and approved on the per-family sheets. |
 | RT Realistic R1-R2 (RT sun shadows on the world, soft contact-hardening shadows, AO everywhere) | **off** (user) | Possibly "on when the GPU supports DXR 1.1 and has headroom" through auto-detect, but only if the user asks. Never on GPUs without ray tracing. |
 | RT reflections (R3) | **off** | Same rule as R1-R2, after a performance review. |
 | Lightmap-free GI (R4) | **off** | Unlikely as a default: it is the largest departure from the original lighting and the most expensive. It stays an explicit choice. |
 | FSR 3.1 / DLSS, frame generation | off (explicit choices, M5) | - |
 
 A **graphics preset** row could bundle these later: "Original" (the faithful look), "Modern" (HD + Modern materials), "Realistic" (Modern + RT Realistic). The preset only sets the individual rows; each stays switchable. The proposal is Frontend's row; the user decides whether to add it.
+
+## 4c. Review gates (Experimental, 2026-10-12)
+
+1. **Metal classifier**: materials that consume uRT_Cust_Color_* / EnergonColor (team / customisation tints) stay dielectric unless a reviewed per-family row says otherwise. Exit check: tinted regions keep their mean hue within 3 degrees of Original under Modern.
+2. **Generated maps (HD pack)**:
+   - each roughness map's mean is normalised to the derived sqrt(2 / (SpecularPower + 2)) of its material;
+   - an ORM's metal channel must agree with the per-material class (else the map is rejected for that material);
+   - per texture family: eye sheets and the luminance exit.
+3. **VRAM**: a per-map table of the sibling maps (BC4 roughness about +40-50 % of a map's colour-texture memory at full resolution); AssetTools asked for half-resolution roughness.
+4. **Calibration inputs**:
+   - every calibration file (M6 luminance, R1 split check, R4 GI fit) records the texture-pack version it was made with;
+   - loading it with another pack version fails loudly (no silent stale calibration);
+   - M6 / R4 calibration waits for the pack's E decision.
+5. **R1 with HD normals**: k and p are fitted with the normal set the player sees (the HD pack boosts relief x1.6 where present). The < 1/255 exit is checked with HD on and off (a fit per pack state if they differ).
+6. Memory note corrected above: V_bake R8 is about 1/12 of the coefficient pages.
 
 ## 5. Asks
 
