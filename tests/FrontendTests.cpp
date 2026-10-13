@@ -67,6 +67,13 @@ static void testProfileBotMigration() {
     std::ifstream back("wfc_profile.ini");
     frontend::LocalProfile r;
     r.loadFrom(back);
+    {   // Ray tracing: 0 Off (default) / 1 Faithful / 2 Realistic; HD textures: the user's pick is kept
+        std::istringstream in("[PCSettings]\nRayTracing=2\nHDTexturesUserSet=1\n"), big("[PCSettings]\nRayTracing=9\n");
+        frontend::LocalProfile a, b, d;
+        a.loadFrom(in); b.loadFrom(big);
+        check(a.display.rayTracing == 2 && b.display.rayTracing == 2 && d.display.rayTracing == 0 && a.display.hdTexturesUserSet &&
+              !d.display.hdTexturesUserSet, "profile.ray_tracing_0_2_hd_user_set");
+    }
     {   // Frame generation: 0 / 1 (any non-zero is On); default Off
         std::istringstream on("[PCSettings]\nFrameGeneration=7\n");
         frontend::LocalProfile a, d;
@@ -102,6 +109,13 @@ static void testGraphicsAutoDetect() {
           a.upscaling == 0 && a.hdTextures && a.textureQuality == 2, "autodetect.strong_pc_native_4k", a.tier + " " + a.why);
     big.hdTexturePack = false;
     check(!t.pick(big).hdTextures, "autodetect.hd_textures_only_with_pack");
+    {   // HD textures on every tier with the pack, from 6 GB (user decision 2026-10-12)
+        frontend::HardwareFacts six = big;
+        six.hdTexturePack = true; six.vramMB = 6144; six.cpuCores = 2; six.nativeW = 1920; six.nativeH = 1080;
+        const frontend::GraphicsPreset lo = t.pick(six);
+        six.vramMB = 5900;
+        check(lo.tier == "low" && lo.hdTextures && !t.pick(six).hdTextures, "autodetect.hd_textures_every_tier_6gb", lo.tier);
+    }
     frontend::HardwareFacts mid = big;
     mid.gpuName = "NVIDIA GeForce RTX 3060 Ti"; mid.vramMB = 8192; mid.cpuCores = 8;
     frontend::GraphicsPreset b = t.pick(mid);

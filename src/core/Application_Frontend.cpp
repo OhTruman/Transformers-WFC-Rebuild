@@ -174,6 +174,17 @@ template <class R> struct HasRendererUpscalingAvail<R, std::void_t<decltype(std:
 template <class R, class = void> struct HasRendererFrameGen : std::false_type {};
 template <class R> struct HasRendererFrameGen<R, std::void_t<decltype(std::declval<const R&>().frameGenerationAvailable()),
                                                              decltype(std::declval<const R&>().frameGenerationActive())>> : std::true_type {};
+// Rendering (M7 ray tracing): bool IRenderer::rayTracingAvailable() const (DXR 1.1 + the D3D12 runtime) and
+// void IRenderer::setRayTracingMode(int mode) (0 Off, 1 Faithful, 2 Realistic). Detected; without them the Ray Tracing
+// row stays hidden and the stored value is only kept.
+template <class R, class = void> struct HasRendererRayTracing : std::false_type {};
+template <class R> struct HasRendererRayTracing<R, std::void_t<decltype(std::declval<const R&>().rayTracingAvailable()),
+                                                               decltype(std::declval<R&>().setRayTracingMode(0))>> : std::true_type {};
+template <class R> const char* applyRayTracing(R* r, int mode) {
+    if constexpr (HasRendererRayTracing<R>::value) { if (r) { r->setRayTracingMode(mode); return "renderer"; } }
+    (void)r; (void)mode;
+    return "stored (no renderer API yet)";
+}
 template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
     frontend::HardwareFacts f;
     if constexpr (HasRendererGpuFacts<R>::value) {
@@ -195,6 +206,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
     // check (tools/package/verify_slim.ps1) matches it against the package's contents
     LOG_INFO("graphics: optional runtimes: FSR 3.1 %s, frame generation %s, HD texture pack %s", f.fsr3 ? "yes" : "no",
              f.frameGen ? "yes" : "no", f.hdTexturePack ? "yes" : "no");
+    if constexpr (HasRendererRayTracing<R>::value) { if (r) f.rtAvailable = r->rayTracingAvailable(); }
     f.cpuCores = (int)std::thread::hardware_concurrency();
     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
     (void)r;
@@ -405,6 +417,9 @@ void Application::attachPresenter() {
                                                                  {"anisotropy", std::to_string(af)},
                                                                  {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
                                                                  {"provenance", "PC EXTENSION"}});
+        appliedRayTracing_ = d.rayTracing;
+        frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing)},
+                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -447,6 +462,11 @@ void Application::attachPresenter() {
             frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", frontend::FlowTrace::boolean(hd)},
                                                                      {"anisotropy", std::to_string(af)},
                                                                      {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "apply"}});
+        }
+        if (p.display.rayTracing != appliedRayTracing_) {
+            appliedRayTracing_ = p.display.rayTracing;
+            frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(appliedRayTracing_)}, {"by", applyRayTracing(renderer_, appliedRayTracing_)},
+                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
         }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});

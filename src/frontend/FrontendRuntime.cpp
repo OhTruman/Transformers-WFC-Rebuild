@@ -746,6 +746,7 @@ GraphicsPreset FrontendRuntime::applyRecommendedGraphics(const char* why) {
     p.display.anisotropy = g.anisotropy;
     p.display.upscaling = g.upscaling;
     p.display.hdTextures = g.hdTextures;
+    p.display.hdTexturesUserSet = false;   // back to following the default
     p.display.textureQuality = g.textureQuality;
     // Ray tracing / frame generation stay as they are (off by default; never enabled by auto-detect).
     p.autoDetectGpu = hardware_.gpuId();
@@ -786,6 +787,15 @@ bool FrontendRuntime::autoDetectGraphicsAtBoot() {
     // user's settings and just record the GPU.
     const bool changed = !p.autoDetectGpu.empty() && !hardware_.gpuName.empty() && p.autoDetectGpu != id;
     const bool forced = force && std::string(force) == "1";
+    // HD textures follow their default (the pack + 6 GB: on) until the user picks a value in the menu, so a pack
+    // installed later turns them on at its first boot (the row's hint says so that session).
+    if (!p.display.hdTexturesUserSet && p.display.hdTextures != hdTexturesDefault(hardware_)) {
+        p.display.hdTextures = hdTexturesDefault(hardware_);
+        hdTexturesTurnedOn_ = p.display.hdTextures;
+        p.save();
+        FlowTrace::emit("settings.hdTexturesDefault", {{"on", FlowTrace::boolean(p.display.hdTextures)}, {"hdPack", FlowTrace::boolean(hardware_.hdTexturePack)},
+                                                       {"vramMB", std::to_string(hardware_.vramMB)}, {"provenance", "PC EXTENSION"}});
+    }
     if (!first && !changed && !forced) {
         if (p.autoDetectGpu.empty() && !hardware_.gpuName.empty()) { p.autoDetectGpu = id; p.save(); }
         return false;

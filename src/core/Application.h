@@ -66,6 +66,7 @@ private:
     int appliedUpscaling_ = -1;    // PC EXTENSION [PCSettings] Upscaling / HDTextures last handed to the renderer
     bool appliedHdTextures_ = false;
     int appliedAnisotropy_ = -1;
+    int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
     void qaTick(const platform::InputFrame& in);
     void playtestOverlayTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;
