@@ -1,0 +1,1842 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cba259a..b3c7e47 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -60,6 +60,17 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/api/include/ffx_api
+         "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/bin/amd_fidelityfx_framegeneration_dx12.dll"
+         "${CMAKE_SOURCE_DIR}/third_party/ffx_sdk/license.md" $<TARGET_FILE_DIR:wfc_rebuild>)
+ endif()
++# Optional NVIDIA DLSS via Streamline (M5 D, src/render/d3d12/D3D12Streamline.cpp / D3D12Dlss.cpp): the SDK headers + the
++# signed production DLLs fetched by tools/render/fetch_streamline.py into third_party/streamline (not committed: NVIDIA's
++# licences); without them DLSS builds as an unavailable stub. The DLLs are only loaded on NVIDIA GPUs.
++if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/streamline/include/sl.h")
++    target_include_directories(wfc_rebuild PRIVATE "${CMAKE_SOURCE_DIR}/third_party/streamline/include")
++    target_compile_definitions(wfc_rebuild PRIVATE WFC_STREAMLINE_SDK=1)
++    target_link_libraries(wfc_rebuild PRIVATE wintrust crypt32)   # (sl_security.h: the interposer's NVIDIA signature check)
++    file(GLOB WFC_SL_DLLS "${CMAKE_SOURCE_DIR}/third_party/streamline/bin/*.dll")
++    add_custom_command(TARGET wfc_rebuild POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different ${WFC_SL_DLLS}
++        $<TARGET_FILE_DIR:wfc_rebuild>)
++endif()
+ # D3D12 Agility SDK runtime (tools/render/fetch_d3d12_agility.py, not committed): FSR 3.1 needs shader model 6.6;
+ # the exe exports D3D12SDKVersion / D3D12SDKPath (src/render/d3d12/D3D12Agility.cpp) and D3D12Core.dll goes to bin/D3D12
+ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/d3d12_agility/bin/D3D12Core.dll")
+diff --git a/.gitignore b/.gitignore
+index e707e05..44e2b16 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -37,3 +37,4 @@ wfc_profile.ini
+ third_party/ffx_sdk/
+ third_party/d3d12_agility/
+ third_party/dxc/
++third_party/streamline/
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index ace6500..c7fdbf1 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -150,10 +150,13 @@ public:
+     // The PC Graphics menu's Upscaling row: 0 Off (the original path), 1 FSR 1 Quality (1.5x: scale 0.667),
+     // 2 Balanced (1.7x: 0.588), 3 Performance (2x: 0.5); 4 / 5 / 6 FSR 3.1 Quality / Balanced / Performance (temporal,
+     // over D3D12; falls back to FSR 1 at the same scale when unavailable at run time); AMD's default sharpness (0.2).
++    // [Systems M5 D] 7 / 8 / 9 / 10 / 11 DLSS Quality / Balanced / Performance / Ultra Performance / DLAA (NVIDIA RTX only,
++    // via Streamline; falls back to FSR 3.1, then FSR 1, when unavailable at run time).
+     // Safe at any time: the render size changes at the next frame.
+     virtual void setUpscaling(int mode) { (void)mode; }
+     // Whether a mode of that row can run here (menus grey out the rest): 0-3 always; 4-6 when the FSR 3.1 runtime
+     // pieces ship beside the exe (amd_fidelityfx_loader_dx12.dll + D3D12/D3D12Core.dll). Cheap (file checks only).
++    // 7-11 (DLSS) only on an NVIDIA RTX GPU with the Streamline / DLSS DLLs beside the exe (one adapter query on other GPUs).
+     virtual bool upscalingModeAvailable(int mode) const { return mode >= 0 && mode <= 3; }
+     // The next frame's camera does not continue this one's (respawn, teleport, spectator / guided-missile view entered or
+     // left, cinematic cut): temporal upscaling / frame generation drop their history. reason: a short static string
+diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+index 4e7fcc9..1590c82 100644
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -18,6 +18,8 @@
+ 
+ #include "render/Renderer.h"
+ #include "render/gl/WfcPipeline.h"
++#include "render/d3d12/D3D12Dlss.h"
++#include "render/d3d12/D3D12Streamline.h"
+ #include "render/d3d12/D3D12FrameGen.h"
+ #include "platform/FileCompression.h"
+ #include "render/gl/RenderWatchdog.h"
+@@ -1579,17 +1581,24 @@ public:
+         static const float kScale[4] = {1.0f, 0.667f, 0.588f, 0.5f};
+         static const char* kName[7] = {"off", "FSR 1 Quality", "FSR 1 Balanced", "FSR 1 Performance", "FSR 3.1 Quality",
+                                        "FSR 3.1 Balanced", "FSR 3.1 Performance"};
++        if (mode >= 7 && mode <= 11) {                                     // [Systems M5 D] 7-11 DLSS Q / B / P / UP / DLAA
++            wfc_.setFsr3(true); wfc_.setDlss(mode - 7);                    //   (the temporal path; DLSS's per-axis ratios)
++            wfc_.setUpscaling(dlssRenderScale(mode - 7), 0.0f);
++            LOG_INFO("renderer: upscaling mode %d (%s)", mode, dlssModeName(mode - 7));
++            return;
++        }
+         if (mode <= 0 || mode > 6) mode = 0;
+-        wfc_.setFsr3(mode >= 4);
++        wfc_.setFsr3(mode >= 4); wfc_.setDlss(-1);
+         if (mode == 0) wfc_.setUpscaling(1.0f, -1.0f);                     // Off: the original presentation
+         else wfc_.setUpscaling(kScale[mode >= 4 ? mode - 3 : mode], 0.2f);
+         LOG_INFO("renderer: upscaling mode %d (%s)", mode, kName[mode]);
+     }
+     void notifyCameraCut(const char* reason) override { wfc_.notifyCameraCut(reason); }
+-    bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped(); }
++    bool frameGenerationAvailable() const override { return frameGenerationRuntimeShipped() || dlssFrameGenerationAvailable(); }
+     bool frameGenerationActive() const override { return framegenActive(); }
+-    int frameGenerationFactor() const override { return framegenGenerating() ? 2 : 1; }   // (menus: real frames only)
++    int frameGenerationFactor() const override { return framegenFactor(); }   // [Systems M5 D] DLSS-G: 2 / 3 / 4   // (menus: real frames only)
+     bool upscalingModeAvailable(int mode) const override {
++        if (mode >= 7 && mode <= 11) return dlssAvailable();              // [Systems M5 D] NVIDIA RTX + the DLLs (probed once)
+         return mode >= 0 && (mode <= 3 || (mode <= 6 && wfc::Pipeline::fsr3RuntimeShipped()));
+     }
+     void setAnisotropy(int level) override { wfc_.setAnisotropy(level); }
+diff --git a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+index a27dc3f..e277387 100644
+--- a/src/render/gl/WfcPipeline.h
++++ b/src/render/gl/WfcPipeline.h
+@@ -473,6 +473,8 @@ private:
+     std::chrono::steady_clock::time_point fsr3LastFrame_{};
+     double fsr3InSum_ = 0, fsr3InMax_ = 0; int fsr3InN_ = 0;
+     bool fsr3Mode() const;
++    int dlssMode_ = -1;                                // [Systems M5 D] the temporal path's evaluator: DLSS mode 0-4 (D3D12Dlss.h)
++    bool dlssFailed_ = false;                          //   instead of FSR 3.1; on failure FSR 3.1 takes over (then FSR 1)
+     // optional FSR 3 frame generation (WfcFrameGen.cpp): HUD-less / depth / motion inputs for the presenter's FG swapchain
+     GLuint fgDepthProg_ = 0, fgVelProg_ = 0, fgFbo_ = 0;
+     std::chrono::steady_clock::time_point fgLastFrame_{};
+@@ -976,7 +978,8 @@ public:
+     // (0 strongest, 2 mild); scale 1 and sharpness < 0 = off (the original presentation)
+     void setUpscaling(float scale, float sharpness);
+     void notifyCameraCut(const char* reason) { cutPending_ = true; cutPendingWhy_ = reason ? reason : "explicit"; }
+-    void setFsr3(bool on) { fsr3On_ = on; }            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
++    void setFsr3(bool on) { fsr3On_ = on; }
++    void setDlss(int mode) { dlssMode_ = mode; }       // [Systems M5 D] -1 off; 0-4 DLSS Q / B / P / UP / DLAA (with setFsr3(true))            // with setUpscaling's scale: FSR 3.1 instead of FSR 1 (WfcFsr3.cpp)
+     static bool fsr3RuntimeShipped();                  // the FFX loader + Agility runtime beside the exe (file checks)
+     void setAnisotropy(int level);              // 4 (original MaxAnisotropy, default) / 8 / 16
+     static bool hdTexturesAvailable();          // IRenderer::hdTexturesAvailable
+diff --git a/src/render/gl/WfcFsr3.cpp b/src/render/gl/WfcFsr3.cpp
+index acf6191..f76f2e9 100644
+--- a/src/render/gl/WfcFsr3.cpp
++++ b/src/render/gl/WfcFsr3.cpp
+@@ -8,6 +8,7 @@
+ #include <windows.h>
+ #include "render/gl/WfcPipeline.h"
+ #include "render/d3d12/D3D12Upscaler.h"
++#include "render/d3d12/D3D12Dlss.h"
+ #include "core/Log.h"
+ 
+ #include <chrono>
+@@ -62,7 +63,12 @@ bool Pipeline::fsr3Run(int outW, int outH) {
+     static PFN_CopyImageSubData copyImage = (PFN_CopyImageSubData)(void*)wglGetProcAddress("glCopyImageSubData");
+     if (!copyImage) { LOG_WARN("FSR3: glCopyImageSubData unavailable"); fsr3Failed_ = true; return false; }
+     Fsr3Targets t;
+-    if (!fsr3Prepare(vpW_, vpH_, outW, outH, &t)) {
++    // [Systems M5 D] DLSS: the same inputs into DLSS's shared targets; unavailable -> FSR 3.1 (-> FSR 1) as before
++    bool dlss = dlssMode_ >= 0 && !dlssFailed_;
++    if (dlss && !dlssPrepare(dlssMode_, vpW_, vpH_, outW, outH, &t)) {
++        LOG_WARN("DLSS: unavailable (see above): FSR 3.1 instead"); dlssFailed_ = true; dlss = false;
++    }
++    if (!dlss && !fsr3Prepare(vpW_, vpH_, outW, outH, &t)) {
+         LOG_WARN("FSR3: unavailable (see above): FSR 1 kept"); fsr3Failed_ = true; return false;
+     }
+     if (!fsr3DepthProg_) {
+@@ -122,10 +128,11 @@ bool Pipeline::fsr3Run(int outW, int outH) {
+             fsr3InSum_ = fsr3InMax_ = 0; fsr3InN_ = 0;
+         }
+     }
+-    if (!fsr3Dispatch(p)) return false;
++    if (dlss ? !dlssDispatch(p, (unsigned)frameNo_) : !fsr3Dispatch(p)) return false;
+     fsr3Out_ = t.output;
+-    static bool logged = false;
+-    if (!logged) { LOG_INFO("FSR3: upscaling %dx%d -> %dx%d (before post; sharpness %.2f)", vpW_, vpH_, outW, outH, p.sharpness); logged = true; }
++    static bool logged = false, loggedDlss = false;
++    if (!dlss && !logged) { LOG_INFO("FSR3: upscaling %dx%d -> %dx%d (before post; sharpness %.2f)", vpW_, vpH_, outW, outH, p.sharpness); logged = true; }
++    if (dlss && !loggedDlss) { LOG_INFO("DLSS: %s %dx%d -> %dx%d (before post)", dlssModeName(dlssMode_), vpW_, vpH_, outW, outH); loggedDlss = true; }
+     return true;
+ }
+ 
+diff --git a/src/render/gl/WfcFrameGen.cpp b/src/render/gl/WfcFrameGen.cpp
+index 42ca686..eb24340 100644
+--- a/src/render/gl/WfcFrameGen.cpp
++++ b/src/render/gl/WfcFrameGen.cpp
+@@ -115,6 +115,11 @@ void Pipeline::framegenCapture(int outW, int outH) {
+         p.camRight[k] = v[k * 4 + 0]; p.camUp[k] = v[k * 4 + 1]; p.camFwd[k] = -v[k * 4 + 2];
+     }
+     p.camPos[0] = camPos_.x; p.camPos[1] = camPos_.y; p.camPos[2] = camPos_.z;
++    // [Systems M5 D] DLSS-G's reprojection matrices (unjittered; prevViewProj_ is last frame's until WfcMotion's frame end)
++    std::memcpy(p.viewProj, viewProjNoJitter_.m, sizeof p.viewProj);
++    std::memcpy(p.view, camView_.m, sizeof p.view);
++    std::memcpy(p.prevViewProj, havePrevVP_ ? prevViewProj_.m : viewProjNoJitter_.m, sizeof p.prevViewProj);
++    p.matrices = true;
+     framegenParams(p);
+     static bool logged = false;
+     if (!logged) { LOG_INFO("FRAMEGEN: inputs %dx%d (render) / %dx%d (HUD-less)", vpW_, vpH_, outW, outH); logged = true; }
+diff --git a/src/render/d3d12/D3D12FrameGen.h b/src/render/d3d12/D3D12FrameGen.h
+index ee3c227..ec31a07 100644
+--- a/src/render/d3d12/D3D12FrameGen.h
++++ b/src/render/d3d12/D3D12FrameGen.h
+@@ -18,6 +18,10 @@ struct FgParams {
+     bool reset = false;                         // camera cut
+     float nearM = 0.1f, farM = 20000.0f, fovY = 1.0f;
+     float camPos[3] = {}, camUp[3] = {0, 1, 0}, camRight[3] = {1, 0, 0}, camFwd[3] = {0, 0, -1};
++    // [Systems M5 D] DLSS-G reprojects with the camera matrices (GL column-major, unjittered): this frame's view-projection,
++    // its view, and the previous frame's view-projection. matrices = false: not filled (FSR 3 FG does not read them).
++    float viewProj[16] = {}, view[16] = {}, prevViewProj[16] = {};
++    bool matrices = false;
+ };
+ 
+ bool framegenActive();                                       // the presenter runs the FG swapchain
+@@ -31,5 +35,11 @@ void framegenParams(const FgParams& p);                      // this frame's cam
+ // present / FG; a CPU-side latency proxy, display scan-out not included).
+ void presentFrameStart(long long steadyNs);
+ bool frameGenerationRuntimeShipped();                        // FFX FG DLLs + D3D12/D3D12Core.dll beside the exe
++// [Systems M5 D] Frames on screen per rendered frame while FG generates (FSR 3 FG 2; DLSS-G 2 / 3 / 4), else 1.
++int framegenFactor();
++bool framegenIsDlss();                                       // the presenter runs DLSS-G (NVIDIA) rather than FSR 3 FG
++// DLSS-G frames on screen per rendered frame (2 / 3 / 4: multi frame generation on RTX 50; clamped to the GPU's maximum),
++// decided at start-up like the FG row. WFC_DLSSG_FACTOR overrides; WFC_FG_BACKEND=fsr keeps FSR 3 FG on NVIDIA.
++void setFrameGenerationFactorAtStartup(int factor);
+ 
+ }  // namespace render
+diff --git a/src/render/d3d12/D3D12Presenter.cpp b/src/render/d3d12/D3D12Presenter.cpp
+index 0b07162..25aabc0 100644
+--- a/src/render/d3d12/D3D12Presenter.cpp
++++ b/src/render/d3d12/D3D12Presenter.cpp
+@@ -15,6 +15,7 @@
+ #include "platform/PresentHook.h"
+ #include "render/d3d12/D3D12FrameGen.h"
+ #include "render/d3d12/D3D12Adapter.h"
++#include "render/d3d12/D3D12Streamline.h"
+ #include "core/Log.h"
+ #if defined(WFC_FFX_SDK)
+ #include "ffx_api.h"
+@@ -44,6 +45,8 @@ namespace render {
+ void d3d12SelectAgility();   // D3D12Agility.cpp
+ static bool g_fgAtStartup = false;                // setFrameGenerationAtStartup (the profile's Frame Generation row)
+ void setFrameGenerationAtStartup(bool on) { g_fgAtStartup = on; }
++static int g_fgFactorAtStartup = 2;                 // [Systems M5 D] DLSS-G 2x / 3x / 4x (setFrameGenerationFactorAtStartup)
++void setFrameGenerationFactorAtStartup(int factor) { g_fgFactorAtStartup = std::max(2, std::min(4, factor)); }
+ // the FSR 3 FG runtime beside the exe: the FFX loader + frame-generation DLLs and the Agility D3D12 runtime
+ bool frameGenerationRuntimeShipped() {
+     static const bool shipped = [] {
+@@ -184,15 +187,27 @@ public:
+         typedef HRESULT(WINAPI * PFN_CF2)(UINT, REFIID, void**);
+         auto cf2 = dxgi ? (PFN_CF2)(void*)GetProcAddress(dxgi, "CreateDXGIFactory2") : nullptr;
+         IDXGIAdapter1* adapter = d3d12AdapterForGL();   // [Systems] GL's adapter (hybrid laptops); nullptr = the default
+-        const bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_)) &&
+-                          SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_));
++        bool made = create && cf2 && SUCCEEDED(cf2(0, __uuidof(IDXGIFactory5), (void**)&factory_));
++        // [Systems M5 D] frame generation on an NVIDIA RTX GPU: DLSS-G through Streamline (WFC_FG_BACKEND=fsr: FSR 3 FG).
++        // The swapchain then comes from Streamline's upgraded factory, on Streamline's device (it runs one device).
++        static const char* fgBackend = std::getenv("WFC_FG_BACKEND");
++        if (made && (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) && !(fgBackend && std::strcmp(fgBackend, "fsr") == 0) &&
++            dlssFrameGenerationAvailable()) {
++            ID3D12Device* sd = streamlineDevice();
++            if (sd && streamlineUpgrade((void**)&factory_) && streamlineReflexOptions(1, 0)) {   // (DLSS-G requires Reflex)
++                dev_ = sd; dev_->AddRef(); dlssg_ = true;
++                const char* e = std::getenv("WFC_DLSSG_FACTOR");
++                dlssgFrames_ = std::max(1, std::min(3, (e ? std::atoi(e) : g_fgFactorAtStartup) - 1));
++            } else LOG_WARN("DLSS-G: Streamline device / factory / Reflex unavailable: FSR 3 frame generation instead");
++        }
++        made = made && (dev_ || SUCCEEDED(create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&dev_)));
+         if (adapter) adapter->Release();
+         if (!made) { LOG_WARN("D3D12 present: no D3D12 device: GL present kept"); return false; }
+         BOOL tear = FALSE;
+         if (SUCCEEDED(factory_->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tear, sizeof tear))) tearing_ = tear != FALSE;
+         vsync_ = std::getenv("WFC_D3D12_VSYNC") != nullptr;
+ #if defined(WFC_FFX_SDK)
+-        if (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup) {   // FSR 3 frame generation (M5 C): the FG swapchain + context
++        if (!dlssg_ && (std::getenv("WFC_FRAMEGEN") || g_fgAtStartup)) {   // FSR 3 frame generation (M5 C): the FG swapchain + context
+             ffxDll_ = LoadLibraryW(L"amd_fidelityfx_loader_dx12.dll");
+             if (ffxDll_) { ffxLoadFunctions(&ffx_, ffxDll_); fg_ = ffx_.CreateContext && ffx_.Configure && ffx_.Dispatch && ffx_.DestroyContext; }
+             if (!fg_) LOG_WARN("FRAMEGEN: amd_fidelityfx_loader_dx12.dll / entry points missing: plain D3D12 present");
+@@ -212,7 +227,8 @@ public:
+         gl_.importSem(sem_, kHandleD3D12Fence, fenceHandle_);
+         RECT rc; GetClientRect(hwnd_, &rc);
+         if (!createSwapchain(std::max<LONG>(1, rc.right - rc.left), std::max<LONG>(1, rc.bottom - rc.top))) return false;
+-        if (std::getenv("WFC_D3D12_WORKER")) startWorker();
++        if (std::getenv("WFC_D3D12_WORKER") && dlssg_) LOG_INFO("D3D12 present: DLSS-G presents on the main thread (WFC_D3D12_WORKER ignored)");
++        else if (std::getenv("WFC_D3D12_WORKER")) startWorker();
+         {   // M5 item 1 diagnostics: is the WGL_NV_DX_interop2 path (lock / unlock instead of an external semaphore) offered?
+             typedef const char*(WINAPI * PFN_GetExtStr)(HDC);
+             auto ges = (PFN_GetExtStr)(void*)wglGetProcAddress("wglGetExtensionsStringARB");
+@@ -222,7 +238,8 @@ public:
+         }
+         LOG_INFO("PRESENT: D3D12 (flip model, %u buffers, %u shared, latency-waitable max %u, %s%s%s) over the GL renderer (%dx%d)", buffers_, kRing, latency_,
+                  vsync_ ? "v-sync" : tearing_ ? "immediate + tearing" : "immediate", worker_ ? ", worker-thread signal + present" : "",
+-                 fg_ ? ", FSR 3 frame generation" : "", w_, h_);
++                 fg_ ? ", FSR 3 frame generation" : dlssg_ ? (dlssgFrames_ == 1 ? ", DLSS frame generation 2x" : dlssgFrames_ == 2 ?
++                 ", DLSS multi frame generation 3x" : ", DLSS multi frame generation 4x") : "", w_, h_);
+         return true;
+     }
+     // WFC_D3D12_WORKER=1: the GL semaphore signal (~0.7 ms CPU in the AMD driver, M5 item 1) and the D3D12 copy / present
+@@ -414,6 +431,7 @@ public:
+         b[1].Transition.pResource = back_[bi]; b[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT; b[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+         list_->ResourceBarrier(2, b);
+         fgRecord(slot);                                  // FSR 3 FG: configure + prepare (depth / motion / camera) for this frame
++        dlssgRecord(slot);                               // [Systems M5 D] DLSS-G: options, constants, input tags
+         list_->CopyResource(back_[bi], shared_[slot]);
+         // WFC_D3D12SHOT=<frame>,<file.bmp> (verification): the presented image read back from the D3D12 side
+         static int shotFrame = -1; static std::string shotFile;
+@@ -449,7 +467,9 @@ public:
+         ID3D12CommandList* lists[] = {list_};
+         queue_->ExecuteCommandLists(1, lists);
+         const clk::time_point t4 = clk::now();
++        if (dlssg_) streamlineMarker(StreamlineMarker::PresentStart);
+         HRESULT hr = swap_->Present(vsync_ ? 1 : 0, !vsync_ && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0);
++        if (dlssg_) streamlineMarker(StreamlineMarker::PresentEnd);
+         // (verification) WFC_D3D12_SIMLOST=<n>: the n-th present reports DXGI_ERROR_DEVICE_REMOVED (the GL fallback path)
+         static const int simLost = [] { const char* e = std::getenv("WFC_D3D12_SIMLOST"); return e ? std::atoi(e) : -1; }();
+         if (presented_ == simLost) hr = DXGI_ERROR_DEVICE_REMOVED;
+@@ -577,7 +597,47 @@ public:
+     }
+ 
+     // ---------------------------------------------------------------- FSR 3 frame generation (M5 C)
+-    bool fgOn() const { return fg_ && fgCtx_ && !lost_ && !failed_; }
++    bool fgOn() const { return ((fg_ && fgCtx_) || dlssg_) && !lost_ && !failed_; }
++    bool dlssg() const { return dlssg_; }
++    int factor() const { return fgGenerating() ? (dlssg_ ? 1 + dlssgSet_ : 2) : 1; }
++    // [Systems M5 D] DLSS-G per real frame: options when they change (off in menus / frames without inputs), the camera
++    // constants and the three inputs tagged on this frame's token (the swapchain proxy interpolates at Present)
++    void dlssgRecord(UINT slot) {
++        if (!dlssg_ || lost_ || failed_) return;
++        const bool have = fgHave_[slot];
++        fgHave_[slot] = false;
++        fgGenFrames_ = have ? 30 : std::max(0, fgGenFrames_.load() - 1);
++        fgGenerating_ = fgGenFrames_ > 0;
++        if (!streamlineFrameOwned()) streamlineBeginFrame((uint32_t)mainFrame_);   // (no main-loop token: the presenter's)
++        const FgParams& p = fgParams_[slot];
++        const int frames = have ? dlssgFrames_ : 0;
++        if (frames != dlssgSet_ || w_ != dlssgKey_[0] || h_ != dlssgKey_[1] || (have && (p.renderW != dlssgKey_[2] || p.renderH != dlssgKey_[3]))) {
++            if (streamlineDlssgOptions(frames, w_, h_, have ? p.renderW : dlssgKey_[2], have ? p.renderH : dlssgKey_[3])) {
++                dlssgSet_ = frames; dlssgKey_[0] = w_; dlssgKey_[1] = h_;
++                if (have) { dlssgKey_[2] = p.renderW; dlssgKey_[3] = p.renderH; }
++            }
++        }
++        if (!have) return;
++        if (have && p.reset) ++fgResets_;
++        StreamlineCamera c;
++        const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
++        for (float* m : {c.viewToClip, c.clipToView, c.clipToPrevClip, c.prevClipToClip}) std::memcpy(m, id, sizeof id);
++        if (p.matrices) streamlineCameraFromGL(p.viewProj, p.view, p.prevViewProj, c);
++        c.jitterX = p.jitterX; c.jitterY = p.jitterY;      // (render pixels, +y down: the FG inputs are top-down)
++        c.mvecScaleX = 1.0f; c.mvecScaleY = 1.0f;          // (prevUV - curUV: already normalised screen units)
++        for (int k = 0; k < 3; ++k) { c.pos[k] = p.camPos[k]; c.up[k] = p.camUp[k]; c.right[k] = p.camRight[k]; c.fwd[k] = p.camFwd[k]; }
++        c.nearM = p.nearM; c.farM = p.farM; c.fovY = p.fovY; c.aspect = p.renderH > 0 ? (float)p.renderW / (float)p.renderH : 1.0f;
++        c.depthInverted = false; c.reset = p.reset;
++        streamlineSetCamera(c);
++        streamlineTagFrameGen(list_, fgIn_[slot][0].res, fgIn_[slot][1].res, fgIn_[slot][2].res, w_, h_, p.renderW, p.renderH);
++        if (++dlssgStatusN_ >= 300) {                      // the status bits once per 300 frames (a failing input explains itself)
++            dlssgStatusN_ = 0;
++            const int st = streamlineDlssgStatus();
++            if (st > 0 && st != dlssgLastStatus_) LOG_WARN("DLSS-G: status 0x%x (1 resolution too low, 2 Reflex not detected, 4 HDR format, "
++                                                           "8 constants invalid, 16 GetCurrentBackBufferIndex not called)", st);
++            dlssgLastStatus_ = st;
++        }
++    }
+     bool fgGenerating() const { return fgOn() && fgGenerating_; }
+     // the slot the next present() uses: wait (GPU side) for D3D12's last reads of it, (re)create the inputs at this size
+     bool fgInputs(int rw, int rh, FgInputs* out) {
+@@ -683,7 +743,7 @@ public:
+     }
+     // presented frames (real + generated) from the swapchain's statistics vs real frames, per 300 real frames
+     void fgCount(std::chrono::steady_clock::time_point t0) {
+-        if (!fg_) return;
++        if (!fg_ && !dlssg_) return;
+         if (fgCountN_ == 0) {
+             fgCountT0_ = t0; DXGI_FRAME_STATISTICS st{};
+             fgCountP0_ = SUCCEEDED(swap_->GetFrameStatistics(&st)) ? st.PresentCount : 0;
+@@ -759,6 +819,8 @@ public:
+     double latSum_ = 0, latMax_ = 0; int latN_ = 0, fgResets_ = 0;
+     UINT swapFlags_ = 0;
+     int fgCountN_ = 0; UINT fgCountP0_ = 0, fgLast0_ = 0; std::chrono::steady_clock::time_point fgCountT0_;
++    bool dlssg_ = false;                                 // [Systems M5 D] DLSS-G through Streamline's swapchain proxy
++    int dlssgFrames_ = 1, dlssgSet_ = -1, dlssgKey_[4] = {}, dlssgStatusN_ = 0, dlssgLastStatus_ = 0;
+ #if defined(WFC_FFX_SDK)
+     HMODULE ffxDll_ = nullptr;
+     ffxFunctions ffx_{};
+@@ -772,7 +834,7 @@ private:
+         DXGI_SWAP_CHAIN_DESC1 sd{};
+         sd.Width = (UINT)w; sd.Height = (UINT)h; sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.SampleDesc.Count = 1;
+         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = buffers_; sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+-        swapFlags_ = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | (fg_ ? 0u : (UINT)DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
++        swapFlags_ = (tearing_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) | (fg_ || dlssg_ ? 0u : (UINT)DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+         sd.Flags = swapFlags_;
+         IDXGISwapChain1* sc1 = nullptr;
+ #if defined(WFC_FFX_SDK)
+@@ -793,7 +855,7 @@ private:
+         factory_->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
+         sc1->QueryInterface(__uuidof(IDXGISwapChain3), (void**)&swap_);
+         rel(sc1);
+-        if (swap_ && !fg_) { swap_->SetMaximumFrameLatency(latency_); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
++        if (swap_ && !fg_ && !dlssg_) { swap_->SetMaximumFrameLatency(latency_); waitable_ = swap_->GetFrameLatencyWaitableObject(); }
+         return resize(w, h, false);
+     }
+     bool resizeFail(const char* what, int w, int h) {   // logged once per kind: a failing resize falls back to GL each frame
+@@ -957,6 +1019,8 @@ bool presentHook() {
+ }  // namespace
+ bool framegenActive() { return g_presenter && g_presenter->fgOn(); }
+ bool framegenGenerating() { return g_presenter && g_presenter->fgGenerating(); }
++int framegenFactor() { return g_presenter ? g_presenter->factor() : 1; }
++bool framegenIsDlss() { return g_presenter && g_presenter->dlssg(); }
+ bool framegenInputs(int renderW, int renderH, FgInputs* out) { return g_presenter && g_presenter->fgInputs(renderW, renderH, out); }
+ void framegenParams(const FgParams& p) { if (g_presenter) g_presenter->fgSetParams(p); }
+ void presentFrameStart(long long ns) { if (g_presenter) g_presenter->setFrameStart(ns); }
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index fcef999..c805b28 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -9,6 +9,7 @@
+ #include <windows.h>
+ #include <psapi.h>
+ #endif
++#include "render/d3d12/D3D12Streamline.h"
+ #include "render/HudMarkers.h"
+ #include <xmmintrin.h>
+ #include <thread>
+@@ -508,6 +509,7 @@ Application::MatchExit Application::runMatch() {
+             break;
+         }
+         ++frame;
++        render::streamlineFrameStart();   // [Systems M5 D] Reflex sleep + markers (DLSS-G / Reflex only; else a no-op)
+         // [Rendering M09] PC ADAPTATION: presented-frame limiter slot, before the frame's clock read and input pump
+         // (lowest latency; the simulation's fixed step is unaffected). No-op when the limit is 0 (unlimited).
+         pacingCheckFrameGeneration();   // [Systems, M5 item 10] frame generation on / off / factor: the limiter paces the rendered rate
+@@ -963,6 +965,8 @@ Application::MatchExit Application::runMatch() {
+                 else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
+             }
+         }
++        render::streamlineMarker(render::StreamlineMarker::SimulationEnd);       // [Systems M5 D]
++        render::streamlineMarker(render::StreamlineMarker::RenderSubmitStart);
+         renderer_->beginFrame(camera_, window_->width(), window_->height());
+         world_.draw(*renderer_);
+         if (WFC_ENV("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
+@@ -1148,6 +1152,7 @@ Application::MatchExit Application::runMatch() {
+             }
+         }
+ 
++        render::streamlineMarker(render::StreamlineMarker::RenderSubmitEnd);   // [Systems M5 D]
+         window_->present();
+         if (latProbe && lat.phase == 2 && lat.seen) {
+             const double ms = (nowSeconds() - lat.tIn) * 1000.0;
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 0ce32c9..d3b7285 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -1,6 +1,7 @@
+ // Clean-room reconstruction — application side of the frontend boot (docs/FRONTEND.md).
+ // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
+ // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
++#include "render/d3d12/D3D12Streamline.h"
+ #include "core/Application.h"
+ #include "core/FrameProfile.h"
+ #include "core/FrontendSceneGL.h"
+@@ -187,7 +188,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
+         }
+     }
+     if constexpr (HasRendererHdPack<R>::value) { if (r) f.hdTexturePack = r->hdTexturesAvailable(); }
+-    if constexpr (HasRendererUpscalingAvail<R>::value) { if (r) f.fsr3 = r->upscalingModeAvailable(4); }
++    if constexpr (HasRendererUpscalingAvail<R>::value) { if (r) { f.fsr3 = r->upscalingModeAvailable(4); f.dlss = r->upscalingModeAvailable(7); } }
+     if constexpr (HasRendererFrameGen<R>::value) {
+         if (r) { f.frameGen = r->frameGenerationAvailable(); f.frameGenActive = r->frameGenerationActive(); }
+     }
+@@ -195,6 +196,7 @@ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::I
+     // check (tools/package/verify_slim.ps1) matches it against the package's contents
+     LOG_INFO("graphics: optional runtimes: FSR 3.1 %s, frame generation %s, HD texture pack %s", f.fsr3 ? "yes" : "no",
+              f.frameGen ? "yes" : "no", f.hdTexturePack ? "yes" : "no");
++    LOG_INFO("graphics: DLSS %s", f.dlss ? "yes (NVIDIA RTX, Streamline)" : "no");   // [Systems M5 D] (the reason: the DLSS line above)
+     f.cpuCores = (int)std::thread::hardware_concurrency();
+     if (w) w->desktopMode(f.nativeW, f.nativeH, f.nativeHz);
+     (void)r;
+@@ -915,6 +917,9 @@ void Application::drawFrontendFrame() {
+     ui::beginScreenFrame(window_->width(), window_->height());
+     frontend_->draw(window_->width(), window_->height());
+     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
++    render::streamlineMarker(render::StreamlineMarker::SimulationEnd);       // [Systems M5 D] (menus: one span)
++    render::streamlineMarker(render::StreamlineMarker::RenderSubmitStart);
++    render::streamlineMarker(render::StreamlineMarker::RenderSubmitEnd);
+     {   core::prof::Scope prof("present"); window_->present(); }
+     applyHudScreenEffect(renderer_, -1);
+     notePresented(renderer_);   // every frontend present (movies, menus, load yields) is progress for the stall watchdog
+@@ -944,6 +949,7 @@ void Application::runFrontend() {
+         bool quit = false;
+         for (;;) {
+             pacingCheckFrameGeneration();   // [Systems, M5 item 10] as runMatch's loop (the limiter waits in endFrame here)
++            render::streamlineFrameStart();  // [Systems M5 D] Reflex sleep + markers (DLSS-G / Reflex only; else a no-op)
+             bool pumped;
+             { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
+             if (!pumped) { quit = true; break; }
+diff --git a/src/frontend/GraphicsAutoDetect.h b/src/frontend/GraphicsAutoDetect.h
+index 35d6198..641176a 100644
+--- a/src/frontend/GraphicsAutoDetect.h
++++ b/src/frontend/GraphicsAutoDetect.h
+@@ -15,6 +15,8 @@ struct HardwareFacts {
+     bool rayTracing = false, hdTexturePack = false;
+     bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
+     bool frameGen = false, frameGenActive = false;   // FSR frame generation can run / did start this session (Rendering)
++    bool dlss = false;                // [Systems M5 D] DLSS SR can run (NVIDIA RTX + Streamline DLLs): the DLSS rows (7-11) show
++                                      // only then; auto-detect never picks them
+     int cpuCores = 0;
+     int nativeW = 0, nativeH = 0, nativeHz = 0;   // the monitor's current (desktop) mode
+     std::string gpuId() const;                    // stored with the settings to re-detect when the GPU changes
+diff --git a/src/frontend/Profile.h b/src/frontend/Profile.h
+index 720ab23..01ed764 100644
+--- a/src/frontend/Profile.h
++++ b/src/frontend/Profile.h
+@@ -46,7 +46,7 @@ public:
+     struct Display {
+         int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0;
+         int upscaling = 0; bool hdTextures = false; int anisotropy = 4; int frameGeneration = 0; bool rayTracing = false;
+-        static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance
++        static constexpr int kUpscalingMax = 11;  // [Systems M5 D] 7-11 DLSS Q / B / P / UP / DLAA (rows: NVIDIA RTX only)
+         static int clampAnisotropy(int v) { return v >= 16 ? 16 : v >= 8 ? 8 : 4; }
+     };
+     // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and
+diff --git a/src/frontend/FrontendRuntime.h b/src/frontend/FrontendRuntime.h
+index 0c23e22..821d3db 100644
+--- a/src/frontend/FrontendRuntime.h
++++ b/src/frontend/FrontendRuntime.h
+@@ -150,6 +150,7 @@ public:
+     bool hdTexturesAvailable() const { return hardwareKnown_ && hardware_.hdTexturePack; }
+     // FSR 3.1 upscaling (modes 4-6) can run: its runtime ships beside the exe (Rendering's upscalingModeAvailable at boot).
+     bool fsr3Available() const { return hardwareKnown_ && hardware_.fsr3; }
++    bool dlssAvailable() const { return hardwareKnown_ && hardware_.dlss; }   // [Systems M5 D] NVIDIA RTX + Streamline
+     // FSR frame generation: its runtime ships (the row is offered) / it started this session (set at launch only).
+     bool frameGenerationAvailable() const { return hardwareKnown_ && hardware_.frameGen; }
+     bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
+diff --git a/src/ui/GfxPresenter.cpp b/src/ui/GfxPresenter.cpp
+index a6303af..66fafd7 100644
+--- a/src/ui/GfxPresenter.cpp
++++ b/src/ui/GfxPresenter.cpp
+@@ -1035,7 +1035,7 @@ namespace {
+ constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
+ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
+                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
+-                       bool frameGenAvailable, bool frameGenActive) {
++                       bool frameGenAvailable, bool frameGenActive, bool dlssAvailable) {
+     if (linkage != "mc_subMenu" || !init) return;
+     gfx::avm1::VM& vm = p.vm();
+     gfx::avm1::Value a = vm.get(init, "buildArray");
+@@ -1086,6 +1086,11 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
+     const bool fsr3Missing = !fsr3Available && upscalingCurrent >= 4;   // a stored FSR 3.1 choice without its runtime
+     for (int m = 4; m <= 6; ++m)
+         if (fsr3Available || m == upscalingCurrent) add(up, m, kFsr3[m - 4]);
++    // [Systems M5 D] DLSS (7-11): only on NVIDIA RTX with the Streamline / DLSS DLLs (never listed elsewhere; a stored DLSS
++    // choice on another GPU runs FSR 3.1 / FSR 1 at the same scale and is shown so the row reads what is set)
++    static const char* const kDlss[] = {"DLSS Quality", "DLSS Balanced", "DLSS Perf.", "DLSS Ultra Perf.", "DLAA"};
++    for (int m = 7; m <= 11; ++m)
++        if (dlssAvailable || m == upscalingCurrent) add(up, m, kDlss[m - 7]);
+     add(hd, 0, "Off");
+     if (hdAvailable) add(hd, 1, "On");   // without the pack the row has the single value Off (cannot be changed)
+     add(af, 4, "4x"); add(af, 8, "8x"); add(af, 16, "16x");   // 4x = the original's filtering
+@@ -1373,7 +1378,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame&
+             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
+                 addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
+                                  rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
+-                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive());
++                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.dlssAvailable());
+             };
+     }
+     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
+diff --git a/tools/package/build_slim.py b/tools/package/build_slim.py
+index f382a9e..cd938fa 100644
+--- a/tools/package/build_slim.py
++++ b/tools/package/build_slim.py
+@@ -19,6 +19,11 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
+           AMD's license.md -> licenses/amd_fidelityfx/, Microsoft's Agility SDK LICENSE.txt (--agility-license, default
+           third_party/d3d12_agility/LICENSE.txt) -> licenses/microsoft_d3d12_agility/. Never d3d12SDKLayers.dll (the debug
+           layer: not needed at run time, not in the package). Without --m5 none of these files ship even if --bin has them.
++  --dlss  (with --m5) also ship NVIDIA DLSS via Streamline, from --bin (CMake copies them there only when
++          tools/render/fetch_streamline.py ran): sl.interposer / common / dlss / dlss_g / reflex / pcl .dll, nvngx_dlss.dll,
++          nvngx_dlssg.dll; NVIDIA's licence / notice texts (--streamline-licenses, default third_party/streamline/licenses)
++          -> licenses/nvidia/; DLSS_Laptop_Test.bat + dlss_laptop_test.ps1 in the package root (the RTX laptop test).
++          The DLLs only load on NVIDIA GPUs; the credits / splash attribution follow the package (Frontend's build flag).
+   --plan  dry run: counts, bytes, missing sources; writes nothing.
+ Writes <out>/build_slim.json: head, flags (m5, hd + label) and the exact bin file list, which verify_slim.ps1 holds the
+ package to (no file missing, none extra). Run outside any PERF_HOLD (IO + CPU heavy). Verify afterwards with
+@@ -43,6 +48,12 @@ M5_FROM_BIN = [('amd_fidelityfx_loader_dx12.dll', 'amd_fidelityfx_loader_dx12.dl
+                ('D3D12/D3D12Core.dll', 'D3D12/D3D12Core.dll'),
+                ('license.md', 'licenses/amd_fidelityfx/license.md')]
+ AGILITY_LICENSE_DEST = 'licenses/microsoft_d3d12_agility/LICENSE.txt'
++# DLSS (--dlss): the Streamline production DLLs in --bin, NVIDIA's licence texts, the laptop test in the package root
++DLSS_FROM_BIN = ['sl.interposer.dll', 'sl.common.dll', 'sl.dlss.dll', 'sl.dlss_g.dll', 'sl.reflex.dll', 'sl.pcl.dll',
++                 'nvngx_dlss.dll', 'nvngx_dlssg.dll']
++DLSS_LICENSES = ['license.txt', '3rd-party-licenses.md', 'nvngx_dlss.license.txt', 'reflex.license.txt']
++DLSS_LICENSE_DEST = 'licenses/nvidia'
++DLSS_ROOT_FILES = ['DLSS_Laptop_Test.bat', 'dlss_laptop_test.ps1']   # (slim_template/ and tools/package/)
+ 
+ 
+ def arg(name, default=None):
+@@ -108,6 +119,23 @@ def main():
+             problems.append('--m5: Microsoft Agility SDK LICENSE.txt not found: %s' % lic)
+         else:
+             bin_rows.append((lic, BIN_DEST + '/' + AGILITY_LICENSE_DEST))
++    dlss = '--dlss' in sys.argv
++    if dlss and not m5:
++        problems.append('--dlss needs --m5 (DLSS runs on the same D3D12 path)')
++    if dlss:
++        for n in DLSS_FROM_BIN:
++            src = os.path.join(bin_dir, n)
++            if not os.path.isfile(src):
++                problems.append('--dlss: --bin lacks %s (build with tools/render/fetch_streamline.py run first)' % n)
++            else:
++                bin_rows.append((src, BIN_DEST + '/' + n))
++        lic_dir = arg('--streamline-licenses', os.path.join(REPO, 'third_party', 'streamline', 'licenses'))
++        for n in DLSS_LICENSES:
++            src = os.path.join(lic_dir, n)
++            if not os.path.isfile(src):
++                problems.append('--dlss: NVIDIA licence text missing: %s' % src)
++            else:
++                bin_rows.append((src, BIN_DEST + '/' + DLSS_LICENSE_DEST + '/' + n))
+     missing = [r['source'] for r in rows if not os.path.isfile(os.path.join(ROOT, r['source']))]
+     problems += ['source missing: %s' % m for m in missing[:20]]
+     if len(missing) > 20:
+@@ -154,7 +182,7 @@ def main():
+                       '%d files (%.2f GB)' % (len(hd_rows), hd_b / 2**30) if hd_src else 'none', 'yes' if m5 else 'no'))
+     bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
+     manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
+-                'm5_runtime': m5, 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
++                'm5_runtime': m5, 'dlss': '--dlss' in sys.argv, 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
+                 'bin_dest': BIN_DEST, 'bin_files': bin_files}
+     if plan:
+         print('bin files (%d):' % len(bin_files))
+@@ -214,10 +242,21 @@ def main():
+             t = t.rstrip('\r\n') + ('\n\nOptional graphics runtime (Graphics menu: FSR 3.1 upscaling, frame generation; off by default): AMD FidelityFX\n'
+                                     'DLLs and Microsoft D3D12 Agility SDK runtime (D3D12\\D3D12Core.dll) beside the game; their licences are in\n'
+                                     'Transformers Rebuild\\Rebuild\\build\\release\\bin\\licenses\\amd_fidelityfx and \\microsoft_d3d12_agility.\n')
++        if n == 'README.txt' and '--dlss' in sys.argv:
++            t = t.rstrip('\r\n') + ('\n\nNVIDIA DLSS (Graphics menu: DLSS upscaling / DLSS frame generation, shown only on NVIDIA RTX GPUs): NVIDIA\n'
++                                    'Streamline and DLSS DLLs beside the game, used unmodified under NVIDIA\'s licences (in ...\\bin\\licenses\\nvidia);\n'
++                                    'they are loaded only on NVIDIA GPUs. NVIDIA, DLSS and Streamline are trademarks of NVIDIA Corporation.\n'
++                                    'DLSS_Laptop_Test.bat runs the RTX test and leaves a results zip in this folder.\n')
+         t = t.replace('\r\n', '\n').replace('\n', '\r\n')   # CRLF whatever the checkout's line endings: cmd mis-parses LF-only labels
+         if head not in t:
+             fails.append(('VERSION', n))
+         open(os.path.join(out, n), 'w', encoding='utf-8', newline='').write(t)
++    if '--dlss' in sys.argv:                              # the laptop test beside Play.bat
++        for n in DLSS_ROOT_FILES:
++            src = os.path.join(HERE, 'slim_template', n) if n.endswith('.bat') else os.path.join(HERE, n)
++            t = open(src, encoding='utf-8', newline='').read().replace('09c b898c75 slim', '09c %s slim' % head)
++            t = t.replace('\r\n', '\n').replace('\n', '\r\n')
++            open(os.path.join(out, n), 'w', encoding='utf-8', newline='').write(t)
+     json.dump(manifest, open(os.path.join(out, MANIFEST), 'w', encoding='utf-8'), indent=1)
+     print('wrote %s: keep %d, xpr %d, %.2f GB, %d s, failures %d' % (out, tot['keep'], tot['xpr'], tot['bytes'] / 2**30,
+                                                                    time.time() - t0, len(fails)))
+diff --git a/src/render/d3d12/D3D12Streamline.h b/src/render/d3d12/D3D12Streamline.h
+new file mode 100644
+index 0000000..1cb1912
+--- /dev/null
++++ b/src/render/d3d12/D3D12Streamline.h
+@@ -0,0 +1,84 @@
++// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems).
++// Nothing here runs unless a DLSS row is selected, and nothing NVIDIA is even loaded unless GL's adapter is an NVIDIA GPU:
++// on any other GPU the probe answers "unavailable" from the adapter's vendor id alone (no DLL loaded, no error logged), so
++// the DLSS rows stay hidden. On an NVIDIA GPU the probe verifies sl.interposer.dll's NVIDIA signature, loads it, calls
++// slInit (no OTA downloads, plugins only from the exe's directory) and asks Streamline which features the adapter
++// supports. The SDK pieces come from tools/render/fetch_streamline.py (never committed; licences in
++// docs/handoff/SYSTEMS_M5D_DLSS_STREAMLINE_PLAN.md).
++// One D3D12 device runs every Streamline feature (Streamline supports one): streamlineDevice() creates it on GL's adapter
++// and registers it (slSetD3DDevice). DLSS SR (D3D12Dlss.cpp) dispatches on it; a DLSS-G presenter must create its swapchain
++// on it, through a factory upgraded with streamlineUpgrade (D3D12Presenter, Rendering).
++#pragma once
++#include <cstdint>
++
++struct ID3D12Device;
++struct ID3D12Resource;
++
++namespace render {
++
++struct StreamlineCaps {
++    bool nvidia = false;          // GL's adapter is an NVIDIA GPU (vendor 0x10DE)
++    bool shipped = false;         // sl.interposer.dll + the feature DLLs are beside the exe
++    bool initialised = false;     // slInit succeeded
++    bool dlss = false, dlssg = false, reflex = false;   // slIsFeatureSupported on GL's adapter
++    int dlssgFramesMax = 0;       // DLSS-G frames generated per real frame (1: 2x; 3: 4x on RTX 50), 0 unknown
++    char why[200] = "";           // the reason when unavailable (logged once)
++};
++
++// Probes once (cheap on non-NVIDIA: one DXGI adapter query). WFC_NODLSS=1: never loads anything (always unavailable).
++const StreamlineCaps& streamlineCaps();
++bool dlssAvailable();                       // DLSS SR can run here (the Upscaling row's DLSS modes)
++bool dlssFrameGenerationAvailable();        // DLSS-G can run here (the Frame generation row's DLSS backend)
++bool reflexAvailable();                     // NVIDIA Reflex low-latency mode
++bool streamlineRuntimeShipped();            // the DLLs are beside the exe (file checks only; no load)
++
++// The Streamline D3D12 device (created once on GL's adapter, after slInit; registered with Streamline). nullptr: unavailable.
++ID3D12Device* streamlineDevice();
++// slUpgradeInterface: a native IDXGIFactory / swapchain becomes Streamline's proxy (DLSS-G needs the swapchain created
++// through an upgraded factory). False: unavailable (the object is left as it was).
++bool streamlineUpgrade(void** iface);
++
++// ---- per frame (main thread; index = the renderer's frame counter; one viewport, id 0) ----
++void streamlineBeginFrame(uint32_t frameIndex);        // a new frame token
++void* streamlineFrameToken();                          // (sl::FrameToken*) of the current frame, nullptr before the first
++// Reflex / PCL: markers around the frame phases; sleep at the top of the frame (replaces the limiter's wait when on)
++enum class StreamlineMarker { SimulationStart, SimulationEnd, RenderSubmitStart, RenderSubmitEnd, PresentStart, PresentEnd };
++void streamlineMarker(StreamlineMarker m);
++void streamlineReflexSleep();
++// Reflex mode: 0 off, 1 low latency, 2 low latency + boost; frameLimitUs 0 = none (the limiter's cap when Reflex is on)
++bool streamlineReflexOptions(int mode, uint32_t frameLimitUs);
++
++// The camera constants every feature reads (DLSS SR uses jitter / motion-vector scale / reset; DLSS-G all of them).
++// Matrices column-major (GL); the module converts to Streamline's row-major convention.
++struct StreamlineCamera {
++    float viewToClip[16], clipToView[16], clipToPrevClip[16], prevClipToClip[16];
++    float jitterX = 0, jitterY = 0;                    // render pixels (the projection jitter, as FSR 3.1's)
++    float mvecScaleX = 1, mvecScaleY = 1;              // motion vector -> normalised [-1, 1] screen units
++    float pos[3] = {}, up[3] = {0, 1, 0}, right[3] = {1, 0, 0}, fwd[3] = {0, 0, -1};
++    float nearM = 0.1f, farM = 20000.0f, fovY = 1.0f, aspect = 1.777f;
++    bool depthInverted = false, reset = false;
++};
++bool streamlineSetCamera(const StreamlineCamera& c);   // for the current frame token
++// The camera matrices from GL's (column-major): this frame's unjittered view-projection, view, and the previous frame's
++// unjittered view-projection, for images stored top-down (D3D's orientation: the FG inputs) with GL window depth [0, 1].
++// False: a matrix is singular (out is left as it was).
++bool streamlineCameraFromGL(const float* viewProj, const float* view, const float* prevViewProj, StreamlineCamera& out);
++
++// ---- the main loop (Application): the frame's token + Reflex sleep + PCL markers, when Streamline runs a latency feature
++void streamlineFrameStart();                           // top of the frame: new token, Reflex sleep, SimulationStart
++bool streamlineFrameOwned();                           // streamlineFrameStart runs (the per-feature callers use its token)
++
++// ---- DLSS frame generation (the presenter, D3D12Presenter.cpp) ----
++// framesToGenerate 0 = off (menus / frames without inputs), 1 = 2x, 2 = 3x, 3 = 4x (clamped to the GPU's maximum);
++// colour = the swapchain size, mvec / depth = the render size. Called when any of them changes.
++bool streamlineDlssgOptions(int framesToGenerate, int colorW, int colorH, int mvecW, int mvecH);
++// This frame's DLSS-G inputs on the presenter's command list (states as they are when the swapchain presents: COMMON for
++// the simultaneous-access shared textures): HUD-less colour (RGBA8, display size), depth (R32F) and motion vectors
++// (RG16F: prevUV - curUV, +y down), render size.
++bool streamlineTagFrameGen(void* cmdList, ID3D12Resource* hudless, ID3D12Resource* depth, ID3D12Resource* mvec, int colorW,
++                           int colorH, int renderW, int renderH);
++int streamlineDlssgStatus();                           // slDLSSGGetState's status bits (0 = OK; -1 unknown)
++void streamlineShutdown();                             // (registered at exit after a successful slInit)
++const char* streamlineResultName(int result);
++
++}  // namespace render
+diff --git a/src/render/d3d12/D3D12Streamline.cpp b/src/render/d3d12/D3D12Streamline.cpp
+new file mode 100644
+index 0000000..ab30f56
+--- /dev/null
++++ b/src/render/d3d12/D3D12Streamline.cpp
+@@ -0,0 +1,444 @@
++// Clean-room reconstruction — NVIDIA Streamline for the optional DLSS paths (PC ADAPTATION, M5 D; OFF by default; Systems;
++// render/d3d12/D3D12Streamline.h). Built only with the SDK headers (WFC_STREAMLINE_SDK, tools/render/fetch_streamline.py);
++// the interposer is loaded at run time (LoadLibrary + GetProcAddress: no import library, no load on non-NVIDIA GPUs).
++#if defined(_WIN32) && defined(WFC_STREAMLINE_SDK)
++// (sl_security.h's signature check uses WINTRUST_SIGNATURE_SETTINGS: Windows 8+ declarations in mingw's wintrust.h)
++#if !defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0A00
++#undef _WIN32_WINNT
++#define _WIN32_WINNT 0x0A00
++#endif
++#if !defined(NTDDI_VERSION) || NTDDI_VERSION < 0x0A000000
++#undef NTDDI_VERSION
++#define NTDDI_VERSION 0x0A000000
++#endif
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <d3d12.h>
++#include <dxgi1_4.h>
++
++#include "render/d3d12/D3D12Streamline.h"
++#include "render/d3d12/D3D12Adapter.h"
++#include "core/Log.h"
++
++#include "sl.h"
++#include "sl_consts.h"
++#include "sl_dlss.h"
++#include "sl_dlss_g.h"
++#include "sl_reflex.h"
++#include "sl_pcl.h"
++#include "sl_helpers.h"
++#include "sl_security.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <string>
++
++namespace render {
++void d3d12SelectAgility();   // D3D12Agility.cpp
++namespace {
++
++struct Fns {
++    PFun_slInit* init = nullptr; PFun_slShutdown* shutdown = nullptr;
++    PFun_slIsFeatureSupported* isSupported = nullptr; PFun_slSetFeatureLoaded* setLoaded = nullptr;
++    PFun_slGetFeatureFunction* getFunction = nullptr; PFun_slSetD3DDevice* setDevice = nullptr;
++    PFun_slUpgradeInterface* upgrade = nullptr; PFun_slGetNewFrameToken* newToken = nullptr;
++    PFun_slSetConstants* setConstants = nullptr;
++    PFun_slReflexSleep* reflexSleep = nullptr; PFun_slReflexSetOptions* reflexOptions = nullptr;
++    PFun_slPCLSetMarker* marker = nullptr; PFun_slDLSSGGetState* dlssgState = nullptr;
++    PFun_slReflexGetState* reflexState = nullptr;
++};
++
++struct State {
++    bool probed = false;
++    StreamlineCaps caps;
++    HMODULE dll = nullptr;
++    Fns f;
++    std::wstring dir;                                     // the exe's directory (plugins, DLL checks)
++    LUID luid{}; bool haveLuid = false;
++    ID3D12Device* dev = nullptr; bool devFailed = false;
++    sl::FrameToken* token = nullptr; uint32_t tokenIndex = 0;
++    bool owned = false; uint32_t ownFrame = 0;            // (streamlineFrameStart drives the tokens)
++    PFun_slDLSSGSetOptions* dlssgOptions = nullptr; PFun_slSetTagForFrame* setTag = nullptr;
++} S;
++
++void slLog(sl::LogType type, const char* msg) {
++    std::string m = msg ? msg : "";
++    while (!m.empty() && (m.back() == '\n' || m.back() == '\r')) m.pop_back();
++    if (type == sl::LogType::eError) LOG_WARN("Streamline: %s", m.c_str());
++    else if (type == sl::LogType::eWarn) LOG_INFO("Streamline (warning): %s", m.c_str());
++}
++
++std::wstring exeDir() {
++    wchar_t p[MAX_PATH * 2] = L"";
++    GetModuleFileNameW(nullptr, p, MAX_PATH * 2);
++    std::wstring d(p);
++    return d.substr(0, d.find_last_of(L"\\/") + 1);
++}
++bool fileExists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
++
++const wchar_t* const kDlls[] = {L"sl.interposer.dll", L"sl.common.dll", L"sl.dlss.dll", L"sl.dlss_g.dll", L"sl.reflex.dll",
++                                L"sl.pcl.dll", L"nvngx_dlss.dll", L"nvngx_dlssg.dll"};
++
++bool shippedFiles() {
++    const std::wstring d = exeDir();
++    for (const wchar_t* n : kDlls) if (!fileExists(d + n)) return false;
++    return true;
++}
++
++// GL's adapter: vendor id + LUID (nullptr from d3d12AdapterForGL: the default adapter, as D3D12 would pick)
++bool glAdapter(UINT& vendor, LUID& luid, char* name, size_t nameLen) {
++    IDXGIAdapter1* a = d3d12AdapterForGL();
++    if (!a) {
++        HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
++        typedef HRESULT(WINAPI * PFN_CF1)(REFIID, void**);
++        auto cf1 = dxgi ? (PFN_CF1)(void*)GetProcAddress(dxgi, "CreateDXGIFactory1") : nullptr;
++        IDXGIFactory1* f = nullptr;
++        if (cf1 && SUCCEEDED(cf1(__uuidof(IDXGIFactory1), (void**)&f)) && f) { f->EnumAdapters1(0, &a); f->Release(); }
++    }
++    if (!a) return false;
++    DXGI_ADAPTER_DESC1 d{};
++    const bool ok = SUCCEEDED(a->GetDesc1(&d));
++    a->Release();
++    if (!ok) return false;
++    vendor = d.VendorId; luid = d.AdapterLuid;
++    WideCharToMultiByte(CP_UTF8, 0, d.Description, -1, name, (int)nameLen, nullptr, nullptr);
++    return true;
++}
++
++template <class F> bool featureFn(sl::Feature feat, const char* name, F*& out) {
++    void* p = nullptr;
++    if (!S.f.getFunction || S.f.getFunction(feat, name, p) != sl::Result::eOk || !p) return false;
++    out = (F*)p;
++    return true;
++}
++
++void probe() {
++    S.probed = true;
++    StreamlineCaps& c = S.caps;
++    if (std::getenv("WFC_NODLSS")) { std::snprintf(c.why, sizeof c.why, "WFC_NODLSS set"); return; }
++    UINT vendor = 0; char name[128] = "?";
++    if (!glAdapter(vendor, S.luid, name, sizeof name)) { std::snprintf(c.why, sizeof c.why, "no DXGI adapter"); return; }
++    S.haveLuid = true;
++    c.nvidia = vendor == 0x10DE;
++    if (!c.nvidia) {                                      // the AMD / Intel path: nothing NVIDIA is touched
++        std::snprintf(c.why, sizeof c.why, "not an NVIDIA GPU (%s, vendor 0x%04X)", name, vendor);
++        return;
++    }
++    S.dir = exeDir();
++    c.shipped = shippedFiles();
++    if (!c.shipped) { std::snprintf(c.why, sizeof c.why, "the Streamline / DLSS DLLs are not beside the exe"); return; }
++    const std::wstring interposer = S.dir + L"sl.interposer.dll";
++    if (!std::getenv("WFC_SL_NOSIGCHECK") && !sl::security::verifyEmbeddedSignature(interposer.c_str())) {
++        std::snprintf(c.why, sizeof c.why, "sl.interposer.dll is not signed by NVIDIA"); return;
++    }
++    S.dll = LoadLibraryW(interposer.c_str());
++    if (!S.dll) { std::snprintf(c.why, sizeof c.why, "sl.interposer.dll failed to load (%lu)", GetLastError()); return; }
++    auto g = [](const char* n) { return (void*)GetProcAddress(S.dll, n); };
++    Fns& f = S.f;
++    f.init = (PFun_slInit*)g("slInit"); f.shutdown = (PFun_slShutdown*)g("slShutdown");
++    f.isSupported = (PFun_slIsFeatureSupported*)g("slIsFeatureSupported"); f.setLoaded = (PFun_slSetFeatureLoaded*)g("slSetFeatureLoaded");
++    f.getFunction = (PFun_slGetFeatureFunction*)g("slGetFeatureFunction"); f.setDevice = (PFun_slSetD3DDevice*)g("slSetD3DDevice");
++    f.upgrade = (PFun_slUpgradeInterface*)g("slUpgradeInterface"); f.newToken = (PFun_slGetNewFrameToken*)g("slGetNewFrameToken");
++    f.setConstants = (PFun_slSetConstants*)g("slSetConstants");
++    if (!f.init || !f.isSupported || !f.getFunction || !f.setDevice || !f.upgrade || !f.newToken || !f.setConstants) {
++        std::snprintf(c.why, sizeof c.why, "sl.interposer.dll lacks the core entry points"); return;
++    }
++    static const sl::Feature features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex, sl::kFeaturePCL};
++    static const wchar_t* paths[1];
++    paths[0] = S.dir.c_str();
++    sl::Preferences pref{};
++    pref.showConsole = false;
++    pref.logLevel = std::getenv("WFC_SL_VERBOSE") ? sl::LogLevel::eVerbose : sl::LogLevel::eDefault;
++    pref.pathsToPlugins = paths; pref.numPathsToPlugins = 1;
++    pref.logMessageCallback = &slLog;
++    // no over-the-air downloads / downloaded plugins: exactly the DLLs the package ships
++    pref.flags = sl::PreferenceFlags::eDisableCLStateTracking | sl::PreferenceFlags::eUseFrameBasedResourceTagging;
++    pref.featuresToLoad = features; pref.numFeaturesToLoad = 4;
++    pref.engine = sl::EngineType::eCustom; pref.engineVersion = "wfc-rebuild";
++    pref.projectId = "6c1f0f0e-8f3b-4f1e-9d4a-2a6f5e7b9c01";   // (a fixed GUID for this project; no NVIDIA application id)
++    pref.renderAPI = sl::RenderAPI::eD3D12;
++    const sl::Result r = f.init(pref, sl::kSDKVersion);
++    if (r != sl::Result::eOk) { std::snprintf(c.why, sizeof c.why, "slInit: %s", sl::getResultAsStr(r)); return; }
++    c.initialised = true;
++    sl::AdapterInfo ai{};
++    ai.deviceLUID = (uint8_t*)&S.luid; ai.deviceLUIDSizeInBytes = sizeof(LUID);
++    auto supported = [&](sl::Feature ft, const char* what) {
++        const sl::Result fr = f.isSupported(ft, ai);
++        if (fr != sl::Result::eOk) LOG_INFO("Streamline: %s not supported here (%s)", what, sl::getResultAsStr(fr));
++        return fr == sl::Result::eOk;
++    };
++    c.dlss = supported(sl::kFeatureDLSS, "DLSS SR");
++    c.dlssg = supported(sl::kFeatureDLSS_G, "DLSS frame generation");
++    c.reflex = supported(sl::kFeatureReflex, "Reflex");
++    if (supported(sl::kFeaturePCL, "PC latency markers")) featureFn(sl::kFeaturePCL, "slPCLSetMarker", f.marker);
++    if (c.reflex) {
++        featureFn(sl::kFeatureReflex, "slReflexSleep", f.reflexSleep); featureFn(sl::kFeatureReflex, "slReflexSetOptions", f.reflexOptions);
++        featureFn(sl::kFeatureReflex, "slReflexGetState", f.reflexState);
++    }
++    if (c.dlssg) {
++        featureFn(sl::kFeatureDLSS_G, "slDLSSGGetState", f.dlssgState);
++        featureFn(sl::kFeatureDLSS_G, "slDLSSGSetOptions", S.dlssgOptions);
++        S.setTag = (PFun_slSetTagForFrame*)g("slSetTagForFrame");
++        if (!S.dlssgOptions || !S.setTag) c.dlssg = false;
++    }
++    std::atexit([] { streamlineShutdown(); });
++    if (!c.dlss && !c.dlssg) std::snprintf(c.why, sizeof c.why, "Streamline reports no DLSS feature on %s", name);
++    LOG_INFO("Streamline %d.%d.%d on %s: DLSS SR %s, DLSS-G %s, Reflex %s", SL_VERSION_MAJOR, SL_VERSION_MINOR, SL_VERSION_PATCH, name,
++             c.dlss ? "yes" : "no", c.dlssg ? "yes" : "no", c.reflex ? "yes" : "no");
++}
++
++void convert(const float* gl, sl::float4x4& m) {         // GL column-major (column vectors) = Streamline row-major (row vectors)
++    for (int r = 0; r < 4; ++r) m.row[r] = sl::float4(gl[r * 4], gl[r * 4 + 1], gl[r * 4 + 2], gl[r * 4 + 3]);
++}
++}  // namespace
++
++const StreamlineCaps& streamlineCaps() {
++    if (!S.probed) {
++        probe();
++        if (!S.caps.dlss && !S.caps.dlssg) LOG_INFO("DLSS: unavailable (%s)", S.caps.why);
++    }
++    return S.caps;
++}
++bool dlssAvailable() { return streamlineCaps().dlss; }
++bool dlssFrameGenerationAvailable() { return streamlineCaps().dlssg && streamlineCaps().reflex; }   // (DLSS-G requires Reflex)
++bool reflexAvailable() { return streamlineCaps().reflex; }
++bool streamlineRuntimeShipped() { static const bool s = shippedFiles(); return s; }
++
++ID3D12Device* streamlineDevice() {
++    if (S.dev || S.devFailed) return S.dev;
++    if (!streamlineCaps().initialised) { S.devFailed = true; return nullptr; }
++    d3d12SelectAgility();
++    HMODULE d3d = LoadLibraryW(L"d3d12.dll");
++    auto create = d3d ? (PFN_D3D12_CREATE_DEVICE)(void*)GetProcAddress(d3d, "D3D12CreateDevice") : nullptr;
++    IDXGIAdapter1* adapter = d3d12AdapterForGL();
++    const HRESULT hr = create ? create(adapter, D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), (void**)&S.dev) : E_FAIL;
++    if (adapter) adapter->Release();
++    if (FAILED(hr) || !S.dev) { LOG_WARN("Streamline: no D3D12 device (0x%08lx)", (unsigned long)hr); S.devFailed = true; S.dev = nullptr; return nullptr; }
++    const sl::Result r = S.f.setDevice(S.dev);
++    if (r != sl::Result::eOk) {
++        LOG_WARN("Streamline: slSetD3DDevice: %s", sl::getResultAsStr(r));
++        S.dev->Release(); S.dev = nullptr; S.devFailed = true; return nullptr;
++    }
++    LOG_INFO("Streamline: D3D12 device registered");
++    return S.dev;
++}
++
++bool streamlineUpgrade(void** iface) {
++    if (!iface || !*iface || !streamlineCaps().initialised) return false;
++    const sl::Result r = S.f.upgrade(iface);
++    if (r != sl::Result::eOk) LOG_WARN("Streamline: slUpgradeInterface: %s", sl::getResultAsStr(r));
++    return r == sl::Result::eOk;
++}
++
++void streamlineBeginFrame(uint32_t frameIndex) {   // (idempotent per index: whoever comes first in a frame makes the token)
++    if (!S.caps.initialised || S.owned || (S.token && S.tokenIndex == frameIndex)) return;   // (owned: the main loop's token)
++    sl::FrameToken* t = nullptr;
++    if (S.f.newToken(t, &frameIndex) == sl::Result::eOk) { S.token = t; S.tokenIndex = frameIndex; }
++}
++void* streamlineFrameToken() { return S.token; }
++
++void streamlineMarker(StreamlineMarker m) {
++    if (!S.f.marker || !S.token) return;
++    static const sl::PCLMarker map[] = {sl::PCLMarker::eSimulationStart, sl::PCLMarker::eSimulationEnd, sl::PCLMarker::eRenderSubmitStart,
++                                        sl::PCLMarker::eRenderSubmitEnd, sl::PCLMarker::ePresentStart, sl::PCLMarker::ePresentEnd};
++    S.f.marker(map[(int)m], *S.token);
++}
++void streamlineReflexSleep() { if (S.f.reflexSleep && S.token) S.f.reflexSleep(*S.token); }
++bool streamlineReflexOptions(int mode, uint32_t frameLimitUs) {
++    if (!S.f.reflexOptions) return false;
++    sl::ReflexOptions o{};
++    o.mode = mode <= 0 ? sl::ReflexMode::eOff : mode == 1 ? sl::ReflexMode::eLowLatency : sl::ReflexMode::eLowLatencyWithBoost;
++    o.frameLimitUs = frameLimitUs;
++    o.useMarkersToOptimize = true;
++    const sl::Result r = S.f.reflexOptions(o);
++    if (r != sl::Result::eOk) LOG_WARN("Streamline: slReflexSetOptions: %s", sl::getResultAsStr(r));
++    return r == sl::Result::eOk;
++}
++
++bool streamlineSetCamera(const StreamlineCamera& c) {
++    if (!S.caps.initialised || !S.token) return false;
++    sl::Constants k{};
++    convert(c.viewToClip, k.cameraViewToClip); convert(c.clipToView, k.clipToCameraView);
++    convert(c.clipToPrevClip, k.clipToPrevClip); convert(c.prevClipToClip, k.prevClipToClip);
++    const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
++    convert(id, k.clipToLensClip);
++    k.jitterOffset = sl::float2(c.jitterX, c.jitterY);
++    k.mvecScale = sl::float2(c.mvecScaleX, c.mvecScaleY);
++    k.cameraPinholeOffset = sl::float2(0, 0);
++    k.cameraPos = sl::float3(c.pos[0], c.pos[1], c.pos[2]); k.cameraUp = sl::float3(c.up[0], c.up[1], c.up[2]);
++    k.cameraRight = sl::float3(c.right[0], c.right[1], c.right[2]); k.cameraFwd = sl::float3(c.fwd[0], c.fwd[1], c.fwd[2]);
++    k.cameraNear = c.nearM; k.cameraFar = c.farM; k.cameraFOV = c.fovY; k.cameraAspectRatio = c.aspect;
++    k.motionVectorsInvalidValue = 0.0f;
++    k.depthInverted = c.depthInverted ? sl::Boolean::eTrue : sl::Boolean::eFalse;
++    k.cameraMotionIncluded = sl::Boolean::eTrue;          // (WfcMotion: full motion, camera + object)
++    k.motionVectors3D = sl::Boolean::eFalse;
++    k.reset = c.reset ? sl::Boolean::eTrue : sl::Boolean::eFalse;
++    k.orthographicProjection = sl::Boolean::eFalse;
++    k.motionVectorsDilated = sl::Boolean::eFalse;
++    k.motionVectorsJittered = sl::Boolean::eFalse;        // (WfcMotion: jitter-free motion vectors)
++    const sl::Result r = S.f.setConstants(k, *S.token, sl::ViewportHandle(0));
++    if (r != sl::Result::eOk) {
++        static bool told = false;
++        if (!told) { told = true; LOG_WARN("Streamline: slSetConstants: %s", sl::getResultAsStr(r)); }
++    }
++    return r == sl::Result::eOk;
++}
++
++const char* streamlineResultName(int result) { return sl::getResultAsStr((sl::Result)result); }
++
++namespace {
++void mul(const double* a, const double* b, double* o) {   // column-major o = a * b
++    for (int c = 0; c < 4; ++c)
++        for (int r = 0; r < 4; ++r) { double s = 0; for (int k = 0; k < 4; ++k) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; }
++}
++bool inv(const double* m, double* o) {                     // Gauss-Jordan, partial pivoting
++    double a[4][8];
++    for (int r = 0; r < 4; ++r) for (int c = 0; c < 4; ++c) { a[r][c] = m[c * 4 + r]; a[r][c + 4] = r == c ? 1.0 : 0.0; }
++    for (int c = 0; c < 4; ++c) {
++        int p = c;
++        for (int r = c + 1; r < 4; ++r) if (std::fabs(a[r][c]) > std::fabs(a[p][c])) p = r;
++        if (std::fabs(a[p][c]) < 1e-12) return false;
++        if (p != c) for (int k = 0; k < 8; ++k) std::swap(a[p][k], a[c][k]);
++        const double d = a[c][c];
++        for (int k = 0; k < 8; ++k) a[c][k] /= d;
++        for (int r = 0; r < 4; ++r) if (r != c) { const double f = a[r][c]; for (int k = 0; k < 8; ++k) a[r][k] -= f * a[c][k]; }
++    }
++    for (int r = 0; r < 4; ++r) for (int c = 0; c < 4; ++c) o[c * 4 + r] = a[r][c + 4];
++    return true;
++}
++}  // namespace
++
++bool streamlineCameraFromGL(const float* viewProj, const float* view, const float* prevViewProj, StreamlineCamera& out) {
++    // F: GL clip -> D3D-style clip for top-down images: y flipped, z from [-w, w] to [0, w] (GL window depth [0, 1])
++    const double F[16] = {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 1};
++    double vp[16], v[16], pvp[16], iv[16], vtc[16], ctv[16], fvp[16], ifvp[16], fpvp[16], c2p[16], p2c[16], t[16];
++    for (int i = 0; i < 16; ++i) { vp[i] = viewProj[i]; v[i] = view[i]; pvp[i] = prevViewProj[i]; }
++    if (!inv(v, iv)) return false;
++    mul(vp, iv, t); mul(F, t, vtc);                       // view -> clip = F * VP * V^-1 (the projection)
++    mul(F, vp, fvp); mul(F, pvp, fpvp);
++    if (!inv(vtc, ctv) || !inv(fvp, ifvp)) return false;
++    mul(fpvp, ifvp, c2p);                                 // clip -> world -> previous clip
++    if (!inv(c2p, p2c)) return false;
++    for (int i = 0; i < 16; ++i) {
++        out.viewToClip[i] = (float)vtc[i]; out.clipToView[i] = (float)ctv[i];
++        out.clipToPrevClip[i] = (float)c2p[i]; out.prevClipToClip[i] = (float)p2c[i];
++    }
++    return true;
++}
++
++void streamlineFrameStart() {
++    if (!S.caps.initialised || !(S.caps.reflex || S.caps.dlssg)) return;
++    sl::FrameToken* t = nullptr;
++    const uint32_t idx = ++S.ownFrame;
++    if (S.f.newToken(t, &idx) != sl::Result::eOk) return;
++    S.token = t; S.tokenIndex = idx; S.owned = true;
++    // WFC_REFLEX=0 / 1 / 2 (off / low latency / + boost): Reflex without DLSS-G (the laptop test's on / off comparison;
++    // DLSS-G turns it on itself). Applied once, at the first frame.
++    static bool applied = false;
++    if (!applied) {
++        applied = true;
++        if (const char* e = std::getenv("WFC_REFLEX")) streamlineReflexOptions(std::atoi(e), 0);
++    }
++    streamlineReflexSleep();
++    streamlineMarker(StreamlineMarker::SimulationStart);
++    // the driver's latency reports (Reflex), per 300 frames: simulation start -> GPU render end, and the GPU frame time
++    if (S.f.reflexState && idx % 300 == 0) {
++        sl::ReflexState st{};
++        if (S.f.reflexState(st) == sl::Result::eOk && st.latencyReportAvailable) {
++            double sum = 0, mx = 0, gpu = 0; int n = 0;
++            for (const sl::ReflexReport& r : st.frameReport) {
++                if (!r.simStartTime || r.gpuRenderEndTime <= r.simStartTime) continue;
++                const double us = (double)(r.gpuRenderEndTime - r.simStartTime);
++                sum += us; mx = std::max(mx, us); gpu += r.gpuFrameTimeUs; ++n;
++            }
++            if (n) LOG_INFO("Reflex: PC latency (simulation start -> GPU render end) %.2f ms avg, %.2f max over %d reports; GPU frame %.2f ms; "
++                            "low latency %s", sum / n / 1000.0, mx / 1000.0, n, gpu / n / 1000.0, st.lowLatencyAvailable ? "available" : "unavailable");
++        }
++    }
++}
++bool streamlineFrameOwned() { return S.owned; }
++
++bool streamlineDlssgOptions(int frames, int colorW, int colorH, int mvecW, int mvecH) {
++    if (!S.dlssgOptions) return false;
++    sl::DLSSGOptions o{};
++    const int maxFrames = S.caps.dlssgFramesMax > 0 ? S.caps.dlssgFramesMax : 1;
++    o.mode = frames > 0 ? sl::DLSSGMode::eOn : sl::DLSSGMode::eOff;
++    o.numFramesToGenerate = (uint32_t)std::max(1, std::min(frames, maxFrames));
++    o.colorWidth = (uint32_t)colorW; o.colorHeight = (uint32_t)colorH;
++    o.mvecDepthWidth = (uint32_t)mvecW; o.mvecDepthHeight = (uint32_t)mvecH;
++    o.colorBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM; o.hudLessBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
++    o.mvecBufferFormat = DXGI_FORMAT_R16G16_FLOAT; o.depthBufferFormat = DXGI_FORMAT_R32_FLOAT;
++    const sl::Result r = S.dlssgOptions(sl::ViewportHandle(0), o);
++    if (r != sl::Result::eOk) LOG_WARN("Streamline: slDLSSGSetOptions: %s", sl::getResultAsStr(r));
++    else LOG_INFO("DLSS-G: %s (%u generated per real frame; colour %dx%d, motion / depth %dx%d)", frames > 0 ? "on" : "off",
++                  frames > 0 ? o.numFramesToGenerate : 0u, colorW, colorH, mvecW, mvecH);
++    return r == sl::Result::eOk;
++}
++
++bool streamlineTagFrameGen(void* cmdList, ID3D12Resource* hudless, ID3D12Resource* depth, ID3D12Resource* mvec, int colorW,
++                           int colorH, int renderW, int renderH) {
++    if (!S.setTag || !S.token) return false;
++    const uint32_t common = (uint32_t)D3D12_RESOURCE_STATE_COMMON;
++    sl::Resource rh(sl::ResourceType::eTex2d, hudless, common), rd(sl::ResourceType::eTex2d, depth, common),
++        rm(sl::ResourceType::eTex2d, mvec, common);
++    const sl::Extent ce{0, 0, (uint32_t)colorW, (uint32_t)colorH}, re{0, 0, (uint32_t)renderW, (uint32_t)renderH};
++    sl::ResourceTag tags[3] = {sl::ResourceTag(&rh, sl::kBufferTypeHUDLessColor, sl::eValidUntilPresent, &ce),
++                               sl::ResourceTag(&rd, sl::kBufferTypeDepth, sl::eValidUntilPresent, &re),
++                               sl::ResourceTag(&rm, sl::kBufferTypeMotionVectors, sl::eValidUntilPresent, &re)};
++    const sl::Result r = S.setTag(*S.token, sl::ViewportHandle(0), tags, 3, cmdList);
++    if (r != sl::Result::eOk) {
++        static bool told = false;
++        if (!told) { told = true; LOG_WARN("DLSS-G: slSetTagForFrame: %s", sl::getResultAsStr(r)); }
++    }
++    return r == sl::Result::eOk;
++}
++
++int streamlineDlssgStatus() {
++    if (!S.f.dlssgState) return -1;
++    sl::DLSSGState st{};
++    if (S.f.dlssgState(sl::ViewportHandle(0), st, nullptr) != sl::Result::eOk) return -1;
++    if (st.numFramesToGenerateMax > 0) S.caps.dlssgFramesMax = (int)st.numFramesToGenerateMax;
++    return (int)st.status;
++}
++
++void streamlineShutdown() {
++    if (!S.caps.initialised || !S.f.shutdown) return;
++    S.caps.initialised = false;
++    S.token = nullptr;
++    S.f.shutdown();
++}
++
++}  // namespace render
++#else
++#include "render/d3d12/D3D12Streamline.h"
++#include <cstdio>
++namespace render {
++const StreamlineCaps& streamlineCaps() {
++    static StreamlineCaps c = [] { StreamlineCaps x; std::snprintf(x.why, sizeof x.why, "built without the Streamline SDK"); return x; }();
++    return c;
++}
++bool dlssAvailable() { return false; }
++bool dlssFrameGenerationAvailable() { return false; }
++bool reflexAvailable() { return false; }
++bool streamlineRuntimeShipped() { return false; }
++ID3D12Device* streamlineDevice() { return nullptr; }
++bool streamlineUpgrade(void**) { return false; }
++void streamlineBeginFrame(uint32_t) {}
++void* streamlineFrameToken() { return nullptr; }
++void streamlineMarker(StreamlineMarker) {}
++void streamlineReflexSleep() {}
++bool streamlineReflexOptions(int, uint32_t) { return false; }
++bool streamlineSetCamera(const StreamlineCamera&) { return false; }
++const char* streamlineResultName(int) { return "unavailable"; }
++bool streamlineCameraFromGL(const float*, const float*, const float*, StreamlineCamera&) { return false; }
++void streamlineFrameStart() {}
++bool streamlineFrameOwned() { return false; }
++bool streamlineDlssgOptions(int, int, int, int, int) { return false; }
++bool streamlineTagFrameGen(void*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, int, int, int, int) { return false; }
++int streamlineDlssgStatus() { return -1; }
++void streamlineShutdown() {}
++}  // namespace render
++#endif
+diff --git a/src/render/d3d12/D3D12Dlss.h b/src/render/d3d12/D3D12Dlss.h
+new file mode 100644
+index 0000000..9e7ebb0
+--- /dev/null
++++ b/src/render/d3d12/D3D12Dlss.h
+@@ -0,0 +1,22 @@
++// Clean-room reconstruction — optional NVIDIA DLSS super resolution over D3D12 via Streamline (PC ADAPTATION, M5 D; OFF by
++// default; Systems). The same interface and inputs as the FSR 3.1 upscaler (D3D12Upscaler.h): the renderer copies its
++// render-size HDR colour, depth (R32F) and motion vectors into the shared targets, calls dlssDispatch, then samples the
++// display-size output. Only on NVIDIA RTX GPUs with the Streamline / DLSS DLLs beside the exe (dlssAvailable()).
++#pragma once
++#include "render/d3d12/D3D12Upscaler.h"
++
++namespace render {
++
++// The Upscaling row's DLSS modes: 0 Quality, 1 Balanced, 2 Performance, 3 Ultra Performance, 4 DLAA (native).
++constexpr int kDlssModes = 5;
++float dlssRenderScale(int mode);                 // NVIDIA's per-axis ratios: 0.667, 0.58, 0.5, 0.333, 1.0
++const char* dlssModeName(int mode);
++
++// (Re)creates the shared targets / DLSS resources on first use or a size / mode change. False: DLSS unavailable (the caller
++// keeps its other path). t: the same roles as FSR 3.1's (reactive is created for the shared copy code but not read by DLSS).
++bool dlssPrepare(int mode, int inW, int inH, int outW, int outH, Fsr3Targets* t);
++// GL inputs written: GL -> DLSS -> GL (GPU waits on both sides). frameIndex: the renderer's frame counter (the Streamline
++// frame token). p.sharpness is ignored (DLSS 3.7+ has no sharpening). False: the evaluation failed this frame.
++bool dlssDispatch(const Fsr3Params& p, unsigned frameIndex);
++
++}  // namespace render
+diff --git a/src/render/d3d12/D3D12Dlss.cpp b/src/render/d3d12/D3D12Dlss.cpp
+new file mode 100644
+index 0000000..4f84197
+--- /dev/null
++++ b/src/render/d3d12/D3D12Dlss.cpp
+@@ -0,0 +1,298 @@
++// Clean-room reconstruction — optional NVIDIA DLSS super resolution via Streamline (PC ADAPTATION, M5 D; OFF by default;
++// Systems; render/d3d12/D3D12Dlss.h). The FSR 3.1 upscaler's design (D3D12Upscaler.cpp) with DLSS as the evaluator: shared
++// D3D12 textures imported into GL (GL_EXT_memory_object_win32), one shared fence (GL signals N, D3D12 waits N, evaluates,
++// signals N + 1, GL waits N + 1 on the GPU), on Streamline's device (D3D12Streamline.cpp). Orientation: the shared textures
++// keep GL's row order, as for FSR 3.1: consistent across the inputs, the jitter and motion-vector scale in that space.
++#if defined(_WIN32) && defined(WFC_STREAMLINE_SDK)
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <d3d12.h>
++#include <GL/gl.h>
++
++#include "render/d3d12/D3D12Dlss.h"
++#include "render/d3d12/D3D12Streamline.h"
++#include "core/Log.h"
++
++#include "sl.h"
++#include "sl_consts.h"
++#include "sl_dlss.h"
++#include "sl_helpers.h"
++
++#include <algorithm>
++#include <cstdint>
++#include <cstring>
++
++namespace render {
++namespace {
++typedef uint64_t GLuint64_;
++typedef void(APIENTRY* PFN_CreateMemoryObjectsEXT)(GLsizei, GLuint*);
++typedef void(APIENTRY* PFN_DeleteMemoryObjectsEXT)(GLsizei, const GLuint*);
++typedef void(APIENTRY* PFN_ImportMemoryWin32HandleEXT)(GLuint, GLuint64_, GLenum, void*);
++typedef void(APIENTRY* PFN_MemoryObjectParameterivEXT)(GLuint, GLenum, const GLint*);
++typedef void(APIENTRY* PFN_TexStorageMem2DEXT)(GLenum, GLsizei, GLenum, GLsizei, GLsizei, GLuint, GLuint64_);
++typedef void(APIENTRY* PFN_GenSemaphoresEXT)(GLsizei, GLuint*);
++typedef void(APIENTRY* PFN_ImportSemaphoreWin32HandleEXT)(GLuint, GLenum, void*);
++typedef void(APIENTRY* PFN_SemaphoreParameterui64vEXT)(GLuint, GLenum, const GLuint64_*);
++typedef void(APIENTRY* PFN_WaitSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
++typedef void(APIENTRY* PFN_SignalSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
++constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
++constexpr GLenum kLayoutShaderRead = 0x958F, kLayoutGeneral = 0x958D;
++template <class T> void rel(T*& p) { if (p) { p->Release(); p = nullptr; } }
++
++struct Shared { ID3D12Resource* res = nullptr; HANDLE handle = nullptr; GLuint mem = 0, tex = 0; int w = 0, h = 0; };
++
++const float kScale[kDlssModes] = {0.667f, 0.58f, 0.5f, 0.333f, 1.0f};
++const char* const kName[kDlssModes] = {"DLSS Quality", "DLSS Balanced", "DLSS Performance", "DLSS Ultra Performance", "DLAA"};
++const sl::DLSSMode kMode[kDlssModes] = {sl::DLSSMode::eMaxQuality, sl::DLSSMode::eBalanced, sl::DLSSMode::eMaxPerformance,
++                                        sl::DLSSMode::eUltraPerformance, sl::DLSSMode::eDLAA};
++
++class Dlss {
++public:
++    bool init() {
++        auto g = [](const char* n) { return (void*)wglGetProcAddress(n); };
++        createMem_ = (PFN_CreateMemoryObjectsEXT)g("glCreateMemoryObjectsEXT"); deleteMem_ = (PFN_DeleteMemoryObjectsEXT)g("glDeleteMemoryObjectsEXT");
++        importMem_ = (PFN_ImportMemoryWin32HandleEXT)g("glImportMemoryWin32HandleEXT"); memParam_ = (PFN_MemoryObjectParameterivEXT)g("glMemoryObjectParameterivEXT");
++        texStorageMem_ = (PFN_TexStorageMem2DEXT)g("glTexStorageMem2DEXT"); genSem_ = (PFN_GenSemaphoresEXT)g("glGenSemaphoresEXT");
++        importSem_ = (PFN_ImportSemaphoreWin32HandleEXT)g("glImportSemaphoreWin32HandleEXT");
++        semParam_ = (PFN_SemaphoreParameterui64vEXT)g("glSemaphoreParameterui64vEXT"); waitSem_ = (PFN_WaitSemaphoreEXT)g("glWaitSemaphoreEXT");
++        signalSem_ = (PFN_SignalSemaphoreEXT)g("glSignalSemaphoreEXT");
++        if (!createMem_ || !deleteMem_ || !importMem_ || !memParam_ || !texStorageMem_ || !genSem_ || !importSem_ || !semParam_ || !waitSem_ || !signalSem_) {
++            LOG_WARN("DLSS: GL external-object entry points missing"); return false;
++        }
++        if (!dlssAvailable()) return false;                 // (the reason is logged once by streamlineCaps)
++        dev_ = streamlineDevice();
++        if (!dev_) return false;
++        void* p = nullptr;
++        if (!getFn("slDLSSSetOptions", p)) return false; setOptions_ = (PFun_slDLSSSetOptions*)p;
++        if (!getFn("slDLSSGetOptimalSettings", p)) return false; optimal_ = (PFun_slDLSSGetOptimalSettings*)p;
++        HMODULE sl = GetModuleHandleW(L"sl.interposer.dll");
++        setTag_ = sl ? (PFun_slSetTagForFrame*)(void*)GetProcAddress(sl, "slSetTagForFrame") : nullptr;
++        evaluate_ = sl ? (PFun_slEvaluateFeature*)(void*)GetProcAddress(sl, "slEvaluateFeature") : nullptr;
++        freeRes_ = sl ? (PFun_slFreeResources*)(void*)GetProcAddress(sl, "slFreeResources") : nullptr;
++        if (!setTag_ || !evaluate_ || !freeRes_) { LOG_WARN("DLSS: Streamline entry points missing"); return false; }
++        D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
++        if (FAILED(dev_->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void**)&queue_))) return false;
++        for (auto& a : alloc_)
++            if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&a))) return false;
++        if (FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc_[0], nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&list_))) return false;
++        list_->Close();
++        if (FAILED(dev_->CreateFence(0, D3D12_FENCE_FLAG_SHARED, __uuidof(ID3D12Fence), (void**)&fence_))) return false;
++        if (FAILED(dev_->CreateSharedHandle(fence_, nullptr, GENERIC_ALL, nullptr, &fenceHandle_))) return false;
++        genSem_(1, &sem_);
++        importSem_(sem_, kHandleD3D12Fence, fenceHandle_);
++        event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
++        LOG_INFO("DLSS: ready (Streamline device, shared GL inputs)");
++        return true;
++    }
++
++    bool prepare(int mode, int inW, int inH, int outW, int outH, Fsr3Targets* t) {
++        if (inW <= 0 || inH <= 0 || outW <= 0 || outH <= 0 || mode < 0 || mode >= kDlssModes) return false;
++        if (inW != inW_ || inH != inH_ || outW != outW_ || outH != outH_) {
++            waitIdle();
++            if (inW_) freeRes_(sl::kFeatureDLSS, sl::ViewportHandle(0));   // (DLSS's own resources for the old sizes)
++            for (Shared* s : {&color_, &depth_, &vel_, &reactive_, &out_}) freeShared(*s);
++            if (!makeShared(color_, inW, inH, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A, false) ||
++                !makeShared(depth_, inW, inH, DXGI_FORMAT_R32_FLOAT, 0x822E, false) ||
++                !makeShared(vel_, inW, inH, DXGI_FORMAT_R16G16_FLOAT, 0x822F, false) ||
++                !makeShared(reactive_, inW, inH, DXGI_FORMAT_R8_UNORM, 0x8229, false) ||
++                !makeShared(out_, outW, outH, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A, true)) {
++                LOG_WARN("DLSS: shared targets %dx%d -> %dx%d failed", inW, inH, outW, outH); inW_ = 0; return false;
++            }
++            inW_ = inW; inH_ = inH; outW_ = outW; outH_ = outH;
++            mode_ = -1;
++        }
++        if (mode != mode_) {
++            sl::DLSSOptions o{};
++            o.mode = kMode[mode];
++            o.outputWidth = (uint32_t)outW; o.outputHeight = (uint32_t)outH;
++            o.colorBuffersHDR = sl::Boolean::eTrue;          // (pre-tonemap scene colour, as FSR 3.1's)
++            o.useAutoExposure = sl::Boolean::eTrue;          // (no exposure texture: FSR 3.1 also runs auto exposure)
++            sl::DLSSOptimalSettings os{};
++            if (optimal_(o, os) == sl::Result::eOk)
++                LOG_INFO("DLSS: %s %dx%d -> %dx%d (NVIDIA's optimal render size %ux%u, range %ux%u .. %ux%u)", kName[mode], inW, inH,
++                         outW, outH, os.optimalRenderWidth, os.optimalRenderHeight, os.renderWidthMin, os.renderHeightMin,
++                         os.renderWidthMax, os.renderHeightMax);
++            const sl::Result r = setOptions_(sl::ViewportHandle(0), o);
++            if (r != sl::Result::eOk) { LOG_WARN("DLSS: slDLSSSetOptions: %s", sl::getResultAsStr(r)); return false; }
++            mode_ = mode;
++        }
++        t->color = color_.tex; t->depth = depth_.tex; t->velocity = vel_.tex; t->reactive = reactive_.tex; t->output = out_.tex;
++        return true;
++    }
++
++    bool dispatch(const Fsr3Params& p, unsigned frameIndex) {
++        if (!inW_ || mode_ < 0) return false;
++        const UINT64 n = ++value_;
++        GLuint texs[4] = {color_.tex, depth_.tex, vel_.tex, out_.tex};
++        GLenum lay[4] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutGeneral};
++        GLuint64_ v = n;
++        semParam_(sem_, kFenceValue, &v);
++        signalSem_(sem_, 0, nullptr, 4, texs, lay);
++        glFlush();
++        const int a = (int)(frame_++ & 1);
++        if (allocDone_[a] && fence_->GetCompletedValue() < allocDone_[a]) {
++            fence_->SetEventOnCompletion(allocDone_[a], event_);
++            if (WaitForSingleObject(event_, 1000) != WAIT_OBJECT_0 && fence_->GetCompletedValue() < allocDone_[a]) {
++                // (still running: no evaluation this frame; GL's wait value is still signalled, after the pending work)
++                queue_->Wait(fence_, n);
++                const UINT64 skip = ++value_;
++                queue_->Signal(fence_, skip);
++                GLuint64_ w = skip; semParam_(sem_, kFenceValue, &w);
++                GLuint outTex = out_.tex; GLenum outLay = kLayoutShaderRead;
++                waitSem_(sem_, 0, nullptr, 1, &outTex, &outLay);
++                return false;
++            }
++        }
++        alloc_[a]->Reset();
++        list_->Reset(alloc_[a], nullptr);
++        auto barrier = [&](ID3D12Resource* r, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
++            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = r;
++            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES; b.Transition.StateBefore = from; b.Transition.StateAfter = to;
++            return b;
++        };
++        const D3D12_RESOURCE_STATES srv = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
++        D3D12_RESOURCE_BARRIER pre[4] = {barrier(color_.res, D3D12_RESOURCE_STATE_COMMON, srv), barrier(depth_.res, D3D12_RESOURCE_STATE_COMMON, srv),
++                                         barrier(vel_.res, D3D12_RESOURCE_STATE_COMMON, srv),
++                                         barrier(out_.res, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)};
++        list_->ResourceBarrier(4, pre);
++        // this frame's token, camera constants (DLSS SR reads jitter / motion-vector scale / reset / depth convention)
++        streamlineBeginFrame(frameIndex);
++        StreamlineCamera c;
++        const float id[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
++        for (float* m : {c.viewToClip, c.clipToView, c.clipToPrevClip, c.prevClipToClip}) std::memcpy(m, id, sizeof id);
++        c.jitterX = p.jitterX; c.jitterY = p.jitterY;
++        // velocity (texture units) * p.mvScale = render pixels (FSR 3.1's scale); DLSS wants normalised screen units
++        c.mvecScaleX = p.mvScaleX / (float)inW_; c.mvecScaleY = p.mvScaleY / (float)inH_;
++        c.nearM = p.nearM; c.farM = p.farM; c.fovY = p.fovY; c.aspect = (float)inW_ / (float)inH_;
++        c.depthInverted = false; c.reset = p.reset;
++        bool ok = streamlineSetCamera(c);
++        sl::FrameToken* token = (sl::FrameToken*)streamlineFrameToken();
++        sl::Result r = sl::Result::eErrorMissingInputParameter;
++        if (ok && token) {
++            const uint32_t srvState = (uint32_t)srv;
++            sl::Resource rc(sl::ResourceType::eTex2d, color_.res, srvState), rd(sl::ResourceType::eTex2d, depth_.res, srvState),
++                rm(sl::ResourceType::eTex2d, vel_.res, srvState),
++                ro(sl::ResourceType::eTex2d, out_.res, (uint32_t)D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
++            const sl::Extent inExt{0, 0, (uint32_t)inW_, (uint32_t)inH_}, outExt{0, 0, (uint32_t)outW_, (uint32_t)outH_};
++            sl::ResourceTag tags[4] = {sl::ResourceTag(&rc, sl::kBufferTypeScalingInputColor, sl::eValidUntilEvaluate, &inExt),
++                                       sl::ResourceTag(&rd, sl::kBufferTypeDepth, sl::eValidUntilEvaluate, &inExt),
++                                       sl::ResourceTag(&rm, sl::kBufferTypeMotionVectors, sl::eValidUntilEvaluate, &inExt),
++                                       sl::ResourceTag(&ro, sl::kBufferTypeScalingOutputColor, sl::eValidUntilEvaluate, &outExt)};
++            r = setTag_(*token, sl::ViewportHandle(0), tags, 4, list_);
++            if (r == sl::Result::eOk) {
++                sl::ViewportHandle vp(0);
++                const sl::BaseStructure* inputs[] = {&vp};
++                r = evaluate_(sl::kFeatureDLSS, *token, inputs, 1, list_);
++            }
++        }
++        D3D12_RESOURCE_BARRIER post[4] = {barrier(color_.res, srv, D3D12_RESOURCE_STATE_COMMON), barrier(depth_.res, srv, D3D12_RESOURCE_STATE_COMMON),
++                                          barrier(vel_.res, srv, D3D12_RESOURCE_STATE_COMMON),
++                                          barrier(out_.res, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON)};
++        list_->ResourceBarrier(4, post);
++        list_->Close();
++        queue_->Wait(fence_, n);
++        ID3D12CommandList* lists[] = {list_};
++        queue_->ExecuteCommandLists(1, lists);
++        const UINT64 done = ++value_;
++        queue_->Signal(fence_, done);
++        allocDone_[a] = done;
++        GLuint64_ w = done;
++        semParam_(sem_, kFenceValue, &w);
++        GLuint outTex = out_.tex; GLenum outLay = kLayoutShaderRead;
++        waitSem_(sem_, 0, nullptr, 1, &outTex, &outLay);
++        if (r != sl::Result::eOk) {
++            if (!failLogged_) { failLogged_ = true; LOG_WARN("DLSS: evaluation failed (%s)", sl::getResultAsStr(r)); }
++            return false;
++        }
++        return true;
++    }
++
++private:
++    static bool getFn(const char* name, void*& p) {
++        HMODULE sl = GetModuleHandleW(L"sl.interposer.dll");
++        auto get = sl ? (PFun_slGetFeatureFunction*)(void*)GetProcAddress(sl, "slGetFeatureFunction") : nullptr;
++        if (!get || get(sl::kFeatureDLSS, name, p) != sl::Result::eOk || !p) { LOG_WARN("DLSS: %s unavailable", name); return false; }
++        return true;
++    }
++    bool makeShared(Shared& s, int w, int h, DXGI_FORMAT fmt, GLenum glFmt, bool uav) {
++        D3D12_HEAP_PROPERTIES hp{}; hp.Type = D3D12_HEAP_TYPE_DEFAULT;
++        D3D12_RESOURCE_DESC rd{}; rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; rd.Width = (UINT64)w; rd.Height = (UINT)h;
++        rd.DepthOrArraySize = 1; rd.MipLevels = 1; rd.Format = fmt; rd.SampleDesc.Count = 1; rd.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
++        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
++                   (uav ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
++        if (FAILED(dev_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_SHARED, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr,
++                                                 __uuidof(ID3D12Resource), (void**)&s.res))) return false;
++        if (FAILED(dev_->CreateSharedHandle(s.res, nullptr, GENERIC_ALL, nullptr, &s.handle))) return false;
++        const D3D12_RESOURCE_ALLOCATION_INFO ai = dev_->GetResourceAllocationInfo(0, 1, &rd);
++        createMem_(1, &s.mem);
++        const GLint ded = 1; memParam_(s.mem, kDedicated, &ded);
++        importMem_(s.mem, ai.SizeInBytes, kHandleD3D12Resource, s.handle);
++        glGenTextures(1, &s.tex);
++        glBindTexture(GL_TEXTURE_2D, s.tex);
++        texStorageMem_(GL_TEXTURE_2D, 1, glFmt, w, h, s.mem, 0);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
++        glBindTexture(GL_TEXTURE_2D, 0);
++        s.w = w; s.h = h;
++        return glGetError() == GL_NO_ERROR;
++    }
++    void freeShared(Shared& s) {
++        if (s.tex) glDeleteTextures(1, &s.tex);
++        if (s.mem) deleteMem_(1, &s.mem);
++        if (s.handle) CloseHandle(s.handle);
++        rel(s.res);
++        s = Shared{};
++    }
++    void waitIdle() {
++        if (!queue_ || !fence_) return;
++        const UINT64 v = ++value_;
++        queue_->Signal(fence_, v);
++        if (fence_->GetCompletedValue() < v) { fence_->SetEventOnCompletion(v, event_); WaitForSingleObject(event_, 2000); }
++    }
++
++    PFN_CreateMemoryObjectsEXT createMem_ = nullptr; PFN_DeleteMemoryObjectsEXT deleteMem_ = nullptr;
++    PFN_ImportMemoryWin32HandleEXT importMem_ = nullptr; PFN_MemoryObjectParameterivEXT memParam_ = nullptr;
++    PFN_TexStorageMem2DEXT texStorageMem_ = nullptr; PFN_GenSemaphoresEXT genSem_ = nullptr;
++    PFN_ImportSemaphoreWin32HandleEXT importSem_ = nullptr; PFN_SemaphoreParameterui64vEXT semParam_ = nullptr;
++    PFN_WaitSemaphoreEXT waitSem_ = nullptr; PFN_SignalSemaphoreEXT signalSem_ = nullptr;
++    PFun_slDLSSSetOptions* setOptions_ = nullptr; PFun_slDLSSGetOptimalSettings* optimal_ = nullptr;
++    PFun_slSetTagForFrame* setTag_ = nullptr; PFun_slEvaluateFeature* evaluate_ = nullptr; PFun_slFreeResources* freeRes_ = nullptr;
++    ID3D12Device* dev_ = nullptr; ID3D12CommandQueue* queue_ = nullptr;
++    ID3D12CommandAllocator* alloc_[2] = {}; ID3D12GraphicsCommandList* list_ = nullptr;
++    ID3D12Fence* fence_ = nullptr; HANDLE fenceHandle_ = nullptr, event_ = nullptr;
++    GLuint sem_ = 0;
++    UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
++    Shared color_, depth_, vel_, reactive_, out_;
++    int inW_ = 0, inH_ = 0, outW_ = 0, outH_ = 0, mode_ = -1;
++    bool failLogged_ = false;
++};
++
++Dlss* g_dlss = nullptr;
++bool g_failed = false;
++}  // namespace
++
++float dlssRenderScale(int mode) { return mode >= 0 && mode < kDlssModes ? kScale[mode] : 1.0f; }
++const char* dlssModeName(int mode) { return mode >= 0 && mode < kDlssModes ? kName[mode] : "?"; }
++
++bool dlssPrepare(int mode, int inW, int inH, int outW, int outH, Fsr3Targets* t) {
++    if (g_failed) return false;
++    if (!g_dlss) {
++        g_dlss = new Dlss();
++        if (!g_dlss->init()) { delete g_dlss; g_dlss = nullptr; g_failed = true; return false; }
++    }
++    return g_dlss->prepare(mode, inW, inH, outW, outH, t);
++}
++bool dlssDispatch(const Fsr3Params& p, unsigned frameIndex) { return g_dlss && g_dlss->dispatch(p, frameIndex); }
++
++}  // namespace render
++#else
++#include "render/d3d12/D3D12Dlss.h"
++namespace render {
++float dlssRenderScale(int mode) { static const float s[kDlssModes] = {0.667f, 0.58f, 0.5f, 0.333f, 1.0f}; return mode >= 0 && mode < kDlssModes ? s[mode] : 1.0f; }
++const char* dlssModeName(int) { return "DLSS (not built)"; }
++bool dlssPrepare(int, int, int, int, int, Fsr3Targets*) { return false; }
++bool dlssDispatch(const Fsr3Params&, unsigned) { return false; }
++}  // namespace render
++#endif
+diff --git a/tools/render/fetch_streamline.py b/tools/render/fetch_streamline.py
+new file mode 100644
+index 0000000..de95f5f
+--- /dev/null
++++ b/tools/render/fetch_streamline.py
+@@ -0,0 +1,90 @@
++"""Fetch the pinned NVIDIA Streamline SDK pieces the optional DLSS paths use (PC ADAPTATION, M5 D) into
++third_party/streamline/ (not committed: Streamline's licence is MIT-style, the DLSS DLLs fall under the NVIDIA RTX SDKs
++licence - object code, unmodified, NVIDIA GPUs only, attribution; see docs/handoff/SYSTEMS_M5D_DLSS_STREAMLINE_PLAN.md).
++
++  fetch_streamline.py           downloads the release zip once (third_party/streamline/.download/), extracts include/ and
++                                the production DLLs below, verifies them (PE header, size), then deletes the zip
++  fetch_streamline.py --keep    keeps the zip
++
++Layout after fetching: include/*.h (the SDK headers, sl_nvperf.h excluded), bin/*.dll (production, signed), licenses/
++(Streamline's license.txt + 3rd-party-licenses.md, the DLSS licence nvngx_dlss.license.txt, reflex.license.txt). The game loads
++sl.interposer.dll at run time, only on an NVIDIA GPU and only when a DLSS row is selected; a package ships bin/*.dll next to
++the exe plus the licence texts in bin/licenses/nvidia/. Never shipped: sl_nvperf* (Nsight Perf SDK licence), the
++development DLLs (bin/x64/development), symbols.
++"""
++import os
++import shutil
++import sys
++import urllib.request
++import zipfile
++
++TAG = 'v2.14.1'
++ZIP = 'streamline-sdk-%s.zip' % TAG
++URL = 'https://github.com/NVIDIA-RTX/Streamline/releases/download/%s/%s' % (TAG, ZIP)
++SIZE = 275994000                       # the release asset's size (GitHub API, 2026-10-12)
++DLLS = ['sl.interposer.dll', 'sl.common.dll', 'sl.dlss.dll', 'sl.dlss_g.dll', 'sl.reflex.dll', 'sl.pcl.dll',
++        'nvngx_dlss.dll', 'nvngx_dlssg.dll']
++# the licence / notice texts a package ships for these DLLs (bin/licenses/nvidia/)
++LICENSES = ['license.txt', '3rd-party-licenses.md', 'bin/x64/nvngx_dlss.license.txt', 'bin/x64/reflex.license.txt']
++
++
++def main():
++    keep = '--keep' in sys.argv[1:]
++    root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'third_party', 'streamline'))
++    if all(os.path.isfile(os.path.join(root, 'bin', d)) for d in DLLS) and os.path.isfile(os.path.join(root, 'include', 'sl.h')):
++        print('Streamline %s already in %s' % (TAG, root))
++        return 0
++    dl = os.path.join(root, '.download')
++    os.makedirs(dl, exist_ok=True)
++    zpath = os.path.join(dl, ZIP)
++    if not (os.path.isfile(zpath) and os.path.getsize(zpath) == SIZE):
++        print('downloading %s (%.0f MB) ...' % (URL, SIZE / 1048576.0))
++        tmp = zpath + '.part'
++        with urllib.request.urlopen(URL, timeout=600) as r, open(tmp, 'wb') as f:
++            shutil.copyfileobj(r, f, 1 << 20)
++        if os.path.getsize(tmp) != SIZE:
++            print('size mismatch: %d (expected %d)' % (os.path.getsize(tmp), SIZE)); return 1
++        os.replace(tmp, zpath)
++    want_bin = {d.lower() for d in DLLS}
++    got = set()
++    with zipfile.ZipFile(zpath) as z:
++        for info in z.infolist():
++            name = info.filename.replace('\\', '/')
++            parts = name.split('/')
++            low = name.lower()
++            dst = None
++            if parts[0] == 'include' and len(parts) == 2 and parts[1] and 'nvperf' not in low:
++                dst = os.path.join(root, 'include', parts[1])
++            elif low.startswith('bin/x64/') and len(parts) == 3 and parts[-1].lower() in want_bin:
++                dst = os.path.join(root, 'bin', parts[-1])
++                got.add(parts[-1].lower())
++            elif name in LICENSES:
++                dst = os.path.join(root, 'licenses', parts[-1])
++            if not dst:
++                continue
++            os.makedirs(os.path.dirname(dst), exist_ok=True)
++            with z.open(info) as src, open(dst, 'wb') as out:
++                shutil.copyfileobj(src, out)
++    missing = want_bin - got
++    if missing:
++        print('missing in the zip:', ', '.join(sorted(missing))); return 1
++    for d in DLLS:
++        with open(os.path.join(root, 'bin', d), 'rb') as f:
++            if f.read(2) != b'MZ':
++                print('NOT A DLL:', d); return 1
++    for l in LICENSES:
++        if not os.path.isfile(os.path.join(root, 'licenses', l.split('/')[-1])):
++            print('licence text missing:', l); return 1
++    if not os.path.isfile(os.path.join(root, 'include', 'sl.h')):
++        print('include/sl.h missing'); return 1
++    if not keep:
++        os.remove(zpath)
++        shutil.rmtree(dl, ignore_errors=True)
++    for d in DLLS:
++        print('%10d  bin/%s' % (os.path.getsize(os.path.join(root, 'bin', d)), d))
++    print('Streamline %s ready in %s' % (TAG, root))
++    return 0
++
++
++if __name__ == '__main__':
++    sys.exit(main())
+diff --git a/tools/package/dlss_laptop_test.ps1 b/tools/package/dlss_laptop_test.ps1
+new file mode 100644
+index 0000000..95f4cf1
+--- /dev/null
++++ b/tools/package/dlss_laptop_test.ps1
+@@ -0,0 +1,237 @@
++# dlss_laptop_test.ps1 - the M5 D test on the user's NVIDIA RTX laptop (Systems; docs/handoff/SYSTEMS_M5D_DLSS_STREAMLINE_PLAN.md
++# section 3). One click (DLSS_Laptop_Test.bat in the package root runs this); about 45 minutes, mostly unattended; results
++# go into a zip beside the package to bring back to F:.
++#
++# Before starting: plugged in, Windows power mode "Best performance", display at its native resolution / refresh, Windows'
++# "Hardware-accelerated GPU scheduling" ON (DLSS frame generation needs it), other games / overlays closed.
++#
++#   step 0  setup: GPU / driver / HAGS / power / display facts; a short start-up reads which GPU GL runs on and what
++#           Streamline offers (stops here, with the reason, if GL is not on the NVIDIA GPU or DLSS is unavailable)
++#   step 1  native baseline: Gorge + Rust, 64 players, 120 s real play each (no upscaler, no frame generation)
++#   step 2  DLSS super resolution: DLAA, Quality, Balanced, Performance, Ultra Performance (+ FSR 3.1 Quality for
++#           comparison): 60 s real play each (fps) + a lockstep pass with screenshots at fixed match steps (image sheet)
++#   step 3  Reflex: DLSS Quality with Reflex off, then on: the driver's PC-latency reports
++#   step 4  DLSS frame generation 2x / 3x / 4x (4x needs RTX 50): presented vs rendered fps, then the frame-cap check
++#           (Frame Rate Limit 120: rendered 60 / 40 / 30)
++#   step 5  stability: 20 min DLSS-G at the highest factor; log scan; then a short manual checklist (alt-tab, fullscreen)
++#   step 6  a few questions (image quality / feel) and the zip
++#
++# Every run is one game process, started and stopped by this script (killed by its process id only on a timeout).
++param([switch]$Quick)   # -Quick: short runs (20 s) to check the script itself
++
++$ErrorActionPreference = 'Stop'
++$pkg = Split-Path -Parent $MyInvocation.MyCommand.Path
++$stamp = Get-Date -Format 'yyyyMMdd_HHmm'
++$out = Join-Path $pkg "dlss_test_results_$stamp"
++New-Item -ItemType Directory -Force $out | Out-Null
++$report = Join-Path $out 'report.txt'
++function Say([string]$s) { Write-Host $s; Add-Content -Path $report -Value $s }
++function Result([string]$step, [bool]$pass, [string]$detail) {
++    $line = '{0,-34} {1}  {2}' -f $step, $(if ($pass) { 'PASS' } else { 'FAIL' }), $detail
++    Write-Host $line -ForegroundColor $(if ($pass) { 'Green' } else { 'Red' }); Add-Content -Path $report -Value $line
++}
++$secs = { param($s) if ($Quick) { 20 } else { $s } }
++
++# ---------------------------------------------------------------- the data drive (as Play.bat: this folder as F:)
++$exeRel = 'Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe'
++$mapped = $false
++if (-not (Test-Path "F:\$exeRel")) {
++    if (Test-Path 'F:\') { Write-Host 'Drive F: is in use on this PC: free the letter (Disk Management) and run again.' -ForegroundColor Red; Read-Host 'Enter to close'; exit 1 }
++    subst F: "$pkg"
++    if (-not (Test-Path "F:\$exeRel")) { Write-Host 'Could not map F: to this folder.' -ForegroundColor Red; Read-Host 'Enter to close'; exit 1 }
++    $mapped = $true
++}
++$exe = "F:\$exeRel"
++$bin = Split-Path -Parent $exe
++
++try {
++# ---------------------------------------------------------------- step 0: setup facts
++Say "WFC Rebuild DLSS laptop test, $stamp"
++Say "package: $pkg"
++$gpus = Get-CimInstance Win32_VideoController
++foreach ($g in $gpus) { Say ("GPU: {0} | driver {1} ({2}) | {3}x{4} @ {5} Hz" -f $g.Name, $g.DriverVersion, $g.DriverDate, $g.CurrentHorizontalResolution, $g.CurrentVerticalResolution, $g.CurrentRefreshRate) }
++$hags = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name HwSchMode -ErrorAction SilentlyContinue).HwSchMode
++Say "Hardware-accelerated GPU scheduling: $(if ($hags -eq 2) { 'ON' } elseif ($hags -eq 1) { 'OFF' } else { 'unknown' })"
++$bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
++Say "power: $(if (-not $bat) { 'no battery (desktop?)' } elseif ($bat.BatteryStatus -eq 2) { 'on AC' } else { 'ON BATTERY (plug in for valid numbers)' }); scheme $((powercfg /getactivescheme) -join ' ')"
++$nv = $gpus | Where-Object { $_.Name -match 'NVIDIA' } | Select-Object -First 1
++$W = 0; $H = 0
++foreach ($g in $gpus) { if ($g.CurrentHorizontalResolution -gt $W) { $W = [int]$g.CurrentHorizontalResolution; $H = [int]$g.CurrentVerticalResolution } }
++if ($W -le 0) { $W = 1920; $H = 1080 }
++Say "test resolution: ${W}x${H} fullscreen (the display's current mode: no mode switch)"
++
++$common = @{
++    WFC_BOOT = 'frontend'; WFC_SKIPINTRO = '1'; WFC_NOMOUSE = '1'; WFC_FLOWSEED = '1'; WFC_SEED = '7'; WFC_AUTODETECT = '0';
++    WFC_LOGTIME = '1'; WFC_PLAYERBOT = '1'; WFC_PERFLOG = '300'
++}
++$lobby64 = 'ExtendedPlayers=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=1500'
++function Script([int]$map, [int]$s) {
++    "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;" +
++    "call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;" +
++    "call:Online.SetSelectedMapID,$map;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$s;quit"
++}
++# one game run in its own directory: profile + environment, wait (timeout -> kill by PID), returns the log text
++function Run([string]$name, [hashtable]$env, [hashtable]$profile, [int]$timeout, [switch]$Interactive) {
++    $dir = Join-Path $out $name
++    New-Item -ItemType Directory -Force $dir | Out-Null
++    $ini = @('[ProfileData]', '', '[PCSettings]', "Width=$W", "Height=$H", "Fullscreen=$($profile.Fullscreen)", 'TextureQuality=2', 'VSync=0',
++             "FrameLimit=$($profile.FrameLimit)", "Upscaling=$($profile.Upscaling)", 'HDTextures=0', 'Anisotropy=4',
++             "FrameGeneration=$($profile.FrameGeneration)", 'RayTracing=0', 'BotsEdited=1', 'AutoDetectGpu=')
++    Set-Content -Path (Join-Path $dir 'wfc_profile.ini') -Value $ini -Encoding ASCII
++    $psi = New-Object System.Diagnostics.ProcessStartInfo
++    $psi.FileName = $exe; $psi.WorkingDirectory = $dir; $psi.UseShellExecute = $false
++    if (-not $Interactive) { foreach ($k in $common.Keys) { $psi.EnvironmentVariables[$k] = $common[$k] } }   # (the manual run: the player plays)
++    foreach ($k in $env.Keys) { $psi.EnvironmentVariables[$k] = [string]$env[$k] }
++    Write-Host "  running $name ..." -NoNewline
++    $p = [System.Diagnostics.Process]::Start($psi)
++    if (-not $p.WaitForExit($timeout * 1000)) {
++        Write-Host ' timeout (stopped)' -ForegroundColor Yellow
++        try { Stop-Process -Id $p.Id -Force } catch {}
++        Add-Content -Path $report -Value "  ${name}: TIMEOUT after $timeout s (stopped)"
++    } else { Write-Host " exit $($p.ExitCode)" }
++    $log = Join-Path $dir 'wfc.log'
++    if (Test-Path $log) { return (Get-Content $log -Raw) } else { return '' }
++}
++function Lines([string]$log, [string]$pattern) { ($log -split "`n") | Where-Object { $_ -match $pattern } }
++# mean frame ms of the PERF lines after the first 20 s of the match (the match start: the first PERF line)
++function Fps([string]$log) {
++    $ms = @(); $t0 = $null
++    foreach ($l in (Lines $log 'PERF f\d+ frame=')) {
++        if ($l -match '^\s*([\d.]+) .*frame=([\d.]+)ms') {
++            $t = [double]$Matches[1]
++            if ($null -eq $t0) { $t0 = $t }
++            if ($t - $t0 -ge 20 -or $Quick) { $ms += [double]$Matches[2] }
++        }
++    }
++    if ($ms.Count -eq 0) { return 0 }
++    return [math]::Round(1000.0 / (($ms | Measure-Object -Average).Average), 1)
++}
++function Errors([string]$log) { @(Lines $log '\[error\]').Count }
++
++Say ''
++Say '== step 0: start-up check'
++$log0 = Run 'step0_startup' @{ WFC_FRONTEND_SCRIPT = 'wait:frontend;wait:ui=FrontEnd;wait:t=5;quit' } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 0; FrameGeneration = 0 } 120
++$glLine = (Lines $log0 'GL interop: ') | Select-Object -First 1         # (its "vendor ..., renderer ..." part names GL's GPU)
++$slLine = (Lines $log0 'Streamline \d+\.\d+\.\d+ on |DLSS: unavailable') | Select-Object -First 1
++$adLine = (Lines $log0 'GPU: GL on ') | Select-Object -First 1
++Say "  $glLine"; Say "  $adLine"; Say "  $slLine"
++$glNv = $glLine -match 'renderer [^)]*NVIDIA|vendor NVIDIA'
++$dlssOk = $slLine -match 'DLSS SR yes'
++$fgOk = $slLine -match 'DLSS-G yes'
++Result 'step 0: GL on the NVIDIA GPU' $glNv $(if ($glNv) { '' } else { 'GL runs on another GPU: set wfc_rebuild.exe to "High performance" in Windows Settings > Display > Graphics, then run again' })
++Result 'step 0: DLSS available' $dlssOk ($slLine -replace '^\s*[\d.]+ \[info \] ', '')
++Result 'step 0: HAGS on (DLSS-G needs it)' ($hags -eq 2) ''
++if (-not ($glNv -and $dlssOk)) { Say 'Stopping: the rest needs DLSS on the NVIDIA GPU.'; throw 'setup' }
++
++# ---------------------------------------------------------------- step 1: native baseline
++Say ''; Say '== step 1: native baseline (64 players, real play)'
++$base = @{}
++foreach ($m in @(@{ id = 510; n = 'Gorge' }, @{ id = 504; n = 'Rust' })) {
++    $s = & $secs 120
++    $l = Run "step1_native_$($m.n)" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_FRONTEND_SCRIPT = (Script $m.id $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 0; FrameGeneration = 0 } ($s + 240)
++    $base[$m.n] = Fps $l
++    Result "step 1: native $($m.n)" ($base[$m.n] -gt 0 -and (Errors $l) -eq 0) ("{0} fps, {1} errors" -f $base[$m.n], (Errors $l))
++}
++
++# ---------------------------------------------------------------- step 2: DLSS super resolution (+ FSR 3.1 for comparison)
++Say ''; Say '== step 2: DLSS super resolution on Gorge'
++$modes = @(@{ v = 11; n = 'DLAA' }, @{ v = 7; n = 'DLSS_Quality' }, @{ v = 8; n = 'DLSS_Balanced' }, @{ v = 9; n = 'DLSS_Performance' },
++           @{ v = 10; n = 'DLSS_UltraPerformance' }, @{ v = 4; n = 'FSR31_Quality' })
++foreach ($m in $modes) {
++    $s = & $secs 60
++    $l = Run "step2_$($m.n)" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = $m.v; FrameGeneration = 0 } ($s + 240)
++    $fps = Fps $l
++    $active = if ($m.v -ge 7) { [bool](Lines $l 'DLSS: DLSS |DLSS: DLAA ') } else { [bool](Lines $l 'FSR3: upscaling') }
++    $failed = [bool](Lines $l 'DLSS: evaluation failed|DLSS: unavailable \(see above\)')
++    Result "step 2: $($m.n)" ($active -and -not $failed -and (Errors $l) -eq 0) ("{0} fps ({1:+0;-0}% vs native {2}); {3} errors{4}" -f $fps,
++        $(if ($base['Gorge'] -gt 0) { 100.0 * ($fps - $base['Gorge']) / $base['Gorge'] } else { 0 }), $base['Gorge'], (Errors $l), $(if (-not $active) { '; NOT ACTIVE' } else { '' }))
++    # screenshots at the same match moments (lockstep: one simulation step per frame), for the side-by-side sheet
++    $shots = Join-Path $out "shots_$($m.n)"; New-Item -ItemType Directory -Force $shots | Out-Null
++    $null = Run "step2_shots_$($m.n)" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_LOCKSTEP = '1'; WFC_SHOTMATCH = "$shots,600,2400,600"; WFC_FRONTEND_SCRIPT = (Script 510 (& $secs 50)) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = $m.v; FrameGeneration = 0 } 400
++}
++# native shots for the sheet
++$shotsN = Join-Path $out 'shots_native'; New-Item -ItemType Directory -Force $shotsN | Out-Null
++$null = Run 'step2_shots_native' @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_LOCKSTEP = '1'; WFC_SHOTMATCH = "$shotsN,600,2400,600"; WFC_FRONTEND_SCRIPT = (Script 510 (& $secs 50)) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 0; FrameGeneration = 0 } 400
++# the sheet: one HTML page, native / each mode side by side per match moment
++$sheet = @('<html><body style="background:#222;color:#ddd;font-family:sans-serif"><h2>Gorge, same match moments (lockstep)</h2>')
++foreach ($f in (Get-ChildItem $shotsN -Filter *.bmp | Sort-Object Name)) {
++    $sheet += "<h3>$($f.BaseName)</h3><div style='display:flex;flex-wrap:wrap;gap:6px'>"
++    foreach ($d in @('native') + ($modes | ForEach-Object { $_.n })) { $sheet += "<figure style='margin:0'><img src='shots_$d/$($f.Name)' width='640'><figcaption>$d</figcaption></figure>" }
++    $sheet += '</div>'
++}
++$sheet += '</body></html>'
++Set-Content -Path (Join-Path $out 'image_sheet.html') -Value $sheet -Encoding UTF8
++Say '  image sheet: image_sheet.html (open it in a browser; compare native / DLAA / DLSS modes / FSR 3.1)'
++
++# ---------------------------------------------------------------- step 3: Reflex
++Say ''; Say '== step 3: Reflex at DLSS Quality'
++foreach ($r in @(0, 1)) {
++    $s = & $secs 60
++    $l = Run "step3_reflex$r" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_REFLEX = "$r"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 0 } ($s + 240)
++    $lat = (Lines $l 'Reflex: PC latency') | ForEach-Object { if ($_ -match 'GPU render end\) ([\d.]+) ms avg') { [double]$Matches[1] } }
++    $avg = if ($lat) { [math]::Round(($lat | Measure-Object -Average).Average, 2) } else { 0 }
++    Result "step 3: Reflex $(if ($r) { 'on' } else { 'off' })" ($avg -gt 0) ("PC latency {0} ms avg, {1} fps" -f $avg, (Fps $l))
++}
++
++# ---------------------------------------------------------------- step 4: DLSS frame generation
++Say ''; Say '== step 4: DLSS frame generation (DLSS Quality)'
++$fgMax = 2
++foreach ($f in @(2, 3, 4)) {
++    $s = & $secs 90
++    $l = Run "step4_dlssg_${f}x" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_DLSSG_FACTOR = "$f"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } ($s + 240)
++    $on = [bool](Lines $l 'PRESENT: D3D12 .*DLSS (multi )?frame generation')
++    $gen = (Lines $l 'FRAMEGEN: \d+ real frames') | Select-Object -Last 3
++    $real = 0; $shown = 0
++    foreach ($g in $gen) { if ($g -match '\(([\d.]+) fps\); swapchain presents\s+([\d.]+) / s') { $real += [double]$Matches[1]; $shown += [double]$Matches[2] } }
++    if ($gen) { $real = [math]::Round($real / @($gen).Count, 1); $shown = [math]::Round($shown / @($gen).Count, 1) }
++    $ratio = if ($real -gt 0) { [math]::Round($shown / $real, 2) } else { 0 }
++    $status = (Lines $l 'DLSS-G: status') | Select-Object -First 1
++    $ok = $on -and $ratio -ge ($f - 0.4) -and (Errors $l) -eq 0
++    if ($ok) { $fgMax = $f }
++    Result "step 4: DLSS-G ${f}x" $ok ("rendered {0} fps, presented {1} / s (x{2}); {3} errors {4}{5}" -f $real, $shown, $ratio, (Errors $l), $(if (-not $on) { '; NOT ACTIVE' } else { '' }), $(if ($status) { "; $status" } else { '' }))
++    if ($f -eq 4 -and -not $ok) { Say '  (4x needs an RTX 50 GPU; 3x likewise)' }
++}
++foreach ($f in @(2, 3, 4)) {
++    if ($f -gt $fgMax) { continue }
++    $s = & $secs 60
++    $l = Run "step4_cap120_${f}x" @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_DLSSG_FACTOR = "$f"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 120; Upscaling = 7; FrameGeneration = 1 } ($s + 240)
++    $fps = Fps $l
++    $want = [math]::Round(120.0 / $f, 1)
++    Result "step 4: cap 120 at ${f}x" ([math]::Abs($fps - $want) -le 0.1 * $want) ("rendered {0} fps (expected {1})" -f $fps, $want)
++}
++
++# ---------------------------------------------------------------- step 5: stability
++Say ''; Say "== step 5: 20 min DLSS-G ${fgMax}x soak"
++$s = & $secs 1200
++$l = Run 'step5_soak' @{ WFC_LOBBY_OPTIONS = $lobby64; WFC_DLSSG_FACTOR = "$fgMax"; WFC_FRONTEND_SCRIPT = (Script 510 $s) } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } ($s + 300)
++$bad = Lines $l 'DEVICE_REMOVED|device lost|recovered with a new device|crashed|watchdog: no frame'
++Result 'step 5: soak' ((Errors $l) -eq 0 -and -not $bad) ("{0} errors; {1}" -f (Errors $l), $(if ($bad) { ($bad | Select-Object -First 2) -join ' | ' } else { 'no device loss / crash / hang' }))
++Say ''
++Say 'Manual check (2 minutes): Play.bat is started for you with DLSS Quality + DLSS frame generation. In a match:'
++Say '  1. alt-tab out and back twice   2. Options > Graphics: switch Fullscreen off and on   3. change Upscaling to DLAA, then back'
++Say '  then quit the game.'
++Read-Host 'Enter to start the game for the manual check'
++$l = Run 'step5_manual' @{ WFC_SKIPINTRO = '1'; WFC_LOGTIME = '1' } @{ Fullscreen = 1; FrameLimit = 0; Upscaling = 7; FrameGeneration = 1 } 1800 -Interactive
++$ans = Read-Host 'Did the picture come back correctly after each step, without a crash or a black screen? (y/n)'
++Result 'step 5: manual alt-tab / fullscreen / mode' ($ans -match '^[yY]') ("{0} errors in its log" -f (Errors $l))
++
++# ---------------------------------------------------------------- step 6: questions
++Say ''; Say '== step 6: your impressions (short answers are fine)'
++foreach ($q in @('Image quality: DLAA / DLSS Quality vs native (image_sheet.html) - better, same, worse? Anything blurry or smeared?',
++                 'DLSS frame generation: does movement feel smoother? Any artifacts on the HUD, kill feed or text?',
++                 'Input feel with frame generation: noticeably laggier than without?',
++                 'Anything else you noticed?')) {
++    $a = Read-Host $q
++    Add-Content -Path $report -Value "Q: $q`r`nA: $a"
++}
++}
++catch { if ($_.Exception.Message -ne 'setup') { Say "script error: $($_.Exception.Message)" } }
++finally {
++    if ($mapped) { subst F: /d | Out-Null }
++    $zip = "$out.zip"   # (crash / hang dumps are written into the run directories: zipped with them)
++    Compress-Archive -Path $out -DestinationPath $zip -Force
++    Write-Host ''
++    Write-Host "Results: $zip" -ForegroundColor Cyan
++    Write-Host 'Copy that zip to F:\Transformers Rebuild\ on the desktop PC (or send it) so the results can be read.'
++    Read-Host 'Enter to close'
++}
+diff --git a/tools/package/slim_template/DLSS_Laptop_Test.bat b/tools/package/slim_template/DLSS_Laptop_Test.bat
+new file mode 100644
+index 0000000..7eda951
+--- /dev/null
++++ b/tools/package/slim_template/DLSS_Laptop_Test.bat
+@@ -0,0 +1,4 @@
++@echo off
++rem WFC Rebuild: the NVIDIA DLSS test (09c b898c75 slim). About 45 minutes, mostly unattended; plugged in, other games closed.
++rem It runs dlss_laptop_test.ps1 from this folder and leaves a dlss_test_results_*.zip here to bring back.
++powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0dlss_laptop_test.ps1" %*

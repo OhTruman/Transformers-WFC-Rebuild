@@ -129,3 +129,55 @@ at the end.
 - Notices: NVIDIA's licence / notice text for the shipped DLLs goes in the package's licenses folder beside the vgmstream
   ones (bin/licenses/nvidia/), referenced from README.txt.
 - D itself waits for the user's RTX 5090 laptop session (section 3).
+
+## 7. Built (2026-10-12, HELD until the laptop test: docs/handoff/SYSTEMS_M5D_DLSS.patch on 09c de6783e)
+
+Compile-tested and absence-tested on the AMD desktop only; nothing NVIDIA has run yet.
+
+- **SDK**: tools/render/fetch_streamline.py pins Streamline v2.14.1. It is fetched, never committed (third_party/streamline/ is git-ignored).
+  - Kept: include/ (without sl_nvperf.h); the 8 production DLLs (sl.interposer / common / dlss / dlss_g / reflex / pcl, nvngx_dlss 59 MB, nvngx_dlssg 7.5 MB); licenses/ (Streamline license.txt + 3rd-party-licenses.md, nvngx_dlss.license.txt, reflex.license.txt).
+  - CMake builds DLSS only when the headers are present (WFC_STREAMLINE_SDK), links wintrust / crypt32 (the interposer's signature check) and copies the DLLs beside the exe. Without the SDK every call is an "unavailable" stub.
+- **Core (render/d3d12/D3D12Streamline.{h,cpp})**
+  - A one-time probe reads GL's adapter vendor (d3d12AdapterForGL; else the default adapter). On non-NVIDIA it stops there: no DLL loaded, one info line "DLSS: unavailable (not an NVIDIA GPU (...))".
+  - On NVIDIA: verify sl.interposer.dll's NVIDIA signature (sl_security.h), LoadLibrary + GetProcAddress (no import library), then slInit.
+    - Settings: no OTA, no downloaded plugins, plugins from the exe directory, frame-based tagging, DLSS / DLSS-G / Reflex / PCL.
+    - slIsFeatureSupported runs on GL's LUID.
+  - One Streamline D3D12 device on GL's adapter (slSetD3DDevice), plus frame tokens, Reflex options / sleep / PCL markers, and camera constants.
+  - The GL matrices are converted to Streamline's convention: y flip and z to [0, 1] for the top-down FG inputs.
+  - Latency log: "Reflex: PC latency (simulation start -> GPU render end) X ms avg", from the driver's reports, every 300 frames.
+  - WFC_NODLSS=1 never loads anything. slShutdown runs at exit.
+- **DLSS SR (render/d3d12/D3D12Dlss.{h,cpp})**
+  - Same interface as FSR 3.1 (Fsr3Targets / Fsr3Params) and the same GL copies into shared textures. Pipeline::fsr3Run picks DLSS when a DLSS mode is set.
+  - Fallback: DLSS -> FSR 3.1 -> FSR 1, at the same scale.
+  - Upscaling modes 7-11 = DLSS Quality / Balanced / Performance / Ultra Performance / DLAA (ratios 0.667 / 0.58 / 0.5 / 0.333 / 1.0; NVIDIA's optimal size logged).
+  - Inputs: HDR colour + auto exposure; motion-vector scale converted to normalised units; jitter as FSR 3.1's.
+- **DLSS-G (D3D12Presenter.cpp, Rendering's file)**: FG on + an NVIDIA GPU with DLSS-G + Reflex means the presenter runs on Streamline's device with an upgraded DXGI factory, so the swapchain is Streamline's proxy. WFC_FG_BACKEND=fsr keeps FSR 3 FG.
+  - Reflex low latency is on.
+  - Per frame it reuses FSR 3 FG's three inputs (HUD-less RGBA8, depth R32F, motion RG16F): options when they change (off in menus), camera constants from new FgParams matrices (unjittered view-projection, view, previous view-projection), tags (state COMMON, valid until present), PCL present markers.
+  - Factor 2x / 3x / 4x: setFrameGenerationFactorAtStartup / WFC_DLSSG_FACTOR. framegenFactor() feeds the M5 item 10 limiter (cap / factor).
+  - The worker-thread present is not used with DLSS-G. slDLSSGGetState's status is logged when it fails.
+- **Main loops (Application)**: Reflex sleep + simulation / render-submit markers. These are no-ops unless Streamline runs Reflex or DLSS-G.
+- **Menus**
+  - Profile Upscaling now goes up to 11.
+  - HardwareFacts.dlss / FrontendRuntime::dlssAvailable(): the Upscaling row lists the DLSS entries only when DLSS is available (else only a stored choice, so the row shows what is set). Auto-detect never picks DLSS.
+  - The Frame generation row: frameGenerationAvailable() is true with FSR 3 FG or DLSS-G.
+  - Log line "graphics: DLSS yes / no". (The optional-runtimes line is unchanged, for verify_slim.)
+- **Package**: build_slim.py --m5 --dlss ships the 8 DLLs, licenses/nvidia/, README notes (NVIDIA trademarks; loaded only on NVIDIA GPUs), and DLSS_Laptop_Test.bat + dlss_laptop_test.ps1 in the package root.
+- **Laptop test (tools/package/dlss_laptop_test.ps1, one click, about 45 min)** implements section 3:
+  - Step 0: setup facts, plus a start-up that stops with the reason if GL is not on the NVIDIA GPU or DLSS is unavailable.
+  - Step 1: native Gorge + Rust, 64p.
+  - Step 2: DLAA / Q / B / P / UP / FSR 3.1 fps, plus lockstep screenshots at match steps 600-2400 into image_sheet.html.
+  - Step 3: Reflex off / on latency.
+  - Step 4: DLSS-G 2x / 3x / 4x (presented / rendered), plus the 120 cap check (60 / 40 / 30).
+  - Step 5: 20 min soak, then a manual alt-tab / fullscreen / mode check.
+  - Step 6: questions, then the zip. PASS / FAIL per step goes to report.txt.
+- **Absence proof (RX 7900 XTX, 09c de6783e + the patch, 1080p window, Streets 5v5)**:
+  - Default settings: "DLSS: unavailable (not an NVIDIA GPU (AMD Radeon RX 7900 XTX, vendor 0x1002))", "graphics: DLSS no", 0 [error]; NVIDIA / Streamline modules loaded: none (process module list at 46 s).
+  - A stored DLSS choice (WFC_UPSCALING=7): "renderer: upscaling mode 7 (DLSS Quality)" -> "DLSS: unavailable (see above): FSR 3.1 instead" -> FSR 1 at 0.67 (this tree has no FFX SDK); 0 [error].
+- **To check on the laptop first** (assumptions that cannot be verified here):
+  - The jitter sign and the motion-vector scale for DLSS SR (DLSS's debug overlay / ghosting).
+  - The FG camera matrices: prevViewProj_ timing within the frame; DLSS-G status bit 8 = constants invalid.
+  - That slSetTag with state COMMON is accepted for the simultaneous-access shared textures.
+  - Whether Streamline needs the D3D12 device created through the interposer (we use slSetD3DDevice on a native device).
+  - Reflex markers in the frontend loop (one span per frame).
+- **Not done (later)**: the HUD as a separate UI layer for DLSS-G (M5 item 6; until then the HUD is interpolated with the frame); a Reflex row; a 3x / 4x choice in the FG row (the factor is start-up / env only); the credits / splash attribution (Frontend, §6).
