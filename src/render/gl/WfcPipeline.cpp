@@ -1016,6 +1016,8 @@ void Pipeline::release() {
     const int keepAniso = anisotropy_;
     const bool keepHd = hdTextures_;
     const bool keepFsr3 = fsr3On_;                     // (the Upscaling row's FSR 3.1: lost here before, FSR 1 in matches)
+    const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
+                                                       //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
@@ -1023,6 +1025,22 @@ void Pipeline::release() {
     anisotropy_ = keepAniso;
     hdTextures_ = keepHd;
     fsr3On_ = keepFsr3;
+    modern_ = keepModern;
+}
+
+// WFC_SETTINGSTEST=1 (at init, before any map): every caller setting set to a non-default value survives release() -
+// a setting the frontend hands over only at boot / on change must not reset at a map change.
+void Pipeline::runSettingsSelfTest() {
+    int pass = 0, fail = 0;
+    auto check = [&](bool ok, const char* what) { (ok ? pass : fail)++; LOG_INFO("settings-test %s: %s", ok ? "PASS" : "FAIL", what); };
+    const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
+    const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+    displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+    release();
+    check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
+    check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+    displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
+    LOG_INFO("settings-test: %d pass, %d fail", pass, fail);
 }
 
 // ------------------------------------------------------------------------- loading

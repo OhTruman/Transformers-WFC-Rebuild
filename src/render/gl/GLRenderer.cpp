@@ -73,6 +73,7 @@ public:
         initD3D12PresentIfRequested();
         if (const char* fl = std::getenv("WFC_FRAMELIMIT")) { limiter_.setLimit((float)std::atof(fl)); limitFromEnv_ = true; }
         if (std::getenv("WFC_HDFORCE")) wfc_.setHdTextures(true);   // (verification: HD on without the frontend's setting, e.g. the scene viewer)
+        if (std::getenv("WFC_SETTINGSTEST")) wfc_.runSettingsSelfTest();   // (caller settings survive a map change; before any map)
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         glEnable(GL_CULL_FACE);
