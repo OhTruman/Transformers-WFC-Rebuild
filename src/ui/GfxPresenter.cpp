@@ -1486,8 +1486,14 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
 void GfxPresenter::syncPackageCredit() {
     const frontend::GameFlow& flow = rt_.flow();
     const std::string& movie = flow.kismetMovie().empty() ? flow.scriptMovie() : flow.kismetMovie();
-    const bool shown = frontend::packageCreditShown(frontend::kDlssPackage, rt_.startupMovieUp(),
-                                                    rt_.fullScreenMovie() && rt_.movieOpen(), movie);
+    bool shown = frontend::packageCreditShown(frontend::kDlssPackage, rt_.startupMovieUp(),
+                                              rt_.fullScreenMovie() && rt_.movieOpen(), movie);
+    // Between two boot logos no movie plays for a few frames (Systems measured 0.05-0.06 s): the line stays up for up to
+    // 0.25 s there instead of blinking. A non-logo movie (FMV_intro) or the end of the credits turns it off at once.
+    const auto now = std::chrono::steady_clock::now();
+    if (shown) { creditOnLogo_ = frontend::isStartupLogoMovie(movie) || rt_.startupMovieUp(); creditGapFrom_ = now; }
+    else if (creditShown_ && creditOnLogo_ && movie.empty() && std::chrono::duration<double>(now - creditGapFrom_).count() < 0.25)
+        shown = true;
     if (shown != creditShown_) {
         creditShown_ = shown;
         frontend::FlowTrace::emit("package.credit", {{"line", "NVIDIA DLSS"}, {"shown", frontend::FlowTrace::boolean(shown)},
