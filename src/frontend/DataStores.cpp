@@ -62,6 +62,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:Upscaling>") return std::to_string(flow_.profile().display.upscaling);    // PC EXTENSION
     if (markup == "<PCSettings:HDTextures>") return flow_.profile().display.hdTextures ? "1" : "0";      // PC EXTENSION
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
+    if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
@@ -329,9 +330,19 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
                                                      {"applies", "next launch"}, {"provenance", "PC EXTENSION"}});
         return {};
     }
+    if (fn == "WriteValue" && m == "<PCSettings:RayTracing>") {   // PC EXTENSION (the row shows only where it can run)
+        flow_.profile().display.rayTracing = std::clamp(std::atoi(arg(1).c_str()), 0, LocalProfile::Display::kRayTracingMax);
+        FlowTrace::emit("settings.rayTracing", {{"mode", std::to_string(flow_.profile().display.rayTracing)}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
     if (fn == "WriteValue" && m == "<PCSettings:HDTextures>") {   // PC EXTENSION (the row offers On only with the pack)
-        flow_.profile().display.hdTextures = arg(1) == "1" || arg(1) == "true";
-        FlowTrace::emit("settings.hdTextures", {{"on", FlowTrace::boolean(flow_.profile().display.hdTextures)}, {"provenance", "PC EXTENSION"}});
+        // Commit writes every row: only a changed value counts as the user's choice (then the default stops applying).
+        LocalProfile::Display& d = flow_.profile().display;
+        const bool on = arg(1) == "1" || arg(1) == "true";
+        if (on != d.hdTextures) d.hdTexturesUserSet = true;
+        d.hdTextures = on;
+        FlowTrace::emit("settings.hdTextures", {{"on", FlowTrace::boolean(d.hdTextures)}, {"userSet", FlowTrace::boolean(d.hdTexturesUserSet)},
+                                                {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:FrameLimit>") {   // applied (and saved) by Game.ApplyProfileSettings

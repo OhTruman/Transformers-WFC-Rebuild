@@ -153,6 +153,10 @@ public:
     // FSR frame generation: its runtime ships (the row is offered) / it started this session (set at launch only).
     bool frameGenerationAvailable() const { return hardwareKnown_ && hardware_.frameGen; }
     bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
+    // Ray-traced shadows / lighting can run (the Ray Tracing row is offered; Rendering's rayTracingAvailable at boot).
+    bool rayTracingAvailable() const { return hardwareKnown_ && hardware_.rtAvailable; }
+    // The HD textures default turned the setting on at this boot (a pack was found): the row's hint says so.
+    bool hdTexturesTurnedOnAtBoot() const { return hdTexturesTurnedOn_; }
     // Picks the preset for the known facts and writes it into the profile (saved); why: "first launch", "gpu changed",
     // "recommended" (the menu action). The caller applies the display mode / renderer settings (profile apply).
     GraphicsPreset applyRecommendedGraphics(const char* why);
@@ -259,6 +263,7 @@ private:
     DisplayHooks display_;
     HardwareFacts hardware_;
     bool hardwareKnown_ = false;
+    bool hdTexturesTurnedOn_ = false;
     GraphicsPresetTable presets_;
     bool presetsLoaded_ = false;
     BridgeValue account(const std::string& fn, const std::vector<std::string>& args);

@@ -15,10 +15,18 @@ struct HardwareFacts {
     bool rayTracing = false, hdTexturePack = false;
     bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
     bool frameGen = false, frameGenActive = false;   // FSR frame generation can run / did start this session (Rendering)
+    bool rtAvailable = false;         // ray-traced shadows / lighting can run (Rendering's rayTracingAvailable(): DXR 1.1 +
+                                      // the D3D12 runtime) - the Ray Tracing row shows only then
     int cpuCores = 0;
     int nativeW = 0, nativeH = 0, nativeHz = 0;   // the monitor's current (desktop) mode
     std::string gpuId() const;                    // stored with the settings to re-detect when the GPU changes
 };
+
+// HD textures default (user decision 2026-10-12, "the brand new textures should be the default"): On when the HD pack is
+// installed and the GPU has at least ~6 GB of video memory (the pack adds up to ~2 GB per map; 6 GB cards report
+// 6000-6144 MB). Used by auto-detect on every tier and, until the user picks a value, at every boot.
+constexpr int kHdTexturesMinVramMB = 6000;
+inline bool hdTexturesDefault(const HardwareFacts& f) { return f.hdTexturePack && f.vramMB >= kHdTexturesMinVramMB; }
 
 struct GraphicsPreset {
     std::string tier, why;
@@ -42,7 +50,7 @@ private:
         bool allowIntegrated = true;
         long long nativePixelBudget = 921600;
         int upscalingOverBudget = 2, maxHeight = 1080, anisotropy = 4, textureQuality = 1;
-        bool hdTextures = false, fullscreen = true, vsync = false;
+        bool fullscreen = true, vsync = false;
         int frameLimit = -1;                      // -1 = the monitor's refresh rate
     };
     std::vector<std::string> integrated_;

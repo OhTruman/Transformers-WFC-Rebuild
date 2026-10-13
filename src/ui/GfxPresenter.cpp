@@ -1035,7 +1035,7 @@ namespace {
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
-                       bool frameGenAvailable, bool frameGenActive) {
+                       bool frameGenAvailable, bool frameGenActive, bool hdTurnedOn, bool rtAvailable) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1098,8 +1098,9 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         : fsr3Available ? "FSR 1 nearly free; FSR 3.1 best if GPU-bound, else slower."
                         : "Lower render resolution, upscaled. FSR 1 is nearly free.", "Upscaling");
     row(hd, "<PCSettings:HDTextures>",
-        hdAvailable ? "Use high-resolution textures (more video memory). Applies on the next map load."
-                    : "The HD texture pack is not installed.", "HD Textures");
+        !hdAvailable ? "The HD texture pack is not installed."
+        : hdTurnedOn ? "The HD texture pack was found and turned on."
+                     : "HD textures use more video memory. Applies on next map.", "HD Textures");
     row(af, "<PCSettings:Anisotropy>", "Sharper textures at grazing angles (4x is the original setting).", "Anisotropic Filtering");
     if (frameGenAvailable) {   // decided at start-up: a value different from this session's state says so
         std::vector<gfx::avm1::Value> fg;
@@ -1107,6 +1108,11 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         add(fg, 1, frameGenActive ? "On" : "On (restart)");
         row(fg, "<PCSettings:FrameGeneration>",
             "Doubles frames below your refresh rate; adds a little lag.", "Frame Generation");   // restart: in the labels
+    }
+    if (rtAvailable) {   // PC EXTENSION; Off by default, never auto-detected (user decision 2026-10-12)
+        std::vector<gfx::avm1::Value> rtv;
+        add(rtv, 0, "Off"); add(rtv, 1, "Faithful"); add(rtv, 2, "Realistic");
+        row(rtv, "<PCSettings:RayTracing>", "Ray-traced shadows and lighting. Faithful: original look.", "Ray Tracing");
     }
     {   // PC EXTENSION action row in the original button form (as Commit Changes / Brightness: mc_panelButton +
         // clickFunction): re-applies the auto-detected preset.
@@ -1124,7 +1130,7 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     }
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
-    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + (rtAvailable ? "Ray Tracing," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
 }
 }
 
@@ -1373,7 +1379,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
                 addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTexturesAvailable(),
                                  rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
-                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive());
+                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.hdTexturesTurnedOnAtBoot(),
+                                 rt_.rayTracingAvailable());
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
