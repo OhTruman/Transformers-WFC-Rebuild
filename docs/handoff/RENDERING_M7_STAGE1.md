@@ -39,6 +39,12 @@ composite 0.10 ms, dynamic depth pass 0.02 ms, character skinning 0.005 ms, refi
 - Look, RT on vs off (lockstep match shots, 1080p): Gorge 0.0-0.3 % of pixels changed, Rust 0-2.3 % (the player's
   vehicle self-shadowing and its shadow on the ground outdoors, contact AO); no false darkening indoors.
 
+- Temporal stability (lockstep RT off / on, 61 consecutive frames, 2560x1421 windowed): on the pixels that are static
+  with RT off, RT adds a mean frame-to-frame change of 0.006 (Gorge) / 0.041 (Rust) levels; flicker above 4 levels on
+  0.007 % / 0 % of them; their 60-frame per-pixel std with RT on 0.12 / 0.21 (max 0.5 / 0.6). Stable.
+- Before / after sheets for the user: work/fsr3/sheet/rt_{rust_00300,rust_01500,gorge_01200,gorge_00600}.png in the
+  Rendering worktree (full frames + 2x crops of the region with the most change).
+
 ## Found and fixed on the way
 
 - The DXR front-face convention is the reverse of GL's with our positions (depth check 10 % -> 99.98 %).
@@ -48,7 +54,6 @@ composite 0.10 ms, dynamic depth pass 0.02 ms, character skinning 0.005 ms, refi
 
 ## Open
 
-- Temporal stability (per-pixel variance over 60 frames, static camera): not measured yet.
 - One D3D12 device for the presenter, FSR 3.1 / DLSS and the RT bridge (three today): before stage 2.
 - Faithful world shadows on dynamic objects need the components' CastShadow / bCastDynamicShadow flags in the render
   data (AssetTools); without them WFC_RT_WORLDSHADOWS shadows characters by occluders the original did not count.
