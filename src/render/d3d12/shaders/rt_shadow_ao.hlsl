@@ -5,7 +5,8 @@
 // the camera-reprojection velocity (previous uv - uv, FidelityFX's top-down uv). Compiled at build time by DXC (cs_6_5).
 RaytracingAccelerationStructure Scene : register(t0);
 Texture2D<float> RasterDepth : register(t1);
-RWTexture2D<float2> Mask : register(u0);
+Texture2D<float> WorldDepth : register(t2);     // the depth before the dynamic draws (dynamic pixel = closer now)
+RWTexture2D<float4> Mask : register(u0);        // sun visibility, AO openness, dynamic pixel (1 / 0), 0
 RWTexture2D<uint> HitMask : register(u1);
 RWTexture2D<float4> Normal : register(u2);
 RWTexture2D<float2> Velocity : register(u3);
@@ -28,10 +29,10 @@ float3 worldAt(int2 px, float d) {
 uint hash(uint x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 float rnd(inout uint s) { s = hash(s); return (s >> 8) * (1.0 / 16777216.0); }
 
-bool occluded(float3 o, float3 dir, float tMax) {
+bool occluded(float3 o, float3 dir, float tMax, uint mask) {
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
     RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = tMax;
-    q.TraceRayInline(Scene, RAY_FLAG_NONE, (uint)Params.z, r);
+    q.TraceRayInline(Scene, RAY_FLAG_NONE, mask, r);
     q.Proceed();
     return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
@@ -48,6 +49,11 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     uint rays = 0;
     float2 outv = float2(1.0, 1.0);
     float3 n = float3(0, 0, 1);
+    // dynamic pixels (characters, movers: drawn after the world) are shadowed by everything. World pixels only by the
+    // characters, and only where the sun would otherwise reach them: their world shadows are baked into the lightmaps
+    // (indoors, under a roof, a character casts no sun shadow). AO on world pixels: the characters' contact occlusion.
+    const bool dynamicPx = inside && d < WorldDepth[px];
+    const uint traceMask = dynamicPx ? (uint)Params.z : 0x4u;
     if (inside && d < 1.0) {
         const float3 p = worldAt(px, d);
         // normal from depth: per axis the neighbour with the smaller step (keeps silhouettes from bending the normal)
@@ -71,7 +77,12 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
                 const float r = sqrt(rnd(s)) * Params.w, phi = 6.2831853 * rnd(s);
                 sd = normalize(sd + su * (r * cos(phi)) + sv * (r * sin(phi)));
             }
-            outv.x = occluded(o, sd, 10000.0) ? 0.0 : 1.0; ++rays;
+            if (dynamicPx) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z) ? 0.0 : 1.0; ++rays; }
+            else {
+                const bool any = occluded(o, sd, 10000.0, (uint)Params.z); ++rays;
+                // occluded: by the world (baked: no extra darkening) or by characters only (the RT character shadow)
+                if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x4u) ? 1.0 : 0.0; ++rays; }
+            }
         }
         const uint nAo = (uint)Size.w;
         if (nAo > 0) {
@@ -82,14 +93,14 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
                 const float u1 = rnd(s), u2 = rnd(s);
                 const float r = sqrt(u1), phi = 6.2831853 * u2;
                 const float3 dir = t * (r * cos(phi)) + bt * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1));
-                hit += occluded(o, dir, Params.x) ? 1u : 0u;
+                hit += occluded(o, dir, Params.x, traceMask) ? 1u : 0u;
             }
             outv.y = 1.0 - (float)hit / (float)nAo;
             rays += nAo;
         }
     }
     if (inside) {
-        Mask[px] = outv;
+        Mask[px] = float4(outv, dynamicPx ? 1.0 : 0.0, 0.0);
         Normal[px] = float4(n, 0.0);
         const float2 uv = (float2(px) + 0.5) / Size.xy;
         const float4 clip = mul(Reproj, float4(uv.x * 2.0 - 1.0, 1.0 - 2.0 * uv.y, d, 1.0));

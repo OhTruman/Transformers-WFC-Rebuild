@@ -30,6 +30,7 @@
 #include "render/Mesh.h"
 #include "render/Renderer.h"
 #include "render/LightVisibilityVolume.h"
+#include "render/d3d12/D3D12RtBridge.h"
 #include "assets/SkinnedModel.h"
 
 namespace render {
@@ -484,6 +485,17 @@ private:
     void rtRoundTrip(bool bspSet, bool endOfOpaque = false);
     core::Mat4 rtPrevVP_; bool rtHavePrevVP_ = false;
     GLuint rtLastDepthTex_ = 0;
+    // stage 1 option b (WfcRt.cpp): flushDynQueue's RT path - the world depth, a depth-only pass of the dynamic draws, the
+    // round trip + world composite, then the dynamic draws shaded with the RT mask (uShadowMask) and AO (unit 25)
+    bool rtShadowAoOn() const;
+    bool rtDynBegin();
+    void rtDynMid();
+    void rtDynEnd();
+    void rtCopyDepth(GLuint tex);
+    GLuint rtAoTexture();
+    RtTargets rtTargets_;
+    GLuint rtCompositeProg_ = 0, rtWhiteTex_ = 0;
+    bool rtDepthOnly_ = false, rtMaskActive_ = false;
     int rtWorldSets_ = 0;                              // static sets on D3D12 (shadow / AO waits for one)
     int rtFrame_ = -1;
     void rtBuildWorld(int meshId);

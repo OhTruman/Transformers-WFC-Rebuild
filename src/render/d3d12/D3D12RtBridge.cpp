@@ -129,12 +129,12 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
-            free(depth_); free(mask_); free(ao_); free(dnOut_);
+            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_);
             rel(hit_); rel(nrm_); rel(vel_);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
             nrm_ = localTex(w, h, DXGI_FORMAT_R16G16B16A16_FLOAT);
             vel_ = localTex(w, h, DXGI_FORMAT_R16G16_FLOAT);
-            if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/) ||
+            if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(wdepth_, w, h) ||
                 !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !hit_ || !nrm_ || !vel_) {
                 LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
             }
@@ -146,7 +146,7 @@ public:
             }
 #endif
         }
-        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex;
         return true;
     }
 
@@ -271,9 +271,9 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[4] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex};
-        GLenum ly[4] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 4, tx, ly);
+        GLuint tx[5] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex};
+        GLenum ly[5] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead};
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 5, tx, ly);
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
@@ -378,9 +378,9 @@ private:
         if (pso_) return true;
         if (!serializeRs_) return false;
         D3D12_DESCRIPTOR_RANGE rg[2]{};
-        rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = 1; rg[0].BaseShaderRegister = 1;
+        rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = 2; rg[0].BaseShaderRegister = 1;
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 4; rg[1].BaseShaderRegister = 0;
-        rg[1].OffsetInDescriptorsFromTableStart = 1;
+        rg[1].OffsetInDescriptorsFromTableStart = 2;
         D3D12_ROOT_PARAMETER rp[4]{};
         rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 48;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
@@ -410,7 +410,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 10;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 12;
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -431,14 +431,18 @@ private:
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; sd.Texture2D.MipLevels = 1;
         dev_->CreateShaderResourceView(depth_.res, &sd, h);
         h.ptr += inc;
+        dev_->CreateShaderResourceView(wdepth_.res, &sd, h);          // (table A: t2, unused by the depth check)
+        h.ptr += inc;
         D3D12_UNORDERED_ACCESS_VIEW_DESC ud{}; ud.Format = DXGI_FORMAT_R32_FLOAT; ud.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         dev_->CreateUnorderedAccessView(mask_.res, nullptr, &ud, h);
         auto uav = [&](ID3D12Resource* r, DXGI_FORMAT f) { h.ptr += inc; D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = f;
                                                             u.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D; dev_->CreateUnorderedAccessView(r, nullptr, &u, h); };
         uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);   // (A: unused)
-        h.ptr += inc;                                    // table B (shadow / AO): depth SRV; u0 raw mask, u1 hit mask, u2 normal, u3 velocity
+        h.ptr += inc;                                    // table B (shadow / AO): t1 depth, t2 world depth; u0 raw mask, u1 hit mask, u2 normal, u3 velocity
         dev_->CreateShaderResourceView(depth_.res, &sd, h);
-        uav(ao_.res, DXGI_FORMAT_R16G16_FLOAT); uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
+        h.ptr += inc;
+        dev_->CreateShaderResourceView(wdepth_.res, &sd, h);
+        uav(ao_.res, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
     }
     void depthCheck(const RtFrame& fr, int slot) {
         static const bool flip = std::getenv("WFC_RT_FLIPWINDING") != nullptr;   // (diagnostics: the other winding)
@@ -487,7 +491,7 @@ private:
         list_->SetComputeRoot32BitConstants(0, 48, c, 0);
         list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
         D3D12_GPU_DESCRIPTOR_HANDLE t2 = heap_->GetGPUDescriptorHandleForHeapStart();
-        t2.ptr += 5ull * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        t2.ptr += 6ull * dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         list_->SetComputeRootDescriptorTable(2, t2);
         list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 4);
@@ -636,7 +640,7 @@ private:
     GLuint sem_ = 0;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_;
     ID3D12Resource* hit_ = nullptr; ID3D12Resource* nrm_ = nullptr; ID3D12Resource* vel_ = nullptr;
     std::vector<GLuint> sigBufs_;
     ID3D12Resource* dbgRb_ = nullptr; int dbgSlot_ = -1;

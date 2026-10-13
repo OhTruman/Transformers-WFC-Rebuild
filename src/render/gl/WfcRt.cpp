@@ -33,6 +33,23 @@ uniform sampler2D uDepth;
 out float oDepth;
 void main() { oDepth = texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r; }
 )";
+// stage 1 composite on world pixels (multiplied into the scene colour): the characters' RT shadow with the sun's
+// ModShadowColor (as the original projectors darken the world) and their contact AO; dynamic pixels and the sky stay 1
+const char* kRtCompositeFS = R"(#version 430
+uniform sampler2D uVis;     // denoised sun visibility (R8)
+uniform sampler2D uSao;     // raw sun, AO, dynamic pixel
+uniform vec3 uModShadow;
+uniform float uAoStrength;
+out vec4 oFactor;
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec4 s = texelFetch(uSao, p, 0);
+    if (s.z > 0.5) { oFactor = vec4(1.0); return; }
+    float vis = texelFetch(uVis, p, 0).r;
+    vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, s.y, uAoStrength);
+    oFactor = vec4(f, 1.0);
+}
+)";
 bool depthCheckOn() { static const bool on = std::getenv("WFC_RT_DEPTHCHECK") != nullptr; return on; }
 // stage 1 (measurement): sun shadow + AO rays per pixel (WFC_RT_AORAYS, default 2; WFC_RT_AORADIUS metres, default 1)
 bool shadowAoOn() { static const bool on = std::getenv("WFC_RT_SHADOWAO") != nullptr; return on; }
@@ -117,6 +134,123 @@ void Pipeline::rtBuildWorld(int meshId) {
 // the set WFC_RT_CHECKSET names (0 world, the default; 1 level BSP), traced against that set alone. Shadow / AO
 // (WFC_RT_SHADOWAO, stage 1 option b): at the end of the opaque pass (flushTranslucency, after the characters), where
 // the depth is complete and this frame's poses exist; endOfOpaque marks that call.
+bool Pipeline::rtShadowAoOn() const { return shadowAoOn() && !depthCheckOn(); }
+
+// the shared depth -> R32F copy (the scene depth as of now) into tex
+void Pipeline::rtCopyDepth(GLuint tex) {
+    ensureSceneDepth();
+    GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+    GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
+    GLboolean cm[4]; glGetBooleanv(GL_COLOR_WRITEMASK, cm);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    BindFramebuffer(GL_FRAMEBUFFER, rtFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+    glViewport(0, 0, vpW_, vpH_);
+    UseProgram(rtDepthProg_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    Uniform1i(cachedUniformLocation(rtDepthProg_, "uDepth"), 0);
+    BindVertexArray(postVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    BindVertexArray(0);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFb);
+    glColorMask(cm[0], cm[1], cm[2], cm[3]);
+    if (depthOn) glEnable(GL_DEPTH_TEST);
+    if (blendOn) glEnable(GL_BLEND);
+    if (cullOn) glEnable(GL_CULL_FACE);
+    UseProgram((GLuint)prevProg);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    glx::uniformCacheForgetCurrent();
+}
+
+// flushDynQueue's RT path (stage 1 option b), once per frame in the main scene pass with a static world on D3D12:
+// begin = the world depth (before the dynamic draws) copied, colour writes off for the dynamic depth pass
+bool Pipeline::rtDynBegin() {
+    if (!rtShadowAoOn() || rtFailed_ || rtWorldSets_ == 0 || rtFrame_ == frameNo_) return false;
+    GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+    if ((GLuint)drawFb != fbo_) return false;
+    RtTargets t;
+    if (!rtBridgePrepare(vpW_, vpH_, &t)) { rtFailed_ = true; LOG_WARN("RT: bridge unavailable"); return false; }
+    if (t.depth != rtLastDepthTex_) { glx::textureCacheInvalidate(); rtLastDepthTex_ = t.depth; }
+    if (!rtDepthProg_) {
+        GLuint vs = compileShader(GL_VERTEX_SHADER, kRtVS, "rt.vs");
+        GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kRtDepthFS, "rt_depth.fs") : 0;
+        GLuint cf = vs ? compileShader(GL_FRAGMENT_SHADER, kRtCompositeFS, "rt_composite.fs") : 0;
+        rtDepthProg_ = fs ? linkProgram(vs, fs, "rt_depth") : 0;
+        rtCompositeProg_ = cf ? linkProgram(vs, cf, "rt_composite") : 0;
+        for (GLuint sh : {vs, fs, cf}) if (sh) DeleteShader(sh);
+        GenFramebuffers(1, &rtFbo_);
+        if (!rtDepthProg_ || !rtCompositeProg_) { rtFailed_ = true; return false; }
+    }
+    rtCopyDepth(t.worldDepth);
+    rtTargets_ = t;
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    rtDepthOnly_ = true;
+    return true;
+}
+
+// mid = the dynamic depth is in: the round trip (shadow / AO / denoise), the world composite, and the RT mask + AO bound
+// for the dynamic draws that follow
+void Pipeline::rtDynMid() {
+    rtDepthOnly_ = false;
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    depthDirty_ = true;
+    rtRoundTrip(false, true);
+    glx::gpuStamp("RT: world composite");
+    const RtTargets& t = rtTargets_;
+    const Light* sun = nullptr;
+    for (const Light& L : lights_) if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
+    static const float aoStrength = [] { const char* e = std::getenv("WFC_RT_AOSTRENGTH"); return e ? (float)std::atof(e) : 1.0f; }();
+    GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND), cullOn = glIsEnabled(GL_CULL_FACE);
+    GLint bs = 0, bd = 0; glGetIntegerv(0x80C9 /*GL_BLEND_SRC_RGB*/, &bs); glGetIntegerv(0x80C8 /*GL_BLEND_DST_RGB*/, &bd);
+    GLint bsa = 0, bda = 0; glGetIntegerv(0x80CB /*GL_BLEND_SRC_ALPHA*/, &bsa); glGetIntegerv(0x80CA /*GL_BLEND_DST_ALPHA*/, &bda);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glEnable(GL_BLEND);
+    BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+    UseProgram(rtCompositeProg_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, t.shadowDn);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, t.shadowAo);
+    ActiveTexture(GL_TEXTURE0);
+    Uniform1i(cachedUniformLocation(rtCompositeProg_, "uVis"), 0);
+    Uniform1i(cachedUniformLocation(rtCompositeProg_, "uSao"), 1);
+    Uniform3f(cachedUniformLocation(rtCompositeProg_, "uModShadow"), sun ? sun->modShadowColor[0] : 0.0f,
+              sun ? sun->modShadowColor[1] : 0.0f, sun ? sun->modShadowColor[2] : 0.0f);
+    Uniform1f(cachedUniformLocation(rtCompositeProg_, "uAoStrength"), aoStrength);
+    BindVertexArray(postVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    BindVertexArray(0);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    BlendFuncSeparate((GLenum)bs, (GLenum)bd, (GLenum)bsa, (GLenum)bda);
+    if (!blendOn) glDisable(GL_BLEND);
+    if (depthOn) glEnable(GL_DEPTH_TEST);
+    if (cullOn) glEnable(GL_CULL_FACE);
+    UseProgram((GLuint)prevProg);
+    glx::uniformCacheForgetCurrent();
+    glx::textureCacheInvalidate();
+    rtMaskActive_ = true;                                // shadowMaskTexFor / the AO unit: the RT results
+}
+
+void Pipeline::rtDynEnd() { rtMaskActive_ = false; }
+
+// the AO sampler of the RT-on dynamic shader variant (unit 25): the RT target while the RT path draws, else white
+GLuint Pipeline::rtAoTexture() {
+    if (rtMaskActive_) return rtTargets_.shadowAo;
+    if (!rtWhiteTex_) {
+        glGenTextures(1, &rtWhiteTex_);
+        glBindTexture(GL_TEXTURE_2D, rtWhiteTex_);
+        const unsigned char px[4] = {255, 255, 255, 255};
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glx::textureCacheInvalidate();
+    }
+    return rtWhiteTex_;
+}
+
 void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
     static const bool on = std::getenv("WFC_RT_ROUNDTRIP") != nullptr || depthCheckOn() || shadowAoOn();
     if (!on || rtFailed_) return;

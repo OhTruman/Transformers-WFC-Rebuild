@@ -10,8 +10,9 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0; };   // render size: depth / mask R32F,
-                                                                 // shadowAo RG16F (raw), shadowDn R8 (denoised sun) - shared
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0; };   // render size: depth / mask R32F,
+                                                                 // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
+                                                                 // (denoised sun), worldDepth R32F (before the dynamic draws)
 
 // the static world as GL's depth prepass draws it: positions (xyz, world space), triangle lists for one-sided
 // (back faces culled, GL counter-clockwise front) and two-sided geometry

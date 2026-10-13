@@ -2121,6 +2121,16 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at == std::string::npos) mainLM.clear();
     }
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : kFSMainUber);
+    if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
+        auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
+        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;");
+        sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).y;");
+        // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the directional lights only: the
+        // original's one mask came from the environment's dominant shadow light, which indoors is not the sun
+        sub("float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;",
+            "float rtVis = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x; float mask = 1.0;");
+        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 ? 1.0 : rtVis);");
+    }
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
@@ -2308,6 +2318,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uVLM"), 11);
     Uniform1i(U("uVLMBuf"), 22);                         // (MDI variants: the set's vertex-lightmap sample buffer)
     Uniform1i(U("uShadowMask"), 10);
+    Uniform1i(U("uRtAo"), 25);                          // (M7 stage 1 RT-on variant only; -1 otherwise)
     if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
     if (mdiBuild_) Uniform1i(U("uRowTex"), 20);
     UseProgram(0);
@@ -3014,6 +3025,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform3f(ULOC(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
+        if (rtShadowAoOn()) { ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10); }
     }
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
@@ -3187,7 +3199,6 @@ unsigned char* Pipeline::spriteRingAcquire(size_t bytes, size_t& base) {
 
 void Pipeline::flushTranslucency() {
     flushDynQueue();                                   // queued characters (their shadows + draws) before translucency
-    rtRoundTrip(false, true);                          // (WFC_RT_SHADOWAO, M7 stage 1: the opaque depth is complete here)
     if (transQueue_.empty()) return;
     const bool fxOn = fxSubCpuOn();
     double fxt = fxOn ? fxSubNowMs() : 0.0;
@@ -3444,7 +3455,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     const bool mdiMesh = bspSet || (meshIdx >= 0 && meshIdx == mdiMesh_ && !warmup_ && onlySub < 0 && !mdiBuckets_.empty());
     if (bspSet) { swapMdiSlot(bspMdi_); drawMdi(g); swapMdiSlot(bspMdi_); }
     else if (mdiMesh) drawMdi(g);
-    for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
+    for (int pass = onlySub >= 0 ? 1 : 0; pass < (rtDepthOnly_ ? 1 : 2); ++pass) {   // 0: opaque + masked, 1: translucent
         // one sub (a queued translucent draw): index it directly - scanning every sub of the world mesh per queued
         // item was ~10 % of the main thread at 10 v 10
         const size_t siBegin = onlySub >= 0 ? (size_t)onlySub : 0;
@@ -6483,6 +6494,13 @@ void Pipeline::flushDynQueue() {
         run(false);
         dump("shadoworder_original.bmp");
         DeleteFramebuffers(1, &sFbo); glDeleteTextures(1, &sCol); glDeleteTextures(1, &sDep);
+    } else if (rtDynBegin()) {                          // M7 stage 1 (WFC_RT_SHADOWAO): RT shadows / AO replace the projectors
+        glx::gpuStamp("RT: dynamic depth");
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // depth only (rtDepthOnly_: opaque + masked)
+        rtDynMid();
+        glx::gpuStamp("characters: queued draws");
+        for (const DynDraw& d : dynQueue_) { restoreDynDraw(d); draw(d); }   // shaded with the RT mask + AO
+        rtDynEnd();
     } else {
         run(incremental);
     }
@@ -6687,6 +6705,7 @@ void Pipeline::writeFrameReport() {
 // texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
 GLuint Pipeline::shadowMaskTexFor(bool character) {
     maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
+    if (rtMaskActive_) return rtTargets_.shadowDn;     // (M7 stage 1: the denoised RT sun visibility, screen-sized)
     if (character && maskDrawnFrame_ == frameNo_ && maskBlurTex_) {
         maskTexelOffset_[0] = 0.5f / (float)maskW_;
         maskTexelOffset_[1] = 0.5f / (float)maskH_;
