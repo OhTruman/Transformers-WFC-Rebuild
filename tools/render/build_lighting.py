@@ -97,8 +97,8 @@ def lm_records(repo, pkg_index):
 def component_flags(mapname):
     """Authored per-component render flags (AssetTools props_authored.json, effective values merged over the
     archetype chain): hidden actors (bHidden, not drawn in game) and components that receive no light
-    (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels).
-    Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
+    (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels), and the
+    shadow-casting exceptions (no_shadow: CastShadow False; dynamic_shadow: bCastDynamicShadow True). Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
     p = os.path.join('F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', mapname, 'props_authored.json')
     if not os.path.exists(p):
         return {}
@@ -110,6 +110,15 @@ def component_flags(mapname):
             f['hidden'] = True
         if r.get('bAcceptsLights') is False or pr.get('lighting_channels_on') == []:
             f['no_lights'] = True
+        # shadow casting (M7 ray tracing): CastShadow False = casts no shadow at all; bCastDynamicShadow True is rare on
+        # the static world (UE3 shadowed dynamic objects from it only through the light environment's visibility), so
+        # only the exceptions are written
+        if r.get('CastShadow') is False:
+            f['no_shadow'] = True
+        if r.get('bCastDynamicShadow') is True:
+            f['dynamic_shadow'] = True
+        if r.get('bAcceptsLights') is False or pr.get('lighting_channels_on') == []:
+            pass
         elif pr.get('lighting_channels_on') and 'Static' not in pr['lighting_channels_on'] and \
                 'Dynamic' in pr['lighting_channels_on']:
             # M41: Dynamic-channel primitives (movable InterpActors with an enabled LightEnvironment: the title scene's
