@@ -308,12 +308,13 @@ public:
         const int w = std::max<LONG>(1, rc.right - rc.left), h = std::max<LONG>(1, rc.bottom - rc.top);
         if (w != w_ || h != h_) {
             drainWorker(); waitIdle();
-            if (!resize(w, h)) {                         // no flip-model swapchain at this size: GL presents from now on
-                LOG_ERROR("D3D12 present: the swapchain could not be resized to %dx%d: presenting through GL from now on "
-                          "(frame generation off)", w, h);
+            if (!resize(w, h)) {                         // retried once on the next frame, then the presenter is recreated
+                if (++resizeFails_ < 2) { w_ = h_ = -1; return true; }   // (w_ = -1: the next frame resizes again)
+                LOG_ERROR("D3D12 present: the swapchain could not be resized to %dx%d twice: recreating the presenter", w, h);
                 failed_ = true;
                 return false;
             }
+            resizeFails_ = 0;
         }
         const UINT slot = (UINT)(mainFrame_++ % kRing);
         if (resumeReset_) { fgParams_[slot].reset = true; resumeReset_ = false; }   // (restored: no history across the gap)
@@ -521,8 +522,8 @@ public:
     void presentFailed(HRESULT hr) {
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG) {
             if (!lost_.exchange(true))
-                LOG_ERROR("D3D12 present: device lost (Present 0x%08lx, removed reason 0x%08lx): presenting through GL from now on "
-                          "(frame generation off)", (unsigned long)hr, (unsigned long)dev_->GetDeviceRemovedReason());
+                LOG_ERROR("D3D12 present: device lost (Present 0x%08lx, removed reason 0x%08lx): recreating the presenter "
+                          "(new device + swapchain)", (unsigned long)hr, (unsigned long)dev_->GetDeviceRemovedReason());
             return;
         }
         std::lock_guard<std::mutex> lk(logMx_);
@@ -602,14 +603,16 @@ public:
 #endif
                 waitIdle();
             }
-            for (auto& x : fgIn_[slot]) freeShared(x);
-            if (!makeShared(fgIn_[slot][0], w_, h_, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
-                !makeShared(fgIn_[slot][1], rw, rh, DXGI_FORMAT_R32_FLOAT, 0x822E /*GL_R32F*/) ||
-                !makeShared(fgIn_[slot][2], rw, rh, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/)) {
-                LOG_WARN("FRAMEGEN: input textures failed at %dx%d / render %dx%d (real frames only at this size)", w_, h_, rw, rh);
-                for (auto& x : fgIn_[slot]) freeShared(x);
-                std::copy(key, key + 4, fgFailSize_);
-                return false;
+            for (UINT k = 0; k < kRing; ++k) {            // every ring slot at once (one drain per size change, not three)
+                for (auto& x : fgIn_[k]) freeShared(x);
+                if (!makeShared(fgIn_[k][0], w_, h_, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
+                    !makeShared(fgIn_[k][1], rw, rh, DXGI_FORMAT_R32_FLOAT, 0x822E /*GL_R32F*/) ||
+                    !makeShared(fgIn_[k][2], rw, rh, DXGI_FORMAT_R16G16_FLOAT, 0x822F /*GL_RG16F*/)) {
+                    LOG_WARN("FRAMEGEN: input textures failed at %dx%d / render %dx%d (real frames only at this size)", w_, h_, rw, rh);
+                    for (auto& sl : fgIn_) for (auto& x : sl) freeShared(x);
+                    std::copy(key, key + 4, fgFailSize_);
+                    return false;
+                }
             }
         }
         out->hudless = fgIn_[slot][0].tex; out->depth = fgIn_[slot][1].tex; out->velocity = fgIn_[slot][2].tex;
@@ -628,7 +631,8 @@ public:
         if (!fgOn()) return;
         const bool have = fgHave_[slot];
         fgHave_[slot] = false;
-        fgGenerating_ = have;                            // (frameGenerationFactor: 2 only while frames are generated)
+        fgGenFrames_ = have ? 30 : std::max(0, fgGenFrames_.load() - 1);   // (frameGenerationFactor: 2 while generated
+        fgGenerating_ = fgGenFrames_ > 0;                // frames present, with 30 frames of hysteresis: no 2 -> 1 -> 2 flapping)
         const FgParams& p = fgParams_[slot];
         if (have && p.reset) ++fgResets_;
         const uint64_t id = ++fgFrameId_;
@@ -741,6 +745,8 @@ public:
     }
     bool fg_ = false, fgHave_[kRing] = {}, fgCfgFailLogged_ = false, fgPrepFailLogged_ = false;
     std::atomic<bool> fgGenerating_{false}, lost_{false};
+    std::atomic<int> fgGenFrames_{0};
+    int resizeFails_ = 0;
     bool failed_ = false, down_ = false, stop_ = false, resumeReset_ = false;
     int fgFailSize_[4] = {};
     std::mutex logMx_; std::vector<HRESULT> failCodes_;
@@ -904,18 +910,46 @@ private:
 D3D12Presenter* g_presenter = nullptr;
 }  // namespace
 // exit (~GLRenderer, GL context current, before the window goes) or the GL fallback: ordered teardown, GL presents
-void shutdownD3D12Present() {
+namespace {
+bool g_initTried = false;
+void teardownPresenter() {
     if (!g_presenter) return;
     platform::setPresentOverride(nullptr);
     g_presenter->shutdown();
     delete g_presenter;
     g_presenter = nullptr;
 }
+}  // namespace
+void shutdownD3D12Present() {                            // the renderer's own shutdown: a recreated renderer may start again
+    teardownPresenter();
+    g_initTried = false;
+}
 namespace {
+int g_recoveries = 0;
+bool presentHook();
+bool startPresenter() {
+    auto* p = new D3D12Presenter();
+    if (!p->init()) { delete p; return false; }
+    g_presenter = p;
+    platform::setPresentOverride(&presentHook);
+    return true;
+}
 bool presentHook() {
     if (!g_presenter) return false;
     if (!g_presenter->failed() && g_presenter->present() && !g_presenter->failed()) return true;
-    shutdownD3D12Present();                              // device lost / no swapchain: this frame and the rest through GL
+    // device lost / no swapchain. GL cannot take over: once a flip-model swapchain has owned the window, SwapBuffers no
+    // longer reaches the screen (WFC_D3D12_SIMLOST captures: frozen). So: a new device + swapchain (the standard answer to a
+    // GPU reset / TDR), frame generation included; three attempts, then a clear error (the game keeps running)
+    teardownPresenter();                                 // (not re-armed: the renderer's init call sites do not restart it)
+    while (g_recoveries < 3) {
+        ++g_recoveries;
+        if (startPresenter()) {
+            LOG_WARN("D3D12 present: recovered with a new device + swapchain (attempt %d of 3)", g_recoveries);
+            return g_presenter->present();
+        }
+    }
+    static bool told = false;
+    if (!told) { told = true; LOG_ERROR("D3D12 present: could not recover after 3 attempts: the window cannot show new frames - restart the game"); }
     return false;
 }
 }  // namespace
@@ -927,14 +961,10 @@ void presentFrameStart(long long ns) { if (g_presenter) g_presenter->setFrameSta
 
 // Called once with the GL context current (first frame): enables D3D12 presentation when WFC_D3D12PRESENT is set.
 void initD3D12PresentIfRequested() {
-    static bool tried = false;
-    if (tried) return;
-    tried = true;
+    if (g_initTried || g_presenter) return;             // (once per renderer: re-armed by shutdownD3D12Present)
+    g_initTried = true;
     if (!std::getenv("WFC_D3D12PRESENT") && !std::getenv("WFC_FRAMEGEN") && !g_fgAtStartup) return;   // (FG presents through D3D12)
-    auto* p = new D3D12Presenter();
-    if (!p->init()) { delete p; LOG_WARN("PRESENT: GL (D3D12 present unavailable)"); return; }
-    g_presenter = p;
-    platform::setPresentOverride(&presentHook);
+    if (!startPresenter()) LOG_WARN("PRESENT: GL (D3D12 present unavailable)");
 }
 
 }  // namespace render
