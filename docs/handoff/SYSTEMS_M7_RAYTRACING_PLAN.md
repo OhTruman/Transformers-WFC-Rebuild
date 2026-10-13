@@ -237,6 +237,8 @@ CheckFeatureSupport OPTIONS5, else the row is greyed); auto-detect never enables
 - B vs C at stage 2 (needs stage 1's round-trip cost).
 - NRD licence read (with the DLSS / Streamline read), only if FidelityFX quality is short.
 - RT GI vs Brixelizer GI at stage 3, for both the calibrated add-on and the user-approved "RT lighting" mode (§6 stage 3).
+- 2026-10-12: superseded by SYSTEMS_RT_REALISTIC_M6_PLAN.md (the user's "brand new" goal): R1-R5 order, a probe-volume RT GI
+  first, Brixelizer as a fallback, light sources / calibration, and how M6 Modern materials combine with it.
 
 ## 8. Sources
 
