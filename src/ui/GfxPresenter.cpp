@@ -1481,15 +1481,17 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
 }
 
 #if WFC_DLSS_PACKAGE
-// PC EXTENSION (DLSS package builds): one small grey line in the bottom-right corner while the start-up movie or the
-// credits movie is up; no timing of its own. Sized from the window: ~1.3 % of its height (14 px at 1080p), a 2 % margin.
+// PC EXTENSION (DLSS package builds): one small grey line in the bottom-right corner while the start-up movie, a boot
+// logo movie or the credits movie is up; no timing of its own. Sized from the window: ~1.3 % of its height (14 px at 1080p), a 2 % margin.
 void GfxPresenter::syncPackageCredit() {
+    const frontend::GameFlow& flow = rt_.flow();
+    const std::string& movie = flow.kismetMovie().empty() ? flow.scriptMovie() : flow.kismetMovie();
     const bool shown = frontend::packageCreditShown(frontend::kDlssPackage, rt_.startupMovieUp(),
-                                                    rt_.fullScreenMovie() && rt_.movieOpen(), rt_.flow().scriptMovie());
+                                                    rt_.fullScreenMovie() && rt_.movieOpen(), movie);
     if (shown != creditShown_) {
         creditShown_ = shown;
         frontend::FlowTrace::emit("package.credit", {{"line", "NVIDIA DLSS"}, {"shown", frontend::FlowTrace::boolean(shown)},
-                                                     {"movie", rt_.startupMovieUp() ? "startup" : rt_.flow().scriptMovie()},
+                                                     {"movie", rt_.startupMovieUp() ? "startup" : movie},
                                                      {"provenance", "PC EXTENSION"}});
     }
     if (!shown || creditFailed_) return;
