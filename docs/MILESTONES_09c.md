@@ -328,5 +328,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   harness groups PASS, measurement-only clean, no open gameplay FAIL; private memory flat at 4.50 GB over a 870 s Gorge
   5v5 (no leak in our process). QABOT fixed a17309b7 (QA freeze zeroes bot velocity once; vehicle-form bot coasted 5.3 m;
   7/7 both AIs; dev-only path). TDR #9 11:06:42 (Rendering HD-on runs + Gameplay exe). FINAL HEAD CANDIDATE a17309b7.
+  11:35 HD-ON PAIRS (Rendering, 18 runs): Rebuild-Rendering/work/pairs README section HD on: final_hd_* (Original / D /
+  Enhanced, RT Off), final_hdrt_* (Original / D + Faithful / Enhanced + Realistic), final_e_vs_d_rust, + showcase crops.
+  FINDINGS: (1) the menu's Enhanced is NOT live: hdTextureLevelAvailable(2) is false (no Enhanced root), HDTextures=2
+  clamps to 1 (D textures, Modern off); the pairs forced WFC_MODERN=1. Next round: level-2 root = E + Modern. (2) HONEST
+  READ of Modern: floors / metal much brighter, paler, glossier (82-84 % of pixels change) - washed out / plastic next to
+  the original's dark weathering; kPbrSpecOcc / specular calibration is the first next-round item. (3) HD D vs Original:
+  sharper grit, same colours, subtle in full frames (Integration view of m00300 crop1 agrees). (4) E vs D: 0.7-1.7 % of
+  pixels, the 20-row pilot is too small to judge; extend E to a full map. DECISION: the package ships as is (Enhanced
+  clamps to Faithful, user told); the morning showcase leads with RT Realistic crops + HD D.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
