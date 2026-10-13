@@ -1141,6 +1141,9 @@ bool Pipeline::load(const std::string& mapName) {
             r1Map_ = r1Fit_[0] > 0.0f && DrawBuffers && ColorMaski && ClearBufferfv;
             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
                      r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (GL entry points / k)");
+        } else {
+            LOG_INFO("RT R1 sun swap data: none (%s/fit.json %s) - Realistic without the sun swap on %s", r1Dir_.c_str(),
+                     ft.empty() ? "missing" : "unparsable", mapName.c_str());
         }
     }
     loadMovers(dataDir_ + "/movers.json");
@@ -4450,6 +4453,10 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+    // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
+    // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
+    if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
+    if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
     logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
