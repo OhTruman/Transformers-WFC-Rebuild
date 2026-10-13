@@ -467,9 +467,14 @@ try {
                 $rl = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
                 $dataLine = $rl | Select-String -Pattern 'RT R1 sun swap data: .*\(k ([0-9.]+)' | Select-Object -First 1
                 $pageLine = $rl | Select-String -Pattern 'RT R1 sun swap: (\d+) V_bake pages' | Select-Object -First 1
-                $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1 .*unused' | Select-Object -First 1
+                $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1 .*unused|RT R1: glDrawBuffers / glColorMaski / glClearBufferfv missing|RT R1: the sun-swap composite failed' | Select-Object -First 1
                 $pages = if ($pageLine) { [int]$pageLine.Matches[0].Groups[1].Value } else { 0 }
-                $ok = $dataLine -and $pages -gt 0 -and -not $bad
+                # Rendering c232c380+ (GL entry points tested after the GL load) also logs the first Realistic frame's state:
+                # when that line exists it must say "sun swap ON (V_bake pages N" with N > 0
+                $firstLine = $rl | Select-String -Pattern 'RT R1 \(first Realistic frame\): (.*)' | Select-Object -First 1
+                $firstOk = -not $firstLine -or $firstLine.Line -match 'sun swap ON \(V_bake pages ([1-9]\d*)'
+                if ($firstLine -and -not $firstOk -and -not $bad) { $bad = $firstLine }
+                $ok = $dataLine -and $pages -gt 0 -and $firstOk -and -not $bad
                 $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r1: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages$(if ($bad) { '; ' + $bad.Line.Trim() })"
                 if (-not $ok) { $rtGate.Status = 'FAIL' }
             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
