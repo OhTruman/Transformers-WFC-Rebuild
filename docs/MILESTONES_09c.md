@@ -519,5 +519,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   designer-colour channel / threshold. Approved next: 'G4' A/B = 4x, denoise 0.70, lock at half the original resolution,
   fixed protection, 5 units (~30 min). If G4 is the look: milestone 1 (user's 5 maps) ~17 GPU h over the week, the rest
   of the world after the playtest; the user sees the sheet + hours first.
+  18:55 Tint-mask semantics corrected (Systems 5fc3a0b6, merged 5e9dc3fd): Masks B is the Cust A / B blend only with
+  Enable_CustomColorTint (234 of 662 materials), elsewhere the detail-normal mask; E protects where the effective tint is
+  far from white (SYSTEMS_M6_TINT_AB.json).
+  19:00 PATHING ROOT CAUSE (Gameplay): Smart's health-pickup fetch measured distance horizontally - a pickup 18 m below a
+  railing counted as nearest within 40 m and the trip led bots into an uncovered nav strip with no corridor out, for
+  minutes. Smart-only fixes: height counts double; failed trip skips 90 s; dither escape skips the pickup 2 min; dither
+  guard + floor-aware arrival + trapped escape (back to the last on-mesh point; 3 escapes per life -> stranded rule).
+  Streets seed 5: reversals 8.4 -> 2.8 per travel-min, worst bot 565 -> 18. Spawn-near fix: spawnNearScope=2 (team's
+  ACTIVE spawn cluster): Gorge 7.6/3.7/8.4/1.70 vs any-start 11.9/8.4/11.8/2.64. Final set under a 6-seed run; then
+  BOTTEST / DETERMINISM, the Classic identity check, the patch.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
