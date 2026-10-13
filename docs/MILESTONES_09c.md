@@ -383,5 +383,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   extended; 5 ui.* tests; Frontend reviewing). #7 closed by code: XP = base x BotXpPolicy::scale(difficulty), no
   AI-dependent path (43 = 50 x 0.85 Expert), XPTEST classic vs smart to confirm. All playtest P0/P1 code fixes except the
   judder (Rendering, captures running) and the jet-gun transparency are now on integration.
+  16:30 Launch / log fixes on integration 0507891d (Systems): Play.bat always runs the package's own exe from its own bin
+  and maps the package to F: if free, else the first free letter from W: down with the WFC_* roots set (on the dev PC it
+  picks W:, so the package's data is used, not the integration tree); verify_slim requires wfc.log beside the exe, the new
+  Play.bat template, and a -ForeignCwd write-denied-cwd run; SYSTEMS_LOG_DIR.patch: cwd stays primary for wfc.log /
+  profile / characters / crash reports (harnesses collect per-run logs there), the exe folder is the fallback, the log's
+  first line names the file. README: start only via Play.bat. Frontend reviewed the respawn UI hunk: OK; options-row
+  style follow-up merged 0b096b7c.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
