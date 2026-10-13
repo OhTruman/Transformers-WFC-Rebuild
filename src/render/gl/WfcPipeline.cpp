@@ -1138,9 +1138,10 @@ bool Pipeline::load(const std::string& mapName) {
             r1Fit_[0] *= kScale;                       // (WFC_RT_R1K: a scale on the fitted k, for tuning)
             const assets::Json& s = F["sun_linear"];
             for (int c = 0; c < 3; ++c) r1Sun_[c] = s.arr.size() > (size_t)c ? s.arr[(size_t)c].asFloat(0.0f) : 0.0f;
-            r1Map_ = r1Fit_[0] > 0.0f && DrawBuffers && ColorMaski && ClearBufferfv;
+            // (the GL entry points are tested later, in r1CheckGl: a direct / package boot runs this before the GL load)
+            r1Map_ = r1Fit_[0] > 0.0f; r1GlChecked_ = false; r1StateLogged_ = false;
             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
-                     r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (GL entry points / k)");
+                     r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (k <= 0)");
         } else {
             LOG_INFO("RT R1 sun swap data: none (%s/fit.json %s) - Realistic without the sun swap on %s", r1Dir_.c_str(),
                      ft.empty() ? "missing" : "unparsable", mapName.c_str());
@@ -2599,6 +2600,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     const size_t mainStart = fs.size();
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
+    r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
     if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
@@ -4452,6 +4454,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
+    r1CheckGl();
     if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
     // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
     // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
@@ -8074,6 +8077,17 @@ void Pipeline::endFrame() {
 bool Pipeline::r1Active() const {
     static const bool off = [] { const char* e = std::getenv("WFC_RT_R1"); return e && std::atoi(e) == 0; }();
     return r1Map_ && !off && rtInfra_ && !rtFailed_ && rtMode_ == 2;
+}
+
+// R1 needs three optional GL entry points (MRT output, per-target colour masks, float clears). Tested once per map at the
+// first program build / warm-up, i.e. after the GL loader ran (load() parses the map before it on a direct boot).
+void Pipeline::r1CheckGl() {
+    if (!r1Map_ || r1GlChecked_) return;
+    r1GlChecked_ = true;
+    if (!(DrawBuffers && ColorMaski && ClearBufferfv)) {
+        r1Map_ = false;
+        LOG_WARN("RT R1: glDrawBuffers / glColorMaski / glClearBufferfv missing - Realistic without the sun swap");
+    }
 }
 
 // V_bake per lightmap page (Systems' vbake_<coefficient-0 page>.png, 8-bit linear) as RG8: R = V_bake, G = 1 where the

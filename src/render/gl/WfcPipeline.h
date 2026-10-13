@@ -530,6 +530,7 @@ private:
     // lightmap, fogged) and V_bake (the bake's sun visibility) to a second target; the world composite then swaps the
     // baked sun for the ray-traced one: colour += share x (V_rt - V_bake). Per map, never a setting (the mode is rtMode_).
     bool r1Map_ = false, r1Built_ = false, r1WorldMrt_ = false, r1Suppress_ = false;
+    bool r1GlChecked_ = false, r1StateLogged_ = false;   // (the GL entry-point test runs after the GL load; one log per map)
     float r1Fit_[4] = {0, 1, 1, 0};                    // k, p, tangent_y_sign
     float r1Sun_[3] = {0, 0, 0};                       // the sun's linear colour x brightness (fit.json sun_linear)
     float r1SunDir_[3] = {0, 0, 1};                    // towards the sun (world)
@@ -539,6 +540,7 @@ private:
     GLuint r1SunTex_ = 0, rtCompositeR1Prog_ = 0;
     int r1SunW_ = 0, r1SunH_ = 0, r1ClearedFrame_ = -1;
     bool r1Active() const;
+    void r1CheckGl();
     void r1Build();
     void r1WorldBegin();
     void r1WorldEnd();

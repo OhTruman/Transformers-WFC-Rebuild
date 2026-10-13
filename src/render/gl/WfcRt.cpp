@@ -758,6 +758,14 @@ void Pipeline::rtDynMid() {
         if (!rtCompositeR1Prog_) { LOG_WARN("RT R1: the sun-swap composite failed to build: R1 off"); r1Map_ = false; }
     }
     r1 = r1 && rtCompositeR1Prog_;
+    if (rtMode_ == 2 && !r1StateLogged_ && (r1 || !r1Active())) {   // (the R1 state as the player sees it: once per map)
+        r1StateLogged_ = true;
+        size_t pages = 0;
+        for (GLuint t : vbTex_) pages += t ? 1 : 0;
+        LOG_INFO("RT R1 (first Realistic frame): %s (V_bake pages %zu, arrays %zu)", r1 ? "sun swap ON" :
+                 "sun swap OFF (no usable V_bake fit / GL entry points / WFC_RT_R1=0)",
+                 pages, vbArrays_.size());
+    }
     const GLuint cp = r1 ? rtCompositeR1Prog_ : rtCompositeProg_;
     if (r1) BlendFuncSeparate(GL_ONE, 0x88F9 /*GL_SRC1_COLOR*/, GL_ZERO, GL_ONE);   // colour = colour x factor + add
     else BlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);   // colour *= factor, alpha kept
