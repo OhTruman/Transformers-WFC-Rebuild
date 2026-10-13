@@ -83,3 +83,23 @@ BOTTEST 38/39 (N3), BRAWL, CAM, CHARGE, CHASSIS, CLASSCHANGE, CTF, SETTINGS 6/6,
 
 PENDING. The first attempt (16 matches over the 8 maps, 7v8 bots, 1080p windowed) hung in match 2 on the 07:45 driver
 reset (N1). It resumes when the GPU cap lifts.
+
+## 6. RT stage 1 merge review (integration 5d1aecd0, head 52efcbf7; code read)
+
+| item | status | detail |
+|---|---|---|
+| F9 bound three times | **FAIL -> fixed e6d61e2d (code-presence PASS: F9 = Button::RenderMode only, Win32Window.cpp:70; Button::Debug = F11, :55; bot overlay = F12, Application_Frontend.cpp:844; no other F9 / F11 / F12 binding)** | Button::Debug (debug wireframes: bounds / capsule / aim ray, World.cpp:3621), the playtest bot overlay (Application_Frontend.cpp:844) and Button::RenderMode (the RT cycle) all fire on F9 in every build. The first two predate the merge. Proposed: RT keeps F9; Debug moves to a dev-only key; the overlay moves to F12. |
+| release() keep list / RT objects freed | PASS (minor) | rtMode_ and rtAvailKnown_ kept; WFC_SETTINGSTEST checks the RT mode; GL RT objects and BLAS / TLAS / masked / hit data freed per map. The clearStaticWorld waitIdle-failed branch drops the resources without freeing or logging them (up to ~187 MB per map change); a LOG_WARN was requested. |
+| RT Off and never toggled | PARTIAL | Image byte-identical (Rendering's gate), but every launch creates the RT bridge (D3D12 device, queue, allocators, shared fence imported as a GL semaphore) through the frontend's hardware probe (rayTracingAvailable -> Bridge::init). Asked for a throwaway capability probe / lazy bridge, and a regress-8map with RT Off vs 05319349 before the playtest package. |
+| RT failure fallback | PASS | g_failed is sticky; the uniform gates give the Original look (within the accepted <= 1 / 255). |
+| F9 vs the Ray Tracing row | NOTE | F9 on a map loaded with RT Off arms the next map only; F9 changes neither the profile nor the Settings row. Goes in the playtest guide. |
+| Env vars leaking into shipping behaviour | PASS | every WFC_RT_* is read only when set. |
+
+## 7. Build and harness items added tonight
+
+| item | status | detail |
+|---|---|---|
+| Integration builds without the RT shaders | **FAIL -> fixed 08:27** | Integration's third_party had no dxc / ffx_denoiser, so every integration build had WFC_RT_SHADERS undefined: the Ray Tracing row showed and Faithful / Realistic looked Original ("RT bridge: built without the RT shaders"). Integration fetched dxc 1.9.2609.5 + FidelityFX SDK v1.1.4 denoiser and re-configured. tools/fidelity/rt-build-check.ps1 -BuildDir: integration build/release PASS (WFC_RT_SHADERS, WFC_RT_DENOISER, 10 / 10 generated headers). Rendering (rt2): rtAvailable() false without the RT shaders. Runtime check (-Exe: profile RayTracing=2 builds a TLAS, logs no "without the RT shaders"): PENDING (exe launches after the GPU cap). |
+| Settings precedence: profile vs WFC_* env | PASS (pinned) | Since the frontend's Ray Tracing row, the profile's RayTracing= / HDTextures= are applied at boot and override WFC_RT_MODE / WFC_HDTEXTURES. Every harness profile writer now writes RayTracing (0 by default; Get-BotProfile -RayTracing) next to HDTextures + HDTexturesUserSet=1 (M05.ps1, bot-matrix legacy, m07-frontend, map-loss-gate). lockstep-ab writes each arm's WFC_RT_MODE into that arm's profile. |
+| lockstep-ab marks a Ray Tracing mismatch UNKNOWN | PASS | New columns rt_req / rt_mode / rt_scene / rt_noshaders (lib/Run.ps1 Get-WfcRtState: the last "renderer: Ray Tracing <mode>" line, else inferred from the RT scene: TLAS = Faithful, + reflection hit data = Realistic). UNKNOWN if the mode differs from the request, or an RT-on arm built no RT scene / has no shaders. Checked on Rendering's s5_mat log (Realistic inferred) and a regress-8map head log (Off). |
+| GPU-lost dialog in harness runs | PASS (pinned) | Add-WfcHarnessEnv pins WFC_GPULOST_DIALOG_S=0. |

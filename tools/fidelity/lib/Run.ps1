@@ -45,6 +45,24 @@ function Get-WfcHdState([string]$WfcLog) {
     return $o
 }
 
+# Ray Tracing state from a wfc.log (RT stage 1, integration 5d1aecd0+): mode = the last "renderer: Ray Tracing <mode>" line (the
+# renderer logs only CHANGES, so no line = the mode the map loaded with: Off unless the profile / WFC_RT_MODE set it); scene = an
+# RT scene was built ("... TLAS <n> instances"); noShaders = the build has no RT shaders (a no-op RT row).
+function Get-WfcRtState([string]$WfcLog) {
+    $o = [pscustomobject]@{ mode = 0; modeLogged = $false; scene = $false; noShaders = $false }
+    if (-not (Test-Path $WfcLog)) { return $o }
+    foreach ($l in [IO.File]::ReadLines((Resolve-Path $WfcLog).Path)) {
+        if ($l.Contains('renderer: Ray Tracing ')) { $m = [regex]::Match($l, 'renderer: Ray Tracing (Off|Faithful|Realistic)'); if ($m.Success) { $o.mode = @{ Off = 0; Faithful = 1; Realistic = 2 }[$m.Groups[1].Value]; $o.modeLogged = $true } }
+        elseif ($l -match 'TLAS \d+ instances') { $o.scene = $true }
+        elseif ($l.Contains('built without the RT shaders') -or $l.Contains('this build has no RT shaders')) { $o.noShaders = $true }
+        elseif ($l.Contains('reflection hit data')) { $o | Add-Member -NotePropertyName refl -NotePropertyValue $true -Force }
+    }
+    # a mode set at init (WFC_RT_MODE / WFC_RT_SHADOWAO) is not logged as a change: infer it from the scene (Realistic builds the
+    # reflection hit data)
+    if (-not $o.modeLogged -and $o.scene) { $o.mode = if ($o.PSObject.Properties['refl']) { 2 } else { 1 } }
+    return $o
+}
+
 # Run an exe with temporary process environment variables; returns the exit code (-999 = killed
 # after -TimeoutSec).
 function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log = "run.log", [int]$TimeoutSec = 0) {
