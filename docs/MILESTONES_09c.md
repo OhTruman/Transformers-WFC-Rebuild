@@ -108,7 +108,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   numbers first. Port the renderer to D3D12 (option C; never Vulkan) only if those show the hybrid limits RT quality / performance
   or grows overly complicated. OpenGL stays the Classic / reference / default renderer regardless.
   USER 2026-10-12: yes to a later separate optional "RT lighting" mode where ray-traced GI replaces the baked lightmaps
-  (modern look); the faithful baked lighting stays the default. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
+  (modern look); the faithful baked lighting stays the default.
+  USER 2026-10-12 (goal "make this game look brand new"): the HD texture pack (D) is the DEFAULT when installed; ray-traced
+  shadows / lighting are OFF by default unless enabled. RT sheets judged "way too hard... should be softer and more natural and
+  realistic. I want realistic lighting and shadows for everything" -> RT Realistic mode brought forward (soft contact-hardening
+  shadows, runtime sun for all geometry + RT-baked indirect lightmaps, local lights, AO, lit reflections, then dynamic GI).
+  Comparisons for the user: full-frame 2560x1440 pairs and an F9 live toggle, no crops. Stage 1 composite: RT shadows / AO on dynamic surfaces + the
   dynamic-light term only (option b: end of the opaque pass), lightmapped statics untouched except character contact AO.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
