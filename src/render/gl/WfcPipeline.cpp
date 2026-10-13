@@ -1141,6 +1141,9 @@ bool Pipeline::load(const std::string& mapName) {
             r1Map_ = r1Fit_[0] > 0.0f && DrawBuffers && ColorMaski && ClearBufferfv;
             LOG_INFO("RT R1 sun swap data: %s (k %.3f, p %.2f, tangent y %+.0f, sun %.3f %.3f %.3f)%s", r1Dir_.c_str(), r1Fit_[0],
                      r1Fit_[1], r1Fit_[2], r1Sun_[0], r1Sun_[1], r1Sun_[2], r1Map_ ? "" : " - unused (GL entry points / k)");
+        } else {
+            LOG_INFO("RT R1 sun swap data: none (%s/fit.json %s) - Realistic without the sun swap on %s", r1Dir_.c_str(),
+                     ft.empty() ? "missing" : "unparsable", mapName.c_str());
         }
     }
     loadMovers(dataDir_ + "/movers.json");
