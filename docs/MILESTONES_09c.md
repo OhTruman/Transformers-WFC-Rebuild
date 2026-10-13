@@ -377,5 +377,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   code, integration render data); fixes: Play.bat runs the package's own exe (free drive letter when F: is taken), log +
   profile beside the exe (patch), verify_slim checks it. Rule: the user double-clicks the package exe; no build/release
   rebuild while they play.
+  16:20 Frontend's Game Mode Options merge landed 9dd8a406 (7da913ed: Player Limit / Autobot + Decepticon Bots or Bots
+  / Bot Difficulty inside the mode's options; no bot rows on the lobby screen; tests 145/0). P0 #4 FIX APPLIED c31d8547
+  (Gameplay 886e704d: UIController PausedSpectating handles OnRespawn -> Paused, Paused handles OnSpectating; CLASSCHANGE
+  extended; 5 ui.* tests; Frontend reviewing). #7 closed by code: XP = base x BotXpPolicy::scale(difficulty), no
+  AI-dependent path (43 = 50 x 0.85 Expert), XPTEST classic vs smart to confirm. All playtest P0/P1 code fixes except the
+  judder (Rendering, captures running) and the jet-gun transparency are now on integration.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
