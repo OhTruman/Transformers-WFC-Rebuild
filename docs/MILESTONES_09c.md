@@ -489,5 +489,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Ablation running (exposure cost, per-bot route noise reseeded every 10 s = prime suspect, squads, flank); repaths
   ~45-55 per bot-min = corridor churn. TARGET for the next playtest: Smart >= Classic in all four columns on every map
   with the tactics kept; fix mechanisms (seed hold, repath cap, corridor hysteresis), not feature zeroing.
+  18:30 USER REQUEST: automated game runs must be silent while they use the PC (movie). WFC_MUTE=1 added c246ed3e
+  (Win32Audio feeds silence to the device, mix / cue logic / stats unchanged; env-only, never a package default), pinned
+  in tools/fidelity (eef42f10) and every lane runner; a Windows session muter (Core Audio, scratchpad script) mutes any
+  wfc_rebuild.exe session within 2 s for builds without the switch (running 17:27-03:27). Systems' light calibration
+  merged 13b29545 (fit_lights.json x10, shipped by build_slim --vbake).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
