@@ -63,6 +63,7 @@ param(
     [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
     [int]$SettingsExpected = 0,  # WFC_SETTINGSTEST: the number of renderer settings checks expected (0 = any count; all must pass)
     [switch]$NoSettingsTest,     # skip the settings self-test run
+    [string]$RtHoldFile = "",    # the RT gate (only) waits while this file exists: the RT-off steps run first, the gate starts once the RT slot is granted and the file is removed
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
                                  # sees the laptop's path lengths: a package deep in a work folder pushes long HD paths past
                                  # MAX_PATH (260) that are 213 chars under Play.bat's F:. Removed at the end.
@@ -436,6 +437,10 @@ try {
         if (-not (Test-Path -LiteralPath $rtScript)) { $rtGate.Status = 'FAIL'; $rtGate.Note = "rt-build-check.ps1 not found at $rtScript (-RtCheck <path>, or -NoRtCheck)" }
         else {
             WaitHold
+            if ($RtHoldFile -and (Test-Path -LiteralPath $RtHoldFile)) {
+                Write-Host "RT hold file present ($RtHoldFile): the RT gate waits for the RT slot"
+                while (Test-Path -LiteralPath $RtHoldFile) { Start-Sleep -Seconds 2 }
+            }
             $rtRun = Join-Path $WorkDir 'rt'
             if (Test-Path -LiteralPath $rtRun) { Remove-Item -LiteralPath $rtRun -Recurse -Force }
             $rtBin = Join-Path $rtRun 'bin'
@@ -462,10 +467,15 @@ try {
                 $rl = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
                 $dataLine = $rl | Select-String -Pattern 'RT R1 sun swap data: .*\(k ([0-9.]+)' | Select-Object -First 1
                 $pageLine = $rl | Select-String -Pattern 'RT R1 sun swap: (\d+) V_bake pages' | Select-Object -First 1
-                $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1 .*unused' | Select-Object -First 1
+                $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1 .*unused|RT R1: glDrawBuffers / glColorMaski / glClearBufferfv missing|RT R1: the sun-swap composite failed' | Select-Object -First 1
                 $pages = if ($pageLine) { [int]$pageLine.Matches[0].Groups[1].Value } else { 0 }
-                $ok = $dataLine -and $pages -gt 0 -and -not $bad
-                $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r1: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages$(if ($bad) { '; ' + $bad.Line.Trim() })"
+                # Rendering c232c380+ (GL entry points tested after the GL load) also logs the first Realistic frame's state:
+                # it is required: "sun swap ON (V_bake pages N" with N > 0 (a build before c232c380 fails this row)
+                $firstLine = $rl | Select-String -Pattern 'RT R1 \(first Realistic frame\): (.*)' | Select-Object -First 1
+                $firstOk = $firstLine -and $firstLine.Line -match 'sun swap ON \(V_bake pages ([1-9]\d*)'
+                if ($firstLine -and -not $firstOk -and -not $bad) { $bad = $firstLine }
+                $ok = $dataLine -and $pages -gt 0 -and $firstOk -and -not $bad
+                $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r1: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages$(if (-not $firstLine) { '; no RT R1 (first Realistic frame) line' })$(if ($bad) { '; ' + $bad.Line.Trim() })"
                 if (-not $ok) { $rtGate.Status = 'FAIL' }
             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
