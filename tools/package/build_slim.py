@@ -111,12 +111,14 @@ def main():
             name = mapdir.rstrip('/').split('/')[-1]
             src_dir = os.path.join(vbake_dir, name)
             if name.startswith('MP_') and os.path.isfile(os.path.join(src_dir, 'fit.json')):
-                files = ['fit.json'] + sorted(f for f in os.listdir(src_dir) if f.startswith('vbake_') and f.endswith('.png'))
+                pngs = sorted(f for f in os.listdir(src_dir) if f.startswith('vbake_') and f.endswith('.png'))
+                # (+ fit_lights.json where present: vbake_lights_fit's sky / point / spot calibration for the runtime RT lightmap)
+                files = ['fit.json'] + (['fit_lights.json'] if os.path.isfile(os.path.join(src_dir, 'fit_lights.json')) else []) + pngs
                 for f in files:
                     src_abs = os.path.join(src_dir, f)
                     rows.append(dict(dest=mapdir + 'vbake/' + f, source=os.path.relpath(src_abs, ROOT).replace('\\', '/'),
                                      bytes=str(os.path.getsize(src_abs)), action='keep', reason='R1 vbake'))
-                vbake_maps.append('%s (%d pages)' % (name, len(files) - 1))
+                vbake_maps.append('%s (%d pages%s)' % (name, len(pngs), ', fit_lights' if 'fit_lights.json' in files else ''))
             elif name.startswith('MP_'):
                 problems_vb.append('--vbake: no fit.json for %s in %s' % (name, vbake_dir))
         if not r['dest'].endswith('/materials_glsl.json'):
