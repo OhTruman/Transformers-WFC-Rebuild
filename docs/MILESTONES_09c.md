@@ -350,5 +350,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   without the sun swap); Rendering fixes the order (lazy check) on rt2, repackage after the playtest. Leak soak FINAL
   PASS (Experimental 13:53): plateau ~4.9-5.4 GB, handles / GDI / threads flat, GL live textures plateau 93, PCM 36.5 MB
   every return; driver pool +456 MB in 42 min under load, flat on the quiet run. User awake 13:54; lanes parked.
+  USER PLAYTEST 2026-10-13 ~15:00 (docs/handoff/USER_PLAYTEST_2026-10-13.md): P0 (user: ASAP) first-person weapon
+  wobble / interlace when strafing (Rendering; suspect the M1 weapon draw queue); false firing + reload prompts from
+  nearby bot fire (Gameplay); vehicle form = low-ammo / cannot reload (Gameplay); class change during respawn = spawned
+  but cannot move (Gameplay). P1: Game Mode Options must hold Player Limit / Autobots / Decepticons / Bot Difficulty /
+  Bot AI (Frontend); map name centred, frame off the text (Frontend); USER DECISION M2: Smart AI is the default and the
+  Classic row leaves the UI (code path kept for identity tests), Smart XP parity (Gameplay); FPS counter in settings
+  (Frontend + Rendering); bot pathing keeps improving (Gameplay, bots unpaused). RT: user likes Realistic on the whole
+  environment, wants it pushed further, shadows good; verify reflections (cannot tell); shadow alignment bug on the
+  tested map; check the main-menu globe. Working: menus, loading, XP (43 per kill), bots die properly. Overall: 'the game
+  is getting closer ... a lot is working'.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
