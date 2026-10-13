@@ -390,5 +390,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   profile / characters / crash reports (harnesses collect per-run logs there), the exe folder is the fallback, the log's
   first line names the file. README: start only via Play.bat. Frontend reviewed the respawn UI hunk: OK; options-row
   style follow-up merged 0b096b7c.
+  16:45 P0 #1 judder REPRODUCED objectively (Experimental, a17309b7, Streets strafe, 64 px tiles on the gun): gun-tile
+  jitter 34.7 px at 144 Hz (sign flips 0.37) vs 2.06 px at the 60 Hz control; weapondirect (M1 queue bypassed) 33.2 and
+  FSR 3.1 34.8 = the queue and FSR are NOT the cause; interpolation-only, which fits the gun at the current-step socket
+  vs the blended body. PASS for the fix = gun-tile jitter <= control + 0.35 px on tiles 7,8 / 8,7 / 6,8. Cross-talk
+  baseline: robot-form idle shows no ammo drop and no reload prompt (the vehicle-form row is being added); the image
+  flash detector is being reworked offline; WFC_FXOWNERTEST is the authoritative proof. User's settings: max, no FSR / FG,
+  300 cap, fullscreen native; RT ON when the jet gun looked see-through.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
