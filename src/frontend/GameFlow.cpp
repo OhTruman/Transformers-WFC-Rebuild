@@ -546,10 +546,11 @@ const GameFlow::BotOption* GameFlow::botOption(const std::string& name) {
 }
 
 std::string GameFlow::botChoiceLabel(const std::string& field, int v) const {
-    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD", "EXPERT"};   // EXPERT: PC EXTENSION (Gameplay's Expert AI)
+    // The options menu's own value style ("Autobalanced", "15 minutes"). Expert: PC EXTENSION (Gameplay's Expert AI).
+    static const char* kDiff[] = {"Easy", "Medium", "Hard", "Expert"};
     const bool teams = botRows() == BotRows::Teams;
     if (field == "difficulty") return kDiff[std::clamp(v, 0, 3)];
-    if (field == "extended") return v ? (teams ? "EXTENDED (32 V 32)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
+    if (field == "extended") return v ? (teams ? "Extended (32 v 32)" : "Extended") : (teams ? "Original (5 v 5)" : "Original (10)");
     return std::to_string(v);
 }
 
