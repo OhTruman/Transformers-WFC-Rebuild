@@ -958,7 +958,9 @@ void Pipeline::release() {
     lmArrays_.clear(); lmArrOf_.clear();
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
+    const double vramIn = rtBridgeVramMB();
     rtBridgeClearStaticWorld();                        // (M7 stage 0: no-op unless a static world was built)
+    if (vramIn > 0) LOG_INFO("RT VRAM (leak diagnostics): release() entry %.0f MB, after the bridge's clear %.0f MB", vramIn, rtBridgeVramMB());
     if (bspMdi_.rowTex) glDeleteTextures(1, &bspMdi_.rowTex);
     for (GLuint* b : {&bspMdi_.rowVbo, &bspMdi_.cmdBuf}) if (*b) DeleteBuffers(1, b);
     for (GLuint* t : {&mdiVlmTex_, &bspMdi_.vlmTex}) if (*t) { glDeleteTextures(1, t); *t = 0; }
@@ -1095,6 +1097,7 @@ void Pipeline::release() {
     fsr3On_ = keepFsr3;
     modern_ = keepModern;
     rtMode_ = keepRtMode; rtAvailKnown_ = keepRtAvail;
+    if (vramIn > 0) { glFinish(); LOG_INFO("RT VRAM (leak diagnostics): release() exit %.0f MB (GL side freed after the bridge)", rtBridgeVramMB()); }
 }
 
 // WFC_SETTINGSTEST=1 (at init, before any map): every caller setting set to a non-default value survives release() -
