@@ -1011,5 +1011,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering items 1 / 2 near commit (Off / Faithful identity 5 / 5; probes 1.72 M, 55 % usable, 4.5 s load; per-light
   shadows fixed from a radius-0 descriptor bug, 4 lights traced; a 5 s first-frame stall fixed); the barrier blend
   (material resolve) follows their commit.
+  14:46 RT PLAN V2 ITEMS 1 + 2 MERGED df132b5a (rt2 12bda047): item 1 characters / movers lit by the RT world via sparse
+  RT probes (default on in Realistic; WFC_RT_GIPROBES=0 off; release trace 0.75-1.8 s per map under the loading
+  screen); item 2 per-light RT shadows, up to 4 lamps per frame (2A a lamp behind a wall no longer lights a robot +
+  lamp self-shadowing; 2B robots' lamp shadows on the world; WFC_RT_LIGHTSHADOWS=0 off). Gates: Off + Faithful
+  byte-identical vs 77d9e02c (5 / 5 shots, SIMHASH f3db6ef0); no new settings; rt-perf-baseline vs 30b2fa74 at 1440p
+  / 63 bots: Realistic p50 Rust 7.77 -> 8.04, Debris 6.99 -> 7.10, Streets 8.28 -> 8.66, Molten 8.68 -> 9.09, Gorge
+  7.96 -> 8.48 ms (p90 max 10.55; shadow + AO 2.7-3.6 ms); Off / Faithful unchanged. Example (Molten vehicle picking
+  up the room's purple light) sent to the user. Head df132b5a named to Experimental (regress vs 30b2fa74, Off /
+  Faithful identity with the smoke-order diffs expected on character silhouettes only, R4 leak rows). Rendering next:
+  barrier blend, option B + 3b, item 3.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
