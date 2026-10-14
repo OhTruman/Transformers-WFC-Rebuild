@@ -655,5 +655,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   build; RT Off never initialises the bridge. Morning: GL regress-8map on the package-4 head. Squad regroup design
   (Gameplay eac44488, on integration 54f46ff9): A + C approved under the cohesion / movement / AIDUEL gate; 00:30 GPU
   check booked for the bounce bug (new bounce-ray counters).
+  23:15 SQUAD REGROUP A + C MEASURED, FAILS THE GATE (null boot, 6 seeds x 4 maps): cohesion shipping 70.6 m / 19.0 %,
+  A 63.7 / 20.6, A + C 63.6 / 19.2, C 70.1 / 18.8 vs gate <= 55 m / >= 22 %; A + C also had a Streets outlier (slow 17 %).
+  Nothing ships; A / C stay uncommitted. Reading: cohesion is bounded by fights splitting squads, not respawn placement;
+  a real gain needs squad-level tactics (members positioning around the leader in engagements) = a design item for the
+  user. Experimental: R4 leak rows (harness d150f8d9, r4leak.sh) ready for the morning slot; release edge found by
+  reading (clearStaticWorld's drop-without-release branch skips giRelease and its leaked: line omits giBytes_) forwarded
+  to Rendering, non-blocking.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
