@@ -35,9 +35,13 @@ for m in $MAPS; do
   run $HEAD $m head
   b=$O/$m-base; h=$O/$m-head
   # compare over the common step range (runs quit on wall time, so the last step differs)
-  awk 'NR==FNR { a[$2]=$3; next } ($2 in a) { n++; if (a[$2] != $3) { d++; if (!f) f=$2 } } END { printf "map simhash: %d common steps, %d differ, first differing step %s\n", n, d+0, f ? f : "none" }' $b/simhash.txt $h/simhash.txt
+  sh=$(awk 'NR==FNR { a[$2]=$3; next } ($2 in a) { n++; if (a[$2] != $3) { d++; if (!f) f=$2 } } END { printf "map simhash: %d common steps, %d differ, first differing step %s\n", n, d+0, f ? f : "none" }' $b/simhash.txt $h/simhash.txt)
+  echo "$sh"
+  # (Rendering 2026-10-13: renderer output feeds the sim - per-owner render times are read by gameplay / bots - so an RT-on pair can
+  #  diverge in SIMULATION; captures from the first differing step on are labelled SIM-DIVERGED by shotsdiff, not counted as render diffs)
+  fd=$(echo "$sh" | sed -nE 's/.*first differing step ([0-9]+).*/\1/p')
   echo "map $m: simhash lines base $(wc -l < $b/simhash.txt) head $(wc -l < $h/simhash.txt)"
-  PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/shotsdiff.py $b $h
+  PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/shotsdiff.py $b $h $fd
 done
 for p in $(mine); do echo "leftover $p"; done
 echo "ident done $(date +%H:%M:%S)"

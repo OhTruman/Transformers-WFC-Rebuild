@@ -76,7 +76,9 @@ if (-not $cycle) { Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FA
 $glU = @($glLive | Select-Object -Unique)
 # a one-time rise over the first returns (persistent caches) then constant = plateau; still rising over the last three = growth
 $glTail = @($glLive | Select-Object -Last 3 | Select-Object -Unique)
-Res "gl_live_after_unload" $(if (-not $glLive.Count) { "UNKNOWN" } elseif ($glU.Count -eq 1) { "PASS" } elseif ($glLive.Count -ge 4 -and $glTail.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL live textures after each unload: {0} (plateau if constant over the last three)" -f ($glLive -join ", ")) "Rendering"
+# (2026-10-13: the census line needs WFC_GLCENSUS=1; without it every entry is null - no data is UNKNOWN, not FAIL)
+$glHave = @($glLive | Where-Object { $null -ne $_ })
+Res "gl_live_after_unload" $(if (-not $glHave.Count) { "UNKNOWN" } elseif ($glU.Count -eq 1) { "PASS" } elseif ($glLive.Count -ge 4 -and $glTail.Count -eq 1) { "PASS" } else { "FAIL" }) $(if (-not $glHave.Count) { "no match.glCensus lines (run with -ExtraEnv WFC_GLCENSUS=1)" } else { "GL live textures after each unload: {0} (plateau if constant over the last three)" -f ($glLive -join ", ") }) "Rendering"
 Res "matches" $(if ($n -ge $MatchCount) { "PASS" } elseif ($n -ge 3) { "PARTIAL" } else { "FAIL" }) ("{0} of {1} matches completed and unloaded in one process" -f $n, $MatchCount) "Frontend"
 foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "loaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "pcm_unloaded"; o = "Systems"; t = 2 }, @{ c = "pcm_loaded"; o = "Systems"; t = 2 })) {
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })

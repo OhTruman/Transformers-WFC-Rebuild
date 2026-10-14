@@ -80,7 +80,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             gpu_transl = [Math]::Round((Mean (& $col 12)), 2); gpu_post = [Math]::Round((Mean (& $col 13)), 2); cpu_render = [Math]::Round((Mean (& $col 1)), 2)
             cpu_chars = [Math]::Round((Mean (& $colA 3)), 2); outside = [Math]::Round((Mean (& $col 7)), 2)
             draws = [Math]::Round((Mean (& $colA 14)), 0); draws_dyn = [Math]::Round((Mean (& $colA 15)), 0); draws_fx = [Math]::Round((Mean (& $colA 16)), 0); binds = [Math]::Round((Mean (& $colA 17)), 0)
-            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root; rt_req = $rtReq; rt_mode = $rs.mode; rt_scene = $rs.scene; rt_noshaders = $rs.noShaders
+            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root; rt_req = $rtReq; rt_mode = $rs.mode; rt_modeLogged = $rs.modeLogged; rt_scene = $rs.scene; rt_noshaders = $rs.noShaders
             hashes = ($rng | ForEach-Object { $hash[$_] }) -join ',' })
     }
 }
@@ -122,7 +122,8 @@ foreach ($r in $rows) {
     elseif ($r.hd_on) { $occNote += " HD on: {0} textures ({1})" -f $r.hd_pack, $r.hd_root }
     # Ray Tracing (5d1aecd0+): the arm's mode must be the one it asked for (WFC_RT_MODE, written into its profile, which wins at
     # boot), an RT-on arm must have built its RT scene with the RT shaders - else the arms drew different things: UNKNOWN.
-    if ($r.rt_mode -ne $r.rt_req) { $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
+    # (a mode set at init is inferred from the scene: Faithful vs Realistic is compared only when the renderer logged the mode)
+    if (($r.rt_req -eq 0 -and $r.rt_mode -ne 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -eq 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -ne $r.rt_req -and $r.rt_modeLogged)) { $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
     elseif ($r.rt_req -gt 0 -and ($r.rt_noshaders -or -not $r.rt_scene)) { $hdOk = $false; $occNote += " Ray Tracing requested but no RT scene{0}" -f $(if ($r.rt_noshaders) { " (build without the RT shaders)" } else { "" }) }
     elseif ($r.rt_req -gt 0) { $occNote += " Ray Tracing mode {0}, scene built" -f $r.rt_req }
     $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-Path $cm

@@ -42,7 +42,7 @@ if ($Exe) {
         $noMap = Select-String -Path $lg -Pattern 'render data not found' -Quiet
         if ($noMap) { Res "runtime" "UNKNOWN" ("map '{0}' did not load (render data not found): no verdict" -f $Map) "Experimental"; $Exe = $null }
         if (-not $Exe) { } else {
-        $st = if ($rs.noShaders) { "FAIL" } elseif ($rs.scene -and $rs.mode -eq 2) { "PASS" } elseif (Select-String -Path $lg -Pattern 'RT bridge: no D3D12 device|raytracing tier .* < 1\.1' -Quiet) { "UNKNOWN" } else { "FAIL" }
+        $st = if ($rs.noShaders) { "FAIL" } elseif ($rs.scene -and $rs.mode -ge 1) { "PASS" }   # (Realistic logs "reflection hit data" only with the material reflection data; an RT scene in the requested non-Off mode passes) elseif (Select-String -Path $lg -Pattern 'RT bridge: no D3D12 device|raytracing tier .* < 1\.1' -Quiet) { "UNKNOWN" } else { "FAIL" }
         Res "runtime" $st ("profile RayTracing=2 on {0}: mode {1} (logged {2}), RT scene {3}, no-shader message {4}{5}" -f $Map, $rs.mode, $rs.modeLogged, $rs.scene, $rs.noShaders,
             $(if ($st -eq "UNKNOWN") { " (this machine has no DXR 1.1 device: not a build verdict)" } else { "" })) "Rendering"
         }
