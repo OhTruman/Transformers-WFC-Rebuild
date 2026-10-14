@@ -156,7 +156,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     RtHitKeep keep;
     W.pos.resize(v.size() / 14 * 3);
     for (size_t i = 0, n = v.size() / 14; i < n; ++i) std::memcpy(&W.pos[i * 3], &v[i * 14], 12);
-    size_t subs = 0, skipped = 0, noShadow = 0, vlmSubs = 0, nonMdiSubs = 0;
+    size_t subs = 0, skipped = 0, noShadow = 0, vlmSubs = 0, nonMdiSubs = 0, actorNodes = 0;
     std::vector<std::pair<float, std::string>> largest;      // (diagnostics) the biggest subs going into the TLAS
     for (const Sub& s : g.subs) {
         if (s.prog < 0 || (size_t)s.first + s.count > idx.size()) continue;
@@ -164,6 +164,11 @@ void Pipeline::rtBuildWorld(int meshId) {
         const Program& M = P.mdiProg >= 0 ? progs_[(size_t)P.mdiProg] : P;
         if (M.blend != 0 || P.blend != 0) continue;
         if (s.noShadow) { ++noShadow; continue; }       // (authored CastShadow false: not an occluder)
+        // actor-placed nodes (movers, authored-hidden and Gameplay-toggled props: the only subs carrying an actor name) are
+        // not static: the TLAS would keep them at their load pose while GL hides or moves them. Molten's InterpActor_11529
+        // (PROP_UND_RepairNodeB, 10 x 10 m, 7-25 cm above the central platform, hidden in TDM) blacked the floor out
+        // through R3's world AO and R1's sun visibility - the user's "shadows that do not line up" (2026-10-13).
+        if (!s.actor.empty()) { ++actorNodes; continue; }
         const core::Vec3 ext = s.bmax - s.bmin;
         const float size = std::max(ext.x, std::max(ext.y, ext.z));
         // sky domes / boxes are not occluders (every sun ray hit Rust's 4.5 km Spacedome): over 2 km, or named so
@@ -184,6 +189,21 @@ void Pipeline::rtBuildWorld(int meshId) {
             if (hit) { ++skipped; continue; }
         }
         largest.push_back({size, s.matName + (M.lit ? "" : " (unlit)")});
+        // (diagnostics) WFC_RT_CENSUS=x,y,z,r: every sub going into the TLAS whose box comes within r of the point
+        static const float* census = [] {
+            static float c[4]; const char* e = std::getenv("WFC_RT_CENSUS");
+            return e && std::sscanf(e, "%f,%f,%f,%f", &c[0], &c[1], &c[2], &c[3]) == 4 ? c : (const float*)nullptr;
+        }();
+        if (census) {
+            float d2 = 0.0f;
+            const float pt[3] = {census[0], census[1], census[2]}, lo[3] = {s.bmin.x, s.bmin.y, s.bmin.z}, hi[3] = {s.bmax.x, s.bmax.y, s.bmax.z};
+            for (int k = 0; k < 3; ++k) { const float q = std::max(lo[k] - pt[k], std::max(0.0f, pt[k] - hi[k])); d2 += q * q; }
+            if (d2 <= census[3] * census[3])
+                LOG_INFO("RT census: mesh %d sub %zu '%s' comp '%s' box (%.2f %.2f %.2f)..(%.2f %.2f %.2f) %s%s%s tris %u", meshId,
+                         (size_t)(&s - g.subs.data()), s.matName.c_str(), s.comp.c_str(), s.bmin.x, s.bmin.y, s.bmin.z, s.bmax.x,
+                         s.bmax.y, s.bmax.z, M.lit ? "lit" : "UNLIT", M.twoSided ? " two-sided" : "", s.lmTex[0] >= 0 ? " lightmapped" : " no-lightmap",
+                         s.count / 3);
+        }
         if (s.vlmTex) ++vlmSubs;
         if (s.mdiRow < 0) ++nonMdiSubs;
         std::vector<uint32_t>& out = M.twoSided ? W.twoSided : W.oneSided;
@@ -197,8 +217,8 @@ void Pipeline::rtBuildWorld(int meshId) {
     const int set = meshId == bspMesh_ ? 1 : 0;
     static const bool noBsp = std::getenv("WFC_RT_NOBSP") != nullptr;   // (diagnostics: the level BSP set left out)
     if (set == 1 && noBsp) { LOG_INFO("RT world: level BSP set left out (WFC_RT_NOBSP)"); return; }
-    LOG_INFO("RT world: %zu static opaque subs of the %s set (mesh %d; %zu vertex-lit, %zu not MDI-drawn) -> D3D12 (%zu sky subs and %zu CastShadow-false subs left out)",
-             subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow);
+    LOG_INFO("RT world: %zu static opaque subs of the %s set (mesh %d; %zu vertex-lit, %zu not MDI-drawn) -> D3D12 (%zu sky subs, %zu CastShadow-false"
+             " subs and %zu actor-placed (mover / toggled) subs left out)", subs, set ? "level BSP" : "world", meshId, vlmSubs, nonMdiSubs, skipped, noShadow, actorNodes);
     W.idBase = 0x10000u + (unsigned)set * 2u;           // (the reflection hits look their BLAS up by InstanceID)
     if (keepHit) {
         keep.mesh = meshId; keep.set = set; keep.idx[0] = W.oneSided; keep.idx[1] = W.twoSided;
