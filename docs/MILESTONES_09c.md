@@ -760,5 +760,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   generation: retry rejects at denoise 0.5 + a stronger negative prompt; text / logo mask protection if cheap; per-map
   contact sheets (accepted + rejected examples) for the user. Live E pack Molten = 132 rows, 997 MB; generation at ~95 /
   197 on Streets.
+  05:10 E at 133 / 197 (Molten 88 + Streets 44 complete, Gorge started; 5 gate fails), 7.8 GPU h, Streets ~2.7 min /
+  unit; generation completes ~08:00, the retry pass (eye-rejects at denoise 0.5 + extended negative prompt) to ~08:20;
+  HIGH MOON / emblem units stay D this milestone. Molten contact sheet (6 accepted D | E, 3 rejected with reasons)
+  sent to the user. Morning GPU sequence moved up to ~08:30 (gicheck3 + Gameplay slot B -> flip commit -> example set
+  alone -> ~09:30 Experimental regress alone + RT-on rows -> package 4).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
