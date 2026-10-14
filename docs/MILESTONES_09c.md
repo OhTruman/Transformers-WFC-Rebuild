@@ -563,5 +563,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (shared RNG consumed by the RT path, or lockstep steps-per-frame tied to frame time): assigned to Rendering as a
   determinism bug to find before S1 (WFC_IMPACTRELEVANCE=0 rerun, RNG / step-clock audit). Experimental: RT-on lockstep
   rows judged SIMHASH-first ('SIM DIVERGED at step N').
+  19:49 INTERIM PACKAGE 3 VERIFIED (Systems, work/playtest_slim 15.0 GB, c949ab88, tag playtest/09c-interim3-c949ab88):
+  REPORT.md PASS on EVERY row - HD b0-12 0 problems; Streets / Gorge / Debris with -ForeignCwd; SETTINGSTEST 7/7; RT
+  build / robust context / runtime; R1 PASS for the first time with the full chain on a direct boot ('sun swap ON
+  (V_bake pages 26, arrays 4)'), i.e. the RT-every-frame fix works in the package. Previous package kept as
+  playtest_slim_a44aa6db; b6b6e38 / a17309b7 packages deleted (tagged, rebuildable).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
