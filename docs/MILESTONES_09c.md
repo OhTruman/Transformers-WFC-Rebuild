@@ -665,5 +665,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   23:35 USER APPROVED squad-level tactics for Smart bots (members positioning around their leader during engagements;
   Classic identical): design doc GAMEPLAY_SQUAD_TACTICS_DESIGN.md first, then implementation, gated on NAVQ cohesion /
   movement / AIDUEL; Gameplay starts after the 00:30 b74 set; target before the package-4 cut.
+  2026-10-14 00:05 Squad tactics rounds 1-2 (Gameplay, null boot, 6 seeds x 4 maps): design on integration 6a4b27b6
+  (travel wedge, firing line in fights, break rules, keys default off). Cause of far members = leaders leaving the squad
+  (moving 48-76 % / vehicle 20-59 % of far samples; pathless only 3-19 %). Formation alone: settled 60.1 m / 24.2 %
+  within 15 m, in-fight 73.1 m / 16.7 % within 20 m (shipping 70.6 / 19.0; 91.5 / 9.7) but Debris movement worse.
+  F + W (leader on foot while strung out) + E (slot edge margin 1.2 m): 67.6 / 21.8; 73.9 / 17.4 (+7.7 pts) with
+  movement at or better than shipping on all maps (Debris 3.85 / 0.88 / 2.66 / 0.89, better than Classic). No arm meets
+  the original gate; decision: round 3 on F + W + E (leader waits at a slot-able spot; members vehicle only to catch up)
+  under a REVISED GATE (settled >= 22 % within 15 m AND in-fight >= 19.7 % within 20 m, movement within 1 SE, AIDUEL
+  57-65 %, Classic 24/24); fallback = ship F + W + E after AIDUEL without the +10.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
