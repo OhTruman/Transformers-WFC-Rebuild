@@ -91,6 +91,7 @@ struct RtGiJob {
     float lightSize = 0.0f;                     // (item 5) the static lights' source radius, m (0: hard)
 };
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex);
+double rtBridgeVramMB();                                  // (leak diagnostics) the process's local video memory, MB (0: unknown)
 void rtBridgeGiQueue(const RtGiJob& j);
 bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk);
 // S3: the probe grid (origin, spacing, dims) traced from the current RT lightmap with the job's offsets / mask / bounce

@@ -233,7 +233,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint s5 = WaveActiveSum((uint)(gAlb * 1000.0)), s6 = WaveActiveSum((uint)(gRad * 10000.0));
     if (WaveIsFirstLane()) {
         Stats.InterlockedAdd(192, s0); Stats.InterlockedAdd(196, s1); Stats.InterlockedAdd(200, s2); Stats.InterlockedAdd(204, s3);
-        Stats.InterlockedAdd(208, s4); Stats.InterlockedAdd(212, s5); Stats.InterlockedAdd(216, s6);
+        Stats.InterlockedAdd(208, s4);
+        // (the albedo / radiance sums pass 2^32 over a load's ~10^8 rays: a carry word each, bytes 220 / 224)
+        uint o5, o6;
+        Stats.InterlockedAdd(212, s5, o5); if (o5 + s5 < o5) Stats.InterlockedAdd(220, 1u);
+        Stats.InterlockedAdd(216, s6, o6); if (o6 + s6 < o6) Stats.InterlockedAdd(224, 1u);
     }
 }
 

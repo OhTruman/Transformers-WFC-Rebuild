@@ -556,14 +556,24 @@ public:
 #else
         glTex.clear();
         if (!dev_ || !psoGi_ || !heap_ || !waitIdle()) return false;
-        giRelease();
+        giRelease(); giReused_ = 0;
         gi_.resize(std::min(S.pageSize.size(), (size_t)kMaxLm));
         UINT64 bytes = 0;
         for (size_t k = 0; k < gi_.size(); ++k) {
             const int w = S.pageSize[k].first, h = S.pageSize[k].second;
             if (w <= 0 || h <= 0) continue;
             const bool f32 = (int)k == S.floatPage;
-            if (!make(gi_[k], w, h, f32 ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT, f32 ? 0x8814 /*GL_RGBA32F*/ : 0x881A /*GL_RGBA16F*/)) {
+            const DXGI_FORMAT fmt = f32 ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT;
+            // (a page of this size + format from an earlier map's pool first: freed GL-imported D3D12 memory stayed charged
+            // to the process on AMD - +~300 MB per map change - so the shared pages are kept and reused, never freed until exit;
+            // the first propagation pass overwrites every listed texel, the gutter pass the gutters)
+            bool pooled = false;
+            for (size_t q = 0; q < giPool_.size(); ++q)
+                if (giPool_[q].first.w == w && giPool_[q].first.h == h && giPool_[q].second == fmt) {
+                    gi_[k] = giPool_[q].first; giPool_.erase(giPool_.begin() + (std::ptrdiff_t)q); pooled = true; ++giReused_; break;
+                }
+            giFmt_.resize(gi_.size(), DXGI_FORMAT_UNKNOWN); giFmt_[k] = fmt;
+            if (!pooled && !make(gi_[k], w, h, fmt, f32 ? 0x8814 /*GL_RGBA32F*/ : 0x881A /*GL_RGBA16F*/)) {
                 LOG_WARN("RT GI: shared page %zu failed", k); giRelease(); return false;
             }
             glBindTexture(GL_TEXTURE_2D, gi_[k].tex);
@@ -603,8 +613,8 @@ public:
         writeDescriptors();
         for (const Shared& s : gi_) glTex.push_back(s.tex);
         giBytes_ = bytes + (UINT64)(S.texels.size() + S.dilate.size() + S.data.size()) * 4;
-        LOG_INFO("RT GI: %zu shared pages, %u texels, %u gutter texels, %.1f MB on D3D12", giSig_.size(), giTexelN_, giDilateN_,
-                 (double)giBytes_ / 1048576.0);
+        LOG_INFO("RT GI: %zu shared pages (%zu reused from the pool, %zu pooled spare), %u texels, %u gutter texels, %.1f MB on D3D12 (device VRAM now %.0f MB)", giSig_.size(), giReused_, giPool_.size(), giTexelN_, giDilateN_,
+                 (double)giBytes_ / 1048576.0, vramMB());
         return true;
 #endif
     }
@@ -700,7 +710,8 @@ public:
                 const double rays = std::max(1.0, (double)s[0]), st = std::max(1.0, (double)s[1]);
                 LOG_INFO("RT GI bounce rays: %u, %.1f %% hit static geometry (of those: GI page %.1f %%, bake %.1f %%, none %.1f %%);"
                          " hit albedo mean %.3f, hit radiance mean %.4f (before the gain)", s[0], 100.0 * s[1] / rays, 100.0 * s[2] / st,
-                         100.0 * s[3] / st, 100.0 * s[4] / st, s[5] / 1000.0 / st, s[6] / 10000.0 / st);
+                         100.0 * s[3] / st, 100.0 * s[4] / st, ((double)s[7] * 4294967296.0 + s[5]) / 1000.0 / st,
+                         ((double)s[8] * 4294967296.0 + s[6]) / 10000.0 / st);
             }
         }
         return true;
@@ -735,15 +746,26 @@ public:
             rtDynamicAbandon();
             return;
         }
+        const double v0 = vramMB();
         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)
+        const double v1 = vramMB();
         giRelease();
+        const double v2 = vramMB();
         releaseMasked();
         releaseHit();
+        const double v3 = vramMB();
         for (auto& d : dyn_) { rel(d.tlas); rel(d.scratch); rel(d.inst); d = DynTlas{}; }
         rel(tlas_);
         for (auto* b : blas_) b->Release();
         blas_.clear(); instances_.clear(); totalBlas_ = 0;
         for (bool& v : rbValid_) v = false;
+        if (v0 > 0) LOG_INFO("RT bridge VRAM (device, MB) at the map change: %.0f -> characters %.0f -> R4 GI %.0f -> masked + hit data %.0f -> BLAS / TLAS %.0f",
+                             v0, v1, v2, v3, vramMB());
+    }
+    double vramMB() {                                    // (leak diagnostics) this process's local video memory, MB (0: unknown)
+        if (!adapter_) return 0.0;
+        DXGI_QUERY_VIDEO_MEMORY_INFO mi{};
+        return SUCCEEDED(adapter_->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mi)) ? (double)mi.CurrentUsage / 1048576.0 : 0.0;
     }
 
     bool roundTrip(const RtFrame* fr) {
@@ -1246,6 +1268,8 @@ public:
         if (!waitIdle()) LOG_WARN("RT bridge: shutdown - the D3D12 queue did not go idle within 5 s");
         clearStaticWorld();
         for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_}) free(*s);
+        for (auto& ps : giPool_) free(ps.first);         // (R4: the pooled GI pages)
+        giPool_.clear();
         if (sem_ && deleteSem_) deleteSem_(1, &sem_);
         sem_ = 0;
         glFinish();
@@ -1431,11 +1455,16 @@ private:
         return idle;
     }
     void giRelease() {
-        for (Shared& s : gi_) free(s);
-        gi_.clear(); giSig_.clear();
+        for (size_t k = 0; k < gi_.size(); ++k) {         // (to the pool: see giSetup)
+            if (!gi_[k].res) continue;
+            giPool_.emplace_back(gi_[k], k < giFmt_.size() ? giFmt_[k] : DXGI_FORMAT_UNKNOWN);
+            gi_[k] = Shared{};
+        }
+        gi_.clear(); giFmt_.clear(); giSig_.clear();
         rel(giTexels_); rel(giDilate_); rel(giData_); giTexelN_ = giDilateN_ = giDataN_ = 0; giBytes_ = 0; giPending_ = false;
     }
     std::vector<Shared> gi_; std::vector<GLuint> giSig_;
+    std::vector<DXGI_FORMAT> giFmt_; std::vector<std::pair<Shared, DXGI_FORMAT>> giPool_; size_t giReused_ = 0;
     ID3D12Resource* giTexels_ = nullptr; ID3D12Resource* giDilate_ = nullptr; ID3D12Resource* giData_ = nullptr;
     UINT giTexelN_ = 0, giDilateN_ = 0, giDataN_ = 0; UINT64 giBytes_ = 0;
     ID3D12PipelineState* psoGi_ = nullptr; ID3D12PipelineState* psoGiDil_ = nullptr;
@@ -1504,6 +1533,7 @@ bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHi
 bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
+double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
 void rtBridgeGiQueue(const RtGiJob& j) { if (g_bridge) g_bridge->giQueue(j); }
 bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk) { return g_bridge && g_bridge->giRunNow(j, passes, chunk); }
 bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays, std::vector<float>& out) {
@@ -1525,6 +1555,7 @@ bool rtBridgeAddHitData(const RtHitData&) { return false; }
 bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
+double rtBridgeVramMB() { return 0.0; }
 void rtBridgeGiQueue(const RtGiJob&) {}
 bool rtBridgeGiRunNow(const RtGiJob&, int, unsigned) { return false; }
 bool rtBridgeGiProbes(const RtGiJob&, const float*, float, const int*, int, std::vector<float>& out) { out.clear(); return false; }
