@@ -588,5 +588,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   22 %) but scope 0 doubles Gorge's movement cost. Integration decision: build (c) = active cluster + any start with a
   short nav path (<= ~40 m) to the leader, ship if Gorge stays within 1 SE of scope 2 and cohesion improves, else keep
   scope 2.
+  20:45 TEXTURE OVERHAUL STRENGTH DECIDED: E-4x-G3 + negative prompt (user delegated the choice: 'choose whichever one
+  looks the best'; G4 invents objects and fails identity). Milestone 1 = the user's five maps (~15 GPU h) in DML windows +
+  overnight blocks; level-2 E snapshot after it for an interim package; the rest of the world after the playtest.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
