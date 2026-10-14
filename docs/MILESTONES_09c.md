@@ -858,5 +858,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   allocations); both up = live objects. Also: the 'hit albedo mean 0.011' log value is a 32-bit stats overflow
   (albedo x 1000 sum wraps past ~5e7 rays; Molten at 71 M rays reads 0.058 = the table mean), carry-word fix coded;
   lighting unaffected (the gain fit does not use it). FAST gate on 30b2fa74 running since 11:13 (hold set).
+  11:42 FAST GATE on 30b2fa74 (Experimental, 11:13-11:39): PASS 55 / 4 flagged / KNOWN 2 / INFO 8 / PARTIAL 2 / UNKNOWN 1
+  / SKIP 1; the 4 flagged rows traced to stale harness expectations (range damage 15 hp at 300 m per Gameplay 03e4e31a;
+  64 decal nodes vs an old manifest of 25; the fidelity rig infers the drawn model from a CPU pose, empty since GPU
+  skinning) and a 79 ms GPU frame spike under the shared card; 2 voices after an unload = the transition movie on the
+  pause -> Quit route (lobby route 0 / 3). Owner confirmations requested for the harness update. PACKAGE 4 PROMOTED:
+  work/playtest_slim -> playtest_slim_30b2fa74 (16.60 GB; notes in docs/handoff/PACKAGE_4_30b2fa74.md; tag
+  playtest/09c-package4-30b2fa74).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
