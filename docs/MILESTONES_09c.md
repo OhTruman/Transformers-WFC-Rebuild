@@ -630,5 +630,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   86198319: per-page sun k on all five user maps, capped at the map q30 k (Streets 7.6 -> 5.8 %, Gorge 16.2 -> 10.3 %,
   Rust 19.9 -> 16.5 %, Debris 15.1 -> 14.8 %, Molten 11.0 -> 5.1 % clamped sun energy); fits copied into integration's
   render data (work/render/<map>/vbake/fit.json).
+  22:13 E MILESTONE 1 PROGRESS: 18 / 175 units (all Molten; 17 pass, stains_01 overlay stays D because E breaks its tiling
+  wrap, caught by the seam gate), 1.4 GPU h, ~4.6 min / unit, remaining ~9-11 GPU h. DML paused 22:13 -> ~22:45 for
+  Rendering's S1 + S2 check (bounce gain fitted at load so RT / bake mean = 1.0; per-page sun k read from fit.json; the
+  vertex-lit subs traced too (Rust's 825 no longer keep the bake); per-frame tracing stops after 8 sweeps; GI pass GPU
+  timing; reflection hardening) and Gameplay's jitter self-test in slot B.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
