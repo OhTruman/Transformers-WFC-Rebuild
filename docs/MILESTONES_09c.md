@@ -843,5 +843,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   lit bounce + 32-sweep path; descriptor-table refs). Rendering's code read found no missing release on the normal
   path; a VRAM-per-release-step diagnostic cycle runs in slot A after Systems' verify. Experimental's block done
   11:02; Systems' verify_slim slot opened 11:03.
+  11:11 PACKAGE 4 VERIFY PASS (Systems, 11:09): HD b0-15 1,875 rows 0 problems; bin 20 / M5 runtime; Streets / Gorge /
+  Debris -ForeignCwd PASS; SETTINGSTEST 7 / 7; RT build / context / runtime mode 2 PASS; the R1 row's FAIL was a stale
+  gate rule (with R4 running the sun swap is off by design: r1Active = && !giActive); verify_slim is R4-aware now
+  (requires V_bake data + pages, R4 texels > 0, per-page k from fit.json: 937,589 texels, 26 k-pages on that log) -
+  merged 90cd8550 with the NOPROMOTE mode. Slot A -> Rendering's leak diagnostic cycle; Experimental's FAST gate on
+  30b2fa74 beside it (RT off); promote on FAST PASS.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
