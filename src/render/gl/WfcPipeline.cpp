@@ -3864,6 +3864,8 @@ void Pipeline::flushTranslucency() {
             frameFx_ = false;
             std::fill(fxColor_, fxColor_ + 4, 1.0f);
             std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        } else if (it.kind == 2) {
+            drawFallbackSprites(fallbackPool_[(size_t)it.idx]);
         } else {
             SpriteBatch& b = spritePool_[(size_t)it.idx];
             std::copy(b.dyn, b.dyn + 4, dynParam_);
@@ -3992,6 +3994,7 @@ void Pipeline::flushTranslucency() {
     };
     auto itemName = [&](size_t i) -> std::string {
         if (const SpriteBatch* b = batchOf(i)) return "sprites " + b->mat;
+        if (q[i].kind == 2) return std::string("fallback particles");
         const TransSub& t = transSubs_[(size_t)q[i].idx];
         const GpuMesh& g = meshes_[(size_t)t.meshIdx];
         return (size_t)t.sub < g.subs.size() ? "mesh " + g.subs[(size_t)t.sub].matName : std::string("mesh ?");
@@ -4055,7 +4058,7 @@ void Pipeline::flushTranslucency() {
         }
         LOG_INFO("TRANSPROF frame %d: translucency %.3f ms GPU over %zu items; top:%s", frameNo_, total, tpName.size() - 1, s.c_str());
     }
-    q.clear(); transSubs_.clear(); spriteUsed_ = 0;     // capacities kept for the next frame
+    q.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0;     // capacities kept for the next frame
     flushingTrans_ = false;
 }
 
@@ -7663,6 +7666,103 @@ void Pipeline::spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& faci
     }
 }
 
+bool Pipeline::queueFallbackSprites(unsigned tex, bool additive, float rgbScale, const Sprite* sp, size_t n) {
+    static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
+    static const bool off = std::getenv("WFC_FALLBACKIMMEDIATE") != nullptr;   // A/B: the immediate fixed-function draw
+    if (off || immediateTrans || !deferTrans_ || flushingTrans_ || !sp || n == 0 || n > 262144) return false;
+    core::Vec3 c{0, 0, 0};
+    for (size_t i = 0; i < n; ++i) {
+        for (int k = 0; k < 4; ++k)
+            if (!std::isfinite(sp[i].c[k].x) || !std::isfinite(sp[i].c[k].y) || !std::isfinite(sp[i].c[k].z)) return false;
+        c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+    }
+    c = c * (1.0f / (float)n);
+    if (fallbackUsed_ == fallbackPool_.size()) fallbackPool_.emplace_back();
+    FallbackBatch& b = fallbackPool_[fallbackUsed_];
+    b.tex = tex; b.additive = additive; b.scale = rgbScale; b.sprites.assign(sp, sp + n);
+    transQueue_.push_back({viewDepth(c), 2, (int)fallbackUsed_});
+    ++fallbackUsed_;
+    return true;
+}
+
+// the fixed-function fallback's look in GLSL: MODULATE (or COMBINE with RGB_SCALE 2 / 4, clamped), vertex colour clamped
+// to [0, 1] as fixed-function colours are; + a soft depth fade (UE3 DepthBiasedAlpha with a 0.5 m scale) against the scene
+// depth copy (the characters included), so smoke no longer cuts hard lines where it meets bodies and floors
+static const char* kFallbackVS = R"(#version 430
+layout(location=0) in vec3 aPos; layout(location=1) in vec2 aUV; layout(location=2) in vec4 aCol;
+uniform mat4 uVP; out vec2 vUV; out vec4 vCol;
+void main() { vUV = aUV; vCol = clamp(aCol, 0.0, 1.0); gl_Position = uVP * vec4(aPos, 1.0); }
+)";
+static const char* kFallbackFS = R"(#version 430
+in vec2 vUV; in vec4 vCol; out vec4 oColor;
+uniform sampler2D uTex; uniform int uHasTex; uniform float uScale;
+uniform sampler2D uDepth; uniform vec2 uNearFar; uniform float uFade;
+float lin(float d) { float z = d * 2.0 - 1.0, n = uNearFar.x, f = uNearFar.y; return 2.0 * n * f / (f + n - z * (f - n)); }
+void main() {
+    vec4 t = uHasTex != 0 ? texture(uTex, vUV) : vec4(1.0);
+    vec3 c = t.rgb * vCol.rgb;
+    if (uScale > 1.0) c = clamp(c * uScale, 0.0, 1.0);
+    float a = t.a * vCol.a;
+    if (uFade > 0.0) a *= clamp((lin(texelFetch(uDepth, ivec2(gl_FragCoord.xy), 0).r) - lin(gl_FragCoord.z)) / uFade, 0.0, 1.0);
+    oColor = vec4(c, a);
+}
+)";
+
+void Pipeline::drawFallbackSprites(const FallbackBatch& b) {
+    if (b.sprites.empty()) return;
+    if (!fallbackProg_) {
+        const GLuint vs = compileShader(GL_VERTEX_SHADER, kFallbackVS, "fallback_particles.vs");
+        const GLuint fs = vs ? compileShader(GL_FRAGMENT_SHADER, kFallbackFS, "fallback_particles.fs") : 0;
+        fallbackProg_ = fs ? linkProgram(vs, fs, "fallback_particles") : 0;
+        if (!fallbackProg_) { LOG_WARN("wfc: fallback particle program failed - these particles are skipped"); fallbackProg_ = (GLuint)-1; }
+        GenVertexArrays(1, &fallbackVao_); GenBuffers(1, &fallbackVbo_); GenBuffers(1, &fallbackIbo_);
+    }
+    if (fallbackProg_ == (GLuint)-1) return;
+    static std::vector<float> v;
+    v.clear(); v.reserve(b.sprites.size() * 4 * 9);
+    for (const Sprite& s : b.sprites)
+        for (int k = 0; k < 4; ++k) v.insert(v.end(), {s.c[k].x, s.c[k].y, s.c[k].z, s.uv[k][0], s.uv[k][1], s.color[0], s.color[1], s.color[2], s.color[3]});
+    BindVertexArray(fallbackVao_);
+    BindBuffer(GL_ARRAY_BUFFER, fallbackVbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
+    const GLsizei st = 9 * sizeof(float);
+    EnableVertexAttribArray(0); VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, st, (void*)0);
+    EnableVertexAttribArray(1); VertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, st, (void*)(3 * sizeof(float)));
+    EnableVertexAttribArray(2); VertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, st, (void*)(5 * sizeof(float)));
+    BindBuffer(GL_ELEMENT_ARRAY_BUFFER, fallbackIbo_);
+    if (b.sprites.size() > fallbackIboQuads_) {
+        const size_t cap = std::max<size_t>(b.sprites.size(), fallbackIboQuads_ * 2);
+        std::vector<uint32_t> idx(cap * 6);
+        for (size_t qd = 0; qd < cap; ++qd) {
+            const uint32_t b4 = (uint32_t)(qd * 4);
+            const uint32_t qq[6] = {b4, b4 + 1, b4 + 2, b4, b4 + 2, b4 + 3};
+            std::copy(qq, qq + 6, &idx[qd * 6]);
+        }
+        BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STATIC_DRAW);
+        fallbackIboQuads_ = cap;
+    }
+    static const float fade = [] { const char* e = std::getenv("WFC_FALLBACKFADE"); return e ? (float)std::atof(e) : 0.5f; }();   // m
+    if (fade > 0.0f) ensureSceneDepth();
+    UseProgram(fallbackProg_);
+    UniformMatrix4fv(cachedUniformLocation(fallbackProg_, "uVP"), 1, GL_FALSE, viewProj_.m);
+    Uniform1i(cachedUniformLocation(fallbackProg_, "uTex"), 0);
+    Uniform1i(cachedUniformLocation(fallbackProg_, "uHasTex"), b.tex ? 1 : 0);
+    Uniform1f(cachedUniformLocation(fallbackProg_, "uScale"), b.scale);
+    Uniform1i(cachedUniformLocation(fallbackProg_, "uDepth"), 12);
+    Uniform2f(cachedUniformLocation(fallbackProg_, "uNearFar"), znear_, zfar_);
+    Uniform1f(cachedUniformLocation(fallbackProg_, "uFade"), fade);
+    ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, b.tex);
+    glEnable(GL_BLEND);
+    if (b.additive) glBlendFunc(GL_SRC_ALPHA, GL_ONE); else glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE); glEnable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+    glDrawElements(GL_TRIANGLES, (GLsizei)(b.sprites.size() * 6), GL_UNSIGNED_INT, nullptr);
+    glDepthMask(GL_TRUE); glDisable(GL_BLEND); glEnable(GL_CULL_FACE);
+    BindVertexArray(0);
+    glx::uniformCacheForgetCurrent(); glx::textureCacheInvalidate();
+    ++counts_.draws; ++counts_.translucent;
+}
+
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     // AMD stability (Milestone E): never upload non-finite sprite corners or an unbounded batch
     {
@@ -7908,7 +8008,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glx::gpuStamp("world: before the MDI");
     depthDirty_ = true;
-    transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0;
+    transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0;
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;

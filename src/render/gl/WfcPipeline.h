@@ -273,6 +273,11 @@ public:
         float uv2[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}}; float blend = 0.0f;   // M67 second SubUV cell + interp
     };
     bool drawSprites(const char* material, const Sprite* s, size_t n, const core::Vec3& facing);
+    // Material-less particles (the game's WeaponFx / vehicle emitters; was GLRenderer's immediate fixed-function draw, before
+    // the characters): queued into the sorted translucency pass with the fixed-function look (texture x vertex colour, the
+    // COMBINE RGB scale, alpha or additive blend, no depth write) plus a soft depth fade against the scene, characters
+    // included. tex = a GL texture name (0: untextured); false = not queued (the caller draws it as before)
+    bool queueFallbackSprites(unsigned tex, bool additive, float rgbScale, const Sprite* s, size_t n);
 
 private:
     struct Sub {
@@ -351,6 +356,12 @@ private:
     std::vector<TransSub> transSubs_;
     std::vector<SpriteBatch> spritePool_;
     size_t spriteUsed_ = 0;
+    // kind 2: a material-less particle batch (queueFallbackSprites)
+    struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
+    std::vector<FallbackBatch> fallbackPool_;
+    size_t fallbackUsed_ = 0;
+    GLuint fallbackProg_ = 0, fallbackVao_ = 0, fallbackVbo_ = 0, fallbackIbo_ = 0; size_t fallbackIboQuads_ = 0;
+    void drawFallbackSprites(const FallbackBatch& b);
     // drawSprites' upload scratch and its one-sub mesh, reused per call
     std::vector<float> spriteV_, spriteCol_, spriteSub_;
     std::vector<uint32_t> spriteIdx_;

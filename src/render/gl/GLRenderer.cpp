@@ -1788,6 +1788,29 @@ public:
             }
             if (wfc_.drawSprites(b.material, sp.data(), sp.size(), camF * -1.0f)) { glLoadMatrixf(view_.m); return; }
         }
+        if (wfc_.active()) {
+            // No compiled emitter material (WeaponFx, material-less vehicle emitters): queued into the pipeline's sorted
+            // translucency pass with the fixed-function look below (+ a soft depth fade), after the characters; an
+            // immediate draw here came before the queued characters, which then covered the smoke (user playtest
+            // 2026-10-14). WFC_FALLBACKIMMEDIATE=1 = the immediate draw below.
+            const bool texd = b.tex >= 0 && (size_t)b.tex < textures_.size();
+            const float scale = texd && b.colorScale > 1.0f ? (b.colorScale >= 4.0f ? 4.0f : (b.colorScale >= 2.0f ? 2.0f : 1.0f)) : 1.0f;
+            std::vector<wfc::Pipeline::Sprite> sp(b.n);
+            for (size_t i = 0; i < b.n; ++i) {
+                const Particle& p = b.p[i];
+                core::Vec3 ax, ay;
+                particleAxes(p, camR, camU, camF, ax, ay);
+                core::Vec3 hx = ax * (p.w * 0.5f), hy = ay * (p.h * 0.5f);
+                wfc::Pipeline::Sprite& s = sp[i];
+                s.c[0] = p.pos - hx - hy; s.c[1] = p.pos + hx - hy; s.c[2] = p.pos + hx + hy; s.c[3] = p.pos - hx + hy;
+                particleUVs(p, s.uv);
+                s.color[0] = p.r; s.color[1] = p.g; s.color[2] = p.b; s.color[3] = p.a;
+            }
+            if (wfc_.queueFallbackSprites(texd ? textures_[(size_t)b.tex] : 0u, b.blend == ParticleBlend::Additive, scale, sp.data(), sp.size())) {
+                glLoadMatrixf(view_.m);
+                return;
+            }
+        }
         glDisable(GL_LIGHTING);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
