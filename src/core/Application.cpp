@@ -206,7 +206,8 @@ bool Application::init() {
     if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
     if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
     if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09
-    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09
+    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }
+    if (std::getenv("WFC_TIPTEST")) { runTipTest(); return false; }         // bot vehicle tip-over recovery on real map geometry   // robot body height idle vs locomotion, human playtest M09
     if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09
     if (std::getenv("WFC_HEADJIT")) { runHeadingJitterTest(); return false; } // drawn heading vs camera per render frame, playtest M10
     if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
@@ -4010,6 +4011,54 @@ void Application::runScoreTest() {
         if (matchNo == 2) { for (int i = 0; i < 60 * 130 && world_.match().state() == game::Match::State::InProgress; ++i) run(dt); }
     }
     LOG_INFO("SCORE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_TIPTEST (with WFC_MAP=MP_UND_Gorge): a hover car is put back in the tipped state a bot reached in a match (WFC_TIPLOG, Gorge
+// seed 2: Car2 at (-181.4, 11.9, -12.3), yaw -1.7448, pitch -35.8 deg). Its nose is against a 4.7 m step (wall 1.5 m ahead), held
+// nose-down by the rear springs. Each stick (back = the bots' stuck reversal, left, right, forward into the wall) runs once on the
+// player path and once as a Smart bot (MoveIntent.aiTip: the Smart default = the original AI path's RotateToTargetOrientation while
+// tipped, contact-relative gate; WFC_BOTTIP / WFC_TIPREL select other modes). PASS (bot, back / left / right) = under 30 deg within 3 s and over 3 m from the tip spot. Forward pushes into the wall
+// (no path recovers it there; the bot's stuck rule reverses) and the player path (no AI righting in the original either) are INFO.
+void Application::runTipTest() {
+    const float dt = 1.0f / 60.0f;
+    const char* root = std::getenv("WFC_ASSETS");
+    static game::ChassisDef car;
+    if (!game::loadChassisDef(root ? root : core::config::kAssetRootDefault, "Car2", car) || !world_.collision()) {
+        LOG_INFO("TIPTEST SKIP: chassis or collision missing"); return;
+    }
+    const core::Vec3 tip{-181.4f, 11.9f, -12.3f};
+    struct Stick { const char* name; float f, r; bool gated; };
+    const Stick sticks[4] = {{"back", -1.0f, 0.0f, true}, {"left", 0.0f, -1.0f, true}, {"right", 0.0f, 1.0f, true}, {"forward", 1.0f, 0.0f, false}};
+    int pass = 0, checks = 0;
+    for (const Stick& st : sticks) for (int bot = 0; bot < 2; ++bot) {
+        game::Character c;
+        c.setForm(game::Form::Vehicle); c.setChassis(&car);
+        c.setPosition(tip); c.setYaw(-1.7448f);
+        c.vehicleState().pitch = -35.8f * 0.0174533f; c.vehicleState().angVel = {0, 0, 0};
+        game::MoveIntent go; go.moveForward = st.f; go.moveRight = st.r; go.faceYaw = -1.7448f;
+        if (bot) {   // the Smart default (righting, contact-relative gate); WFC_BOTTIP / WFC_TIPREL override
+            const char* bt = std::getenv("WFC_BOTTIP"); const char* tr = std::getenv("WFC_TIPREL");
+            go.aiTip = bt ? std::atoi(bt) : 0; go.aiTipRel = !tr || std::atoi(tr) != 0;
+        }
+        {   // the bot's next waypoint: 10 m along the stick direction (as a path would give)
+            const core::Vec3 Fy = core::forwardFromYawPitch(-1.7448f, 0.0f), Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
+            go.hasAiTarget = true; go.aiTarget = tip + (Fy * st.f + Ry * st.r) * 10.0f;
+        }
+        float rightedAt = -1.0f, tipped = 0.0f;
+        for (int i = 0; i < 360; ++i) {
+            game::CharacterMovement::update(c, go, dt, world_.collision());
+            const auto& v = c.vehicleState();
+            const float tilt = std::max(std::fabs(v.pitch), std::fabs(v.roll)) * 57.2958f;
+            if (tilt > 30.0f) tipped += dt; else if (rightedAt < 0.0f) rightedAt = (i + 1) * dt;
+        }
+        const core::Vec3 d0 = c.position() - tip;
+        const float moved = std::sqrt(d0.x * d0.x + d0.z * d0.z);
+        const bool gated = bot && st.gated, ok = rightedAt >= 0.0f && rightedAt <= 3.0f && moved > 3.0f;
+        if (gated) { ++checks; pass += ok ? 1 : 0; }
+        LOG_INFO("TIPTEST %s %s stick %s: under 30 deg after %.2f s, tipped %.2f of 6 s, moved %.1f m", gated ? (ok ? "PASS" : "FAIL") : "INFO",
+                 bot ? "bot" : "player", st.name, rightedAt, tipped, moved);
+    }
+    LOG_INFO("TIPTEST SUMMARY: %d/%d checks passed", pass, checks);
 }
 
 // WFC_HEIGHTTEST: per tick, feet (pawn position), capsule centre, mesh origin, root / hips / head bone world heights and the hips /

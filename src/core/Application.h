@@ -92,6 +92,7 @@ private:
     void runSwitchTest();
     void runScoreTest();
     void runHeightTest();
+    void runTipTest();
     void runVehPhysTest();
     void runHeadingJitterTest();
     void runVehicleSocketProbe();

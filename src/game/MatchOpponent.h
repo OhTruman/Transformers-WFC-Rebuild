@@ -32,6 +32,7 @@ public:
         pos_ = p; spawned_ = true; intent_ = MoveIntent{};
     }
     void despawn() { spawned_ = false; }
+    float tipT_ = 0.0f; bool tipLogged_ = false;   // WFC_TIPLOG diagnostic
     // DIAGNOSTIC participant input: holds the contextual pickup button (no AI decides this).
     bool pressesPickup = true;
     void setPosition(const core::Vec3& p) { pos_ = p; pawn_.setPosition(p); pawn_.velocity() = {0, 0, 0}; }
@@ -43,6 +44,31 @@ public:
     void simulateMovement(float dt, const CollisionWorld* col) {
         if (!spawned_) return;
         CharacterMovement::update(pawn_, intent_, dt, col);
+        {   // DIAGNOSTIC (WFC_TIPLOG): a bot vehicle tipped past 30 deg for over 1 s - one line per episode.
+            static const bool tipLog = std::getenv("WFC_TIPLOG") != nullptr;
+            if (tipLog) {
+                const auto& v = pawn_.vehicleState();
+                const bool veh = pawn_.moveForm() == Form::Vehicle;
+                const float tilt = veh ? std::max(std::fabs(v.pitch), std::fabs(v.roll)) * 57.2958f : 0.0f;
+                static long calls = 0; static bool firstHover = false; ++calls;
+                if (tilt > 30.0f && !v.driving && !firstHover && pawn_.vehicleParams().form != VehicleFormType::Jet) {
+                    firstHover = true; LOG_INFO("TIPLOG first unstable bot hover step: bot-step %ld (%s)", calls, pawn_.chassis().id.c_str());
+                }
+                if (tilt > 30.0f) {
+                    tipT_ += dt;
+                    if (tipT_ > 1.0f && !tipLogged_) {
+                        tipLogged_ = true;
+                        const core::Vec3 p = pawn_.position(), vel = pawn_.velocity();
+                        LOG_INFO("TIPLOG %s tipped %.1f s: pitch %.1f roll %.1f deg, %s, contacts %d, onGround %d, speed %.1f m/s, at (%.1f, %.1f, %.1f), yaw %.4f, fwd %.2f",
+                                 pawn_.chassis().id.c_str(), tipT_, v.pitch * 57.2958f, v.roll * 57.2958f, v.driving ? "DRIVING" : "hover", v.contacts,
+                                 (int)v.onTheGround, std::sqrt(vel.x * vel.x + vel.z * vel.z), p.x, p.y, p.z, pawn_.yaw(), intent_.moveForward);
+                    }
+                } else {
+                    if (tipLogged_) LOG_INFO("TIPLOG %s recovered after %.1f s", pawn_.chassis().id.c_str(), tipT_);
+                    tipT_ = 0.0f; tipLogged_ = false;
+                }
+            }
+        }
         intent_.wantJump = false; intent_.wantDash = false; intent_.dodgeDir = 0;   // edge inputs are consumed
         pos_ = pawn_.position();
     }

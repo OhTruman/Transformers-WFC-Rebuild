@@ -408,6 +408,29 @@ void runVehicleTests() {
                 LOG_INFO("VEHTEST tank: hover %.1f m/s (cap 15), boost forward %.1f (cap 25) side %.2f with stick right, drifting after release %d",
                          hov, boostFwd, std::sqrt(std::max(0.0f, boostSide)), (int)(s.c.vehicleState().driftRemain > 0.0f));
             }
+            // Tip-over (user report 2026-10-14: a bot's car tipped forward kept driving): car hovering forward, tipped 63 deg nose down
+            // (past the 30 deg IsUnstable threshold) and held there. Bot: the AI path rights it (pitch / roll back under 30 deg).
+            for (int bot = 0; bot < 2; ++bot) {
+                Sim s(&w, 2.0f); s.c.setChassis(&car); s.step(MoveIntent{}, 120);
+                MoveIntent go; go.moveForward = 1.0f; go.aiTip = bot ? 0 : -1;
+                s.step(go, 60);
+                s.c.vehicleState().pitch = -1.1f; s.c.vehicleState().angVel = {0, 0, 0};
+                core::Vec3 p0 = s.c.position();
+                float rightedAt = -1.0f, maxTilt = 0.0f;
+                for (int i = 0; i < 180; ++i) {
+                    s.step(go);
+                    const auto& v = s.c.vehicleState();
+                    const float tilt = std::max(std::fabs(v.pitch), std::fabs(v.roll)) * 57.2958f;
+                    maxTilt = std::max(maxTilt, tilt);
+                    if (rightedAt < 0.0f && tilt < 30.0f) rightedAt = (float)(i + 1) / 60.0f;
+                }
+                const auto& v = s.c.vehicleState();
+                const float moved = std::sqrt((s.c.position().x - p0.x) * (s.c.position().x - p0.x) + (s.c.position().z - p0.z) * (s.c.position().z - p0.z));
+                const bool ok = !bot || (rightedAt >= 0.0f && std::fabs(v.pitch) * 57.2958f < 30.0f);
+                LOG_INFO("VEHTEST tipover %s: tipped 63 deg nose down; under 30 deg after %s s, after 3 s pitch %.1f roll %.1f deg, moved %.1f m - %s",
+                         bot ? "bot" : "player", rightedAt >= 0.0f ? std::to_string(rightedAt).substr(0, 4).c_str() : "never",
+                         v.pitch * 57.2958f, v.roll * 57.2958f, moved, bot ? (ok ? "PASS" : "FAIL") : "info (player path: no AI righting)");
+            }
             // Jet: hover holds altitude (gravity cancelled), ascend servo 10 m/s, flight 40 m/s along the view, release -> hover.
             {
                 Sim s(&w, 6.0f); s.c.setChassis(&jet);

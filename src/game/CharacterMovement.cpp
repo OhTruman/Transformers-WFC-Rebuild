@@ -308,6 +308,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     BodyAxes B = bodyAxes(c.yaw(), vs.pitch, vs.roll);
     const float stabRad = cfg::kHoverStabilityDeg * 0.0174533f;
     bool unstable = std::fabs(vs.pitch) > stabRad || std::fabs(vs.roll) > stabRad;
+    vs.unstableT = unstable ? vs.unstableT + dt : 0.0f;
+    const int tipMode = in.aiTip;   // bot AI path while tipped (MoveIntent.aiTip; see the righting / translation below)
 
     // Special move (VehicleSpecialMove = Dash input): CanUseSpecialMove = no cooldown running.
     if (in.wantDash && !tank) {   // tank special move = 180 quick turn (native not recovered: PARTIAL, not implemented)
@@ -425,6 +427,14 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
 
         // ---- UpdateTerminalVelocity ----
         if (v.y < -cfg::kHoverTerminalVel) v.y = -cfg::kHoverTerminalVel;
+        // Bot AI path gate [PROV, WFC_TIPREL=1]: "tipped" relative to the ground the springs touch (body up vs the averaged contact
+        // normal past the stability threshold), or with no contact at all - a hover vehicle climbing a ramp steeper than 30 deg with its
+        // springs on the ramp is not tipped (the original AI's absolute IsUnstable would pull it level against the slope).
+        bool aiTipped = tipMode >= 0 && unstable;
+        if (tipMode >= 0 && in.aiTipRel && contacts > 0) {   // relative to the contact normal (the measured 2026-10-14 gate)
+            const core::Vec3 cn = core::normalize(vs.contactN);
+            aiTipped = core::dot(B.z, cn) < std::cos(stabRad);
+        }
 
         // ---- UpdateDash / UpdateStrafe (body-local; ApplyLocalLinearAcceleration) ----
         core::Vec3 lv{core::dot(v, B.x), core::dot(v, B.y), core::dot(v, B.z)};
@@ -465,6 +475,31 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                            core::clampf(in.moveRight, -1.0f, 1.0f) * hs, 0.0f};
             la = clampLength(core::Vec3{des.x - lv.x, des.y - lv.y, 0.0f} * (1.0f / dt), maxA);   // AxisMask (1,1,0)
         }
+        // Bots tipped past 30 deg (IsUnstable / !IsStable): the original AI path's translation, HoverPhysics.MoveToTargetLocation
+        // [CONF script], replaces the stand-in strafe: world-horizontal (AxisMask (1,1,0)) velocity toward the target at AiMaxLinearSpeed,
+        // ClampLength((desired - v) / dt, AiMaxLinearAcceleration); no StabilityScale. The target is the bot's move direction (its stick
+        // in the facing frame; a far target gives the full AiMaxLinearSpeed, no stick = hold still). Only while tipped: normal bot
+        // driving keeps the stand-in strafe (the full AI translation is not ported; GAMEPLAY_BOTS.md).
+        if (aiTipped && tipMode == 2 && vs.unstableT > 1.0f && in.hasAiTarget) {
+            // MoveToTargetLocation: to = (target - location) x (1,1,0); desired v = ClampLength(to / dt, min(sqrt(maxA x |to|), maxS));
+            // a = ClampLength((desired - v) / dt, maxA). The target is the bot's next waypoint (on the nav mesh), so the drag cannot pull
+            // the car off the mesh; only after 1 s tipped (brief tips keep the stand-in strafe).
+            la = core::Vec3{0, 0, 0};
+            core::Vec3 to{in.aiTarget.x - p.x, 0.0f, in.aiTarget.z - p.z};
+            const float dist = core::length(to);
+            const core::Vec3 desV = clampLength(to * (1.0f / dt), std::min(std::sqrt(VP.aiMaxLinAccel * dist), VP.aiMaxLinSpeed));
+            accel = accel + clampLength(core::Vec3{(desV.x - v.x) / dt, 0.0f, (desV.z - v.z) / dt}, VP.aiMaxLinAccel);
+        } else if (aiTipped && tipMode == 1) {
+            la = core::Vec3{0, 0, 0};
+            const core::Vec3 Fy = core::forwardFromYawPitch(in.faceYaw, 0.0f);
+            const core::Vec3 Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
+            core::Vec3 dir = Fy * core::clampf(in.moveForward, -1.0f, 1.0f) + Ry * core::clampf(in.moveRight, -1.0f, 1.0f);
+            const float dl = core::length(dir);
+            if (dl > 1.0f) dir = dir * (1.0f / dl);
+            const core::Vec3 desV = dir * VP.aiMaxLinSpeed;
+            core::Vec3 a{(desV.x - v.x) / dt, 0.0f, (desV.z - v.z) / dt};
+            accel = accel + clampLength(a, VP.aiMaxLinAccel);
+        }
         if (!tank) accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
 
         // ---- UpdateRoll: ApplyLocalAngularAcceleration(RightLeftInput - LocalAngularVelocity.Z, 0, 0) ----
@@ -494,6 +529,27 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                 vs.angVel.x = k30 * vs.roll / dt;
                 vs.angVel.y = k30 * vs.pitch / dt;
             }
+        }
+        // Bots: TnCarForm / TnTankForm.Hovering.DoUpdateAi -> UpdateFromLocationAndRotation [CONF script]: an AI-driven hover vehicle
+        // does not run the player's UpdateTurn. HoverPhysics.RotateToTargetOrientation turns it toward the AI's DesiredRotation
+        // (TnVehicleCarAiControlStrategy: the focus direction, Pitch = 0, roll 0) with AxisMask = IsUnstable (car / truck) /
+        // !IsStable (tank) ? (1,1,1) : (0,0,1). So once pitch or roll passes 30 deg, pitch / roll are driven back to level.
+        // Desired w = ClampLength(delta / dt, min(sqrt(AiMaxAngularAcceleration x |delta|), AiMaxAngularSpeed)); w += ClampLength((desired
+        // - w) / dt, AiMaxAngularAcceleration) x dt. The AI path's MoveToTargetLocation translation is not ported: bots keep driving
+        // through the player strafe (a stand-in), whose StabilityScale already weakens the push while tipped. Yaw stays the
+        // rebuild's heading control.
+        if (aiTipped) {
+            const float dx = vs.roll, dy = vs.pitch;              // local delta to level, in the angVel sign convention
+            const float dist = std::sqrt(dx * dx + dy * dy);
+            const float wMax = std::min(std::sqrt(VP.aiMaxAngAccel * dist), VP.aiMaxAngSpeed);
+            float wx = dx / dt, wy = dy / dt;
+            const float wl = std::sqrt(wx * wx + wy * wy);
+            if (wl > wMax && wl > 0.0f) { wx *= wMax / wl; wy *= wMax / wl; }
+            float ax = (wx - vs.angVel.x) / dt, ay = (wy - vs.angVel.y) / dt;
+            const float al = std::sqrt(ax * ax + ay * ay);
+            if (al > VP.aiMaxAngAccel && al > 0.0f) { ax *= VP.aiMaxAngAccel / al; ay *= VP.aiMaxAngAccel / al; }
+            vs.angVel.x += ax * dt;
+            vs.angVel.y += ay * dt;
         }
         comAbove = rest;
         float gy; core::Vec3 gn;

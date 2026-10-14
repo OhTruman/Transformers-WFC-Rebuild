@@ -266,6 +266,10 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     V.recoilVelocity = hov["RecoilVelocity"].asFloat(0.0f) * 0.01f;
     V.hoverRollTime = hov["RollDuration"].asFloat(0.6f);
     V.hoverRollSpeed = hov["RollLinearSpeed"].asFloat(3000) * 0.01f;
+    V.aiMaxAngSpeed = hov["AiMaxAngularSpeed"].asFloat(12.0f);
+    V.aiMaxAngAccel = hov["AiMaxAngularAcceleration"].asFloat(12.0f);
+    V.aiMaxLinSpeed = hov["AiMaxLinearSpeed"].asFloat(1500) * 0.01f;
+    V.aiMaxLinAccel = hov["AiMaxLinearAcceleration"].asFloat(3000) * 0.01f;
     if (vp.has("FlyingVehicleBlueprint")) {
         const assets::Json& fl = vp["FlyingVehicleBlueprint"]["values"];
         V.flySpeed = fl["MaxSpeed"].asFloat(4000) * 0.01f;

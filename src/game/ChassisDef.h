@@ -67,6 +67,11 @@ struct VehicleParams {
     float damageMultiplier = 1.0f;                                 // VEHDEF DamageMultiplier
     // VEHDEF AI boost rule (BoostStart / StopDistance UU -> m, BoostStart / StopAngle = cosines) [CONF authored].
     float aiBoostStartM = 50.0f, aiBoostStopM = 30.0f, aiBoostStartCos = 0.98f, aiBoostStopCos = 0.707f;
+    // Hover blueprint AiMaxAngularSpeed / AiMaxAngularAcceleration (rad/s, rad/s^2) [CONF authored]: HoverPhysics.RotateToTargetOrientation
+    // limits on the AI path (car 12 / 12, truck 20 / 20, tank 6 / 6).
+    float aiMaxAngSpeed = 12.0f, aiMaxAngAccel = 12.0f;
+    // AiMaxLinearSpeed / AiMaxLinearAcceleration (UU -> m) [CONF authored]: HoverPhysics.MoveToTargetLocation limits on the AI path.
+    float aiMaxLinSpeed = 15.0f, aiMaxLinAccel = 30.0f;
     float selfDamageMultiplier = 0.45f;                            // VEHDEF SelfDamageMultiplier
     // Rigid-body hull around the mesh root (m). Truck: VH_Optimus_PHYSSYS convex box [CONF AssetTools PHYSICS_STREETS];
     // every MP chassis: its VH_*_PHYSSYS convex hull (VehicleHullTable.inc) [CONF authored]; mesh bounds only as a fallback.

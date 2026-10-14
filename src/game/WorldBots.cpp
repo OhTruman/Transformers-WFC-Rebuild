@@ -2437,6 +2437,14 @@ void World::tickBots(float dt) {
         botAimAndFire(*o, b, dt);
         if (anySmart_ && botIsSmart(b.player)) smartAimPost(*o, b, smart_[(size_t)b.player], smartYaw0, smartPitch0, dt);
         if (tickProfOn()) tickProfAdd(21, profMsBots() - ta0);
+        {   // Tipped hover vehicles: the original AI path (GAMEPLAY_BOTS.md, 2026-10-14). Smart default: righting with the contact-relative
+            // gate [PROV]; Classic stays on the player path. WFC_BOTTIP=<-1|0|1|2> (+ WFC_TIPREL=0/1) overrides for every bot (measurement).
+            static const char* bt = std::getenv("WFC_BOTTIP");
+            static const char* tr = std::getenv("WFC_TIPREL");
+            if (bt) { in.aiTip = std::atoi(bt); in.aiTipRel = tr && std::atoi(tr) != 0; }
+            else if (botIsSmart(b.player)) { in.aiTip = 0; in.aiTipRel = !tr || std::atoi(tr) != 0; }
+            if (b.wp < b.path.size()) { in.hasAiTarget = true; in.aiTarget = b.path[b.wp].pos; }   // the AI path's target (on the mesh)
+        }
         o->setIntent(in);
         static const char* botlog = std::getenv("WFC_BOTLOG");   // diagnostics: each bot (or =<player>) once a second
         if (botlog && (botlog[0] < '0' || botlog[0] > '9' || std::atoi(botlog) == b.player) && ((int)(b.life * 60.0f + 0.5f)) % 60 == 0) {

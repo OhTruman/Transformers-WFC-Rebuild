@@ -23,6 +23,12 @@ struct MoveIntent {
     bool ascend = false, descend = false;   // jet Hover Up / Down (held)
     bool hoverRequest = false; // TnPlayerController.Hover -> TnAcrobaticsManager.Hover (JumpingToHover)
     int dodgeDir = 0;          // TnAcrobaticsManager dodge request: 1 left, 2 right, 3 forward, 4 back (0 = none)
+    // Tipped hover vehicle, bot AI path (vehicleStep): -1 off (the player path), 0 righting, 1 + translation toward the move direction,
+    // 2 + translation toward aiTarget after 1 s tipped. aiTipRel: "tipped" relative to the spring contact normal [PROV].
+    int aiTip = -1;
+    bool aiTipRel = false;
+    bool hasAiTarget = false;  // bot: aiTarget = its next path waypoint (on the nav mesh) - the AI path's MoveToTargetLocation target
+    core::Vec3 aiTarget{0, 0, 0};
 };
 
 namespace CharacterMovement {

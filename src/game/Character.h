@@ -520,6 +520,7 @@ public:
         core::Vec3 angVel{0, 0, 0};
         float spLen[4] = {-1.0f, -1.0f, -1.0f, -1.0f}; // TnSpring._Length per ray (m); Reset() sets -1
         int contacts = 0;             // suspension rays touching (TnHoverCarSimulation._NumContacts)
+        float unstableT = 0.0f;       // hover: time pitch or roll has been past the stability threshold (bot AI path)
         core::Vec3 contactN{0, 1, 0}; // averaged contact normal
         bool onTheGround = false;     // hover: ContactNormal.Z > CosGroundAngle; driving: wheels down
         float jumpWait = 0.0f;        // TnCarForm._TimeBeforeNextJump

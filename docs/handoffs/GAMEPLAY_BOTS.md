@@ -116,3 +116,110 @@ Bots think every 0.25 s, staggered. Each decision covers:
 - `WFC_BOTNAVTEST` (7/7 on 9 maps; `WFC_MAP=<map>`): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
 - `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
 - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.
+
+## Tipped bot vehicles (2026-10-14): Smart self-rights by default; Gorge movement cost is the next round's target
+
+**User report (package 4):** "a car tipped over and it was still moving forward even though the car was tipped forward".
+
+**Status:** fixed for **Smart** by default (Integration decision 2026-10-14, overriding the strict pooled gate).
+- Smart bots get the AI-path righting with the contact-relative gate (mode 0 + REL below). Classic stays on the player path, byte-identical to 30b2fa74.
+- The cost is a measured Smart movement regression on Gorge, which is the explicit target of the next Smart pathing round (after the playtest, with the follow reversals).
+- Package-5 notes: "Smart bot vehicles self-right (original AI behaviour); Gorge movement slightly worse, next round".
+
+### What the original does
+
+From the decompiled scripts:
+- There is no forced transform, auto-reset or roll clamp.
+- **Bots** in hover form run the AI path, not the player simulation: TnCarForm / TnTankForm.Hovering.DoUpdateAi calls UpdateFromLocationAndRotation, which uses:
+  - HoverPhysics.MoveToTargetLocation: world-horizontal, at AiMaxLinearSpeed / AiMaxLinearAcceleration;
+  - HoverPhysics.RotateToTargetOrientation: toward DesiredRotation (the focus direction, Pitch 0, roll 0). Pitch and roll are only included while IsUnstable (car / truck: absolute pitch or roll over 30 deg) or !IsStable (tank).
+- So a tipped AI hover vehicle is turned back to level at AiMaxAngularSpeed / Acceleration (authored, rad/s and rad/s^2: car 12 / 12, truck 20 / 20, tank 6 / 6).
+- **Players:** UpdateTurn rights the body only with no spring contact or upside down (up.Z < 0.01).
+- **Driving:** DoUpdateAi is a no-op in the Driving state.
+
+### What the rebuild did (Classic still does)
+
+- Bots run the player hover path.
+- Pitch and roll are clamped to +-1.2 rad, so "upside down" is unreachable. A tipped body that keeps a spring contact is not righted, and its body-frame strafe keeps pushing.
+- The real case (WFC_TIPTEST, from a Gorge match): Car2 with its nose against a 4.7 m step, held nose-down by the rear springs. It stays at -60..-67 deg on the player path, whichever way it steers.
+
+### The fix
+
+Per bot, MoveIntent.aiTip. **Smart default: mode 0 with the contact-relative gate.** Classic: -1 (the player path). `WFC_BOTTIP=<-1|0|1|2>` (+ `WFC_TIPREL=0/1`) overrides it for every bot, for measurement:
+
+| Mode | Behaviour |
+|---|---|
+| 0 | RotateToTargetOrientation on pitch / roll while unstable |
+| 1 | Mode 0, plus MoveToTargetLocation toward the move direction while unstable |
+| 2 | Mode 0, plus MoveToTargetLocation toward the bot's next nav-mesh waypoint once unstable for over 1 s |
+
+The contact-relative gate (REL) is [PROV], a deviation from the original's absolute IsUnstable. Tipped = body up vs the averaged spring contact normal past 30 deg; with no contact, the absolute rule applies. A hover vehicle climbing a ramp steeper than 30 deg with its springs on the ramp is not "tipped", so it is not pulled level against the slope. The absolute gate regressed Smart on Debris and Gorge (9 columns).
+
+**What is not ported:** AI translation while stable, and AI yaw.
+
+### Measurements
+
+**WFC_TIPTEST** (real Gorge tip):
+
+| Path | Back (the bots' stuck reversal) | Left | Right | Forward into the wall |
+|---|---|---|---|---|
+| Player (the default) | tipped 6 s | tipped 6 s | tipped 6 s | tipped 6 s |
+| Modes 0 / 2, either gate | level at 0.35 s | level at 0.45 s | level at 0.82 s | unrecoverable on any path |
+| Mode 1 | | | 4.72 s | |
+
+**Tipped time** (Smart, hover episodes over 1 s, seeds 1-3, summed; "old" is the default):
+
+| Map | Old | Mode 1 | Mode 0 | Mode 2 | Mode 0 + REL | Mode 2 + REL |
+|---|---|---|---|---|---|---|
+| Streets | 69.8 s | 43.1 | 30.7 | 32.2 | 23.0 | 23.0 |
+| Molten | 41.9 s | 10.6 | 23.0 | 18.5 | 12.7 | 13.0 |
+| Debris | 20.3 s | 14.3 | 12.9 | 12.9 | 9.5 | 9.5 |
+| Gorge | 98.2 s | 36.5 | 65.9 | 65.3 | 31.3 | 64.1 |
+| **Total** | **230 s** | **105** | **132** | **129** | **76.5** | **109.6** |
+
+**Pooled 12-seed NAVQ gate:** off s1-12 vs mode s1-12, both AIs. Noise reference per column = |off s7-12 - off s1-6|; a column regresses when its delta exceeds that.
+
+| Variant | Smart regressing columns | Classic regressing columns |
+|---|---|---|
+| Mode 0 | 9 | 4 |
+| Mode 2 | 9 | 4 |
+| Mode 0 + REL | 3 | 11 |
+| Mode 2 + REL | 6 | 11 |
+
+- Smart's Gorge regression appears in every variant. For example, mode 2 + REL: stucks 1.26 -> 1.59 / bot-min, off-mesh 4.50 -> 5.64 %, reversals 4.24 -> 5.10.
+- Caveat: the noise reference is one 6-vs-6 difference per column, and some are near zero, so individual calls are weak. The Gorge pattern is consistent across variants.
+
+**Shipped Smart default, pooled 12 seeds** (mode 0 + REL; off -> on, with the noise |off s7-12 - off s1-6| in brackets; **bold** = beyond noise):
+
+| Map | slow % | reversals / travel-min | off-mesh % | idle5 / bot-min | stucks / bot-min |
+|---|---|---|---|---|---|
+| Streets | 5.14 -> 5.82 (1.48) | 4.80 -> 4.70 (1.07) | **3.85 -> 4.91 (0.25)** | 0.16 -> 0.16 (0.03) | 1.41 -> 1.56 (0.30) |
+| Molten | 1.92 -> 1.60 (0.17) | 3.32 -> 3.22 (0.23) | 1.90 -> 1.75 (0.26) | 0.24 -> 0.21 (0.05) | 0.68 -> 0.53 (0.01) |
+| Debris | 4.04 -> 3.68 (1.38) | 2.94 -> 2.90 (0.08) | 2.08 -> 1.98 (0.33) | **0.10 -> 0.12 (0.00)** | 0.98 -> 1.02 (0.20) |
+| Gorge | 4.10 -> 5.11 (1.03) | 4.24 -> 4.84 (0.71) | 4.50 -> 5.20 (1.00) | 0.14 -> 0.18 (0.06) | **1.26 -> 1.44 (0.06)** |
+
+- **Gorge** is worse on every column; only stucks clears its (small) noise reference. This is the next round's target.
+- Streets off-mesh is also beyond noise. Molten improves.
+
+**Shipped default** (integration 56290b7d + this patch, run on 30b2fa74's identical sources):
+- Classic NAVQ: 24/24 byte-exact vs the 30b2fa74 baseline.
+- Smart NAVQ: reproduces the measured mode 0 + REL runs exactly (8/8 checked). The pooled table above (mode 0 + REL: Smart 3 regressing columns) is the shipped behaviour.
+- BOTTEST: Classic 39/39; Smart 39/39 on two seeds (grenades 7 and 4).
+- DETERMINISM: 2/2 for both AIs.
+- 31v32 AI cost: 0.23 ms.
+- TIPTEST: 3/3.
+
+When the righting is forced onto Classic (WFC_BOTTIP), the SIMHASH divergence starts one step after the first unstable bot hover step (Gorge s2 713 -> 714, Molten s3 770 -> 771, Streets s1 1127 -> 1128).
+
+### Next round (open)
+
+- Find why righting degrades Gorge movement. Candidates: righting while the stuck / dither logic reverses the bot; or bots taking routes that only the player path could climb.
+- Consider porting the full AI translation as one unit.
+
+### Diagnostics
+
+| Variable | Use |
+|---|---|
+| WFC_TIPLOG | Tip episodes and the first unstable bot hover step |
+| WFC_TIPTEST | The real Gorge tip case (with WFC_MAP=MP_UND_Gorge) |
+| WFC_BOTTIP / WFC_TIPREL | Override the per-bot mode / gate (measurement) |
