@@ -568,5 +568,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   build / robust context / runtime; R1 PASS for the first time with the full chain on a direct boot ('sun swap ON
   (V_bake pages 26, arrays 4)'), i.e. the RT-every-frame fix works in the package. Previous package kept as
   playtest_slim_a44aa6db; b6b6e38 / a17309b7 packages deleted (tagged, rebuildable).
+  20:05 VISIBLE RT REFLECTIONS MERGED aaded95e (rt2 61b301aa): Realistic-only Fresnel-weighted RT specular layer on glossy
+  surfaces (SpecularPower-gated) + roughness gate (Molten veins fixed); WFC_RT_REFLSTRENGTH / WFC_RT_NOREFL; Faithful
+  identity vs the a93 baseline 5/5 + SIMHASH. SIM DIVERGENCE RESOLVED as a ONE-OFF: the same exe reproduces f3db... (=
+  Off = the other Faithful runs); the odd run had heavy CPU contention and a different impact-FX history -> lockstep is
+  not fully deterministic under CPU load (async-step join / FX relevance timing suspected): Gameplay owns the repro +
+  fix + a run-twice-under-load self-test; until then lockstep A/Bs run on a quiet CPU. RT code cleared.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
