@@ -829,5 +829,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   revisits (Molten 0.932, Rust 0.980, Streets 1.057). Isolation next (Realistic + GI=0; Faithful). Package 4 ships with
   it as a KNOWN ISSUE (RT off by default; ~0.3 GB VRAM per map change in Realistic until restart); Rendering fixes it
   before item 1 lands, target package 5.
+  10:28 LOCKSTEP DIVERGENCE CLOSED AS MONITORED: the RT-on Faithful 31 v 32 jitter pair on 30b2fa74 (Rust, frontend boot,
+  player bot, lockstep exact, seed 7 / flow 1, WFC_ASYNCJITTER=1) = SIMHASH 3002 / 3002 identical, 25 / 25 shots
+  byte-identical (3843 detail lines kept). With the RT-off proofs, the one-off split is not reproducible; the most
+  plausible cause (stray window input) is fixed by the lockstep input drop. Standing rule: lockstep runs keep the
+  700-760 detail hashes so any recurrence names the pawn and field. Leak isolation rows (Realistic GI=0; Faithful)
+  running, ~40 min.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
