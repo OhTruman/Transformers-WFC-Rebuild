@@ -50,3 +50,7 @@ Rule for every item: fix on the lane branch, prove with the matching harness + a
 ## Decisions (Integration, from the feedback)
 - Smart AI milestone M2: the user's verdict is "Smart should be the default; Classic not needed" -> Smart default, Classic row removed from the UI (code path kept for identity tests). The remaining Smart work is pathing / navigation quality.
 - Package order: P0 1-4 fixed and proven first, then 5-8 and the RT items, then a repackage + verify.
+
+## Addendum 2026-10-14 (package 4)
+
+- **Characters draw in front of smoke / effects even when inside them** (user, 13:00): translucent FX not depth-tested against characters (draw order / depth). Owner: Systems (effects fidelity), Rendering consulted on the pass order. Fix = a baseline change in all modes (new captures, not an identity gate).
