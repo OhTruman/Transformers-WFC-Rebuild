@@ -6,7 +6,7 @@
 # <OutDir>\RT-PERF-BASELINE.md (+ .csv) - Rendering diffs a later build's table against it after each plan item.
 # The arms differ in what they render, so lockstep-ab's workload-parity / same-match validity is not a gate here (reported only).
 #
-#   .\tools\fidelity\rt-perf-baseline.ps1 -Root work\ab\m9c_30b2fa7 -OutDir <dir> [-Maps 504,507,508,509,510] [-Steps 6000] [-From 2400]
+#   .\tools\fidelity\rt-perf-baseline.ps1 -Root work\ab\m9c_30b2fa7 -OutDir <dir> [-Maps 504,507,508,509,510] [-Steps 6000 (the last step)] [-From 2400]
 #       [-Width 2560] [-Height 1440] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("504", "507", "508", "509", "510"),
       [int]$Steps = 6000, [int]$From = 2400, [int]$Width = 2560, [int]$Height = 1440, [switch]$ReportOnly)
@@ -48,10 +48,15 @@ foreach ($m in $Maps) {
 }
 $rows | Export-Csv -NoTypeInformation -Encoding ASCII (Join-Path $OutDir "rt-perf-baseline.csv")
 $md = New-Object System.Collections.Generic.List[string]
-$md.Add("# RT perf baseline - $(Split-Path $Root -Leaf), ${Width}x${Height} windowed, 31 v 32 bots + player bot, lockstep steps $From-$($From + $Steps)")
+$md.Add("# RT perf baseline - $(Split-Path $Root -Leaf), ${Width}x${Height} windowed, 31 v 32 bots + player bot, lockstep steps $From-$Steps")
 $md.Add(""); $md.Add("GPU ms per RT pass = the product's RT summary averages over the run; frame p50 / p90 over the measured steps (ms).")
 $md.Add(""); $md.Add("| map | mode | frame p50 | frame p90 | shadow+AO | denoiser | reflections | GI tracer (per traced frame) | RT VRAM MB | frames |")
 $md.Add("|---|---|---|---|---|---|---|---|---|---|")
-foreach ($r in $rows) { $md.Add("| {0} | {1}{2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} |" -f $r.map, $r.mode, $(if ($r.mode -ne "off" -and $r.rt_mode -ne $null -and (@{ faithful = 1; realistic = 2 })[$r.mode] -ne $r.rt_mode) { " (mode $($r.rt_mode)!)" } else { "" }), $r.p50, $r.p90, $r.shadow_ao, $r.denoise, $r.refl, $r.gi, $r.rt_vram_mb, $r.frames) }
+foreach ($r in $rows) {
+    $want = @{ off = 0; faithful = 1; realistic = 2 }[[string]$r.mode]
+    $flag = if ($r.mode -ne "off" -and $null -ne $r.rt_mode -and [int]$r.rt_mode -ne $want) { " (logged mode $($r.rt_mode)!)" } else { "" }
+    $cells = @([string]$r.map, ([string]$r.mode + $flag), [string]$r.p50, [string]$r.p90, [string]$r.shadow_ao, [string]$r.denoise, [string]$r.refl, [string]$r.gi, [string]$r.rt_vram_mb, [string]$r.frames)
+    $md.Add("| " + ($cells -join " | ") + " |")
+}
 $md | Set-Content -Encoding UTF8 (Join-Path $OutDir "RT-PERF-BASELINE.md")
 $md
