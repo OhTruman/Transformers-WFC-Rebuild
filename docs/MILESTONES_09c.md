@@ -733,11 +733,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   re-baselined (B and 0 duels running for a fair reference); the player-facing lever is Bot Difficulty, so the
   difficulty ladder (Smart vs Classic at matched difficulty) must stay monotonic with Easy <= ~55 %; if Easy is above
   ~60 % with squads, squadTactics scales by difficulty (Easy = 1) instead.
-  02:00 USER: 140 fps at 1440p is fine; quality first ('squeeze every amount of realistic lighting we can out of the
+  01:15 USER: 140 fps at 1440p is fine; quality first ('squeeze every amount of realistic lighting we can out of the
   game, we'll worry about FPS later'). RT plan v2 gate (c) revised: per-item GPU budgets are reported measurements, not
   merge gates; each item takes its quality-maximising variant; the quality sub-setting is for recovering fps later.
   Hard floors kept: no stalls / hitches, Off + Faithful identity, SETTINGSTEST, Realistic >= ~60 fps at 1440p.
-  02:10 SQUAD TACTICS MERGED 15b89a75 (Gameplay GAMEPLAY_SQUAD_TACTICS.patch; squadTactics preset 2 = on default / 1 =
+  01:30 SQUAD TACTICS MERGED 15b89a75 (Gameplay GAMEPLAY_SQUAD_TACTICS.patch; squadTactics preset 2 = on default / 1 =
   movement-only / 0 = off). Duels Smart vs Classic at matched difficulty: A Hard 70.2 % (104), B 54.8 %, tactics off on
   the same code 65.4 % (today's squads were already at the top of the band; A adds ~5 pts); ladder for A (56 each,
   +-6.6 SE): Easy 51.8 / Medium 60.7 / Hard 70.2 / Expert 57.1 -> Easy <= 55 %, no trim. Classic identity 24 / 24,
