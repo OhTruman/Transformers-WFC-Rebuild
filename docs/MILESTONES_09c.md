@@ -1000,5 +1000,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   shipped as is: Gameplay measures (a) righting-only and (b') = translation only after > 1 s unstable with the target
   clamped to the nav mesh; the best within 1 SE on all maps ships; the TIPTEST right row may ship as a known limit if
   it levels within 5 s.
+  14:39 Tip-over (a) righting-only vs (b') translation toward the next nav waypoint after 1 s tipped: TIPTEST 3 / 3 both
+  (right case 0.82 s); tipped time total old 230 / (b) 105 / (a) 132 / (b') 129 s. Runs diverge from the first tip, so
+  6-seed NAVQ columns are unpaired; pooled 12 seeds (noise = |off s7-12 - off s1-6|): NEITHER passes (Smart 9 regressing
+  columns each, mostly Debris / Gorge, e.g. (a) Gorge reversals 4.24 -> 5.82 at noise 0.71, stucks 1.26 -> 1.73 at
+  0.06; Classic 4 each). Hypothesis: the original's absolute IsUnstable (> 30 deg) also fires on hover vehicles climbing
+  steep ramps and rights them against the slope; our bots take ramps the original AI may not. Testing a contact-
+  relative gate (WFC_TIPREL, PROV: body up vs the averaged spring contact normal, or no contact; the Gorge wall case
+  still counts) pooled on both AIs: ships default-on if it passes (documented deviation), else keys only + known issue.
+  Rendering items 1 / 2 near commit (Off / Faithful identity 5 / 5; probes 1.72 M, 55 % usable, 4.5 s load; per-light
+  shadows fixed from a radius-0 descriptor bug, 4 lights traced; a 5 s first-frame stall fixed); the barrier blend
+  (material resolve) follows their commit.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
