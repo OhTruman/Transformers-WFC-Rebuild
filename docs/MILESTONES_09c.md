@@ -778,7 +778,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   08:40 USER: 'I just dropped the ones that look worse and just continue with D.' E (the generative overhaul) is DROPPED:
   no sharpness attempt, no freeze, outputs archived out of every pack. Textures = the D faithful HD pass to completion
   (user maps, rest of the world, M6 roughness maps). The HD row stays Off / Faithful (D) / Enhanced (D + materials).
-  09:00 D pass status (AssetTools): colour 1,432 / 1,657 (a CPU shard crashed at 01:00 on a 4-px strip texture, fixed
+  08:40 D pass status (AssetTools): colour 1,432 / 1,657 (a CPU shard crashed at 01:00 on a 4-px strip texture, fixed
   with >= 16 px tile padding, restarted 08:55, ETA ~15:30); D GPU rows all done = no DML windows today; batches 0-13
   reviewed + packed (1,660 textures, 9.9 GB), 14-31 after colour; D complete freeze (b0-31) tonight -> package 5 with
   Rendering's items; then M6 roughness maps (490, CPU). Gameplay slot B partial: 2 RT-off lockstep runs step-identical;
