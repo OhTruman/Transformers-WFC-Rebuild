@@ -803,5 +803,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identical across all three modes on all 5 maps (no sim divergence in 15 RT runs). Not for the user: Rust m600 (near-
   black camera spot); the reflection seam / grazing lines exist but are invisible at triptych scale (item 3). NAVQ
   baseline for 30b2fa74 on integration (2d551f4e). Experimental's block running on 30b2fa74 since 09:31.
+  10:05 PACKAGE 4 provisional head 30b2fa74: Systems building work/playtest_slim_30b2fa74 (refresh.sh NOPROMOTE=1; work/
+  playtest_slim stays c949ab88 until 'promote'); HD = D snapshot b0-15 frozen 09:37 (push_full_snap_20261014_b0-15,
+  1,875 rows, 11.0 GB; b0-12 fallback); promote criteria = Experimental regress-8map + captures PASS, Systems verify_slim
+  PASS (slot right after Experimental's block), Experimental FAST PASS. AssetTools incidents: the D build runner had
+  crashed 205 times since 01:00 on one truncated model output (the killed shard's mid-write file) - deleted, gen writes
+  atomic (4f89608), builds moving (batch 16); row 2022 to be regenerated ~15:30; D complete (b0-31) ~21:00-22:00.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
