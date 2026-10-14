@@ -1808,6 +1808,10 @@ public:
             }
             if (wfc_.drawSprites(b.material, sp.data(), sp.size(), camF * -1.0f)) { glLoadMatrixf(view_.m); return; }
         }
+        // Fallback (no compiled emitter material): drawn immediately, depth writes off. The characters are still queued
+        // (drawn at drawMapPresentation): draw them first, or they would cover smoke they stand in or behind (user
+        // playtest 2026-10-14). The sorted material sprites above are drawn after them already.
+        if (wfc_.active()) { wfc_.flushQueuedCharacters(); glLoadMatrixf(view_.m); }
         glDisable(GL_LIGHTING);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);

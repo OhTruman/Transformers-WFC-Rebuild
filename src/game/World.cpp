@@ -3634,13 +3634,14 @@ void World::draw(render::IRenderer& r) const {
         repairSquibDraw_ = false;
     }
 
-    // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
-    { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
-    if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+    // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
+    // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
+    { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+    if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());
 

@@ -212,6 +212,9 @@ public:
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
+    // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
+    // particle fallback draws immediately with depth writes off; characters drawn after it would cover the smoke)
+    void flushQueuedCharacters() { flushDynQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
     struct FrameCounts {
