@@ -1,0 +1,144 @@
+== navq_MP_IAC_Streets_classic_s1
+NAVQ reversals split: pathing 3.28 / follow 0.00 / fidget 0.00 per travel-min (47 / 0 / 0 of 47)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 269.1 s simulated: bot-min alive 32.8, travelling 14.3 (44%), speed 17.38 m/s; slow 4.1%, reversals 3.28 / travel-min, off-mesh 4.59%, idle5 0.03 / bot-min, stucks 1.01 / bot-min, repaths 50.44 / bot-min, failed searches 0.64 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_classic_s2
+NAVQ reversals split: pathing 3.70 / follow 0.00 / fidget 0.00 per travel-min (38 / 0 / 0 of 38)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 210.2 s simulated: bot-min alive 24.8, travelling 10.3 (41%), speed 17.24 m/s; slow 4.7%, reversals 3.70 / travel-min, off-mesh 4.68%, idle5 0.04 / bot-min, stucks 1.05 / bot-min, repaths 53.40 / bot-min, failed searches 0.61 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_classic_s3
+NAVQ reversals split: pathing 1.79 / follow 0.00 / fidget 0.00 per travel-min (28 / 0 / 0 of 28)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 290.0 s simulated: bot-min alive 35.9, travelling 15.7 (44%), speed 17.97 m/s; slow 2.5%, reversals 1.79 / travel-min, off-mesh 2.43%, idle5 0.03 / bot-min, stucks 1.03 / bot-min, repaths 47.43 / bot-min, failed searches 0.59 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_classic_s4
+NAVQ reversals split: pathing 6.99 / follow 0.00 / fidget 0.00 per travel-min (85 / 0 / 0 of 85)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 251.8 s simulated: bot-min alive 30.1, travelling 12.2 (40%), speed 14.97 m/s; slow 12.2%, reversals 6.99 / travel-min, off-mesh 12.01%, idle5 0.00 / bot-min, stucks 2.49 / bot-min, repaths 56.39 / bot-min, failed searches 0.63 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_classic_s5
+NAVQ reversals split: pathing 1.90 / follow 0.00 / fidget 0.00 per travel-min (32 / 0 / 0 of 32)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 294.2 s simulated: bot-min alive 36.0, travelling 16.9 (47%), speed 17.14 m/s; slow 6.9%, reversals 1.90 / travel-min, off-mesh 5.55%, idle5 0.00 / bot-min, stucks 1.47 / bot-min, repaths 49.98 / bot-min, failed searches 0.58 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_classic_s6
+NAVQ reversals split: pathing 2.14 / follow 0.00 / fidget 0.00 per travel-min (24 / 0 / 0 of 24)
+NAVQ SUMMARY map MP_IAC_Streets ai Classic bots 9, 221.7 s simulated: bot-min alive 26.6, travelling 11.2 (42%), speed 14.91 m/s; slow 11.0%, reversals 2.14 / travel-min, off-mesh 5.92%, idle5 0.00 / bot-min, stucks 1.84 / bot-min, repaths 60.26 / bot-min, failed searches 0.49 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_IAC_Streets_smart_s1
+NAVQ reversals split: pathing 2.29 / follow 2.45 / fidget 0.95 per travel-min (41 / 44 / 17 of 102)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 41.3, travelling 17.9 (43%), speed 13.42 m/s; slow 8.0%, reversals 5.69 / travel-min, off-mesh 0.92%, idle5 0.17 / bot-min, stucks 2.10 / bot-min, repaths 50.23 / bot-min, failed searches 0.36 / bot-min, dither escapes 0, squad member-leader settled mean 28.7 m (38% within 15 m), in-fight mean 49.2 m (26% within 20 m)
+== navq_MP_IAC_Streets_smart_s2
+NAVQ reversals split: pathing 3.95 / follow 6.50 / fidget 0.96 per travel-min (62 / 102 / 15 of 179)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 39.9, travelling 15.7 (39%), speed 13.22 m/s; slow 4.5%, reversals 11.41 / travel-min, off-mesh 4.74%, idle5 0.18 / bot-min, stucks 2.03 / bot-min, repaths 57.77 / bot-min, failed searches 0.80 / bot-min, dither escapes 0, squad member-leader settled mean 37.1 m (52% within 15 m), in-fight mean 55.3 m (19% within 20 m)
+== navq_MP_IAC_Streets_smart_s3
+NAVQ reversals split: pathing 3.25 / follow 1.42 / fidget 1.26 per travel-min (62 / 27 / 24 of 113)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 42.0, travelling 19.1 (45%), speed 15.26 m/s; slow 5.6%, reversals 5.93 / travel-min, off-mesh 5.21%, idle5 0.19 / bot-min, stucks 1.71 / bot-min, repaths 44.95 / bot-min, failed searches 0.60 / bot-min, dither escapes 0, squad member-leader settled mean 54.8 m (41% within 15 m), in-fight mean 53.4 m (31% within 20 m)
+== navq_MP_IAC_Streets_smart_s4
+NAVQ reversals split: pathing 1.36 / follow 0.86 / fidget 0.31 per travel-min (22 / 14 / 5 of 41)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 40.6, travelling 16.2 (40%), speed 15.28 m/s; slow 5.5%, reversals 2.53 / travel-min, off-mesh 3.82%, idle5 0.20 / bot-min, stucks 0.86 / bot-min, repaths 54.38 / bot-min, failed searches 0.59 / bot-min, dither escapes 0, squad member-leader settled mean 48.4 m (45% within 15 m), in-fight mean 81.8 m (18% within 20 m)
+== navq_MP_IAC_Streets_smart_s5
+NAVQ reversals split: pathing 1.56 / follow 1.38 / fidget 0.00 per travel-min (25 / 22 / 0 of 47)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 40.2, travelling 16.0 (40%), speed 15.44 m/s; slow 7.9%, reversals 2.94 / travel-min, off-mesh 6.79%, idle5 0.17 / bot-min, stucks 1.59 / bot-min, repaths 46.74 / bot-min, failed searches 2.04 / bot-min, dither escapes 0, squad member-leader settled mean 57.2 m (28% within 15 m), in-fight mean 76.7 m (34% within 20 m)
+== navq_MP_IAC_Streets_smart_s6
+NAVQ reversals split: pathing 2.57 / follow 0.78 / fidget 0.12 per travel-min (43 / 13 / 2 of 58)
+NAVQ SUMMARY map MP_IAC_Streets ai Smart bots 9, 312.0 s simulated: bot-min alive 40.5, travelling 16.7 (41%), speed 15.40 m/s; slow 3.8%, reversals 3.47 / travel-min, off-mesh 2.34%, idle5 0.15 / bot-min, stucks 1.06 / bot-min, repaths 53.19 / bot-min, failed searches 0.52 / bot-min, dither escapes 0, squad member-leader settled mean 47.8 m (33% within 15 m), in-fight mean 106.8 m (15% within 20 m)
+== navq_MP_KON_Molten_classic_s1
+NAVQ reversals split: pathing 0.85 / follow 0.00 / fidget 0.00 per travel-min (14 / 0 / 0 of 14)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 312.0 s simulated: bot-min alive 38.8, travelling 16.5 (43%), speed 15.29 m/s; slow 0.9%, reversals 0.85 / travel-min, off-mesh 1.17%, idle5 0.03 / bot-min, stucks 0.34 / bot-min, repaths 58.32 / bot-min, failed searches 12.34 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_classic_s2
+NAVQ reversals split: pathing 4.48 / follow 0.00 / fidget 0.00 per travel-min (92 / 0 / 0 of 92)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 312.0 s simulated: bot-min alive 39.6, travelling 20.5 (52%), speed 14.11 m/s; slow 3.6%, reversals 4.48 / travel-min, off-mesh 2.78%, idle5 0.03 / bot-min, stucks 2.00 / bot-min, repaths 44.32 / bot-min, failed searches 0.53 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_classic_s3
+NAVQ reversals split: pathing 1.32 / follow 0.00 / fidget 0.00 per travel-min (26 / 0 / 0 of 26)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 312.0 s simulated: bot-min alive 39.3, travelling 19.7 (50%), speed 15.31 m/s; slow 1.2%, reversals 1.32 / travel-min, off-mesh 0.74%, idle5 0.00 / bot-min, stucks 0.69 / bot-min, repaths 44.21 / bot-min, failed searches 0.48 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_classic_s4
+NAVQ reversals split: pathing 1.15 / follow 0.00 / fidget 0.00 per travel-min (14 / 0 / 0 of 14)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 245.8 s simulated: bot-min alive 29.9, travelling 12.2 (41%), speed 15.68 m/s; slow 2.3%, reversals 1.15 / travel-min, off-mesh 1.40%, idle5 0.00 / bot-min, stucks 0.37 / bot-min, repaths 50.02 / bot-min, failed searches 0.54 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_classic_s5
+NAVQ reversals split: pathing 2.02 / follow 0.00 / fidget 0.00 per travel-min (39 / 0 / 0 of 39)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 312.0 s simulated: bot-min alive 38.7, travelling 19.3 (50%), speed 15.58 m/s; slow 0.7%, reversals 2.02 / travel-min, off-mesh 1.47%, idle5 0.00 / bot-min, stucks 0.36 / bot-min, repaths 46.86 / bot-min, failed searches 0.67 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_classic_s6
+NAVQ reversals split: pathing 2.18 / follow 0.00 / fidget 0.00 per travel-min (32 / 0 / 0 of 32)
+NAVQ SUMMARY map MP_KON_Molten ai Classic bots 9, 259.9 s simulated: bot-min alive 31.8, travelling 14.7 (46%), speed 14.32 m/s; slow 1.9%, reversals 2.18 / travel-min, off-mesh 1.19%, idle5 0.00 / bot-min, stucks 1.26 / bot-min, repaths 49.84 / bot-min, failed searches 1.13 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_KON_Molten_smart_s1
+NAVQ reversals split: pathing 1.24 / follow 0.85 / fidget 0.39 per travel-min (19 / 13 / 6 of 38)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 40.1, travelling 15.4 (38%), speed 13.47 m/s; slow 4.6%, reversals 2.47 / travel-min, off-mesh 3.13%, idle5 0.30 / bot-min, stucks 1.15 / bot-min, repaths 47.86 / bot-min, failed searches 2.19 / bot-min, dither escapes 0, squad member-leader settled mean 37.6 m (42% within 15 m), in-fight mean 54.8 m (13% within 20 m)
+== navq_MP_KON_Molten_smart_s2
+NAVQ reversals split: pathing 1.34 / follow 3.12 / fidget 1.04 per travel-min (22 / 51 / 17 of 90)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 41.2, travelling 16.4 (40%), speed 13.78 m/s; slow 0.9%, reversals 5.50 / travel-min, off-mesh 2.16%, idle5 0.24 / bot-min, stucks 0.53 / bot-min, repaths 57.09 / bot-min, failed searches 5.93 / bot-min, dither escapes 0, squad member-leader settled mean 40.0 m (42% within 15 m), in-fight mean 52.7 m (29% within 20 m)
+== navq_MP_KON_Molten_smart_s3
+NAVQ reversals split: pathing 0.72 / follow 1.02 / fidget 0.00 per travel-min (12 / 17 / 0 of 29)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 40.2, travelling 16.7 (42%), speed 15.92 m/s; slow 1.0%, reversals 1.73 / travel-min, off-mesh 0.72%, idle5 0.07 / bot-min, stucks 0.25 / bot-min, repaths 45.42 / bot-min, failed searches 1.57 / bot-min, dither escapes 0, squad member-leader settled mean 49.5 m (32% within 15 m), in-fight mean 80.6 m (24% within 20 m)
+== navq_MP_KON_Molten_smart_s4
+NAVQ reversals split: pathing 0.41 / follow 0.96 / fidget 1.72 per travel-min (6 / 14 / 25 of 45)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 40.2, travelling 14.5 (36%), speed 14.49 m/s; slow 0.6%, reversals 3.10 / travel-min, off-mesh 1.30%, idle5 0.30 / bot-min, stucks 0.45 / bot-min, repaths 53.75 / bot-min, failed searches 2.04 / bot-min, dither escapes 0, squad member-leader settled mean 33.4 m (51% within 15 m), in-fight mean 69.8 m (19% within 20 m)
+== navq_MP_KON_Molten_smart_s5
+NAVQ reversals split: pathing 0.81 / follow 1.94 / fidget 0.56 per travel-min (13 / 31 / 9 of 53)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 40.5, travelling 16.0 (39%), speed 14.31 m/s; slow 2.0%, reversals 3.31 / travel-min, off-mesh 2.33%, idle5 0.17 / bot-min, stucks 0.67 / bot-min, repaths 54.01 / bot-min, failed searches 0.81 / bot-min, dither escapes 0, squad member-leader settled mean 30.8 m (51% within 15 m), in-fight mean 56.9 m (21% within 20 m)
+== navq_MP_KON_Molten_smart_s6
+NAVQ reversals split: pathing 3.12 / follow 1.19 / fidget 0.23 per travel-min (55 / 21 / 4 of 80)
+NAVQ SUMMARY map MP_KON_Molten ai Smart bots 9, 312.0 s simulated: bot-min alive 41.3, travelling 17.6 (43%), speed 13.51 m/s; slow 1.9%, reversals 4.53 / travel-min, off-mesh 2.50%, idle5 0.51 / bot-min, stucks 1.07 / bot-min, repaths 46.84 / bot-min, failed searches 0.65 / bot-min, dither escapes 0, squad member-leader settled mean 34.3 m (49% within 15 m), in-fight mean 62.4 m (15% within 20 m)
+== navq_MP_ORB_Debris_classic_s1
+NAVQ reversals split: pathing 0.87 / follow 0.00 / fidget 0.00 per travel-min (11 / 0 / 0 of 11)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 245.7 s simulated: bot-min alive 29.6, travelling 12.7 (43%), speed 16.64 m/s; slow 2.2%, reversals 0.87 / travel-min, off-mesh 1.95%, idle5 0.00 / bot-min, stucks 0.64 / bot-min, repaths 54.05 / bot-min, failed searches 0.78 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_classic_s2
+NAVQ reversals split: pathing 0.73 / follow 0.00 / fidget 0.00 per travel-min (12 / 0 / 0 of 12)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 262.5 s simulated: bot-min alive 32.2, travelling 16.4 (51%), speed 16.28 m/s; slow 2.8%, reversals 0.73 / travel-min, off-mesh 1.88%, idle5 0.03 / bot-min, stucks 1.09 / bot-min, repaths 47.73 / bot-min, failed searches 0.87 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_classic_s3
+NAVQ reversals split: pathing 1.44 / follow 0.00 / fidget 0.00 per travel-min (25 / 0 / 0 of 25)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 283.4 s simulated: bot-min alive 34.8, travelling 17.3 (50%), speed 16.25 m/s; slow 4.9%, reversals 1.44 / travel-min, off-mesh 2.50%, idle5 0.03 / bot-min, stucks 1.01 / bot-min, repaths 49.59 / bot-min, failed searches 3.68 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_classic_s4
+NAVQ reversals split: pathing 2.33 / follow 0.00 / fidget 0.00 per travel-min (37 / 0 / 0 of 37)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 312.0 s simulated: bot-min alive 39.2, travelling 15.9 (40%), speed 14.88 m/s; slow 5.8%, reversals 2.33 / travel-min, off-mesh 1.77%, idle5 0.13 / bot-min, stucks 1.25 / bot-min, repaths 58.68 / bot-min, failed searches 20.25 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_classic_s5
+NAVQ reversals split: pathing 0.47 / follow 0.00 / fidget 0.00 per travel-min (7 / 0 / 0 of 7)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 266.9 s simulated: bot-min alive 32.1, travelling 14.8 (46%), speed 16.85 m/s; slow 1.5%, reversals 0.47 / travel-min, off-mesh 0.97%, idle5 0.03 / bot-min, stucks 0.97 / bot-min, repaths 53.42 / bot-min, failed searches 1.03 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_classic_s6
+NAVQ reversals split: pathing 1.55 / follow 0.00 / fidget 0.00 per travel-min (28 / 0 / 0 of 28)
+NAVQ SUMMARY map MP_ORB_Debris ai Classic bots 9, 288.3 s simulated: bot-min alive 35.5, travelling 18.1 (51%), speed 15.10 m/s; slow 5.8%, reversals 1.55 / travel-min, off-mesh 3.43%, idle5 0.06 / bot-min, stucks 1.61 / bot-min, repaths 44.99 / bot-min, failed searches 1.49 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_ORB_Debris_smart_s1
+NAVQ reversals split: pathing 1.06 / follow 0.81 / fidget 0.13 per travel-min (17 / 13 / 2 of 32)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 40.2, travelling 16.0 (40%), speed 14.45 m/s; slow 4.9%, reversals 2.00 / travel-min, off-mesh 3.83%, idle5 0.10 / bot-min, stucks 0.92 / bot-min, repaths 52.63 / bot-min, failed searches 1.10 / bot-min, dither escapes 1, squad member-leader settled mean 34.6 m (43% within 15 m), in-fight mean 42.3 m (39% within 20 m)
+== navq_MP_ORB_Debris_smart_s2
+NAVQ reversals split: pathing 0.90 / follow 0.71 / fidget 0.06 per travel-min (14 / 11 / 1 of 26)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 39.9, travelling 15.6 (39%), speed 15.26 m/s; slow 3.7%, reversals 1.67 / travel-min, off-mesh 1.10%, idle5 0.13 / bot-min, stucks 0.85 / bot-min, repaths 51.33 / bot-min, failed searches 0.80 / bot-min, dither escapes 0, squad member-leader settled mean 42.2 m (43% within 15 m), in-fight mean 76.8 m (14% within 20 m)
+== navq_MP_ORB_Debris_smart_s3
+NAVQ reversals split: pathing 0.76 / follow 1.34 / fidget 1.53 per travel-min (12 / 21 / 24 of 57)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 39.9, travelling 15.7 (39%), speed 15.26 m/s; slow 2.4%, reversals 3.63 / travel-min, off-mesh 1.59%, idle5 0.10 / bot-min, stucks 0.63 / bot-min, repaths 53.74 / bot-min, failed searches 4.08 / bot-min, dither escapes 0, squad member-leader settled mean 51.5 m (38% within 15 m), in-fight mean 45.8 m (31% within 20 m)
+== navq_MP_ORB_Debris_smart_s4
+NAVQ reversals split: pathing 1.74 / follow 2.36 / fidget 1.46 per travel-min (31 / 42 / 26 of 99)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 39.9, travelling 17.8 (45%), speed 14.47 m/s; slow 6.8%, reversals 5.55 / travel-min, off-mesh 1.27%, idle5 0.05 / bot-min, stucks 1.30 / bot-min, repaths 42.33 / bot-min, failed searches 0.58 / bot-min, dither escapes 0, squad member-leader settled mean 55.1 m (39% within 15 m), in-fight mean 77.4 m (17% within 20 m)
+== navq_MP_ORB_Debris_smart_s5
+NAVQ reversals split: pathing 2.40 / follow 0.74 / fidget 0.34 per travel-min (42 / 13 / 6 of 61)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 40.8, travelling 17.5 (43%), speed 13.77 m/s; slow 6.2%, reversals 3.49 / travel-min, off-mesh 1.54%, idle5 0.15 / bot-min, stucks 1.98 / bot-min, repaths 49.09 / bot-min, failed searches 0.66 / bot-min, dither escapes 0, squad member-leader settled mean 51.3 m (41% within 15 m), in-fight mean 63.1 m (25% within 20 m)
+== navq_MP_ORB_Debris_smart_s6
+NAVQ reversals split: pathing 0.83 / follow 0.66 / fidget 0.06 per travel-min (15 / 12 / 1 of 28)
+NAVQ SUMMARY map MP_ORB_Debris ai Smart bots 9, 312.0 s simulated: bot-min alive 40.3, travelling 18.2 (45%), speed 14.89 m/s; slow 4.4%, reversals 1.54 / travel-min, off-mesh 2.14%, idle5 0.10 / bot-min, stucks 0.82 / bot-min, repaths 44.02 / bot-min, failed searches 0.79 / bot-min, dither escapes 0, squad member-leader settled mean 63.8 m (23% within 15 m), in-fight mean 52.1 m (26% within 20 m)
+== navq_MP_UND_Gorge_classic_s1
+NAVQ reversals split: pathing 2.97 / follow 0.00 / fidget 0.00 per travel-min (36 / 0 / 0 of 36)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 254.5 s simulated: bot-min alive 30.3, travelling 12.1 (40%), speed 16.86 m/s; slow 4.5%, reversals 2.97 / travel-min, off-mesh 5.25%, idle5 0.03 / bot-min, stucks 1.12 / bot-min, repaths 57.66 / bot-min, failed searches 5.21 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_classic_s2
+NAVQ reversals split: pathing 3.52 / follow 0.00 / fidget 0.00 per travel-min (48 / 0 / 0 of 48)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 271.0 s simulated: bot-min alive 32.9, travelling 13.7 (42%), speed 15.85 m/s; slow 3.6%, reversals 3.52 / travel-min, off-mesh 4.37%, idle5 0.00 / bot-min, stucks 1.49 / bot-min, repaths 53.20 / bot-min, failed searches 0.76 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_classic_s3
+NAVQ reversals split: pathing 4.57 / follow 0.00 / fidget 0.00 per travel-min (56 / 0 / 0 of 56)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 250.7 s simulated: bot-min alive 30.1, travelling 12.3 (41%), speed 14.71 m/s; slow 9.7%, reversals 4.57 / travel-min, off-mesh 11.81%, idle5 0.07 / bot-min, stucks 2.49 / bot-min, repaths 57.44 / bot-min, failed searches 1.16 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_classic_s4
+NAVQ reversals split: pathing 1.27 / follow 0.00 / fidget 0.00 per travel-min (14 / 0 / 0 of 14)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 236.0 s simulated: bot-min alive 28.5, travelling 11.0 (39%), speed 17.54 m/s; slow 1.7%, reversals 1.27 / travel-min, off-mesh 1.87%, idle5 0.00 / bot-min, stucks 0.49 / bot-min, repaths 55.54 / bot-min, failed searches 0.67 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_classic_s5
+NAVQ reversals split: pathing 16.46 / follow 0.00 / fidget 0.00 per travel-min (346 / 0 / 0 of 346)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 312.0 s simulated: bot-min alive 39.9, travelling 21.0 (53%), speed 10.64 m/s; slow 14.3%, reversals 16.46 / travel-min, off-mesh 18.13%, idle5 0.50 / bot-min, stucks 7.52 / bot-min, repaths 54.21 / bot-min, failed searches 2.23 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_classic_s6
+NAVQ reversals split: pathing 1.28 / follow 0.00 / fidget 0.00 per travel-min (11 / 0 / 0 of 11)
+NAVQ SUMMARY map MP_UND_Gorge ai Classic bots 9, 217.6 s simulated: bot-min alive 24.7, travelling 8.6 (35%), speed 17.54 m/s; slow 1.3%, reversals 1.28 / travel-min, off-mesh 0.79%, idle5 0.00 / bot-min, stucks 0.73 / bot-min, repaths 64.18 / bot-min, failed searches 1.38 / bot-min, dither escapes 0, squad member-leader settled mean 0.0 m (0% within 15 m), in-fight mean 0.0 m (0% within 20 m)
+== navq_MP_UND_Gorge_smart_s1
+NAVQ reversals split: pathing 4.21 / follow 0.45 / fidget 0.38 per travel-min (56 / 6 / 5 of 67)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 312.0 s simulated: bot-min alive 39.8, travelling 13.3 (33%), speed 14.58 m/s; slow 5.5%, reversals 5.04 / travel-min, off-mesh 5.49%, idle5 0.18 / bot-min, stucks 0.98 / bot-min, repaths 53.13 / bot-min, failed searches 1.01 / bot-min, dither escapes 0, squad member-leader settled mean 63.2 m (35% within 15 m), in-fight mean 48.5 m (34% within 20 m)
+== navq_MP_UND_Gorge_smart_s2
+NAVQ reversals split: pathing 2.31 / follow 2.24 / fidget 1.38 per travel-min (35 / 34 / 21 of 90)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 312.0 s simulated: bot-min alive 39.8, travelling 15.2 (38%), speed 13.89 m/s; slow 6.4%, reversals 5.93 / travel-min, off-mesh 8.14%, idle5 0.25 / bot-min, stucks 1.78 / bot-min, repaths 54.54 / bot-min, failed searches 0.28 / bot-min, dither escapes 2, squad member-leader settled mean 31.9 m (46% within 15 m), in-fight mean 55.1 m (18% within 20 m)
+== navq_MP_UND_Gorge_smart_s3
+NAVQ reversals split: pathing 2.18 / follow 1.32 / fidget 0.33 per travel-min (33 / 20 / 5 of 58)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 312.0 s simulated: bot-min alive 40.3, travelling 15.1 (38%), speed 13.90 m/s; slow 4.6%, reversals 3.83 / travel-min, off-mesh 6.84%, idle5 0.17 / bot-min, stucks 1.17 / bot-min, repaths 58.21 / bot-min, failed searches 4.17 / bot-min, dither escapes 2, squad member-leader settled mean 29.6 m (53% within 15 m), in-fight mean 40.0 m (47% within 20 m)
+== navq_MP_UND_Gorge_smart_s4
+NAVQ reversals split: pathing 2.04 / follow 0.56 / fidget 0.00 per travel-min (29 / 8 / 0 of 37)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 312.0 s simulated: bot-min alive 40.6, travelling 14.2 (35%), speed 13.97 m/s; slow 4.2%, reversals 2.60 / travel-min, off-mesh 3.70%, idle5 0.22 / bot-min, stucks 0.91 / bot-min, repaths 50.59 / bot-min, failed searches 1.85 / bot-min, dither escapes 0, squad member-leader settled mean 51.8 m (33% within 15 m), in-fight mean 71.6 m (18% within 20 m)
+== navq_MP_UND_Gorge_smart_s5
+NAVQ reversals split: pathing 0.99 / follow 4.11 / fidget 0.85 per travel-min (14 / 58 / 12 of 84)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 312.0 s simulated: bot-min alive 39.4, travelling 14.1 (36%), speed 13.93 m/s; slow 3.8%, reversals 5.95 / travel-min, off-mesh 4.14%, idle5 0.10 / bot-min, stucks 1.65 / bot-min, repaths 57.85 / bot-min, failed searches 2.43 / bot-min, dither escapes 0, squad member-leader settled mean 32.6 m (50% within 15 m), in-fight mean 49.0 m (41% within 20 m)
+== navq_MP_UND_Gorge_smart_s6
+NAVQ reversals split: pathing 0.88 / follow 2.99 / fidget 0.35 per travel-min (10 / 34 / 4 of 48)
+NAVQ SUMMARY map MP_UND_Gorge ai Smart bots 9, 218.3 s simulated: bot-min alive 27.6, travelling 11.4 (41%), speed 15.16 m/s; slow 3.2%, reversals 4.22 / travel-min, off-mesh 1.72%, idle5 0.11 / bot-min, stucks 0.91 / bot-min, repaths 47.60 / bot-min, failed searches 0.36 / bot-min, dither escapes 0, squad member-leader settled mean 39.5 m (40% within 15 m), in-fight mean 53.4 m (31% within 20 m)
