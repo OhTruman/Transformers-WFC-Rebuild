@@ -574,5 +574,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Off = the other Faithful runs); the odd run had heavy CPU contention and a different impact-FX history -> lockstep is
   not fully deterministic under CPU load (async-step join / FX relevance timing suspected): Gameplay owns the repro +
   fix + a run-twice-under-load self-test; until then lockstep A/Bs run on a quiet CPU. RT code cleared.
+  20:15 Experimental review of the reflection layer: PASS (Off gets no shader text; Faithful's uRtGloss = 0 is an exact
+  no-op; world lit / lightmapped programs only, never characters / weapons; gate = authored SpecularPower + SpecularColor;
+  tangent-space NoV valid). Hardening for Rendering: guard GLOSSLO < GLOSSHI; clamp WFC_RT_REFLSTRENGTH to [0, 4];
+  watch grazing-angle edge ghosting from the reprojected target in the next pairs. Gameplay's determinism audit: RNG /
+  wall-clock coupling unlikely; suspect a race between the async step's background part and the main thread under
+  load; repro = 3 lockstep runs under CPU load + an WFC_ASYNCSTEP=0 control (slot B after the pathing set).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
