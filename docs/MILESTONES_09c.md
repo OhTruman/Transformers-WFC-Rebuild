@@ -822,5 +822,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   0 / 3002 differ, 0 / 25 shots); Faithful identity vs 0e7329cf PASS (0 / 0); Realistic view vs R4-off: SIMHASH 0
   differ, 25 / 25 shots differ = lighting only (RT GI 1.93 M texels in 47 pages, 2527 subs, 59 MB). Remaining for
   promote: Systems verify_slim, Experimental FAST.
+  10:27 R4 LEAK FOUND (Experimental r4leak rows on 30b2fa74, Realistic + GI, Molten -> Rust -> Streets x 2, 6 matches, no
+  TDR): GPU dedicated memory +368 / +386 / +78 / +333 MB per map change (+1165 MB over 5), still rising; RT off was flat
+  (a17309b7, 12 changes); private memory plateaus; GL live textures plateau (98-101) -> D3D12 / interop per-map release
+  (BLAS / TLAS / hit data / GI pages / shared textures / denoiser + RT targets). R4 calibration deterministic across
+  revisits (Molten 0.932, Rust 0.980, Streets 1.057). Isolation next (Realistic + GI=0; Faithful). Package 4 ships with
+  it as a KNOWN ISSUE (RT off by default; ~0.3 GB VRAM per map change in Realistic until restart); Rendering fixes it
+  before item 1 lands, target package 5.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
