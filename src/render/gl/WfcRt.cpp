@@ -546,7 +546,7 @@ void Pipeline::rtBuildHit() {
                 for (int c = 0; c < 3; ++c) s3[c] += std::max(0.0f, q[c]);
                 n += 1;
             }
-        for (int c = 0; c < 3; ++c) rgb[c] = n > 0 ? (float)(s3[c] / n) : 0.0f;
+        for (int c = 0; c < 3; ++c) rgb[c] = n > 0 ? (float)(s3[c] / n) : -1.0f;   // (-1: the tile got no fragment - filled below)
     };
     // (materials) the map's compiled reflection shader + material ids; per program its slot table; textures read back
     // from GL from the cap level down (WFC_RT_TEXCAP, default 256)
@@ -650,7 +650,7 @@ void Pipeline::rtBuildHit() {
         return k;
     };
     size_t matSubs = 0;
-    double albSum = 0.0, emiSum = 0.0; size_t albZero = 0;   // (R4 diagnostics: the hit albedo the bounce sees)
+    double albSum = 0.0, emiSum = 0.0; size_t albZero = 0, albN = 0;   // (R4: the hit albedo the bounce sees)
     // the sub table: 8 float4 per sub
     for (size_t i = 0; i < nSub; ++i) {
         const Sub& s = meshes_[(size_t)subRef[i].first].subs[subRef[i].second];
@@ -668,7 +668,9 @@ void Pipeline::rtBuildHit() {
         std::memcpy(r + 4, s.lmCoord, 16);
         average(i, r + 20);
         average(nSub + i, r + 24);
-        { const double a = (r[20] + r[21] + r[22]) / 3.0; albSum += a; emiSum += (r[24] + r[25] + r[26]) / 3.0; if (a < 0.01) ++albZero; }
+        if (r[24] < 0.0f) r[24] = r[25] = r[26] = 0.0f;   // (an empty emissive tile: none)
+        if (r[20] >= 0.0f) { const double a = (r[20] + r[21] + r[22]) / 3.0; albSum += a; ++albN; } else ++albZero;
+        emiSum += (r[24] + r[25] + r[26]) / 3.0;
         r[28] = -1.0f;                                   // (materials) id, texture base, log2(uv per metre), flags
         if (!matId.empty() && s.prog >= 0 && (size_t)s.prog < progs_.size() && progs_[(size_t)s.prog].original) {
             std::string ml = s.matName;
@@ -719,6 +721,13 @@ void Pipeline::rtBuildHit() {
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     glx::textureCacheInvalidate();
+    // subs whose 8 x 8 tile got no fragment (UV islands thinner than a texel: half of Molten's) take the mean of the rest
+    // (they read black before: the bounce rays saw albedo 0.03 on average)
+    {
+        const float fill = albN ? (float)(albSum / (double)albN) : 0.25f;
+        for (size_t i = 0; i < nSub && (i + 1) * 32 <= D.subs.size(); ++i)
+            if (D.subs[i * 32 + 20] < 0.0f) D.subs[i * 32 + 20] = D.subs[i * 32 + 21] = D.subs[i * 32 + 22] = fill;
+    }
     size_t bytes = 0; for (const auto& L : D.lightmaps) bytes += L.rgba.size();
     const bool ok = rtBridgeAddHitData(D);
     size_t texBytes = 0;
@@ -727,8 +736,8 @@ void Pipeline::rtBuildHit() {
              " materials: %zu subs with a translated material (%zu ids), %zu + %zu cube textures copied (cap %d, %.1f MB), %zu slots",
              nSub, D.lightmaps.size(), (double)bytes / 1048576.0, ok ? "ok" : "FAILED", matSubs, matId.size(), D.textures.size(),
              D.cubes.size(), texCap, (double)texBytes / 1048576.0, D.matTex.size() / 12);
-    if (nSub) LOG_INFO("RT hit shading: sub albedo mean %.3f (%zu of %zu subs below 0.01), emissive mean %.3f", albSum / (double)nSub,
-                       albZero, nSub, emiSum / (double)nSub);
+    if (nSub) LOG_INFO("RT hit shading: sub albedo mean %.3f over %zu subs with fragments; %zu of %zu subs had none (given that mean),"
+                       " emissive mean %.3f", albN ? albSum / (double)albN : 0.0, albN, albZero, nSub, emiSum / (double)nSub);
     rtHitKeep_.clear(); rtHitKeep_.shrink_to_fit();
 }
 

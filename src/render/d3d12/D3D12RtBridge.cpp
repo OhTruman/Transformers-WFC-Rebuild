@@ -614,6 +614,19 @@ public:
         if (!giReady() || !tlas_) return false;
         using clk = std::chrono::steady_clock;
         const clk::time_point t0 = clk::now();
+        if (!giStatUp_) { const uint32_t z[16] = {}; giStatUp_ = uploadBuffer(dev_, z, sizeof z); }
+        if (!giStatRb_) giStatRb_ = makeBuffer(dev_, 64, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
+        auto statCopy = [&](ID3D12GraphicsCommandList* cl, bool toRb) {   // (bytes 192 .. 255 of the stats buffer)
+            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = stats_;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            b.Transition.StateAfter = toRb ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST;
+            cl->ResourceBarrier(1, &b);
+            if (toRb) cl->CopyBufferRegion(giStatRb_, 0, stats_, 192, 64); else cl->CopyBufferRegion(stats_, 192, giStatUp_, 0, 64);
+            std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+            cl->ResourceBarrier(1, &b);
+        };
+        if (giStatUp_ && giStatRb_) oneShot([&](ID3D12GraphicsCommandList* cl) { statCopy(cl, false); }, "GI: stats reset");
         for (int pass = 0; pass < passes; ++pass)
             for (UINT first = 0; first < giTexelN_; first += chunk) {
                 RtGiJob j = j0; j.first = first; j.count = std::min(chunk, giTexelN_ - first); j.frame = (unsigned)(pass * 7919u + first);
@@ -622,6 +635,16 @@ public:
             }
         LOG_INFO("RT GI: %d load-time passes over %u texels in %.0f ms", passes, giTexelN_,
                  std::chrono::duration<double, std::milli>(clk::now() - t0).count());
+        if (giStatUp_ && giStatRb_ && oneShot([&](ID3D12GraphicsCommandList* cl) { statCopy(cl, true); }, "GI: stats read")) {
+            void* p = nullptr; D3D12_RANGE r{0, 64}, none{0, 0};
+            if (SUCCEEDED(giStatRb_->Map(0, &r, &p))) {
+                uint32_t s[16]; std::memcpy(s, p, 64); giStatRb_->Unmap(0, &none);
+                const double rays = std::max(1.0, (double)s[0]), st = std::max(1.0, (double)s[1]);
+                LOG_INFO("RT GI bounce rays: %u, %.1f %% hit static geometry (of those: GI page %.1f %%, bake %.1f %%, none %.1f %%);"
+                         " hit albedo mean %.3f, hit radiance mean %.4f (before the gain)", s[0], 100.0 * s[1] / rays, 100.0 * s[2] / st,
+                         100.0 * s[3] / st, 100.0 * s[4] / st, s[5] / 1000.0 / st, s[6] / 10000.0 / st);
+            }
+        }
         return true;
     }
     void releaseHit() {
@@ -645,8 +668,10 @@ public:
         maxSubmitMs_ = 0.0; maxSubmitWhat_ = "";
         if ((tlas_ || !blas_.empty() || rtDynamicHasWork()) && !waitIdle()) {   // (still in flight: dropped, not freed)
             LOG_WARN("RT bridge: the GPU did not go idle at the map change: the RT scene is dropped without release (leaked: "
-                     "%zu BLAS %.1f MB, TLAS %s, reflection hit data %.1f MB)", blas_.size(), (double)totalBlas_ / 1048576.0,
-                     tlas_ ? "yes" : "no", (double)hitBytes_ / 1048576.0);
+                     "%zu BLAS %.1f MB, TLAS %s, reflection hit data %.1f MB, R4 GI pages + buffers %.1f MB)", blas_.size(), (double)totalBlas_ / 1048576.0,
+                     tlas_ ? "yes" : "no", (double)hitBytes_ / 1048576.0, (double)giBytes_ / 1048576.0);
+            // (R4: dropped like the rest - still possibly in flight, so not released; the next giSetup starts clean)
+            gi_.clear(); giSig_.clear(); giTexels_ = giDilate_ = giData_ = nullptr; giTexelN_ = giDilateN_ = giDataN_ = 0; giBytes_ = 0; giPending_ = false;
             tlas_ = nullptr; blas_.clear(); instances_.clear(); totalBlas_ = 0; for (bool& v : rbValid_) v = false;
             for (auto& d : dyn_) d = DynTlas{};
             rtDynamicAbandon();
@@ -1349,6 +1374,7 @@ private:
     UINT giTexelN_ = 0, giDilateN_ = 0, giDataN_ = 0; UINT64 giBytes_ = 0;
     ID3D12PipelineState* psoGi_ = nullptr; ID3D12PipelineState* psoGiDil_ = nullptr;
     RtGiJob giJob_; bool giPending_ = false;
+    ID3D12Resource* giStatUp_ = nullptr; ID3D12Resource* giStatRb_ = nullptr;
     bool giTimed_[2] = {false, false}; double giSum_ = 0, giMax_ = 0; int giN_ = 0;
 };
 
