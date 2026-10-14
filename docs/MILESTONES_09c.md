@@ -1031,5 +1031,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (NODISTORTION / v1 barrier move reverted / WEAPONDIRECT) in slot B, prime suspect the v1 move of the immediate
   barrier draw before fx_.draw into a pass state with blend off. Option B (material-less particles into the sorted
   translucency, 0.5 m soft depth fade, WFC_FALLBACKIMMEDIATE=1 = old path) coded by Rendering, test pending.
+  15:19 CAPTURES df132b5a vs 30b2fa74, Rust (Experimental): SIMHASH 3002 / 3002 identical in both modes; Off 9 / 25 shots
+  differ (521-22,961 px), Faithful the same 9 shots with the same boxes within a few px = the smoke-order baseline
+  change only (a purple weapon plume the jet used to occlude now draws over it at m960; smoke over a Decepticon
+  silhouette at m1080; tracer smoke over character edges at m840 / m1500); static world, HUD and non-overlapping
+  smoke identical; items 1 + 2 did not leak into Faithful. PASS. Barrier bisect NEGATIVE (control / NODISTORTION / v1
+  reverted / WEAPONDIRECT pixel-identical: the dark panel rises and hides the bots, steps 920-980); rt2 12bda047 Debug
+  + the kit renders it see-through -> next split: 12bda047 Release + kit vs 56290b7d Debug (code vs build type; a
+  Release / PGO-only cause = uninitialised blend / program-variant state, priority since the user plays Release +
+  PGO). R4 leak rows then the 501 timed rerun running.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
