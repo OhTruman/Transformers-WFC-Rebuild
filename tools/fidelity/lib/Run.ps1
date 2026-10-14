@@ -75,6 +75,23 @@ function Get-WfcRtState([string]$WfcLog) {
 
 # Run an exe with temporary process environment variables; returns the exit code (-999 = killed
 # after -TimeoutSec).
+# A python process that can load this machine's lanes' work: one of the project's (its exe or command line under
+# F:\Transformers Rebuild, e.g. AssetTools' runners) and not this worktree's own. 2026-10-14: the watchdog flagged the user's
+# unrelated Codex / APEX python (C:\Users\...\codex-runtimes, ~1 % of one CPU) on every regress row; those are not a lane's work.
+function Test-WfcLanePython($proc) {
+    $t = "$($proc.ExecutablePath) $($proc.CommandLine)"
+    return ($t -like '*Transformers Rebuild*') -and ("$($proc.CommandLine)" -notlike '*Rebuild-Experimental*')
+}
+# Whether a CONTAMINATED.txt names a lane's process (another game exe, or a lane python per Test-WfcLanePython); files written
+# before 2026-10-14 also list unrelated pythons, so the report re-reads them line by line.
+function Test-WfcContaminated([string]$Path) {
+    if (-not (Test-Path $Path)) { return $false }
+    foreach ($l in (Get-Content $Path)) {
+        if ($l -match 'wfc_rebuild[^ ]*\.exe' -or $l -match 'Transformers Rebuild') { if ($l -notmatch 'python\.exe' -or $l -notmatch 'Rebuild-Experimental') { return $true } }
+    }
+    return $false
+}
+
 function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log = "run.log", [int]$TimeoutSec = 0) {
     New-Item -ItemType Directory -Force $Dir | Out-Null
     $Env = Add-WfcHarnessEnv $Env   # graphics pins: auto-detect off (+ windowed), HD off unless the caller sets it (frozen root)
@@ -98,7 +115,7 @@ function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log
             if ($TimeoutSec -gt 0 -and ((Get-Date) - $t0).TotalSeconds -gt $TimeoutSec) { $p.Kill(); $p.WaitForExit(); return -999 }
             if ($watch -and -not (Test-Path $mark)) {
                 $other = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe' OR Name = 'python.exe'" -ErrorAction SilentlyContinue | Where-Object {
-                    $_.ProcessId -ne $p.Id -and ($_.Name -ne 'python.exe' -or "$($_.CommandLine)" -notlike '*Rebuild-Experimental*') })
+                    $_.ProcessId -ne $p.Id -and ($_.Name -ne 'python.exe' -or (Test-WfcLanePython $_)) })
                 # (2026-10-11: a python.exe nobody claimed - the line also names its command line and parent, so the owner can be found)
                 if ($other.Count) { ($other | ForEach-Object {
                     $pp = Get-CimInstance Win32_Process -Filter "ProcessId = $($_.ParentProcessId)" -ErrorAction SilentlyContinue
