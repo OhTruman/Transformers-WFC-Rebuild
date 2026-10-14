@@ -882,5 +882,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pool, M pooled spare'; albedo stats carry-word fix rides along. Verification: one 22-min cycle in slot A after
   Systems' REPORT rerun, pass = counter lobby flat over 5 changes; then Experimental's 1440p RT perf baseline
   (rt-perf-baseline.ps1, synced 7ccf1f30).
+  12:28 Package 4 REPORT.md PASS on every row (Systems, 12:05). R4 LEAK FIXED + VERIFIED, merged 00aa2ca7 (rt2 77d9e02c):
+  GI shared-page pool reused by (w, h, format), freed at shutdown; counter lobby minimum 1632 / 2321 / 2354 / 2468 /
+  2393 / 2446 MB = flat after cycle 1 (was 1818 -> 3184); loaded cycle 1 -> 2 Rust 5261 -> 5336, Streets 4816 -> 4829
+  (was +658 / +596); pool holds the largest page set played (Rust 142 pages, ~130 MB); albedo stats carry word + VRAM
+  step log ride along; Off / Faithful unaffected. Goes into package 5. Experimental's 1440p RT perf baseline on
+  30b2fa74 started 12:30 (alone, hold set); then slot A back to Rendering for the item 1 / 2 tests.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
