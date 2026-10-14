@@ -2464,6 +2464,17 @@ void Pipeline::touchNewTextures() {
 }
 
 // ------------------------------------------------------------------------- programs
+// Realistic's reflection layer gate: the SpecularPower range over which a surface goes from no RT reflection to the full
+// Fresnel weight (WFC_RT_GLOSSLO / _HI; GLSL float literals)
+static const char* rtGlossLo() {
+    static const std::string s = [] { const char* e = std::getenv("WFC_RT_GLOSSLO"); return std::to_string(e ? std::atof(e) : 12.0); }();
+    return s.c_str();
+}
+static const char* rtGlossHi() {
+    static const std::string s = [] { const char* e = std::getenv("WFC_RT_GLOSSHI"); return std::to_string(e ? std::atof(e) : 48.0); }();
+    return s.c_str();
+}
+
 int Pipeline::buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                            const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
                            bool lightmapped, const std::vector<std::string>& rtParams) {
@@ -2498,6 +2509,27 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return cube;\n"
               "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + max(bias, 0.0));\n"
               "    return vec4(mix(cube.rgb, r.rgb / max(r.a, 1e-3), clamp(r.a, 0.0, 1.0)), cube.a);\n"
+              "}\n"
+              // Realistic's visible reflection layer (PC EXTENSION, over the authored cube term above, which the original
+              // graphs weight low): glossy lit surfaces (SpecularPower gate, weighted by the specular colour) take the ray-
+              // traced reflection with Schlick Fresnel (F0 0.04), blurred by roughness over the target's mips; the diffuse
+              // lighting gives way by the same weight. uRtGloss = WFC_RT_REFLSTRENGTH (Realistic only; 0 = off).
+              "uniform float uRtGloss;\n"
+              "vec3 wfcRtGlossMix(vec3 c, float sp, vec3 spec, vec3 n, vec3 V) {\n"
+              "    if (uRtReflOn == 0 || uRtGloss <= 0.0) return c;\n"
+              "    float gate = smoothstep(" + std::string(rtGlossLo()) + ", " + std::string(rtGlossHi()) + ", sp) * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n"
+              "    if (gate <= 0.0) return c;\n"
+              "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
+              "    if (p.w <= 0.0) return c;\n"
+              "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
+              "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;\n"
+              "    float rough = clamp(sqrt(2.0 / (max(sp, 0.0) + 2.0)), 0.02, 1.0);\n"
+              "    ivec2 rs = textureSize(uRtRefl, 0);\n"
+              "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))) * 0.5);\n"
+              "    if (r.a <= 1e-3) return c;\n"
+              "    float NoV = clamp(dot(normalize(n), normalize(V)), 0.0, 1.0);\n"
+              "    float k = (0.04 + 0.96 * pow(1.0 - NoV, 5.0)) * gate * uRtGloss * clamp(r.a, 0.0, 1.0);\n"
+              "    return mix(c, r.rgb / r.a, clamp(k, 0.0, 1.0));\n"
               "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
@@ -2603,6 +2635,12 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
+    if (rtRefl && lightmapped && !mainOverride_ && lit) {   // (Realistic's visible reflection layer, after the lit block)
+        const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
+        const size_t at = fs.find(anchor, mainStart);
+        if (at != std::string::npos)
+            fs.insert(at, "    if (uLit != 0) c = wfcRtGlossMix(c, o.SpecularPower, o.SpecularColor, normalize(o.Normal), normalize(m.cameraVector));\n");
+    }
     if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
         const size_t nl1 = fs.find('\n');
         if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\nuniform int uRtUvMode;\n");
@@ -3579,6 +3617,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
             Uniform1i(ULOC(P, "uRtRefl"), 26);
             Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ && rtReflLive() ? 1 : 0);
             Uniform1f(ULOC(P, "uRtReflLod"), lod);
+            static const float gloss = [] { const char* e = std::getenv("WFC_RT_REFLSTRENGTH"); return e ? (float)std::atof(e) : 1.0f; }();
+            Uniform1f(ULOC(P, "uRtGloss"), rtMode_ == 2 ? gloss : 0.0f);   // (Realistic only: Faithful keeps its look)
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
     }
