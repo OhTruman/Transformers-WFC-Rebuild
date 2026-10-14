@@ -677,5 +677,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   00:18 E MILESTONE 1 PROGRESS: 42 / 175 (all Molten, 41 pass + stains_01 at D), 3.2 GPU h, remaining ~8-9 GPU h. DML
   paused 00:17 -> ~01:00: Rendering's bounce check (counters; fix + recheck in-slot if named) + Gameplay's b74 windowed
   lockstep set (-OwnWindow). Then undisturbed until morning.
+  00:45 DETERMINISM VERDICT (Gameplay b74 set): Rendering's exact configuration with RT OFF (frontend boot, Rust, 31 + 32,
+  player bot, lockstep exact, seed 7 / flow 1, SIMHASH detail 700-760): 4 runs x 4202 steps IDENTICAL incl. step 727, 2
+  of them under seeded 0-8 ms WFC_ASYNCJITTER on the background step + main thread (wall 57-59 s vs 28 s). With the
+  direct-boot and async-step results: the RT-off sim is step-deterministic in both boots. The one divergence was an
+  RT-ON Faithful run, so the leak is in an RT-only path feeding the sim (shared RNG / query side effects / RT-written
+  data). Next: Rendering reruns the faith arm 2-3x with WFC_ASYNCJITTER=1 (test-only patch, merging) + detail hashes.
+  SQUAD TACTICS ROUND 3 (r3c) hits both cohesion gates: settled 36.8 % within 15 m, in-fight 25.2 % within 20 m; a
+  reversal rise (stop-and-go at wedge slots) is being fixed with station-keeping before the full gate.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
