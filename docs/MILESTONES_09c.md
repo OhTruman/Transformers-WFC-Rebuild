@@ -888,5 +888,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (was +658 / +596); pool holds the largest page set played (Rust 142 pages, ~130 MB); albedo stats carry word + VRAM
   step log ride along; Off / Faithful unaffected. Goes into package 5. Experimental's 1440p RT perf baseline on
   30b2fa74 started 12:30 (alone, hold set); then slot A back to Rendering for the item 1 / 2 tests.
+  12:33 USER (package 4): characters draw in front of smoke / effects even when inside them -> translucent FX not
+  depth-tested against characters (draw order / depth); Systems owns the diagnosis + fix, Rendering consulted on the
+  pass order; fix = a baseline change in all modes (new captures); target package 5. USER on squads: 'just do whatever
+  looks best' -> the formation version stays the Smart default. Baseline note: AssetTools' long jobs checked the hold
+  only between textures (up to ~50 min on a 4096); fixed to a 20 s re-check between model tiles; map 504 rerun at
+  the end of the baseline.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
