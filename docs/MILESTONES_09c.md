@@ -774,5 +774,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pass is skipped. AssetTools: sharpness analysis D vs E (Laplacian variance; 1:1 crops of the units the user saw),
   then one detail-preserving attempt on Molten (D high-pass over E or denoise 0.35-0.4, gated on E sharpness >= D) with
   a 1:1 sheet; if that does not beat D by eye, E is dropped.
+  08:30 E generation finished 197 / 197 (exit 0); morning GPU sequence started (gicheck3 + Gameplay's input-drop slot B).
+  08:40 USER: 'I just dropped the ones that look worse and just continue with D.' E (the generative overhaul) is DROPPED:
+  no sharpness attempt, no freeze, outputs archived out of every pack. Textures = the D faithful HD pass to completion
+  (user maps, rest of the world, M6 roughness maps). The HD row stays Off / Faithful (D) / Enhanced (D + materials).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
