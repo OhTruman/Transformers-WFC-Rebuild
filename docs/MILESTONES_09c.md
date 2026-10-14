@@ -1048,5 +1048,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   regression), (b') opt-in (WFC_BOTTIP=2); reason: the user's visible bug is fixed at the cost of 3 Smart columns on
   Gorge, which becomes the explicit target of the next Smart pathing round (with the follow reversals). Package-5
   note: Smart bot vehicles self-right (original AI behaviour); Gorge movement slightly worse, next round.
+  15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
+  Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
+  proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
+  non-Leader pawn (Car4), leaving the force field's per-owner material parameters unset. Every 'barrier opaque' result
+  today is UNCONFIRMED as a product bug; the name-fallback finding stands as code. Next: Rendering answers case 3 in
+  its working scene (a bot behind the grid: drawn over it or tinted by it?) and reports how its barrier resolved its
+  material (decides whether the name fallback is needed); Systems prepares a Leader-owner staging (CPU) for a
+  controlled A/B if needed. Cases 1 (smoke on a bot) and 2 (local muzzle flash over a bot) stay verified correct.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
