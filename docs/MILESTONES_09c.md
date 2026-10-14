@@ -914,5 +914,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Off. Rendering diffs each plan-v2 item against it (rt-perf-baseline.ps1). Rust's first pass (under AssetTools' python)
   rerun clean. GPU released: slot A -> Rendering (item 1 / 2 tests), slot B -> Systems (smoke repro + A/B), AssetTools
   resumed.
+  13:08 SMOKE-BEHIND-CHARACTERS FIXED, merged 56290b7d (Systems SYSTEMS_SMOKE_ORDER.patch 657fe1c7): the drawParticles
+  fallback flushes the queued characters first (WfcPipeline::flushQueuedCharacters); barrier / sentry meshes queued
+  before fx_.draw / vehicleFx_.draw (Rendering's RT-pass guard). Staged A/B (Streets, Off, the WFC_SMOKEREPRO
+  diagnostic hook in the A/B trees only): 70 / 70 frames differ only on the character silhouette under the trails;
+  before = the trail in front of the body cut out, after = it veils the legs and arms while the trail behind stays
+  hidden (captures docs/handoff/smoke_ab/, crop sent to the user). A baseline change in all three modes wherever
+  game-side smoke overlaps a character; SIMHASH unaffected. Remaining: hard particle edges, no soft depth fade =
+  option B (Rendering after item 2). Head 56290b7d = package-5 candidate base.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
