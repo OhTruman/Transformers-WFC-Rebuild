@@ -3,7 +3,9 @@
 #   work\ab\<Name>\build-release\bin  Release (every target: wfc_rebuild, wfc_frontend_tests, ...)
 #   work\ab\<Name>\work\render        render data (tools\render\build_render_data.ps1 of that commit)
 #   .\tools\fidelity\m05\build-target.ps1 -Ref origin/integration/milestone-05 -Name m5int [-Jobs 2] [-NoDebug]
-param([Parameter(Mandatory)][string]$Ref, [Parameter(Mandatory)][string]$Name, [int]$Jobs = 2, [switch]$NoDebug)
+# -ThirdParty <dir>: copy the untracked third_party folders (dxc, ffx_denoiser, ffx_sdk, d3d12_agility) from <dir> before the Release
+#  configure (git archive has none of them: without dxc / ffx_denoiser the Release build silently has no RT shaders)
+param([Parameter(Mandatory)][string]$Ref, [Parameter(Mandatory)][string]$Name, [int]$Jobs = 2, [switch]$NoDebug, [string]$ThirdParty = "")
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $sha = (& git -C $root rev-parse --verify "$Ref^{commit}").Trim()
@@ -12,6 +14,12 @@ Write-Host "M05 build target: $Ref = $sha -> work\ab\$Name"
 $abExit = $LASTEXITCODE   # ab.ps1 also runs the fidelity harness: its exit code counts harness failures, not build errors
 if (-not (Test-Path (Join-Path $root "work\ab\$Name\build\bin\wfc_rebuild.exe"))) { throw "ab.ps1 did not produce build\bin\wfc_rebuild.exe (exit $abExit)" }
 $dest = Join-Path $root "work\ab\$Name"
+if ($ThirdParty) {
+    foreach ($d in Get-ChildItem $ThirdParty -Directory) {
+        $to = Join-Path $dest "third_party\$($d.Name)"
+        if (-not (Test-Path $to)) { Write-Host "third_party: $($d.Name) from $ThirdParty"; Copy-Item -Recurse $d.FullName $to }
+    }
+}
 $tc = Join-Path $root ".toolchain"
 $clangDir = Join-Path $tc "llvm-mingw-20260922-ucrt-x86_64\bin"; $cmakeExe = Join-Path $tc "cmake-4.4.3-windows-x86_64\bin\cmake.exe"; $ninjaExe = Join-Path $tc "ninja\ninja.exe"
 $env:PATH = "$clangDir;" + $env:PATH
