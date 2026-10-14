@@ -967,5 +967,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the original's Barrier ability material in the Game Dump (translucent hex grid, no depth write?) and the package-4
   exe with HD on / off; if the original is translucent, ours is made translucent and 3a goes in with it. Cases 1 (smoke
   on a bot) and 2 (local muzzle flash over a bot) are CORRECT on 56290b7d.
+  13:44 BARRIER FIDELITY BUG (Systems, Game Dump): the original barrier mesh WEP_Shield_p.Barrier.WEP_Barrier_SKEL uses
+  WEP_Barrier_Defrag_MATINST (parent ENV_ForceField_Defrag_MAT): BLEND_Additive, MLM_Unlit, Distortion + Emissive +
+  Normal + Opacity from wfcDepthBiasedAlpha = a see-through additive force field that never writes depth (matches the
+  user seeing players through the grid). Ours renders a flat pink wall that hides everything behind it: dynamic meshes
+  (meshIdx -1) cannot defer translucent subs, so the barrier's sub draws immediately in World::draw, and its distortion
+  goes through distFbo_ in post. Isolation runs (WFC_SKIPMAT=Barrier_Defrag, WFC_NODISTORTION=1, WFC_HDTEXTURES=1) in
+  slot B, then the fix: render it additive / unlit with depth-biased alpha + distortion, bundled with 3a (the
+  immediate translucent draw then needs the characters flushed first) and staged with the bot behind the grid. Package
+  5 item. The package-4 exe cannot be staged (release build, no hook); Systems' tree A is the same renderer / barrier
+  code.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
