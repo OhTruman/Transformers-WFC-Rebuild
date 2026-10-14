@@ -707,5 +707,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   + a reflections close-up from the morning check for the user; RT_FULL_PLAN.md v2 (impact per GPU day, perf budgets)
   reviewed before S3. Lockstep input-drop built (verification = morning slot B with injected window input); squad
   tactics round-3 reversals = a 45 m form-flip threshold, hysteresis in (walk <= 30 m), measuring.
+  01:10 RT_FULL_PLAN v2 APPROVED (Rendering work/fsr3/RT_FULL_PLAN.md; copy to docs at the next rt2 commit): 1 characters
+  / movers lit by the RT world via a probe grid (1.5 d); 2 soft RT shadows from every light on characters + robots'
+  lamp shadows onto the world (1 d); 3 reflections on every physically reflective surface (2 d); 4 dynamic lights
+  lighting the world with RT shadows (1.5 d); 5 area-light lamp shadows in the lightmap (0.5 d); 6 Modern calibration
+  + Enhanced live; 7 polish. Budget: Realistic >= 120 fps at 1440p (RT ~4.2 ms, ~140 fps expected; the 300 cap is
+  unreachable under any RT mode; Faithful stays the high-fps RT mode). Gates per item: Off / Faithful identity, keep
+  list + SETTINGSTEST, measured at 1440p within budget with a quality sub-setting, one example image for the user.
+  Items 1-2 target package 5 before the ~21 Oct playtest. Morning order fixed: gicheck3 (+ Gameplay slot B) -> R4
+  default flip -> example set alone -> Experimental regress alone -> Experimental RT-on rows -> DML reopens.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
