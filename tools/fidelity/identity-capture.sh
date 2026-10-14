@@ -8,8 +8,14 @@
 # usage: [RTMODE=1] bash tools/fidelity/identity-capture.sh "504" 0531934 <headname>   (identity of a head vs a base, HD off, windowed;
 #        RTMODE 0 Off (default) / 1 Faithful / 2 Realistic - RT-on pairs: compare SIMHASH first, shotsdiff labels SIM-DIVERGED)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
-BASE=${2:-0531934}; HEAD=${3:?head build name (work/ab/m9c_<name>)}; MAPS=${1:-"504"}; RT=${RTMODE:-0}   # RTMODE=0|1|2: the profile's Ray Tracing row (Off / Faithful / Realistic; frontend boots apply the profile)
-O=work/sweep/ident_${BASE}_vs_${HEAD}$([ "$RT" != 0 ] && echo "_rt$RT"); mkdir -p $O
+BASE=${2:-0531934}; HEAD=${3:?head build name (work/ab/m9c_<name>)}; MAPS=${1:-"504"}; RT=${RTMODE:-0}
+# ROSTER=64: a real 31 v 32 roster (BotsExtended=1, the lobby's key) with a 900 s timeout; default: the 5-a-side rows (comparable
+# with every identity pair since 2026-10-12). XENV="K=V K=V": extra env for both runs (e.g. WFC_ASYNCJITTER=1); SIMHASH: the
+# WFC_SIMHASH value (default 0 = per-step hashes only; "700-760" adds per-pawn / per-bot detail lines for those steps)
+ROSTER=${ROSTER:-5}; SH=${SIMHASH:-0}; XENV=${XENV:-}
+if [ "$ROSTER" = 64 ]; then LOBBY="BotsExtended=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=300"; TMO=900
+else LOBBY="ExtendedPlayers=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=300"; TMO=180; fi   # RTMODE=0|1|2: the profile's Ray Tracing row (Off / Faithful / Realistic; frontend boots apply the profile)
+O=work/sweep/ident_${BASE}_vs_${HEAD}$([ "$RT" != 0 ] && echo "_rt$RT")$([ "$ROSTER" = 64 ] && echo "_r64")$([ -n "$XENV" ] && echo "_x"); mkdir -p $O
 PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"; SP="C:/Users/coxes/AppData/Local/Temp/claude/F--Transformers-Rebuild-Rebuild-Experimental/80e2e0b2-04f6-4df6-991a-088cc81d6a34/scratchpad"
 freegb() { powershell -NoProfile -Command "[int]((Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory/1MB)"; }
 mine() { powershell -NoProfile -Command "Get-CimInstance Win32_Process | ? { \$_.ExecutablePath -like '*Rebuild-Experimental\work\ab\m9c_*' } | % { \$_.ProcessId }"; }
@@ -25,13 +31,13 @@ run() {   # run <sha> <map> <tag>
   cp work/sweep/ident_profile.ini $d/wfc_profile.ini
   if grep -q "^RayTracing=" $d/wfc_profile.ini; then sed -i "s/^RayTracing=.*/RayTracing=$RT/" $d/wfc_profile.ini; else echo "RayTracing=$RT" >> $d/wfc_profile.ini; fi
   ( cd $d && env WFC_BOOT=frontend WFC_BOTAI=Classic WFC_HDTEXTURES=0 WFC_GPULOST_DIALOG_S=0 WFC_HANG_EXIT_S=60 WFC_MUTE=1 WFC_SKIPINTRO=1 WFC_NOMOUSE=1 \
-      WFC_FLOWSEED=1 WFC_SEED=7 WFC_AUTODETECT=0 WFC_LOGEVERY=0 WFC_LOGTIME=1 WFC_LOCKSTEP=1 WFC_LOCKSTEP_EXACT=1 WFC_SIMHASH=0 \
+      WFC_FLOWSEED=1 WFC_SEED=7 WFC_AUTODETECT=0 WFC_LOGEVERY=0 WFC_LOGTIME=1 WFC_LOCKSTEP=1 WFC_LOCKSTEP_EXACT=1 WFC_SIMHASH=$SH $XENV \
       WFC_RENDERSIZE=3840x2160 WFC_PLAYERBOT=1 WFC_SHOTMATCH="$(cygpath -w "$PWD")\\shots,60,1500,60" \
-      WFC_LOBBY_OPTIONS="ExtendedPlayers=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=300" \
+      WFC_LOBBY_OPTIONS="$LOBBY" \
       WFC_FRONTEND_SCRIPT="wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,$map;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=40;quit" \
-      timeout 180 "$exe" > run.out 2>&1 )
+      timeout $TMO "$exe" > run.out 2>&1 )
   for p in $(mine); do powershell -NoProfile -Command "Stop-Process -Id $p -Force"; echo "reaped $p"; done
-  grep 'SIMHASH' $d/wfc.log | sed -E 's/.*(SIMHASH [0-9]+ [0-9a-f]+).*/\1/' > $d/simhash.txt
+  grep -E 'SIMHASH [0-9]+ [0-9a-f]{16}' $d/wfc.log | sed -E 's/.*(SIMHASH [0-9]+ [0-9a-f]+).*/\1/' > $d/simhash.txt
   echo "$(date +%H:%M:%S) $(basename $d): $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash, size $(grep -o 'window [0-9]*x[0-9]*' $d/wfc.log | head -1)"
 }
 for m in $MAPS; do
