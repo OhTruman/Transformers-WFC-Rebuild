@@ -573,12 +573,24 @@ private:
     void giCopyVertexPage();
     // S3: the characters' / movers' ambient from the RT world - a probe grid traced at load (WFC_RT_GIPROBES=1 for now),
     // sampled trilinearly in place of the bake's Beast probe term of the light environment's ambient cube
-    std::vector<float> giProbes_;                       // 24 per probe (6 x rgb + w), x fastest
+    std::vector<float> giProbes_;                       // 24 per probe (6 x rgb + w), in giProbeCell_ order
+    std::unordered_map<uint32_t, uint32_t> giProbeCell_;   // the sparse grid: cell (x fastest) -> probe
     std::vector<uint8_t> giProbeOk_;                    // per probe: usable (not inside geometry)
     float giProbeOrigin_[3] = {0, 0, 0}, giProbeSpacing_ = 1.5f; int giProbeDims_[3] = {0, 0, 0};
     void giBuildProbes();
     bool giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const;
     bool giOn() const;
+    // item 2 (Realistic): up to 4 point / spot lights shadowed per pixel by the RT pass (the lights the characters used
+    // most last frame); a character's env light that is one of them takes its RT visibility (uRtLVis, uRtLSlot)
+    std::unordered_map<int, int> rtLightUse_;           // light index -> draws using it as a direct light (this frame)
+    int rtShadowLight_[4] = {-1, -1, -1, -1};           // the RT pass's shadow lights (light indices), this frame
+    bool rtShadowLightsOn() const;
+    // item 2B: the characters' lamp shadows on the world - the world pass writes its decoded lightmap irradiance to R1's
+    // second target (uRtLumOn), the composite darkens a world pixel by each shadow light's share where a character blocks it
+    bool rtLampShadowsWorld() const;
+    int rtLampWorldN_ = 0;                              // (diagnostics) item 2B's lights in the last composite
+    bool rtMrtWorld() const { return rtShadowLightsOn() && r1Map_; }   // (the world pass keeps the second target bound in Realistic)
+    std::unordered_map<int, std::array<float, 4>> giLightCal_;   // light index -> its calibrated colour (rgb), w: 1 = linear falloff
     bool giActive() const;
     void giSetup();
     void giFrame();                                     // queue this frame's slice (before the round trip)

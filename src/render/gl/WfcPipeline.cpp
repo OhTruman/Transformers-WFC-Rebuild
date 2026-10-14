@@ -2640,6 +2640,22 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
+    if (rtShadowAoOn() && lightmapped && !mainOverride_ && lit) {   // (item 2B: the decoded lightmap irradiance -> target 1)
+        const std::string lAnchor = "vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];";
+        const std::string tAnchor = "    wfcTranslucentOut(c, o.Opacity);\n";
+        const size_t la = fs.find(lAnchor, mainStart), ta = fs.find(tAnchor, mainStart), ma = fs.find("void main() {", mainStart);
+        if (la != std::string::npos && ta != std::string::npos && ma != std::string::npos && ta > la) {
+            fs.insert(ta, "    if (uRtLumOn != 0 && uLit != 0 && uBlend <= 1) oSun = vec4(wfcRtL, 1.0);\n");
+            fs.insert(la + lAnchor.size(), "\n        wfcRtL = L;");
+            fs.insert(ma + 13, "\n    vec3 wfcRtL = vec3(0.0);");
+            fs.insert(ma, "uniform int uRtLumOn;\n");
+            if (fs.find("out vec4 oSun;") == std::string::npos) {
+                const std::string oc = "layout(location=0) out vec4 oColor;";
+                const size_t od = fs.find(oc);
+                if (od != std::string::npos) fs.insert(od + oc.size(), "\nlayout(location=1) out vec4 oSun;");
+            }
+        }
+    }
     if (rtRefl && lightmapped && !mainOverride_ && lit) {   // (Realistic's visible reflection layer, after the lit block)
         const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
         const size_t at = fs.find(anchor, mainStart);
@@ -2656,7 +2672,10 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     if (rtShadowAoOn() && !lightmapped && !mainOverride_) {   // (M7 stage 1, RT on only: the RT AO on the ambient term)
         auto sub = [&](const char* a, const char* b) { size_t at = fs.find(a); if (at != std::string::npos) fs.replace(at, std::strlen(a), b); };
-        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;\nuniform int uRtOn;");
+        sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;\nuniform int uRtOn;\n"
+            "uniform sampler2D uRtLVis;\nuniform vec3 uRtLSlot;\n"   // (item 2: a point / spot env light's RT visibility, -1 = none)
+            "float wfcRtLV(int i) { int s = int(floor((i == 0 ? uRtLSlot.x : i == 1 ? uRtLSlot.y : uRtLSlot.z) + 0.5)); if (uRtOn == 0 || s < 0) return 1.0;"
+            " vec4 v = texture(uRtLVis, gl_FragCoord.xy / uViewport); return s == 0 ? v.x : s == 1 ? v.y : s == 2 ? v.z : v.w; }");
         sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).w;");
         // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
         // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
@@ -2665,7 +2684,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         sub("float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;",
             "float rtVis0 = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;"
             " float rtVis = uRtOn != 0 ? rtVis0 : 1.0; float mask = uRtOn != 0 ? 1.0 : rtVis0;");
-        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 || dot(uLDir[i].xyz, uRtSunDir) < 0.999 ? 1.0 : rtVis);");
+        sub("* uLCol[i].rgb * att * uLSpot[i].w;", "* uLCol[i].rgb * att * uLSpot[i].w * (uLPos[i].w > 0.0 ? wfcRtLV(i) : dot(uLDir[i].xyz, uRtSunDir) < 0.999 ? 1.0 : rtVis);");
     }
 
     static GLuint vsSharedBy[2] = {0, 0};               // (without / with the RT text: maps can load with or without RT)
@@ -2876,6 +2895,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uVLMBuf"), 22);                         // (MDI variants: the set's vertex-lightmap sample buffer)
     Uniform1i(U("uShadowMask"), 10);
     Uniform1i(U("uRtAo"), 25);                          // (M7 stage 1 RT-on variant only; -1 otherwise)
+    Uniform1i(U("uRtLVis"), 29);                        // (item 2: the per-light RT visibility)
     if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
     if (mdiBuild_) Uniform1i(U("uRowTex"), 20);
     UseProgram(0);
@@ -3621,6 +3641,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
             ActiveTexture(GL_TEXTURE0 + 25); glBindTexture(GL_TEXTURE_2D, rtAoTexture()); ActiveTexture(GL_TEXTURE0 + 10);
             Uniform3f(ULOC(P, "uRtSunDir"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
             Uniform1i(ULOC(P, "uRtOn"), rtMaskActive_ ? 1 : 0);
+            if (rtShadowLightsOn()) { ActiveTexture(GL_TEXTURE0 + 29); glBindTexture(GL_TEXTURE_2D, rtTargets_.lightVis); ActiveTexture(GL_TEXTURE0 + 10); }
         }
         if (rtReflComposite()) {                         // (M7 stage 2 modern mode) the previous frame's reflections
             static const float lod = [] { const char* e = std::getenv("WFC_RT_REFLECT_LOD"); return e ? (float)std::atof(e) : 1.0f; }();
@@ -4276,6 +4297,16 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform3fv(P.uAmb, 6, &env->cube[0].x);
                 Uniform1i(P.uNumLights, env->n);
                 Uniform4fv(P.uLPos, 3, &env->pos[0][0]);
+                if (dynamicObject && rtShadowLightsOn()) {     // (item 2) its env lights among the RT pass's shadow lights
+                    int sl[3] = {-1, -1, -1};
+                    for (int i = 0; i < env->n && i < 3; ++i) {
+                        const int li = env->light[i];
+                        if (li < 0) continue;
+                        ++rtLightUse_[li];
+                        for (int k = 0; k < 4; ++k) if (rtShadowLight_[k] == li) sl[i] = k;
+                    }
+                    Uniform3f(ULOC(P, "uRtLSlot"), (float)sl[0], (float)sl[1], (float)sl[2]);
+                } else if (rtShadowAoOn()) Uniform3f(ULOC(P, "uRtLSlot"), -1.0f, -1.0f, -1.0f);
                 Uniform4fv(P.uLDir, 3, &env->dir[0][0]);
                 Uniform4fv(P.uLCol, 3, &env->col[0][0]);
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
@@ -4354,7 +4385,9 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
     if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
-    const bool r1 = g.world && r1Active() && !warmup_ && !rtUvAtlas_ && !rtDepthOnly_;
+    // (R1, or item 2B's irradiance target: bound in the warm-up too, so the programs meet the two-target state under the
+    // loading screen - the first match frame stalled ~5 s (Debug) compiling them otherwise)
+    const bool r1 = g.world && ((r1Active() && !warmup_) || rtMrtWorld()) && !rtUvAtlas_ && !rtDepthOnly_;
     if (r1) r1WorldBegin();
     struct R1End { Pipeline* p; bool on; ~R1End() { if (on) p->r1WorldEnd(); } } r1End{this, r1};
     drawSubs(g, model, !g.world);
@@ -4454,6 +4487,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     for (const MapProp& p : mapProps_)
         for (int k = 0; k < 2; ++k) if (p.stateMesh[k] >= 0) draw(p.stateMesh[k], core::Mat4::identity());
     warmup_ = false;
+    r1ClearedFrame_ = -1;                              // (item 2B: the warm-up's target writes are cleared by the first frame)
     // the static light environments it cached were evaluated before the first frame's movers / Matinee light state:
     // dropped, so the first frame computes them exactly as without the warm-up
     for (GpuMesh& gm : meshes_)
@@ -8278,13 +8312,16 @@ void Pipeline::r1WorldEnd() {
 void Pipeline::r1BindDraw(int prog, int lm0, int arr) {
     if (prog < 0 || (size_t)prog >= progs_.size()) return;
     const Program& P = progs_[(size_t)prog];
+    const GLint lumOn = ULOC(P, "uRtLumOn");            // (item 2B)
+    if (lumOn >= 0) Uniform1i(lumOn, r1WorldMrt_ && rtLampShadowsWorld() ? 1 : 0);
     const GLint on = ULOC(P, "uR1On");
     static int toldOn = 0, toldOff = 0;
     if (on < 0) { if (r1WorldMrt_ && toldOff++ < 3) LOG_INFO("RT R1: program %d has no uR1On (no sun-swap text)", prog); return; }
-    if (r1WorldMrt_ && toldOn++ < 6) LOG_INFO("RT R1: draw with program %d: swap %s, page %d (V_bake %s), array %d", prog, r1WorldMrt_ ? "on" : "off", lm0,
+    if (r1WorldMrt_ && toldOn++ < 6) LOG_INFO("RT R1: draw with program %d: swap %s, page %d (V_bake %s), array %d", prog, r1Active() && !warmup_ ? "on" : "off (item 2B target only)", lm0,
                                lm0 >= 0 && (size_t)lm0 < vbTex_.size() && vbTex_[(size_t)lm0] ? "yes" : "no", arr);
-    Uniform1i(on, r1WorldMrt_ ? 1 : 0);
-    if (!r1WorldMrt_) return;
+    const bool swap = r1WorldMrt_ && r1Active() && !warmup_;
+    Uniform1i(on, swap ? 1 : 0);
+    if (!swap) return;
     Uniform4f(ULOC(P, "uR1Fit"), r1Fit_[0], r1Fit_[1], r1Fit_[2], 0.0f);
     Uniform3f(ULOC(P, "uR1Sun"), r1Sun_[0], r1Sun_[1], r1Sun_[2]);
     Uniform3f(ULOC(P, "uR1SunDir"), r1SunDir_[0], r1SunDir_[1], r1SunDir_[2]);

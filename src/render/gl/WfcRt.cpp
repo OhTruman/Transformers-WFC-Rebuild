@@ -41,15 +41,55 @@ uniform sampler2D uVis;     // denoised sun visibility (R8)
 uniform sampler2D uSao;     // raw sun, AO, dynamic pixel
 uniform vec3 uModShadow;
 uniform float uAoStrength;
+// (item 2B) the characters' lamp shadows on the world: per shadow light its visibility from the characters (uLVis),
+// its direct irradiance here (calibrated colour x UE3 falloff x cone^2 x N.L x 0.66, the flat-normal decode of the
+// directional basis) against the pixel's decoded lightmap irradiance (uLum, written by the world pass)
+uniform int uLB;
+uniform int uLVView;   // (diagnostics, WFC_RT_LVISVIEW=1: the per-light visibility, min of the 4 slots, on every pixel)
+uniform sampler2D uLVis;
+uniform sampler2D uLum;
+uniform sampler2D uDepth;
+uniform mat4 uInvVP;
+uniform vec2 uSize;
+uniform vec4 uSLPos[4];   // xyz, radius
+uniform vec4 uSLCol[4];   // calibrated rgb, w: falloff exponent (< 0: linear)
+uniform vec4 uSLDir[4];   // forward, w: cos(outer) (-2 = point)
+uniform vec4 uSLCosI;
+vec3 wfcWorldAt(ivec2 q) { vec2 ndc = (vec2(q) + 0.5) / uSize * 2.0 - 1.0; float d = texelFetch(uDepth, q, 0).r;
+    vec4 w = uInvVP * vec4(ndc, d * 2.0 - 1.0, 1.0); return w.xyz / w.w; }
 out vec4 oFactor;
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
     vec4 s = texelFetch(uSao, p, 0);
+    if (uLVView != 0) { vec4 v = texelFetch(uLVis, p, 0); float m = min(min(v.x, v.y), min(v.z, v.w)); oFactor = vec4(m, m, s.z > 0.5 ? 1.0 : m, 1.0); return; }
     if (s.z > 0.5) { oFactor = vec4(1.0); return; }
     float vis = texelFetch(uVis, p, 0).r;
     vis = vis > 0.985 ? 1.0 : vis;                  // (the 8-bit denoised visibility tops out just under 1: unlit pixels exact)
     float ao = s.w > 0.985 ? 1.0 : s.w;          // (the filtered AO)
     vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, ao, uAoStrength);
+    if (uLB > 0) {
+        vec4 lum = texelFetch(uLum, p, 0);
+        float lw = dot(lum.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec4 lv = texelFetch(uLVis, p, 0);
+        if (lum.a > 0.5 && lw > 1e-4 && min(min(lv.x, lv.y), min(lv.z, lv.w)) < 0.5) {
+            vec3 P = wfcWorldAt(p);
+            ivec2 px1 = ivec2(min(p.x + 1, int(uSize.x) - 1), p.y), py1 = ivec2(p.x, min(p.y + 1, int(uSize.y) - 1));
+            vec3 N = normalize(cross(wfcWorldAt(px1) - P, wfcWorldAt(py1) - P));
+            vec3 E = vec3(0.0);
+            for (int k = 0; k < 4; ++k) {
+                if (k >= uLB || lv[k] > 0.5) continue;
+                vec3 d = uSLPos[k].xyz - P; float dist = length(d);
+                if (dist >= uSLPos[k].w || dist < 1e-3) continue;
+                vec3 l = d / dist;
+                float r = dist / uSLPos[k].w;
+                float F = uSLCol[k].w < 0.0 ? max(0.0, 1.0 - r) : pow(max(0.0, 1.0 - r * r), uSLCol[k].w);
+                if (uSLDir[k].w > -1.5) { float cn = clamp((dot(-l, uSLDir[k].xyz) - uSLDir[k].w) / max(uSLCosI[k] - uSLDir[k].w, 1e-4), 0.0, 1.0); F *= cn * cn; }
+                E += uSLCol[k].rgb * F * abs(dot(N, l)) * 0.66;
+            }
+            float share = clamp(dot(E, vec3(0.2126, 0.7152, 0.0722)) / lw, 0.0, 1.0);
+            f *= 1.0 - share;
+        }
+    }
     oFactor = vec4(f, 1.0);
 }
 )";
@@ -826,6 +866,44 @@ void Pipeline::rtDynMid() {
     Uniform3f(cachedUniformLocation(cp, "uModShadow"), sun ? sun->modShadowColor[0] : 0.0f,
               sun ? sun->modShadowColor[1] : 0.0f, sun ? sun->modShadowColor[2] : 0.0f);
     Uniform1f(cachedUniformLocation(cp, "uAoStrength"), aoStrength);
+    {   // (item 2B) the characters' lamp shadows on the world (the plain composite; R1 off under R4)
+        int nb = 0;
+        if (!r1 && rtLampShadowsWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ && t.lightVis) {
+            float pos[16] = {}, col[16] = {}, dir[16] = {}, cosI[4] = {};
+            for (int k = 0; k < 4; ++k) {
+                const int li = rtShadowLight_[k];
+                if (li < 0) break;
+                const Light& L = lights_[(size_t)li];
+                auto cal = giLightCal_.find(li);
+                if (cal == giLightCal_.end()) break;
+                pos[k * 4] = L.pos.x; pos[k * 4 + 1] = L.pos.y; pos[k * 4 + 2] = L.pos.z; pos[k * 4 + 3] = L.radius;
+                col[k * 4] = cal->second[0]; col[k * 4 + 1] = cal->second[1]; col[k * 4 + 2] = cal->second[2];
+                col[k * 4 + 3] = cal->second[3] > 0.5f ? -1.0f : L.falloff;
+                const core::Vec3 fw = core::normalize(L.dir);
+                dir[k * 4] = fw.x; dir[k * 4 + 1] = fw.y; dir[k * 4 + 2] = fw.z; dir[k * 4 + 3] = L.type == 1 ? L.spotCosO : -2.0f;
+                cosI[k] = L.type == 1 ? L.spotCosI : 1.0f;
+                ++nb;
+            }
+            if (nb) {
+                ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis);
+                ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, r1SunTex_);
+                ActiveTexture(GL_TEXTURE0 + 5); glBindTexture(GL_TEXTURE_2D, t.worldDepth);
+                ActiveTexture(GL_TEXTURE0);
+                Uniform1i(cachedUniformLocation(cp, "uLVis"), 3); Uniform1i(cachedUniformLocation(cp, "uLum"), 4);
+                Uniform1i(cachedUniformLocation(cp, "uDepth"), 5);
+                float inv[16];
+                if (invert(viewProj_.m, inv)) UniformMatrix4fv(cachedUniformLocation(cp, "uInvVP"), 1, GL_FALSE, inv); else nb = 0;
+                Uniform2f(cachedUniformLocation(cp, "uSize"), (float)vpW_, (float)vpH_);
+                Uniform4fv(cachedUniformLocation(cp, "uSLPos"), 4, pos); Uniform4fv(cachedUniformLocation(cp, "uSLCol"), 4, col);
+                Uniform4fv(cachedUniformLocation(cp, "uSLDir"), 4, dir); Uniform4f(cachedUniformLocation(cp, "uSLCosI"), cosI[0], cosI[1], cosI[2], cosI[3]);
+            }
+        }
+        Uniform1i(cachedUniformLocation(cp, "uLB"), nb);
+        static const bool lvView = std::getenv("WFC_RT_LVISVIEW") != nullptr;
+        if (lvView && t.lightVis) { ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis); ActiveTexture(GL_TEXTURE0); Uniform1i(cachedUniformLocation(cp, "uLVis"), 3); }
+        Uniform1i(cachedUniformLocation(cp, "uLVView"), lvView && t.lightVis ? 1 : 0);
+        rtLampWorldN_ = nb;
+    }
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
@@ -957,6 +1035,32 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             if (r1Active() && r1ClearedFrame_ == frameNo_) fr.toSun[3] = 3.0f;   // (R1: the world's own sun visibility too; R4 keeps 2: its lightmap holds the world's sun shadows, world pixels take the characters' only)
             rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
         }
+        // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
+        // last frame (up to 4), traced per pixel; the characters drawn after this pass map their env lights to them
+        for (int& k : rtShadowLight_) k = -1;
+        if (rtShadowLightsOn()) {
+            std::vector<std::pair<int, int>> use(rtLightUse_.begin(), rtLightUse_.end());
+            std::sort(use.begin(), use.end(), [](const auto& a, const auto& b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+            int n = 0;
+            for (const auto& u : use) {
+                if (n >= 4) break;
+                if (u.first < 0 || (size_t)u.first >= lights_.size()) continue;
+                const Light& L = lights_[(size_t)u.first];
+                if (L.type != 0 && L.type != 1) continue;
+                rtShadowLight_[n] = u.first;
+                fr.shadowLights[n][0] = L.pos.x; fr.shadowLights[n][1] = L.pos.y; fr.shadowLights[n][2] = L.pos.z; fr.shadowLights[n][3] = L.radius;
+                ++n;
+            }
+            fr.shadowLightN = n;
+            static int frames = 0; static double sumUsed = 0, sumN = 0, sumWorld = 0;   // (diagnostics, every 600 frames)
+            sumUsed += (double)use.size(); sumN += n; sumWorld += rtLampWorldN_;
+            if (++frames == 600) {
+                LOG_INFO("RT light shadows (600 frames): %.1f point / spot lights used by characters per frame, %.2f traced, %.2f on the world (item 2B; GI %s, calibrated lights %zu)",
+                         sumUsed / 600.0, sumN / 600.0, sumWorld / 600.0, giActive() ? "on" : "off", giLightCal_.size());
+                frames = 0; sumUsed = sumN = sumWorld = 0;
+            }
+        }
+        rtLightUse_.clear();
         // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut
         float glInvP[16], glInvVP[16], tmp[16], tmp2[16];
         invert(camProj_.m, glInvP); invert(viewProj_.m, glInvVP);
