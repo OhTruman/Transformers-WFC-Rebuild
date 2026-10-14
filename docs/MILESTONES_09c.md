@@ -580,5 +580,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   watch grazing-angle edge ghosting from the reprojected target in the next pairs. Gameplay's determinism audit: RNG /
   wall-clock coupling unlikely; suspect a race between the async step's background part and the main thread under
   load; repro = 3 lockstep runs under CPU load + an WFC_ASYNCSTEP=0 control (slot B after the pathing set).
+  20:30 PATHING SET 2 APPLIED 20ab0a4a (Gameplay e0353420): floor-aware think re-pick, dither escape ends any Smart errand,
+  squadSlowFactor key, NAVQ squad cohesion. 6 seeds (Classic): Streets 5.1/3.2/3.6/1.25 (6.9/3.3/5.9/1.48), Molten
+  2.2/2.0/1.6/0.67 (1.8/2.0/1.5/0.84), Debris 4.4/1.3/2.5/0.91 (3.8/1.2/2.1/1.09), Gorge 4.9/3.9/6.4/1.39 (5.9/5.0/7.0/
+  2.31): LEVEL WITH CLASSIC within 1 SE on every map, stucks below; Classic identity 24/24; BOTTEST 39/39; 31v32 AI cost
+  0.40 vs 0.43 ms. Squad trade-off: spawnNearScope 2 spreads squads (70.6 m mean, 19 % within 15 m) vs scope 0 (55.0 m,
+  22 %) but scope 0 doubles Gorge's movement cost. Integration decision: build (c) = active cluster + any start with a
+  short nav path (<= ~40 m) to the leader, ship if Gorge stays within 1 SE of scope 2 and cohesion improves, else keep
+  scope 2.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
