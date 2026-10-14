@@ -535,5 +535,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Streak artefact removed by a negative prompt (default now). Recommendation G3 + negative prompt, E gate dE p99 ~5 with
   layout / edge / palette / seam strict; cost ~0.7 GPU-min per 1024 HD unit -> milestone 1 ~15 GPU h. First DML window
   closed 19:20 (D GPU rows done 18:32); RT RESUME to Rendering (reflections block), Experimental's sweep resumed.
+  19:35 SELF-TEST SWEEP on 2017eeba (Experimental, 61 switches, 180 s cap): 38 PASS / 0 FAIL / 23 diagnostic (no
+  verdict by design); exit codes 0 / 1 only, no 0xC0000409, no crash dumps except HANGTEST's intended one, 0 gpu_lost;
+  QA 9/9 after rerunning with WFC_QA=1. Slot B -> Gameplay (FXOWNER rerun + GL-vs-null DETERMINISM digest).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
