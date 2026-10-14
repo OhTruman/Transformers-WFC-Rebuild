@@ -604,5 +604,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   now stay out of the static TLAS (Molten leaves out 2); Off unchanged by construction, Faithful intended change on maps
   with actor nodes; WFC_RT_CENSUS diagnostic. The user's Molten shadow report is CLOSED. Rendering parks for the S1 code
   stretch ~21:20 -> DML window (E milestone 1 at G3) opens.
+  20:35 Rendering parked; S1 first smoke test on Molten: the runtime RT lightmap BUILDS (551 k texels in 18 pages, 297
+  lights, 4 load-time passes in 119 ms, no errors) but the world draws black with it active (a draw / binding bug, in
+  debug). DML WINDOW OPENED 20:35: E milestone 1 at G3 (175 user-map textures, Molten -> Streets -> Gorge -> Rust ->
+  Debris), continuing as an overnight block with pauses for Rendering's ~20-min GPU checks; Gameplay's windowed lockstep
+  repro parked until the next pause (windowless null-render sims continue).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
