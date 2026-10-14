@@ -1,8 +1,32 @@
 diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
-index c7afe37..764828b 100644
+index c7afe37..fc524ca 100644
 --- a/src/game/CharacterMovement.cpp
 +++ b/src/game/CharacterMovement.cpp
-@@ -465,6 +465,22 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+@@ -308,6 +308,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+     BodyAxes B = bodyAxes(c.yaw(), vs.pitch, vs.roll);
+     const float stabRad = cfg::kHoverStabilityDeg * 0.0174533f;
+     bool unstable = std::fabs(vs.pitch) > stabRad || std::fabs(vs.roll) > stabRad;
++    vs.unstableT = unstable ? vs.unstableT + dt : 0.0f;
++    const int tipMode = in.aiTip;   // bot AI path while tipped (MoveIntent.aiTip; see the righting / translation below)
+ 
+     // Special move (VehicleSpecialMove = Dash input): CanUseSpecialMove = no cooldown running.
+     if (in.wantDash && !tank) {   // tank special move = 180 quick turn (native not recovered: PARTIAL, not implemented)
+@@ -425,6 +427,14 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+ 
+         // ---- UpdateTerminalVelocity ----
+         if (v.y < -cfg::kHoverTerminalVel) v.y = -cfg::kHoverTerminalVel;
++        // Bot AI path gate [PROV, WFC_TIPREL=1]: "tipped" relative to the ground the springs touch (body up vs the averaged contact
++        // normal past the stability threshold), or with no contact at all - a hover vehicle climbing a ramp steeper than 30 deg with its
++        // springs on the ramp is not tipped (the original AI's absolute IsUnstable would pull it level against the slope).
++        bool aiTipped = tipMode >= 0 && unstable;
++        if (tipMode >= 0 && in.aiTipRel && contacts > 0) {   // relative to the contact normal (the measured 2026-10-14 gate)
++            const core::Vec3 cn = core::normalize(vs.contactN);
++            aiTipped = core::dot(B.z, cn) < std::cos(stabRad);
++        }
+ 
+         // ---- UpdateDash / UpdateStrafe (body-local; ApplyLocalLinearAcceleration) ----
+         core::Vec3 lv{core::dot(v, B.x), core::dot(v, B.y), core::dot(v, B.z)};
+@@ -465,6 +475,31 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                             core::clampf(in.moveRight, -1.0f, 1.0f) * hs, 0.0f};
              la = clampLength(core::Vec3{des.x - lv.x, des.y - lv.y, 0.0f} * (1.0f / dt), maxA);   // AxisMask (1,1,0)
          }
@@ -11,7 +35,16 @@ index c7afe37..764828b 100644
 +        // ClampLength((desired - v) / dt, AiMaxLinearAcceleration); no StabilityScale. The target is the bot's move direction (its stick
 +        // in the facing frame; a far target gives the full AiMaxLinearSpeed, no stick = hold still). Only while tipped: normal bot
 +        // driving keeps the stand-in strafe (the full AI translation is not ported; GAMEPLAY_BOTS.md).
-+        if (in.ai && unstable) {
++        if (aiTipped && tipMode == 2 && vs.unstableT > 1.0f && in.hasAiTarget) {
++            // MoveToTargetLocation: to = (target - location) x (1,1,0); desired v = ClampLength(to / dt, min(sqrt(maxA x |to|), maxS));
++            // a = ClampLength((desired - v) / dt, maxA). The target is the bot's next waypoint (on the nav mesh), so the drag cannot pull
++            // the car off the mesh; only after 1 s tipped (brief tips keep the stand-in strafe).
++            la = core::Vec3{0, 0, 0};
++            core::Vec3 to{in.aiTarget.x - p.x, 0.0f, in.aiTarget.z - p.z};
++            const float dist = core::length(to);
++            const core::Vec3 desV = clampLength(to * (1.0f / dt), std::min(std::sqrt(VP.aiMaxLinAccel * dist), VP.aiMaxLinSpeed));
++            accel = accel + clampLength(core::Vec3{(desV.x - v.x) / dt, 0.0f, (desV.z - v.z) / dt}, VP.aiMaxLinAccel);
++        } else if (aiTipped && tipMode == 1) {
 +            la = core::Vec3{0, 0, 0};
 +            const core::Vec3 Fy = core::forwardFromYawPitch(in.faceYaw, 0.0f);
 +            const core::Vec3 Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
@@ -25,7 +58,7 @@ index c7afe37..764828b 100644
          if (!tank) accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
  
          // ---- UpdateRoll: ApplyLocalAngularAcceleration(RightLeftInput - LocalAngularVelocity.Z, 0, 0) ----
-@@ -495,6 +511,27 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+@@ -495,6 +530,27 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                  vs.angVel.y = k30 * vs.pitch / dt;
              }
          }
@@ -37,7 +70,7 @@ index c7afe37..764828b 100644
 +        // - w) / dt, AiMaxAngularAcceleration) x dt. The AI path's MoveToTargetLocation translation is not ported: bots keep driving
 +        // through the player strafe (a stand-in), whose StabilityScale already weakens the push while tipped. Yaw stays the
 +        // rebuild's heading control.
-+        if (in.ai && unstable) {
++        if (aiTipped) {
 +            const float dx = vs.roll, dy = vs.pitch;              // local delta to level, in the angVel sign convention
 +            const float dist = std::sqrt(dx * dx + dy * dy);
 +            const float wMax = std::min(std::sqrt(VP.aiMaxAngAccel * dist), VP.aiMaxAngSpeed);
@@ -54,14 +87,19 @@ index c7afe37..764828b 100644
          float gy; core::Vec3 gn;
          if (col && col->groundHeight(com.x, com.z, com.y, 0.0f, gy, gn)) comAbove = com.y - gy;
 diff --git a/src/game/CharacterMovement.h b/src/game/CharacterMovement.h
-index aa1d377..ee91232 100644
+index aa1d377..63d21f3 100644
 --- a/src/game/CharacterMovement.h
 +++ b/src/game/CharacterMovement.h
-@@ -23,6 +23,7 @@ struct MoveIntent {
+@@ -23,6 +23,12 @@ struct MoveIntent {
      bool ascend = false, descend = false;   // jet Hover Up / Down (held)
      bool hoverRequest = false; // TnPlayerController.Hover -> TnAcrobaticsManager.Hover (JumpingToHover)
      int dodgeDir = 0;          // TnAcrobaticsManager dodge request: 1 left, 2 right, 3 forward, 4 back (0 = none)
-+    bool ai = false;           // bot-driven (TnAiController): hover vehicles take the AI path's self-righting (vehicleStep)
++    // Tipped hover vehicle, bot AI path (vehicleStep): -1 off (the player path), 0 righting, 1 + translation toward the move direction,
++    // 2 + translation toward aiTarget after 1 s tipped. aiTipRel: "tipped" relative to the spring contact normal [PROV].
++    int aiTip = -1;
++    bool aiTipRel = false;
++    bool hasAiTarget = false;  // bot: aiTarget = its next path waypoint (on the nav mesh) - the AI path's MoveToTargetLocation target
++    core::Vec3 aiTarget{0, 0, 0};
  };
  
  namespace CharacterMovement {
@@ -97,7 +135,7 @@ index c983ac4..53d376c 100644
          const assets::Json& fl = vp["FlyingVehicleBlueprint"]["values"];
          V.flySpeed = fl["MaxSpeed"].asFloat(4000) * 0.01f;
 diff --git a/src/game/MatchOpponent.h b/src/game/MatchOpponent.h
-index 148a4d5..11ed024 100644
+index 148a4d5..aecebac 100644
 --- a/src/game/MatchOpponent.h
 +++ b/src/game/MatchOpponent.h
 @@ -32,6 +32,7 @@ public:
@@ -108,12 +146,9 @@ index 148a4d5..11ed024 100644
      // DIAGNOSTIC participant input: holds the contextual pickup button (no AI decides this).
      bool pressesPickup = true;
      void setPosition(const core::Vec3& p) { pos_ = p; pawn_.setPosition(p); pawn_.velocity() = {0, 0, 0}; }
-@@ -42,7 +43,34 @@ public:
-     void simulate(float dt, const CollisionWorld* col) { simulateMovement(dt, col); simulateAnimation(dt); }
+@@ -43,6 +44,31 @@ public:
      void simulateMovement(float dt, const CollisionWorld* col) {
          if (!spawned_) return;
-+        static const bool noAiPath = std::getenv("WFC_NOAIPATH") != nullptr;   // DIAGNOSTIC: the pre-2026-10-14 behaviour (bots on the player path)
-+        intent_.ai = !noAiPath;   // bot-driven: tipped hover vehicles take the original AI path (CharacterMovement vehicleStep)
          CharacterMovement::update(pawn_, intent_, dt, col);
 +        {   // DIAGNOSTIC (WFC_TIPLOG): a bot vehicle tipped past 30 deg for over 1 s - one line per episode.
 +            static const bool tipLog = std::getenv("WFC_TIPLOG") != nullptr;
@@ -143,8 +178,39 @@ index 148a4d5..11ed024 100644
          intent_.wantJump = false; intent_.wantDash = false; intent_.dodgeDir = 0;   // edge inputs are consumed
          pos_ = pawn_.position();
      }
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 56854e8..a0d31d5 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -2437,6 +2437,14 @@ void World::tickBots(float dt) {
+         botAimAndFire(*o, b, dt);
+         if (anySmart_ && botIsSmart(b.player)) smartAimPost(*o, b, smart_[(size_t)b.player], smartYaw0, smartPitch0, dt);
+         if (tickProfOn()) tickProfAdd(21, profMsBots() - ta0);
++        {   // Tipped hover vehicles: the original AI path (GAMEPLAY_BOTS.md, 2026-10-14). Smart default: righting with the contact-relative
++            // gate [PROV]; Classic stays on the player path. WFC_BOTTIP=<-1|0|1|2> (+ WFC_TIPREL=0/1) overrides for every bot (measurement).
++            static const char* bt = std::getenv("WFC_BOTTIP");
++            static const char* tr = std::getenv("WFC_TIPREL");
++            if (bt) { in.aiTip = std::atoi(bt); in.aiTipRel = tr && std::atoi(tr) != 0; }
++            else if (botIsSmart(b.player)) { in.aiTip = 0; in.aiTipRel = !tr || std::atoi(tr) != 0; }
++            if (b.wp < b.path.size()) { in.hasAiTarget = true; in.aiTarget = b.path[b.wp].pos; }   // the AI path's target (on the mesh)
++        }
+         o->setIntent(in);
+         static const char* botlog = std::getenv("WFC_BOTLOG");   // diagnostics: each bot (or =<player>) once a second
+         if (botlog && (botlog[0] < '0' || botlog[0] > '9' || std::atoi(botlog) == b.player) && ((int)(b.life * 60.0f + 0.5f)) % 60 == 0) {
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 24311e2..4fbb313 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -520,6 +520,7 @@ public:
+         core::Vec3 angVel{0, 0, 0};
+         float spLen[4] = {-1.0f, -1.0f, -1.0f, -1.0f}; // TnSpring._Length per ray (m); Reset() sets -1
+         int contacts = 0;             // suspension rays touching (TnHoverCarSimulation._NumContacts)
++        float unstableT = 0.0f;       // hover: time pitch or roll has been past the stability threshold (bot AI path)
+         core::Vec3 contactN{0, 1, 0}; // averaged contact normal
+         bool onTheGround = false;     // hover: ContactNormal.Z > CosGroundAngle; driving: wheels down
+         float jumpWait = 0.0f;        // TnCarForm._TimeBeforeNextJump
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
-index 03b1d3d..187a370 100644
+index 03b1d3d..0222b83 100644
 --- a/src/core/Application.cpp
 +++ b/src/core/Application.cpp
 @@ -206,7 +206,8 @@ bool Application::init() {
@@ -157,15 +223,15 @@ index 03b1d3d..187a370 100644
      if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09
      if (std::getenv("WFC_HEADJIT")) { runHeadingJitterTest(); return false; } // drawn heading vs camera per render frame, playtest M10
      if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
-@@ -4012,6 +4013,46 @@ void Application::runScoreTest() {
+@@ -4012,6 +4013,54 @@ void Application::runScoreTest() {
      LOG_INFO("SCORE SUMMARY: %d/%d checks passed", checks - fails, checks);
  }
  
 +// WFC_TIPTEST (with WFC_MAP=MP_UND_Gorge): a hover car is put back in the tipped state a bot reached in a match (WFC_TIPLOG, Gorge
 +// seed 2: Car2 at (-181.4, 11.9, -12.3), yaw -1.7448, pitch -35.8 deg). Its nose is against a 4.7 m step (wall 1.5 m ahead), held
 +// nose-down by the rear springs. Each stick (back = the bots' stuck reversal, left, right, forward into the wall) runs once on the
-+// player path and once bot-driven (MoveIntent.ai: the original AI path's RotateToTargetOrientation + MoveToTargetLocation while
-+// unstable). PASS (bot, back / left / right) = under 30 deg within 3 s and over 3 m from the tip spot. Forward pushes into the wall
++// player path and once as a Smart bot (MoveIntent.aiTip: the Smart default = the original AI path's RotateToTargetOrientation while
++// tipped, contact-relative gate; WFC_BOTTIP / WFC_TIPREL select other modes). PASS (bot, back / left / right) = under 30 deg within 3 s and over 3 m from the tip spot. Forward pushes into the wall
 +// (no path recovers it there; the bot's stuck rule reverses) and the player path (no AI righting in the original either) are INFO.
 +void Application::runTipTest() {
 +    const float dt = 1.0f / 60.0f;
@@ -183,7 +249,15 @@ index 03b1d3d..187a370 100644
 +        c.setForm(game::Form::Vehicle); c.setChassis(&car);
 +        c.setPosition(tip); c.setYaw(-1.7448f);
 +        c.vehicleState().pitch = -35.8f * 0.0174533f; c.vehicleState().angVel = {0, 0, 0};
-+        game::MoveIntent go; go.moveForward = st.f; go.moveRight = st.r; go.faceYaw = -1.7448f; go.ai = bot != 0;
++        game::MoveIntent go; go.moveForward = st.f; go.moveRight = st.r; go.faceYaw = -1.7448f;
++        if (bot) {   // the Smart default (righting, contact-relative gate); WFC_BOTTIP / WFC_TIPREL override
++            const char* bt = std::getenv("WFC_BOTTIP"); const char* tr = std::getenv("WFC_TIPREL");
++            go.aiTip = bt ? std::atoi(bt) : 0; go.aiTipRel = !tr || std::atoi(tr) != 0;
++        }
++        {   // the bot's next waypoint: 10 m along the stick direction (as a path would give)
++            const core::Vec3 Fy = core::forwardFromYawPitch(-1.7448f, 0.0f), Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
++            go.hasAiTarget = true; go.aiTarget = tip + (Fy * st.f + Ry * st.r) * 10.0f;
++        }
 +        float rightedAt = -1.0f, tipped = 0.0f;
 +        for (int i = 0; i < 360; ++i) {
 +            game::CharacterMovement::update(c, go, dt, world_.collision());
@@ -230,7 +304,7 @@ index 6a1558b..88f4769 100644
                            "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
          if (std::getenv(v)) return false;
 diff --git a/src/game/VehicleTests.cpp b/src/game/VehicleTests.cpp
-index 58ef3d9..330f476 100644
+index 58ef3d9..4032b38 100644
 --- a/src/game/VehicleTests.cpp
 +++ b/src/game/VehicleTests.cpp
 @@ -408,6 +408,29 @@ void runVehicleTests() {
@@ -241,7 +315,7 @@ index 58ef3d9..330f476 100644
 +            // (past the 30 deg IsUnstable threshold) and held there. Bot: the AI path rights it (pitch / roll back under 30 deg).
 +            for (int bot = 0; bot < 2; ++bot) {
 +                Sim s(&w, 2.0f); s.c.setChassis(&car); s.step(MoveIntent{}, 120);
-+                MoveIntent go; go.moveForward = 1.0f; go.ai = bot != 0;
++                MoveIntent go; go.moveForward = 1.0f; go.aiTip = bot ? 0 : -1;
 +                s.step(go, 60);
 +                s.c.vehicleState().pitch = -1.1f; s.c.vehicleState().angVel = {0, 0, 0};
 +                core::Vec3 p0 = s.c.position();
@@ -264,84 +338,117 @@ index 58ef3d9..330f476 100644
              {
                  Sim s(&w, 6.0f); s.c.setChassis(&jet);
 diff --git a/docs/handoffs/GAMEPLAY_BOTS.md b/docs/handoffs/GAMEPLAY_BOTS.md
-index 0ba87fc..e050c00 100644
+index 0ba87fc..28ce56d 100644
 --- a/docs/handoffs/GAMEPLAY_BOTS.md
 +++ b/docs/handoffs/GAMEPLAY_BOTS.md
-@@ -116,3 +116,77 @@ Bots think every 0.25 s, staggered. Each decision covers:
+@@ -116,3 +116,110 @@ Bots think every 0.25 s, staggered. Each decision covers:
  - `WFC_BOTNAVTEST` (7/7 on 9 maps; `WFC_MAP=<map>`): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
  - `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
  - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.
 +
-+## Tipped bot vehicles: the original AI path (2026-10-14)
++## Tipped bot vehicles (2026-10-14): Smart self-rights by default; Gorge movement cost is the next round's target
 +
 +**User report (package 4):** "a car tipped over and it was still moving forward even though the car was tipped forward".
++
++**Status:** fixed for **Smart** by default (Integration decision 2026-10-14, overriding the strict pooled gate).
++- Smart bots get the AI-path righting with the contact-relative gate (mode 0 + REL below). Classic stays on the player path, byte-identical to 30b2fa74.
++- The cost is a measured Smart movement regression on Gorge, which is the explicit target of the next Smart pathing round (after the playtest, with the follow reversals).
++- Package-5 notes: "Smart bot vehicles self-right (original AI behaviour); Gorge movement slightly worse, next round".
 +
 +### What the original does
 +
 +From the decompiled scripts:
 +- There is no forced transform, auto-reset or roll clamp.
-+- **Bots** in hover form do not run the player simulation. TnCarForm / TnTankForm.Hovering.DoUpdateAi calls UpdateFromLocationAndRotation, which uses:
-+  - HoverPhysics.MoveToTargetLocation: world-horizontal velocity toward the target at AiMaxLinearSpeed / AiMaxLinearAcceleration;
-+  - HoverPhysics.RotateToTargetOrientation: toward DesiredRotation (the focus direction, Pitch 0, roll 0). Pitch and roll are only included once IsUnstable (car / truck: pitch or roll over 30 deg) or !IsStable (tank).
-+- So a tipped AI hover vehicle is turned back to level, at AiMaxAngularSpeed / AiMaxAngularAcceleration (authored: car 12 / 12, truck 20 / 20, tank 6 / 6, in rad/s and rad/s^2), and keeps translating while it rights.
++- **Bots** in hover form run the AI path, not the player simulation: TnCarForm / TnTankForm.Hovering.DoUpdateAi calls UpdateFromLocationAndRotation, which uses:
++  - HoverPhysics.MoveToTargetLocation: world-horizontal, at AiMaxLinearSpeed / AiMaxLinearAcceleration;
++  - HoverPhysics.RotateToTargetOrientation: toward DesiredRotation (the focus direction, Pitch 0, roll 0). Pitch and roll are only included while IsUnstable (car / truck: absolute pitch or roll over 30 deg) or !IsStable (tank).
++- So a tipped AI hover vehicle is turned back to level at AiMaxAngularSpeed / Acceleration (authored, rad/s and rad/s^2: car 12 / 12, truck 20 / 20, tank 6 / 6).
 +- **Players:** UpdateTurn rights the body only with no spring contact or upside down (up.Z < 0.01).
-+- **Driving:** DoUpdateAi is a no-op in the Driving state. AI cars in Driving run the player CarSimulation.
++- **Driving:** DoUpdateAi is a no-op in the Driving state.
 +
-+### What the rebuild did
++### What the rebuild did (Classic still does)
 +
-+- Bots ran the player hover path.
-+- Pitch and roll are clamped to +-1.2 rad, so "upside down" is unreachable. A tipped body that kept one spring contact never righted, and its body-frame strafe kept pushing it.
++- Bots run the player hover path.
++- Pitch and roll are clamped to +-1.2 rad, so "upside down" is unreachable. A tipped body that keeps a spring contact is not righted, and its body-frame strafe keeps pushing.
++- The real case (WFC_TIPTEST, from a Gorge match): Car2 with its nose against a 4.7 m step, held nose-down by the rear springs. It stays at -60..-67 deg on the player path, whichever way it steers.
 +
-+### What is ported
++### The fix
 +
-+| Part of the AI path | Status |
++Per bot, MoveIntent.aiTip. **Smart default: mode 0 with the contact-relative gate.** Classic: -1 (the player path). `WFC_BOTTIP=<-1|0|1|2>` (+ `WFC_TIPREL=0/1`) overrides it for every bot, for measurement:
++
++| Mode | Behaviour |
 +|---|---|
-+| RotateToTargetOrientation on pitch / roll while unstable | **Ported**, authored limits |
-+| MoveToTargetLocation translation | **Ported only while unstable**: toward the bot's move direction, replacing the stand-in strafe |
-+| Translation while stable | **Not ported**: bots keep the player-style strafe (the stand-in), so normal bot driving is unchanged |
-+| AI yaw control | Not ported |
-+| Driving state | Unchanged (the original has no AI path there either) |
-+| Jets | Unaffected (jetStep) |
++| 0 | RotateToTargetOrientation on pitch / roll while unstable |
++| 1 | Mode 0, plus MoveToTargetLocation toward the move direction while unstable |
++| 2 | Mode 0, plus MoveToTargetLocation toward the bot's next nav-mesh waypoint once unstable for over 1 s |
 +
-+This change affects both Smart and Classic (shared vehicle code). The Classic identity gate is re-based from integration 56290b7d + this patch.
++The contact-relative gate (REL) is [PROV], a deviation from the original's absolute IsUnstable. Tipped = body up vs the averaged spring contact normal past 30 deg; with no contact, the absolute rule applies. A hover vehicle climbing a ramp steeper than 30 deg with its springs on the ramp is not "tipped", so it is not pulled level against the slope. The absolute gate regressed Smart on Debris and Gorge (9 columns).
++
++**What is not ported:** AI translation while stable, and AI yaw.
 +
 +### Measurements
 +
-+**Tipped time** (null-render NAVQ, Smart; summed hover-vehicle episodes over 1 s, seeds 1-3; old -> (a) righting only -> (b) righting + translation):
++**WFC_TIPTEST** (real Gorge tip):
 +
-+| Map | Old | (a) | (b) |
-+|---|---|---|---|
-+| Streets | 69.8 s | 29.6 s | 43.1 s |
-+| Molten | 41.9 s | 15.9 s | 10.6 s |
-+| Debris | 20.3 s | 11.9 s | 14.3 s |
-+| Gorge | 98.2 s | 61.7 s | 36.5 s |
-+| **Total** | **230 s** | **119 s** | **105 s** |
++| Path | Back (the bots' stuck reversal) | Left | Right | Forward into the wall |
++|---|---|---|---|---|
++| Player (the default) | tipped 6 s | tipped 6 s | tipped 6 s | tipped 6 s |
++| Modes 0 / 2, either gate | level at 0.35 s | level at 0.45 s | level at 0.82 s | unrecoverable on any path |
++| Mode 1 | | | 4.72 s | |
 +
-+The longest episode drops from 10.2 s to 7.3 s.
++**Tipped time** (Smart, hover episodes over 1 s, seeds 1-3, summed; "old" is the default):
 +
-+**WFC_TIPTEST**, real Gorge geometry: the tip state is reproduced from a match. The car's nose is against a 4.7 m step, held nose-down by the rear springs.
++| Map | Old | Mode 1 | Mode 0 | Mode 2 | Mode 0 + REL | Mode 2 + REL |
++|---|---|---|---|---|---|---|
++| Streets | 69.8 s | 43.1 | 30.7 | 32.2 | 23.0 | 23.0 |
++| Molten | 41.9 s | 10.6 | 23.0 | 18.5 | 12.7 | 13.0 |
++| Debris | 20.3 s | 14.3 | 12.9 | 12.9 | 9.5 | 9.5 |
++| Gorge | 98.2 s | 36.5 | 65.9 | 65.3 | 31.3 | 64.1 |
++| **Total** | **230 s** | **105** | **132** | **129** | **76.5** | **109.6** |
 +
-+| Path | Result |
++**Pooled 12-seed NAVQ gate:** off s1-12 vs mode s1-12, both AIs. Noise reference per column = |off s7-12 - off s1-6|; a column regresses when its delta exceeds that.
++
++| Variant | Smart regressing columns | Classic regressing columns |
++|---|---|---|
++| Mode 0 | 9 | 4 |
++| Mode 2 | 9 | 4 |
++| Mode 0 + REL | 3 | 11 |
++| Mode 2 + REL | 6 | 11 |
++
++- Smart's Gorge regression appears in every variant. For example, mode 2 + REL: stucks 1.26 -> 1.59 / bot-min, off-mesh 4.50 -> 5.64 %, reversals 4.24 -> 5.10.
++- Caveat: the noise reference is one 6-vs-6 difference per column, and some are near zero, so individual calls are weak. The Gorge pattern is consistent across variants.
++
++**Shipped Smart default, pooled 12 seeds** (mode 0 + REL; off -> on, with the noise |off s7-12 - off s1-6| in brackets; **bold** = beyond noise):
++
++| Map | slow % | reversals / travel-min | off-mesh % | idle5 / bot-min | stucks / bot-min |
++|---|---|---|---|---|---|
++| Streets | 5.14 -> 5.82 (1.48) | 4.80 -> 4.70 (1.07) | **3.85 -> 4.91 (0.25)** | 0.16 -> 0.16 (0.03) | 1.41 -> 1.56 (0.30) |
++| Molten | 1.92 -> 1.60 (0.17) | 3.32 -> 3.22 (0.23) | 1.90 -> 1.75 (0.26) | 0.24 -> 0.21 (0.05) | 0.68 -> 0.53 (0.01) |
++| Debris | 4.04 -> 3.68 (1.38) | 2.94 -> 2.90 (0.08) | 2.08 -> 1.98 (0.33) | **0.10 -> 0.12 (0.00)** | 0.98 -> 1.02 (0.20) |
++| Gorge | 4.10 -> 5.11 (1.03) | 4.24 -> 4.84 (0.71) | 4.50 -> 5.20 (1.00) | 0.14 -> 0.18 (0.06) | **1.26 -> 1.44 (0.06)** |
++
++- **Gorge** is worse on every column; only stucks clears its (small) noise reference. This is the next round's target.
++- Streets off-mesh is also beyond noise. Molten improves.
++
++**Shipped default** (integration 56290b7d + this patch, run on 30b2fa74's identical sources):
++- Classic NAVQ: 24/24 byte-exact vs the 30b2fa74 baseline.
++- Smart NAVQ: reproduces the measured mode 0 + REL runs exactly (8/8 checked). The pooled table above (mode 0 + REL: Smart 3 regressing columns) is the shipped behaviour.
++- BOTTEST: Classic 39/39; Smart 39/39 on two seeds (grenades 7 and 4).
++- DETERMINISM: 2/2 for both AIs.
++- 31v32 AI cost: 0.23 ms.
++- TIPTEST: 3/3.
++
++When the righting is forced onto Classic (WFC_BOTTIP), the SIMHASH divergence starts one step after the first unstable bot hover step (Gorge s2 713 -> 714, Molten s3 770 -> 771, Streets s1 1127 -> 1128).
++
++### Next round (open)
++
++- Find why righting degrades Gorge movement. Candidates: righting while the stuck / dither logic reverses the bot; or bots taking routes that only the player path could climb.
++- Consider porting the full AI translation as one unit.
++
++### Diagnostics
++
++| Variable | Use |
 +|---|---|
-+| Player path (the old bot behaviour) | Stays tipped the full 6 s whichever way it steers. Matches the user's report. |
-+| Bot, stick back (the bots' stuck reversal) | PASS, level after 1.48 s |
-+| Bot, stick left | PASS, level after 0.45 s |
-+| Bot, stick right | FAIL, level after 4.72 s. It slides along the wall face, and the rear-spring torque beats the authored 12 rad/s^2 cap. |
-+| Bot, forward into the wall | INFO: unrecoverable on any path |
-+
-+The remaining gap is contact geometry: the original's PhysX hull collides with the whole body, while ours casts 4 spring rays.
-+
-+**VEHTEST tipover** (flat ground): rights in 0.25 s on both paths.
-+
-+**Classic identity:**
-+- With WFC_NOAIPATH=1 (diagnostic: the old behaviour), Classic reproduces the 30b2fa74 baseline exactly.
-+- With the fix, all 24 baseline runs differ, because every run has at least one brief bot tip.
-+- The SIMHASH divergence starts one step after the first unstable bot hover step: Gorge s2 713 -> 714, Molten s3 770 -> 771, Streets s1 1127 -> 1128.
-+
-+**NAVQ movement** (6 seeds; from the first tip on, every run takes a different trajectory):
-+- Smart is within about 1 SE of the 30b2fa74 baseline on most columns. Debris off-mesh is 1.9 -> 3.4 % (±0.8) and Gorge stucks 1.23 -> 1.79 (±0.4).
-+- Classic moves both ways, driven by single seeds (Streets s6 reversals 3 -> 10).
-+
-+**Self-tests:** BOTTEST 39/39 for both AIs. DETERMINISM 2/2 for both AIs. 31v32 AI cost 0.20 ms (unchanged).
-+
-+**Diagnostics:** WFC_TIPLOG (tip episodes, first unstable step), WFC_TIPTEST, WFC_NOAIPATH.
++| WFC_TIPLOG | Tip episodes and the first unstable bot hover step |
++| WFC_TIPTEST | The real Gorge tip case (with WFC_MAP=MP_UND_Gorge) |
++| WFC_BOTTIP / WFC_TIPREL | Override the per-bot mode / gate (measurement) |
