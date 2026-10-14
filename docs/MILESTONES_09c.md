@@ -724,5 +724,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   gates. DECISION: ship A as the Smart default with a key selecting B / off; the user judges the fidgeting in the
   playtest; NAVQ fidget counter added; remaining gates (AIDUEL 57-65 %, Classic 24/24, BOTTEST, DETERMINISM, AI cost)
   then the patch on 64a1ce50.
+  01:45 squadTactics preset 2 = A (default) / 1 = B / 0 = off. Fidget counter: only ~0.6 / travel-min; most of A's
+  reversal rise is members moving with a walking leader (follow adjustments, not stucks); A kept as default, NAVQ
+  reversal column split pathing / follow / fidget, playtest guide gets a what-to-watch line. Gates for A: Classic
+  identity 24 / 24, DETERMINISM 2 / 2, 31 + 32 AI cost 0.20 ms, BOTTEST Smart 39 / 39 (Classic 38 / 39 = a 6.16 ms max
+  under load, rerun). AIDUEL: Smart 70 % (73 / 104; Streets 18-8, Molten 18-8, Debris 19-7, Gorge 18-8) vs the old
+  57-65 % band, kill share 52 % unchanged = squads win fights, aim equal. Decision: no global trim; the band is
+  re-baselined (B and 0 duels running for a fair reference); the player-facing lever is Bot Difficulty, so the
+  difficulty ladder (Smart vs Classic at matched difficulty) must stay monotonic with Easy <= ~55 %; if Easy is above
+  ~60 % with squads, squadTactics scales by difficulty (Easy = 1) instead.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
