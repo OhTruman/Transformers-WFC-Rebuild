@@ -635,5 +635,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering's S1 + S2 check (bounce gain fitted at load so RT / bake mean = 1.0; per-page sun k read from fit.json; the
   vertex-lit subs traced too (Rust's 825 no longer keep the bake); per-frame tracing stops after 8 sweeps; GI pass GPU
   timing; reflection hardening) and Gameplay's jitter self-test in slot B.
+  22:28 S1 + S2 CHECK (Rendering): Faithful lockstep identity 5/5 shots byte-identical (SIMHASH 9601 f3db on both) = GI
+  inert in Faithful. Works: whole map lit by RT on Molten / Rust (557 k / 1.93 M texels, 297 / 346 static lights, per-page
+  sun k); vertex-lit props traced (Rust 1.07 M vertices; 41 subs still on the bake); converges in 41 frames then 0 ms;
+  worst case with per-frame tracing forced: 1.31 ms avg GPU, 3.5 max (Molten 720p). NOT green: brightness - RT / bake at
+  the 4x bounce-gain cap Molten 0.77, Rust 0.88; gain 1.4 -> 4 moved Molten 0.73 -> 0.77 only, so the bounce rays deliver
+  almost nothing = a bug (suspect: hit albedo from the reflection hit table, now logged). Commit plan: S1 / S2 land with
+  R4 OFF by default (WFC_RT_GI=1 opts in) so a package's Realistic stays as today until RT matches the bake. DML window
+  reopened 22:28 (overnight; next check >= 00:30).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
