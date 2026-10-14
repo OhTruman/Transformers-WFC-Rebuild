@@ -932,5 +932,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   is PACKAGE 5 after 'the lighting is all done and all the ray tracing stuff is implemented and textures' = plan v2
   items 1-5 + option B + D complete (+ rest of the world if ready) + the effects v2 / vehicle fixes; slot A continuous
   for Rendering; user away until 2026-10-15 10:00 (usage reset), message only when package 5 is ready.
+  13:25 TIPPED VEHICLE (Gameplay, RE decomp): the original gives players no forced transform / reset / roll clamp (hover
+  rights only with no spring contact or upside down; strafe scaled by up.Z^2), but AI vehicles run TnCarForm /
+  TnTankForm Hovering.DoUpdateAi -> HoverPhysics.RotateToTargetOrientation toward pitch 0 / roll 0 (AxisMask 1,1,1
+  once IsUnstable > 30 deg) at AiMaxAngularSpeed / Acceleration (car 12 / 12, truck 20 / 20, tank 6 / 6), translating
+  in world frame meanwhile. Ours ran bots on the player hover path with +-1.2 rad pitch / roll clamps, so a tipped body
+  with spring contact never righted. FIX (built, CPU): MoveIntent.ai from MatchOpponent + RotateToTargetOrientation
+  when unstable with the authored limits from the hover blueprint; AI translation port out of scope. Approved as a
+  BASELINE change (both AIs; player path untouched): identity re-based where a tip occurs, with the 24-match tip
+  diagnostic, a real-case VEHTEST tipover row, BOTTEST / DETERMINISM. AssetTools: the D pass is the whole M4 HD
+  selection (3,771 textures, all maps), so tonight's b0-31 freeze (~22:00-23:00) is the complete faithful HD world for
+  package 5.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
