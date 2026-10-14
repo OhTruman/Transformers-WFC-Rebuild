@@ -1,0 +1,331 @@
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 67fac74..2e932de 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -626,7 +626,8 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
+     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
+     b.repathTimer -= dt;
+     const bool chasing = b.goal.kind == BotGoalKind::Attack;
+-    const bool wants = (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
++    const bool trapped = match_.matchTime() < b.trappedUntil;   // Smart dither escape off the mesh (botSteer)
++    const bool wants = !trapped && (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
+     if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
+     if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
+         botSearchQueue_.pop_front();
+@@ -639,6 +640,7 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
+             static const bool noRoutes = std::getenv("WFC_SMARTOFF") && std::strstr(std::getenv("WFC_SMARTOFF"), "routes");
+             if (!noRoutes && team >= 0 && team < 2 && !smartThreat_[(size_t)team].empty()) { ag.cost = &smartThreat_[(size_t)team]; ag.costW = smartTune().routeExposureW; }
+             ag.noiseSeed = 0x9e37u + (unsigned)b.player * 7919u + (unsigned)(match_.matchTime() * 0.1f);
++            ag.noiseW = smartTune().routeNoise;
+         }
+         if (botNav_.beginSearch(pos, b.goal.pos, ag)) { botSearchOwner_ = b.player; botSearchVehicle_ = vehicle; }
+         else botPathFailed(b, vehicle);
+@@ -814,7 +816,9 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                 if (rl > 0.8f) moveDir = rd * (1.0f / rl); else { b.hasRejoin = false; b.wantRepath = true; }
+             }
+         } else if (b.goal.kind != BotGoalKind::Attack) {
+-            b.hasGoal = b.hasGoal && hdist(b.goal.pos, pos) > b.goal.radius;   // arrived: the next think picks a new goal
++            const bool smartFloor = anySmart_ && botIsSmart(b.player) && smartTune().goalFloorM > 0.0f;
++            const bool arrived = hdist(b.goal.pos, pos) <= b.goal.radius && (!smartFloor || std::fabs(b.goal.pos.y - pos.y) <= smartTune().goalFloorM);
++            b.hasGoal = b.hasGoal && !arrived;   // arrived: the next think picks a new goal
+         }
+         // Corridor done next to an objective (the nav approach cell): walk the last metres onto the flag / bomb / point itself.
+         if ((b.path.empty() || b.wp >= b.path.size()) && b.goal.hasTouch && hdist(b.goal.touch, pos) > 0.6f && hdist(b.goal.touch, pos) < 15.0f) {
+@@ -842,6 +846,47 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+         if (botNav_.valid() && !botNav_.directWalkable(pos, pos + side * 2.0f, ag)) { b.strafeDir = -b.strafeDir; }
+         else moveDir = moveDir + side * sk.strafe;
+     }
++    // Smart dithering watch (ditherGuard): travelling, not fighting, robot form.
++    if (anySmart_ && botIsSmart(b.player) && smartTune().ditherGuard > 0.0f && !visible && !vehicle && b.wp < b.path.size()) {
++        const float nowD = match_.matchTime();
++        if (b.ditherT < 0.0f) { b.ditherT = nowD; b.ditherFrom = pos; b.ditherLast = pos; b.ditherPath = 0.0f; b.ditherOff = 0.0f; }
++        b.ditherPath += hdist(pos, b.ditherLast); b.ditherLast = pos;
++        if (botNav_.findCell(pos, 0.0f) < 0) b.ditherOff += dt;
++        if (nowD - b.ditherT >= 6.0f) {
++            // Half the window off the mesh: the ping-pong cases (a pocket beside a railing). On the mesh, milling near a goal is not one
++            // (BOTTEST: a bot holding its roam point tripped the guard and stood 20 s).
++            if (b.ditherPath > 12.0f && hdist(pos, b.ditherFrom) < 3.0f && b.ditherOff >= 3.0f) {
++                ++b.dithers;
++                for (float r : {0.0f, 4.0f}) { const int c = botNav_.findCell(pos, r);
++                    if (c >= 0 && std::find(b.avoidCells.begin(), b.avoidCells.end(), c) == b.avoidCells.end()) b.avoidCells.push_back(c); }
++                if (const int gc = botNav_.findCell(b.goal.pos, 2.0f); gc >= 0 && std::find(b.avoidCells.begin(), b.avoidCells.end(), gc) == b.avoidCells.end())
++                    b.avoidCells.push_back(gc);
++                b.avoidUntil = nowD + 30.0f;
++                if (b.goal.kind != BotGoalKind::Attack) b.hasGoal = false;
++                b.wantRepath = true; b.hasRejoin = false; b.rejoinUntil = nowD + 4.0f;
++                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action == SmartBot::Retreat && sd.actionTarget == -2) {   // a pickup trip: skip it 2 min
++                    sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; sd.action = SmartBot::None;
++                }
++                if (botNav_.findCell(pos, 0.0f) < 0) {
++                    // Off the mesh: every corridor from here starts with the same blocked leg (a pocket beside a railing: the rejoin
++                    // points along it never reach the mesh). Drop the corridor and take the stranded search (wider, drops allowed;
++                    // its 30 s no-way-out rule still applies) for 10 s without new searches.
++                    b.path.clear(); b.wp = 0; ++b.noPaths; b.wantRepath = false; b.rejoinUntil = 0.0f; b.trappedUntil = nowD + 10.0f;
++                    // The way in is the way out: walk straight back to where the bot last stood on the mesh (the stranded branch walks
++                    // to b.rejoin; a nav hole beside a railing let bots in and no corridor led back out). A third trapped escape in one
++                    // life is a strand with no way out: the stranded rule's suicide (the 0.5 m on-mesh tolerance kept resetting its 30 s).
++                    if (hdist(b.lastOnMeshPos, pos) > 1.0f && hdist(b.lastOnMeshPos, pos) < 25.0f) {
++                        b.rejoin = b.lastOnMeshPos; b.hasRejoin = true; b.rejoinUntil = nowD + 8.0f;
++                    }
++                    if (++b.trapEscapes >= 3 && !b.suicideWish) {
++                        LOG_INFO("bots: p%d trapped off the mesh (3 dither escapes) at t %.2f at (%.1f %.1f %.1f): stranded rule", b.player, nowD, pos.x, pos.y, pos.z);
++                        b.suicideWish = true;
++                    }
++                }
++            }
++            b.ditherT = nowD; b.ditherFrom = pos; b.ditherPath = 0.0f; b.ditherOff = 0.0f;
++        }
++    } else b.ditherT = -1.0f;
+     // Local avoidance (PC ADAPTATION): pawns block each other (RE addendum 11), so a pawn standing in the corridor ahead (a teammate
+     // holding a point, a pawn against a wall) is steered around instead of pushed into.
+     if (core::length(moveDir) > 1e-3f && match_.players().size() > 1) {
+@@ -1543,13 +1588,17 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+                    (now - s.actionSince > 12.0f || (!b.path.empty() && b.wp >= b.path.size() && hdist(pos, s.actionPos) > 2.5f))) {
+             // The pickup trip failed (unreachable: the path ends short of it; or 12 s without getting it): skip that pickup for 30 s
+             // (BOTOBJ: bots stood idle at a pickup they could not take).
+-            s.skipPickup = s.actionPos; s.skipPickupUntil = now + 30.0f; s.action = SmartBot::None;
++            s.skipPickup = s.actionPos; s.skipPickupUntil = now + 90.0f; s.action = SmartBot::None;   // was 30 s: a pickup below a railing drew bots back
+         } else if (smartTune().pickupSegments > 0.0f && !visible && now - s.lastHitAt > 3.0f && (s.action != SmartBot::Retreat || s.actionTarget == -2) &&
+                    h.current <= h.max - smartTune().pickupSegments * (h.segmentCount > 0 ? h.max / h.segmentCount : 125.0f)) {
++            // Distance with the height difference counted double: a pickup on the floor below a railing measured 2 m horizontally
++            // and drew bots into a nav hole beside it (NAVQ Streets: 4 min ping-pong).
+             float bd = 40.0f; core::Vec3 to = pos; bool found = false;
+-            for (const PickupFactory* f : pickupFactories_)
+-                if (f && f->kind() == PickupFactory::Kind::Health && f->available() && hdist(f->position(), pos) < bd &&
+-                    !(now < s.skipPickupUntil && hdist(f->position(), s.skipPickup) < 1.0f)) { bd = hdist(f->position(), pos); to = f->position(); found = true; }
++            for (const PickupFactory* f : pickupFactories_) {
++                const float fd = f ? hdist(f->position(), pos) + 2.0f * std::fabs(f->position().y - pos.y) : 1e9f;
++                if (f && f->kind() == PickupFactory::Kind::Health && f->available() && fd < bd &&
++                    !(now < s.skipPickupUntil && hdist(f->position(), s.skipPickup) < 1.0f)) { bd = fd; to = f->position(); found = true; }
++            }
+             if (found) { if (s.action != SmartBot::Retreat) ++s.pickupTrips; start(SmartBot::Retreat, to, -2); setGoal(BotGoalKind::Roam, to, 1.0f, -1); return; }
+         }
+     }
+@@ -2024,6 +2073,7 @@ void World::tickBots(float dt) {
+         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
+             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
+             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
++            const int dth = b.dithers;
+             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
+             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
+             const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut; const std::array<double, 4> aes = b.aimErrSum; const std::array<int, 4> aen = b.aimErrN; const std::array<double, 16> apa = b.aimParts;
+@@ -2033,7 +2083,7 @@ void World::tickBots(float dt) {
+             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
+             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
+             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;
+-            b.wasSpawned = true; b.yaw = pc.yaw();
++            b.wasSpawned = true; b.yaw = pc.yaw(); b.dithers = dth;
+         }
+         b.life += dt;
+         // KillZ (FellOutOfWorld) for participants, as the local pawn.
+diff --git a/src/game/BotBrain.h b/src/game/BotBrain.h
+index 3f474c2..cba18fe 100644
+--- a/src/game/BotBrain.h
++++ b/src/game/BotBrain.h
+@@ -101,6 +101,9 @@ struct BotBrain {
+     float omEntryT = 0.0f, omEntryLife = 0.0f, omEntryVy = 0.0f, omEntrySinceVeh = 0.0f, omEntrySinceDmg = 0.0f; bool omEntryJet = false; core::Vec3 omEntryPos{};
+     bool spawnPosSet = false, spawnLaunchLogged = false; float spawnT = 0.0f; core::Vec3 spawnPos{};   // spawn-launch diagnostic (log only)
+     float rejoinDrop = 0.0f;   // height from the bot down to its chosen rejoin cell (log only)
++    // Smart dithering watch: path length vs net displacement over a 6 s window while travelling (a ping-pong between two points).
++    core::Vec3 ditherFrom{0, 0, 0}, ditherLast{0, 0, 0}; float ditherT = -1.0f, ditherPath = 0.0f, ditherOff = 0.0f; int dithers = 0;
++    float trappedUntil = -1.0f; int trapEscapes = 0;   // Smart: dithering off the mesh - no new corridor until then; the stranded search finds the way out
+     bool fireWish = false;
+     unsigned lastShotSerial = 0;
+     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
+diff --git a/src/game/BotSmart.h b/src/game/BotSmart.h
+index a5cb4b1..9ad9b94 100644
+--- a/src/game/BotSmart.h
++++ b/src/game/BotSmart.h
+@@ -66,6 +66,15 @@ struct SmartTune {
+     float flankEtaS = 6.0f;         // a flank route longer than this at run speed (6 m/s) is dropped: the fight moves on before it pays
+     float flankExtraM = 15.0f;      // a flank spot may lie at most this much farther (straight line) than the enemy itself
+     float preAim = 1.0f;            // with no target in sight, look where a remembered enemy (>= 0.4 sure, <= 45 m) should appear (0 = off)
++    // Pathing (user playtest 2026-10-13: "could definitely be a lot better").
++    float ditherGuard = 1.0f;       // a bot that covers > 12 m but nets < 3 m in 6 s outside combat, half of it off the mesh (ping-pong in a
++                                    // pocket beside a railing): avoid
++                                    // that spot, drop the goal and hold off off-mesh rejoins 4 s (0 = off)
++    float goalFloorM = 3.0f;        // a Roam / Attack goal counts as reached only within this height too (a goal on the floor below a railing
++                                    // was "reached" from above and never left) (0 = horizontal only, the Classic rule)
++    float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster
++                                    // only (any start drew bots to far / raised starts of other clusters: NAVQ Gorge off-mesh 14.7 -> 5.3 %)
++    float routeNoise = 0.25f;       // per-bot seeded route cost noise: cell cost x (1 + routeNoise * hash) so bots do not all share one corridor
+ };
+ const SmartTune& smartTune();
+ 
+diff --git a/src/game/BotSmart.cpp b/src/game/BotSmart.cpp
+index fef0b74..89a5136 100644
+--- a/src/game/BotSmart.cpp
++++ b/src/game/BotSmart.cpp
+@@ -38,7 +38,7 @@ const SmartTune& smartTune() {
+             {"coverExposure", &v.coverExposure}, {"coverMaxExposure", &v.coverMaxExposure}, {"coverChance", &v.coverChance},
+             {"coverChancePerDiff", &v.coverChancePerDiff}, {"coverRangeM", &v.coverRangeM}, {"coverHurtFrac", &v.coverHurtFrac}, {"coverRangedChance", &v.coverRangedChance}, {"coverHoldS", &v.coverHoldS}, {"coverNear", &v.coverNear}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
+             {"routeExposureW", &v.routeExposureW}, {"focusHurtW", &v.focusHurtW}, {"focusMatesW", &v.focusMatesW},
+-            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}};
++            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}, {"routeNoise", &v.routeNoise}, {"ditherGuard", &v.ditherGuard}, {"goalFloorM", &v.goalFloorM}, {"spawnNearScope", &v.spawnNearScope}};
+         std::string s = e;
+         size_t i = 0;
+         while (i < s.size()) {
+diff --git a/src/game/BotNav.h b/src/game/BotNav.h
+index 58565d8..232dfff 100644
+--- a/src/game/BotNav.h
++++ b/src/game/BotNav.h
+@@ -30,7 +30,7 @@ public:
+     struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr;   // avoid: cells costed x10 (a bot's blocked spots)
+                    // Smart AI only (null / 0 for Classic): cell cost x (1 + costW * cost[cell]) (threat exposure), and a per-agent
+                    // seeded noise x (1 + 0.25 * hash(cell, noiseSeed)) so bots do not all take one corridor.
+-                   const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; };
++                   const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; float noiseW = 0.25f; };
+ 
+     bool load(const std::string& path);
+     bool valid() const { return !cells_.empty(); }
+diff --git a/src/game/BotNav.cpp b/src/game/BotNav.cpp
+index d2a1285..fe01a03 100644
+--- a/src/game/BotNav.cpp
++++ b/src/game/BotNav.cpp
+@@ -121,6 +121,17 @@ bool BotNav::load(const std::string& path) {
+         ++pid;
+     }
+     mainPiece_ = best;
++    if (std::getenv("WFC_NAVPORTALAUDIT")) {   // diagnostic: portals whose two cells' floors differ at the shared edge (a walk link over a drop)
++        int bad = 0, total = 0;
++        for (size_t i = 0; i < cells_.size(); ++i)
++            for (const Portal& q : cells_[i].portals) {
++                ++total;
++                const float mx = (q.a.x + q.b.x) * 0.5f, mz = (q.a.z + q.b.z) * 0.5f;
++                const float dh = std::fabs(heightAt(cells_[i], mx, mz) - heightAt(cells_[(size_t)q.to], mx, mz));
++                if (dh > 1.0f) { if (bad < 12) LOG_INFO("botnav: portal %zu -> %d at (%.1f %.1f) floor step %.1f m", i, q.to, mx, mz, dh); ++bad; }
++            }
++        LOG_INFO("botnav: portal audit: %d of %d portals step more than 1 m at the shared edge", bad, total);
++    }
+     LOG_INFO("botnav: %s: %zu cells, %zu links, %zu anchors, %d pieces (main %d cells)", path.c_str(), cells_.size(), links_.size(), anchors_.size(), pid, best);
+     return valid();
+ }
+@@ -240,7 +251,7 @@ int BotNav::stepSearch(int maxExpansions) const {
+             float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
+             if (a.avoid && std::find(a.avoid->begin(), a.avoid->end(), p.to) != a.avoid->end()) tight *= 10.0f;
+             if (a.cost && (size_t)p.to < a.cost->size()) tight *= 1.0f + a.costW * (*a.cost)[(size_t)p.to];
+-            if (a.noiseSeed) tight *= 1.0f + 0.25f * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
++            if (a.noiseSeed) tight *= 1.0f + a.noiseW * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
+             const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
+             if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); push(ng + kSearchWeight * core::length(cells_[(size_t)p.to].centroid - S.goalC), p.to); }
+         }
+diff --git a/src/game/Match.h b/src/game/Match.h
+index 5af1234..a0386fc 100644
+--- a/src/game/Match.h
++++ b/src/game/Match.h
+@@ -168,6 +168,9 @@ public:
+     // Smart AI (PC EXTENSION, team games): where a respawning participant's squad is; the start of its team nearest that point with no
+     // live enemy within 25 m is taken (before the active cluster). Returns false for everyone else (Classic: the original rules).
+     void setSquadAnchor(std::function<bool(int, core::Vec3&)> f) { squadAnchor_ = std::move(f); }
++    // Which team starts a squad respawn may take: 0 any team start, 1 starts of clusters registered for this game type,
++    // 2 the team's active cluster only (the authored FindSpawnPoint set, nearest the squad within it).
++    void setSquadAnchorScope(int s) { squadAnchorScope_ = s; }
+     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
+     void tick(float dt);
+     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
+@@ -248,6 +251,7 @@ private:
+     std::vector<int> lastHitBy_;         // Pawn.LastHitBy: the last other player who damaged this life's pawn (-1 none)   // per player cylinder radius (setPlayerLocation)
+     std::function<bool(const std::string&, std::string&)> chassisCheck_;
+     std::function<bool(int, core::Vec3&)> squadAnchor_;
++    int squadAnchorScope_ = 0;
+     int attackingTeam_ = 255, currentRound_ = 0;
+     bool betweenRounds_ = false;
+     float roundTimeLeft_ = 0.0f, betweenRoundsLeft_ = 0.0f;
+diff --git a/src/game/Match.cpp b/src/game/Match.cpp
+index 5ee4a6e..2464714 100644
+--- a/src/game/Match.cpp
++++ b/src/game/Match.cpp
+@@ -549,6 +549,15 @@ int Match::findPlayerStart(int p) {
+         for (size_t i = 0; i < starts_.size(); ++i) {
+             const Start& s = starts_[i];
+             if (s.generated || s.ffa || s.team != P.team) continue;
++            if (squadAnchorScope_ > 0) {   // only starts of registered clusters (1) / of the team's active cluster (2)
++                bool inScope = false;
++                for (size_t c = 0; c < clusters_.size() && !inScope; ++c) {
++                    const Cluster& cl = clusters_[c];
++                    if (cl.actor != s.cluster) continue;
++                    inScope = squadAnchorScope_ == 1 ? cl.registered : (int)c == active_[P.team];
++                }
++                if (!inScope) continue;
++            }
+             const float d = core::length(s.pos - anchor);
+             if (d >= bestD || !safe((int)i)) continue;
+             bool enemyNear = false;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index f190c33..6cc6b0c 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2360,6 +2360,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
+         }
+         return false;
+     });
++    match_.setSquadAnchorScope((int)smartTune().spawnNearScope);
+     match_.begin(s);
+     match_.setSnapshotProvider([this](int p) { return participantSnapshot(p); });
+     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 920b1c0..b6f40e2 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -113,7 +113,10 @@ bool Application::init() {
+     if (nullRender && wantsFrontendBoot()) { LOG_ERROR("WFC_NULLRENDER: only for direct-boot harnesses (set the harness variable)"); return false; }
+     if (nullRender) {
+         renderer_ = render::createNullRenderer();
+-        LOG_INFO("WFC_NULLRENDER: no window, no GL context, no GPU upload (sim-only harness boot)");
++        LOG_INFO("WFC_NULLRENDER: null render - no window, no GL context, no GPU upload, no audio device (sim-only harness boot)");
++#ifdef _WIN32
++        SetConsoleTitleA("wfc_rebuild NULLRENDER sim (no window / GPU / audio)");   // other lanes' runners can tell it apart (no-op without a console)
++#endif
+     } else {
+         window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
+         if (!window_) { LOG_ERROR("window creation failed"); return false; }
+@@ -123,7 +126,7 @@ bool Application::init() {
+         if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
+     }
+ 
+-    audio_ = audio::createAudio();
++    audio_ = nullRender ? nullptr : audio::createAudio();   // null boot: no audio device either (silent by construction)
+     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
+ 
+     // Frontend boot: the match world is loaded later, from the frontend's match launch (Application_Frontend.cpp).
+@@ -4709,6 +4712,15 @@ void Application::runNavQualityTest() {
+             const core::Vec3 p = pc.position();
+             a.aliveT += dt;
+             const bool travel = b && !pc.isTransforming() && b->target < 0 && b->wp < b->path.size() && !world_.botHoldingStill(o->matchPlayer());
++            static const int traceP = std::getenv("WFC_NAVQTRACE") ? std::atoi(std::getenv("WFC_NAVQTRACE")) : -1;   // one bot's state every 0.5 s
++            if (b && o->matchPlayer() == traceP && i % 30 == 0) {
++                const game::BotNav::Waypoint* w = b->wp < b->path.size() ? &b->path[b->wp] : nullptr;
++                LOG_INFO("NAVQTRACE t %.1f p%d pos (%.1f %.1f %.1f) cell %d ground %d form %s v %.1f | goal %s (%.1f %.1f %.1f) target %d | wp %zu/%zu next (%.1f %.1f %.1f) act %d | rejoin %d (%.1f %.1f) stuckLvl %d travel %d",
++                         i * dt, b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), (int)pc.onGround(), game::formName(pc.moveForm()),
++                         std::sqrt(pc.velocity().x * pc.velocity().x + pc.velocity().z * pc.velocity().z), game::botGoalName(b->goal.kind),
++                         b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, b->target, b->wp, b->path.size(), w ? w->pos.x : 0.0f, w ? w->pos.y : 0.0f,
++                         w ? w->pos.z : 0.0f, w ? w->action : -1, (int)b->hasRejoin, b->rejoin.x, b->rejoin.z, b->stuckLevel, (int)travel);
++            }
+             core::Vec3 v = pc.velocity(); v.y = 0.0f;
+             if (travel) {
+                 a.travelT += dt;
+@@ -4735,20 +4747,20 @@ void Application::runNavQualityTest() {
+             a.last = p;
+         }
+     }
+-    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0;
++    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0;
+     for (const auto& [p, a] : acc) {
+         travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
+-        if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; }
++        if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; dithers += b->dithers; }
+         smart += world_.botIsSmart(p); ++nb;
+         LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
+                  a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
+     }
+     const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
+     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
+-             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min",
++             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d",
+              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
+              dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
+-             stucks / botMin, repaths / botMin, noPaths / botMin);
++             stucks / botMin, repaths / botMin, noPaths / botMin, dithers);
+ }
+ 
+ // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.
