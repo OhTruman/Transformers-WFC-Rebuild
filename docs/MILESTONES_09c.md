@@ -609,5 +609,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   debug). DML WINDOW OPENED 20:35: E milestone 1 at G3 (175 user-map textures, Molten -> Streets -> Gorge -> Rust ->
   Debris), continuing as an overnight block with pauses for Rendering's ~20-min GPU checks; Gameplay's windowed lockstep
   repro parked until the next pause (windowless null-render sims continue).
+  20:50 S1 black-world cause found (Rendering): under GI, ToSun.w = 3 (R1's full traced sun visibility on world pixels)
+  without R1's dual-source composite multiplied every world pixel by the traced sun visibility - Molten is mostly indoors,
+  so everything went black. GI now keeps ToSun.w = 2: world pixels take only the characters' shadows (the lightmap holds
+  the world's), which also restores character shadows on the floor under GI; a load-time calibration log (RT vs bake
+  decoded means per page) added. First S1 GPU check (~20 min) at the DML pause; Gameplay's lockstep repro runs as slot B
+  in the same pause.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
