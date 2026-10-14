@@ -1,0 +1,546 @@
+﻿{
+    "summary":  {
+                    "pass":  68,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  3,
+                    "skip":  5,
+                    "human":  14,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_flow",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_flow.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_gfx",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_gfx.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_modes",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_modes.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_maps",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_maps.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_loading",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_loading.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_audio",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_audio.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_localization",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_localization.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.mp_map_catalog",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\mp_map_catalog.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.frontend_unit_tests",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Frontend",
+                        "note":  "wfc_frontend_tests exit 0; failing: "
+                    },
+                    {
+                        "id":  "e2e.STATE.flow_trace",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "855 events, exit 0; script timeout 0"
+                    },
+                    {
+                        "id":  "e2e.STATE.boot_map",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "boot map UI_FrontEnd_m; watchedIntro False (fresh profile expects False)"
+                    },
+                    {
+                        "id":  "e2e.STATE.boot_loading_kind",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "first loading screen closes as InitialStartup (RE 1.1 [LoadingMovie] InitialStartupFileName)"
+                    },
+                    {
+                        "id":  "e2e.STATE.intro_chain_order",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "movie.play: Logo_Activision,Logo_Hasbro,Logo_HighMoon,FMV_intro (expected Logo_Activision,Logo_Hasbro,Logo_HighMoon,FMV_intro)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.intro_movies_decoded",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "intro movies with a decoded first frame: 4/4; finished events 4; unavailable 0 "
+                    },
+                    {
+                        "id":  "e2e.STATE.intro_played_to_end",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "movie.finished: Logo_Activision pos 10.400318 skipped False; Logo_Hasbro pos 13.202710 skipped False; Logo_HighMoon pos 7.482242 skipped False; FMV_intro pos 128.689676 skipped False"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.intro_on_screen",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "frames at 6 s / 14 s after boot: near-black 72% / 7%, mean luma 25.8 / 38.1, change 54.91. Drawn: whether it is the shipped intro presentation (logos, FMV, no audio PARTIAL) is a human check"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.movie_mute",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "audio.moviePlaying events 10: playing=True | playing=False | playing=True | playing=False | playing=True | playing=False (CINE_MUTE_FOR_BINK while a Bink plays: Systems M06 MovieMixerPreset)"
+                    },
+                    {
+                        "id":  "e2e.STATE.ui_transitions_legal",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "8 UI state changes; outside the TnUIController table: "
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.FrontEnd",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "expected UI_GFxFrontEnd_p.FrontEnd_GFX_1 opened (RE 1.4)"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.InLobby@PartyLobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "expected UI_GFxLobbies_p.PartyLobby_GFX_1 opened (RE 1.4)"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.InLobby@GameLobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "expected UI_GFxLobbies_p.GameLobby_GFX_1 opened (RE 1.4)"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.Paused",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "expected UI_GFxPause_p.PauseMenu_GFX_1 opened (RE 1.4)"
+                    },
+                    {
+                        "id":  "e2e.STATE.no_duplicate_screens",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GFx movies opened again while open: "
+                    },
+                    {
+                        "id":  "e2e.STATE.key_multiplayer",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Start, Down, A on the main menu -\u003e Online.OpenPartyLobby(GTS_TeamGame) (BLK A2: GTS_TeamGame)"
+                    },
+                    {
+                        "id":  "e2e.STATE.key_mode_focus_tdm",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "first EditGameMode on entering the mode list: TDM (BLK B2: initial focus TDM, EditGameMode on focus)"
+                    },
+                    {
+                        "id":  "e2e.STATE.host_option_defaults",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Create Game with untouched rows wrote: AutobalanceTeams=Autobalanced, MapSelectionMethod=Host\u0027s Choice, TimeLimit=15 minutes, PointsToWin=40 (BLK B4: Autobalanced / Host\u0027s Choice / 15 minutes / 40)"
+                    },
+                    {
+                        "id":  "e2e.STATE.lobby_default_map",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "game lobby opened: server pick 508, then the lobby movie pushed SetSelectedMapID(501); expected the first selectable map in TransLevels order (BLK C4: index 0; rebuild-selectable maps 501,502,503,504,507,508,509,510 -\u003e 501). Original dump: Seed of Corruption 501 is index 0; the rebuild only lists maps with runtime data"
+                    },
+                    {
+                        "id":  "e2e.STATE.lobby_countdown",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "A on Start Game -\u003e countdown 10 s, final countdown after 10.00 s (BLK C8: 10 s)"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_url",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "MP_IAC_Seed_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=501; mismatched keys:  (RE 3.1 / BLK D1)"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_loading_text",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "title \u0027Team Deathmatch\u0027 message \u0027in Seed Of Corruption\u0027 tips 3"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.launch_request",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "frontend MatchLaunch: mode TDM goal 40 time 900 runtimeDir MP_IAC_Seed team 1"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.gameplay_match_settings",
+                        "status":  "PASS",
+                        "owner":  "Integration/Gameplay",
+                        "note":  "Gameplay launched map MP_IAC_Seed mode TDM goal 40 time 900; frontend selection runtimeDir MP_IAC_Seed mode TDM goal 40 time 900 (RE D1-D3: from the URL)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.default_rules_tdm",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "default host options -\u003e Gameplay goal 40 / time 900 s (BLK B4/D2: 40 / 900)"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.audio_map_follows_selection",
+                        "status":  "PASS",
+                        "owner":  "Systems/Integration",
+                        "note":  "Systems loaded level audio \u0027MP_IAC_Seed\u0027 for the selected map MP_IAC_Seed"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.gameplay_runs_request",
+                        "status":  "PASS",
+                        "owner":  "Integration/Gameplay",
+                        "note":  "Gameplay: \u0027launched MP_IAC_Seed TDM (goal 40, time 900 s)\u0027 vs frontend request mode TDM goal 40 time 900"
+                    },
+                    {
+                        "id":  "e2e.MATCH.pending_countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "match level -\u003e InGame after 10.26 s (BLK D4 / RE 5.2: PendingMatch 10 s, PreGameCountdown shown yes)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.no_spawn_before_start",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "first spawn log line 1406 vs match level begin / InGame (BLK E5: no spawns in PendingMatch)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.spawn_team_cluster",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned at TnTeamPlayerStart_15214 in TnSpawnCluster_11813, team 0 (RE 5.3 / BLK E6: a faction\u0027s first cluster is an InitialSpawn cluster, locked 15 s; Streets Autobots 7810 / Decepticons 4159; this map\u0027s InitialSpawn clusters TnSpawnCluster_10766, TnSpawnCluster_11813)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.spawn_class",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "start actor TnTeamPlayerStart_15214 (TnTeamPlayerStart in TDM)"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.team_consistent",
+                        "status":  "INFO",
+                        "owner":  "Integration",
+                        "note":  "frontend launch team 1, Gameplay spawn team 0 (BLK E2/E4: offline the lobby assigns no team; the match PickTeam decides)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.title",
+                        "status":  "HUMAN",
+                        "note":  "b_title.bmp: near-black 1%, mean luma 77.1 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.main_menu",
+                        "status":  "HUMAN",
+                        "note":  "c_mainmenu.bmp: near-black 1%, mean luma 78.4 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.party_lobby",
+                        "status":  "HUMAN",
+                        "note":  "d_party.bmp: near-black 0%, mean luma 37.4 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.mode_list",
+                        "status":  "HUMAN",
+                        "note":  "e_modes.bmp: near-black 0%, mean luma 37 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.host_options",
+                        "status":  "HUMAN",
+                        "note":  "f_hostoptions.bmp: near-black 0%, mean luma 38 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.game_lobby",
+                        "status":  "HUMAN",
+                        "note":  "g_gamelobby.bmp: near-black 0%, mean luma 39.6 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.lobby_countdown",
+                        "status":  "HUMAN",
+                        "note":  "h_countdown.bmp: near-black 0%, mean luma 39.8 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.loading_screen",
+                        "status":  "HUMAN",
+                        "note":  "i_loading.bmp: near-black 13%, mean luma 22.4 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.match_pre_game",
+                        "status":  "HUMAN",
+                        "note":  "j_match_pending.bmp: near-black 1%, mean luma 49.4 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.pause_menu",
+                        "status":  "HUMAN",
+                        "note":  "m_pause.bmp: near-black 3%, mean luma 29.1 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.screen.returned_frontend",
+                        "status":  "HUMAN",
+                        "note":  "n_return.bmp: near-black 1%, mean luma 77.7 - drawn; whether it looks like WFC is a human check (R1_sheet.png)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.in_game_world_visible",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering/Frontend",
+                        "note":  "in-game frames (trace: InGame, HUD on): near-black 2% / 0%, mean luma 52.8 / 61.3"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.in_game_live",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frames 8 s apart with walk + turn input differ by 35.56 luma (frozen view if ~0)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.pause_menu_drawn",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "pause frame differs from the game frame by 38.48 luma (menu over the running match; backdrop blend PARTIAL per Frontend)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.pause_input_focus",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "hold W, press Esc: the robot must stop while the pause menu is up, and the world keeps running (scripted WFC_AUTO* input is injected after the focus gate; real keys cannot be sent safely on a shared desktop)"
+                    },
+                    {
+                        "id":  "e2e.STATE.quit_to_main_menu",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "travel UI_FrontEnd_m; returned uiState FrontEnd; intro replayed after return: 0"
+                    },
+                    {
+                        "id":  "e2e.STATE.return_lands_on_main_menu",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "frontend after the match resembles the main menu (diff 3.13) rather than Press START (diff 7.75) (Online.ShouldShowStartScreen: true only until ShowDeviceSelectionUI, Frontend 76b8287 from the recovered script)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.state_reset_after_return",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "returned snapshot: mode \u0027\u0027 mapId -1 team -1 hud False"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.music.FrontEnd",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "2 visits, music plays: BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01,BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01 (expected FRONTEND_MX_ORBIT_01 once per visit; package prefix accepted)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.music.PartyLobby",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "1 visits, music plays: BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX (expected MP_PARTY_LOBBY_MX once per visit; package prefix accepted)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.music.GameLobby",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "1 visits, music plays: BL_LVL_HUD_INTERFACE.MP_LOBBY_MX (expected MP_LOBBY_MX once per visit; package prefix accepted)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.no_menu_music_in_match",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "frontend / lobby music started during the match: "
+                    },
+                    {
+                        "id":  "e2e.AUDIO.match_start_music",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "match music during the match: BL_LVL_MP_MX.DM_START; expected BL_LVL_MP_MX.DM_START at the match start (OV A5 TnGameTypeMessage GameTypeMusic, CONFIRMED)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.ui_sounds_played",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "8 UI sounds requested by the movies (BUTTON_START,BUTTON_DOWN,BUTTON_ACCEPT); without an audio owner (audio=none): 0"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.ui_sounds_single",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "same UI sound requested twice within 20 ms: 0"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.doubled_sounds_R1",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "cue instances started twice at the same place and moment: 0 "
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.audio_level",
+                        "status":  "PASS",
+                        "owner":  "Systems/Integration",
+                        "note":  "Systems AMB level during the match: MP_IAC_Seed"
+                    },
+                    {
+                        "id":  "e2e.OWNERSHIP.render_map",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "render log lines naming the map: wfc: released map render data (11 meshes, 85 programs, 118 textures) | wfc: released map render data (2 meshes, 53 programs, 52 textures)"
+                    },
+                    {
+                        "id":  "e2e.STATE.second_launch_profile",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "watchedIntro=True with the first launch\u0027s profile"
+                    },
+                    {
+                        "id":  "e2e.STATE.second_launch_skips_intro",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "intro movies on the second launch: 0; title reached"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.cycles_completed",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "3/3 frontend -\u003e Streets TDM (15 s of walking, turning, firing, boosting) -\u003e frontend cycles; exit 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_stabilizes",
+                        "status":  "INFO",
+                        "measured":  73,
+                        "owner":  "Rendering/Systems/Integration",
+                        "note":  "private MB after each unload: 2839.094 \u003e 2789.184 \u003e 2862.199 (slope 73 MB/cycle after cycle 1); at the frontend after each return: 2426.1 \u003e 2479.2 \u003e 2482 (slope 2.8). neither GL release counts nor audio PCM explain it: run with WFC_NO_GL_RELEASE A/B and Systems WFC_LEVELAUDIO_CYCLE to split; unattributed growth -\u003e Integration"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_peak",
+                        "status":  "INFO",
+                        "measured":  3234.8,
+                        "note":  "peak private memory over 3 cycles: 3234.8 MB"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.handles_threads",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "handles at each return: 654 \u003e 657 \u003e 661 (slope 4); threads: 24 \u003e 14 \u003e 13 (slope -1)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.gl_release_per_return",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL objects released at each return: textures=72 buffers=0 framebuffers=0 renderbuffers=0 vertexArrays=0 programs=0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.audio_pcm_per_match",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "peak decoded PCM per match: 108.4 \u003e 108.4 \u003e 108.4 MB; peak live instances per match: 69 \u003e 69 \u003e 69"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.map_audio_released_each_unload",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "after each of 3 unloads (voices / instances / level cues / PCM MB): 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489; pre-load baseline PCM 36.489 MB (Systems guarantee: 0 / 0 / 0 / baseline)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.map_audio_loaded_each_match",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "map audio at each match load: level MP_IAC_Streets, level cues 189, PCM 97.179 / 97.179 / 97.179 MB"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.menu_music_resumes",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "frontend music starts: 4 for 3 returns (+ boot)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.no_menu_music_in_matches",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "frontend / lobby music starts inside 3 matches: 0 (game-type DM_* music excluded: it belongs to the match, OV A5)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.no_stale_reverb",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "after 3 returns, the next reverb change still starts from a map preset (stale map reverb): 0"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.doubled_sounds_cycles",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "doubled cue starts over 3 matches: 0 "
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.ui_movies_per_cycle",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GFx movies opened per cycle (after the first): 7, 7"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.no_stale_flow_state",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "returned snapshots with leftover match / lobby state: 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.one_launch_per_cycle",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Integration",
+                        "note":  "Gameplay launches 3, frontend match loads 3"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.map_collision",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for map_collision across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.map_objects",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for map_objects across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.particles",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for particles across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.event_queues",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for event_queues across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.timers",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for timers across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    }
+                ]
+}

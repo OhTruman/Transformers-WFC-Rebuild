@@ -1,0 +1,140 @@
+﻿{
+    "summary":  {
+                    "pass":  3,
+                    "fail":  12,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  2,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "vehicle_collision.drive",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 0.83 km driven: INFO stuck 8, PASS 4."
+                    },
+                    {
+                        "id":  "vehicle_collision.boost",
+                        "status":  "FAIL",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 0.94 km driven: INFO stuck 8, FAIL ramp_hard_stop 2, PASS 2. Failing: boost_s24 through  at () h  m @f; boost_s48 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.boost_right",
+                        "status":  "FAIL",
+                        "measured":  3,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1.54 km driven: PASS 6, FAIL ramp_hard_stop 3, INFO stuck 3. Failing: boost_right_s24 through  at () h  m @f; boost_right_s40 through  at () h  m @f; boost_right_s48 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.boost_left",
+                        "status":  "FAIL",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1.03 km driven: PASS 6, FAIL ramp_hard_stop 2, INFO stuck 4. Failing: boost_left_s24 through  at () h  m @f; boost_left_s48 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.nitro",
+                        "status":  "FAIL",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1.05 km driven: PASS 2, INFO stuck 8, FAIL ramp_hard_stop 2. Failing: nitro_s24 through  at () h  m @f; nitro_s48 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.boost_cycle",
+                        "status":  "FAIL",
+                        "measured":  3,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1.48 km driven: INFO stuck 3, PASS 6, FAIL ramp_hard_stop 2, FAIL passed_through 1. Failing: boost_cycle_s40 through  at () h  m @f; boost_cycle_s48 through StaticMeshCollectionActor_7283 at (36.0,-6.21,-29.73) h 1.6 m @f640; boost_cycle_s88 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.reverse",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 0.47 km driven: PASS 10, INFO stuck 2."
+                    },
+                    {
+                        "id":  "vehicle_collision.strafe_boost",
+                        "status":  "FAIL",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 0.96 km driven: INFO stuck 9, FAIL ramp_hard_stop 2, PASS 1. Failing: strafe_boost_s24 through  at () h  m @f; strafe_boost_s48 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.robot_walk",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 0.76 km driven: PASS 4, INFO stuck 8."
+                    },
+                    {
+                        "id":  "vehicle_collision.robot_turn",
+                        "status":  "FAIL",
+                        "measured":  1,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1 km driven: PASS 11, FAIL ramp_hard_stop 1. Failing: robot_turn_s40 through  at () h  m @f"
+                    },
+                    {
+                        "id":  "vehicle_collision.robot_jump",
+                        "status":  "FAIL",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs, 1.04 km driven: PASS 10, FAIL passed_through 2. Failing: robot_jump_s32 through StaticMeshCollectionActor_13834 at (-11.03,0.31,-20.33) h 1.6 m @f517; robot_jump_s40 through StaticMeshCollectionActor_5767 at (191.18,0.4,-114.61) h 1.6 m @f551"
+                    },
+                    {
+                        "id":  "vehicle_collision.visible_blocking_geometry",
+                        "status":  "HUMAN",
+                        "measured":  52,
+                        "owner":  "Gameplay/AssetTools",
+                        "note":  "runs whose pawn crossed VISIBLE triangles of meshes authored blocking (collision.json block=True) without crossing the exported collision: 52 (simple collision bodies are not exported, so this is a look-here list, not proof: visible-but-passable vs a simplified body). Passing through exported collision is the FAIL above. boost_cycle_s32: StaticMeshCollectionActor_8413.2;StaticMeshCollectionActor_8413.7; boost_cycle_s40: StaticMeshCollectionActor_9207.9; boost_cycle_s48: StaticMeshCollectionActor_8413.4;StaticMeshCollectionActor_8413.2;StaticMeshCollectionActor_7283.9;StaticMeshCollectionActor_13834.3; boost_cycle_s80: StaticMeshCollectionActor_8413.3;StaticMeshCollectionActor_8413.2;StaticMeshCollectionActor_8413.4; boost_left_s24: StaticMeshCollectionActor_8413.4;StaticMeshCollectionActor_8413.3; boost_left_s32: StaticMeshCollectionActor_8413.2;StaticMeshCollectionActor_8413.7"
+                    },
+                    {
+                        "id":  "vehicle_collision.visible_passable_by_authoring",
+                        "status":  "INFO",
+                        "measured":  3,
+                        "note":  "runs passing through visible meshes authored block=False (legitimately passable): 3; actors StaticMeshCollectionActor_12147.11, StaticMeshCollectionActor_12147.6, StaticMeshCollectionActor_15840.10"
+                    },
+                    {
+                        "id":  "vehicle_collision.ramp_hard_stops",
+                        "status":  "FAIL",
+                        "measured":  14,
+                        "owner":  "Gameplay",
+                        "note":  "hard stops (\u003e 8 m/s to \u003c 35% in 0.2 s) with no authored wall / step ahead on a rising walkable floor: 14 runs. boost_cycle_s40@f833 (215.0,5.1,-81.8) from 9.7 m/s rise 15.01; boost_cycle_s88@f123 (3.8,1.1,-86.6) from 14.5 m/s rise 2.26; boost_left_s24@f228 (-7.8,-8.6,-27.8) from 27.1 m/s rise 0.35; boost_left_s48@f238 (-7.7,-8.6,-27.8) from 28.2 m/s rise 0.35; boost_right_s24@f228 (-7.8,-8.6,-27.8) from 27.1 m/s rise 0.35; boost_right_s40@f585 (215.0,5.1,-81.8) from 15.2 m/s rise 15.38"
+                    },
+                    {
+                        "id":  "vehicle_collision.open_floor_stops",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "owner":  "Gameplay",
+                        "note":  "hard stops with no authored wall / step ahead on a level floor: 1 runs (a prop / volume the probe misses, or an inappropriate stop: look at the location). boost_cycle_s88@f270 (14.6,5.6,-65.5) from 15.0 m/s rise 0.11"
+                    },
+                    {
+                        "id":  "vehicle_collision.actor.StaticMeshCollectionActor_5767",
+                        "status":  "FAIL",
+                        "measured":  1,
+                        "owner":  "Gameplay",
+                        "note":  "1 runs passed through authored collision actor StaticMeshCollectionActor_5767"
+                    },
+                    {
+                        "id":  "vehicle_collision.actor.StaticMeshCollectionActor_13834",
+                        "status":  "FAIL",
+                        "measured":  1,
+                        "owner":  "Gameplay",
+                        "note":  "1 runs passed through authored collision actor StaticMeshCollectionActor_13834"
+                    },
+                    {
+                        "id":  "vehicle_collision.actor.StaticMeshCollectionActor_7283",
+                        "status":  "FAIL",
+                        "measured":  1,
+                        "owner":  "Gameplay",
+                        "note":  "1 runs passed through authored collision actor StaticMeshCollectionActor_7283"
+                    }
+                ]
+}

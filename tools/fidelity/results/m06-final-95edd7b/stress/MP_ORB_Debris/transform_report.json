@@ -1,0 +1,113 @@
+﻿{
+    "summary":  {
+                    "pass":  14,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "transform_stress.r2v_stationary",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 12. Met: thin floor 9, wall 0, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 0, low ceiling 0, transforms 12. Large legal drops 0."
+                    },
+                    {
+                        "id":  "transform_stress.r2v_walk",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: INFO large_drop 3, INFO no_exported_floor 1, PASS 8. Met: thin floor 8, wall 0, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 0, low ceiling 0, transforms 12. Large legal drops 3."
+                    },
+                    {
+                        "id":  "transform_stress.r2v_airborne",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 9, INFO large_drop 3. Met: thin floor 6, wall 0, incline \u003e 0.5 m 12, decline \u003c -0.5 m 0, airborne at press 12, low ceiling 0, transforms 12. Large legal drops 3."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_stationary",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 12. Met: thin floor 9, wall 0, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 0, low ceiling 0, transforms 12. Large legal drops 0."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_drive",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: INFO no_exported_floor 1, INFO large_drop 2, PASS 9. Met: thin floor 7, wall 1, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 0, low ceiling 0, transforms 12. Large legal drops 2."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_boost",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 11, INFO large_drop 1. Met: thin floor 5, wall 9, incline \u003e 0.5 m 1, decline \u003c -0.5 m 4, airborne at press 3, low ceiling 0, transforms 12. Large legal drops 1."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_nitro",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 11, INFO large_drop 1. Met: thin floor 5, wall 9, incline \u003e 0.5 m 1, decline \u003c -0.5 m 4, airborne at press 3, low ceiling 0, transforms 12. Large legal drops 1."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_boost_turn",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 10, INFO large_drop 2. Met: thin floor 5, wall 6, incline \u003e 0.5 m 1, decline \u003c -0.5 m 3, airborne at press 3, low ceiling 0, transforms 12. Large legal drops 2."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_airborne",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 12. Met: thin floor 5, wall 1, incline \u003e 0.5 m 8, decline \u003c -0.5 m 4, airborne at press 11, low ceiling 0, transforms 12. Large legal drops 0."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_boost_long",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: INFO large_drop 2, PASS 10. Met: thin floor 5, wall 2, incline \u003e 0.5 m 3, decline \u003c -0.5 m 1, airborne at press 3, low ceiling 0, transforms 12. Large legal drops 2."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_boost_left",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 11, INFO no_exported_floor 1. Met: thin floor 5, wall 4, incline \u003e 0.5 m 2, decline \u003c -0.5 m 4, airborne at press 4, low ceiling 0, transforms 12. Large legal drops 0."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_nitro_late",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 10, INFO large_drop 2. Met: thin floor 5, wall 2, incline \u003e 0.5 m 0, decline \u003c -0.5 m 3, airborne at press 5, low ceiling 2, transforms 12. Large legal drops 2."
+                    },
+                    {
+                        "id":  "transform_stress.v2r_rapid",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 11, INFO large_drop 1. Met: thin floor 9, wall 0, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 12, low ceiling 0, transforms 84. Large legal drops 1."
+                    },
+                    {
+                        "id":  "transform_stress.r2v_rapid",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "12 runs: PASS 10, INFO large_drop 1, INFO no_exported_floor 1. Met: thin floor 9, wall 0, incline \u003e 0.5 m 0, decline \u003c -0.5 m 0, airborne at press 0, low ceiling 0, transforms 72. Large legal drops 1."
+                    }
+                ]
+}

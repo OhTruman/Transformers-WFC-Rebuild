@@ -1,0 +1,1 @@
+scenario	cue (candidates sharing the wave)	wave	attachment	max offset growth

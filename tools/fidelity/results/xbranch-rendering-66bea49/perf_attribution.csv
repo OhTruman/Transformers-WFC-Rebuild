@@ -1,0 +1,6 @@
+"phase","frames","frame_ms","p95_ms","particles","meshes","samples","cost_present","cost_visibility","cost_lighting","cost_collision","cost_first_use","cost_skinning","cost_particles","cost_audio","cost_weapon","cost_anim","cost_render","cost_gameplay","cost_sim","cost_other","origin_shell_mag","origin_weapon_fx","origin_vehicle_fx","origin_character","origin_hitscan","origin_camera_aim","origin_movement","origin_world","origin_audio","origin_sim","origin_present","origin_other"
+"idle.steady","666","6.4","7.3","0","0","2839","0.03","0","0","0.09","0","4.24","0","0.03","0.01","0.02","1.97","0","0","0","0","0","0","3.49","0","0","0","2.6","0.03","0.25","0.03","0"
+"held.mag1_2_3s","5","258.44","263","154","15","798","0.32","0.32","0","241.6","0","11.01","0","1.62","0.32","0","3.24","0","0","0","0.32","0","0","10.36","117.24","123.39","0.32","3.24","1.62","1.62","0.32","0"
+"held.all","418","38.14","258.2","234","16","10488","0.02","0.09","0","28.81","1.03","5.25","0.04","0.68","0.02","0.09","2.11","0","0","0","0.07","0.04","0","5.53","14.17","14.47","0.01","2.76","0.68","0.39","0.02","0"
+"held_fire.ms_per_cumulative_shot","418","-1.9863","-0.299",,,"0",,,,,,,,,,,,,,,,,,,,,,,,,,
+"held_fire.ms_per_live_mesh_particle","418","8.8708","0.497",,,"0",,,,,,,,,,,,,,,,,,,,,,,,,,

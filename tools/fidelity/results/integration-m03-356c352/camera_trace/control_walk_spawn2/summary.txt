@@ -1,0 +1,2 @@
+exit 0; frames 145; flagged 1
+frame 98 e=-165.000s form ROBOT move ROBOT camS 0 both 0: offset jump 7.167 m, camera step 7.271 m, pawn step 0.158 m, yaw step 0.00 deg

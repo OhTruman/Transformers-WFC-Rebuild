@@ -1,0 +1,163 @@
+﻿{
+    "summary":  {
+                    "pass":  12,
+                    "fail":  0,
+                    "known":  2,
+                    "info":  10,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "transform_capture.r2v_side.ran",
+                        "status":  "PASS",
+                        "measured":  87,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.mesh_switch_time",
+                        "status":  "KNOWN",
+                        "measured":  1.0167,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "single-mesh switch at 1.017 s (authored: both meshes visible 0.396-0.88 s; the rebuild never shows both)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  1.731,
+                        "note":  "image change at the switch frame vs fold median 0.50 (ratio 3.4x)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.visual_pops",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "grabs with a change \u003e 3x the fold median: "
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.frozen_grabs",
+                        "status":  "INFO",
+                        "measured":  7,
+                        "note":  "fold grabs with no visible change vs the previous grab (fixed camera; authored holds included)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.ran",
+                        "status":  "PASS",
+                        "measured":  62,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.5833,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "single-mesh switch at 0.583 s (authored: both meshes visible 0.098-0.663 s; the rebuild never shows both)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  0.892,
+                        "note":  "image change at the switch frame vs fold median 0.73 (ratio 1.2x)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.visual_pops",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "grabs with a change \u003e 3x the fold median: "
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.frozen_grabs",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "fold grabs with no visible change vs the previous grab (fixed camera; authored holds included)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.ran",
+                        "status":  "PASS",
+                        "measured":  87,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.mesh_switch_time",
+                        "status":  "KNOWN",
+                        "measured":  1.0167,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "single-mesh switch at 1.017 s (authored: both meshes visible 0.396-0.88 s; the rebuild never shows both)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  7.292,
+                        "note":  "image change at the switch frame vs fold median 1.53 (ratio 4.8x)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.ran",
+                        "status":  "PASS",
+                        "measured":  62,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.5833,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "single-mesh switch at 0.583 s (authored: both meshes visible 0.098-0.663 s; the rebuild never shows both)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  1.48,
+                        "note":  "image change at the switch frame vs fold median 1.81 (ratio 0.8x)"
+                    }
+                ]
+}

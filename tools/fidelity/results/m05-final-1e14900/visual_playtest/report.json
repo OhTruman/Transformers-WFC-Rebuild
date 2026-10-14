@@ -1,0 +1,772 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  99,
+                    "skip":  0,
+                    "human":  31,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "playtest.sheets.FogBlue_0.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.050277777777777775,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 5%/red, 30m 14%/red, 15m 18%/red, 6m 20%/red, 2m 20%/red; StaticMeshCollectionActor_4549 (24 instances of FogSheet_DepthBiased_Blue_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_0.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.13534722222222223,
+                        "note":  "largest screen coverage at 30-60 m 14% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogBlue_0_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_0.close_change",
+                        "status":  "INFO",
+                        "measured":  1.00208261020479,
+                        "note":  "coverage at 2 m / at 6 m = 1.00 (20% -\u003e 20%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_0.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: red (material FogSheet_DepthBiased_Blue_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_0.motion",
+                        "status":  "HUMAN",
+                        "measured":  2.6994538538664288E-05,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 0.00 luma (coverage 14.3%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_1.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.059375,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 6%/mixed, 30m 30%/red, 15m 33%/red, 6m 20%/red, 2m 11%/red; StaticMeshCollectionActor_16332 (24 instances of FogSheet_DepthBiased_Blue_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_1.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.30069444444444443,
+                        "note":  "largest screen coverage at 30-60 m 30% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogBlue_1_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_1.close_change",
+                        "status":  "INFO",
+                        "measured":  0.5454232622161046,
+                        "note":  "coverage at 2 m / at 6 m = 0.55 (20% -\u003e 11%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_1.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: mixed, red (material FogSheet_DepthBiased_Blue_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_1.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_2.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.02125,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 2%/blue, 30m 12%/blue, 15m 17%/blue, 6m 16%/blue, 2m 3%/blue; StaticMeshCollectionActor_13351 (24 instances of FogSheet_DepthBiased_Blue_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_2.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.12145833333333333,
+                        "note":  "largest screen coverage at 30-60 m 12% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogBlue_2_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_2.close_change",
+                        "status":  "HUMAN",
+                        "measured":  0.1728888888888889,
+                        "note":  "coverage at 2 m / at 6 m = 0.17 (16% -\u003e 3%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_2.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: blue (material FogSheet_DepthBiased_Blue_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogBlue_2.motion",
+                        "status":  "HUMAN",
+                        "measured":  0.13657542286196767,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 0.14 luma (coverage 16.7%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_0.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.111875,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 11%/red, 30m 22%/mixed, 15m 25%/grey/white, 6m 19%/blue, 2m 18%/blue; StaticMeshCollectionActor_13351 (18 instances of FogSheet_DepthBiased_RED_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_0.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.22458333333333333,
+                        "note":  "largest screen coverage at 30-60 m 22% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogRED_0_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_0.close_change",
+                        "status":  "INFO",
+                        "measured":  0.94186875891583455,
+                        "note":  "coverage at 2 m / at 6 m = 0.94 (19% -\u003e 18%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_0.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: red, mixed, grey/white, blue (material FogSheet_DepthBiased_RED_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_0.motion",
+                        "status":  "HUMAN",
+                        "measured":  0.011701256176821558,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 0.01 luma (coverage 13.3%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_1.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.11875,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 12%/blue, 30m 21%/red, 15m 19%/mixed, 6m 16%/mixed, 2m 3%/red; StaticMeshCollectionActor_9567 (18 instances of FogSheet_DepthBiased_RED_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_1.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.20979166666666665,
+                        "note":  "largest screen coverage at 30-60 m 21% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogRED_1_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_1.close_change",
+                        "status":  "HUMAN",
+                        "measured":  0.19839932603201346,
+                        "note":  "coverage at 2 m / at 6 m = 0.20 (16% -\u003e 3%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_1.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, red, mixed (material FogSheet_DepthBiased_RED_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_1.motion",
+                        "status":  "HUMAN",
+                        "measured":  0.095621331173666821,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 0.10 luma (coverage 17.8%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_2.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.096527777777777782,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 10%/grey/white, 30m 8%/mixed, 15m 12%/mixed, 6m 19%/grey/white, 2m 21%/grey/white; StaticMeshCollectionActor_13351 (18 instances of FogSheet_DepthBiased_RED_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_2.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.096527777777777782,
+                        "note":  "largest screen coverage at 30-60 m 10% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogRED_2_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_2.close_change",
+                        "status":  "INFO",
+                        "measured":  1.1125319693094629,
+                        "note":  "coverage at 2 m / at 6 m = 1.11 (19% -\u003e 21%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_2.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: grey/white, mixed (material FogSheet_DepthBiased_RED_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogRED_2.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_0.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.065972222222222224,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 7%/blue, 30m 14%/blue, 15m 17%/blue, 6m 7%/grey/white, 2m 3%/blue; StaticMeshCollectionActor_12785 (4 instances of FogSheet_DepthBiased_Purple_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_0.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.13805555555555554,
+                        "note":  "largest screen coverage at 30-60 m 14% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogPurple_0_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_0.close_change",
+                        "status":  "INFO",
+                        "measured":  0.45684803001876173,
+                        "note":  "coverage at 2 m / at 6 m = 0.46 (7% -\u003e 3%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_0.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: blue, grey/white (material FogSheet_DepthBiased_Purple_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_0.motion",
+                        "status":  "HUMAN",
+                        "measured":  0.0047603454910406543,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 0.00 luma (coverage 3.3%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_1.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.17694444444444443,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 18%/blue, 30m 0%/blue, 15m 0%/neutral, 6m 9%/blue, 2m 1%/blue; StaticMeshCollectionActor_12785 (4 instances of FogSheet_DepthBiased_Purple_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_1.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.17694444444444443,
+                        "note":  "largest screen coverage at 30-60 m 18% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogPurple_1_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_1.close_change",
+                        "status":  "HUMAN",
+                        "measured":  0.071870170015455953,
+                        "note":  "coverage at 2 m / at 6 m = 0.07 (9% -\u003e 1%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_1.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: blue (material FogSheet_DepthBiased_Purple_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_1.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_2.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.18486111111111111,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 18%/blue, 30m 17%/blue, 15m 18%/blue, 6m 0%/neutral, 2m 0%/blue; StaticMeshCollectionActor_12785 (4 instances of FogSheet_DepthBiased_Purple_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_2.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.18486111111111111,
+                        "note":  "largest screen coverage at 30-60 m 18% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at FogPurple_2_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_2.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: blue (material FogSheet_DepthBiased_Purple_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.FogPurple_2.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_0.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.26770833333333333,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 27%/mixed, 30m 65%/mixed, 15m 73%/mixed, 6m 92%/mixed, 2m 100%/mixed; StaticMeshCollectionActor_9567 (20 instances of BckSillouhetteSmoke_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_0.far_veil",
+                        "status":  "HUMAN",
+                        "measured":  0.65395833333333331,
+                        "note":  "largest screen coverage at 30-60 m 65% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at BckSillouhetteSmoke_0_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_0.close_change",
+                        "status":  "INFO",
+                        "measured":  1.0892586989409985,
+                        "note":  "coverage at 2 m / at 6 m = 1.09 (92% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_0.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: mixed (material BckSillouhetteSmoke_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_0.motion",
+                        "status":  "INFO",
+                        "measured":  5.3143479731009116,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 5.31 luma (coverage 51.6%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_1.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.56361111111111106,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 56%/grey/white, 30m 56%/grey/white, 15m 75%/grey/white, 6m 93%/grey/white, 2m 100%/grey/white; StaticMeshCollectionActor_9818 (20 instances of BckSillouhetteSmoke_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_1.far_veil",
+                        "status":  "HUMAN",
+                        "measured":  0.56361111111111106,
+                        "note":  "largest screen coverage at 30-60 m 56% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at BckSillouhetteSmoke_1_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_1.close_change",
+                        "status":  "INFO",
+                        "measured":  1.0714285714285714,
+                        "note":  "coverage at 2 m / at 6 m = 1.07 (93% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_1.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: grey/white (material BckSillouhetteSmoke_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_1.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.2%)"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_2.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.999375,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 100%/mixed, 30m 100%/mixed, 15m 100%/mixed, 6m 100%/mixed, 2m 100%/mixed; StaticMeshCollectionActor_8104 (20 instances of BckSillouhetteSmoke_MATINST)"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_2.far_veil",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "largest screen coverage at 30-60 m 100% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at BckSillouhetteSmoke_2_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_2.close_change",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "coverage at 2 m / at 6 m = 1.00 (100% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_2.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: mixed (material BckSillouhetteSmoke_MATINST); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.sheets.BckSillouhetteSmoke_2.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_0.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.0022222222222222222,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 0%/mixed, 30m 3%/grey/white, 15m 28%/grey/white, 6m 96%/grey/white, 2m 100%/grey/white; Emitter_12994 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_0.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.028402777777777777,
+                        "note":  "largest screen coverage at 30-60 m 3% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_0_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_0.close_change",
+                        "status":  "INFO",
+                        "measured":  1.0374639769452449,
+                        "note":  "coverage at 2 m / at 6 m = 1.04 (96% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_0.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: grey/white (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_0.motion",
+                        "status":  "INFO",
+                        "measured":  40.725585108091195,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 40.73 luma (coverage 16.8%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_1.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.024305555555555556,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 2%/blue, 30m 30%/blue, 15m 52%/blue, 6m 100%/purple/magenta, 2m 99%/purple/magenta; Emitter_13577 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_1.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.30486111111111114,
+                        "note":  "largest screen coverage at 30-60 m 30% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_1_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_1.close_change",
+                        "status":  "INFO",
+                        "measured":  0.98895449808961455,
+                        "note":  "coverage at 2 m / at 6 m = 0.99 (100% -\u003e 99%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_1.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, purple/magenta (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_1.motion",
+                        "status":  "INFO",
+                        "measured":  12.562622757508553,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 12.56 luma (coverage 83.4%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_2.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.0077083333333333335,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 1%/blue, 30m 58%/blue, 15m 24%/purple/magenta, 6m 88%/purple/magenta, 2m 99%/purple/magenta; Emitter_15801 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_2.far_veil",
+                        "status":  "HUMAN",
+                        "measured":  0.58201388888888894,
+                        "note":  "largest screen coverage at 30-60 m 58% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_2_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_2.close_change",
+                        "status":  "INFO",
+                        "measured":  1.1250297123841217,
+                        "note":  "coverage at 2 m / at 6 m = 1.13 (88% -\u003e 99%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_2.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, purple/magenta (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_2.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_3.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.10743055555555556,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 11%/grey/white, 30m 16%/mixed, 15m 38%/mixed, 6m 100%/mixed, 2m 100%/mixed; Emitter_5707 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_3.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.15694444444444444,
+                        "note":  "largest screen coverage at 30-60 m 16% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_3_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_3.close_change",
+                        "status":  "INFO",
+                        "measured":  1.0046047582501918,
+                        "note":  "coverage at 2 m / at 6 m = 1.00 (100% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_3.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: grey/white, mixed (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_3.motion",
+                        "status":  "INFO",
+                        "measured":  25.93160575344449,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 25.93 luma (coverage 31.7%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_4.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.0028472222222222223,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 0%/grey/white, 30m 4%/blue, 15m 30%/blue, 6m 74%/purple/magenta, 2m 100%/purple/magenta; Emitter_6309 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_4.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.035416666666666666,
+                        "note":  "largest screen coverage at 30-60 m 4% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_4_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_4.close_change",
+                        "status":  "INFO",
+                        "measured":  1.3504747579204661,
+                        "note":  "coverage at 2 m / at 6 m = 1.35 (74% -\u003e 100%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_4.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, purple/magenta (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_4.motion",
+                        "status":  "INFO",
+                        "measured":  14.623124321752798,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 14.62 luma (coverage 16.7%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_5.distance_series",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 0%/neutral, 30m 32%/blue, 15m 26%/blue, 6m 100%/blue, 2m 57%/blue; Emitter_7306 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_5.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.31930555555555556,
+                        "note":  "largest screen coverage at 30-60 m 32% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_5_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_5.close_change",
+                        "status":  "INFO",
+                        "measured":  0.570652930530419,
+                        "note":  "coverage at 2 m / at 6 m = 0.57 (100% -\u003e 57%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_5.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: blue (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_5.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_6.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.00090277777777777774,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 0%/grey/white, 30m 14%/blue, 15m 31%/blue, 6m 93%/purple/magenta, 2m 98%/blue; Emitter_7338 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_6.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.14152777777777778,
+                        "note":  "largest screen coverage at 30-60 m 14% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_6_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_6.close_change",
+                        "status":  "INFO",
+                        "measured":  1.0568684822567334,
+                        "note":  "coverage at 2 m / at 6 m = 1.06 (93% -\u003e 98%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_6.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, purple/magenta (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_6.motion",
+                        "status":  "INFO",
+                        "measured":  5.3950688362121584,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 5.40 luma (coverage 1.1%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_7.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.00986111111111111,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 1%/purple/magenta, 30m 85%/purple/magenta, 15m 61%/blue, 6m 78%/blue, 2m 21%/blue; Emitter_8333 FX_Level_Generic_p.FX.Steam_Sm_FX"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_7.far_veil",
+                        "status":  "HUMAN",
+                        "measured":  0.850625,
+                        "note":  "largest screen coverage at 30-60 m 85% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Steam_7_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_7.close_change",
+                        "status":  "INFO",
+                        "measured":  0.27225223629439377,
+                        "note":  "coverage at 2 m / at 6 m = 0.27 (78% -\u003e 21%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_7.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: purple/magenta, blue (material FX_Level_Generic_p.FX.Steam_Sm_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Steam_7.motion",
+                        "status":  "INFO",
+                        "measured":  13.66249512326598,
+                        "note":  "change of the effect\u0027s own contribution over 0.93 s at 15 m: 13.66 luma (coverage 22.0%); \u003c 0.5 flagged static-looking"
+                    },
+                    {
+                        "id":  "playtest.particles.Pickup_FX.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.015416666666666667,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 2%/blue, 30m 0%/blue, 15m 2%/blue, 6m 2%/purple/magenta, 2m 8%/mixed; TnAmmoCratePickupFactory_10561 FX_Pickups_p.FX.Pickup_FX (active state: authored / Gameplay)"
+                    },
+                    {
+                        "id":  "playtest.particles.Pickup_FX.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.015416666666666667,
+                        "note":  "largest screen coverage at 30-60 m 2% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at Pickup_FX_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.Pickup_FX.hue",
+                        "status":  "HUMAN",
+                        "note":  "effect colour contribution: blue, purple/magenta, mixed (material FX_Pickups_p.FX.Pickup_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.Pickup_FX.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.0%)"
+                    },
+                    {
+                        "id":  "playtest.particles.HealthPickup_FX.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.0010416666666666667,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 0%/mixed, 30m 0%/mixed, 15m 1%/mixed, 6m 9%/grey/white, 2m 15%/mixed; TnHealthPickupFactory_13806 FX_Pickups_p.FX.HealthPickup_FX (active state: authored / Gameplay)"
+                    },
+                    {
+                        "id":  "playtest.particles.HealthPickup_FX.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.0029166666666666668,
+                        "note":  "largest screen coverage at 30-60 m 0% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at HealthPickup_FX_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.HealthPickup_FX.close_change",
+                        "status":  "INFO",
+                        "measured":  1.5345080763582966,
+                        "note":  "coverage at 2 m / at 6 m = 1.53 (9% -\u003e 15%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.HealthPickup_FX.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: mixed, grey/white (material FX_Pickups_p.FX.HealthPickup_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.HealthPickup_FX.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.1%)"
+                    },
+                    {
+                        "id":  "playtest.particles.OvershieldPickup_FX.distance_series",
+                        "status":  "INFO",
+                        "measured":  0.013680555555555555,
+                        "note":  "coverage/hue by distance (best of 4 azimuths): 60m 1%/mixed, 30m 1%/blue, 15m 3%/blue, 6m 13%/blue, 2m 26%/blue; TnOverShieldPickupFactory_6009 FX_Pickups_p.FX.OvershieldPickup_FX (active state: authored / Gameplay)"
+                    },
+                    {
+                        "id":  "playtest.particles.OvershieldPickup_FX.far_veil",
+                        "status":  "INFO",
+                        "measured":  0.013680555555555555,
+                        "note":  "largest screen coverage at 30-60 m 1% (\u003e= 35% flagged: a distant effect filling a third of the view). Look at OvershieldPickup_FX_d60_a0.jpg / _d30"
+                    },
+                    {
+                        "id":  "playtest.particles.OvershieldPickup_FX.close_change",
+                        "status":  "INFO",
+                        "measured":  2.0758733624454151,
+                        "note":  "coverage at 2 m / at 6 m = 2.08 (13% -\u003e 26%); \u003c 0.25 or \u003e 4 flagged as a drastic close-range change"
+                    },
+                    {
+                        "id":  "playtest.particles.OvershieldPickup_FX.hue",
+                        "status":  "INFO",
+                        "note":  "effect colour contribution: mixed, blue (material FX_Pickups_p.FX.OvershieldPickup_FX); red/purple flagged for the reported red/purple smoke"
+                    },
+                    {
+                        "id":  "playtest.particles.OvershieldPickup_FX.motion",
+                        "status":  "INFO",
+                        "measured":  -1,
+                        "note":  "effect not visible from the 15 m motion camera (coverage 0.4%)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_light_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 59%. Worst view IAC_Glass2_light_0_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_light_0_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_621 modPlatform_Straight_2048_STAT (26 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_light_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 80%. Worst view IAC_Glass2_light_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_light_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_4168 modPlatform_Straight_2048_STAT (26 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 27%, grazing 45%, below 74%. Worst view IAC_Glass_0_aboveclose_a1: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass_0_aboveclose_a1.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_12089 modPlatform_Straight_2048_STAT (3 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 71%. Worst view IAC_Glass_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_2413 modPlatform_CTR_2048_STAT (3 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Decagon_GlassPan2_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 24%, above 12%, grazing 28%, below 0%. Worst view IAC_Decagon_GlassPan2_0_grazing_a1: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Decagon_GlassPan2_0_grazing_a1.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_16246 ENV_CORE_CanyonFloor_B_STAT (18 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Decagon_GlassPan2_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 23%. Worst view IAC_Decagon_GlassPan2_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Decagon_GlassPan2_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_16246 ENV_CORE_CanyonFloor_B_STAT (18 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_dense_Dark_0",
+                        "status":  "HUMAN",
+                        "measured":  0.712,
+                        "note":  "14 views. Glass contributes over its own surface (mean): aboveclose 75%, above 77%, grazing 61%, below 43%. Worst view IAC_Glass2_dense_Dark_0_below_a2: 71% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_dense_Dark_0_below_a2.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_4284 CoolantSurfaceHole_STAT (4 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_dense_Dark_1",
+                        "status":  "HUMAN",
+                        "measured":  0.972,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 35%, above 47%, grazing 48%, below 31%. Worst view IAC_Glass2_dense_Dark_1_below_a1: 97% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_dense_Dark_1_below_a1.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_4284 CoolantSurfaceHole_STAT (4 placements)"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_1009_side",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_1009_side.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_7408_up",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_7408_up.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_1009_up",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_1009_up.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_1009_down",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_1009_down.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_7408_down",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_7408_down.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_7293_down",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_7293_down.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_7293_side",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_7293_side.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.TnReachSpec_7408_side",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "near-black (luma \u003c 3) fraction of the view along/across an authored ramp (navigation edge slope \u003e 0.12); \u003e= 15% flagged - TnReachSpec_7408_side.jpg"
+                    },
+                    {
+                        "id":  "playtest.ramps.views",
+                        "status":  "INFO",
+                        "measured":  18,
+                        "note":  "18 ramp views over 6 authored ramp edges (of 6 with slope \u003e 0.12)"
+                    }
+                ]
+}

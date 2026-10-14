@@ -1,0 +1,69 @@
+﻿{
+    "summary":  {
+                    "pass":  6,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  2,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  2
+                },
+    "results":  [
+                    {
+                        "id":  "mapsweep.MP_IAC_Seed",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.039); draws world 57 / BSP 9, materials 36, noProgram 0, glErr 0, glDebug 0, gpu 1.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Berth",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.049); draws world 29 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_UND_Complex",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.337); draws world 46 / BSP 17, materials 33, noProgram 0, glErr 0, glDebug 0, gpu 0.5 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Rust",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.244); draws world 132 / BSP 19, materials 58, noProgram 0, glErr 0, glDebug 0, gpu 0.6 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ESC_BrokenHope",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.373); draws world 548 / BSP 130, materials 92, noProgram 0, glErr 0, glDebug 0, gpu 1 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ESC_Remnant",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.592); draws world 155 / BSP 37, materials 57, noProgram 0, glErr 0, glDebug 0, gpu 0.7 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ORB_Debris",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE WITH VISUAL DEFECTS: world PASS (0.454); draws world 47 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.4 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Streets",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.164); draws world 78 / BSP 33, materials 41, noProgram 0, glErr 0, glDebug 0, gpu 0.8 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_KON_Molten",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.516); draws world 38 / BSP 47, materials 35, noProgram 0, glErr 0, glDebug 0, gpu 1 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_UND_Gorge",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE WITH VISUAL DEFECTS: world PASS (0.358); draws world 286 / BSP 66, materials 47, noProgram 0, glErr 0, glDebug 0, gpu 1.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    }
+                ]
+}

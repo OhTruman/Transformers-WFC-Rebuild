@@ -1,0 +1,116 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  15,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "perf_release.idle",
+                        "status":  "INFO",
+                        "measured":  3.76,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 3.66-4.20 ms); integration baseline 3.8-4.1 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.movement",
+                        "status":  "INFO",
+                        "measured":  0.99,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 0.87-1.87 ms); integration baseline 1-1.5 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.firing",
+                        "status":  "INFO",
+                        "measured":  4.07,
+                        "unit":  "ms",
+                        "note":  "median of 4 120-frame windows (range 4.03-4.07 ms); integration baseline 4-4.1 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.sustained",
+                        "status":  "INFO",
+                        "measured":  4.07,
+                        "unit":  "ms",
+                        "note":  "median of 49 120-frame windows (range 3.74-4.43 ms); integration baseline 3.75-4.6 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.fine_aim",
+                        "status":  "INFO",
+                        "measured":  3.19,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 3.12-3.34 ms); integration baseline 3.1-4.2 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.transform_r2v",
+                        "status":  "INFO",
+                        "measured":  3.88,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 3.53-4.06 ms); integration baseline 0.9-1.7 ms; 0 spikes after startup; POSSIBLE REGRESSION (\u003e baseline max x1.25 + 0.5 ms)"
+                    },
+                    {
+                        "id":  "perf_release.vehicle_idle",
+                        "status":  "INFO",
+                        "measured":  4.23,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 4.17-4.41 ms); integration baseline 4.3-4.5 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.hover_move",
+                        "status":  "INFO",
+                        "measured":  2.44,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 1.93-3.74 ms); integration baseline 1.2-1.8 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.boost",
+                        "status":  "INFO",
+                        "measured":  4.12,
+                        "unit":  "ms",
+                        "note":  "median of 9 120-frame windows (range 4.02-4.38 ms); integration baseline 1.2-1.7 ms; 0 spikes after startup; POSSIBLE REGRESSION (\u003e baseline max x1.25 + 0.5 ms)"
+                    },
+                    {
+                        "id":  "perf_release.nitro",
+                        "status":  "INFO",
+                        "measured":  4.2,
+                        "unit":  "ms",
+                        "note":  "median of 9 120-frame windows (range 3.95-4.39 ms); integration baseline 1.2-1.8 ms; 0 spikes after startup; POSSIBLE REGRESSION (\u003e baseline max x1.25 + 0.5 ms)"
+                    },
+                    {
+                        "id":  "perf_release.transform_v2r",
+                        "status":  "INFO",
+                        "measured":  3.73,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 3.65-4.09 ms); integration baseline 1.1-2.1 ms; 0 spikes after startup; POSSIBLE REGRESSION (\u003e baseline max x1.25 + 0.5 ms)"
+                    },
+                    {
+                        "id":  "perf_release.transform_r2v_turning",
+                        "status":  "INFO",
+                        "measured":  1.19,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 0.87-2.00 ms); integration baseline 0.9-1.7 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.boost_turning",
+                        "status":  "INFO",
+                        "measured":  1.63,
+                        "unit":  "ms",
+                        "note":  "median of 9 120-frame windows (range 1.17-4.36 ms); integration baseline 1.2-1.7 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.nitro_turning",
+                        "status":  "INFO",
+                        "measured":  1.51,
+                        "unit":  "ms",
+                        "note":  "median of 9 120-frame windows (range 1.23-4.42 ms); integration baseline 1.2-1.8 ms; 0 spikes after startup"
+                    },
+                    {
+                        "id":  "perf_release.transform_v2r_turning",
+                        "status":  "INFO",
+                        "measured":  1.14,
+                        "unit":  "ms",
+                        "note":  "median of 6 120-frame windows (range 1.06-2.38 ms); integration baseline 1.1-2.1 ms; 0 spikes after startup"
+                    }
+                ]
+}

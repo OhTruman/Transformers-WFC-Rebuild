@@ -1,0 +1,267 @@
+﻿{
+    "summary":  {
+                    "pass":  15,
+                    "fail":  26,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  1,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "present.route.completes",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e MP_IAC_Streets -\u003e pause / resume -\u003e frontend -\u003e second match: completed"
+                    },
+                    {
+                        "id":  "present.frontend.scene.a00_title",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "title 3D scene region: detail 0.124, black 0.595, largest blank area 0.6, untextured / placeholder surface largest 0.028 total 0.037, noise texture 0.001 (FAIL: black \u003e= 0.70, one blank area \u003e= 0.45, detail \u003c 0.10, untextured largest \u003e= 0.12 or total \u003e= 0.40, noise \u003e= 0.15)"
+                    },
+                    {
+                        "id":  "present.frontend.scene.a01_title_9s",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "title 3D scene region: detail 0.116, black 0.584, largest blank area 0.6, untextured / placeholder surface largest 0.025 total 0.036, noise texture 0 (FAIL: black \u003e= 0.70, one blank area \u003e= 0.45, detail \u003c 0.10, untextured largest \u003e= 0.12 or total \u003e= 0.40, noise \u003e= 0.15)"
+                    },
+                    {
+                        "id":  "present.frontend.scene.a13_frontend_after",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "title 3D scene region: detail 0.384, black 0.007, largest blank area 0.048, untextured / placeholder surface largest 0.028 total 0.124, noise texture 0.01 (FAIL: black \u003e= 0.70, one blank area \u003e= 0.45, detail \u003c 0.10, untextured largest \u003e= 0.12 or total \u003e= 0.40, noise \u003e= 0.15)"
+                    },
+                    {
+                        "id":  "present.frontend.scene.b13_frontend_after",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "title 3D scene region: detail 0.385, black 0.007, largest blank area 0.025, untextured / placeholder surface largest 0.028 total 0.12, noise texture 0.01 (FAIL: black \u003e= 0.70, one blank area \u003e= 0.45, detail \u003c 0.10, untextured largest \u003e= 0.12 or total \u003e= 0.40, noise \u003e= 0.15)"
+                    },
+                    {
+                        "id":  "present.frontend.screen.a02_party",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "screen: detail 0.112, black 0, largest blank 0.437, untextured 0 / 0, noise 0; scene area right of the panel: largest blank 0.713, flat grey 0%"
+                    },
+                    {
+                        "id":  "present.frontend.screen.a03_lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "screen: detail 0.18, black 0.008, largest blank 0.318, untextured 0 / 0, noise 0; scene area right of the panel: largest blank 0.467, flat grey 0%"
+                    },
+                    {
+                        "id":  "present.frontend.screen.a04_loading",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "screen: detail 0.077, black 0.355, largest blank 0.172, untextured 0.001 / 0.001, noise 0"
+                    },
+                    {
+                        "id":  "present.frontend.screen.b02_party",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "screen: detail 0.112, black 0, largest blank 0.384, untextured 0 / 0, noise 0; scene area right of the panel: largest blank 0.849, flat grey 0%"
+                    },
+                    {
+                        "id":  "present.frontend.screen.b03_lobby",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "screen: detail 0.179, black 0.008, largest blank 0.314, untextured 0 / 0, noise 0; scene area right of the panel: largest blank 0.608, flat grey 0%"
+                    },
+                    {
+                        "id":  "present.charselect.ui.a",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Choose Character screen: detail 0.244; dump texts with class names: 2"
+                    },
+                    {
+                        "id":  "present.charselect.ui.b",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Choose Character screen: detail 0.239; dump texts with class names: 2"
+                    },
+                    {
+                        "id":  "present.charselect.gameplay_receives",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "selected Scientist (Jet4); Gameplay spawn chassis Jet4,Jet4"
+                    },
+                    {
+                        "id":  "present.charselect.body_resolves",
+                        "status":  "FAIL",
+                        "owner":  "AssetTools/Gameplay",
+                        "note":  "selected chassis Jet4; robot body loaded: Optimus (Optimus for a non-Optimus selection = the selection is not drawn)"
+                    },
+                    {
+                        "id":  "present.gameplay.world.a07_spawn",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.056 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.05, largest blank 0.562, untextured 0.004 / 0.027, noise 0"
+                    },
+                    {
+                        "id":  "present.gameplay.world.a08_moving",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.02 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.283, largest blank 0.35, untextured 0.006 / 0.017, noise 0"
+                    },
+                    {
+                        "id":  "present.gameplay.world.a09_moving2",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.022 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.674, largest blank 0.65, untextured 0 / 0, noise 0"
+                    },
+                    {
+                        "id":  "present.gameplay.world.b07_spawn",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.05 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.058, largest blank 0.37, untextured 0.004 / 0.026, noise 0"
+                    },
+                    {
+                        "id":  "present.gameplay.world.b08_moving",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.019 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.3, largest blank 0.373, untextured 0.007 / 0.017, noise 0"
+                    },
+                    {
+                        "id":  "present.gameplay.world.b09_moving2",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Integration",
+                        "note":  "world region (HUD band and player excluded): textured detail 0.022 (PASS \u003e= 0.15, FAIL \u003c 0.10), black 0.675, largest blank 0.647, untextured 0 / 0, noise 0"
+                    },
+                    {
+                        "id":  "present.transition.second_match.07_spawn",
+                        "status":  "FAIL",
+                        "owner":  "Integration/Rendering",
+                        "note":  "world detail match 1 0.056 vs match 2 0.05 (ratio 0.89; equivalent within 0.6 - 1.7, and match 2 itself must not FAIL)"
+                    },
+                    {
+                        "id":  "present.transition.second_match.08_moving",
+                        "status":  "FAIL",
+                        "owner":  "Integration/Rendering",
+                        "note":  "world detail match 1 0.02 vs match 2 0.019 (ratio 0.95; equivalent within 0.6 - 1.7, and match 2 itself must not FAIL)"
+                    },
+                    {
+                        "id":  "present.transition.pause_cleared.a",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "3.5 s after Resume: structural similarity to the PAUSE frame 0.971, to the gameplay frame before pause 0.254 (FAIL: the frame still looks like the pause screen)"
+                    },
+                    {
+                        "id":  "present.transition.pause_cleared.b",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "3.5 s after Resume: structural similarity to the PAUSE frame 0.971, to the gameplay frame before pause 0.254 (FAIL: the frame still looks like the pause screen)"
+                    },
+                    {
+                        "id":  "present.exclusive.menu_visible_while_moving",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "pause menu still drawn after Resume: True; product UI state after Resume = InGame (real input routed to gameplay): True; pawn moved after Resume: True -\u003e a menu stays visible while gameplay accepts movement"
+                    },
+                    {
+                        "id":  "present.exclusive.no_movement_under_menu",
+                        "status":  "UNKNOWN",
+                        "owner":  "Experimental/Frontend",
+                        "note":  "not measurable with the current hooks: scripted input (WFC_AUTO*) is added after the menu input gate. Motion per UI state with scripted Forward, for reference only: WaitingOnGameStart 0.0 m; InGame 29.4 m; Paused 5.9 m; InGame 17.8 m; Paused 5.1 m; WaitingOnGameStart 0.0 m; InGame 29.8 m; Paused 7.5 m; InGame 16.7 m; Paused 5.7 m. Proposal: a pre-gate input hook (e.g. WFC_INPUTSCRIPT) so tests press keys the way a player does"
+                    },
+                    {
+                        "id":  "present.gameplay.route_vs_direct",
+                        "status":  "FAIL",
+                        "owner":  "Integration",
+                        "note":  "same start (TnTeamPlayerStart_12481) - direct boot world detail 0.197, frontend-launched 0.056 (ratio 0.28; FAIL \u003c 0.5: the frontend-launched match loses world content that direct boot draws -\u003e route-specific seam, not the map data)"
+                    },
+                    {
+                        "id":  "present.reference.streets_pipeline",
+                        "status":  "PASS",
+                        "owner":  "Rendering/Integration",
+                        "note":  "13 fixed Streets cameras vs the known-good reference (streets_spawn_m05_1e14900): median structural similarity 1; views lost (detail ratio \u003c 0.5 or similarity \u003c 0.4): 0 . FAIL flags the whole merged visual pipeline regardless of how many maps load"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_movies.softlock",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "extras_movies: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: none; after 3 Back press(es) the frame matches the main menu False (scene similarity 0.075, still-inside similarity 0.958); focus present in the screen\u0027s dumps False"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_movies.classification",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "extras_movies: DISPLAY CORRECT (automated part). a movie started: False"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_credits.softlock",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "extras_credits: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: none; after 2 Back press(es) the frame matches the main menu False (scene similarity -0.011, still-inside similarity 0.924); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_credits.classification",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "extras_credits: DISPLAY CORRECT (automated part). after Accept on Credits the screen differs from the Extras list: False (similarity 0.915)"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_concept.softlock",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "extras_concept: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: not needed; after 2 Back press(es) the frame matches the main menu True (scene similarity 0.607, still-inside similarity 0.111); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.extras_concept.classification",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "extras_concept: FULLY FUNCTIONAL. "
+                    },
+                    {
+                        "id":  "present.watchdog.accounts_create.softlock",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "accounts_create: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: none; after 3 Back press(es) the frame matches the main menu False (scene similarity -0.043, still-inside similarity 0.959); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.accounts_create.classification",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "accounts_create: DISPLAY CORRECT (automated part). typed \u0027WFCQA\u0027 with ordinary key events: text in a dump False; frame changed after typing False"
+                    },
+                    {
+                        "id":  "present.watchdog.settings_controls.softlock",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "settings_controls: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: not needed; after 3 Back press(es) the frame matches the main menu True (scene similarity 0.55, still-inside similarity 0.179); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.settings_controls.classification",
+                        "status":  "FAIL",
+                        "owner":  "Frontend",
+                        "note":  "settings_controls: DISPLAY CORRECT (automated part). Mouse / Keyboard Layout page, Accept on the first binding, then the K key: binding texts changed True, a \u0027K\u0027 binding shown False"
+                    },
+                    {
+                        "id":  "present.watchdog.customization.softlock",
+                        "status":  "PASS",
+                        "owner":  "Frontend/AssetTools",
+                        "note":  "customization: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: not needed; after 3 Back press(es) the frame matches the main menu True (scene similarity 0.887, still-inside similarity 0.185); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.customization.classification",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/AssetTools",
+                        "note":  "customization: DISPLAY CORRECT (automated part). character model loaded for the preview: False; \u0027LOADING\u0027 still shown: False"
+                    },
+                    {
+                        "id":  "present.watchdog.back_forward.softlock",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "back_forward: script finished; alternative exit (Cancel / Start / Esc) reaches the main menu: not needed; after 0 Back press(es) the frame matches the main menu True (scene similarity 0.642, still-inside similarity 0.993); focus present in the screen\u0027s dumps True"
+                    },
+                    {
+                        "id":  "present.watchdog.back_forward.classification",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "back_forward: FULLY FUNCTIONAL. "
+                    }
+                ]
+}

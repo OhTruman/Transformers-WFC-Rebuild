@@ -1,0 +1,53 @@
+== held_fire firing window: 16253 samples
+  100.0%  main
+  100.0%  [KERNEL32.DLL]
+  100.0%  [ntdll.dll]
+  100.0%  core::Application::run
+  100.0%  __tmainCRTStartup
+  84.9%  game::CollisionWorld::segmentHit
+  83.0%  game::World::tick
+  79.3%  game::PlayerController::applyToPawn
+  39.2%  game::World::fireHitscan
+  21.5%  core::Vec3::operator-
+  15.6%  core::cross
+  15.4%  render::
+  15.4%  game::World::draw
+  11.2%  core::Vec3::Vec3
+  11.0%  std::__1::__math::fabs[abi:nqe230102]
+   9.6%  core::dot
+   8.4%  render::wfc::Pipeline::drawSubs
+   8.0%  render::wfc::Pipeline::draw
+   7.3%  render::wfc::Pipeline::drawDynamic
+   5.3%  render::wfc::Pipeline::computeEnv
+   5.3%  bool std::__1::__invoke_r[abi:nqe230102]<bool, game::World::loadVerticalSlice
+   5.3%  bool std::__1::__invoke_void_return_wrapper<bool, false>::__call[abi:nqe230102]<game::World::loadVerticalSlice
+  -- segmentHit direct callers:
+  84.8%  game::CollisionWorld::segmentHit (Collision.cpp:122)
+   0.0%  game::World::loadVerticalSlice (World.cpp:135)
+   0.0%  game::World::fireHitscan (World.cpp:303)
+   0.0%  game::PlayerController::applyToPawn (PlayerController.cpp:185)
+== burst firing window: 2141 samples
+  100.0%  core::Application::run
+  100.0%  __tmainCRTStartup
+  100.0%  [ntdll.dll]
+  100.0%  main
+  100.0%  [KERNEL32.DLL]
+  90.8%  game::World::tick
+  90.7%  game::CollisionWorld::segmentHit
+  87.8%  game::PlayerController::applyToPawn
+  43.7%  game::World::fireHitscan
+  25.3%  core::Vec3::operator-
+  15.9%  core::cross
+  11.9%  core::Vec3::Vec3
+  11.4%  std::__1::__math::fabs[abi:nqe230102]
+  10.3%  core::dot
+   8.3%  render::
+   8.2%  game::World::draw
+   4.8%  render::wfc::Pipeline::drawDynamic
+   3.6%  render::wfc::Pipeline::drawSubs
+   3.5%  render::wfc::Pipeline::draw
+   3.4%  render::wfc::Pipeline::programFor
+   3.3%  render::wfc::Pipeline::texture
+   3.3%  std::__1::operator!=[abi:nqe230102]
+  -- segmentHit direct callers:
+  90.7%  game::CollisionWorld::segmentHit (Collision.cpp:122)

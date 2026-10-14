@@ -1,0 +1,63 @@
+﻿{
+    "map":  "MP_IAC_Streets",
+    "render_audit":  true,
+    "runtime_exit":  0,
+    "prefab_instances_declared":  16,
+    "summary":  {
+                    "bsp":  {
+                                "PRESENT + RENDERED":  1,
+                                "UNKNOWN":  1
+                            },
+                    "movers":  {
+                                   "PRESENT + WRONG EFFECT":  3,
+                                   "PRESENT + RENDERED":  6,
+                                   "UNKNOWN":  3
+                               },
+                    "prefab_members":  {
+                                           "PRESENT + RENDERED":  33,
+                                           "UNKNOWN":  1
+                                       },
+                    "props":  {
+                                  "PRESENT + RENDERED":  1870,
+                                  "UNKNOWN":  36
+                              },
+                    "prefabs":  {
+                                    "PRESENT + RENDERED":  15,
+                                    "NOT INSTANTIATED":  1
+                                },
+                    "decals":  {
+                                   "PRESENT + RENDERED":  25
+                               },
+                    "level_emitters":  {
+                                           "NOT INSTANTIATED":  8
+                                       },
+                    "pickup_fx":  {
+                                      "NOT INSTANTIATED":  37
+                                  },
+                    "pickups":  {
+                                    "NOT INSTANTIATED":  5
+                                },
+                    "destructibles":  {
+                                          "NOT INSTANTIATED":  1
+                                      },
+                    "lights":  {
+                                   "PRESENT + RENDERED":  1,
+                                   "NOT INSTANTIATED":  1
+                               },
+                    "lightmaps":  {
+                                      "PRESENT + RENDERED":  1
+                                  },
+                    "fog":  {
+                                "PRESENT + RENDERED":  1
+                            },
+                    "post_process":  {
+                                         "PRESENT + RENDERED":  1
+                                     },
+                    "reflections":  {
+                                        "UNKNOWN":  1
+                                    },
+                    "ambient_audio":  {
+                                          "NOT INSTANTIATED":  70
+                                      }
+                }
+}

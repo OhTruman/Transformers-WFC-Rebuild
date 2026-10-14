@@ -1,0 +1,225 @@
+﻿{
+    "summary":  {
+                    "pass":  16,
+                    "fail":  7,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  5,
+                    "unknown":  0,
+                    "waiting":  5,
+                    "partial":  1
+                },
+    "results":  [
+                    {
+                        "id":  "accept.intro.video",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "intro movies with decoded frames 4/4; frame at 5 s near-black 84%"
+                    },
+                    {
+                        "id":  "accept.intro.audio",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Systems",
+                        "note":  "intro movies whose audio started on the Systems device (movie.audioStart with a handle): 0/4; decode failures 0. Audible balance / sync is a human check. Human playtest: the intro has no sound. Frontend documents movie audio as PARTIAL (10 mono FLAC tracks, layout unidentified; MoviesToAlwaysPlaySound lists the logos) - owner Frontend for decode, Systems for playback on the one audio device, AssetTools / RE for the track layout"
+                    },
+                    {
+                        "id":  "accept.background.title",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering/AssetTools",
+                        "note":  "title: near-black 94%, flat untextured grey 0%; original = live 3D level UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m (RE OV D, CONFIRMED). Black = the level / sublevel / camera is not running; flat grey = placeholder or missing-material geometry; otherwise drawn - fidelity is a human check"
+                    },
+                    {
+                        "id":  "accept.background.main_menu",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering/AssetTools",
+                        "note":  "main_menu: near-black 87%, flat untextured grey 0%; original = live 3D level UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m (RE OV D, CONFIRMED). Black = the level / sublevel / camera is not running; flat grey = placeholder or missing-material geometry; otherwise drawn - fidelity is a human check"
+                    },
+                    {
+                        "id":  "accept.background.party_lobby",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering/AssetTools",
+                        "note":  "party_lobby: near-black 64%, flat untextured grey 0%; original = live 3D level UI_PartyLobby_m streaming UI_CharacterCustomization_m (RE OV D, CONFIRMED). Black = the level / sublevel / camera is not running; flat grey = placeholder or missing-material geometry; otherwise drawn - fidelity is a human check"
+                    },
+                    {
+                        "id":  "accept.background.host_options",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering/AssetTools",
+                        "note":  "host_options: near-black 65%, flat untextured grey 0%; original = live 3D level UI_PartyLobby_m streaming UI_CharacterCustomization_m (RE OV D, CONFIRMED). Black = the level / sublevel / camera is not running; flat grey = placeholder or missing-material geometry; otherwise drawn - fidelity is a human check"
+                    },
+                    {
+                        "id":  "accept.background.frontend_after_return",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Rendering/AssetTools",
+                        "note":  "frontend_after_return: near-black 94%, flat untextured grey 0%; original = live 3D level UI_FrontEnd_m again after travel back (RE OV D, CONFIRMED). Black = the level / sublevel / camera is not running; flat grey = placeholder or missing-material geometry; otherwise drawn - fidelity is a human check"
+                    },
+                    {
+                        "id":  "accept.title.background_summary",
+                        "status":  "INFO",
+                        "owner":  "AssetTools/Frontend/Rendering",
+                        "note":  "title frame near-black 94%, main menu 87%. The original shows the UI_FrontEnd_m 3D scene (orbit camera, Cybertron, fireworks; RE 1.2 Kismet). Documented gap: UI_FrontEnd_m not exported (AssetTools) / not rendered (Frontend / Rendering)"
+                    },
+                    {
+                        "id":  "accept.title.start_advances",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Start (keyboard F3) -\u003e ShowDeviceSelectionUI + main menu: True; A (Enter) before it advanced: False. CONFIRMED original: the title reacts to buttonStart only (FrontEnd_GFX inputEvent), so Enter doing nothing is original; keyboard Start is F3 in the rebuild\u0027s PROVISIONAL key map - usability decision for Frontend, not a fidelity defect"
+                    },
+                    {
+                        "id":  "accept.controller",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "XInput is mapped (Win32Window: A/B/X/Y/Start/Back/D-pad/shoulders/triggers/thumbs -\u003e UiKey) but pad input cannot be injected safely; play the whole route with a controller"
+                    },
+                    {
+                        "id":  "accept.nav.back_mode_list",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "B in the mode list returns to the party lobby root: frame difference to the root 3.23 luma (focus highlight may differ)"
+                    },
+                    {
+                        "id":  "accept.nav.back_host_options",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "B in the host options returns to the mode list: difference 0.62"
+                    },
+                    {
+                        "id":  "accept.nav.back_twice",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "B twice from the host options returns to the party root: difference 3.8"
+                    },
+                    {
+                        "id":  "accept.nav.back_party_root",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "B at the party root -\u003e Game.QuitToMainMenu 1 -\u003e travel to UI_FrontEnd_m 1 (BLK A3)"
+                    },
+                    {
+                        "id":  "accept.nav.back_sound",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "BUTTON_BACK requested 5 times for 4 B presses (BLK A4)"
+                    },
+                    {
+                        "id":  "accept.nav.flow_completed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "navigation script completed"
+                    },
+                    {
+                        "id":  "accept.loading.updates_during_load",
+                        "status":  "FAIL",
+                        "owner":  "Frontend/Integration",
+                        "note":  "18 window captures over 4.9 s of map load (4.057 s blocking per match.loaded); consecutive captures that change: 4/17; longest frozen interval 3.7 s (FAIL above 2.5 s). A frozen loading screen = the load blocks the presentation loop (Frontend documents the blocking load as PARTIAL; RE: native threaded load + Bink underlay keeps animating)"
+                    },
+                    {
+                        "id":  "accept.loading.overlay_gone",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "in-game frame 2 s after InGame: near-black 3%, mean luma 18.1 (the loading underlay was composited over the match until Integration 7a11ce2)"
+                    },
+                    {
+                        "id":  "accept.match.clock_runs",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "Gameplay RemainingTime: 25 samples, 23 1-s decrements (GRI 1 Hz timer)"
+                    },
+                    {
+                        "id":  "accept.match.score_updates",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "team score lines: team=0 score=1 | team=1 score=1 | team=0 score=2 | team=1 score=2 | team=0 score=3"
+                    },
+                    {
+                        "id":  "accept.match.kill_death_events",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Integration",
+                        "note":  "MATCH kill 5, MATCH death 5, flow match.kill 5"
+                    },
+                    {
+                        "id":  "accept.match.respawn_sequence",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Integration",
+                        "note":  "respawns 4; Spectating UI shown"
+                    },
+                    {
+                        "id":  "accept.match.end_rule",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "reason=score_limit winner=0 t=22 (gameplay reason Score)"
+                    },
+                    {
+                        "id":  "accept.match.result_exposed",
+                        "status":  "PARTIAL",
+                        "owner":  "Frontend/Integration",
+                        "note":  "EndGameStats: data-store reads the rebuild does not answer: GetCollectionRowCount \u003cTnMenuItems:Specialties\u003e; ReadValue \u003cCurrentGame:AttackingTeamIndex\u003e (Integration documents \u0027undefined / +NaN\u0027 in the experience panel: no profile / XP service)"
+                    },
+                    {
+                        "id":  "accept.match.second_match_reset",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "second match from the lobby: MATCH restart + InGame reached (score reset is checked by m05-e2e-gate R7)"
+                    },
+                    {
+                        "id":  "accept.hud.clock_displayed",
+                        "status":  "WAITING",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "Hud_GFX (clock / team score / health / ammo, BLK G) open in play: False; dumps 0. Until the HUD movie is drawn, displayed vs Gameplay values cannot be compared (owner Frontend / Rendering: HUD ownership handoff)"
+                    },
+                    {
+                        "id":  "accept.hud.score_displayed",
+                        "status":  "WAITING",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "team score bars (\u003cCurrentGame:Teams\u003e polled every 500 ms, BLK G) - waiting for the HUD movie"
+                    },
+                    {
+                        "id":  "accept.hud.kill_feed_event",
+                        "status":  "WAITING",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "kills 5; kill-feed (TnDeathMessage: DeathMessage(killer, victim) / SuicideMessage, 3.0 s lifetime, CONFIRMED) entries traced: 0. Original presentation (RE OV A2, CONFIRMED): Hud_GFX _global.GameMessage(html) at (84, 626), 5 rows, each 5.0 s + 1.0 s fade, local white / teammate (80,181,213) / enemy (240,60,60), weapon icon tokens. Gameplay 391b7f0 exposes HudGameState::killFeed; WAITING until a trace or drawn feed exists"
+                    },
+                    {
+                        "id":  "accept.hud.point_event",
+                        "status":  "WAITING",
+                        "owner":  "Frontend",
+                        "note":  "kill -\u003e _global.PointEvent (TnHUD KillTransactionObserver, CONFIRMED authored) pushes traced: 0"
+                    },
+                    {
+                        "id":  "accept.hud.values_match_gameplay",
+                        "status":  "WAITING",
+                        "owner":  "Frontend",
+                        "note":  "HUD text fields vs MATCH timer / score lines (hud_table.csv) - waiting for the HUD movie"
+                    },
+                    {
+                        "id":  "accept.hud.minimap_absent",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Rendering",
+                        "note":  "CONFIRMED original: no minimap, radar or compass (RE OV A9, exhaustive absence; AssetTools negative search). Minimap / radar evidence in this run: 0. A minimap must not be presented as original"
+                    },
+                    {
+                        "id":  "accept.present.a_ingame",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "a_ingame.bmp: near-black 3%"
+                    },
+                    {
+                        "id":  "accept.present.b_spectating",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "b_spectating.bmp: near-black 0%"
+                    },
+                    {
+                        "id":  "accept.present.c_endgame",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "c_endgame.bmp: near-black 0%"
+                    },
+                    {
+                        "id":  "accept.present.d_match2",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "d_match2.bmp: near-black 3%"
+                    }
+                ]
+}

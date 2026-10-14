@@ -1,0 +1,5 @@
+"scenario","windows","median_ms","min_ms","max_ms","baseline","spikes_after_startup","exit","possible_regression"
+"transform_r2v_turning","6","1.18","0.88","1.94","0.9-1.7","0","0","False"
+"boost_turning","9","1.57","1.17","4.5","1.2-1.7","0","0","False"
+"nitro_turning","9","1.36","1.23","4.44","1.2-1.8","0","0","False"
+"transform_v2r_turning","6","1.13","1.03","2.43","1.1-2.1","0","0","False"

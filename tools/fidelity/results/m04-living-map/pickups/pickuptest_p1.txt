@@ -1,0 +1,20 @@
+PICKUPTEST TnAmmoCratePickupFactory initial: available=1 mesh=1 customFx=0 beam=1
+PICKUPTEST t=   0.02 TnAmmoCratePickupFactory TAKEN available=0 mesh=0 customFx=0 beam=0 sound=BL_HUD_INTERFACE.HEALTH_PU_AMMO
+PICKUPTEST t=  30.03 TnAmmoCratePickupFactory RESPAWNED available=1 mesh=1 customFx=0 beam=1 sound=-
+PICKUPTEST TnAmmoCratePickupFactory: taken at 0.02, sleeping overlap ignored, respawn after 30.02 s (authored 30); still standing on it at respawn -> not re-taken (Touch = overlap begin)
+PICKUPTEST TnAmmoCratePickupFactory: step off and back on -> available=0
+PICKUPTEST TnHealthPickupFactory initial: available=1 mesh=1 customFx=1 beam=0
+PICKUPTEST t=  31.12 TnHealthPickupFactory TAKEN available=0 mesh=0 customFx=0 beam=0 sound=BL_HUD_INTERFACE.HEALTH_PU_ENERGON
+PICKUPTEST t=  91.14 TnHealthPickupFactory RESPAWNED available=1 mesh=1 customFx=1 beam=0 sound=-
+PICKUPTEST t=  91.14 TnHealthPickupFactory TAKEN available=0 mesh=0 customFx=0 beam=0 sound=BL_HUD_INTERFACE.HEALTH_PU_ENERGON
+PICKUPTEST TnHealthPickupFactory: taken at 31.12, sleeping overlap ignored, respawn after 60.02 s (authored 60); still standing on it at respawn -> RE-TAKEN (CheckTouching)
+PICKUPTEST TnOverShieldPickupFactory initial: available=1 mesh=1 customFx=1 beam=0
+PICKUPTEST t=  92.17 TnOverShieldPickupFactory TAKEN available=0 mesh=0 customFx=0 beam=0 sound=BL_HUD_INTERFACE.OVERSHIELD_POWER_UP
+PICKUPTEST t= 212.16 TnOverShieldPickupFactory RESPAWNED available=1 mesh=1 customFx=1 beam=0 sound=-
+PICKUPTEST TnOverShieldPickupFactory: taken at 92.17, sleeping overlap ignored, respawn after 119.99 s (authored 120); still standing on it at respawn -> not re-taken (Touch = overlap begin)
+PICKUPTEST TnOverShieldPickupFactory: step off and back on -> available=0
+PICKUPTEST destructible MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.TnStaticDestructibleActor_14465 at 8.96 -3.52 899.68 state 0 health 20
+PICKUPTEST destructible after 15 dmg: state 0 health 5
+PICKUPTEST t= 223.24 destructible 0 state 1 -> 2
+PICKUPTEST destructible: destroyed at t=213.24, settled 10.00 s later (authored 10); position still 8.96 -3.52 899.68
+PICKUPTEST factories loaded: 24

@@ -1,0 +1,191 @@
+﻿{
+    "summary":  {
+                    "pass":  15,
+                    "fail":  0,
+                    "known":  1,
+                    "info":  12,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "transform_capture.r2v_side.ran",
+                        "status":  "PASS",
+                        "measured":  87,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame, NOT explained by camera collision"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.camera_collision_snaps",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "frames where the collided orbit distance snaps \u003e 1 m in one frame (camera-collision pull-in/release; unsmoothed in the rebuild, original TnThirdPersoncollisionCameraBehavior / TnAvoidClippingCameraBehavior response not recovered - [PROV]). Location-dependent; also occurs without a transform (camera-trace controls)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.9167,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "logical form switch at 0.917 s (native overlap window 0.3958-0.8796 s, sampling tolerance 0.058 s; mesh overlap itself is judged frame-exactly by transform_timeline.*.both_meshes_visible_in_fold)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  0.374,
+                        "note":  "image change at the switch frame vs fold median 0.36 (ratio 1.0x)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.visual_pops",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "grabs with a change \u003e 3x the fold median: "
+                    },
+                    {
+                        "id":  "transform_capture.r2v_side.frozen_grabs",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "fold grabs with no visible change vs the previous grab (fixed camera; authored holds included)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.ran",
+                        "status":  "PASS",
+                        "measured":  62,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame, NOT explained by camera collision"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.camera_collision_snaps",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "frames where the collided orbit distance snaps \u003e 1 m in one frame (camera-collision pull-in/release; unsmoothed in the rebuild, original TnThirdPersoncollisionCameraBehavior / TnAvoidClippingCameraBehavior response not recovered - [PROV]). Location-dependent; also occurs without a transform (camera-trace controls)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.6833,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "logical form switch at 0.683 s (native overlap window 0.0984-0.6634 s, sampling tolerance 0.058 s; mesh overlap itself is judged frame-exactly by transform_timeline.*.both_meshes_visible_in_fold)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  2.973,
+                        "note":  "image change at the switch frame vs fold median 1.65 (ratio 1.8x)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.visual_pops",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "grabs with a change \u003e 3x the fold median: f84@0.4167s"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_side.frozen_grabs",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "fold grabs with no visible change vs the previous grab (fixed camera; authored holds included)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.ran",
+                        "status":  "PASS",
+                        "measured":  87,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame, NOT explained by camera collision"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.camera_collision_snaps",
+                        "status":  "KNOWN",
+                        "measured":  2,
+                        "owner":  "Gameplay",
+                        "note":  "frames where the collided orbit distance snaps \u003e 1 m in one frame (camera-collision pull-in/release; unsmoothed in the rebuild, original TnThirdPersoncollisionCameraBehavior / TnAvoidClippingCameraBehavior response not recovered - [PROV]). Location-dependent; also occurs without a transform (camera-trace controls)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.9167,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "logical form switch at 0.917 s (native overlap window 0.3958-0.8796 s, sampling tolerance 0.058 s; mesh overlap itself is judged frame-exactly by transform_timeline.*.both_meshes_visible_in_fold)"
+                    },
+                    {
+                        "id":  "transform_capture.r2v_chase_moving.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  1.846,
+                        "note":  "image change at the switch frame vs fold median 1.52 (ratio 1.2x)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.ran",
+                        "status":  "PASS",
+                        "measured":  62,
+                        "note":  "grabbed frames (exit 0)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.no_debug_geometry",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.no_camera_pop",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "frames where the camera jumps \u003e 1 m relative to the pawn root in one frame, NOT explained by camera collision"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.camera_collision_snaps",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "frames where the collided orbit distance snaps \u003e 1 m in one frame (camera-collision pull-in/release; unsmoothed in the rebuild, original TnThirdPersoncollisionCameraBehavior / TnAvoidClippingCameraBehavior response not recovered - [PROV]). Location-dependent; also occurs without a transform (camera-trace controls)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.mesh_switch_time",
+                        "status":  "INFO",
+                        "measured":  0.6833,
+                        "unit":  "s",
+                        "owner":  "Gameplay",
+                        "note":  "logical form switch at 0.683 s (native overlap window 0.0984-0.6634 s, sampling tolerance 0.058 s; mesh overlap itself is judged frame-exactly by transform_timeline.*.both_meshes_visible_in_fold)"
+                    },
+                    {
+                        "id":  "transform_capture.v2r_chase_moving.switch_visual_change",
+                        "status":  "INFO",
+                        "measured":  9.202,
+                        "note":  "image change at the switch frame vs fold median 4.70 (ratio 2.0x)"
+                    }
+                ]
+}

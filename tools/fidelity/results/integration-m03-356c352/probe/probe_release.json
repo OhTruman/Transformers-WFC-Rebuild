@@ -1,0 +1,276 @@
+﻿{
+    "summary":  {
+                    "pass":  31,
+                    "fail":  0,
+                    "known":  4,
+                    "info":  10,
+                    "skip":  0
+                },
+    "exe":  "F:\\Transformers Rebuild\\Rebuild-Experimental\\work\\ab\\m3int\\build-release\\bin\\wfc_rebuild.exe",
+    "renderData":  "F:\\Transformers Rebuild\\Rebuild-Experimental\\work\\ab\\m3int\\work\\render",
+    "results":  [
+                    {
+                        "id":  "runtime.startup.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "rendering.wfc_shader_path_active",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "RESOLVED: WFC original-material path (else legacy fixed-function)"
+                    },
+                    {
+                        "id":  "rendering.materials_compiled",
+                        "status":  "INFO",
+                        "measured":  211,
+                        "unit":  "mats"
+                    },
+                    {
+                        "id":  "rendering.lightmapped_components",
+                        "status":  "INFO",
+                        "measured":  1973,
+                        "unit":  "comps",
+                        "note":  "integration record: 1973"
+                    },
+                    {
+                        "id":  "rendering.lights",
+                        "status":  "INFO",
+                        "measured":  268,
+                        "unit":  "lights"
+                    },
+                    {
+                        "id":  "rendering.fog_on",
+                        "status":  "PASS",
+                        "source":  "map HeightFogComponent",
+                        "note":  "HeightFog CONF"
+                    },
+                    {
+                        "id":  "rendering.materials_failed_to_build",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "expected":  0,
+                        "tol":  0,
+                        "unit":  "mats",
+                        "owner":  "Rendering",
+                        "note":  "FX_Materials_p.Materials.ParticleBase_BW_MAT"
+                    },
+                    {
+                        "id":  "rendering.textures_failed_to_decode",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "expected":  0,
+                        "tol":  0,
+                        "unit":  "tex",
+                        "owner":  "Rendering"
+                    },
+                    {
+                        "id":  "rendering.legacy_image_decode_failures",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "img",
+                        "note":  "pre-existing (integration record): "
+                    },
+                    {
+                        "id":  "rendering.legacy_textures_failed",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "tex",
+                        "note":  "glTF/legacy texture loads (27 loaded)"
+                    },
+                    {
+                        "id":  "rendering.legacy_lightmap_bindings",
+                        "status":  "INFO",
+                        "measured":  2081,
+                        "unit":  "subs",
+                        "note":  "of 2249 (legacy path)"
+                    },
+                    {
+                        "id":  "rendering.no_gl_errors",
+                        "status":  "PASS"
+                    },
+                    {
+                        "id":  "rendering.known_translator_error.ParticleBase_BW_MAT",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "unit":  "lines",
+                        "owner":  "Rendering",
+                        "note":  "material translator vector-output defect (vec4(t6, t6) from a vec4 constant): the particle permutation does not compile; translator fix deferred past M03"
+                    },
+                    {
+                        "id":  "rendering.vertical_slice_loaded",
+                        "status":  "PASS"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_textures_loaded",
+                        "status":  "PASS",
+                        "note":  "9/9"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_meshes_loaded",
+                        "status":  "PASS",
+                        "note":  "2/2 (shell, magazine)"
+                    },
+                    {
+                        "id":  "runtime.fire.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "weapon_presentation.fire_cues_play",
+                        "status":  "PASS",
+                        "note":  "427 cue launches (0 matching Ion Blaster names)"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_notifies",
+                        "status":  "PASS",
+                        "note":  "70 fx notifies"
+                    },
+                    {
+                        "id":  "weapon_presentation.shell_eject_notifies",
+                        "status":  "PASS",
+                        "note":  "shell notifies: 68"
+                    },
+                    {
+                        "id":  "weapon_presentation.no_unreconstructed_notifies",
+                        "status":  "PASS"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_particles_live",
+                        "status":  "PASS",
+                        "note":  "max live particles 256"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_mesh_particles_max",
+                        "status":  "INFO",
+                        "measured":  16,
+                        "unit":  "meshes",
+                        "note":  "shells/magazine mesh particles"
+                    },
+                    {
+                        "id":  "weapon_presentation.fx_impacts_max",
+                        "status":  "INFO",
+                        "measured":  5,
+                        "unit":  "impacts"
+                    },
+                    {
+                        "id":  "weapon_presentation.auto_reload_after_dump",
+                        "status":  "PASS",
+                        "note":  "reload state seen while holding fire"
+                    },
+                    {
+                        "id":  "runtime.reload_moving.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "weapon_presentation.reload_upper_slot_over_locomotion",
+                        "status":  "PASS",
+                        "note":  "frames with reload weight \u003e 0.9 on a Nav_Strafe base: 42"
+                    },
+                    {
+                        "id":  "weapon_presentation.magazine_drop_notify",
+                        "status":  "PASS",
+                        "note":  "mag notifies: 3"
+                    },
+                    {
+                        "id":  "weapon_presentation.reload_fx_notify",
+                        "status":  "PASS",
+                        "note":  "reload flare/smoke notifies: 3"
+                    },
+                    {
+                        "id":  "runtime.reload_press.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "input_edges.runtime_reload_press_registered",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "intermittent by nature (depends on whether the press frame runs a 60 Hz step); the deterministic check is wfc_fidelity input_edges.reload_press_survives_zero_step_frame"
+                    },
+                    {
+                        "id":  "runtime.vehicle_boost.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "boost_presentation.physics_speed_max",
+                        "status":  "PASS",
+                        "measured":  19.74,
+                        "expected":  30,
+                        "tol":  0,
+                        "unit":  "m/s",
+                        "source":  "CONFIRMED: RE HANDOFF #6 (boost = Driving mode)",
+                        "note":  "boost held via WFC_AUTOBOOST (exe-side key); original boost = Driving, Truck MaxSpeed 3000"
+                    },
+                    {
+                        "id":  "boost_presentation.boost_cue_played",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "RESOLVED: expected BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START/LOOP/END (character.json sounds.vehicle); seen: [VEH_OPTIMUS_BOOST_END VEH_OPTIMUS_BOOST_LOOP VEH_OPTIMUS_BOOST_START]; all cues during boost: 852"
+                    },
+                    {
+                        "id":  "boost_presentation.boost_fx_emitted",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "RESOLVED: vehicle FX live particles while Driving (VFX boost=1 parts=N, WFC_BOOSTLOG): max 78; authored booster FX at BoostSocket_L/R, HoverBooster_*"
+                    },
+                    {
+                        "id":  "boost_presentation.boost_anim_seen",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "RESOLVED: vehicle.glb Nav_HoverToBoost_VEH; base clips seen: Nav_BoostToHover_VEH Nav_HoverToBoost_VEH Nav_Idle_Wheels_VEH"
+                    },
+                    {
+                        "id":  "runtime.transform.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "transform_presentation.transform_cue_is_authored",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "RESOLVED: character.json sounds.transformation BL_TRANSFORM.OPTIMUS_BOT2VEH; transform cues seen: [BL_TRANSFORM.OPTIMUS_BOT2VEH] (rebuild plays a generic gears wav via World::playSfx)"
+                    },
+                    {
+                        "id":  "transform_presentation.transform_completes",
+                        "status":  "PASS",
+                        "note":  "frame log reaches VEHICLE"
+                    },
+                    {
+                        "id":  "runtime.still_vehicle_wfc.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "runtime.still_vehicle_legacy.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "runtime.still_robot_wfc.exit_clean",
+                        "status":  "PASS",
+                        "note":  "exit 0"
+                    },
+                    {
+                        "id":  "stills.captured",
+                        "status":  "INFO",
+                        "measured":  3,
+                        "unit":  "png",
+                        "note":  "WFC_DEBUGCAM=front at the authored spawn (deterministic framing; lighting/time-of-frame may vary)"
+                    },
+                    {
+                        "id":  "material_consistency.vehicle.energon_hue_bake_vs_compiled",
+                        "status":  "KNOWN",
+                        "owner":  "Rendering",
+                        "note":  "AssetTools bake vehicle_0_RB_OptimusPrime_Cust2_Mat_INST_emissive.png: BLUE-dominant (3507 bright texels); compiled TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST HDR colour constants: (1.25,0.050,0.050) with UseAutobotEnergonColor=True. WFC Autobot energon reads blue. RE TARGETED_PASS2 #8: the energon colour is set at runtime by TnCharacterApplier (EnergonColor param from character data, else the robot MIC) - the compiled constant is likely the parent default the rebuild never overrides"
+                    },
+                    {
+                        "id":  "material_consistency.robot.energon_hue_bake_vs_compiled",
+                        "status":  "KNOWN",
+                        "owner":  "Rendering",
+                        "note":  "AssetTools bake robot_0_RB_OptimusPrime_Cust_Mat_INST_B_emissive.png: BLUE-dominant (603 bright texels); compiled TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B HDR colour constants: (1.25,0.050,0.050) with UseAutobotEnergonColor=True. WFC Autobot energon reads blue. RE TARGETED_PASS2 #8: the energon colour is set at runtime by TnCharacterApplier (EnergonColor param from character data, else the robot MIC) - the compiled constant is likely the parent default the rebuild never overrides"
+                    }
+                ]
+}

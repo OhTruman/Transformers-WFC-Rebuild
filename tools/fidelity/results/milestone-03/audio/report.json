@@ -1,0 +1,301 @@
+﻿{
+    "summary":  {
+                    "pass":  24,
+                    "fail":  0,
+                    "known":  20,
+                    "info":  1,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "audio_attach.robot_walk.voice.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  1.4488422964560761,
+                        "note":  "voice (0.58 s) never updated, but the owner moved \u003c 2 m while it played - inconclusive"
+                    },
+                    {
+                        "id":  "audio_attach.robot_walk.voice.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.964454519955677,
+                        "owner":  "Systems",
+                        "note":  "voice (0.71 s) x1: stays at its trigger point; owner moved up to 13.0 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.robot_walk.voice.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  8.8701887804036943,
+                        "owner":  "Systems",
+                        "note":  "voice (0.78 s) x1: stays at its trigger point; owner moved up to 8.9 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.robot_walk.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "0 3D one-shots, 5 voices, 700 listener samples"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.oneshot.EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav",
+                        "status":  "KNOWN",
+                        "measured":  25.768076528914641,
+                        "owner":  "Systems",
+                        "note":  "playAt one-shot (fixed by API) (3.49 s) x1: stays at its trigger point; owner moved up to 25.8 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  9.1228965246789855,
+                        "owner":  "Systems",
+                        "note":  "voice (0.78 s) x1: stays at its trigger point; owner moved up to 9.1 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  64,
+                        "note":  "looping voice (loop) follows its owner: 64 position updates over 2 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.MECH_TANK_LAND_LIGHT_01.wav",
+                        "status":  "KNOWN",
+                        "measured":  3.9939258881456574,
+                        "owner":  "Systems",
+                        "note":  "voice (1.02 s) x1: stays at its trigger point; owner moved up to 4.0 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  32,
+                        "note":  "looping voice (loop) follows its owner: 32 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  32,
+                        "note":  "looping voice (loop) follows its owner: 32 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.voice.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  11.815420305685281,
+                        "owner":  "Systems",
+                        "note":  "voice (0.71 s) x1: stays at its trigger point; owner moved up to 11.8 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.transform_moving.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "1 3D one-shots, 9 voices, 900 listener samples"
+                    },
+                    {
+                        "id":  "audio_attach.landing.oneshot.RELOAD_AIR_RELEASE_THUMP.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.382296596350761,
+                        "owner":  "Systems",
+                        "note":  "playAt one-shot (fixed by API) (0.56 s) x1: stays at its trigger point; owner moved up to 12.4 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.landing.voice.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "KNOWN",
+                        "measured":  6.1163211164882307,
+                        "owner":  "Systems",
+                        "note":  "voice (0.58 s) x1: stays at its trigger point; owner moved up to 6.1 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.landing.voice.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  13.604490839425026,
+                        "owner":  "Systems",
+                        "note":  "voice (0.71 s) x1: stays at its trigger point; owner moved up to 13.6 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.landing.voice.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  9.2076723443007236,
+                        "owner":  "Systems",
+                        "note":  "voice (0.78 s) x1: stays at its trigger point; owner moved up to 9.2 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.landing.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "1 3D one-shots, 5 voices, 700 listener samples"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_loop.voice.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  188,
+                        "note":  "looping voice (loop) follows its owner: 188 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_loop.voice.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  188,
+                        "note":  "looping voice (loop) follows its owner: 188 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_loop.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "0 3D one-shots, 2 voices, 700 listener samples"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  143,
+                        "note":  "voice (3.38 s) follows its owner: 143 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.AUTO_BOOST_PEELOUT_TRUCK.wav",
+                        "status":  "KNOWN",
+                        "measured":  35.424307953720096,
+                        "owner":  "Systems",
+                        "note":  "voice (1.35 s) x1: stays at its trigger point; owner moved up to 35.4 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  177,
+                        "note":  "looping voice (loop) follows its owner: 177 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  177,
+                        "note":  "looping voice (loop) follows its owner: 177 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  178,
+                        "note":  "looping voice (loop) follows its owner: 178 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  178,
+                        "note":  "looping voice (loop) follows its owner: 178 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  178,
+                        "note":  "looping voice (loop) follows its owner: 178 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "KNOWN",
+                        "measured":  13.187173503067337,
+                        "owner":  "Systems",
+                        "note":  "voice (0.70 s) x1: stays at its trigger point; owner moved up to 13.2 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "KNOWN",
+                        "measured":  27.738102116042459,
+                        "owner":  "Systems",
+                        "note":  "voice (1.34 s) x1: stays at its trigger point; owner moved up to 27.7 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.voice.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "KNOWN",
+                        "measured":  20.0245001186047,
+                        "owner":  "Systems",
+                        "note":  "voice (1.39 s) x1: stays at its trigger point; owner moved up to 20.0 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "0 3D one-shots, 11 voices, 700 listener samples"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.AUTO_BOOST_PEELOUT_TRUCK.wav",
+                        "status":  "KNOWN",
+                        "measured":  18.625413767216017,
+                        "owner":  "Systems",
+                        "note":  "voice (1.35 s) x1: stays at its trigger point; owner moved up to 18.6 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  222,
+                        "note":  "looping voice (loop) follows its owner: 222 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  222,
+                        "note":  "looping voice (loop) follows its owner: 222 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  223,
+                        "note":  "looping voice (loop) follows its owner: 223 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  223,
+                        "note":  "looping voice (loop) follows its owner: 223 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  223,
+                        "note":  "looping voice (loop) follows its owner: 223 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "KNOWN",
+                        "measured":  14.342122960008385,
+                        "owner":  "Systems",
+                        "note":  "voice (0.70 s) x2: stays at its trigger point; owner moved up to 14.3 m during playback (2 of 2 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "KNOWN",
+                        "measured":  19.351678531848336,
+                        "owner":  "Systems",
+                        "note":  "voice (1.34 s) x2: stays at its trigger point; owner moved up to 19.4 m during playback (2 of 2 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "KNOWN",
+                        "measured":  19.430690620767965,
+                        "owner":  "Systems",
+                        "note":  "voice (1.39 s) x2: stays at its trigger point; owner moved up to 19.4 m during playback (2 of 2 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  300,
+                        "note":  "voice (3.38 s) follows its owner: 300 position updates over 2 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.SYNTH_AIR_RELEASE_07.wav",
+                        "status":  "KNOWN",
+                        "measured":  5.76085557881814,
+                        "owner":  "Systems",
+                        "note":  "voice (0.63 s) x1: stays at its trigger point; owner moved up to 5.8 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.MECH_TRANS_RAM_ACTIVATE.wav",
+                        "status":  "KNOWN",
+                        "measured":  7.61351292111595,
+                        "owner":  "Systems",
+                        "note":  "voice (0.85 s) x1: stays at its trigger point; owner moved up to 7.6 m during playback (1 of 1 instances, 0 position updates)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.voice.MECH_ORB_ARM_04.wav",
+                        "status":  "PASS",
+                        "measured":  120,
+                        "note":  "voice (1.23 s) follows its owner: 120 position updates over 1 instance(s)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.ran",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "0 3D one-shots, 19 voices, 900 listener samples"
+                    }
+                ]
+}

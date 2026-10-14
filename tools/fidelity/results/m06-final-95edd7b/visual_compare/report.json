@@ -1,0 +1,57 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  4,
+                    "skip":  0,
+                    "human":  2,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "visual.glass.merge",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "owner":  "Rendering/Integration",
+                        "note":  "32 measurements: fix present 0, fix lost 0, merge diverged 0, unchanged 32, no reference 0."
+                    },
+                    {
+                        "id":  "visual.particles.merge",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "owner":  "Rendering/Integration",
+                        "note":  "43 measurements: fix present 0, fix lost 0, merge diverged 0, unchanged 43, no reference 0."
+                    },
+                    {
+                        "id":  "visual.ramps.merge",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "owner":  "Rendering/Integration",
+                        "note":  "9 measurements: fix present 0, fix lost 0, merge diverged 0, unchanged 9, no reference 0."
+                    },
+                    {
+                        "id":  "visual.sheets.merge",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "owner":  "Rendering/Integration",
+                        "note":  "47 measurements: fix present 0, fix lost 0, merge diverged 0, unchanged 47, no reference 0."
+                    },
+                    {
+                        "id":  "visual.far_veil_worst",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "owner":  "Rendering",
+                        "note":  "largest screen coverage by one smoke / steam / fog effect at 30-60 m on the merged build: BckSillouhetteSmoke_2 100% (int-04 100%), Steam_7 85% (int-04 85%), BckSillouhetteSmoke_0 65% (int-04 65%). Whether distant smoke still veils the geometry is the human check"
+                    },
+                    {
+                        "id":  "visual.glass_from_above",
+                        "status":  "HUMAN",
+                        "measured":  0.185625,
+                        "owner":  "Rendering",
+                        "note":  "glass contribution over its own surface seen from above, merged vs int-04: IAC_Decagon_GlassPan2_0.above 12% (was 12%), IAC_Decagon_GlassPan2_0.aboveclose 24% (was 24%), IAC_Decagon_GlassPan2_1.above 0% (was 0%), IAC_Decagon_GlassPan2_1.aboveclose 0% (was 0%), IAC_Glass_0.above 27% (was 27%), IAC_Glass_0.aboveclose 0% (was 0%), IAC_Glass_1.above 0% (was 0%), IAC_Glass_1.aboveclose 0% (was 0%), IAC_Glass2_dense_Dark_0.above 77% (was 77%), IAC_Glass2_dense_Dark_0.aboveclose 75% (was 75%), IAC_Glass2_dense_Dark_1.above 47% (was 47%), IAC_Glass2_dense_Dark_1.aboveclose 35% (was 35%), IAC_Glass2_light_0.above 0% (was 0%), IAC_Glass2_light_0.aboveclose 0% (was 0%), IAC_Glass2_light_1.above 0% (was 0%), IAC_Glass2_light_1.aboveclose 0% (was 0%)"
+                    }
+                ]
+}

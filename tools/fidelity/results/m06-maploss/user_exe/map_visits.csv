@@ -1,0 +1,13 @@
+"config","visit","map","start","frames","world_detail","black","verdict","vc_world","vc_bsp","vc_materials","ref_detail","ref_exe","ratio"
+"normal","s1","MP_IAC_Streets","TnTeamPlayerStart_12481","3","0.07/0.064/0.034","0.037/0.079/0.158","FAIL","35","20","32","0.152","known-good M05","0.46"
+"normal","b","MP_IAC_Berth","TnTeamPlayerStart_5269","3","0.143/0.152/0.131","0.001/0.006/0.004","FAIL","152","19","45",,,
+"normal","s2","MP_IAC_Streets","TnTeamPlayerStart_8835","3","0.061/0.057/0.029","0.045/0.083/0.167","FAIL","36","21","33","0.546","known-good M05","0.11"
+"w1280","s1","MP_IAC_Streets","TnTeamPlayerStart_12481","3","0.073/0.066/0.037","0.048/0.086/0.162","FAIL","36","21","32","0.152","known-good M05","0.48"
+"w1280","b","MP_IAC_Berth","TnTeamPlayerStart_5269","3","0.141/0.156/0.131","0.001/0.006/0.004","FAIL","152","19","45",,,
+"w1280","s2","MP_IAC_Streets","TnTeamPlayerStart_8835","3","0.063/0.055/0.029","0.046/0.086/0.174","FAIL","36","21","33","0.546","known-good M05","0.12"
+"w1920","s1","MP_IAC_Streets","TnTeamPlayerStart_12481","3","0.053/0.046/0.028","0.058/0.095/0.168","FAIL","35","20","32","0.152","known-good M05","0.35"
+"w1920","b","MP_IAC_Berth","TnTeamPlayerStart_5269","3","0.129/0.134/0.108","0.003/0.011/0.008","FAIL","192","26","54",,,
+"w1920","s2","MP_IAC_Streets","TnTeamPlayerStart_8835","3","0.048/0.038/0.025","0.055/0.096/0.182","FAIL","36","21","32","0.546","known-good M05","0.09"
+"lowtex","s1","MP_IAC_Streets","TnTeamPlayerStart_12481","3","0.071/0.067/0.036","0.046/0.085/0.162","FAIL","69","38","49","0.152","known-good M05","0.47"
+"lowtex","b","MP_IAC_Berth","TnTeamPlayerStart_5269","3","0.141/0.155/0.131","0.001/0.006/0.004","FAIL","491","82","109",,,
+"lowtex","s2","MP_IAC_Streets","TnTeamPlayerStart_8835","3","0.064/0.055/0.029","0.046/0.085/0.174","FAIL","64","32","44","0.546","known-good M05","0.12"

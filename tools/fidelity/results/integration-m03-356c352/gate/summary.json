@@ -1,0 +1,271 @@
+﻿{
+    "branch":  "agents/experimental",
+    "commit":  "425eb1a",
+    "counts":  {
+                   "pass":  665,
+                   "fail":  0,
+                   "known":  21,
+                   "info":  599,
+                   "skip":  0
+               },
+    "regressions":  {
+                        "PERFORMANCE":  [
+                                            "idle.steady: 6.06 -\u003e 10.41 ms/frame"
+                                        ],
+                        "VISUAL":  [
+                                       "transform\\r2v_side\\f00056: CHANGED (mean luma diff 5.4, 4% of cells) - review",
+                                       "transform\\r2v_side\\f00062: CHANGED (mean luma diff 5.2, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00068: CHANGED (mean luma diff 5.2, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00074: CHANGED (mean luma diff 5.5, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00080: CHANGED (mean luma diff 6.2, 5% of cells) - review",
+                                       "transform\\r2v_side\\f00086: CHANGED (mean luma diff 6.8, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00092: CHANGED (mean luma diff 7.3, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00098: CHANGED (mean luma diff 7.0, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00104: CHANGED (mean luma diff 6.1, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00110: CHANGED (mean luma diff 5.3, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00116: CHANGED (mean luma diff 5.3, 3% of cells) - review",
+                                       "transform\\r2v_side\\f00120: missing in this run",
+                                       "transform\\r2v_side\\f00122: CHANGED (mean luma diff 6.4, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00128: CHANGED (mean luma diff 6.5, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00134: CHANGED (mean luma diff 6.5, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00140: CHANGED (mean luma diff 6.6, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00146: CHANGED (mean luma diff 6.7, 6% of cells) - review",
+                                       "transform\\r2v_side\\f00152: CHANGED (mean luma diff 7.0, 7% of cells) - review",
+                                       "transform\\r2v_side\\f00158: CHANGED (mean luma diff 7.5, 9% of cells) - review",
+                                       "transform\\r2v_side\\f00164: CHANGED (mean luma diff 7.7, 10% of cells) - review",
+                                       "transform\\r2v_side\\f00166: missing in this run",
+                                       "transform\\r2v_side\\f00168: missing in this run",
+                                       "transform\\r2v_side\\f00170: CHANGED (mean luma diff 10.5, 13% of cells) - review",
+                                       "transform\\r2v_side\\f00172: missing in this run",
+                                       "transform\\r2v_side\\f00174: missing in this run",
+                                       "transform\\r2v_side\\f00176: CHANGED (mean luma diff 12.2, 14% of cells) - review",
+                                       "transform\\r2v_side\\f00178: missing in this run",
+                                       "transform\\r2v_side\\f00182: CHANGED (mean luma diff 15.6, 15% of cells) - review",
+                                       "transform\\r2v_side\\f00188: CHANGED (mean luma diff 14.2, 13% of cells) - review",
+                                       "transform\\r2v_side\\f00194: CHANGED (mean luma diff 13.0, 13% of cells) - review",
+                                       "transform\\r2v_side\\f00200: CHANGED (mean luma diff 15.4, 15% of cells) - review",
+                                       "transform\\r2v_side\\f00206: CHANGED (mean luma diff 15.6, 16% of cells) - review",
+                                       "transform\\r2v_side\\f00212: CHANGED (mean luma diff 14.6, 16% of cells) - review",
+                                       "transform\\r2v_side\\f00218: CHANGED (mean luma diff 14.6, 16% of cells) - review",
+                                       "transform\\r2v_side\\f00224: CHANGED (mean luma diff 14.3, 12% of cells) - review",
+                                       "transform\\v2r_side\\f00056: CHANGED (mean luma diff 12.3, 11% of cells) - review",
+                                       "transform\\v2r_side\\f00062: CHANGED (mean luma diff 11.0, 9% of cells) - review",
+                                       "transform\\v2r_side\\f00068: CHANGED (mean luma diff 14.1, 11% of cells) - review",
+                                       "transform\\v2r_side\\f00074: CHANGED (mean luma diff 13.0, 9% of cells) - review",
+                                       "transform\\v2r_side\\f00080: CHANGED (mean luma diff 11.1, 8% of cells) - review",
+                                       "transform\\v2r_side\\f00086: CHANGED (mean luma diff 7.0, 5% of cells) - review",
+                                       "transform\\v2r_side\\f00090: CHANGED (mean luma diff 6.5, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00092: CHANGED (mean luma diff 6.5, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00094: CHANGED (mean luma diff 6.5, 5% of cells) - review",
+                                       "transform\\v2r_side\\f00098: CHANGED (mean luma diff 8.0, 6% of cells) - review",
+                                       "transform\\v2r_side\\f00104: CHANGED (mean luma diff 5.9, 3% of cells) - review",
+                                       "transform\\v2r_side\\f00110: CHANGED (mean luma diff 6.1, 3% of cells) - review",
+                                       "transform\\v2r_side\\f00116: CHANGED (mean luma diff 6.6, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00122: CHANGED (mean luma diff 7.2, 6% of cells) - review",
+                                       "transform\\v2r_side\\f00128: CHANGED (mean luma diff 7.2, 6% of cells) - review",
+                                       "transform\\v2r_side\\f00134: CHANGED (mean luma diff 6.9, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00140: CHANGED (mean luma diff 6.4, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00146: CHANGED (mean luma diff 5.7, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00152: CHANGED (mean luma diff 5.4, 4% of cells) - review",
+                                       "transform\\v2r_side\\f00158: CHANGED (mean luma diff 5.8, 5% of cells) - review",
+                                       "transform\\v2r_side\\f00164: CHANGED (mean luma diff 6.4, 7% of cells) - review",
+                                       "transform\\v2r_side\\f00170: CHANGED (mean luma diff 7.2, 9% of cells) - review",
+                                       "transform\\v2r_side\\f00176: CHANGED (mean luma diff 7.7, 11% of cells) - review",
+                                       "vehicle_visual\\boost\\wfc: CHANGED (mean luma diff 17.4, 28% of cells) - review",
+                                       "vehicle_visual\\bright_area\\wfc: CHANGED (mean luma diff 23.8, 51% of cells) - review",
+                                       "vehicle_visual\\dark_area\\wfc: CHANGED (mean luma diff 8.1, 10% of cells) - review",
+                                       "vehicle_visual\\dash\\wfc: CHANGED (mean luma diff 17.2, 28% of cells) - review",
+                                       "vehicle_visual\\hover_fx\\wfc: CHANGED (mean luma diff 15.0, 29% of cells) - review",
+                                       "vehicle_visual\\idle_front34\\wfc: CHANGED (mean luma diff 20.3, 23% of cells) - review",
+                                       "vehicle_visual\\idle_rear34\\bakes: CHANGED (mean luma diff 38.7, 24% of cells) - review",
+                                       "vehicle_visual\\idle_rear34\\legacy: CHANGED (mean luma diff 12.6, 17% of cells) - review",
+                                       "vehicle_visual\\idle_rear34\\wfc: CHANGED (mean luma diff 17.0, 14% of cells) - review",
+                                       "vehicle_visual\\idle_side\\bakes: CHANGED (mean luma diff 47.4, 29% of cells) - review",
+                                       "vehicle_visual\\idle_side\\legacy: CHANGED (mean luma diff 12.9, 18% of cells) - review",
+                                       "vehicle_visual\\idle_side\\wfc: CHANGED (mean luma diff 21.2, 20% of cells) - review",
+                                       "vehicle_visual\\nitro\\wfc: CHANGED (mean luma diff 18.6, 30% of cells) - review",
+                                       "vehicle_visual\\transform_mid\\direct_vehicle: CHANGED (mean luma diff 13.4, 13% of cells) - review",
+                                       "vehicle_visual\\transform_mid\\r2v_end: CHANGED (mean luma diff 15.4, 15% of cells) - review",
+                                       "vehicle_visual\\transform_mid\\r2v_mid: CHANGED (mean luma diff 6.3, 6% of cells) - review",
+                                       "vehicle_visual\\_open_probe\\spawn0: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn12: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn15: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn18: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn21: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn3: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn6: missing in this run",
+                                       "vehicle_visual\\_open_probe\\spawn9: missing in this run"
+                                   ],
+                        "RENDERING":  [
+
+                                      ],
+                        "WEAPON":  [
+
+                                   ],
+                        "AUDIO ATTACHMENT":  [
+
+                                             ],
+                        "TRANSFORMATION":  [
+
+                                           ],
+                        "VEHICLE":  [
+
+                                    ],
+                        "MAP COMPLETENESS":  [
+                                                 "movers: NOT INSTANTIATED 0 -\u003e 4",
+                                                 "lights: NOT INSTANTIATED 0 -\u003e 1"
+                                             ],
+                        "FINE AIM":  [
+
+                                     ],
+                        "OTHER":  [
+
+                                  ]
+                    },
+    "improvements":  {
+                         "PERFORMANCE":  [
+                                             "trace_cost.hitscan_trace_under_1ms: KNOWN -\u003e PASS",
+                                             "held.mag1_2_3s: 266.04 -\u003e 8.12 ms/frame",
+                                             "held.all: 51.45 -\u003e 11.52 ms/frame",
+                                             "burst.firing: 321.04 -\u003e 214.90 ms/frame"
+                                         ],
+                         "VISUAL":  [
+
+                                    ],
+                         "RENDERING":  [
+
+                                       ],
+                         "WEAPON":  [
+
+                                    ],
+                         "AUDIO ATTACHMENT":  [
+                                                  "audio_attach.moving_transform.wave.TRANS_ION_UNEQUIP_SERVOS.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.robot_footsteps.wave.TRANS_ION_UNEQUIP_SERVOS.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.robot_footsteps.wave.GUN_RIFLE_BOLT_ACTION.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.jump_land.wave.TRANS_ION_UNEQUIP_SERVOS.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.boost.wave.AUTO_OPTIMUS_BOOST_START_LR.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.boost.wave.WHSH_BOOST_FLARE_LR_03.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.boost.wave.SYNTH_ENGINE_ACCEL.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_04.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_08.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.AUTO_OPTIMUS_BOOST_START_LR.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.WHSH_BOOST_FLARE_LR_03.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.SYNTH_ENGINE_ACCEL.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_04.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_08.wav: KNOWN -\u003e PASS",
+                                                  "audio_attach.nitro.wave.MECH_TRANS_RAM_ACTIVATE.wav: KNOWN -\u003e INFO",
+                                                  "audio_attach.present.robot_footsteps.BL_FS_LRG_BOT_FS__: KNOWN -\u003e PASS",
+                                                  "audio_attach.present.stationary_transform.BL_TRANSFORM_OPTIMUS_BOT2VEH: KNOWN -\u003e PASS",
+                                                  "audio_attach.present.jump_land.BL_FS_LRG_BOT_FS_LAND_: KNOWN -\u003e PASS",
+                                                  "audio_attach.present.fine_aim._FINE_AIM_START: KNOWN -\u003e PASS",
+                                                  "audio_attach.present.fine_aim._FINE_AIM_END: KNOWN -\u003e PASS",
+                                                  "now follows its owner: moving_transform|EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav",
+                                                  "now follows its owner: boost|SYNTH_AIR_RELEASE_08.wav",
+                                                  "now follows its owner: nitro|WHSH_BOOST_FLARE_LR_03.wav",
+                                                  "now follows its owner: boost|SYNTH_ENGINE_ACCEL.wav",
+                                                  "now follows its owner: jump_land|TRANS_ION_UNEQUIP_SERVOS.wav",
+                                                  "now follows its owner: nitro|MECH_TRANS_RAM_ACTIVATE.wav",
+                                                  "now follows its owner: nitro|MECH_ORB_ARM_04.wav",
+                                                  "now follows its owner: boost|WHSH_BOOST_FLARE_LR_03.wav",
+                                                  "now follows its owner: boost|SYNTH_AIR_RELEASE_04.wav",
+                                                  "now follows its owner: boost|AUTO_OPTIMUS_BOOST_START_LR.wav",
+                                                  "now follows its owner: robot_footsteps|TRANS_ION_UNEQUIP_SERVOS.wav",
+                                                  "now follows its owner: nitro|AUTO_BOOST_PEELOUT_TRUCK.wav",
+                                                  "now follows its owner: nitro|SYNTH_AIR_RELEASE_04.wav",
+                                                  "now follows its owner: nitro|SYNTH_ENGINE_ACCEL.wav",
+                                                  "now follows its owner: boost|AUTO_BOOST_PEELOUT_TRUCK.wav",
+                                                  "now follows its owner: nitro|SYNTH_AIR_RELEASE_08.wav",
+                                                  "now follows its owner: moving_transform|TRANS_ION_UNEQUIP_SERVOS.wav",
+                                                  "now follows its owner: robot_footsteps|GUN_RIFLE_BOLT_ACTION.wav",
+                                                  "now follows its owner: nitro|AUTO_OPTIMUS_BOOST_START_LR.wav"
+                                              ],
+                         "TRANSFORMATION":  [
+                                                "transform_momentum.weapon_restore_frac_elapsed_to_robot: KNOWN -\u003e PASS",
+                                                "transform_timeline.r2v_stand.both_meshes_visible_in_fold: KNOWN -\u003e PASS",
+                                                "transform_timeline.r2v_moving.both_meshes_visible_in_fold: KNOWN -\u003e PASS",
+                                                "transform_timeline.v2r_stand.no_usable_weapon_without_muzzle: KNOWN -\u003e PASS",
+                                                "transform_timeline.v2r_stand.both_meshes_visible_in_fold: KNOWN -\u003e PASS",
+                                                "transform_timeline.v2r_moving.no_usable_weapon_without_muzzle: KNOWN -\u003e PASS",
+                                                "transform_timeline.v2r_moving.both_meshes_visible_in_fold: KNOWN -\u003e PASS",
+                                                "transform_timeline.separate_arm_mesh: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_stand.overlap_inside_authored_window: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_stand.target_mesh_first_visible: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_stand.source_mesh_hidden: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_moving.overlap_inside_authored_window: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_moving.target_mesh_first_visible: KNOWN -\u003e PASS",
+                                                "transform_analyzer.r2v_moving.source_mesh_hidden: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_stand.overlap_inside_authored_window: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_stand.target_mesh_first_visible: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_stand.source_mesh_hidden: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_stand.no_usable_weapon_without_muzzle: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_moving.overlap_inside_authored_window: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_moving.target_mesh_first_visible: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_moving.source_mesh_hidden: KNOWN -\u003e PASS",
+                                                "transform_analyzer.v2r_moving.no_usable_weapon_without_muzzle: KNOWN -\u003e PASS",
+                                                "transform_capture.r2v_side.mesh_switch_time: KNOWN -\u003e INFO",
+                                                "transform_capture.r2v_chase_moving.mesh_switch_time: KNOWN -\u003e INFO"
+                                            ],
+                         "VEHICLE":  [
+                                         "movement.vehicle_rest_com_height: KNOWN -\u003e PASS",
+                                         "vehicle_profiles.step.BOOST.never_below_surface: KNOWN -\u003e PASS",
+                                         "vehicle_profiles.step.NITRO.never_below_surface: KNOWN -\u003e PASS"
+                                     ],
+                         "MAP COMPLETENESS":  [
+                                                  "movers: PRESENT + WRONG EFFECT 12 -\u003e 3",
+                                                  "props: PRESENT + WRONG MATERIAL 124 -\u003e 0",
+                                                  "level_emitters: NOT INSTANTIATED 8 -\u003e 0",
+                                                  "pickups: NOT INSTANTIATED 5 -\u003e 0",
+                                                  "destructibles: NOT INSTANTIATED 1 -\u003e 0",
+                                                  "ambient_audio: NOT INSTANTIATED 70 -\u003e 30"
+                                              ],
+                         "FINE AIM":  [
+                                          "fine_aim_presentation.start_end_audio: KNOWN -\u003e PASS",
+                                          "fine_aim_probe.start_end_audio_wired: KNOWN -\u003e PASS"
+                                      ],
+                         "OTHER":  [
+                                       "collision.wall_slide_speed: KNOWN -\u003e PASS",
+                                       "native_vehicle.rest.com_height: KNOWN -\u003e PASS",
+                                       "native_vehicle.free_fall.contacts: KNOWN -\u003e PASS",
+                                       "native_vehicle.free_fall.rb_gravity: KNOWN -\u003e PASS",
+                                       "native_vehicle.hover_jump_stationary.dvz: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_025.no_one_frame_snap: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_025.attitude_follows_terrain: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_025.rest_com_on_top: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_050.no_one_frame_snap: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_050.attitude_follows_terrain: KNOWN -\u003e PASS",
+                                       "native_vehicle.step_050.rest_com_on_top: KNOWN -\u003e PASS",
+                                       "native_vehicle.drop10.settles_to_rest: KNOWN -\u003e PASS",
+                                       "native_vehicle.hover_jump.dvz: KNOWN -\u003e PASS",
+                                       "native_vehicle.boost_jump.dv_up: KNOWN -\u003e PASS",
+                                       "native_vehicle.boost_jump.dv_forward: KNOWN -\u003e PASS",
+                                       "native_vehicle.dash.forward_speed: KNOWN -\u003e PASS",
+                                       "native_vehicle.dash.lateral_zeroed: KNOWN -\u003e PASS",
+                                       "native_vehicle.dash.exit_forward: KNOWN -\u003e PASS",
+                                       "native_vehicle.dash.exit_lateral: KNOWN -\u003e PASS",
+                                       "native_robot.fine_aim.camera_back_shift: KNOWN -\u003e PASS",
+                                       "native_robot.hand_shrink.matches_drawn_weapon: KNOWN -\u003e PASS",
+                                       "native_robot.hand_shrink.on_with_gun: KNOWN -\u003e PASS",
+                                       "original_vs_rebuild.collision.wall_slide_speed: KNOWN -\u003e PASS",
+                                       "original_vs_rebuild.movement.vehicle_rest_com_height: KNOWN -\u003e PASS",
+                                       "original_vs_rebuild.transform_momentum.weapon_restore_frac_elapsed_to_robot: KNOWN -\u003e PASS"
+                                   ]
+                     },
+    "fails":  [
+
+              ],
+    "tool_errors":  [
+
+                    ],
+    "steps":  {
+                  "harness":  "reused (report only)",
+                  "transform_capture":  "reused (report only)",
+                  "audio_attach":  "reused (report only)",
+                  "vehicle_visual":  "reused (report only)",
+                  "map_audit":  "reused (report only)",
+                  "runtime_probe":  "reused (report only)",
+                  "render_selftests":  "reused (report only)",
+                  "perf_release":  "reused (report only)",
+                  "perf_profile":  "reused (report only)",
+                  "perf_counters":  "reused (report only)"
+              }
+}

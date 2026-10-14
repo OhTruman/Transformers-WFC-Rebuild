@@ -1,0 +1,296 @@
+﻿{
+    "summary":  {
+                    "pass":  38,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  8,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "m04_audio.idle_0.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.72,
+                        "note":  "live voices mean first third 64.0, last third 64.7; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_0.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_3.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.79,
+                        "note":  "live voices mean first third 64.4, last third 64.8; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_3.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_8.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.155,
+                        "note":  "live voices mean first third 64.0, last third 64.2; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_8.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_11.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.56875,
+                        "note":  "live voices mean first third 64.2, last third 64.6; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_11.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_12.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.72,
+                        "note":  "live voices mean first third 64.0, last third 64.7; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_12.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_21.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.14875,
+                        "note":  "live voices mean first third 64.1, last third 64.1; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_21.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.idle_23.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.5925,
+                        "note":  "live voices mean first third 64.1, last third 64.6; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.idle_23.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_0.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  65.4175,
+                        "note":  "live voices mean first third 65.5, last third 65.4; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_0.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_3.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  66.12166666666667,
+                        "note":  "live voices mean first third 65.8, last third 66.1; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_3.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_8.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  66.728333333333339,
+                        "note":  "live voices mean first third 65.2, last third 66.7; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_8.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_11.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  65.316666666666663,
+                        "note":  "live voices mean first third 65.4, last third 65.3; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_11.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_12.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  64.3925,
+                        "note":  "live voices mean first third 64.1, last third 64.4; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_12.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_21.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  65.259166666666673,
+                        "note":  "live voices mean first third 64.0, last third 65.3; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_21.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_23.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  65.944166666666661,
+                        "note":  "live voices mean first third 64.4, last third 65.9; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.walk_23.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.walk_23.pickup_sound_once",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "pickup cue launches 3, repeats within 0.5 s 0: 0.13s ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO; 0.13s BL_HUD_INTERFACE.HEALTH_PU_AMMO; 0.33s ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO"
+                    },
+                    {
+                        "id":  "m04_audio.drive_6.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  71.444166666666661,
+                        "note":  "live voices mean first third 71.3, last third 71.4; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.drive_6.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.drive_18.no_voice_growth",
+                        "status":  "PASS",
+                        "measured":  72.369166666666672,
+                        "note":  "live voices mean first third 73.0, last third 72.4; mixer max -1"
+                    },
+                    {
+                        "id":  "m04_audio.drive_18.no_duplicate_launch",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "identical launches (same sound, same position, same frame)"
+                    },
+                    {
+                        "id":  "m04_audio.drive_18.pickup_sound_once",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "pickup cue launches 3, repeats within 0.5 s 0: 42.37s ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO; 42.37s BL_HUD_INTERFACE.HEALTH_PU_AMMO; 42.57s ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO"
+                    },
+                    {
+                        "id":  "m04_audio.emitters_represented",
+                        "status":  "PASS",
+                        "measured":  70,
+                        "expected":  70,
+                        "note":  "authored emitters with a runtime voice over all runs: 70/70. Never voiced: "
+                    },
+                    {
+                        "id":  "m04_audio.emitters_represented.point",
+                        "status":  "INFO",
+                        "measured":  40,
+                        "expected":  40,
+                        "note":  "of 40 authored point emitters"
+                    },
+                    {
+                        "id":  "m04_audio.emitters_represented.line",
+                        "status":  "INFO",
+                        "measured":  13,
+                        "expected":  13,
+                        "note":  "of 13 authored line emitters"
+                    },
+                    {
+                        "id":  "m04_audio.emitters_represented.volume",
+                        "status":  "INFO",
+                        "measured":  17,
+                        "expected":  17,
+                        "note":  "of 17 authored volume emitters"
+                    },
+                    {
+                        "id":  "m04_audio.map_start_active",
+                        "status":  "INFO",
+                        "measured":  50,
+                        "expected":  50,
+                        "note":  "active emitters at the first AMB sample per start: idle_0=50, idle_3=50, idle_8=50, idle_11=50, idle_12=50, idle_21=50, idle_23=50. Systems [CONF]: 30 line/volume always play + point cues limited 13-\u003e5, 12-\u003e5, 8-\u003e5, 5-\u003e3 -\u003e 50 of 70 at map start"
+                    },
+                    {
+                        "id":  "m04_audio.map_start_matches_limits",
+                        "status":  "PASS",
+                        "measured":  7,
+                        "note":  "starts whose map-start active count equals the instance-limit prediction (50)"
+                    },
+                    {
+                        "id":  "m04_audio.shaped_placement",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "41525 voice positions checked against the authored point / segment / box; 0 off-shape by \u003e 0.25 m (worst 0.00 m): "
+                    },
+                    {
+                        "id":  "m04_audio.oneshot_pools_fired",
+                        "status":  "INFO",
+                        "measured":  7,
+                        "expected":  8,
+                        "note":  "pools fired (zone|cue): ENTER_AUTO_ROOM_02|BL_LVL_MP_IAC_STREETS.PP_OPEN_ROOMS, ENTER_DEC_ROOM_LOWER|BL_LVL_MP_IAC_STREETS.PP_CORRIDORS, ENTER_DEC_ROOM_UPPER|BL_LVL_MP_IAC_STREETS.PP_CORRIDORS, ENTER_EXTERIOR|BL_LVL_MP_IAC_STREETS.PP_EXTERIOR_EXPLOSIONS, ENTER_EXTERIOR|BL_LVL_MP_IAC_STREETS.PP_EXTERIOR_ROCKETS, ENTER_NEU_BASE|BL_LVL_MP_IAC_STREETS.PP_SMALL_ROOMS, ENTER_NEU_HALL|BL_LVL_MP_IAC_STREETS.PP_TUNNEL, ENTER_NEU_STAIRWELL|BL_LVL_MP_IAC_STREETS.PP_SMALL_ROOMS, ENTER_NEU_STAIRWELL|BL_LVL_MP_IAC_STREETS.PP_TUNNEL, ENTER_TRAIN_TUNNEL|BL_LVL_MP_IAC_STREETS.PP_TRAIN_TUNNEL; cues: PP_TUNNEL x13, PP_OPEN_ROOMS x21, PP_SMALL_ROOMS x15, PP_TRAIN_TUNNEL x14, PP_EXTERIOR_ROCKETS x30, PP_EXTERIOR_EXPLOSIONS x27, PP_CORRIDORS x28 (authored pools 11, 8 distinct cues)"
+                    },
+                    {
+                        "id":  "m04_audio.oneshot_pools_exercised",
+                        "status":  "INFO",
+                        "measured":  10,
+                        "expected":  11,
+                        "note":  "zone pools that fired at least once (authored 11; a pool runs only while its zone is current)"
+                    },
+                    {
+                        "id":  "m04_audio.oneshot_distance",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "148 pool one-shots; 0 outside the authored DistanceMin..Max from the listener (+-1 m) or not in the current zone\u0027s pool: "
+                    },
+                    {
+                        "id":  "m04_audio.zones_entered",
+                        "status":  "INFO",
+                        "measured":  9,
+                        "expected":  9,
+                        "note":  "ENTER_AUTO_ROOM_01, ENTER_AUTO_ROOM_02, ENTER_DEC_ROOM_LOWER, ENTER_DEC_ROOM_UPPER, ENTER_EXTERIOR, ENTER_NEU_BASE, ENTER_NEU_HALL, ENTER_NEU_STAIRWELL, ENTER_TRAIN_TUNNEL"
+                    },
+                    {
+                        "id":  "m04_audio.reverb_presets_applied",
+                        "status":  "INFO",
+                        "measured":  9,
+                        "expected":  10,
+                        "note":  "REVERB_TRANS_MP_STREETS_AUTO_ROOM_01, REVERB_TRANS_MP_STREETS_AUTO_ROOM_02, REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER, REVERB_TRANS_MP_STREETS_DEC_ROOM_UPPER, REVERB_TRANS_MP_STREETS_EXTERIOR, REVERB_TRANS_MP_STREETS_NEU_BASE, REVERB_TRANS_MP_STREETS_NEU_HALL, REVERB_TRANS_MP_STREETS_NEU_STAIRWELL, REVERB_TRANS_MP_STREETS_TRAIN_TUNNEL"
+                    }
+                ]
+}

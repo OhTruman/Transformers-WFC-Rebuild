@@ -1,0 +1,136 @@
+﻿{
+    "summary":  {
+                    "pass":  20,
+                    "fail":  0,
+                    "known":  1,
+                    "info":  0,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "vehicle_visual.idle_front34.captured",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "3/3 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.idle_rear34.captured",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "3/3 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.idle_side.captured",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "3/3 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.hover_fx.moving",
+                        "status":  "PASS",
+                        "measured":  15,
+                        "note":  "vehicle moving at capture (m/s); a stalled vehicle invalidates the FX still"
+                    },
+                    {
+                        "id":  "vehicle_visual.hover_fx.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.boost.moving",
+                        "status":  "PASS",
+                        "measured":  30,
+                        "note":  "vehicle moving at capture (m/s); a stalled vehicle invalidates the FX still"
+                    },
+                    {
+                        "id":  "vehicle_visual.boost.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.boost.driving_state",
+                        "status":  "PASS",
+                        "measured":  30,
+                        "note":  "vehicle in Driving at capture (speed m/s)"
+                    },
+                    {
+                        "id":  "vehicle_visual.dash.moving",
+                        "status":  "PASS",
+                        "measured":  30,
+                        "note":  "vehicle moving at capture (m/s); a stalled vehicle invalidates the FX still"
+                    },
+                    {
+                        "id":  "vehicle_visual.dash.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.dash.dash_active",
+                        "status":  "PASS",
+                        "measured":  0.3,
+                        "note":  "dash remaining at capture (s)"
+                    },
+                    {
+                        "id":  "vehicle_visual.nitro.moving",
+                        "status":  "PASS",
+                        "measured":  42.92,
+                        "note":  "vehicle moving at capture (m/s); a stalled vehicle invalidates the FX still"
+                    },
+                    {
+                        "id":  "vehicle_visual.nitro.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.nitro.driving_state",
+                        "status":  "PASS",
+                        "measured":  42.92,
+                        "note":  "vehicle in Driving at capture (speed m/s)"
+                    },
+                    {
+                        "id":  "vehicle_visual.nitro.nitro_active",
+                        "status":  "PASS",
+                        "measured":  2.5,
+                        "note":  "nitro remaining at capture (s)"
+                    },
+                    {
+                        "id":  "vehicle_visual.transform_mid.captured",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "3/3 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.dark_area.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.bright_area.captured",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1/1 stills"
+                    },
+                    {
+                        "id":  "vehicle_visual.material.RB_OptimusPrime_Cust2_Mat_INST",
+                        "status":  "PASS",
+                        "note":  "resolved TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST; master TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat; switches on: UseDiffuseReflection,UseEmissiveReflection,UseSpecPower_S_Curve,UseReconstructedNormal,UseAutobotEnergonColor"
+                    },
+                    {
+                        "id":  "vehicle_visual.material.InteriorAlt_Energon_MAT_INST",
+                        "status":  "PASS",
+                        "note":  "resolved TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST; master TR_AllShader_p.Release.InteriorAlt_Energon_MAT; switches on: UseAutobotEnergonColor"
+                    },
+                    {
+                        "id":  "vehicle_visual.customization_pushed",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "no setCharacterColors call in World.cpp: Cust_Color_A/B and EnergonColor keep the compiled defaults"
+                    }
+                ]
+}

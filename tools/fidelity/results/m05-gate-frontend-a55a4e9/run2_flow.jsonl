@@ -1,0 +1,24 @@
+{"t":0.000,"seq":1,"ev":"boot","map":"UI_FrontEnd_m","watchedIntro":true,"seed":1}
+{"t":0.000,"seq":2,"ev":"travel","url":"UI_FrontEnd_m","server":false,"from":"None"}
+{"t":0.000,"seq":3,"ev":"loading.start","kind":"Generic","title":"","message":"","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":0}
+{"t":0.019,"seq":4,"ev":"level.begin","level":"FrontEnd","map":"UI_FrontEnd_m","url":"UI_FrontEnd_m"}
+{"t":0.019,"seq":5,"ev":"frontend.game","state":"WaitingForController"}
+{"t":0.019,"seq":6,"ev":"frontend.game","state":"None","controllerAssigned":true}
+{"t":0.019,"seq":7,"ev":"loading.close","kind":"InitialStartup","level":"FrontEnd"}
+{"t":0.021,"seq":8,"ev":"gfx.open","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":0.021,"seq":9,"ev":"shim","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","what":"HasWatchedIntroMovie branch","provenance":"HIGH (RE 1.2)"}
+{"t":0.021,"seq":10,"ev":"bridge","fn":"Game.HasWatchedIntroMovie","args":"","level":"FrontEnd"}
+{"t":0.021,"seq":11,"ev":"fscommand","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","cmd":"enterFrontEnd","arg":""}
+{"t":0.021,"seq":12,"ev":"frontend.kismet","action":"Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL"}
+{"t":0.021,"seq":13,"ev":"frontend.kismet","action":"SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX"}
+{"t":0.021,"seq":14,"ev":"ui.open","movie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","state":"FrontEnd"}
+{"t":0.021,"seq":15,"ev":"ui.state","from":"NotInGame","to":"FrontEnd","controller":"TnUIControllerFrontEnd","level":"FrontEnd"}
+{"t":0.021,"seq":16,"ev":"profile","HasWatchedIntroMovie":true}
+{"t":0.021,"seq":17,"ev":"gfx.close","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":0.021,"seq":18,"ev":"script.wait","cond":"frontend"}
+{"t":0.021,"seq":19,"ev":"script.wait","cond":"ui=FrontEnd"}
+{"t":0.021,"seq":20,"ev":"audio.uiLevel","level":"UI_FrontEnd_m"}
+{"t":2.020,"seq":21,"ev":"script.wait","cond":"t=2"}
+{"t":2.020,"seq":22,"ev":"snapshot","why":"mainmenu","level":"FrontEnd","map":"UI_FrontEnd_m","uiController":"TnUIControllerFrontEnd","uiState":"FrontEnd","openMovie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","loading":false,"mode":"","mapId":-1,"countdown":0,"team":-1,"hud":false}
+{"t":2.020,"seq":23,"ev":"bridge","fn":"Game.ExitGame","args":"","level":"FrontEnd"}
+{"t":2.020,"seq":24,"ev":"exit"}

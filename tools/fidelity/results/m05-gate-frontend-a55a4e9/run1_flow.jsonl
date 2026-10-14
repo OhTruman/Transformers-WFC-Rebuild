@@ -1,0 +1,144 @@
+{"t":0.000,"seq":1,"ev":"boot","map":"UI_FrontEnd_m","watchedIntro":false,"seed":1}
+{"t":0.000,"seq":2,"ev":"travel","url":"UI_FrontEnd_m","server":false,"from":"None"}
+{"t":0.000,"seq":3,"ev":"loading.start","kind":"Generic","title":"","message":"","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":0}
+{"t":0.020,"seq":4,"ev":"level.begin","level":"FrontEnd","map":"UI_FrontEnd_m","url":"UI_FrontEnd_m"}
+{"t":0.020,"seq":5,"ev":"frontend.game","state":"WaitingForController"}
+{"t":0.020,"seq":6,"ev":"frontend.game","state":"None","controllerAssigned":true}
+{"t":0.020,"seq":7,"ev":"loading.close","kind":"InitialStartup","level":"FrontEnd"}
+{"t":0.022,"seq":8,"ev":"gfx.open","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":0.022,"seq":9,"ev":"shim","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","what":"HasWatchedIntroMovie branch","provenance":"HIGH (RE 1.2)"}
+{"t":0.022,"seq":10,"ev":"bridge","fn":"Game.HasWatchedIntroMovie","args":"","level":"FrontEnd"}
+{"t":0.022,"seq":11,"ev":"fscommand","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","cmd":"enterMovieSequence","arg":""}
+{"t":0.022,"seq":12,"ev":"gfx.close","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":0.022,"seq":13,"ev":"movie.play","movie":"Logo_Activision"}
+{"t":0.022,"seq":14,"ev":"movie.unavailable","movie":"Logo_Activision","file":"movies/Logo_Activision.mkv","why":"no video decoder integrated"}
+{"t":0.022,"seq":15,"ev":"movie.stopped","movie":"Logo_Activision"}
+{"t":0.022,"seq":16,"ev":"movie.play","movie":"Logo_Hasbro"}
+{"t":0.024,"seq":17,"ev":"movie.unavailable","movie":"Logo_Hasbro","file":"movies/Logo_Hasbro.mkv","why":"no video decoder integrated"}
+{"t":0.024,"seq":18,"ev":"movie.stopped","movie":"Logo_Hasbro"}
+{"t":0.024,"seq":19,"ev":"movie.play","movie":"Logo_HighMoon"}
+{"t":0.025,"seq":20,"ev":"movie.unavailable","movie":"Logo_HighMoon","file":"movies/Logo_HighMoon.mkv","why":"no video decoder integrated"}
+{"t":0.025,"seq":21,"ev":"movie.stopped","movie":"Logo_HighMoon"}
+{"t":0.025,"seq":22,"ev":"movie.play","movie":"FMV_intro"}
+{"t":0.026,"seq":23,"ev":"movie.unavailable","movie":"FMV_intro","file":"movies/FMV_intro.mkv","why":"no video decoder integrated"}
+{"t":0.026,"seq":24,"ev":"movie.stopped","movie":"FMV_intro"}
+{"t":0.026,"seq":25,"ev":"frontend.kismet","action":"Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL"}
+{"t":0.026,"seq":26,"ev":"frontend.kismet","action":"SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX"}
+{"t":0.026,"seq":27,"ev":"ui.open","movie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","state":"FrontEnd"}
+{"t":0.026,"seq":28,"ev":"ui.state","from":"NotInGame","to":"FrontEnd","controller":"TnUIControllerFrontEnd","level":"FrontEnd"}
+{"t":0.026,"seq":29,"ev":"profile","HasWatchedIntroMovie":true}
+{"t":0.026,"seq":30,"ev":"script.wait","cond":"frontend"}
+{"t":0.026,"seq":31,"ev":"script.wait","cond":"ui=FrontEnd"}
+{"t":0.026,"seq":32,"ev":"audio.uiLevel","level":"UI_FrontEnd_m"}
+{"t":2.025,"seq":33,"ev":"script.wait","cond":"t=2"}
+{"t":2.025,"seq":34,"ev":"snapshot","why":"mainmenu","level":"FrontEnd","map":"UI_FrontEnd_m","uiController":"TnUIControllerFrontEnd","uiState":"FrontEnd","openMovie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","loading":false,"mode":"","mapId":-1,"countdown":0,"team":-1,"hud":false}
+{"t":2.025,"seq":35,"ev":"bridge","fn":"Online.OpenPartyLobby","args":"GTS_TeamGame","level":"FrontEnd"}
+{"t":2.025,"seq":36,"ev":"online.ConfirmOpenPartyLobby","gameTeamStatus":3}
+{"t":2.025,"seq":37,"ev":"travel","url":"UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen","server":false,"from":"FrontEnd"}
+{"t":2.025,"seq":38,"ev":"loading.start","kind":"PartyLobby","title":"","message":"","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":3}
+{"t":2.025,"seq":39,"ev":"loading.engageText","text":"Use the Cloaking Ability to turn invisible for a brief time."}
+{"t":2.025,"seq":40,"ev":"loading.engageText","text":"The longer the Plasma Cannon is charged, the more damage it causes."}
+{"t":2.025,"seq":41,"ev":"loading.engageText","text":"The Scatter Blaster is most effective at close range."}
+{"t":2.025,"seq":42,"ev":"audio.levelChange","from":"FrontEnd"}
+{"t":2.029,"seq":43,"ev":"level.begin","level":"PartyLobby","map":"UI_PartyLobby_m","url":"UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen"}
+{"t":2.029,"seq":44,"ev":"partylobby.game","state":"Ready","gameTeamStatus":3,"playlists":9}
+{"t":2.029,"seq":45,"ev":"ui.open","movie":"UI_GFxLobbies_p.PartyLobby_GFX_1","state":"InLobby"}
+{"t":2.029,"seq":46,"ev":"ui.state","from":"NotInGame","to":"InLobby","controller":"TnUIControllerPartyLobby","level":"PartyLobby"}
+{"t":2.029,"seq":47,"ev":"loading.close","kind":"PartyLobby","level":"PartyLobby"}
+{"t":2.029,"seq":48,"ev":"script.wait","cond":"level=PartyLobby"}
+{"t":2.029,"seq":49,"ev":"script.wait","cond":"ui=InLobby"}
+{"t":2.029,"seq":50,"ev":"audio.uiLevel","level":"UI_PartyLobby_m"}
+{"t":4.029,"seq":51,"ev":"script.wait","cond":"t=2"}
+{"t":4.029,"seq":52,"ev":"bridge","fn":"Online.EditGameMode","args":"TDM","level":"PartyLobby"}
+{"t":4.029,"seq":53,"ev":"lobby.publishGameInfo","tag":"TDM","settings":"TnOnlineGameSettingsTDMPrivate","friendlyName":"Team Deathmatch"}
+{"t":4.030,"seq":54,"ev":"bridge","fn":"Online.PlayPrivateGame","args":"TDM","level":"PartyLobby"}
+{"t":4.030,"seq":55,"ev":"online.HostOnlineGame","settings":"TnOnlineGameSettingsTDMPrivate","lobbyUrl":"UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen"}
+{"t":4.030,"seq":56,"ev":"travel","url":"UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen","server":true,"from":"PartyLobby"}
+{"t":4.030,"seq":57,"ev":"loading.start","kind":"GameLobby","title":"","message":"","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":3}
+{"t":4.030,"seq":58,"ev":"loading.engageText","text":"Grab an Overshield for increased armor."}
+{"t":4.030,"seq":59,"ev":"loading.engageText","text":"Jumping decreases the accuracy of your weapons."}
+{"t":4.030,"seq":60,"ev":"loading.engageText","text":"The longer the Plasma Cannon is charged, the more damage it causes."}
+{"t":4.030,"seq":61,"ev":"audio.levelChange","from":"PartyLobby"}
+{"t":4.033,"seq":62,"ev":"level.begin","level":"GameLobby","map":"UI_Lobby_m","url":"UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen"}
+{"t":4.033,"seq":63,"ev":"gamelobby.game","gameClass":"TransContent.TnGameLobbyGameTeam","tag":"TDM","settings":"TnOnlineGameSettingsTDMPrivate","private":true,"mapSelectionMethod":1}
+{"t":4.033,"seq":64,"ev":"gamelobby.map","mapId":510,"map":"MP_UND_Gorge_BASE_m","name":"Gorge","hasRequiredAssets":true}
+{"t":4.033,"seq":65,"ev":"gamelobby.status","lobbyStatus":3,"text":"Waiting for host to start game"}
+{"t":4.033,"seq":66,"ev":"ui.open","movie":"UI_GFxLobbies_p.GameLobby_GFX_1","state":"InLobby"}
+{"t":4.033,"seq":67,"ev":"ui.state","from":"NotInGame","to":"InLobby","controller":"TnUIControllerGameLobby","level":"GameLobby"}
+{"t":4.033,"seq":68,"ev":"loading.close","kind":"GameLobby","level":"GameLobby"}
+{"t":4.033,"seq":69,"ev":"script.wait","cond":"level=GameLobby"}
+{"t":4.033,"seq":70,"ev":"script.wait","cond":"ui=InLobby"}
+{"t":4.033,"seq":71,"ev":"audio.uiLevel","level":"UI_Lobby_m"}
+{"t":6.033,"seq":72,"ev":"script.wait","cond":"t=2"}
+{"t":6.033,"seq":73,"ev":"snapshot","why":"gamelobby","level":"GameLobby","map":"UI_Lobby_m","uiController":"TnUIControllerGameLobby","uiState":"InLobby","openMovie":"UI_GFxLobbies_p.GameLobby_GFX_1","loading":false,"mode":"TDM","mapId":510,"countdown":0,"team":-1,"hud":false}
+{"t":6.033,"seq":74,"ev":"bridge","fn":"Online.SetSelectedMapID","args":508,"level":"GameLobby"}
+{"t":6.033,"seq":75,"ev":"gamelobby.map","mapId":508,"map":"MP_IAC_Streets_Base_m","name":"Streets","hasRequiredAssets":true}
+{"t":6.035,"seq":76,"ev":"bridge","fn":"Online.BeginLobbyExitCountdown","args":"","level":"GameLobby"}
+{"t":6.035,"seq":77,"ev":"gamelobby.countdown","seconds":10,"kind":"BeginShortCountdown"}
+{"t":7.035,"seq":78,"ev":"gamelobby.countdownTick","value":9}
+{"t":8.036,"seq":79,"ev":"gamelobby.countdownTick","value":8}
+{"t":9.035,"seq":80,"ev":"gamelobby.countdownTick","value":7}
+{"t":10.035,"seq":81,"ev":"gamelobby.countdownTick","value":6}
+{"t":11.035,"seq":82,"ev":"gamelobby.countdownTick","value":5}
+{"t":12.035,"seq":83,"ev":"gamelobby.countdownTick","value":4}
+{"t":13.035,"seq":84,"ev":"gamelobby.countdownTick","value":3}
+{"t":14.035,"seq":85,"ev":"gamelobby.countdownTick","value":2}
+{"t":15.035,"seq":86,"ev":"gamelobby.countdownTick","value":1}
+{"t":16.035,"seq":87,"ev":"gamelobby.countdownTick","value":0}
+{"t":16.035,"seq":88,"ev":"gamelobby.finalCountdown","team":1,"teamName":"Decepticons"}
+{"t":16.035,"seq":89,"ev":"gamelobby.startLevel","url":"MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508"}
+{"t":16.035,"seq":90,"ev":"travel","url":"MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508","server":true,"from":"GameLobby"}
+{"t":16.035,"seq":91,"ev":"loading.start","kind":"Map","title":"Team Deathmatch","message":"in Streets","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":3}
+{"t":16.035,"seq":92,"ev":"loading.engageText","text":"Don't get fooled. Decoy Traps can be destroyed by shooting them."}
+{"t":16.035,"seq":93,"ev":"loading.engageText","text":"Don't get fooled. Decoy Traps can be destroyed by shooting them."}
+{"t":16.035,"seq":94,"ev":"loading.engageText","text":"Don't get fooled. Decoy Traps can be destroyed by shooting them."}
+{"t":16.035,"seq":95,"ev":"audio.levelChange","from":"GameLobby"}
+{"t":16.039,"seq":96,"ev":"match.launch","url":"MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508","map":"MP_IAC_Streets_Base_m","runtimeDir":"MP_IAC_Streets","mode":"TDM","goalScore":40,"timeLimit":900,"team":1}
+{"t":16.039,"seq":97,"ev":"match.loaded","map":"MP_IAC_Streets","mode":"TDM","seconds":4.347}
+{"t":16.039,"seq":98,"ev":"level.begin","level":"Match","map":"MP_IAC_Streets_Base_m","url":"MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508"}
+{"t":16.039,"seq":99,"ev":"ui.state","from":"NotInGame","to":"WaitingOnGameStart","controller":"TnUIControllerMultiplayer","level":"Match"}
+{"t":16.039,"seq":100,"ev":"ui.open","movie":"UI_GFxCustomize_p.CustomTransformers_GFX_1","state":"WaitingOnGameStart"}
+{"t":16.039,"seq":101,"ev":"loading.close","kind":"Map","level":"Match"}
+{"t":16.039,"seq":102,"ev":"adapter","what":"character selected + match begun (no PendingMatch in Gameplay)","provenance":"PROVISIONAL"}
+{"t":16.039,"seq":103,"ev":"ui.close","movie":"UI_GFxCustomize_p.CustomTransformers_GFX_1"}
+{"t":16.039,"seq":104,"ev":"ui.open","movie":"UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1","state":"WaitingOnGameStart"}
+{"t":16.039,"seq":105,"ev":"ui.close","movie":"UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1"}
+{"t":16.039,"seq":106,"ev":"ui.hud","visible":true}
+{"t":16.039,"seq":107,"ev":"ui.state","from":"WaitingOnGameStart","to":"InGame","controller":"TnUIControllerMultiplayer","level":"Match"}
+{"t":16.039,"seq":108,"ev":"script.wait","cond":"level=Match"}
+{"t":16.039,"seq":109,"ev":"script.wait","cond":"ui=InGame"}
+{"t":22.039,"seq":110,"ev":"script.wait","cond":"t=6"}
+{"t":22.039,"seq":111,"ev":"snapshot","why":"ingame","level":"Match","map":"MP_IAC_Streets_Base_m","uiController":"TnUIControllerMultiplayer","uiState":"InGame","openMovie":"","loading":false,"mode":"TDM","mapId":508,"countdown":0,"team":1,"hud":true}
+{"t":22.039,"seq":112,"ev":"ui.open","movie":"UI_GFxPause_p.PauseMenu_GFX_1","state":"Paused"}
+{"t":22.039,"seq":113,"ev":"ui.state","from":"InGame","to":"Paused","controller":"TnUIControllerMultiplayer","level":"Match"}
+{"t":22.044,"seq":114,"ev":"script.wait","cond":"ui=Paused"}
+{"t":24.042,"seq":115,"ev":"script.wait","cond":"t=2"}
+{"t":24.042,"seq":116,"ev":"snapshot","why":"paused","level":"Match","map":"MP_IAC_Streets_Base_m","uiController":"TnUIControllerMultiplayer","uiState":"Paused","openMovie":"UI_GFxPause_p.PauseMenu_GFX_1","loading":false,"mode":"TDM","mapId":508,"countdown":0,"team":1,"hud":true}
+{"t":24.042,"seq":117,"ev":"bridge","fn":"Game.QuitToMainMenu","args":"","level":"Match"}
+{"t":24.042,"seq":118,"ev":"ui.close","movie":"UI_GFxPause_p.PauseMenu_GFX_1"}
+{"t":24.042,"seq":119,"ev":"ui.state","from":"Paused","to":"NotInGame","controller":"TnUIControllerMultiplayer","level":"Match"}
+{"t":24.042,"seq":120,"ev":"match.quit","reason":"QuitToMainMenu"}
+{"t":24.042,"seq":121,"ev":"travel","url":"UI_FrontEnd_m","server":false,"from":"Match"}
+{"t":24.042,"seq":122,"ev":"loading.start","kind":"Generic","title":"","message":"","bink":"TF_LoadingScreen","gfx":"UI_GFxLoading_p.LoadScreen_GFX","tips":0}
+{"t":24.042,"seq":123,"ev":"match.unloaded"}
+{"t":24.042,"seq":124,"ev":"level.begin","level":"FrontEnd","map":"UI_FrontEnd_m","url":"UI_FrontEnd_m"}
+{"t":24.042,"seq":125,"ev":"frontend.game","state":"WaitingForController"}
+{"t":24.042,"seq":126,"ev":"frontend.game","state":"None","controllerAssigned":true}
+{"t":24.042,"seq":127,"ev":"loading.close","kind":"Generic","level":"FrontEnd"}
+{"t":24.042,"seq":128,"ev":"script.wait","cond":"level=FrontEnd"}
+{"t":24.044,"seq":129,"ev":"gfx.open","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":24.044,"seq":130,"ev":"shim","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","what":"HasWatchedIntroMovie branch","provenance":"HIGH (RE 1.2)"}
+{"t":24.044,"seq":131,"ev":"bridge","fn":"Game.HasWatchedIntroMovie","args":"","level":"FrontEnd"}
+{"t":24.044,"seq":132,"ev":"fscommand","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1","cmd":"enterFrontEnd","arg":""}
+{"t":24.044,"seq":133,"ev":"frontend.kismet","action":"Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL"}
+{"t":24.044,"seq":134,"ev":"frontend.kismet","action":"SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX"}
+{"t":24.044,"seq":135,"ev":"ui.open","movie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","state":"FrontEnd"}
+{"t":24.044,"seq":136,"ev":"ui.state","from":"NotInGame","to":"FrontEnd","controller":"TnUIControllerFrontEnd","level":"FrontEnd"}
+{"t":24.044,"seq":137,"ev":"profile","HasWatchedIntroMovie":true}
+{"t":24.044,"seq":138,"ev":"gfx.close","movie":"UI_GFxFrontEnd_p.MovieLoader_GFX_1"}
+{"t":24.044,"seq":139,"ev":"script.wait","cond":"ui=FrontEnd"}
+{"t":24.044,"seq":140,"ev":"audio.uiLevel","level":"UI_FrontEnd_m"}
+{"t":26.042,"seq":141,"ev":"script.wait","cond":"t=2"}
+{"t":26.042,"seq":142,"ev":"snapshot","why":"returned","level":"FrontEnd","map":"UI_FrontEnd_m","uiController":"TnUIControllerFrontEnd","uiState":"FrontEnd","openMovie":"UI_GFxFrontEnd_p.FrontEnd_GFX_1","loading":false,"mode":"","mapId":-1,"countdown":0,"team":-1,"hud":false}
+{"t":26.042,"seq":143,"ev":"bridge","fn":"Game.ExitGame","args":"","level":"FrontEnd"}
+{"t":26.042,"seq":144,"ev":"exit"}

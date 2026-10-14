@@ -1,0 +1,323 @@
+﻿{
+    "summary":  {
+                    "pass":  52,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "render_selftest.shadow.01_Res_clamp_MaxShadowResolution_1_2048_1024_shipped",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "Res = clamp(MaxShadowResolution, 1, 2048): 1024 shipped"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.02_ShadowDepthBias_1024_0_2_6_2_1165_08",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "ShadowDepthBias = (1024 * 0.2 / 6)^2 = 1165.08"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.03_BranchingPCF_4_edge_12_refining_offsets",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "BranchingPCF: 4 edge + 12 refining offsets"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.04_offset_scale_table_6_Res",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "offset scale = table * 6 / Res"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.05_resolution_clamp_int_ScreenRadius_min_128_1014_min_1024_10_1",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "resolution = clamp((int)ScreenRadius, min(128, 1014), min(1024 - 10, 1014))"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.06_light_Min_MaxShadowResolution_override",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "light Min/MaxShadowResolution override"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.07_Optimus_mesh_CastShadow_bCastDynamicShadow_shown_IsShadowCas",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "Optimus mesh (CastShadow, bCastDynamicShadow, shown): IsShadowCast"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.08_SDPG_World_subject_projects_in_the_World_DPG_pass",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "SDPG_World subject projects in the World DPG pass"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.09_hidden_form_without_bCastHiddenShadow_no_shadow_relevance",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "hidden form without bCastHiddenShadow: no shadow relevance"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.10_hidden_form_with_bCastHiddenShadow_shadow_relevance",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "hidden form with bCastHiddenShadow: shadow relevance"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.11_CastShadow_False_no_shadow_relevance",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "CastShadow False: no shadow relevance"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.12_beyond_MaxDrawDistance_no_shadow_relevance",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "beyond MaxDrawDistance: no shadow relevance"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.13_bUseViewOwnerDPG_for_the_owner_s_view_relevance_in_ViewOwner",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "bUseViewOwnerDPG for the owner\u0027s view: relevance in ViewOwnerDPG only"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.14_bUseViewOwnerDPG_other_view_component_DPG",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "bUseViewOwnerDPG, other view: component DPG"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.15_relevance_without_bit_0x4_not_projected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "relevance without bit 0x4: not projected"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.16_point_composite_projector_type_2_ModShadowColor_shadowFactor",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "point composite -\u003e projector type 2, ModShadowColor = shadowFactor"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.17_spot_composite_overwrites_the_same_slot_no_second_projector",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot composite overwrites the same slot (no second projector)"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.18_directional_Radius_327680_UU_falloff_2_0",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "directional: Radius 327680 UU, falloff 2.0"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.19_shadowFactor_within_1e_4_of_white_no_record_slot_switched_of",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "shadowFactor within 1e-4 of white: no record, slot switched off"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.20_no_composite_light_slot_switched_off",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "no composite light: slot switched off"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.21_DLAC_0_with_no_lights_folded_into_SH",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "DLAC = 0 with no lights folded into SH"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.22_DLAC_CubeSum_L_CubeSum_A_L_0_001_per_channel",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "DLAC = CubeSum(L) / (CubeSum(A + L) + 0.001) per channel"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.23_mask_clear_1_1_1_1_everywhere",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "mask clear = (1,1,1,1) everywhere"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.24_mask_size_scene_SizeX_960_2_1",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "mask size = scene / (SizeX \u003e 960 ? 2 : 1)"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.25_one_projection_mask_rgb_1_0_5",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "one projection: mask.rgb = 1 * 0.5"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.26_two_overlapping_projections_multiply_0_25_not_replace_min_ad",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "two overlapping projections multiply (0.25), not replace / min / add"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.27_second_projection_alone_0_5",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "second projection alone: 0.5"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.28_volume_entirely_in_front_of_the_receiver_stencil_0_mask_unto",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "volume entirely in front of the receiver: stencil 0, mask untouched"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.29_pixels_outside_every_volume_remain_1",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "pixels outside every volume remain 1"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.30_alpha_untouched_by_the_projection_blend",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "alpha untouched by the projection blend"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.31_blur_6_tap_4_2_1_4_s_normalised_H_squared_then_V_closed_form",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "blur = 6-tap {4,2,1}(4 - s) normalised, H squared then V (closed form)"
+                    },
+                    {
+                        "id":  "render_selftest.shadow.32_blur_keeps_unshadowed_regions_at_1",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "blur keeps unshadowed regions at 1"
+                    },
+                    {
+                        "id":  "render_selftest.dle.01_point_inside_RadiusOfInfluence_radius",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "point inside RadiusOfInfluence + radius"
+                    },
+                    {
+                        "id":  "render_selftest.dle.02_point_outside_RadiusOfInfluence_radius",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "point outside RadiusOfInfluence + radius"
+                    },
+                    {
+                        "id":  "render_selftest.dle.03_point_IntensityAt_B_1_d_R_2_F",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "point IntensityAt = B * (1 - (d/R)^2)^F"
+                    },
+                    {
+                        "id":  "render_selftest.dle.04_point_IntensityAt_0_beyond_Radius",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "point IntensityAt = 0 beyond Radius"
+                    },
+                    {
+                        "id":  "render_selftest.dle.05_special_channel_Cinematic_1_not_on_env_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "special channel (Cinematic_1) not on env -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.06_PlayerOnly_light_on_robot_env_PlayerOnly_accepted",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "PlayerOnly light on robot env (PlayerOnly) -\u003e accepted"
+                    },
+                    {
+                        "id":  "render_selftest.dle.07_PlayerOnly_light_on_vehicle_env_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "PlayerOnly light on vehicle env -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.08_CompositeDynamic_treated_as_Dynamic",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "CompositeDynamic treated as Dynamic"
+                    },
+                    {
+                        "id":  "render_selftest.dle.09_no_shared_channel_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "no shared channel -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.10_light_function_without_composite_shadow_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "light function without composite shadow -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.11_light_function_with_composite_shadow_accepted",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "light function with composite shadow -\u003e accepted"
+                    },
+                    {
+                        "id":  "render_selftest.dle.12_disabled_light_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "disabled light -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.13_spot_inside_inner_cone_full_point_intensity",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot inside inner cone = full point intensity"
+                    },
+                    {
+                        "id":  "render_selftest.dle.14_spot_outside_outer_cone_0",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot outside outer cone = 0"
+                    },
+                    {
+                        "id":  "render_selftest.dle.15_spot_between_cones_point_cone_2",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot between cones = point * cone^2"
+                    },
+                    {
+                        "id":  "render_selftest.dle.16_spot_relevance_sphere_outside_the_outer_cone_rejected",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot relevance: sphere outside the outer cone -\u003e rejected"
+                    },
+                    {
+                        "id":  "render_selftest.dle.17_spot_relevance_sphere_inside_the_outer_cone_accepted",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "spot relevance: sphere inside the outer cone -\u003e accepted"
+                    },
+                    {
+                        "id":  "render_selftest.dle.18_movement_90_UU_queues_a_full_re_gather_that_lands_within_2_f",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "movement \u003e 90 UU queues a full re-gather that lands within 2 frames"
+                    },
+                    {
+                        "id":  "render_selftest.dle.19_first_update_after_attach_is_an_immediate_full_update",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "first update after attach is an immediate full update"
+                    },
+                    {
+                        "id":  "render_selftest.dle.20_visibility_transition_1_0_at_0_4_s_gives_0_8_after_0_5_s",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "visibility transition 1 -\u003e 0 at 0.4/s gives 0.8 after 0.5 s"
+                    }
+                ]
+}

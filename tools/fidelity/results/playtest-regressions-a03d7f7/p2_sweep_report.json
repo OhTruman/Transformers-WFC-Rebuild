@@ -1,0 +1,90 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  13,
+                    "skip":  0,
+                    "human":  0
+                },
+    "results":  [
+                    {
+                        "id":  "sweep.category.interior",
+                        "status":  "INFO",
+                        "measured":  368,
+                        "note":  "368 shots; mean luma 36.6; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.exterior",
+                        "status":  "INFO",
+                        "measured":  60,
+                        "note":  "60 shots; mean luma 34.4; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.tunnel",
+                        "status":  "INFO",
+                        "measured":  48,
+                        "note":  "48 shots; mean luma 35.8; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.ramp_stairs",
+                        "status":  "INFO",
+                        "measured":  36,
+                        "note":  "36 shots; mean luma 35.5; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.glass",
+                        "status":  "INFO",
+                        "measured":  12,
+                        "note":  "12 shots; mean luma 41.8; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.skyline",
+                        "status":  "INFO",
+                        "measured":  12,
+                        "note":  "12 shots; mean luma 43.1; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.moving_scenery",
+                        "status":  "INFO",
+                        "measured":  12,
+                        "note":  "12 shots; mean luma 66.7; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.particles",
+                        "status":  "INFO",
+                        "measured":  13,
+                        "note":  "13 shots; mean luma 50.4; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.pickup",
+                        "status":  "INFO",
+                        "measured":  105,
+                        "note":  "105 shots; mean luma 36.5; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.start",
+                        "status":  "INFO",
+                        "measured":  254,
+                        "note":  "254 shots; mean luma 33.7; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.robot",
+                        "status":  "INFO",
+                        "measured":  12,
+                        "note":  "12 shots; mean luma 39.3; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.category.vehicle",
+                        "status":  "INFO",
+                        "measured":  12,
+                        "note":  "12 shots; mean luma 41.6; 0 with \u003e= 40% near-black cells"
+                    },
+                    {
+                        "id":  "sweep.near_black_views",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "views \u003e= 60% near-black (unlit / missing / void candidates): "
+                    }
+                ]
+}

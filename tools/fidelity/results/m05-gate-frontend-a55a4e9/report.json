@@ -1,0 +1,516 @@
+﻿{
+    "summary":  {
+                    "pass":  47,
+                    "fail":  2,
+                    "known":  3,
+                    "info":  3,
+                    "skip":  29,
+                    "human":  1
+                },
+    "results":  [
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_flow",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_flow.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_gfx",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_gfx.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_modes",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_modes.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_maps",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_maps.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_loading",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_loading.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_audio",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_audio.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_localization",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_localization.json present"
+                    },
+                    {
+                        "id":  "e2e.DATA.intro_movie_files",
+                        "status":  "PASS",
+                        "note":  "authored intro movies on disk (ExtractedAssets\\movies): missing "
+                    },
+                    {
+                        "id":  "e2e.DATA.frontend_unit_tests",
+                        "status":  "FAIL",
+                        "measured":  1,
+                        "owner":  "Frontend",
+                        "note":  "wfc_frontend_tests exit 1 (exit = failures); failing: catalog.tdm_selectable_maps_now  2; output frontend_tests.txt"
+                    },
+                    {
+                        "id":  "e2e.STATE.flow_trace",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "144 flow events, run exit 0, timeout events 0"
+                    },
+                    {
+                        "id":  "e2e.STATE.boot_map",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "boot map UI_FrontEnd_m (expected UI_FrontEnd_m, RE 1.1 / frontend_flow.json [URL])"
+                    },
+                    {
+                        "id":  "e2e.STATE.first_launch_profile",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "fresh run directory: watchedIntro=False"
+                    },
+                    {
+                        "id":  "e2e.STATE.boot_loading_movie",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "first loading screen closes as kind=InitialStartup (expected InitialStartup = TF_InitialStartup, RE 1.1 [LoadingMovie] InitialStartupFileName)"
+                    },
+                    {
+                        "id":  "e2e.STATE.boot_loading_trace",
+                        "status":  "INFO",
+                        "owner":  "Frontend",
+                        "note":  "trace detail for the frontend lane: the first loading.start says kind=Generic bink=TF_LoadingScreen but the screen closes as kind=InitialStartup; no event records the switch to TF_InitialStartup"
+                    },
+                    {
+                        "id":  "e2e.STATE.intro_chain_order",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "movie.play order: Logo_Activision,Logo_Hasbro,Logo_HighMoon,FMV_intro; expected Logo_Activision,Logo_Hasbro,Logo_HighMoon,FMV_intro (RE 1.2 Kismet chain (each on the previous Stopped))"
+                    },
+                    {
+                        "id":  "e2e.STATE.ui_transitions_legal",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "8 UI state changes; not in the TnUIController table: "
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.FrontEnd",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "state FrontEnd: expected UI_GFxFrontEnd_p.FrontEnd_GFX_1 opened (RE 1.4); opened: UI_GFxFrontEnd_p.FrontEnd_GFX_1,UI_GFxLobbies_p.PartyLobby_GFX_1,UI_GFxLobbies_p.GameLobby_GFX_1,UI_GFxCustomize_p.CustomTransformers_GFX_1,UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1,UI_GFxPause_p.PauseMenu_GFX_1,UI_GFxFrontEnd_p.FrontEnd_GFX_1"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.InLobby@PartyLobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "state InLobby@PartyLobby: expected UI_GFxLobbies_p.PartyLobby_GFX_1 opened (RE 1.4); opened: UI_GFxFrontEnd_p.FrontEnd_GFX_1,UI_GFxLobbies_p.PartyLobby_GFX_1,UI_GFxLobbies_p.GameLobby_GFX_1,UI_GFxCustomize_p.CustomTransformers_GFX_1,UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1,UI_GFxPause_p.PauseMenu_GFX_1,UI_GFxFrontEnd_p.FrontEnd_GFX_1"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.InLobby@GameLobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "state InLobby@GameLobby: expected UI_GFxLobbies_p.GameLobby_GFX_1 opened (RE 1.4); opened: UI_GFxFrontEnd_p.FrontEnd_GFX_1,UI_GFxLobbies_p.PartyLobby_GFX_1,UI_GFxLobbies_p.GameLobby_GFX_1,UI_GFxCustomize_p.CustomTransformers_GFX_1,UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1,UI_GFxPause_p.PauseMenu_GFX_1,UI_GFxFrontEnd_p.FrontEnd_GFX_1"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.WaitingOnGameStart",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "state WaitingOnGameStart: expected UI_GFxCustomize_p.CustomTransformers_GFX_1 opened (RE 1.4); opened: UI_GFxFrontEnd_p.FrontEnd_GFX_1,UI_GFxLobbies_p.PartyLobby_GFX_1,UI_GFxLobbies_p.GameLobby_GFX_1,UI_GFxCustomize_p.CustomTransformers_GFX_1,UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1,UI_GFxPause_p.PauseMenu_GFX_1,UI_GFxFrontEnd_p.FrontEnd_GFX_1"
+                    },
+                    {
+                        "id":  "e2e.STATE.movie_for.Paused",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "state Paused: expected UI_GFxPause_p.PauseMenu_GFX_1 opened (RE 1.4); opened: UI_GFxFrontEnd_p.FrontEnd_GFX_1,UI_GFxLobbies_p.PartyLobby_GFX_1,UI_GFxLobbies_p.GameLobby_GFX_1,UI_GFxCustomize_p.CustomTransformers_GFX_1,UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1,UI_GFxPause_p.PauseMenu_GFX_1,UI_GFxFrontEnd_p.FrontEnd_GFX_1"
+                    },
+                    {
+                        "id":  "e2e.STATE.no_duplicate_screens",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "movies opened again without being closed: "
+                    },
+                    {
+                        "id":  "e2e.STATE.no_stale_screens_across_travel",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "more than one movie still open when a new level began (travel replaces the UI): "
+                    },
+                    {
+                        "id":  "e2e.STATE.party_lobby_url",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen (expected UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen)"
+                    },
+                    {
+                        "id":  "e2e.STATE.multiplayer_call",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "Online.OpenPartyLobby(GTS_TeamGame) (RE 1.5: GTS_TeamGame)"
+                    },
+                    {
+                        "id":  "e2e.STATE.mode_selection",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "publishGameInfo tag=TDM settings=TnOnlineGameSettingsTDMPrivate friendlyName=Team Deathmatch"
+                    },
+                    {
+                        "id":  "e2e.STATE.game_lobby_url",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen; mismatched keys: "
+                    },
+                    {
+                        "id":  "e2e.STATE.map_selection",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "selected mapId=508 map=MP_IAC_Streets_Base_m name=Streets hasRequiredAssets=True; preselected before the call: 510"
+                    },
+                    {
+                        "id":  "e2e.STATE.lobby_countdown",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "countdown 10 s, 10 ticks, final countdown after 10.00 s (expected 10 s, 1 s ticks)"
+                    },
+                    {
+                        "id":  "e2e.STATE.team_pick",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "finalCountdown team=1 Decepticons (RE 5.3: 0 Autobots, 1 Decepticons; PickTeam tie -\u003e RandomInt(2) HIGH)"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_url",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508\n expected (RE 3.1): MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_loading_text",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "title \u0027Team Deathmatch\u0027 message \u0027in Streets\u0027 tips 3 gfx UI_GFxLoading_p.LoadScreen_GFX bink TF_LoadingScreen"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_launch",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "mode TDM goalScore 40 timeLimit 900 team 1 runtimeDir MP_IAC_Streets (RE 5.1: 40 / 900; team = lobby pick 1)"
+                    },
+                    {
+                        "id":  "e2e.STATE.match_load_time",
+                        "status":  "INFO",
+                        "measured":  4.347,
+                        "note":  "blocking match load 4.347 s"
+                    },
+                    {
+                        "id":  "e2e.MATCH.pending_countdown",
+                        "status":  "KNOWN",
+                        "owner":  "Gameplay",
+                        "note":  "PreGameCountdown -\u003e InGame after 0.00 s (RE 5.2: 10 s). PROVISIONAL adapter: character selected + match begun (no PendingMatch in Gameplay)"
+                    },
+                    {
+                        "id":  "e2e.STATE.hud_visible_in_game",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "ui.hud visible=True on entering InGame (RE 1.4)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.pause_input_focus",
+                        "status":  "HUMAN",
+                        "owner":  "Frontend",
+                        "note":  "hold W, press Esc in a match: the robot must stop while the pause menu is up and the world keeps running. Not automatable: scripted input (WFC_AUTOWALK) enters after the focus gate and the window reads GetAsyncKeyState. Proposed hook for the frontend lane: a scripted-input variant applied before the focus gate. Scripted walk for reference: before pause max 0.2 m/s, during pause max 0.2 m/s, displacement 0.45 m over 69 samples"
+                    },
+                    {
+                        "id":  "e2e.STATE.world_runs_while_paused",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match frames advance during pause: 1850 -\u003e 2530 (RE 6: bPauseable false, HIGH)"
+                    },
+                    {
+                        "id":  "e2e.STATE.quit_to_main_menu",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.quit reason=QuitToMainMenu; travel UI_FrontEnd_m; match.unloaded 1; FrontEnd level entered 2 times (RE 5.7)"
+                    },
+                    {
+                        "id":  "e2e.STATE.return_skips_intro",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "MovieLoader after return: enterFrontEnd; intro movies after return 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.state_reset_after_return",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "returned frontend snapshot: mode=\u0027\u0027 mapId=-1 team=-1 hud=False countdown=0"
+                    },
+                    {
+                        "id":  "e2e.STATE.return_to_game_lobby_after_match_end",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "needs the TDM match end (Gameplay MatchOver 15 s -\u003e ReturnToGameLobby UI_Lobby_m with MapId kept; RE 5.7)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.intro_movies_played",
+                        "status":  "KNOWN",
+                        "owner":  "Frontend",
+                        "note":  "movie.unavailable 4: Logo_Activision (no video decoder integrated); Logo_Hasbro (no video decoder integrated); Logo_HighMoon (no video decoder integrated); FMV_intro (no video decoder integrated) - the files exist (DATA) but the user sees no movie"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.capture_control",
+                        "status":  "SKIP",
+                        "note":  "in-game control capture cap_0107_ui_state.png: flat 98%, near-black 0%. window capture unavailable this run (uniform control frame): screen checks below are SKIP. Re-run with the product window visible on an unlocked desktop"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.frontend_screen",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.party_lobby_screen",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.game_lobby_screen",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.loading_screen_match",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.in_game",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.pause_menu",
+                        "status":  "SKIP",
+                        "note":  "no window capture for this state (state not reached or window not capturable)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.menu_music",
+                        "status":  "SKIP",
+                        "owner":  "Systems/Frontend",
+                        "note":  "MUSIC log lines 0 (WFC_MUSICLOG; needs Systems FrontendAudio wired by the frontend owner): "
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.match_audio_sounding",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "AMB samples 15; backend voices max n/a (Systems field; absent before the Systems merge)"
+                    },
+                    {
+                        "id":  "e2e.PRESENTED.ui_audio_ownership",
+                        "status":  "SKIP",
+                        "owner":  "Systems/Frontend",
+                        "note":  "UI sounds (FrontendAudio.playUiSound) and per-level music handover need the Systems FrontendAudio wiring (call sequence in Systems FIDELITY M05) - expectations in m05\\expectations.json audio_ownership"
+                    },
+                    {
+                        "id":  "e2e.STATE.second_launch_profile",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "second launch in the same directory: watchedIntro=True (profile persisted; medium rebuild-only)"
+                    },
+                    {
+                        "id":  "e2e.STATE.second_launch_skips_logos",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "intro movies played on the second launch: 0 (RE 1.2: logos only until the intro has been watched once (SetHasWatchedIntroMovie); MovieLoader branch HIGH)"
+                    },
+                    {
+                        "id":  "e2e.STATE.second_launch_reaches_menu",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "main menu reached on the second launch"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.cycles_completed",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "3/3 frontend -\u003e TDM -\u003e pause -\u003e quit -\u003e frontend cycles completed (exit 0)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_per_cycle",
+                        "status":  "KNOWN",
+                        "measured":  1579.75,
+                        "owner":  "Rendering",
+                        "note":  "private MB at each return to the frontend: 2507.8 -\u003e 4033.9 -\u003e 5667.3 (+1579.8 MB per cycle). The frontend lane documents that the renderer is recreated on return and the previous map\u0027s GL objects leak (handoff Rendering: map unload)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_peak",
+                        "status":  "FAIL",
+                        "measured":  6242.9,
+                        "owner":  "Rendering/Frontend",
+                        "note":  "peak private memory over 3 cycles: 6242.9 MB (process.csv). FAIL above 6 GB: at that size a user\u0027s ordinary session of a few matches exhausts a typical 8-16 GB machine"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.handles_per_cycle",
+                        "status":  "PASS",
+                        "measured":  5.5,
+                        "note":  "handles at each return: 471 -\u003e 476 -\u003e 482 (+5.5 per cycle)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.one_world_load_per_match",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "match.loaded 3, world loads logged 3"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.load_time_per_cycle",
+                        "status":  "INFO",
+                        "note":  "match load seconds per cycle: 4.408, 2.593, 2.941"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.match_parameters_stable",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.launch mode|goal|time per cycle: TDM|40|900|team 1; TDM|40|900|team 0; TDM|40|900|team 1"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.no_stale_flow_state",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "frontend snapshots after each return with leftover match/lobby state: 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.ui_events_per_cycle_constant",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "ui.open events per cycle: 6, 6 (growth = screens accumulating)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.player_state_fresh_each_match",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "first frame of each match: ammo 50/150; form ROBOT (3 matches)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.audio_pcm_returns_to_base",
+                        "status":  "SKIP",
+                        "owner":  "Systems",
+                        "note":  "decoded PCM per AMB sample (needs Systems): first  MB, last  MB, max  MB; Systems guarantee: back to base after unloadMapAudio"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.map_collision",
+                        "status":  "SKIP",
+                        "owner":  "Frontend/Rendering/Systems",
+                        "note":  "no product counter yet for map_collision across travel; proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount/bytes\u003e\u0027 log line per level.begin (protocols\\RUNTIME-EVENTS.md)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.render_assets",
+                        "status":  "SKIP",
+                        "owner":  "Frontend/Rendering/Systems",
+                        "note":  "no product counter yet for render_assets across travel; proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount/bytes\u003e\u0027 log line per level.begin (protocols\\RUNTIME-EVENTS.md)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.frontend_movies",
+                        "status":  "SKIP",
+                        "owner":  "Frontend/Rendering/Systems",
+                        "note":  "no product counter yet for frontend_movies across travel; proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount/bytes\u003e\u0027 log line per level.begin (protocols\\RUNTIME-EVENTS.md)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.event_queues",
+                        "status":  "SKIP",
+                        "owner":  "Frontend/Rendering/Systems",
+                        "note":  "no product counter yet for event_queues across travel; proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount/bytes\u003e\u0027 log line per level.begin (protocols\\RUNTIME-EVENTS.md)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.timers",
+                        "status":  "SKIP",
+                        "owner":  "Frontend/Rendering/Systems",
+                        "note":  "no product counter yet for timers across travel; proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount/bytes\u003e\u0027 log line per level.begin (protocols\\RUNTIME-EVENTS.md)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.spawn_after_pending",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.team_assignment",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.damage",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.death",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.respawn_delay",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected 5.0 s (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.team_score",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected kill +1 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.player_score",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.score_limit_end",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected 40 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.time_limit_end",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected 900 s (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.tie",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.match_end_ui",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected UI event 9 -\u003e EndGameStats_GFX, HUD hidden (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.reset",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    },
+                    {
+                        "id":  "e2e.MATCH.second_match",
+                        "status":  "SKIP",
+                        "owner":  "Gameplay",
+                        "note":  "expected RE 5 (m05\\expectations.json match_tdm). not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)"
+                    }
+                ]
+}

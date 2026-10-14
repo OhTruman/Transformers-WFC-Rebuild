@@ -1,0 +1,284 @@
+﻿{
+    "summary":  {
+                    "pass":  34,
+                    "fail":  1,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  0,
+                    "human":  1,
+                    "unknown":  1,
+                    "waiting":  1,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "jitter.sim.robot_walk.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 14.01 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_walk.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_walk.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_strafe.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 0.6 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_strafe.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_strafe.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_turnwalk.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 13.68 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_turnwalk.stale",
+                        "status":  "PASS",
+                        "measured":  0.004,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 1 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_turnwalk.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_fire.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 14.01 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_fire.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.robot_fire.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_drive.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 14.86 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_drive.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_drive.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_boost.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 27.15 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_boost.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_boost.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_nitro.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 26.3 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_nitro.stale",
+                        "status":  "PASS",
+                        "measured":  0.007,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 2 (1%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_nitro.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_turn.transform",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady 27.15 m/s; per-frame displacement spikes \u003e 2.5x median: 0; yaw jumps 0, leg-yaw jumps 0"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_turn.stale",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay/Integration",
+                        "note":  "frames with an unchanged position while moving: 0 (0%) - the simulation steps slower than the frame rate; visible stepping unless the renderer interpolates"
+                    },
+                    {
+                        "id":  "jitter.sim.vehicle_turn.anim",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "animation time step median 0.02; double advances 0; frozen steps 0"
+                    },
+                    {
+                        "id":  "jitter.present.vehicle",
+                        "status":  "WAITING",
+                        "owner":  "Frontend/Integration",
+                        "note":  "vehicle presentation frames need a scripted transform in a frontend-launched match (proposal for Frontend / Integration: FRONTEND_SCRIPT step press:transform / hold:boost). Vehicle simulation jitter: part A; look: HUMAN"
+                    },
+                    {
+                        "id":  "jitter.present.robot_walk.alternation",
+                        "status":  "PASS",
+                        "measured":  1.664,
+                        "owner":  "Rendering/Integration",
+                        "note":  "48 consecutive frames, character region: mean |f(i)-f(i+1)| 3.12, |f(i)-f(i+2)| 5.19 (ratio 1.664; smooth motion \u003e= 1); ping-pong frames 0 (two poses / transforms drawn on alternate frames). Limit: a camera-pacing swim (the M05 regression) is not an alternation - part C is its detector"
+                    },
+                    {
+                        "id":  "jitter.present.robot_walk.spikes",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "isolated jumps \u003e 4x the median frame-to-frame change: 0; identical consecutive frames: 0"
+                    },
+                    {
+                        "id":  "jitter.present.robot_strafe_turn.alternation",
+                        "status":  "PASS",
+                        "measured":  1.644,
+                        "owner":  "Rendering/Integration",
+                        "note":  "48 consecutive frames, character region: mean |f(i)-f(i+1)| 2.87, |f(i)-f(i+2)| 4.72 (ratio 1.644; smooth motion \u003e= 1); ping-pong frames 0 (two poses / transforms drawn on alternate frames). Limit: a camera-pacing swim (the M05 regression) is not an alternation - part C is its detector"
+                    },
+                    {
+                        "id":  "jitter.present.robot_strafe_turn.spikes",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "isolated jumps \u003e 4x the median frame-to-frame change: 0; identical consecutive frames: 0"
+                    },
+                    {
+                        "id":  "jitter.bone_level",
+                        "status":  "UNKNOWN",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "no per-bone transform log in the product: root vs individual-bone separation cannot be measured (proposal: WFC_POSELOG \u0027POSE frame bone pos\u0027 for root / pelvis / head / hands). Presentation evidence above + HUMAN-CHECK"
+                    },
+                    {
+                        "id":  "jitter.pacing.robot_walk_turn",
+                        "status":  "FAIL",
+                        "measured":  0.00342,
+                        "owner":  "Gameplay",
+                        "note":  "pawn screen-x second difference per rendered frame (mean / max): 60 Hz 0.00197 / 0.19174 (5.0% frames \u003e 0.004); 144 Hz 0.00342 / 0.05417 (24.6% frames \u003e 0.004); 240 Hz 0 / 4E-05 (0.0% frames \u003e 0.004) (Rendering M08: broken 0.0095 mean at 144 Hz, fixed \u003c= 0.0001; FAIL = mean \u003e 0.002 or \u003e 5% of frames \u003e 0.004)"
+                    },
+                    {
+                        "id":  "jitter.pacing.vehicle_boost_turn",
+                        "status":  "PASS",
+                        "measured":  0.00155,
+                        "owner":  "Gameplay",
+                        "note":  "pawn screen-x second difference per rendered frame (mean / max): 60 Hz 0.00155 / 0.00482 (1.0% frames \u003e 0.004); 144 Hz 0.00039 / 0.00076 (0.0% frames \u003e 0.004); 240 Hz 0.00016 / 0.00027 (0.0% frames \u003e 0.004) (Rendering M08: broken 0.0095 mean at 144 Hz, fixed \u003c= 0.0001; FAIL = mean \u003e 0.002 or \u003e 5% of frames \u003e 0.004)"
+                    },
+                    {
+                        "id":  "jitter.present.vehicle_boost_144.alternation",
+                        "status":  "PASS",
+                        "measured":  1.756,
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "48 consecutive frames: |f(i)-f(i+1)| 1.00, |f(i)-f(i+2)| 1.75; ping-pong frames 0"
+                    },
+                    {
+                        "id":  "jitter.present.robot_walk_144.alternation",
+                        "status":  "PASS",
+                        "measured":  1.862,
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "48 consecutive frames: |f(i)-f(i+1)| 0.30, |f(i)-f(i+2)| 0.56; ping-pong frames 0"
+                    },
+                    {
+                        "id":  "vehicle_states.runway",
+                        "status":  "INFO",
+                        "measured":  8,
+                        "note":  "starts without a clear 8 s boost runway (boost ends on a frontal hit, RE PT 1.2 - not a defect): 5,20,41,60,77,12,33,47; measured on start 5 (boost 28.81 m/s, nitro engaged at frame 300: True)"
+                    },
+                    {
+                        "id":  "vehicle_states.speeds",
+                        "status":  "PASS",
+                        "measured":  28.81,
+                        "owner":  "Gameplay",
+                        "note":  "max speed hover 15 / boost 28.81 / nitro 9.39 / after boost release 0.15 m/s (PT 1.2: hover 15, boost 30, nitro x1.5 = 45)"
+                    },
+                    {
+                        "id":  "vehicle_states.nitro",
+                        "status":  "PASS",
+                        "measured":  0.3,
+                        "owner":  "Gameplay",
+                        "note":  "activation at frame 299: remaining 2.98 s / cooldown 8 s / speedScale 1.5 / steeringScale 0.3 (PT 1.2: 3 / 8 / 1.5 / 0.3); countdown rate 1 s/s; active 0.3 s (ended early by an impact: boost exits on a frontal hit, original); a second request at frame 600 (inside the 8 s cooldown) activated: False"
+                    },
+                    {
+                        "id":  "vehicle_states.stable",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Gameplay",
+                        "note":  "steady boost (frames 200-300): speed oscillations \u003e 1 m/s/frame: 0 (state / speed flicker)"
+                    },
+                    {
+                        "id":  "vehicle_states.visuals",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Systems",
+                        "note":  "hover boosters (6 HoverFX, Size from thruster contribution) / BoostFx / RamFX for Nitro must be distinguishable and steady (PT 1.2 propulsion visuals)"
+                    }
+                ]
+}

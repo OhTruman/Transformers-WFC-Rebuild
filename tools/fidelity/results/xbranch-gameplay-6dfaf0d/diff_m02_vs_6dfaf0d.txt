@@ -1,0 +1,264 @@
+
+change  id                                                                          A     B    measuredA    measuredB   unit  
+------  --                                                                          -     -    ---------    ---------   ----  
+FIXED   collision.wall_slide_speed                                                  KNOWN PASS 0.299162     9.73617     m/s   
+FIXED   movement.vehicle_rest_com_height                                            KNOWN PASS 1.85         1.28716     m     
+FIXED   native_robot.fine_aim.camera_back_shift                                     KNOWN PASS 0            2           m     
+FIXED   native_robot.hand_shrink.matches_drawn_weapon                               KNOWN PASS                                
+FIXED   native_robot.hand_shrink.on_with_gun                                        KNOWN PASS                                
+FIXED   native_vehicle.boost_jump.dv_forward                                        KNOWN PASS 0.416666     6.37793     m/s   
+FIXED   native_vehicle.boost_jump.dv_up                                             KNOWN PASS 0            13.5085     m/s   
+FIXED   native_vehicle.dash.exit_forward                                            KNOWN PASS 0            15          m/s   
+FIXED   native_vehicle.dash.exit_lateral                                            KNOWN PASS 29.5         0.00825098  m/s   
+FIXED   native_vehicle.dash.forward_speed                                           KNOWN PASS 0            30          m/s   
+FIXED   native_vehicle.dash.lateral_zeroed                                          KNOWN PASS 30           0.00805594  m/s   
+FIXED   native_vehicle.drop10.settles_to_rest                                       KNOWN PASS 1.85         1.28725     m     
+FIXED   native_vehicle.free_fall.contacts                                           KNOWN PASS -1           0           probes
+FIXED   native_vehicle.free_fall.rb_gravity                                         KNOWN PASS 0            -19.404     m/s2  
+FIXED   native_vehicle.hover_jump.dvz                                               KNOWN PASS 0            12          m/s   
+FIXED   native_vehicle.hover_jump_stationary.dvz                                    KNOWN PASS 0            12.0001     m/s   
+FIXED   native_vehicle.rest.com_height                                              KNOWN PASS 1.85         1.28726     m     
+FIXED   native_vehicle.step_025.attitude_follows_terrain                            KNOWN PASS                                
+FIXED   native_vehicle.step_025.no_one_frame_snap                                   KNOWN PASS                                
+FIXED   native_vehicle.step_025.rest_com_on_top                                     KNOWN PASS 1.85         1.2866      m     
+FIXED   native_vehicle.step_050.attitude_follows_terrain                            KNOWN PASS                                
+FIXED   native_vehicle.step_050.no_one_frame_snap                                   KNOWN PASS                                
+FIXED   native_vehicle.step_050.rest_com_on_top                                     KNOWN PASS 1.85         1.28524     m     
+FIXED   original_vs_rebuild.collision.wall_slide_speed                              KNOWN PASS 0.299162     9.73617     m/s   
+FIXED   original_vs_rebuild.movement.vehicle_rest_com_height                        KNOWN PASS 1.85         1.28716     m     
+FIXED   original_vs_rebuild.transform_momentum.weapon_restore_frac_elapsed_to_robot KNOWN PASS 0.5          0.257143    frac  
+FIXED   trace_cost.hitscan_trace_under_1ms                                          KNOWN PASS                                
+FIXED   transform_analyzer.r2v_moving.overlap_inside_authored_window                KNOWN PASS                                
+FIXED   transform_analyzer.r2v_moving.source_mesh_hidden                            KNOWN PASS 1.01667      0.9         s     
+FIXED   transform_analyzer.r2v_moving.target_mesh_first_visible                     KNOWN PASS 1.01667      0.416667    s     
+FIXED   transform_analyzer.r2v_stand.overlap_inside_authored_window                 KNOWN PASS                                
+FIXED   transform_analyzer.r2v_stand.source_mesh_hidden                             KNOWN PASS 1.01667      0.9         s     
+FIXED   transform_analyzer.r2v_stand.target_mesh_first_visible                      KNOWN PASS 1.01667      0.416667    s     
+FIXED   transform_analyzer.v2r_moving.no_usable_weapon_without_muzzle               KNOWN PASS                                
+FIXED   transform_analyzer.v2r_moving.overlap_inside_authored_window                KNOWN PASS                                
+FIXED   transform_analyzer.v2r_moving.source_mesh_hidden                            KNOWN PASS 0.583333     0.683333    s     
+FIXED   transform_analyzer.v2r_moving.target_mesh_first_visible                     KNOWN PASS 0.583333     0.116667    s     
+FIXED   transform_analyzer.v2r_stand.no_usable_weapon_without_muzzle                KNOWN PASS                                
+FIXED   transform_analyzer.v2r_stand.overlap_inside_authored_window                 KNOWN PASS                                
+FIXED   transform_analyzer.v2r_stand.source_mesh_hidden                             KNOWN PASS 0.583333     0.683333    s     
+FIXED   transform_analyzer.v2r_stand.target_mesh_first_visible                      KNOWN PASS 0.583333     0.116667    s     
+FIXED   transform_momentum.weapon_restore_frac_elapsed_to_robot                     KNOWN PASS 0.5          0.257143    frac  
+FIXED   transform_timeline.r2v_moving.both_meshes_visible_in_fold                   KNOWN PASS                                
+FIXED   transform_timeline.r2v_stand.both_meshes_visible_in_fold                    KNOWN PASS                                
+FIXED   transform_timeline.separate_arm_mesh                                        KNOWN PASS                                
+FIXED   transform_timeline.v2r_moving.both_meshes_visible_in_fold                   KNOWN PASS                                
+FIXED   transform_timeline.v2r_moving.no_usable_weapon_without_muzzle               KNOWN PASS                                
+FIXED   transform_timeline.v2r_stand.both_meshes_visible_in_fold                    KNOWN PASS                                
+FIXED   transform_timeline.v2r_stand.no_usable_weapon_without_muzzle                KNOWN PASS                                
+FIXED   vehicle_profiles.step.BOOST.never_below_surface                             KNOWN PASS                                
+FIXED   vehicle_profiles.step.NITRO.never_below_surface                             KNOWN PASS                                
+NEW     movement.vehicle_rest_spring_length                                         -     INFO              1.28716     m     
+NEW     native_robot.ram.robot_horizontal_after                                     -     PASS              0           m/s   
+NEW     native_robot.ram.robot_speed_during                                         -     PASS              50          m/s   
+NEW     native_robot.ram.vehicle_add_velocity_half                                  -     PASS              5           m/s   
+NEW     native_vehicle.boost_jump.pitch_rate                                        -     INFO              -1.79615    rad/s 
+NEW     native_vehicle.hover_jump.pitch_kick                                        -     PASS              -1          rad/s 
+NEW     native_vehicle.rest.probe_contacts                                          -     PASS              4           probes
+NEW     native_vehicle.rest.spring_length                                           -     PASS              1.28728     m     
+NEW     native_vehicle.upright.airborne_ratio_per_tick                              -     PASS              0.95              
+REMOVED native_robot.ram                                                            SKIP  -                                   
+moved   boost.physics_boost_speed                                                   INFO  INFO 30           21.9928     m/s   
+moved   collision.wall_stop_gap                                                     PASS  PASS 2.03333      2           m     
+moved   fine_aim.camera_lateral_shift                                               INFO  INFO 0.0517843    0           m     
+moved   fine_aim_probe.camera_distance_fine_aim                                     INFO  INFO 8.48518      9.02679     m     
+moved   fine_aim_probe.camera_distance_normal                                       INFO  INFO 8.48518      7.25001     m     
+moved   fine_aim_probe.camera_lateral_fine_aim                                      INFO  INFO 2.82811      3           m     
+moved   fine_aim_probe.camera_lateral_normal                                        INFO  INFO 2.82811      3           m     
+moved   fine_aim_probe.camera_lateral_shift                                         INFO  INFO 4.05312E-06  0           m     
+moved   fine_aim_probe.entry_t90                                                    INFO  INFO 0.0833333    0.116667    s     
+moved   fine_aim_probe.exit_t90                                                     INFO  INFO 0.25         0.416667    s     
+moved   map.collision_load_build                                                    INFO  INFO 2148.1       2306.87     ms    
+moved   map.collision_step_cost                                                     INFO  INFO 0.0183077    0.0258107   ms    
+moved   map.sweep_airborne_frac                                                     INFO  INFO 0            0.0114583         
+moved   map.sweep_dist_dir225                                                       INFO  INFO 26.9312      38.1919     m     
+moved   map.sweep_dist_dir270                                                       INFO  INFO 40.5674      42.497      m     
+moved   map.sweep_height_range                                                      INFO  INFO 0.320129     2.2309      m     
+moved   map.sweep_stuck_time                                                        INFO  INFO 16.4333      14.4        s     
+moved   map.sweep_total_distance                                                    INFO  INFO 209.33       222.69      m     
+moved   movement.vehicle_boost_decay_time                                           INFO  INFO 0.85         0.733333    s     
+moved   movement.vehicle_boost_rise_time                                            INFO  INFO 0.6          -1          s     
+moved   movement.vehicle_boost_speed_after_2s                                       INFO  INFO 30           26.9299     m/s   
+moved   movement.vehicle_jump_apex                                                  INFO  INFO 0            4.78851     m     
+moved   native_vehicle.boost.speed_at_1s                                            INFO  INFO 30           21.8638     m/s   
+moved   native_vehicle.camera_turn.heading_vs_view_yaw                              PASS  PASS 0            0.0570936   deg   
+moved   native_vehicle.camera_turn.view_yaw_t90                                     INFO  INFO 0.0166667    0.1         s     
+moved   native_vehicle.dash.vertical_zeroed                                         PASS  PASS 0            0.000366213 m/s   
+moved   native_vehicle.drop10.impact_vy                                             INFO  INFO 0            -18.3258    m/s   
+moved   native_vehicle.drop10.min_com_height                                        INFO  INFO 1E+09        0.598983    m     
+moved   native_vehicle.drop10.recovery_time                                         INFO  INFO -1           0.983333    s     
+moved   native_vehicle.hover_jump.apex_above_rest                                   INFO  INFO 0            3.77773     m     
+moved   native_vehicle.hover_jump.horizontal_kept                                   PASS  PASS 0            9.53674E-07 m/s   
+moved   native_vehicle.hover_jump_stationary.horizontal_kept                        PASS  PASS 0            7.42294E-07 m/s   
+moved   native_vehicle.nitro.peak_after_full_boost                                  INFO  INFO 45           43.5084     m/s   
+moved   native_vehicle.push_only.accel_extended                                     INFO  INFO 0            -9.50225    m/s2  
+moved   native_vehicle.rest.pawn_origin_height                                      INFO  INFO 1.85         1.23726     m     
+moved   native_vehicle.rest.visual_mesh_clearance                                   INFO  INFO 1.90928      1.29654     m     
+moved   native_vehicle.step_025.com_range_world                                     INFO  INFO 0            0.276419    m     
+moved   native_vehicle.step_025.pitch_max_deg                                       INFO  INFO 0            4.01357     deg   
+moved   native_vehicle.step_050.com_range_world                                     INFO  INFO 0            0.52094     m     
+moved   native_vehicle.step_050.pitch_max_deg                                       INFO  INFO 0            8.11611     deg   
+moved   orientation.camera_distance                                                 INFO  INFO 8.50711      7.22944     m     
+moved   orientation.camera_shoulder_offset                                          INFO  INFO 2.63161      3           m     
+moved   orientation.pawn_feet_screen_y                                              INFO  INFO -0.974619    -1.09107    ndc   
+moved   orientation.pawn_screen_x                                                   INFO  INFO -0.388401    -0.543789   ndc   
+moved   orientation.vehicle_heading_follows_camera_strafe                           PASS  PASS 0            0.0352742   deg   
+moved   orientation.vehicle_heading_follows_camera_turn                             PASS  PASS 0            0.0570662   deg   
+moved   performance.sim_step_cost_running                                           INFO  INFO 3.0981       3.24763     ms    
+moved   trace_cost.segment_2m_ms                                                    INFO  INFO 0.0211225    0.0186275   ms    
+moved   trace_cost.segment_300m_ms                                                  INFO  INFO 30.9202      0.1058      ms    
+moved   trace_cost.segment_30m_ms                                                   INFO  INFO 0.635898     0.0988675   ms    
+moved   transform.to_robot_mesh_handoff_time                                        INFO  INFO 0.583333     0.683333    s     
+moved   transform.to_vehicle_mesh_handoff_time                                      INFO  INFO 1.01667      0.9         s     
+moved   transform_analyzer.r2v_moving.arm_mesh_steps                                INFO  INFO 0            53          steps 
+moved   transform_analyzer.r2v_moving.authored_hold_steps                           INFO  INFO 9            8           steps 
+moved   transform_analyzer.r2v_moving.camera_offset_swing                           INFO  INFO 2.82811      4.23465     m     
+moved   transform_analyzer.r2v_moving.far_geometry_visible_steps                    INFO  INFO 0            34          steps 
+moved   transform_analyzer.r2v_moving.far_vertex_steps                              INFO  INFO 0            5           steps 
+moved   transform_analyzer.r2v_moving.switch_bounds_jump                            INFO  INFO 2.05195      0.273829    m     
+moved   transform_analyzer.r2v_stand.arm_mesh_steps                                 INFO  INFO 0            53          steps 
+moved   transform_analyzer.r2v_stand.authored_hold_steps                            INFO  INFO 9            8           steps 
+moved   transform_analyzer.r2v_stand.camera_offset_swing                            INFO  INFO 2.82811      4.23465     m     
+moved   transform_analyzer.r2v_stand.far_geometry_visible_steps                     INFO  INFO 0            34          steps 
+moved   transform_analyzer.r2v_stand.far_vertex_steps                               INFO  INFO 0            5           steps 
+moved   transform_analyzer.r2v_stand.switch_bounds_jump                             INFO  INFO 2.05195      0.273829    m     
+moved   transform_analyzer.v2r_moving.arm_mesh_steps                                INFO  INFO 0            60          steps 
+moved   transform_analyzer.v2r_moving.authored_hold_steps                           INFO  INFO 0            1           steps 
+moved   transform_analyzer.v2r_moving.camera_offset_swing                           INFO  INFO 2.82811      4.23103     m     
+moved   transform_analyzer.v2r_moving.far_geometry_visible_steps                    INFO  INFO 17           23          steps 
+moved   transform_analyzer.v2r_moving.far_vertex_steps                              INFO  INFO 17           23          steps 
+moved   transform_analyzer.v2r_moving.switch_bounds_jump                            INFO  INFO 38.5663      0.247344    m     
+moved   transform_analyzer.v2r_stand.arm_mesh_steps                                 INFO  INFO 0            60          steps 
+moved   transform_analyzer.v2r_stand.authored_hold_steps                            INFO  INFO 0            1           steps 
+moved   transform_analyzer.v2r_stand.camera_offset_swing                            INFO  INFO 2.82811      4.23103     m     
+moved   transform_analyzer.v2r_stand.far_geometry_visible_steps                     INFO  INFO 17           23          steps 
+moved   transform_analyzer.v2r_stand.far_vertex_steps                               INFO  INFO 17           23          steps 
+moved   transform_analyzer.v2r_stand.switch_bounds_jump                             INFO  INFO 38.5663      0.251592    m     
+moved   transform_momentum.r2v_angled.v_mid_outgoing                                INFO  INFO 19.7528      17.7765     m/s   
+moved   transform_momentum.r2v_standstill.v_end                                     INFO  INFO 0            1.83278E-08 m/s   
+moved   transform_momentum.r2v_standstill.v_end_plus_0p25                           INFO  INFO 0            2.08167E-08 m/s   
+moved   transform_momentum.r2v_standstill.v_handoff                                 INFO  INFO 0            2.88516E-08 m/s   
+moved   transform_momentum.r2v_standstill.v_mid_outgoing                            INFO  INFO 0            5.91413E-08 m/s   
+moved   transform_momentum.v2r_angled.v_end                                         INFO  INFO 19.6057      19.4367     m/s   
+moved   transform_momentum.v2r_angled.v_end_plus_0p25                               INFO  INFO 14.3024      14.1334     m/s   
+moved   transform_momentum.v2r_angled.v_handoff                                     INFO  INFO 20.5859      20.2488     m/s   
+moved   transform_momentum.v2r_angled.v_mid_outgoing                                INFO  INFO 21.0116      20.8089     m/s   
+moved   transform_momentum.v2r_boost.v_before                                       INFO  INFO 30           22.8843     m/s   
+moved   transform_momentum.v2r_boost.v_end                                          INFO  INFO 28.6257      21.51       m/s   
+moved   transform_momentum.v2r_boost.v_end_plus_0p25                                INFO  INFO 24.8757      17.76       m/s   
+moved   transform_momentum.v2r_boost.v_first_step                                   INFO  INFO 29.9921      22.8764     m/s   
+moved   transform_momentum.v2r_boost.v_first_step_carried                           PASS  PASS 29.9921      22.8764     m/s   
+moved   transform_momentum.v2r_boost.v_handoff                                      INFO  INFO 29.3188      22.0843     m/s   
+moved   transform_momentum.v2r_boost.v_mid_outgoing                                 INFO  INFO 29.6554      22.4803     m/s   
+moved   transform_momentum.v2r_cruise.v_handoff                                     INFO  INFO 14.5564      14.3188     m/s   
+moved   transform_momentum.v2r_cruise.v_mid_outgoing                                INFO  INFO 14.8574      14.7148     m/s   
+moved   transform_momentum.v2r_standstill.v_before                                  INFO  INFO 0            5.56085E-08 m/s   
+moved   transform_momentum.v2r_standstill.v_first_step                              INFO  INFO 0            5.56085E-08 m/s   
+moved   transform_timeline.r2v_moving.max_root_excess                               INFO  INFO 0.0102159    0.00267205  m     
+moved   transform_timeline.r2v_moving.mesh_handoff_progress                         INFO  INFO 0.508474     0.449152    frac  
+moved   transform_timeline.r2v_stand.max_root_excess                                INFO  INFO 0.0618464    0.0018208   m     
+moved   transform_timeline.r2v_stand.mesh_handoff_progress                          INFO  INFO 0.508474     0.449152    frac  
+moved   transform_timeline.v2r_moving.max_root_excess                               INFO  INFO 0.00430915   0.00229546  m     
+moved   transform_timeline.v2r_moving.mesh_handoff_progress                         INFO  INFO 0.5          0.588235    frac  
+moved   transform_timeline.v2r_stand.mesh_handoff_progress                          INFO  INFO 0.5          0.588235    frac  
+moved   vehicle_feel.accel_t90_lateral                                              INFO  INFO 0.45         0.466667    s     
+moved   vehicle_feel.boost_speed_after_3s                                           INFO  INFO 30           28.8622     m/s   
+moved   vehicle_feel.boost_t90                                                      INFO  INFO 0.483333     2.03333     s     
+moved   vehicle_feel.dash_no_stick_peak_speed                                       INFO  INFO 0            30          m/s   
+moved   vehicle_feel.dash_plateau_time                                              PASS  PASS 0.6          0.483333    s     
+moved   vehicle_feel.dash_time_above_cruise                                         INFO  INFO 0.966667     0.483333    s     
+moved   vehicle_feel.heading_error_after_turn_deg                                   INFO  INFO 0            6.83019E-06 deg   
+moved   vehicle_feel.hover_drop_undershoot                                          INFO  INFO 0            -0.0126513  m     
+moved   vehicle_feel.hover_settle_time                                              INFO  INFO 0.316667     1           s     
+moved   vehicle_feel.jump_airtime                                                   INFO  INFO 0.1          1.35        s     
+moved   vehicle_feel.jump_apex_above_hover                                          INFO  INFO 0            3.95722     m     
+moved   vehicle_feel.jump_landing_vy                                                INFO  INFO 0            -4.82417    m/s   
+moved   vehicle_feel.jump_launch_vy                                                 INFO  INFO 0            12.2439     m/s   
+moved   vehicle_feel.lateral_retention_0p5s                                         INFO  INFO 4.03984      4.24757     m/s   
+moved   vehicle_feel.nitro_duration                                                 PASS  PASS 3.01667      3           s     
+moved   vehicle_feel.nitro_peak_after_2s_boost                                      INFO  INFO 45           43.1718     m/s   
+moved   vehicle_feel.rest_com_height                                                INFO  INFO 1.85         1.26811     m     
+moved   vehicle_profiles.bumps.BOOST.max_ride_error                                 INFO  INFO 0            0.24461     m     
+moved   vehicle_profiles.bumps.BOOST.speed_loss                                     INFO  INFO 0            -0.00200462 m/s   
+moved   vehicle_profiles.bumps.BOOST.vy_range                                       INFO  INFO 0            2.91316     m/s   
+moved   vehicle_profiles.bumps.DASH.max_ride_error                                  INFO  INFO 1.19209E-07  0.301873    m     
+moved   vehicle_profiles.bumps.DASH.max_vertical_step                               INFO  INFO 0.25         0.0293529   m     
+moved   vehicle_profiles.bumps.DASH.vy_range                                        INFO  INFO 0            2.19472     m/s   
+moved   vehicle_profiles.bumps.HOVER.max_ride_error                                 INFO  INFO 1.19209E-07  0.301998    m     
+moved   vehicle_profiles.bumps.HOVER.max_vertical_step                              INFO  INFO 0.25         0.0175161   m     
+moved   vehicle_profiles.bumps.HOVER.speed_loss                                     INFO  INFO 0            0.054738    m/s   
+moved   vehicle_profiles.bumps.HOVER.vy_range                                       INFO  INFO 0            1.49097     m/s   
+moved   vehicle_profiles.bumps.NITRO.max_ride_error                                 INFO  INFO 0            0.24461     m     
+moved   vehicle_profiles.bumps.NITRO.speed_loss                                     INFO  INFO -0.416666    -0.178911   m/s   
+moved   vehicle_profiles.bumps.NITRO.vy_range                                       INFO  INFO 0            2.92383     m/s   
+moved   vehicle_profiles.lateral.hover_strafe_t90                                   INFO  INFO 0.45         0.466667    s     
+moved   vehicle_profiles.ledge.BOOST.airtime                                        INFO  INFO 0.633333     0.616667    s     
+moved   vehicle_profiles.ledge.BOOST.speed_loss                                     INFO  INFO 0            -0.00200462 m/s   
+moved   vehicle_profiles.ledge.DASH.airtime                                         INFO  INFO 0.633333     0.716667    s     
+moved   vehicle_profiles.ledge.DASH.landing_recovery                                INFO  INFO 0.0166667    0.416667    s     
+moved   vehicle_profiles.ledge.DASH.landing_vy                                      INFO  INFO -12.2867     -9.99675    m/s   
+moved   vehicle_profiles.ledge.DASH.max_ride_error                                  INFO  INFO 3.99461      3.94543     m     
+moved   vehicle_profiles.ledge.DASH.max_vertical_step                               INFO  INFO 0.204778     0.166613    m     
+moved   vehicle_profiles.ledge.DASH.speed_loss                                      INFO  INFO 15           15.0901     m/s   
+moved   vehicle_profiles.ledge.DASH.vy_range                                        INFO  INFO 12.2867      10.7305     m/s   
+moved   vehicle_profiles.ledge.HOVER.airtime                                        INFO  INFO 0.633333     0.433333    s     
+moved   vehicle_profiles.ledge.HOVER.landing_recovery                               INFO  INFO 0.0166667    0.366667    s     
+moved   vehicle_profiles.ledge.HOVER.landing_vy                                     INFO  INFO -12.2867     -10.2411    m/s   
+moved   vehicle_profiles.ledge.HOVER.max_ride_error                                 INFO  INFO 3.99461      3.93371     m     
+moved   vehicle_profiles.ledge.HOVER.max_vertical_step                              INFO  INFO 0.204778     0.170686    m     
+moved   vehicle_profiles.ledge.HOVER.speed_loss                                     INFO  INFO 0            0.598337    m/s   
+moved   vehicle_profiles.ledge.HOVER.vy_range                                       INFO  INFO 12.2867      11.0301     m/s   
+moved   vehicle_profiles.ledge.NITRO.airtime                                        INFO  INFO 0.633333     0.616667    s     
+moved   vehicle_profiles.ledge.NITRO.speed_loss                                     INFO  INFO -0.416666    -0.178911   m/s   
+moved   vehicle_profiles.long.BOOST.peak_speed                                      INFO  INFO 30           28.127      m/s   
+moved   vehicle_profiles.long.BOOST.release_half_speed                              INFO  INFO 0.85         0.8         s     
+moved   vehicle_profiles.long.BOOST.release_to_1ms                                  INFO  INFO 1.31667      1.23333     s     
+moved   vehicle_profiles.long.BOOST.t_to_90pct                                      INFO  INFO 1.28333      2.38333     s     
+moved   vehicle_profiles.long.NITRO.peak_speed                                      INFO  INFO 45           36.6512     m/s   
+moved   vehicle_profiles.long.NITRO.release_half_speed                              INFO  INFO 1.1          0.95        s     
+moved   vehicle_profiles.long.NITRO.release_to_1ms                                  INFO  INFO 1.81667      1.51667     s     
+moved   vehicle_profiles.long.NITRO.t_to_90pct                                      INFO  INFO 2.43333      2.83333     s     
+moved   vehicle_profiles.steer.BOOST.max_slip_deg                                   INFO  INFO 66.3043      0.189746    deg   
+moved   vehicle_profiles.steer.BOOST.speed_at_turn                                  INFO  INFO 30           24.9808     m/s   
+moved   vehicle_profiles.steer.BOOST.velocity_kept_0p5s                             INFO  INFO 24.5823      26.9268     m/s   
+moved   vehicle_profiles.steer.BOOST.velocity_t_to_81deg                            INFO  INFO 1.53333      -1          s     
+moved   vehicle_profiles.steer.DASH.heading_error_after_step                        INFO  INFO 0            6.83019E-06 deg   
+moved   vehicle_profiles.steer.DASH.max_slip_deg                                    INFO  INFO 57.097       21.6899     deg   
+moved   vehicle_profiles.steer.DASH.velocity_kept_0p5s                              INFO  INFO -1.28949E-06 -0.0216868  m/s   
+moved   vehicle_profiles.steer.DASH.velocity_t_to_81deg                             INFO  INFO 0.05         0.116667    s     
+moved   vehicle_profiles.steer.HOVER.heading_error_after_step                       INFO  INFO 0            6.83019E-06 deg   
+moved   vehicle_profiles.steer.HOVER.max_slip_deg                                   INFO  INFO 88.6172      74.7193     deg   
+moved   vehicle_profiles.steer.HOVER.velocity_kept_0p5s                             INFO  INFO 4.39339      4.62452     m/s   
+moved   vehicle_profiles.steer.NITRO.max_slip_deg                                   INFO  INFO 36.9916      0.059347    deg   
+moved   vehicle_profiles.steer.NITRO.speed_at_turn                                  INFO  INFO 37.9167      27.581      m/s   
+moved   vehicle_profiles.steer.NITRO.velocity_kept_0p5s                             INFO  INFO 41.9735      32.8659     m/s   
+moved   vehicle_profiles.step.BOOST.max_ride_error                                  INFO  INFO 0.5          0           m     
+moved   vehicle_profiles.step.BOOST.max_vertical_step                               INFO  INFO 0            0.5         m     
+moved   vehicle_profiles.step.BOOST.speed_loss                                      INFO  INFO 0            -0.00200462 m/s   
+moved   vehicle_profiles.step.DASH.max_ride_error                                   INFO  INFO 1.19209E-07  0.533045    m     
+moved   vehicle_profiles.step.DASH.max_vertical_step                                INFO  INFO 0.5          0.0646074   m     
+moved   vehicle_profiles.step.DASH.vy_range                                         INFO  INFO 0            3.91379     m/s   
+moved   vehicle_profiles.step.HOVER.max_ride_error                                  INFO  INFO 1.19209E-07  0.516215    m     
+moved   vehicle_profiles.step.HOVER.max_vertical_step                               INFO  INFO 0.5          0.0361052   m     
+moved   vehicle_profiles.step.HOVER.speed_loss                                      INFO  INFO 0            0.203293    m/s   
+moved   vehicle_profiles.step.HOVER.vy_range                                        INFO  INFO 0            2.32326     m/s   
+moved   vehicle_profiles.step.NITRO.max_ride_error                                  INFO  INFO 0.5          0           m     
+moved   vehicle_profiles.step.NITRO.max_vertical_step                               INFO  INFO 0            0.5         m     
+moved   vehicle_profiles.step.NITRO.speed_loss                                      INFO  INFO -0.416666    -0.178911   m/s   
+moved   vehicle_profiles.vertical.body_attitude_represented                         INFO  INFO 0            1                 
+moved   vehicle_profiles.vertical.drop1m_settle                                     INFO  INFO 0.0166667    1.08333     s     
+moved   vehicle_profiles.vertical.drop1m_undershoot                                 INFO  INFO 0            0.00319839  m     
+moved   vehicle_profiles.vertical.jump_apex                                         INFO  INFO 0            3.90474     m     
+moved   vehicle_profiles.vertical.jump_launch_vy                                    INFO  INFO 0            12.1606     m/s   
+moved   vehicle_profiles.vertical.rest_com_height                                   INFO  INFO 1.85         1.27148     m     
+moved   vehicle_profiles.yaw.hover_heading_lag_at_90dps                             INFO  INFO 0            3.74151     deg   
+
+
+
+A: @{pass=267; fail=0; known=66; info=363; skip=1}
+B: @{pass=325; fail=0; known=15; info=365; skip=0}
+

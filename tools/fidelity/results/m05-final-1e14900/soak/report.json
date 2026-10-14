@@ -1,0 +1,190 @@
+﻿{
+    "summary":  {
+                    "pass":  23,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  1,
+                    "skip":  5,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_flow",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_flow.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_gfx",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_gfx.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_modes",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_modes.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_maps",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_maps.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_loading",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_loading.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_audio",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_audio.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.frontend_localization",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\frontend_localization.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.manifest.mp_map_catalog",
+                        "status":  "PASS",
+                        "owner":  "AssetTools",
+                        "note":  "AssetTools manifests\\mp_map_catalog.json"
+                    },
+                    {
+                        "id":  "e2e.DATA.frontend_unit_tests",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "owner":  "Frontend",
+                        "note":  "wfc_frontend_tests exit 0; failing: "
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.cycles_completed",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "20/20 frontend -\u003e Streets TDM (15 s of walking, turning, firing, boosting) -\u003e frontend cycles; exit 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_stabilizes",
+                        "status":  "PASS",
+                        "measured":  4,
+                        "note":  "private MB after each unload: 2467.289 \u003e 2467.516 \u003e 2476.441 \u003e 2488.77 \u003e 2488.648 \u003e 2494.867 \u003e 2499.699 \u003e 2509.574 \u003e 2571.848 \u003e 2531.289 \u003e 2512.676 \u003e 2559.328 \u003e 2534.512 \u003e 2537.41 \u003e 2536.176 \u003e 2531.84 \u003e 2554.992 \u003e 2539.207 \u003e 2531.715 \u003e 2545.457 (slope 4 MB/cycle after cycle 1); at the frontend after each return: 1386.3 \u003e 1389.5 \u003e 1403.4 \u003e 1391.8 \u003e 1395.6 \u003e 1397.4 \u003e 1401.3 \u003e 1435.5 \u003e 1434 \u003e 1434.8 \u003e 1439.1 \u003e 1435.2 \u003e 1433.9 \u003e 1453.4 \u003e 1453.5 \u003e 1454.9 \u003e 1451.8 \u003e 1454 \u003e 1459.4 \u003e 1464 (slope 4.3). "
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.memory_peak",
+                        "status":  "INFO",
+                        "measured":  3327.6,
+                        "note":  "peak private memory over 20 cycles: 3327.6 MB"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.handles_threads",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "handles at each return: 655 \u003e 667 \u003e 667 \u003e 676 \u003e 685 \u003e 687 \u003e 695 \u003e 705 \u003e 715 \u003e 719 \u003e 727 \u003e 735 \u003e 743 \u003e 754 \u003e 762 \u003e 768 \u003e 776 \u003e 784 \u003e 794 \u003e 804 (slope 7.8); threads: 22 \u003e 18 \u003e 14 \u003e 16 \u003e 16 \u003e 13 \u003e 16 \u003e 18 \u003e 18 \u003e 15 \u003e 13 \u003e 14 \u003e 15 \u003e 14 \u003e 14 \u003e 13 \u003e 13 \u003e 13 \u003e 17 \u003e 17 (slope -0.1)"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.gl_release_per_return",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "GL objects released at each return: textures=72 buffers=0 framebuffers=0 renderbuffers=0 vertexArrays=0 programs=0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.audio_pcm_per_match",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "peak decoded PCM per match: 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 \u003e 97.2 MB; peak live instances per match: 68 \u003e 69 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 68 \u003e 69 \u003e 68 \u003e 68 \u003e 69 \u003e 69"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.map_audio_released_each_unload",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "after each of 20 unloads (voices / instances / level cues / PCM MB): 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489 | 0/0/0/36.489; pre-load baseline PCM 36.489 MB (Systems guarantee: 0 / 0 / 0 / baseline)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.map_audio_loaded_each_match",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "map audio at each match load: level MP_IAC_Streets, level cues 32, PCM 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 / 97.179 MB"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.menu_music_resumes",
+                        "status":  "PASS",
+                        "owner":  "Systems/Frontend",
+                        "note":  "frontend music starts: 21 for 20 returns (+ boot)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.no_menu_music_in_matches",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "frontend / lobby music starts inside 20 matches: 0 (game-type DM_* music excluded: it belongs to the match, OV A5)"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.no_stale_reverb",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "after 20 returns, the next reverb change still starts from a map preset (stale map reverb): 0"
+                    },
+                    {
+                        "id":  "e2e.AUDIO.doubled_sounds_cycles",
+                        "status":  "PASS",
+                        "owner":  "Systems",
+                        "note":  "doubled cue starts over 20 matches: 0 "
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.ui_movies_per_cycle",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GFx movies opened per cycle (after the first): 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.no_stale_flow_state",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "returned snapshots with leftover match / lobby state: 0"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.one_launch_per_cycle",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Integration",
+                        "note":  "Gameplay launches 20, frontend match loads 20"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.map_collision",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for map_collision across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.map_objects",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for map_objects across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.particles",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for particles across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.event_queues",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for event_queues across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    },
+                    {
+                        "id":  "e2e.LIFETIME.counter.timers",
+                        "status":  "SKIP",
+                        "owner":  "Integration",
+                        "note":  "no product counter for timers across travel (proposal: one \u0027LIFETIME \u003cname\u003e=\u003ccount\u003e\u0027 line per level.begin, protocols\\RUNTIME-EVENTS.md); covered indirectly by process memory / handles"
+                    }
+                ]
+}
