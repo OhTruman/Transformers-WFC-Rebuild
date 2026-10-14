@@ -809,5 +809,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   PASS (slot right after Experimental's block), Experimental FAST PASS. AssetTools incidents: the D build runner had
   crashed 205 times since 01:00 on one truncated model output (the killed shard's mid-write file) - deleted, gen writes
   atomic (4f89608), builds moving (batch 16); row 2022 to be regenerated ~15:30; D complete (b0-31) ~21:00-22:00.
+  10:00 REGRESS-8MAP c949ab88 vs 30b2fa74 (Experimental; lockstep, best p90 of 2, RT off): 8 / 8 PASS, 0 unknown, worst
+  delta +0.01 ms (501 2.31 -> 2.30, 502 1.93 -> 1.92, 503 2.28, 504 2.51 -> 2.50, 507 2.37 -> 2.34, 508 2.12 -> 2.13, 509
+  2.82, 510 2.66 -> 2.67). 501 / 502 had overlapped AssetTools' 12-thread python colour runner (no hold file had been
+  set) and were rerun alone under the hold (first-pass rows kept as contaminated_0938); the flags on 503-510 came from
+  the user's own Codex / APEX python (~1 % of one CPU), not a lane; harness 0b033f94 now counts only lane processes.
+  HOLD RULE adopted: a file named PERF_HOLD at <lane>\work\ for every timed run (all lanes' runners poll it). AssetTools
+  paused 09:39 -> 10:00 for the rerun. Now: untimed captures, R4 leak rows, the 31 v 32 jitter pair.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
