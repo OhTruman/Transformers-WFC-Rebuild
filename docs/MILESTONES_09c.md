@@ -622,5 +622,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   WFC_ASYNCJITTER self-test (lockstep twice with 0-8 ms jitter, equal SIMHASH asserted) in Rendering's configuration.
   GPU scheduling: a 2-min DML window was wasted at the first S1 check -> rule: 90-min minimum per DML window, Rendering
   checks batched to one per 2 h with 15 min notice.
+  20:50 S1 FIRST WHOLE-MAP RESULT (Rendering, work/wobble/gi_first.png): the world lit entirely by the runtime RT lightmap,
+  right in shape on Molten (551 k texels / 18 pages / 297 lights, 10 passes ~210 ms) and Rust (858 k / 47 / 346, ~100 ms);
+  RT / bake decoded mean 0.72-0.73 on both, consistent across pages (0.67-0.76), not a convergence issue (4 -> 10 passes
+  moved it 0.01) = a systematic gap in the bounce terms (hit albedo source / hemisphere normalisation / hit L), in code
+  before the >= 22:40 check. DML window reopened 20:47 (90-min minimum; overnight block). Systems 552e5f36 merged
+  86198319: per-page sun k on all five user maps, capped at the map q30 k (Streets 7.6 -> 5.8 %, Gorge 16.2 -> 10.3 %,
+  Rust 19.9 -> 16.5 %, Debris 15.1 -> 14.8 %, Molten 11.0 -> 5.1 % clamped sun energy); fits copied into integration's
+  render data (work/render/<map>/vbake/fit.json).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
