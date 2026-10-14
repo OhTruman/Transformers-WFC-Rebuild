@@ -96,6 +96,7 @@ def main():
     lidx = json.load(open(os.path.join(tdir, 'lights_index.json'), encoding='utf-8'))
     names = [x['name'] for x in lidx['lights']]
     k, p, flip = float(sf['k']), float(sf['p']), float(sf['tangent_y_sign'])
+    page_k = {pg['page']: float(pg.get('k', k)) for pg in sf.get('pages', [])}   # (per-page sun k where fit.json has one)
     sun_lin = np.array(sf['sun_linear'])
     comps = tr['components']
     comp_bsp = np.array(['#' in c for c in comps] + [False])               # BSP elements are keyed '<ModelComponent>#<k>'
@@ -124,6 +125,7 @@ def main():
 
     # ---- gather per sample: Y (3 coeff x 3 rgb) = lightmap - sun share, sky S_i, and per light record the unit terms
     bsp_s = []
+    LMs, SUNs, PGs, page_names = [], [], [], []
     Ys, Ss, recs_s, recs_l, recs_V, recs_d, recs_proj, recs_cos = [], [], [], [], [], [], [], []
     nsamp = 0
     for pg in tr['pages']:
@@ -147,8 +149,9 @@ def main():
                     continue
                 Lc[m, i] = t[ys[m], xs[m]] * np.array(pr['scales'][i])
         lt_s = lt[ys, xs] * np.array([1.0, flip, 1.0])
-        sun_share = (np.clip(lt_s @ B.T, 0.0, None) ** p)[:, :, None] * (k * sun_lin)[None, None, :] * V[ys, xs][:, None, None]
+        sun_share = (np.clip(lt_s @ B.T, 0.0, None) ** p)[:, :, None] * (page_k.get(name, k) * sun_lin)[None, None, :] * V[ys, xs][:, None, None]
         Ys.append(Lc - sun_share)
+        LMs.append(Lc); SUNs.append(sun_share); PGs.append(np.full(len(S), len(page_names))); page_names.append(name)
         Ss.append(S['sky'][:, 3:6] if flip < 0 else S['sky'][:, 0:3])
         bsp_s.append(comp_bsp[np.where(cs >= 0, cs, len(comps))])
         cnt = S['count'].astype(np.int64); st = S['start'].astype(np.int64)
@@ -251,11 +254,26 @@ def main():
                   'median %.3f  p75 %.3f  p90 %.3f' % (nm_, len(v), *np.percentile(v, [10, 25, 50, 75, 90])))
     # sky / bounce summaries
     open_sky = S.sum(axis=1) > 0.5 * np.percentile(S.sum(axis=1), 95)
+    corr = np.zeros((n, 3, 3))
     if overrides:
         tt = R_['t']
         fix = np.array([overrides[names[j]]['scale'] / (bfit[4] if cls[j] == 1 else bfit[3]) - 1.0 if names[j] in overrides else 0.0 for j in range(nL)])
-        corr = np.zeros((n, 3, 3)); np.add.at(corr, rs, tt * (fix[rl] * np.where(cls[rl] == 1, bfit[4], bfit[3]))[:, None, None])
+        np.add.at(corr, rs, tt * (fix[rl] * np.where(cls[rl] == 1, bfit[4], bfit[3]))[:, None, None])
         res = res - corr
+    # --page-report N: per lightmap page (the N with the most samples, plus the map), the flat-normal mean (sum of the three
+    # coefficients / 3, luminance) of the bake vs the direct model (sun at the page's k, sky, lamps with overrides)
+    if arg('--page-report'):
+        LM = np.concatenate(LMs); SUN = np.concatenate(SUNs); PG = np.concatenate(PGs)
+        fl = lambda a: (a.sum(axis=1) / 3.0) @ LUM
+        lm_l, sun_l = fl(LM), fl(SUN)
+        sky_l = fl(S[:, :, None] * bfit[None, None, :3]); lamp_l = fl(Tp * bfit[3] + Ts * bfit[4] + corr)
+        order = sorted(range(len(page_names)), key=lambda i: -int((PG == i).sum()))[:int(arg('--page-report'))]
+        print('page                           samples   bake    sun     sky     lamps   direct  direct/bake')
+        for i in order + [None]:
+            m = (PG == i) if i is not None else np.ones(len(PG), bool)
+            d = sun_l[m].mean() + sky_l[m].mean() + lamp_l[m].mean()
+            print('%-30s %7d  %.4f  %.4f  %.4f  %.4f  %.4f  %.3f' % (page_names[i] if i is not None else 'ALL (map)', int(m.sum()), lm_l[m].mean(),
+                  sun_l[m].mean(), sky_l[m].mean(), lamp_l[m].mean(), d, d / max(lm_l[m].mean(), 1e-12)))
     bounce = np.clip(res, 0.0, None)
     bounce_mean = (bounce.sum(axis=1) / 3.0).mean(axis=0)
     total_mean = (Y.sum(axis=1) / 3.0).mean(axis=0)

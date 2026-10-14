@@ -500,8 +500,22 @@ try {
                 $firstLine = $rl | Select-String -Pattern 'RT R1 \(first Realistic frame\): (.*)' | Select-Object -First 1
                 $firstOk = $firstLine -and $firstLine.Line -match 'sun swap ON \(V_bake pages ([1-9]\d*)'
                 if ($firstLine -and -not $firstOk -and -not $bad) { $bad = $firstLine }
+                # R4 (Rendering 30b2fa74+: the runtime RT lightmap lights the whole map in Realistic) replaces the R1 swap:
+                # r1Active() is false while it runs, so "sun swap OFF" is expected; the gate then requires R4's own chain -
+                # "RT GI: <n> lightmap texels" with n > 0 and "RT GI: sun share k per page: <m> pages from fit.json pages[]"
+                $giTex = $rl | Select-String -Pattern 'RT GI: (\d+) lightmap texels' | Select-Object -First 1
+                $giK = $rl | Select-String -Pattern 'RT GI: sun share k per page: (\d+) pages from fit\.json' | Select-Object -First 1
+                $r4 = [bool]$giTex
+                if ($r4) {
+                    $texels = [int64]$giTex.Matches[0].Groups[1].Value
+                    $kPages = if ($giK) { [int]$giK.Matches[0].Groups[1].Value } else { 0 }
+                    $bad = $rl | Select-String -Pattern 'RT R1: program .* failed with the sun-swap text|RT R1: the sun-swap composite failed|RT GI.*(failed|error)' | Select-Object -First 1
+                    $ok = $dataLine -and $pages -gt 0 -and $texels -gt 0 -and $kPages -gt 0 -and -not $bad
+                    $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r4: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages; R4 runtime lightmap $texels texels, per-page k from fit.json on $kPages pages (R1 swap off by design while R4 runs)$(if ($bad) { '; ' + $bad.Line.Trim() })"
+                } else {
                 $ok = $dataLine -and $pages -gt 0 -and $firstOk -and -not $bad
                 $rtGate.Lines += "$(if ($ok) { 'PASS' } else { 'FAIL' }) rtcheck.r1: V_bake shipped; data line $(if ($dataLine) { 'k ' + $dataLine.Matches[0].Groups[1].Value } else { 'MISSING' }), $pages V_bake pages$(if (-not $firstLine) { '; no RT R1 (first Realistic frame) line' })$(if ($bad) { '; ' + $bad.Line.Trim() })"
+                }
                 if (-not $ok) { $rtGate.Status = 'FAIL' }
             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
