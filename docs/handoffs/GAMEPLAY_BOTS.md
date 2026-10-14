@@ -116,3 +116,15 @@ Bots think every 0.25 s, staggered. Each decision covers:
 - `WFC_BOTNAVTEST` (7/7 on 9 maps; `WFC_MAP=<map>`): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
 - `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
 - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.
+
+## Lockstep determinism under load (2026-10-14)
+
+`WFC_ASYNCJITTER=<seed>` (test-only, docs/handoff/GAMEPLAY_ASYNCJITTER.patch): a seeded 0-8 ms sleep on the async background step and on the main thread's frame-top join, so step / frame interleavings vary as under CPU contention.
+
+| Run | Config | Result |
+|---|---|---|
+| WFC_ASYNCSTEPTEST, null boot | 31 + 32 TDM, sync vs async (1-4 frames per step); jitter seeds 1 / 2 / 3 and none | 2/2 each; 287 events, final states identical |
+| Lockstep, direct boot, windowed | Streets TDM 4 + 5, Classic and Smart, under parallel CPU load, async on / off | 8 runs, 4201 steps, identical |
+| Lockstep, Rendering's configuration, RT off | Frontend boot, Rust, extended 31 + 32, WFC_PLAYERBOT, LOCKSTEP_EXACT; 2 plain + 2 jittered | 4 runs, 4202 steps, identical (incl. step 727) |
+
+**Verdict:** the RT-off simulation is step-deterministic under heavy timing variation. Rendering's one divergence (step 727, SIMHASH e70b vs f3db) was RT-on only, so the search is in RT-mode code.
