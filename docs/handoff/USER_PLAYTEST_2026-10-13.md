@@ -54,3 +54,5 @@ Rule for every item: fix on the lane branch, prove with the matching harness + a
 ## Addendum 2026-10-14 (package 4)
 
 - **Characters draw in front of smoke / effects even when inside them** (user, 13:00): translucent FX not depth-tested against characters (draw order / depth). Owner: Systems (effects fidelity), Rendering consulted on the pass order. Fix = a baseline change in all modes (new captures, not an identity gate).
+- **Clarification (14:40):** the effects-ordering problem applies to every character (enemies, teammates): players visible in front of the GRID ability, the local muzzle flash drawn behind the enemy being shot. Systems verifies three cases on 56290b7d (non-local pawn in / behind smoke; muzzle flash over an enemy; the grid / barrier mesh vs characters) with crops; fixes as needed.
+- **Tipped vehicle keeps driving** (14:40, watching bots): a car tipped forward kept moving forward. Owner: Gameplay (original's roll handling: self-right / clamp / forced transform / reset; match it; BOTTEST row).
