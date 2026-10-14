@@ -37,3 +37,23 @@ Classic is untouched in every option.
 - Settled member-to-leader mean ≤ 55 m (at least the M2 level) and within-15 m share ≥ 22 %.
 - All four NAVQ movement columns within 1 SE of the current shipping set.
 - AIDUEL Smart win rate still 57-65 %.
+
+## Results (2026-10-14, measured: not shipped)
+
+A and C were built behind Smart tune keys (`squadDynamic`, `squadVehicleRegroupM`). Measured with null-render NAVQ, 6 seeds × 4 maps; settled member-to-leader cohesion:
+
+| Arm | Mean distance | Within 15 m |
+|---|---|---|
+| Shipping (fixed squads, active-cluster respawn) | 70.6 m | 19.0 % |
+| A: dynamic squads on respawn (nearest live leader, cap 4) | 63.7 m | 20.6 % |
+| A + C (vehicle regroup at 30 m instead of 45 m) | 63.6 m | 19.2 % |
+| C only | 70.1 m | 18.8 % |
+| **Gate** | **≤ 55 m** | **≥ 22 %** |
+
+**Verdict:** gate missed. A is about 7 m closer, with movement within noise, but short of the M2 level. A + C had one Streets outlier (slow 17 %).
+
+- The shipping squads stay.
+- A / C are not committed.
+- The squad-id helper refactor was checked: defaults reproduce the shipping summaries 24/24.
+
+**Reading:** cohesion is bounded by fights splitting squads, not only by respawn placement. A real gain needs squad-level tactics (members positioning around the leader in engagements), a user-level design item.
