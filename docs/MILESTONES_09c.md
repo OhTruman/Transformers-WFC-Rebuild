@@ -529,5 +529,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Streets seed 5: reversals 8.4 -> 2.8 per travel-min, worst bot 565 -> 18. Spawn-near fix: spawnNearScope=2 (team's
   ACTIVE spawn cluster): Gorge 7.6/3.7/8.4/1.70 vs any-start 11.9/8.4/11.8/2.64. Final set under a 6-seed run; then
   BOTTEST / DETERMINISM, the Classic identity check, the patch.
+  19:20 G4 A/B DONE (AssetTools, out/hd/push_e_full/ab/ab4_sheet.png, sent to the user): E-4x-G3 = the real overhaul
+  with designs kept (bolts / rings / rivets / strap detail / bevels / carved panels; mean dE vs D 0.6-0.8, no new edges;
+  identity gates 3/5 with two narrow misses); E-4x-G4 invents objects (stickers, rings, seams; fails identity 5/5).
+  Streak artefact removed by a negative prompt (default now). Recommendation G3 + negative prompt, E gate dE p99 ~5 with
+  layout / edge / palette / seam strict; cost ~0.7 GPU-min per 1024 HD unit -> milestone 1 ~15 GPU h. First DML window
+  closed 19:20 (D GPU rows done 18:32); RT RESUME to Rendering (reflections block), Experimental's sweep resumed.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
