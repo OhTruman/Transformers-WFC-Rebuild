@@ -1065,5 +1065,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   results = the forced barrier on a non-Leader owner (staging). Option B tested green (RT off, Streets staging: the
   smoke trail veils the body; a muzzle / impact flash in front of a bot shows where the bot used to cover it; 0.6-2.9 %
   of pixels differ); Off identity pair running, commit after.
+  15:37 TIP-OVER MERGED 069a0a8f (Gameplay GAMEPLAY_TIPOVER.patch v2): Smart bots self-right when tipped (pitch / roll
+  righting at the authored AI limits with the contact-relative unstable gate, per bot via MoveIntent.aiTip); Classic
+  stays on the player path (NAVQ 24 / 24 byte-exact vs 30b2fa74); WFC_BOTTIP / WFC_TIPREL for measurement, modes 1 / 2
+  opt-in. Smart tipped time 230 -> 76.5 s; TIPTEST 3 / 3; BOTTEST 39 / 39 both; DETERMINISM 2 / 2 both; cost 0.23 ms;
+  Smart Gorge stucks 1.26 -> 1.44 and Streets off-mesh 3.85 -> 4.91 beyond the (weak) pooled noise = the next Smart
+  round's target. Systems' SYSTEMS_FX_ORDER_3A.patch committed (4adf8e9c; name fallback + flush before the barrier /
+  sentry draws), applies clean; merge after Rendering's verification crop.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
