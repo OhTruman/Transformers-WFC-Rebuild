@@ -152,6 +152,7 @@ void Pipeline::rtBuildWorld(int meshId) {
     BindBuffer(GL_ARRAY_BUFFER, g.vbo);
     if (nVert) GetBufferSubData(GL_ARRAY_BUFFER, 0, (GLsizeiptr)(v.size() * 4), v.data());
     BindBuffer(GL_ARRAY_BUFFER, 0);
+    giRasterMesh(meshId, idx, v);                        // (R4: this mesh's lightmap texels, while its buffers are here)
     RtStaticWorld W;
     RtHitKeep keep;
     W.pos.resize(v.size() / 14 * 3);
@@ -649,6 +650,7 @@ void Pipeline::rtBuildHit() {
         return k;
     };
     size_t matSubs = 0;
+    double albSum = 0.0, emiSum = 0.0; size_t albZero = 0;   // (R4 diagnostics: the hit albedo the bounce sees)
     // the sub table: 8 float4 per sub
     for (size_t i = 0; i < nSub; ++i) {
         const Sub& s = meshes_[(size_t)subRef[i].first].subs[subRef[i].second];
@@ -666,6 +668,7 @@ void Pipeline::rtBuildHit() {
         std::memcpy(r + 4, s.lmCoord, 16);
         average(i, r + 20);
         average(nSub + i, r + 24);
+        { const double a = (r[20] + r[21] + r[22]) / 3.0; albSum += a; emiSum += (r[24] + r[25] + r[26]) / 3.0; if (a < 0.01) ++albZero; }
         r[28] = -1.0f;                                   // (materials) id, texture base, log2(uv per metre), flags
         if (!matId.empty() && s.prog >= 0 && (size_t)s.prog < progs_.size() && progs_[(size_t)s.prog].original) {
             std::string ml = s.matName;
@@ -697,6 +700,8 @@ void Pipeline::rtBuildHit() {
     }
     // the lightmap pages (read back as RGBA8; sRGB kept as the GL texture's format said)
     D.lightmaps.resize(lmIndex.size());
+    giHitPageGl_.assign(lmIndex.size(), -1);                    // (R4: the GI pages' numbering at hits)
+    for (const auto& kv : lmIndex) giHitPageGl_[(size_t)kv.second] = kv.first;
     for (const auto& kv : lmIndex) {
         RtLightmap& L = D.lightmaps[(size_t)kv.second];
         const GLuint t = lmTextures_[(size_t)kv.first];
@@ -722,6 +727,8 @@ void Pipeline::rtBuildHit() {
              " materials: %zu subs with a translated material (%zu ids), %zu + %zu cube textures copied (cap %d, %.1f MB), %zu slots",
              nSub, D.lightmaps.size(), (double)bytes / 1048576.0, ok ? "ok" : "FAILED", matSubs, matId.size(), D.textures.size(),
              D.cubes.size(), texCap, (double)texBytes / 1048576.0, D.matTex.size() / 12);
+    if (nSub) LOG_INFO("RT hit shading: sub albedo mean %.3f (%zu of %zu subs below 0.01), emissive mean %.3f", albSum / (double)nSub,
+                       albZero, nSub, emiSum / (double)nSub);
     rtHitKeep_.clear(); rtHitKeep_.shrink_to_fit();
 }
 
@@ -759,7 +766,9 @@ void Pipeline::rtDynMid() {
     rtDepthOnly_ = false;
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     depthDirty_ = true;
+    giFrame();                                           // (R4: this frame's slice of the RT lightmap)
     rtRoundTrip(false, true);
+    giAfterFrame();
     if (rtReflComposite() && rtReflLive()) { glx::gpuStamp("RT: reflections kept"); rtReflKeep(); }
     glx::gpuStamp("RT: world composite");
     const RtTargets& t = rtTargets_;
@@ -933,7 +942,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             const core::Vec3 d = core::normalize(sun->dir);
             static const bool worldShadows = std::getenv("WFC_RT_WORLDSHADOWS") != nullptr;   // (Realistic, or forced)
             fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = (worldShadows || rtMode_ == 2) ? 2.0f : 1.0f;
-            if (r1Active() && r1ClearedFrame_ == frameNo_) fr.toSun[3] = 3.0f;   // (R1: the world's own sun visibility too)
+            if (r1Active() && r1ClearedFrame_ == frameNo_) fr.toSun[3] = 3.0f;   // (R1: the world's own sun visibility too; R4 keeps 2: its lightmap holds the world's sun shadows, world pixels take the characters' only)
             rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
         }
         // the denoiser's matrices (FidelityFX conventions) and the camera-reprojection velocity; history reset on a cut

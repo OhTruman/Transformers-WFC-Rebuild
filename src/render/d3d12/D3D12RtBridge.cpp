@@ -29,6 +29,8 @@
 #include "rt_ao_filter.h"
 #include "rt_reflect.h"
 #include "rt_shadow_soft.h"
+#include "rt_gi.h"
+#include "rt_gi_dilate.h"
 #endif
 #if defined(WFC_RT_DENOISER)
 #include "render/d3d12/D3D12RtDenoise.h"
@@ -543,6 +545,85 @@ public:
         return true;
 #endif
     }
+
+    // ---- R4: the runtime ray-traced lightmap. Per GL lightmap page a shared RGBA16F GI page (GL samples it in place of
+    // the bake), the texel list / gutter list / GiData (subs, lights, hit page map) as buffers; a job is recorded into
+    // the next round trip (per frame: a slice of the texels) or run at once (load: whole passes, chunked) ----
+    bool giSetup(const RtGiSetup& S, std::vector<GLuint>& glTex) {
+#if !defined(WFC_RT_SHADERS)
+        (void)S; (void)glTex; return false;
+#else
+        glTex.clear();
+        if (!dev_ || !psoGi_ || !heap_ || !waitIdle()) return false;
+        giRelease();
+        gi_.resize(std::min(S.pageSize.size(), (size_t)kMaxLm));
+        UINT64 bytes = 0;
+        for (size_t k = 0; k < gi_.size(); ++k) {
+            const int w = S.pageSize[k].first, h = S.pageSize[k].second;
+            if (w <= 0 || h <= 0) continue;
+            const bool f32 = (int)k == S.floatPage;
+            if (!make(gi_[k], w, h, f32 ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R16G16B16A16_FLOAT, f32 ? 0x8814 /*GL_RGBA32F*/ : 0x881A /*GL_RGBA16F*/)) {
+                LOG_WARN("RT GI: shared page %zu failed", k); giRelease(); return false;
+            }
+            glBindTexture(GL_TEXTURE_2D, gi_[k].tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F /*GL_CLAMP_TO_EDGE*/); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            giSig_.push_back(gi_[k].tex);
+            bytes += (UINT64)w * h * (f32 ? 16 : 8);
+        }
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&cl))) {
+            rel(al); giRelease(); return false;
+        }
+        std::vector<ID3D12Resource*> temp;
+        auto toDefault = [&](const void* d, size_t n) -> ID3D12Resource* {
+            n = std::max<size_t>(n, 16);
+            ID3D12Resource* up = uploadBuffer(dev_, d, n);
+            ID3D12Resource* r = makeBuffer(dev_, n, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST);
+            if (up) temp.push_back(up);
+            if (!up || !r) { rel(r); return nullptr; }
+            cl->CopyBufferRegion(r, 0, up, 0, n);
+            D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = r;
+            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST; b.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            cl->ResourceBarrier(1, &b);
+            return r;
+        };
+        giTexels_ = toDefault(S.texels.data(), S.texels.size() * 4); giTexelN_ = (UINT)(S.texels.size() / 8);
+        giDilate_ = toDefault(S.dilate.data(), S.dilate.size() * 4); giDilateN_ = (UINT)(S.dilate.size() / 4);
+        giData_ = toDefault(S.data.data(), S.data.size() * 4); giDataN_ = (UINT)(S.data.size() / 4);
+        cl->Close();
+        const bool ok = giTexels_ && giDilate_ && giData_ && submitTimed(cl, "GI: texel / gutter / data buffers");
+        rel(cl); rel(al);
+        for (auto* r : temp) r->Release();
+        if (!ok) { giRelease(); return false; }
+        writeDescriptors();
+        for (const Shared& s : gi_) glTex.push_back(s.tex);
+        giBytes_ = bytes + (UINT64)(S.texels.size() + S.dilate.size() + S.data.size()) * 4;
+        LOG_INFO("RT GI: %zu shared pages, %u texels, %u gutter texels, %.1f MB on D3D12", giSig_.size(), giTexelN_, giDilateN_,
+                 (double)giBytes_ / 1048576.0);
+        return true;
+#endif
+    }
+    void giQueue(const RtGiJob& j) { giJob_ = j; giPending_ = true; }
+    bool giReady() const { return psoGi_ && giTexels_ && !gi_.empty(); }
+    // load time: whole passes over every texel, in chunks of one submission each (GL owns the pages around it)
+    bool giRunNow(const RtGiJob& j0, int passes, UINT chunk) {
+        if (!giReady() || !tlas_) return false;
+        using clk = std::chrono::steady_clock;
+        const clk::time_point t0 = clk::now();
+        for (int pass = 0; pass < passes; ++pass)
+            for (UINT first = 0; first < giTexelN_; first += chunk) {
+                RtGiJob j = j0; j.first = first; j.count = std::min(chunk, giTexelN_ - first); j.frame = (unsigned)(pass * 7919u + first);
+                j.dilate = first + chunk >= giTexelN_;
+                if (!oneShot([&](ID3D12GraphicsCommandList* cl) { giRecord(cl, j); }, "GI: load-time pass")) return false;
+            }
+        LOG_INFO("RT GI: %d load-time passes over %u texels in %.0f ms", passes, giTexelN_,
+                 std::chrono::duration<double, std::milli>(clk::now() - t0).count());
+        return true;
+    }
     void releaseHit() {
         abandonMaterialPso();
         rel(hInst_); rel(hIdx_); rel(hUv1_); rel(hTriSub_); rel(hSubs_); rel(hVtx_); rel(hMatTex_); rel(psoReflMat_);
@@ -572,6 +653,7 @@ public:
             return;
         }
         rtDynamicClear();                                // (M7 RT characters: Systems' D3D12RtDynamic)
+        giRelease();
         releaseMasked();
         releaseHit();
         for (auto& d : dyn_) { rel(d.tlas); rel(d.scratch); rel(d.inst); d = DynTlas{}; }
@@ -586,9 +668,11 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        GLuint tx[8] = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex, atlas_.tex};
-        GLenum ly[8] = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead};
-        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), atlas_.tex ? 8 : 7, tx, ly);
+        std::vector<GLuint> tx = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex};
+        std::vector<GLenum> ly = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral};
+        if (atlas_.tex) { tx.push_back(atlas_.tex); ly.push_back(kLayoutShaderRead); }
+        for (GLuint g : giSig_) { tx.push_back(g); ly.push_back(kLayoutGeneral); }   // (R4: the GI pages)
+        signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), (GLuint)tx.size(), tx.data(), ly.data());
         glFlush();
         const clk::time_point t1 = clk::now();
         const int a = (int)(frame_++ & 1);
@@ -601,8 +685,10 @@ public:
                 const UINT64 skip = ++value_;
                 queue_->Signal(fence_, skip);
                 GLuint64_ wv = skip; semParam_(sem_, kFenceValue, &wv);
-                GLuint wt[3] = {mask_.tex, ao_.tex, dnOut_.tex}; GLenum wl[3] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
-                waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 3, wt, wl);
+                std::vector<GLuint> wt = {mask_.tex, ao_.tex, dnOut_.tex};
+                for (GLuint g : giSig_) wt.push_back(g);
+                std::vector<GLenum> wl(wt.size(), kLayoutShaderRead);
+                waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), (GLuint)wt.size(), wt.data(), wl.data());
                 return false;
             }
         }
@@ -610,6 +696,14 @@ public:
         alloc_[a]->Reset(); list_->Reset(alloc_[a], nullptr);
         jobTlas_ = tlas_;
         if (fr && tlas_ && pso_) dynamicTlas(a);       // characters: their BLAS refits, then a per-slot TLAS with them
+        giTimed_[a] = false;
+        if (giPending_ && tlas_ && giReady() && tsHeap_) {   // (R4: this frame's slice of the texels, timed: queries 4 / 5 of the slot)
+            list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)a * 6 + 4);
+            giRecord(list_, giJob_);
+            list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)a * 6 + 5);
+            giTimed_[a] = true;
+        }
+        giPending_ = false;
         if (fr && tlas_ && pso_ && fr->mode == 2) shadowAo(*fr, a);
         else if (fr && tlas_ && pso_) depthCheck(*fr, a);
         else copyJob();
@@ -622,9 +716,10 @@ public:
         allocDone_[a] = done;
         const clk::time_point t2 = clk::now();
         GLuint64_ w = done; semParam_(sem_, kFenceValue, &w);
-        GLuint wt[5] = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex, soft_.tex};
-        GLenum wl[5] = {kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead, kLayoutShaderRead};
-        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), 5, wt, wl);
+        std::vector<GLuint> wt = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex, soft_.tex};
+        for (GLuint g : giSig_) wt.push_back(g);
+        std::vector<GLenum> wl(wt.size(), kLayoutShaderRead);
+        waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), (GLuint)wt.size(), wt.data(), wl.data());
         const clk::time_point t3 = clk::now();
         auto ms = [](clk::time_point a_, clk::time_point b_) { return std::chrono::duration<double, std::milli>(b_ - a_).count(); };
         const double ph[3] = {ms(t0, t1), ms(t1, t2), ms(t2, t3)};
@@ -697,18 +792,19 @@ private:
         rg[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; rg[0].NumDescriptors = kSrvN; rg[0].BaseShaderRegister = 1;
         rg[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; rg[1].NumDescriptors = 4; rg[1].BaseShaderRegister = 0;
         rg[1].OffsetInDescriptorsFromTableStart = kSrvN;
-        D3D12_DESCRIPTOR_RANGE lmRange[3]{};            // reflection hits: lightmap pages (space1), material 2D / cube textures (space2 / 3)
-        const UINT lmN[3] = {(UINT)kMaxLm, (UINT)kMaxTex2D, (UINT)kMaxTexCube};
-        for (int k = 0; k < 3; ++k) {
-            lmRange[k].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; lmRange[k].NumDescriptors = lmN[k]; lmRange[k].BaseShaderRegister = 0;
-            lmRange[k].RegisterSpace = (UINT)(1 + k); lmRange[k].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        D3D12_DESCRIPTOR_RANGE lmRange[4]{};            // reflection hits: lightmap pages (space1), material 2D / cube textures (space2 / 3);
+        const UINT lmN[4] = {(UINT)kMaxLm, (UINT)kMaxTex2D, (UINT)kMaxTexCube, (UINT)kMaxLm};   // R4: the GI pages (UAV space1)
+        for (int k = 0; k < 4; ++k) {
+            lmRange[k].RangeType = k == 3 ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV; lmRange[k].NumDescriptors = lmN[k];
+            lmRange[k].BaseShaderRegister = 0;
+            lmRange[k].RegisterSpace = k == 3 ? 1u : (UINT)(1 + k); lmRange[k].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
         }
         D3D12_ROOT_PARAMETER rp[5]{};
         rp[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; rp[0].Constants.Num32BitValues = 52;
         rp[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV; rp[1].Descriptor.ShaderRegister = 0;
         rp[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[2].DescriptorTable.NumDescriptorRanges = 2; rp[2].DescriptorTable.pDescriptorRanges = rg;
         rp[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV; rp[3].Descriptor.ShaderRegister = 4;
-        rp[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[4].DescriptorTable.NumDescriptorRanges = 3; rp[4].DescriptorTable.pDescriptorRanges = lmRange;
+        rp[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE; rp[4].DescriptorTable.NumDescriptorRanges = 4; rp[4].DescriptorTable.pDescriptorRanges = lmRange;
         D3D12_STATIC_SAMPLER_DESC ss[3]{};               // s0: the opacity atlas (point, clamp); s1: linear, clamp; s2: linear, wrap
         for (int k = 0; k < 3; ++k) {
             ss[k].Filter = k ? D3D12_FILTER_MIN_MAG_MIP_LINEAR : D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -734,6 +830,10 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSoft_))) { LOG_WARN("RT bridge: soft shadow PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_reflect; pd.CS.BytecodeLength = sizeof g_rt_reflect;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoRefl_))) { LOG_WARN("RT bridge: reflection PSO failed"); return false; }
+        pd.CS.pShaderBytecode = g_rt_gi; pd.CS.BytecodeLength = sizeof g_rt_gi;   // (R4: a failure leaves Realistic on the bake)
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGi_))) { psoGi_ = nullptr; LOG_WARN("RT bridge: GI texel PSO failed (the bake stays)"); }
+        pd.CS.pShaderBytecode = g_rt_gi_dilate; pd.CS.BytecodeLength = sizeof g_rt_gi_dilate;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGiDil_))) psoGiDil_ = nullptr;
         D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 12;
         if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
         for (auto& r : tsReadback_) r = makeBuffer(dev_, 48, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -745,7 +845,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2 * kTableN;   // (+ R4: GI page UAVs, tables E / F)
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -805,6 +905,18 @@ private:
                 else { sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D; sd.Texture2D.MipLevels = (UINT)-1; }
                 dev_->CreateShaderResourceView(r, &sd, h); h.ptr += inc;
             }
+        }
+        for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
+            uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
+        for (int table = 0; table < 2; ++table) {        // R4: E (the texel tracer) / F (the gutter): t1 .. t13 as A .. D
+            tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
+            tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
+            sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
+            sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
+            if (table == 0) sbuf(giTexels_, giTexelN_, 32); else sbuf(giDilate_, giDilateN_, 16);
+            sbuf(giData_, giDataN_, 16);
+            uav(refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(hit_, DXGI_FORMAT_R32_UINT);
+            uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
     }
     void depthCheck(const RtFrame& fr, int slot) {
@@ -925,7 +1037,7 @@ private:
             list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
         }
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 3);
-        list_->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6, 4, tsReadback_[slot], 0);
+        list_->ResolveQueryData(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6, giTimed_[slot] ? 6 : 4, tsReadback_[slot], 0);
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         list_->ResourceBarrier(1, &b);
         list_->CopyBufferRegion(readback_[slot], 0, stats_, 0, 4);
@@ -944,11 +1056,12 @@ private:
             }
             dbgRb_->Release(); dbgRb_ = nullptr;
         }
-        uint32_t rays = 0; uint64_t ts[4] = {};
+        uint32_t rays = 0; uint64_t ts[6] = {};
         void* p = nullptr; D3D12_RANGE r{0, 4}, none{0, 0};
         if (SUCCEEDED(readback_[slot]->Map(0, &r, &p))) { rays = *(const uint32_t*)p; readback_[slot]->Unmap(0, &none); }
-        D3D12_RANGE r2{0, 32};
-        if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 32); tsReadback_[slot]->Unmap(0, &none); }
+        D3D12_RANGE r2{0, 48};
+        if (SUCCEEDED(tsReadback_[slot]->Map(0, &r2, &p))) { std::memcpy(ts, p, 48); tsReadback_[slot]->Unmap(0, &none); }
+        if (giTimed_[slot] && tsFreq_ && ts[5] > ts[4]) { const double g = (double)(ts[5] - ts[4]) * 1000.0 / (double)tsFreq_; giSum_ += g; giMax_ = std::max(giMax_, g); ++giN_; }
         const double ms = tsFreq_ && ts[1] > ts[0] ? (double)(ts[1] - ts[0]) * 1000.0 / (double)tsFreq_ : 0.0;
         const double dnMs = tsFreq_ && ts[2] > ts[1] ? (double)(ts[2] - ts[1]) * 1000.0 / (double)tsFreq_ : 0.0;
         const double rfMs = tsFreq_ && ts[3] > ts[2] ? (double)(ts[3] - ts[2]) * 1000.0 / (double)tsFreq_ : 0.0;
@@ -972,6 +1085,8 @@ private:
         if (rfAbN_[0] > 0 && rfAbN_[1] > 0)
             LOG_INFO("RT reflections A / B (alternating 30-frame blocks): hit shading on %.3f ms (%d frames), off %.3f ms (%d frames)",
                      rfAb_[1] / rfAbN_[1], rfAbN_[1], rfAb_[0] / rfAbN_[0], rfAbN_[0]);
+        if (giN_ > 0) LOG_INFO("RT GI texel tracer (R4, %d of the 300 frames traced a slice): GPU %.3f ms avg per traced frame, %.3f max", giN_, giSum_ / giN_, giMax_);
+        giSum_ = giMax_ = 0; giN_ = 0;
         rfAb_[0] = rfAb_[1] = 0; rfAbN_[0] = rfAbN_[1] = 0;
         saoMs_.clear(); saoRaySum_ = 0; dnSum_ = dnMax_ = 0; rfSum_ = rfMax_ = 0;
     }
@@ -1163,6 +1278,78 @@ private:
     bool rbValid_[2] = {};
     unsigned long long statSum_[kStatN] = {}; int statFrames_ = 0;
     double sum_[3] = {}, max_[3] = {}; int n_ = 0;
+
+    // ---- R4 helpers ----
+    void giRecord(ID3D12GraphicsCommandList* cl, const RtGiJob& j) {
+        float c[24] = {};
+        std::memcpy(c, j.toSun, 16); std::memcpy(c + 4, j.sunCol, 16); std::memcpy(c + 8, j.sky, 16);
+        const uint32_t u[4] = {j.first, j.count, j.frame, j.lights};
+        std::memcpy(c + 12, u, 16); std::memcpy(c + 16, j.mix, 16);
+        const uint32_t o[4] = {j.subOff, j.lightOff, j.pageMapOff, j.mask};
+        std::memcpy(c + 20, o, 16);
+        const UINT inc = dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        D3D12_GPU_DESCRIPTOR_HANDLE base = heap_->GetGPUDescriptorHandleForHeapStart();
+        D3D12_GPU_DESCRIPTOR_HANDLE lm = base; lm.ptr += 4ull * kTableN * inc;
+        D3D12_GPU_DESCRIPTOR_HANDLE tE = base; tE.ptr += (4ull * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm) * inc;
+        D3D12_GPU_DESCRIPTOR_HANDLE tF = tE; tF.ptr += (UINT64)kTableN * inc;
+        cl->SetComputeRootSignature(rs_);
+        cl->SetDescriptorHeaps(1, &heap_);
+        cl->SetPipelineState(psoGi_);
+        cl->SetComputeRoot32BitConstants(0, 24, c, 0);
+        cl->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());   // (the static scene: characters do not light the map)
+        cl->SetComputeRootDescriptorTable(2, tE);
+        cl->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+        cl->SetComputeRootDescriptorTable(4, lm);
+        if (j.count) cl->Dispatch((j.count + 63) / 64, 1, 1);
+        if (j.dilate && psoGiDil_ && giDilateN_) {       // the gutter, twice (ring 2 reads ring 1)
+            for (int r = 0; r < 2; ++r) {
+                D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; cl->ResourceBarrier(1, &ub);
+                cl->SetPipelineState(psoGiDil_);
+                float c2[24]; std::memcpy(c2, c, sizeof c);
+                const uint32_t ud[4] = {0u, giDilateN_, j.frame, j.lights}; std::memcpy(c2 + 12, ud, 16);
+                cl->SetComputeRoot32BitConstants(0, 24, c2, 0);
+                cl->SetComputeRootDescriptorTable(2, tF);
+                cl->Dispatch((giDilateN_ + 63) / 64, 1, 1);
+            }
+        }
+        D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; cl->ResourceBarrier(1, &ub);
+    }
+    // one GL -> D3D12 -> GL submission outside the frame's round trip (load time): GL signals with the GI pages, D3D12
+    // waits, runs the recorded work, signals; GL waits (the pages back in the shader-read layout)
+    template <class F> bool oneShot(F record, const char* what) {
+        const UINT64 n = ++value_;
+        GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
+        std::vector<GLenum> ly(giSig_.size(), kLayoutGeneral);
+        signalSem_(sem_, 0, nullptr, (GLuint)giSig_.size(), giSig_.data(), ly.data());
+        glFlush();
+        ID3D12CommandAllocator* al = nullptr; ID3D12GraphicsCommandList* cl = nullptr;
+        if (FAILED(dev_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&al)) ||
+            FAILED(dev_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, al, nullptr, __uuidof(ID3D12GraphicsCommandList), (void**)&cl))) {
+            rel(al); queue_->Wait(fence_, n); return false;
+        }
+        record(cl);
+        cl->Close();
+        queue_->Wait(fence_, n);
+        const bool idle = submitTimed(cl, what);
+        rel(cl); rel(al);
+        const UINT64 done = ++value_;
+        queue_->Signal(fence_, done);
+        GLuint64_ w = done; semParam_(sem_, kFenceValue, &w);
+        std::vector<GLenum> wl(giSig_.size(), kLayoutShaderRead);
+        waitSem_(sem_, 0, nullptr, (GLuint)giSig_.size(), giSig_.data(), wl.data());
+        return idle;
+    }
+    void giRelease() {
+        for (Shared& s : gi_) free(s);
+        gi_.clear(); giSig_.clear();
+        rel(giTexels_); rel(giDilate_); rel(giData_); giTexelN_ = giDilateN_ = giDataN_ = 0; giBytes_ = 0; giPending_ = false;
+    }
+    std::vector<Shared> gi_; std::vector<GLuint> giSig_;
+    ID3D12Resource* giTexels_ = nullptr; ID3D12Resource* giDilate_ = nullptr; ID3D12Resource* giData_ = nullptr;
+    UINT giTexelN_ = 0, giDilateN_ = 0, giDataN_ = 0; UINT64 giBytes_ = 0;
+    ID3D12PipelineState* psoGi_ = nullptr; ID3D12PipelineState* psoGiDil_ = nullptr;
+    RtGiJob giJob_; bool giPending_ = false;
+    bool giTimed_[2] = {false, false}; double giSum_ = 0, giMax_ = 0; int giN_ = 0;
 };
 
 Bridge* g_bridge = nullptr;
@@ -1223,6 +1410,9 @@ GLuint rtBridgeMaskAtlas(int w, int h) { return ensure() ? g_bridge->maskAtlas(w
 bool rtBridgeAddHitData(const RtHitData& d) { return g_bridge && g_bridge->addHitData(d); }
 bool rtBridgeAddMasked(const RtMaskedWorld& m) { return g_bridge && g_bridge->addMasked(m); }
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridge->setSignalBuffers(bufs, n); }
+bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
+void rtBridgeGiQueue(const RtGiJob& j) { if (g_bridge) g_bridge->giQueue(j); }
+bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk) { return g_bridge && g_bridge->giRunNow(j, passes, chunk); }
 
 }  // namespace render
 #else
@@ -1238,5 +1428,8 @@ GLuint rtBridgeMaskAtlas(int, int) { return 0; }
 bool rtBridgeAddHitData(const RtHitData&) { return false; }
 bool rtBridgeAddMasked(const RtMaskedWorld&) { return false; }
 void rtBridgeSetSignalBuffers(const GLuint*, int) {}
+bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
+void rtBridgeGiQueue(const RtGiJob&) {}
+bool rtBridgeGiRunNow(const RtGiJob&, int, unsigned) { return false; }
 }  // namespace render
 #endif

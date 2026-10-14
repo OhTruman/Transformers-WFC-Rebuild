@@ -998,6 +998,8 @@ void Pipeline::release() {
         delProg(rtCompositeR1Prog_); delTex(r1SunTex_);                       // (R1: its composite and the sun-share target)
         for (GLuint& t : vbTex_) delTex(t);
         for (GLuint& t : vbArrays_) delTex(t);
+        for (GLuint& t : giArrays_) delTex(t);           // (R4: the GI arrays; the shared pages are the bridge's)
+        delTex(giVlmTex_); if (giVlmBo_) { DeleteBuffers(1, &giVlmBo_); giVlmBo_ = 0; }
         if (rtFbo_) { DeleteFramebuffers(1, &rtFbo_); rtFbo_ = 0; }
         if (rtAtlasFbo_) { DeleteFramebuffers(1, &rtAtlasFbo_); rtAtlasFbo_ = 0; }
         for (GLuint* p : {&fsr3DepthProg_, &fgDepthProg_, &fgVelProg_}) delProg(*p);   // (fsr3Out_ is the upscaler's)
@@ -2466,14 +2468,14 @@ void Pipeline::touchNewTextures() {
 // ------------------------------------------------------------------------- programs
 // Realistic's reflection layer gate: the SpecularPower range over which a surface goes from no RT reflection to the full
 // Fresnel weight (WFC_RT_GLOSSLO / _HI; GLSL float literals)
-static const char* rtGlossLo() {
-    static const std::string s = [] { const char* e = std::getenv("WFC_RT_GLOSSLO"); return std::to_string(e ? std::atof(e) : 12.0); }();
-    return s.c_str();
+// (smoothstep needs lo < hi: an inverted / equal pair falls back to the defaults)
+static std::pair<double, double> rtGlossRange() {
+    const char* l = std::getenv("WFC_RT_GLOSSLO"); const char* h = std::getenv("WFC_RT_GLOSSHI");
+    const double lo = l ? std::atof(l) : 12.0, hi = h ? std::atof(h) : 48.0;
+    return lo >= 0.0 && hi > lo + 1e-3 ? std::make_pair(lo, hi) : std::make_pair(12.0, 48.0);
 }
-static const char* rtGlossHi() {
-    static const std::string s = [] { const char* e = std::getenv("WFC_RT_GLOSSHI"); return std::to_string(e ? std::atof(e) : 48.0); }();
-    return s.c_str();
-}
+static const char* rtGlossLo() { static const std::string s = std::to_string(rtGlossRange().first); return s.c_str(); }
+static const char* rtGlossHi() { static const std::string s = std::to_string(rtGlossRange().second); return s.c_str(); }
 
 int Pipeline::buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                            const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
@@ -3617,7 +3619,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
             Uniform1i(ULOC(P, "uRtRefl"), 26);
             Uniform1i(ULOC(P, "uRtReflOn"), rtReflValid_ && rtReflPrev_ && rtReflLive() ? 1 : 0);
             Uniform1f(ULOC(P, "uRtReflLod"), lod);
-            static const float gloss = [] { const char* e = std::getenv("WFC_RT_REFLSTRENGTH"); return e ? (float)std::atof(e) : 1.0f; }();
+            static const float gloss = [] { const char* e = std::getenv("WFC_RT_REFLSTRENGTH"); return e ? std::min(std::max((float)std::atof(e), 0.0f), 4.0f) : 1.0f; }();   // (0 .. 4)
             Uniform1f(ULOC(P, "uRtGloss"), rtMode_ == 2 ? gloss : 0.0f);   // (Realistic only: Faithful keeps its look)
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
@@ -4186,7 +4188,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
                 for (int i = 0; i < 3; ++i) {
                     ActiveTexture(GL_TEXTURE0 + 13 + i);
-                    glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)s.lmTex[i]] ? lmTextures_[(size_t)s.lmTex[i]] : blackTex_);
+                    const GLuint gt = giTex(s.lmTex[i]);       // (R4: the RT lightmap page where Realistic has one)
+                    glBindTexture(GL_TEXTURE_2D, gt ? gt : lmTextures_[(size_t)s.lmTex[i]] ? lmTextures_[(size_t)s.lmTex[i]] : blackTex_);
                 }
             } else if (!P.lit) {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
@@ -4503,10 +4506,12 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     r1CheckGl();
     if (r1Map_ && rtShadowAoOn() && !r1Built_) r1Build();   // (R1: the V_bake pages / arrays under the loading screen, not in frame 1)
+    if (!giFinished_ && !giTexels_.empty()) giFinishTexels();   // (R4: the gutter list, the coverage maps freed)
     // (RT: the masked-world atlas and the reflection hit data under the loading screen too - the hit data's texture readbacks
     // were a 2-3 s hitch on the first Realistic frame; a mid-map switch to Realistic still builds them at that moment)
     if (rtShadowAoOn() && !rtFailed_ && !rtMaskedBuilt_) rtBuildMasked();
     if (rtShadowAoOn() && !rtFailed_ && !rtHitBuilt_ && rtReflPass()) rtBuildHit();
+    if (!giSetupDone_ && giFinished_ && rtHitBuilt_) giSetup();   // (R4: the RT lightmap's buffers, pages, load passes)
     logMemStats("after the load warm-up");
     LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
@@ -5397,6 +5402,7 @@ void Pipeline::buildMdi(int meshId) {
             glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, &vlmSamples[off * 3]);
             glBindTexture(GL_TEXTURE_2D, 0);
             rw[23 * 4] = 1.0f; rw[23 * 4 + 1] = (float)s.vlmBase; rw[23 * 4 + 2] = (float)off; rw[23 * 4 + 3] = (float)w;
+            s.vlmMdiOff = (int)off; s.vlmMdiCnt = w;
             ++vlmSubs;
         }
         // all three pages in the shared array, and the MDI program samples it: bucket by program alone
@@ -5536,6 +5542,7 @@ void Pipeline::buildMdi(int meshId) {
         glBindTexture(0x8C2A, mdiVlmTex_);
         TexBuffer(0x8C2A, 0x8815 /*GL_RGB32F*/, mdiVlmBo_);
         glBindTexture(0x8C2A, 0);
+        if (meshId != bspMesh_) { giVlmEntries_ = vlmSamples.size() / 3; giVlmMesh_ = meshId; }   // (R4: the GI twin's layout)
         LOG_INFO("wfc: %s MDI: %zu vertex-lightmapped subs via the sample buffer (%zu samples, %.1f MB)",
                  meshId == bspMesh_ ? "level BSP" : "world", vlmSubs, vlmSamples.size() / 9, vlmSamples.size() * 4.0 / 1048576.0);
     }
@@ -6296,14 +6303,20 @@ void Pipeline::drawMdi(GpuMesh& g) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
             for (int i = 0; i < 3; ++i) {
                 ActiveTexture(GL_TEXTURE0 + 13 + i);
-                glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)b.lm[i]] ? lmTextures_[(size_t)b.lm[i]] : blackTex_);
+                const GLuint gt = giTex(b.lm[i]);
+                glBindTexture(GL_TEXTURE_2D, gt ? gt : lmTextures_[(size_t)b.lm[i]] ? lmTextures_[(size_t)b.lm[i]] : blackTex_);
             }
         }
         if (lmArray_) {
             ActiveTexture(GL_TEXTURE0 + 21);
-            glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, b.lm[0] == -2 && b.lm[1] > 0 ? lmArrays_[(size_t)b.lm[1]] : lmArray_);
+            const size_t ai = b.lm[0] == -2 && b.lm[1] > 0 ? (size_t)b.lm[1] : 0;
+            const GLuint ga = giActive() && ai < giArrays_.size() ? giArrays_[ai] : 0;   // (R4: the RT lightmap arrays)
+            glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, ga ? ga : b.lm[0] == -2 && b.lm[1] > 0 ? lmArrays_[(size_t)b.lm[1]] : lmArray_);
         }
-        if (mdiVlmTex_) { ActiveTexture(GL_TEXTURE0 + 22); glBindTexture(0x8C2A /*GL_TEXTURE_BUFFER*/, mdiVlmTex_); }
+        if (mdiVlmTex_) {                                // (R4: the RT vertex lightmaps where Realistic traced them)
+            const GLuint vt = giActive() && giVlmTex_ && mdiMesh_ == giVlmMesh_ ? giVlmTex_ : mdiVlmTex_;
+            ActiveTexture(GL_TEXTURE0 + 22); glBindTexture(0x8C2A /*GL_TEXTURE_BUFFER*/, vt);
+        }
         if (r1Map_) r1BindDraw(progs_[(size_t)b.prog].mdiProg, b.lm[0], b.lm[0] == -2 && b.lm[1] > 0 ? b.lm[1] : 0);   // (the MDI variant bound above)
         ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
         ActiveTexture(GL_TEXTURE0);
@@ -8123,7 +8136,7 @@ void Pipeline::endFrame() {
 // ------------------------------------------------------------------------- R1 sun swap (RT Realistic + V_bake)
 bool Pipeline::r1Active() const {
     static const bool off = [] { const char* e = std::getenv("WFC_RT_R1"); return e && std::atoi(e) == 0; }();
-    return r1Map_ && !off && rtInfra_ && !rtFailed_ && rtMode_ == 2;
+    return r1Map_ && !off && rtInfra_ && !rtFailed_ && rtMode_ == 2 && !giActive();   // (R4 lights the map: no swap)
 }
 
 // R1 needs three optional GL entry points (MRT output, per-target colour masks, float clears). Tested once per map at the
