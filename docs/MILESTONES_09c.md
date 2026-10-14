@@ -922,5 +922,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   hidden (captures docs/handoff/smoke_ab/, crop sent to the user). A baseline change in all three modes wherever
   game-side smoke overlaps a character; SIMHASH unaffected. Remaining: hard particle edges, no soft depth fade =
   option B (Rendering after item 2). Head 56290b7d = package-5 candidate base.
+  13:20 USER clarifications (package 4): the effects ordering applies to all characters (players visible in front of the
+  GRID ability; the local muzzle flash drawn behind the enemy being shot) -> Systems: the muzzle flash is WeaponFx MESH
+  parts drawn immediately before the fallback flush, so v2 = one IRenderer::flushQueuedCharacters() in World::draw
+  after barriers / sentries and before fx_.draw (staged 3-case proof: smoke on a bot, muzzle flash over a bot, barrier
+  between pawn and bot; WFC_FXSTAGE diagnostic hook, never in a patch); the barrier grid is already correct in code. A
+  tipped-over vehicle kept driving forward -> Gameplay (original roll handling; BOTTEST row). The gun cross-talk
+  re-ask = already fixed (b0a22cb6, FXOWNER gate) in packages 3 / 4. USER DECISION: no interim build; the next playtest
+  is PACKAGE 5 after 'the lighting is all done and all the ray tracing stuff is implemented and textures' = plan v2
+  items 1-5 + option B + D complete (+ rest of the world if ready) + the effects v2 / vehicle fixes; slot A continuous
+  for Rendering; user away until 2026-10-15 10:00 (usage reset), message only when package 5 is ready.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
