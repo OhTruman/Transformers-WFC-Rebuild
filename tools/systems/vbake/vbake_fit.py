@@ -21,6 +21,8 @@ texels of one component, one lit and one shadowed by the trace, with similar N.L
                   same estimator as the map: the --k-quantile quantile, else least squares; the map's handedness kept);
                   fit.json pages[] gain k / p / pairs / k_source ("page" or "map": too few pairs, the map's k). For maps
                   whose single k is weak (Molten; Rendering 2026-10-13); the runtime may read pages[].k where present.
+  --per-page-cap  a page's own k never exceeds the map's k (per-page fits then only weaken the swap where a page's sun is
+                  weaker; Streets / Debris: uncapped page k above the map's q30 raised the clamp)
   --per-page-p    also fit p per page (default: the map p; per-page p overfits on small pages)
   --max-clamp F   lower k (keeping p and the handedness) until the >= 0 clamp of the indirect removes at most F of the sun
                   energy over the covered texels (bisection; Rendering 2026-10-13: the first fits' 11-30 % clamp read "a touch
@@ -202,6 +204,8 @@ def main():
                 okq = x > 0.1 * np.median(x[x > 0]) if (x > 0).any() else x > 0
                 if okq.sum():
                     kk = float(np.quantile(Dp[okq] / x[okq], k_quantile))
+            if '--per-page-cap' in sys.argv and kk > k:                         # (only ever lower than the map's k)
+                kk = k
             page_kp[P['name']] = dict(k=kk, p=pp, pairs=int(m.sum()), residual=res_, k_source='page')
         ks = [v['k'] for v in page_kp.values() if v['k_source'] == 'page']
         print('per page (>= %d pairs): %d of %d pages fitted; k p10 %.3f median %.3f p90 %.3f (map k %.3f)' %
