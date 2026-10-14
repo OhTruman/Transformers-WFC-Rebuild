@@ -986,5 +986,19 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   with 3a (an immediate additive draw must come after the flushed characters); AssetTools adds extras.wfc_material to
   those exports later (in work/). Staged A (symptom) vs B (+3a) with the bot behind the now see-through grid in
   slot B.
+  13:51 BARRIER STEP 2 (Systems 9641b7ab): with the package-path name the barrier resolves its compiled material (591
+  verts, 7 joints) but still draws as an OPAQUE near-black wall -> the GPU-skinned dynamic pass-1 draw ignores the
+  material's BLEND_Additive (depth write likely on). Rendering item (now if < 1 h, else right after item 1): skinned
+  dynamic draws honour the material blend mode (additive ONE / ONE, translucent SRC_ALPHA, no depth write, depth test
+  on, depthBiasedAlpha / distortion); then Systems' patch = barrier name fallback + 3a with bot-behind-grid crops;
+  AssetTools exports extras.wfc_material (the turret MATINST is compiled in no map: AssetTools item). TIP-OVER (b)
+  measured (Gameplay GAMEPLAY_TIPOVER.patch, not applied): tipped time old -> (a) -> (b) Streets 69.8 -> 29.6 -> 43.1,
+  Molten 41.9 -> 15.9 -> 10.6, Debris 20.3 -> 11.9 -> 14.3, Gorge 98.2 -> 61.7 -> 36.5 (total 230 -> 119 -> 105 s);
+  TIPTEST 2 / 3 (the right-side case levels after 4.72 s: 4 spring rays vs the PhysX hull); identity re-based (the
+  SIMHASH diverges one step after the first unstable hover step; WFC_NOAIPATH=1 reproduces the baseline); NAVQ (b):
+  Debris off-mesh 1.9 -> 3.4 %, Gorge stucks 1.23 -> 1.79 = outside 1 SE; BOTTEST / DETERMINISM / cost green. NOT
+  shipped as is: Gameplay measures (a) righting-only and (b') = translation only after > 1 s unstable with the target
+  clamped to the nav mesh; the best within 1 SE on all maps ships; the TIPTEST right row may ship as a known limit if
+  it levels within 5 s.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
