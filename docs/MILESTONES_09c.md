@@ -557,5 +557,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   bot steering state per step: 7919/7919 identical on Streets + Gorge x seeds 5 / 7, controls OK); Smart changes OK, no
   tactics regression in code; follow-ups to Gameplay: think-time re-pick floor test, a squad cohesion metric for spawn
   scope 2, dither guard vs cover-Retreat spots in off-mesh pockets, comment fix, BOTPERF at 32v32.
+  20:20 Coupling audit (Gameplay): NO decision-relevant gameplay read of render times (only the impact-squib relevance
+  gate: presentation RNG, extended lobbies, not in SIMHASH; perception / aim / LOD / sleep / bone reads independent; the
+  renderer's visibility query is const). So the Faithful SIMHASH divergence after a93a3e11 is an RT-mode SIM INPUT
+  (shared RNG consumed by the RT path, or lockstep steps-per-frame tied to frame time): assigned to Rendering as a
+  determinism bug to find before S1 (WFC_IMPACTRELEVANCE=0 rerun, RNG / step-clock audit). Experimental: RT-on lockstep
+  rows judged SIMHASH-first ('SIM DIVERGED at step N').
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
