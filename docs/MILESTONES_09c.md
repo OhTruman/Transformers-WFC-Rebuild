@@ -784,5 +784,18 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering's items; then M6 roughness maps (490, CPU). Gameplay slot B partial: 2 RT-off lockstep runs step-identical;
   the injected frontend run stalled in PartyLobby (the injector posted Escape before the match, where the drop does not
   act); retry gated on match start, any time except Experimental's timed regress.
+  08:50 GICHECK3 GREEN -> R4 ON BY DEFAULT in Realistic, merged be72e4ab (rt2 0be0f2ee): RT / bake Streets 1.07 (bounce
+  gain 9.7), Gorge 0.96 (8.1), Debris 0.95 (21.7), Rust 0.98 (4.9), Molten 0.93 (7.7); vertex-lit subs as bounce sources
+  (Rust sourceless static hits 48 % -> 2.5 %); 32 rays / texel, 32 sweeps (quality-first); item 5 soft lamp shadows
+  (0.15 m sources); item 1 probe grid behind WFC_RT_GIPROBES=1 (Molten 3.14 M probes at a forced 4.58 m spacing, tighter
+  next); Off / Faithful inert by construction, fresh identity pair in the next slot. Three-map image sent to the user.
+  Reflection close-up HELD: a hard vertical seam across Molten's platform and thin black lines at grazing angles
+  (reflection-target sampling; item 3's work). Example set running alone (~40 min, HD off).
+  09:00 LOCKSTEP INPUT-DROP PROOF PASS (Gameplay): frontend boot reached the match in 31 s; F9 / R / Escape / wheel /
+  text injected after match start all dropped + logged, no pause menu, step-identical end (frame 4202) with the plain
+  runs (clicks unexercised: WFC_NOMOUSE); patch merged c7f72c50. tools/fidelity scripts synced (Experimental b716a73a:
+  ROSTER=64 real 31 v 32 via BotsExtended, XENV, SIMHASH detail; the old '64p' rows ran 5 a side). My sync chain
+  deleted the tracked results/ folder in 3d643e94; restored in 30b2fa74 (content identical). HEAD 30b2fa74 named to
+  Experimental for regress-8map + captures + R4 leak rows + the 31 v 32 faith jitter pair.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
