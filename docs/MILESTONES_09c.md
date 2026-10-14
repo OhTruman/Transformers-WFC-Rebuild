@@ -904,5 +904,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   slot B after the 1440p baseline; patch on 00aa2ca7; a baseline change in all three modes (SIMHASH unaffected). FIX B
   (fallback batches join the sorted translucency with a generic material + soft depth) queued for Rendering after plan
   v2 item 2.
+  12:43 1440p RT PERF BASELINE on 30b2fa74 (Experimental 976e8f7e; copy in docs/handoff/RT_PERF_BASELINE_30b2fa74.md +
+  .csv): 2560x1440 windowed, 63 bots + player bot, lockstep steps 2400-6000, alone under the hold, every RT arm the same
+  match as Off (SIMHASH equal). Frame p50 / p90 ms: Rust Off 1.84 / 2.29, Faithful 4.85 / 5.53, Realistic 7.77 / 8.61;
+  Debris 2.14 / 2.35, 4.45 / 5.23, 6.99 / 7.83; Streets 1.60 / 1.96, 4.70 / 5.77, 8.28 / 9.38; Molten 1.82 / 2.09, 5.25
+  / 6.21, 8.68 / 9.88; Gorge 1.93 / 2.31, 4.85 / 5.93, 7.96 / 9.04. GPU ms Faithful -> Realistic: shadow + AO 1.9-2.3
+  -> 2.6-3.3, denoiser 0.75 -> 0.9-1.1, reflections 1.3-1.9, GI tracer 3.5-6.6 per traced frame while converging (Debris
+  highest), RT device VRAM 3.4-4.1 -> 3.8-4.6 GB. Realistic = +2.6-3.6 ms p50 over Faithful; Faithful = +2.3-3.4 over
+  Off. Rendering diffs each plan-v2 item against it (rt-perf-baseline.ps1). Rust's first pass (under AssetTools' python)
+  rerun clean. GPU released: slot A -> Rendering (item 1 / 2 tests), slot B -> Systems (smoke repro + A/B), AssetTools
+  resumed.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
