@@ -6,6 +6,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include <utility>
 typedef unsigned int GLuint;
 
 namespace render {
@@ -75,5 +76,21 @@ bool rtBridgeAddMasked(const RtMaskedWorld& m);             // non-opaque BLAS (
 // GL buffers written before the signal that D3D12 reads (Systems' skinned positions): signalled and reacquired with
 // the targets on every round trip until changed (n = 0 clears)
 void rtBridgeSetSignalBuffers(const GLuint* bufs, int n);
+// R4: the runtime ray-traced lightmap (render/gl/WfcRtGi.cpp, shaders/rt_gi.hlsl). Setup: the texels (8 x u32 each, as
+// GiTexel), the gutter list (4 x u32: dst, src, src sub, 0), GiData (float4s: subs, lights, the hit page map), per GL
+// lightmap page its size (0 = none) -> per page a shared GL texture (RGBA16F; 0 = none). A job: constants of one
+// texel range (+ the gutter); queued into the next round trip, or run now in whole passes (load time).
+struct RtGiSetup { std::vector<uint32_t> texels, dilate; std::vector<float> data; std::vector<std::pair<int, int>> pageSize;
+                   int floatPage = -1; };   // (floatPage: RGBA32F - the vertex-lit subs' page)
+struct RtGiJob {
+    float toSun[4] = {0, 0, 0, 0}, sunCol[4] = {0, 0, 0, 0}, sky[4] = {0, 0, 0, 0};
+    uint32_t first = 0, count = 0, frame = 0, lights = 0;
+    float mix[4] = {0.05f, 1.0f, 1.0f, 1.0f};   // minimum blend weight, tangent-y sign, sun exponent p, bounce on
+    uint32_t subOff = 0, lightOff = 0, pageMapOff = 0, mask = 0x0Bu;
+    bool dilate = false;
+};
+bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex);
+void rtBridgeGiQueue(const RtGiJob& j);
+bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk);
 
 }  // namespace render

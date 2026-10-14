@@ -93,6 +93,24 @@ if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe")
             COMMENT "DXC ${sh}.hlsl")
         list(APPEND WFC_RT_SHADER_HEADERS "${out}")
     endforeach()
+    # R4: the runtime ray-traced lightmap - the texel tracer and its gutter copy (one source, GI_DILATE)
+    foreach(pair "rt_gi:" "rt_gi_dilate:-DGI_DILATE")
+        string(REPLACE ":" ";" kv "${pair}")
+        list(GET kv 0 sh)
+        list(LENGTH kv kvn)
+        set(def "")
+        if(kvn GREATER 1)
+            list(GET kv 1 def)
+        endif()
+        set(out "${WFC_RT_SHADER_DIR}/${sh}.h")
+        add_custom_command(OUTPUT "${out}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${WFC_RT_SHADER_DIR}"
+            COMMAND "${CMAKE_SOURCE_DIR}/third_party/dxc/bin/dxc.exe" -nologo -T cs_6_5 -E main -O3 ${def} -Fh "${out}" -Vn g_${sh}
+                "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/rt_gi.hlsl"
+            DEPENDS "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/rt_gi.hlsl" "${CMAKE_SOURCE_DIR}/src/render/d3d12/shaders/rt_common.hlsli"
+            COMMENT "DXC rt_gi.hlsl ${def}")
+        list(APPEND WFC_RT_SHADER_HEADERS "${out}")
+    endforeach()
     target_sources(wfc_rebuild PRIVATE ${WFC_RT_SHADER_HEADERS})
     target_include_directories(wfc_rebuild PRIVATE "${WFC_RT_SHADER_DIR}")
     target_compile_definitions(wfc_rebuild PRIVATE WFC_RT_SHADERS=1)

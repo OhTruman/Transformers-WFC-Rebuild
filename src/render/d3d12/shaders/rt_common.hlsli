@@ -23,6 +23,7 @@ StructuredBuffer<uint> HitTriSub : register(t12);
 StructuredBuffer<float4> HitSub : register(t13);      // 8 per sub: pages, lightmap UV transform, 3 scales, albedo, emissive, 0
 Texture2D<float4> Lightmaps[512] : register(t0, space1);
 
+#ifndef RT_NO_FRAME_CB                               // (rt_gi.hlsl declares its own constants)
 cbuffer Frame : register(b0) {
     float4x4 InvViewProj;   // GL clip -> world (column-major, as GL's matrices)
     float4 ToSun;           // xyz: unit vector towards the sun (-light forward); w: 1 = a sun exists
@@ -38,6 +39,7 @@ float3 worldAt(int2 px, float d) {
     float4 p = mul(InvViewProj, float4(ndc, d * 2.0 - 1.0, 1.0));
     return p.xyz / p.w;
 }
+#endif
 
 uint hash(uint x) { x ^= x >> 16; x *= 0x7feb352dU; x ^= x >> 15; x *= 0x846ca68bU; x ^= x >> 16; return x; }
 float rnd(inout uint s) { s = hash(s); return (s >> 8) * (1.0 / 16777216.0); }

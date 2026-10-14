@@ -290,6 +290,7 @@ private:
         bool noShadow = false;    // authored: CastShadow false (left out of the RT scene)
         bool dynChannel = false;  // authored LightingChannels = Dynamic only: Dynamic-channel lights, per frame
         int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
+        int vlmMdiOff = -1, vlmMdiCnt = 0;   // (MDI) its samples in the set's sample buffer: entry off + row x cnt + vertex
         core::Vec3 bmin, bmax;
         bool envReady = false;
         LightEnv env;
@@ -541,6 +542,41 @@ private:
     int r1SunW_ = 0, r1SunH_ = 0, r1ClearedFrame_ = -1;
     bool r1Active() const;
     void r1CheckGl();
+    // R4 (RT Realistic): the runtime ray-traced lightmap (WfcRtGi.cpp). At load every lightmapped static triangle is
+    // rasterised into its lightmap page (texel centres): per texel its world position and tangent frame, for the D3D12
+    // texel tracer that writes the same three directional coefficients the bake stored. WFC_RT_GI=0: the bake.
+    struct GiTexel { uint32_t pageXY = 0; float pos[3] = {0, 0, 0}; uint32_t nrm = 0, tan = 0, sub = 0, pad = 0; };   // 32 bytes
+    struct GiSub { int lm[3] = {-1, -1, -1}; float scale[3][3] = {}; int bsp = 0; int vcnt = 0; };   // pages, decode scales, BSP receiver;
+    // (vertex-lit subs: page 511 in their texels, vcnt = the sub's vertex count in the MDI sample layout)
+    std::vector<GiTexel> giTexels_;
+    std::vector<GiSub> giSubs_;
+    std::vector<std::pair<int, int>> giPageSize_;      // per lmTextures_ page: its size (0 = not a lightmap page / unread)
+    std::vector<uint32_t> giCovered_;                   // (build) per page texel: its sub + 1, 0 = none (per page, row-major, concatenated)
+    std::vector<size_t> giCoveredBase_;
+    std::vector<uint32_t> giDilate_;                    // gutter copies: (dst, src packed texels, src sub), in order
+    size_t giVertexLitSubs_ = 0, giOverlap_ = 0, giVertexTexels_ = 0;
+    bool giFinished_ = false, giSetupDone_ = false;
+    std::vector<int> giHitPageGl_;                      // the reflection hit data's D3D12 lightmap page -> GL page
+    std::vector<GLuint> giGlTex_;                       // per GL lightmap page: its shared GI page (0 = none)
+    std::vector<GLuint> giArrays_;                      // per lightmap array (as lmArrays_): the GI pages layer for layer
+    std::vector<float> giJob_;                          // the per-frame job's constants (RtGiJob, opaque here)
+    size_t giNext_ = 0;                                 // the next texel of the rotating per-frame slice
+    int giSweeps_ = 0;                                  // full sweeps done (the per-frame tracing stops after WFC_RT_GISWEEPS)
+    // vertex-lit (LMT_1D) world subs: their MDI sample buffer's twin, written by the tracer (GI page 511, RGBA32F, 4096
+    // entries per row) and copied into a buffer texture the MDI rows sample in place of the bake's
+    static constexpr int kGiVertexPage = 511;
+    GLuint giVlmBo_ = 0, giVlmTex_ = 0;
+    size_t giVlmEntries_ = 0; long giVlmMesh_ = -1;
+    void giCopyVertexPage();
+    bool giOn() const;
+    bool giActive() const;
+    void giSetup();
+    void giFrame();                                     // queue this frame's slice (before the round trip)
+    void giAfterFrame();                                // refresh the GI arrays' layers the slice touched (after it)
+    GLuint giTex(int page) const { return giActive() && page >= 0 && (size_t)page < giGlTex_.size() && giGlTex_[(size_t)page] ? giGlTex_[(size_t)page] : 0; }
+    size_t giSliceFirst_ = 0, giSliceCount_ = 0;
+    void giRasterMesh(int meshId, const std::vector<uint32_t>& idx, const std::vector<float>& v);
+    void giFinishTexels();
     void r1Build();
     void r1WorldBegin();
     void r1WorldEnd();
