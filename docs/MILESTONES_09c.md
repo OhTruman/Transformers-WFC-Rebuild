@@ -835,5 +835,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   plausible cause (stray window input) is fixed by the lockstep input drop. Standing rule: lockstep runs keep the
   700-760 detail hashes so any recurrence names the pawn and field. Leak isolation rows (Realistic GI=0; Faithful)
   running, ~40 min.
+  11:02 LEAK ISOLATED TO R4 (Experimental): lobby-dip GPU dedicated MB after each of 5 map changes - Realistic + GI 1:
+  1981 / 2349 / 2735 / 2813 / 3146 (still rising); Realistic GI 0: 1850 / 2132 / 2312 / 2130 / 2071 (plateau ~2.1 GB);
+  Faithful: 1626 / 2130 / 2113 / 2114 / 2130 (plateau); RT off flat. Private memory plateaus in every row. Growth is
+  not proportional to the GI page bytes (Molten 17 MB, Rust 59 MB, Streets 28.6 MB) -> a per-load R4 object kept alive
+  (suspects: shared GI textures still bound / referenced at delete; per-pass one-shot lists / readbacks in the vertex-
+  lit bounce + 32-sweep path; descriptor-table refs). Rendering's code read found no missing release on the normal
+  path; a VRAM-per-release-step diagnostic cycle runs in slot A after Systems' verify. Experimental's block done
+  11:02; Systems' verify_slim slot opened 11:03.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
