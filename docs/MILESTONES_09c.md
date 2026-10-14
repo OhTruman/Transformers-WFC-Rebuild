@@ -538,5 +538,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   19:35 SELF-TEST SWEEP on 2017eeba (Experimental, 61 switches, 180 s cap): 38 PASS / 0 FAIL / 23 diagnostic (no
   verdict by design); exit codes 0 / 1 only, no 0xC0000409, no crash dumps except HANGTEST's intended one, 0 gpu_lost;
   QA 9/9 after rerunning with WFC_QA=1. Slot B -> Gameplay (FXOWNER rerun + GL-vs-null DETERMINISM digest).
+  19:45 Gameplay proofs: FXOWNER 6/6 (bot flash in the bot's socket frame, follows the socket; player ammo unchanged;
+  Scout car HUD 60/300, reload tap works); null-render identity PROVEN (GL and null boot digest 8895b43c7ea0927e).
+  Experimental's sweep doc FINAL copied to docs/handoff (85f19e7f). PATHING PATCH APPLIED c949ab88 (Gameplay 6c9a7109, Smart
+  only, Classic byte-identical): height-aware pickup distance + 90 s skip, off-mesh dither guard + walk-back + stranded
+  after 3 escapes, floor-aware arrival, squad respawn within the team's active cluster. 6 seeds x 4 maps after (Classic):
+  Streets 5.4/3.0/3.2/1.22 (6.9/3.3/5.9/1.48) MET; Gorge 4.7/4.8/5.0/1.57 (5.9/5.0/7.0/2.31) MET; Molten 2.0/2.5/1.6/0.75
+  (1.8/2.0/1.5/0.84) close; Debris 4.8/1.3/2.6/0.94 (3.8/1.2/2.1/1.09) close; stucks below Classic everywhere; BOTTEST
+  39/39 both AIs; Experimental verifying the Classic identity. Remaining: Debris slow time, Molten reversals.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
