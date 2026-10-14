@@ -9,6 +9,7 @@ RWTexture2D<uint> HitMask : register(u1);
 RWTexture2D<float4> Normal : register(u2);
 RWTexture2D<float2> Velocity : register(u3);
 RWByteAddressBuffer Stats : register(u4);     // [0] rays traced this frame
+RWTexture2D<float4> LightVis : register(u0, space2);   // (item 2) per shadow light: visibility (dynamic: all; world: characters)
 
 groupshared uint gTileMask;
 
@@ -86,6 +87,26 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             rays += nAo;
         }
     }
+    // (item 2) the point / spot shadow lights (Extra2.z of them at ring offset Extra2.w): a hard shadow ray each - on
+    // dynamic pixels from everything (a lamp behind a wall no longer lights a robot), on world pixels from the characters
+    // only (the RT lightmap holds the world's own lamp shadows; the robots' lamp shadows on the world)
+    float4 lv = float4(1, 1, 1, 1);
+    if (inside && d < 1.0 && Extra2.z > 0.5) {
+        const float3 p = worldAt(px, d);
+        const float3 eye = worldAt(px, 0.0);
+        const float3 o = p + n * (0.01 + Params.y * length(p - eye));
+        const uint lmask = dynamicPx ? (uint)Params.z : 0x4u;
+        [unroll] for (uint k = 0; k < 4; ++k) {
+            if ((float)k >= Extra2.z) break;
+            const float4 L = ShadowLights[(uint)Extra2.w + k];
+            const float3 dl = L.xyz - o;
+            const float dist = length(dl);
+            if (dist >= L.w || dist < 0.05) continue;
+            lv[k] = occluded(o, dl / dist, dist - 0.05, lmask) ? 0.0 : 1.0;
+            ++rays;
+        }
+    }
+    if (inside) LightVis[px] = lv;
     if (inside) {
         Mask[px] = float4(outv, dynamicPx ? 1.0 : 0.0, 0.0);
         Normal[px] = float4(n, blockT);

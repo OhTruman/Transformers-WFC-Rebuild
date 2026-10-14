@@ -18,6 +18,7 @@
 struct GiTexel { uint pageXY; float3 pos; uint nrm, tan, sub, pad; };
 #if defined(GI_PROBE)
 RWStructuredBuffer<float4> Probes : register(u0);       // (probes) 6 per probe: the ambient cube +X -X +Y -Y +Z -Z
+StructuredBuffer<uint> ProbeCells : register(t14);     // (probes) per probe its grid cell (x fastest): a sparse grid
 #elif defined(GI_DILATE)
 StructuredBuffer<uint4> Dilate : register(t14);       // (dilate) per gutter texel: dst, src, src sub, 0
 #else
@@ -266,7 +267,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= Range.y) return;
     const uint i = Range.x + id.x;
     const uint3 dim = (uint3)SunCol.xyz;
-    const uint3 c = uint3(i % dim.x, (i / dim.x) % dim.y, i / (dim.x * dim.y));
+    const uint cell = ProbeCells[i];
+    const uint3 c = uint3(cell % dim.x, (cell / dim.x) % dim.y, cell / (dim.x * dim.y));
     const float3 P = ToSunG.xyz + float3(c) * ToSunG.w;
     const uint n = max((uint)SkyG.w, 1u);
     uint seed = hash(i * 7919u + 17u);

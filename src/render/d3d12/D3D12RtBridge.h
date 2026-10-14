@@ -11,7 +11,7 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0; };   // render size: depth / mask R32F,
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0, lightVis = 0; };   // render size: depth / mask R32F,
                                                                  // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
                                                                  // (denoised sun), worldDepth R32F (before the dynamic draws)
 
@@ -41,6 +41,9 @@ struct RtFrame {
     float penumbraTan = 0.0f; // (R2) tan(the sun's half angle) for the penumbra width
     float softMaxRadius = 24.0f;   // (R2) the widest penumbra, pixels
     bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
+    // (item 2) up to 4 point / spot lights shadowed per pixel (xyz position, w radius): RtTargets::lightVis RGBA = each
+    // one's visibility - on dynamic pixels from everything, on world pixels from the characters only
+    float shadowLights[4][4] = {}; int shadowLightN = 0;
 };
 
 bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (a throwaway probe)
@@ -97,6 +100,7 @@ bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk);
 // S3: the probe grid (origin, spacing, dims) traced from the current RT lightmap with the job's offsets / mask / bounce
 // gain, rays per probe; out: 24 floats per probe (6 x (rgb, w): the ambient cube +X -X +Y -Y +Z -Z; w of axis 0 = the
 // share of front-face hits, of axis 1 = the share of rays that hit)
-bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays, std::vector<float>& out);
+bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays,
+                      const std::vector<uint32_t>& cells, std::vector<float>& out);   // (cells: the sparse grid's cells, x fastest)
 
 }  // namespace render

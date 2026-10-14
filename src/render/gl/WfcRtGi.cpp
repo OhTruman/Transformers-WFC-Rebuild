@@ -20,6 +20,7 @@
 #include <new>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 
 namespace render {
 namespace wfc {
@@ -37,6 +38,13 @@ uint32_t octEncode(float x, float y, float z) {
     }
     auto q = [](float a) { return (uint32_t)std::lround((std::min(std::max(a, -1.0f), 1.0f) * 0.5f + 0.5f) * 65535.0f); };
     return q(x) | (q(y) << 16);
+}
+void octDecode(uint32_t e, float n[3]) {
+    float x = (float)(e & 0xFFFFu) / 65535.0f * 2.0f - 1.0f, y = (float)(e >> 16) / 65535.0f * 2.0f - 1.0f;
+    float z = 1.0f - std::fabs(x) - std::fabs(y);
+    if (z < 0.0f) { const float ox = (1.0f - std::fabs(y)) * (x >= 0.0f ? 1.0f : -1.0f), oy = (1.0f - std::fabs(x)) * (y >= 0.0f ? 1.0f : -1.0f); x = ox; y = oy; }
+    const float l = std::sqrt(x * x + y * y + z * z);
+    n[0] = x / l; n[1] = y / l; n[2] = z / l;
 }
 }  // namespace
 
@@ -203,6 +211,15 @@ void Pipeline::giFinishTexels() {
     std::vector<size_t>().swap(giCoveredBase_);
 }
 
+// item 2: per-light RT shadows for the characters (Realistic only - Faithful keeps the original's per-object light
+// visibility; WFC_RT_LIGHTSHADOWS=0 off)
+bool Pipeline::rtShadowLightsOn() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_RT_LIGHTSHADOWS"); return e && e[0] == '0'; }();
+    return !off && rtMode_ == 2 && rtShadowAoOn() && !rtFailed_;
+}
+
+bool Pipeline::rtLampShadowsWorld() const { return rtShadowLightsOn() && giActive() && r1Map_ && !giLightCal_.empty(); }
+
 bool Pipeline::giActive() const { return giSetupDone_ && !giGlTex_.empty() && rtMode_ == 2 && giOn(); }
 
 namespace {
@@ -271,6 +288,7 @@ void Pipeline::giSetup() {
         const bool linear = cls["falloff"].asString() == "linear";
         const float chan = ((l.chMask & 0x40000000u) ? 1.0f : 0.0f) + ((l.chMask & 0x20000000u) ? 2.0f : 0.0f);
         const core::Vec3 fwd = core::normalize(l.dir);
+        giLightCal_[(int)(&l - lights_.data())] = {l.color.x * scale, l.color.y * scale, l.color.z * scale, linear ? 1.0f : 0.0f};
         D.insert(D.end(), {l.pos.x, l.pos.y, l.pos.z, l.radius});
         D.insert(D.end(), {l.color.x * scale, l.color.y * scale, l.color.z * scale, l.falloff});
         D.insert(D.end(), {fwd.x, fwd.y, fwd.z, l.type == 1 ? l.spotCosO : -2.0f});
@@ -507,30 +525,54 @@ void Pipeline::giAfterFrame() {
     glx::textureCacheInvalidate();
 }
 
-// S3: the probe grid over the lightmapped world's bounds (+2 m), WFC_RT_GIPROBESPACING (default 1.5 m; widened to keep
-// <= 4 M probes), WFC_RT_GIPROBERAYS rays each (default 128), traced from the calibrated RT lightmap (the same bounce
-// gain); a probe that sees mostly back faces (inside a wall / floor) is not used
+// S3: a sparse probe grid - the cells near the lightmapped surfaces (each texel, moved 0.6 cells to its open side, marks
+// the 8 grid points a lookup there blends, plus up to 3 m above floors, where characters stand), WFC_RT_GIPROBESPACING apart (default
+// 1.0 m; widened to keep <= 4 M probes), WFC_RT_GIPROBERAYS rays each (default 256), traced from the calibrated RT
+// lightmap (the same bounce gain); a probe that sees mostly back faces (inside a wall / floor) is not used
 void Pipeline::giBuildProbes() {
-    giProbes_.clear(); giProbeOk_.clear(); giProbeDims_[0] = giProbeDims_[1] = giProbeDims_[2] = 0;
-    static const bool on = [] { const char* e = std::getenv("WFC_RT_GIPROBES"); return e && e[0] == '1'; }();
+    giProbes_.clear(); giProbeOk_.clear(); giProbeCell_.clear(); giProbeDims_[0] = giProbeDims_[1] = giProbeDims_[2] = 0;
+    static const bool on = [] { const char* e = std::getenv("WFC_RT_GIPROBES"); return !(e && e[0] == '0'); }();   // (Realistic default since 14 Oct; WFC_RT_GIPROBES=0 off)
     if (!on || giTexels_.empty() || giJob_.empty()) return;
     float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
     for (const GiTexel& T : giTexels_)
         for (int c = 0; c < 3; ++c) { lo[c] = std::min(lo[c], T.pos[c]); hi[c] = std::max(hi[c], T.pos[c]); }
-    static const float spacing0 = [] { const char* e = std::getenv("WFC_RT_GIPROBESPACING"); return e ? std::max(0.25f, (float)std::atof(e)) : 1.5f; }();
-    static const int rays = [] { const char* e = std::getenv("WFC_RT_GIPROBERAYS"); return e ? std::max(8, std::atoi(e)) : 128; }();
-    float s = spacing0;
-    int dims[3];
-    for (;;) {
-        for (int c = 0; c < 3; ++c) dims[c] = std::max(2, (int)std::ceil((hi[c] - lo[c] + 4.0f) / s) + 1);
-        if ((double)dims[0] * dims[1] * dims[2] <= 4.0e6) break;
-        s *= 1.25f;
-    }
-    const float origin[3] = {lo[0] - 2.0f, lo[1] - 2.0f, lo[2] - 2.0f};
+    static const float spacing0 = [] { const char* e = std::getenv("WFC_RT_GIPROBESPACING"); return e ? std::max(0.25f, (float)std::atof(e)) : 1.0f; }();
+    static const int rays = [] { const char* e = std::getenv("WFC_RT_GIPROBERAYS"); return e ? std::max(8, std::atoi(e)) : 256; }();
     const auto t0 = std::chrono::steady_clock::now();
+    float s = spacing0;
+    float origin[3];
+    int dims[3];
+    std::vector<uint32_t> cells;
+    for (;;) {
+        for (int c = 0; c < 3; ++c) { origin[c] = lo[c] - 2.0f; dims[c] = std::max(2, (int)std::ceil((hi[c] - lo[c] + 4.0f) / s) + 2); }
+        if ((double)dims[0] * dims[1] * dims[2] >= 4294967295.0) { s *= 1.25f; continue; }
+        std::unordered_set<uint32_t> occ;
+        const int up = std::max(1, (int)std::ceil(3.0f / s));
+        for (const GiTexel& T : giTexels_) {
+            // (the open side: the texel moved 0.6 cells along its normal - the cells behind the surface, inside walls /
+            // floors, were 58 % of Molten's probes; the column above only over floors, normal up)
+            float n[3]; octDecode(T.nrm, n);
+            int ci[3];
+            for (int c = 0; c < 3; ++c) ci[c] = (int)std::floor((T.pos[c] + n[c] * 0.6f * s - origin[c]) / s);
+            // (the 8 grid points giProbeAt blends for that point - floor and floor + 1 per axis - plus the column above floors)
+            const int top = n[1] > 0.5f ? up : 1;
+            for (int dz = 0; dz <= 1; ++dz)
+                for (int dy = 0; dy <= top; ++dy)
+                    for (int dx = 0; dx <= 1; ++dx) {
+                        const int x = ci[0] + dx, y = ci[1] + dy, z = ci[2] + dz;
+                        if (x < 0 || y < 0 || z < 0 || x >= dims[0] || y >= dims[1] || z >= dims[2]) continue;
+                        occ.insert(((uint32_t)z * (uint32_t)dims[1] + (uint32_t)y) * (uint32_t)dims[0] + (uint32_t)x);
+                    }
+            if (occ.size() > 4000000u) break;
+        }
+        if (occ.size() > 4000000u) { s *= 1.25f; continue; }
+        cells.assign(occ.begin(), occ.end());
+        std::sort(cells.begin(), cells.end());
+        break;
+    }
     std::vector<float> out;
-    if (!rtBridgeGiProbes(jobOf(giJob_), origin, s, dims, rays, out)) { LOG_WARN("RT GI: probe grid failed - characters keep the bake's ambient"); return; }
-    const size_t n = (size_t)dims[0] * dims[1] * dims[2];
+    if (!rtBridgeGiProbes(jobOf(giJob_), origin, s, dims, rays, cells, out)) { LOG_WARN("RT GI: probe grid failed - characters keep the bake's ambient"); return; }
+    const size_t n = cells.size();
     // the front-face convention (GL counter-clockwise geometry in D3D12): the majority of open probes see front faces
     double fs = 0; size_t fn = 0;
     for (size_t i = 0; i < n; ++i) if (out[i * 24 + 7] > 0.5f) { fs += out[i * 24 + 3]; ++fn; }
@@ -542,13 +584,15 @@ void Pipeline::giBuildProbes() {
         if (out[i * 24 + 7] < 0.05f || front >= 0.75f) { giProbeOk_[i] = 1; ++ok; }   // (open sky, or mostly front faces)
     }
     giProbes_.swap(out);
+    giProbeCell_.reserve(n);
+    for (size_t i = 0; i < n; ++i) giProbeCell_.emplace(cells[i], (uint32_t)i);
     for (int c = 0; c < 3; ++c) { giProbeOrigin_[c] = origin[c]; giProbeDims_[c] = dims[c]; }
     giProbeSpacing_ = s;
     // the light environments' cached cubes are rebuilt with the probes
     for (GpuMesh& g : meshes_) for (Sub& sb : g.subs) sb.envReady = false;
     envCache_.clear();
-    LOG_INFO("RT GI probes: %d x %d x %d at %.2f m (%zu, %zu usable = %.1f %%), %d rays each, %.0f ms (front faces %s)", dims[0], dims[1],
-             dims[2], s, n, ok, n ? 100.0 * ok / n : 0.0, rays,
+    LOG_INFO("RT GI probes: %zu near the surfaces (%d x %d x %d grid at %.2f m), %zu usable = %.1f %%, %d rays each, %.0f ms (front faces %s)",
+             n, dims[0], dims[1], dims[2], s, ok, n ? 100.0 * ok / n : 0.0, rays,
              std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), flip ? "clockwise" : "counter-clockwise");
 }
 
@@ -567,11 +611,13 @@ bool Pipeline::giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const {
     for (int dz = 0; dz < 2; ++dz)
         for (int dy = 0; dy < 2; ++dy)
             for (int dx = 0; dx < 2; ++dx) {
-                const size_t i = ((size_t)(i0[2] + dz) * giProbeDims_[1] + (size_t)(i0[1] + dy)) * giProbeDims_[0] + (size_t)(i0[0] + dx);
-                if (!giProbeOk_[i]) continue;
+                const uint32_t cell = ((uint32_t)(i0[2] + dz) * (uint32_t)giProbeDims_[1] + (uint32_t)(i0[1] + dy)) * (uint32_t)giProbeDims_[0] +
+                                      (uint32_t)(i0[0] + dx);
+                const auto it = giProbeCell_.find(cell);
+                if (it == giProbeCell_.end() || !giProbeOk_[it->second]) continue;
                 const float w = (dx ? f[0] : 1.0f - f[0]) * (dy ? f[1] : 1.0f - f[1]) * (dz ? f[2] : 1.0f - f[2]);
                 if (w <= 0.0f) continue;
-                const float* v = &giProbes_[i * 24];
+                const float* v = &giProbes_[(size_t)it->second * 24];
                 for (int k = 0; k < 6; ++k) cube[k] = cube[k] + core::Vec3{v[k * 4], v[k * 4 + 1], v[k * 4 + 2]} * w;
                 wsum += w;
             }
