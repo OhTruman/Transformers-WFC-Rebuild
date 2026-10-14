@@ -1,0 +1,56 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index db93883c..e3dc88cb 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3634,6 +3634,11 @@ void World::draw(render::IRenderer& r) const {
+         repairSquibDraw_ = false;
+     }
+ 
++    // Every character is queued by now: draw them before the barrier / sentry meshes (Pipeline::drawDynamic draws those
++    // immediately - it queues only skinned characters with a light environment - so queued characters drawn after them
++    // covered the translucent barrier grid: user playtest 2026-10-14) and before the effects below (meshes and particle
++    // fallbacks, drawn immediately too). One flush per frame: nothing is queued after it.
++    r.flushQueuedCharacters();
+     for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
+     for (const Sentry& se : sentries_)
+         if (se.alive && !se.mesh.positions.empty())
+@@ -4962,6 +4967,12 @@ void World::ensureAbilityModels() {
+         const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";
+         if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
+             assets::loadAnimationsByName(ext + "WEP_Barrier_ANIM.anim.gltf", barrierModel_);
++            // The export carries no extras.wfc_material for the barrier, so the renderer fell back to an opaque lit surface
++            // (user 2026-10-14: the grid must be see-through). Its compiled material is the package's
++            // WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST (ENV_ForceField_Defrag_MAT: BLEND_Additive, unlit, distortion,
++            // depth-biased alpha), present in every MP map's materials_glsl.json.
++            for (render::Material& mt : barrierModel_.mats)
++                if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "WEP_Shield_p.Barrier." + mt.sourceName;
+             resolveModelTextures(barrierModel_);
+             if (renderer_) { render::MeshData md; md.subs = barrierModel_.subs; md.mats = barrierModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(barrierModel_); }
+         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index 6e630395..5249ea92 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -564,6 +564,9 @@ public:
+ 
+     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
+     virtual void drawParticles(const ParticleBatch& batch) = 0;
++    // Draw the characters queued so far now (a renderer that queues dynamic meshes; others: nothing). The game calls it
++    // once after its characters, before meshes / effects drawn immediately, so those depth-test against the characters.
++    virtual void flushQueuedCharacters() {}
+ 
+     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
+     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
+diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+index 15242269..4a8d0f00 100644
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -1778,6 +1778,8 @@ public:
+         glEnd();
+     }
+ 
++    void flushQueuedCharacters() override { if (wfc_.active()) { wfc_.flushQueuedCharacters(); glLoadMatrixf(view_.m); } }
++
+     void drawParticles(const ParticleBatch& b) override {
+         if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
+         watchdog::phase("drawParticles");
