@@ -1,4 +1,4 @@
-"""Per ENV TEXSET Masks texture: the CustA / CustB colours of every tint-enabled ENV_PhongMain_NS material using it, parsed
+"""Per ENV TEXSET Masks texture (keyed by its full object path; unparsed materials listed with their mask): the CustA / CustB colours of every tint-enabled ENV_PhongMain_NS material using it, parsed
 from the translated GLSL: diffuse = mix(base * A, base * B, mask.b). Read-only; writes work/tintab.json."""
 import json, os, re, collections
 R = r'F:/Transformers Rebuild/Rebuild/work/render'
@@ -15,18 +15,19 @@ for mp in sorted(os.listdir(R)):
 res = {}
 unparsed = []
 for k, (i, g) in mats.items():
-    slots = {t['slot']: t['object'].split('.')[-1] for t in i.get('textures', [])}
-    mslot = next((s for s, n in slots.items() if 'Mask' in n), None)
+    slots = {t['slot']: t['object'] for t in i.get('textures', [])}           # full object paths (package.group.name)
+    mslot = next((s for s, n in slots.items() if 'Mask' in n.split('.')[-1]), None)
     defs = {}
     for line in g.splitlines():
         mm = re.match(r'\s*\w+ (t\d+) = (.*);\s*$', line)
         if mm: defs[mm.group(1)] = mm.group(2)
     mask_var = next((v for v, e in defs.items() if e == 'wfcSample2D(%d, t2)' % mslot or re.fullmatch(r'wfcSample2D\(%d, t\d+\)' % mslot, e)), None)
     rgb = next((v for v, e in defs.items() if mask_var and e == '%s.rgb' % mask_var), None)
-    bvar = next((v for v, e in defs.items() if rgb and e == '(vec4(%s, 1.0)).z' % rgb), None)
-    mixv = next(((v, e) for v, e in defs.items() if bvar and re.fullmatch(r'mix\((t\d+), (t\d+), %s\)' % bvar, e)), None)
+    # (mask B can be read more than once: with Use_DetailNormal_Mask the first read scales the detail normal)
+    bvars = [v for v, e in defs.items() if rgb and e == '(vec4(%s, 1.0)).z' % rgb]
+    mixv = next(((v, e) for v, e in defs.items() for bv in bvars if re.fullmatch(r'mix\((t\d+), (t\d+), %s\)' % bv, e)), None)
     if not mixv:
-        unparsed.append(k); continue
+        unparsed.append(dict(material=k, mask=slots.get(mslot))); continue
     a, b = re.fullmatch(r'mix\((t\d+), (t\d+), \w+\)', mixv[1]).groups()
 
     def colour(v):
@@ -37,7 +38,7 @@ for k, (i, g) in mats.items():
         cm = re.fullmatch(r'vec4\(([^)]*)\)', c)
         return [round(float(x), 4) for x in cm.group(1).split(',')[:3]] if cm else c
     res[k] = dict(mask=slots[mslot], A=colour(a), B=colour(b))
-by_mask = collections.defaultdict(list)
+by_mask = collections.defaultdict(list)          # keyed by the mask texture's full object path
 for k, v in res.items(): by_mask[v['mask']].append(dict(material=k, A=v['A'], B=v['B']))
 white = lambda c: isinstance(c, list) and all(abs(x - 1.0) < 1e-3 for x in c)
 nA = sum(1 for v in res.values() if white(v['A'])); nB = sum(1 for v in res.values() if white(v['B']))
