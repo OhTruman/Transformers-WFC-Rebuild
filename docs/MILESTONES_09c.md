@@ -546,5 +546,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Streets 5.4/3.0/3.2/1.22 (6.9/3.3/5.9/1.48) MET; Gorge 4.7/4.8/5.0/1.57 (5.9/5.0/7.0/2.31) MET; Molten 2.0/2.5/1.6/0.75
   (1.8/2.0/1.5/0.84) close; Debris 4.8/1.3/2.6/0.94 (3.8/1.2/2.1/1.09) close; stucks below Classic everywhere; BOTTEST
   39/39 both AIs; Experimental verifying the Classic identity. Remaining: Debris slow time, Molten reversals.
+  20:00 RENDER-TO-SIM COUPLING (Rendering): gameplay / bots read per-owner render times (ownerRendered_, set by
+  unoccluded pawn draws), so the RT-every-frame change moved the lockstep SIMULATION in Faithful (SIMHASH equal at
+  step 300, diverged by step 1000); Off identical. Rules: Faithful / Realistic identity baselines restart at a93a3e11
+  (Rendering keeps an a93 baseline tree, no in-place swaps); RT-on lockstep rows compare SIMHASH first; gameplay identity
+  claims stay RT-off. Gameplay asked what bots read from render times, whether the null boot matches GL over a full
+  match, and to decouple Smart from render times if decision-relevant. Interim package 3 head c949ab88 (HD b0-12) in
+  Systems' pipeline.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
