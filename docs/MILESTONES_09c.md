@@ -1040,5 +1040,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   + the kit renders it see-through -> next split: 12bda047 Release + kit vs 56290b7d Debug (code vs build type; a
   Release / PGO-only cause = uninitialised blend / program-variant state, priority since the user plays Release +
   PGO). R4 leak rows then the 501 timed rerun running.
+  15:25 TIP-OVER DECISION: the contact-relative gate also fails pooled ((b') + TIPREL: Smart 6 regressing columns, Classic
+  11; (a) + TIPREL: Smart 3 (Gorge), Classic 11; the noise yardstick is a single 6-vs-6 difference, some columns at
+  0.00-0.06; the Smart Gorge degradation is consistent across variants). Tipped time (seeds 1-3, Smart): old 230 s,
+  (a) + TIPREL 76.5 s, (b') + TIPREL 109.6 s; TIPTEST 3 / 3. Overriding the strict rule: (a) + TIPREL ships DEFAULT ON
+  for SMART only (WFC_BOTTIP=0, WFC_TIPREL=1), Classic stays on the player path (identity byte-exact, no Classic
+  regression), (b') opt-in (WFC_BOTTIP=2); reason: the user's visible bug is fixed at the cost of 3 Smart columns on
+  Gorge, which becomes the explicit target of the next Smart pathing round (with the follow reversals). Package-5
+  note: Smart bot vehicles self-right (original AI behaviour); Gorge movement slightly worse, next round.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
