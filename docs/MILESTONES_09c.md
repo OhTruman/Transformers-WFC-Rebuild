@@ -797,13 +797,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ROSTER=64 real 31 v 32 via BotsExtended, XENV, SIMHASH detail; the old '64p' rows ran 5 a side). My sync chain
   deleted the tracked results/ folder in 3d643e94; restored in 30b2fa74 (content identical). HEAD 30b2fa74 named to
   Experimental for regress-8map + captures + R4 leak rows + the 31 v 32 faith jitter pair.
-  09:45 EXAMPLE SET (Rendering, 15 triptychs Off | Faithful | Realistic, 63-bot lockstep, HD off, RT / bake Streets 1.06
+  09:25 EXAMPLE SET (Rendering, 15 triptychs Off | Faithful | Realistic, 63-bot lockstep, HD off, RT / bake Streets 1.06
   / Gorge 1.01 / Rust 0.98 / Debris 0.98 / Molten 0.93): 5 clean picks sent to the user (Molten m300 corridor glow,
   Streets m900 overhead shadow, Rust m300, Debris m300, Gorge m600). Faithful = Off within 0-2 % of pixels; SIMHASH
   identical across all three modes on all 5 maps (no sim divergence in 15 RT runs). Not for the user: Rust m600 (near-
   black camera spot); the reflection seam / grazing lines exist but are invisible at triptych scale (item 3). NAVQ
   baseline for 30b2fa74 on integration (2d551f4e). Experimental's block running on 30b2fa74 since 09:31.
-  10:05 PACKAGE 4 provisional head 30b2fa74: Systems building work/playtest_slim_30b2fa74 (refresh.sh NOPROMOTE=1; work/
+  09:35 PACKAGE 4 provisional head 30b2fa74: Systems building work/playtest_slim_30b2fa74 (refresh.sh NOPROMOTE=1; work/
   playtest_slim stays c949ab88 until 'promote'); HD = D snapshot b0-15 frozen 09:37 (push_full_snap_20261014_b0-15,
   1,875 rows, 11.0 GB; b0-12 fallback); promote criteria = Experimental regress-8map + captures PASS, Systems verify_slim
   PASS (slot right after Experimental's block), Experimental FAST PASS. AssetTools incidents: the D build runner had
