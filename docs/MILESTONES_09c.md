@@ -849,5 +849,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (requires V_bake data + pages, R4 texels > 0, per-page k from fit.json: 937,589 texels, 26 k-pages on that log) -
   merged 90cd8550 with the NOPROMOTE mode. Slot A -> Rendering's leak diagnostic cycle; Experimental's FAST gate on
   30b2fa74 beside it (RT off); promote on FAST PASS.
+  11:33 LEAK DIAGNOSTIC (Rendering, DXGI QueryVideoMemoryInfo per release step, Molten -> Rust -> Streets x 2, Realistic
+  + GI): process VRAM with the map unloaded 1578 -> 1880 -> 2008 -> 2019 -> 2013 -> 1989 MB = FLAT after the first
+  cycle; loaded peaks converge (Molten 3748 -> 4227, Rust 4674 -> 4812, Streets 4216 -> 4221); each change frees
+  650-850 MB (GI 50-185, masked + hit 290-370, BLAS / TLAS 260-300). Experimental's sampler counter ('GPU Process
+  Memory Dedicated Usage') rose 1981 -> 3145 on the same cycle -> parity rerun (both views on one 7v8 run) decides:
+  counter up + DXGI flat = residency / driver caching of freed shared allocations (fix: pool the per-map interop
+  allocations); both up = live objects. Also: the 'hit albedo mean 0.011' log value is a 32-bit stats overflow
+  (albedo x 1000 sum wraps past ~5e7 rays; Molten at 71 M rays reads 0.058 = the table mean), carry-word fix coded;
+  lighting unaffected (the gain fit does not use it). FAST gate on 30b2fa74 running since 11:13 (hold set).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
