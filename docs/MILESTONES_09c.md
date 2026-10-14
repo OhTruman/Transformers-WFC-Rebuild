@@ -765,5 +765,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   HIGH MOON / emblem units stay D this milestone. Molten contact sheet (6 accepted D | E, 3 rejected with reasons)
   sent to the user. Morning GPU sequence moved up to ~08:30 (gicheck3 + Gameplay slot B -> flip commit -> example set
   alone -> ~09:30 Experimental regress alone + RT-on rows -> package 4).
+  07:00 Morning health: 0 TDRs overnight; driver pool 4.4 -> 6.7 GB (load-proportional leak, flat since 06:00; reboot
+  before the next playtest); muter ended on its 10 h timeout (lanes launch with WFC_MUTE=1). Streets eye review: 35 /
+  44 accepted, 8 rejected (lettering / logo on the road tube, glyph plate, embossed seal, chevron, panel blocks, hatch
+  markings, pipe from an outline), 1 gate fail = 18 %; Streets sheet sent to the user.
+  07:30 USER VERDICT on the Molten + Streets sheets: the LEFT (D, faithful HD) looks 'way better' than the RIGHT (E,
+  G3 overhaul). E is OFF the shipping path: package 4 ships D as the HD row; the level-2 E freeze is on hold; the retry
+  pass is skipped. AssetTools: sharpness analysis D vs E (Laplacian variance; 1:1 crops of the units the user saw),
+  then one detail-preserving attempt on Molten (D high-pass over E or denoise 0.35-0.4, gated on E sharpness >= D) with
+  a 1:1 sheet; if that does not beat D by eye, E is dropped.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
