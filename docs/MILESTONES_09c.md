@@ -977,5 +977,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   immediate translucent draw then needs the characters flushed first) and staged with the bot behind the grid. Package
   5 item. The package-4 exe cannot be staged (release build, no hook); Systems' tree A is the same renderer / barrier
   code.
+  13:49 BARRIER CAUSE (Systems): the four isolation frames are identical (not distortion, not HD; SKIPMAT by name
+  matched nothing): ExtractedAssets' WEP_Barrier_SKEL.gltf names its material 'WEP_Barrier_Defrag_MATINST' with NO
+  extras.wfc_material, so wfcName is empty and the pipeline draws the barrier with the generic opaque lit glTF
+  fallback (baseColor 0.3 = the pink wall); the compiled additive force field never runs. Same gap on
+  WEP_SentryDeploy_SKEL (WEP_DeployedTurret_MATINST, not compiled in any map). FIX (package 5): World::
+  ensureAbilityModels names the barrier material from the package path when the export lacks wfc_material, bundled
+  with 3a (an immediate additive draw must come after the flushed characters); AssetTools adds extras.wfc_material to
+  those exports later (in work/). Staged A (symptom) vs B (+3a) with the bot behind the now see-through grid in
+  slot B.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
