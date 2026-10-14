@@ -894,5 +894,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   looks best' -> the formation version stays the Smart default. Baseline note: AssetTools' long jobs checked the hold
   only between textures (up to ~50 min on a 4096); fixed to a 20 s re-check between model tiles; map 504 rerun at
   the end of the baseline.
+  12:34 SMOKE BUG CAUSE (Systems, code read): WeaponFx batches (tracer smoke trails, impact / explosion / grenade clouds,
+  sparks, dust) carry no emitter material, so GLRenderer::drawParticles takes the fixed-function fallback and draws
+  them IMMEDIATELY (depth write off) at World.cpp fx_.draw, before the queued characters are flushed (flushDynQueue
+  runs in drawMapPresentation); the characters then pass the depth test and cover the smoke they stand in. Vehicle
+  emitters with no material too; map / authored FX are correct (sorted translucency after flushDynQueue). Rendering
+  confirms the pass order itself is right and RT / R4 do not change it. FIX A approved: the fallback path calls
+  wfc_.flushDynQueue() before its immediate draw (characters first, smoke depth-tests against them); repro + A/B in
+  slot B after the 1440p baseline; patch on 00aa2ca7; a baseline change in all three modes (SIMHASH unaffected). FIX B
+  (fallback batches join the sorted translucency with a generic material + soft depth) queued for Rendering after plan
+  v2 item 2.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
