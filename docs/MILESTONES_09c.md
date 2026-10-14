@@ -553,5 +553,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   claims stay RT-off. Gameplay asked what bots read from render times, whether the null boot matches GL over a full
   match, and to decouple Smart from render times if decision-relevant. Interim package 3 head c949ab88 (HD b0-12) in
   Systems' pipeline.
+  20:10 Experimental review of the pathing patch: CLASSIC IDENTITY PASS (null boot, WFC_SIMHASH=0 hashing every pawn +
+  bot steering state per step: 7919/7919 identical on Streets + Gorge x seeds 5 / 7, controls OK); Smart changes OK, no
+  tactics regression in code; follow-ups to Gameplay: think-time re-pick floor test, a squad cohesion metric for spawn
+  scope 2, dither guard vs cover-Retreat spots in off-mesh pockets, comment fix, BOTPERF at 32v32.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
