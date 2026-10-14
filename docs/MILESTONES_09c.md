@@ -943,5 +943,20 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   diagnostic, a real-case VEHTEST tipover row, BOTTEST / DETERMINISM. AssetTools: the D pass is the whole M4 HD
   selection (3,771 textures, all maps), so tonight's b0-31 freeze (~22:00-23:00) is the complete faithful HD world for
   package 5.
+  13:35 STAGED FX RESULTS on 56290b7d (Systems 8549a529, docs/handoff/fx_order_stage/; bots frozen, local pawn 6 m from a
+  bot, lockstep, RT off; the first two staged runs had captured empty private matches - WFC_LOBBY_OPTIONS now sets 4v4):
+  (1) smoke on a non-local bot CORRECT (the v1 flush covers every queued character); (2) the local muzzle flash 2 m in
+  front of a bot CORRECT (it takes the particle fallback; v2 changed nothing, dropped); (3) the BARRIER grid STILL
+  WRONG: Pipeline::drawDynamic queues only skinDraw_ && envSamples_ && !weapon meshes, so the barrier / sentry / any
+  ability mesh without a light environment draws immediately and the later-flushed characters cover it = the user's
+  'always in front of any effects'. FIX 3a (approved, the patch): flushQueuedCharacters() in World::draw BEFORE the
+  barrier / sentry draws; 3b (drawDynamic queues immediate draws in submission order while dynQueue_ is non-empty,
+  no shadow cast) queued for Rendering with option B; Rendering asked to confirm those meshes are absent from the RT
+  scene. TIP-OVER MEASUREMENTS (Gameplay, 24 Smart matches): righting alone halves tipped time (Streets 69.8 -> 29.6
+  s, Molten 41.9 -> 15.9, Debris 20.3 -> 11.9, Gorge 98.2 -> 61.7); the real case is a car straddling a Gorge ledge on
+  its rear springs (8.3 kN each): the old path sits at -60..-67 deg creeping forward, righting-only holds at -35 deg
+  (the 12 rad/s^2 AI cap loses to the spring torque). DECISION (b): port the AI translation (MoveToTargetLocation at
+  the authored AI linear limits) only while unstable (> 30 deg); gates = TIPTEST on the straddle, the tipped-time
+  table, NAVQ within 1 SE outside tips vs the 30b2fa74 baseline, identity re-based, BOTTEST / DETERMINISM.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
