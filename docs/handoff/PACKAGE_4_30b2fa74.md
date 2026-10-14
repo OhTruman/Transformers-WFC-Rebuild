@@ -25,5 +25,5 @@ Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playt
 - regress-8map c949ab88 vs 30b2fa74: 8/8 PASS, worst +0.01 ms.
 - Off identity vs c949ab88 PASS; Faithful identity vs 0e7329cf PASS; Realistic lighting-only (sim identical).
 - verify_slim -SubstDrive: all rows PASS (R4-aware RT gate, SETTINGSTEST 7/7, -ForeignCwd).
-- FAST gate: 55 PASS; 4 flagged rows = stale harness constructions (the range-damage check builds a bare Weapon with no range points and reads 15 hp; the game deals the authored 7.5 hp at 300 m; 64 decal nodes is current since 480e3149; the rig reads a CPU pose empty since GPU skinning) and one GPU-contention frame spike; 2 movie voices on the pause -> Quit route.
+- FAST gate: 55 PASS; 4 flagged rows = stale harness constructions (the range-damage check builds a bare Weapon with no range points and reads 15 hp; the game deals the authored 7.5 hp at 300 m; 64 decal nodes is current since 480e3149; the rig reads a CPU pose empty since GPU skinning) and one GPU-contention frame spike; 2 voices after the pause -> Quit unload = the Quit popup BUTTON_ACCEPT click (frontend UI; map instances 0 / level cues 0).
 - Lockstep divergence hunt: closed as monitored (RT-off and RT-on 31v32 jitter pairs identical).
