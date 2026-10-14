@@ -4696,7 +4696,7 @@ void Application::runNavQualityTest() {
     if (!world_.launchMatch(L)) { LOG_INFO("NAVQ launch failed"); return; }
     game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier;
     world_.match().selectCharacter(world_.localMatchPlayer(), cs);
-    struct Acc { double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0; core::Vec3 last{}, sample{}; bool have = false;
+    struct Acc { double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, fidget = 0, follow = 0; core::Vec3 last{}, sample{}; bool have = false;
                  float sampleT = 0, stillT = 0; core::Vec3 stillAt{}; core::Vec3 prevDir{}; bool havePrev = false; };
     std::map<int, Acc> acc;
     platform::InputFrame idle;
@@ -4735,7 +4735,19 @@ void Application::runNavQualityTest() {
                 const float l = core::length(d);
                 if (travel && l > 0.4f) {
                     const core::Vec3 dir = d * (1.0f / l);
-                    if (a.havePrev && core::dot(dir, a.prevDir) < -0.5f) ++a.rev;
+                    if (a.havePrev && core::dot(dir, a.prevDir) < -0.5f) {
+                        ++a.rev;
+                        // Fidget (cosmetic): the reversal of a squad member within 6 m of a leader slower than 1 m/s (adjusting in formation),
+                        // tracked apart from pathing reversals.
+                        const int pl = o->matchPlayer();
+                        const int ld = world_.botIsSmart(pl) ? world_.smartSquadLeader(world_.smartSquadId(pl), world_.match().players()[(size_t)pl].team) : -1;
+                        if (ld >= 0 && ld != pl)
+                            if (const game::Character* lc = world_.participantPawn(ld)) {
+                                core::Vec3 lv = lc->velocity(); lv.y = 0.0f; core::Vec3 dd = lc->position() - p; dd.y = 0.0f;
+                                if (core::length(lv) < 1.0f && core::length(dd) < 6.0f) ++a.fidget;
+                                else if (core::length(dd) < 30.0f) ++a.follow;   // moving with / after its leader (formation following)
+                            }
+                    }
                     a.prevDir = dir; a.havePrev = true;
                 } else if (!travel) a.havePrev = false;
                 a.sample = p; a.sampleT = 0.0f;
@@ -4748,23 +4760,35 @@ void Application::runNavQualityTest() {
             a.last = p;
         }
     }
-    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0;
-    double cohSum = 0.0; long cohN = 0, cohNear = 0;
+    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0, fidget = 0, follow = 0;
+    double cohSum = 0.0; long cohN = 0, cohNear = 0; double fSum = 0.0; long fN = 0, fNear = 0; long farR[5] = {0, 0, 0, 0, 0};
     for (const auto& [p, a] : acc) {
-        travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
+        travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5; fidget += a.fidget; follow += a.follow;
         if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; dithers += b->dithers; }
         world_.smartCohesion(p, cohSum, cohN, cohNear);
+        world_.smartFightCohesion(p, fSum, fN, fNear);
+        world_.smartFarReasons(p, farR);
         smart += world_.botIsSmart(p); ++nb;
         LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
                  a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
     }
     const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
+    {   // Reversals split (per travel-min): pathing (no squad context), follow (a member within 30 m of its leader), fidget (within 6 m of a
+        // leader slower than 1 m/s) - the formation part is targeted apart from pathing.
+        const double tm = std::max(1e-6, travelT / 60.0);
+        LOG_INFO("NAVQ reversals split: pathing %.2f / follow %.2f / fidget %.2f per travel-min (%d / %d / %d of %d)", (rev - follow - fidget) / tm, follow / tm,
+                 fidget / tm, rev - follow - fidget, follow, fidget, rev);
+    }
+    if (farR[0] > 0)
+        LOG_INFO("NAVQ squad far (> 25 m, settled): %ld samples - leader moving %.0f%%, member pathless %.0f%%, vehicle form %.0f%%, leader fighting %.0f%%",
+                 farR[0], 100.0 * farR[1] / farR[0], 100.0 * farR[2] / farR[0], 100.0 * farR[3] / farR[0], 100.0 * farR[4] / farR[0]);
     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
-             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m)",
+             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m), in-fight mean %.1f m (%.0f%% within 20 m)",
              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
              dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
              stucks / botMin, repaths / botMin, noPaths / botMin, dithers,
-             cohN > 0 ? cohSum / (double)cohN : 0.0, cohN > 0 ? 100.0 * (double)cohNear / (double)cohN : 0.0);
+             cohN > 0 ? cohSum / (double)cohN : 0.0, cohN > 0 ? 100.0 * (double)cohNear / (double)cohN : 0.0,
+             fN > 0 ? fSum / (double)fN : 0.0, fN > 0 ? 100.0 * (double)fNear / (double)fN : 0.0);
 }
 
 // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

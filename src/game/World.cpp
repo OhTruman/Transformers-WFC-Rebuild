@@ -2362,18 +2362,31 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     match_.setSquadAnchor([this](int p, core::Vec3& anchor) {
         static const bool spawnOff = std::getenv("WFC_SMARTOFF") && std::strstr(std::getenv("WFC_SMARTOFF"), "spawnnear");
         if (spawnOff || !anySmart_ || !botIsSmart(p) || matchMode_ != MatchMode::TDM || smartTune().squadSize <= 1.0f) return false;
-        const int size = (int)smartTune().squadSize;
-        int rank = 0;
-        for (size_t q = 0; q < (size_t)p && q < smart_.size(); ++q) if (smart_[q].active && match_.sameTeam((int)q, p)) ++rank;
-        int r = 0;
+        const int squad = smartSquadId(p);
         for (size_t q = 0; q < smart_.size(); ++q) {
-            if (!smart_[q].active || !match_.sameTeam((int)q, p)) continue;
-            if (r++ / size != rank / size || (int)q == p) continue;
+            if (!smart_[q].active || !match_.sameTeam((int)q, p) || (int)q == p || smartSquadId((int)q) != squad) continue;
             if (const Character* c = participantPawn((int)q)) { anchor = c->position(); return true; }
         }
         return false;
     });
     match_.setSquadAnchorScope((int)smartTune().spawnNearScope);
+    // Scope 3: a start of another cluster is "near the squad" when its nav path to the leader is short (straight line first: a path is
+    // never shorter). One synchronous search per candidate, at respawn only.
+    match_.setSquadStartNear([this](int st, const core::Vec3& anchor) {
+        const float lim = smartTune().spawnNearPathM;
+        const core::Vec3 sp = match_.starts()[(size_t)st].pos;
+        if (!botNav_.valid() || core::length(sp - anchor) > lim) return false;
+        BotNav::Agent ag; ag.radius = 1.75f;
+        // A straight walkable line on about the same floor is a path within the limit (no search buffers used).
+        if (std::fabs(sp.y - anchor.y) <= 4.0f && botNav_.directWalkable(sp, anchor, ag)) return true;
+        // Else a full search - unless a bot's time-sliced search is in flight (shared buffers; sim state, so still deterministic).
+        if (botNav_.searchActive()) return false;
+        std::vector<BotNav::Waypoint> path;
+        if (!botNav_.findPath(sp, anchor, ag, path) || path.empty()) return false;
+        float len = 0.0f; core::Vec3 at = sp;
+        for (const BotNav::Waypoint& w : path) { len += core::length(w.pos - at); at = w.pos; if (len > lim) return false; }
+        return core::length(path.back().pos - anchor) < 6.0f;   // the corridor reaches the leader (not the nearest reachable cell far off)
+    });
     match_.begin(s);
     match_.setSnapshotProvider([this](int p) { return participantSnapshot(p); });
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");

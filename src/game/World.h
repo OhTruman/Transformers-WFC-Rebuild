@@ -1085,6 +1085,21 @@ public:
     long aiKills_[2] = {0, 0}, aiBackKills_[2] = {0, 0};
     void resetAiKillStats() { aiKills_[0] = aiKills_[1] = aiBackKills_[0] = aiBackKills_[1] = 0; }
     bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
+    // Smart squads: a participant's squad id (fixed by player order, or the squad joined at its last respawn with squadDynamic), the
+    // squad's leader (its first live member by player order, -1 when none), and the squadDynamic re-assignment at a respawn.
+    int smartSquadId(int player) const;
+    int smartSquadLeader(int squad, int team) const;
+    void smartJoinNearestSquad(int player, const core::Vec3& at);
+    bool smartLeashCenter(int player, core::Vec3& out) const;   // squadFormation: the live leader's position of a squad member
+    void smartFarReasons(int player, long r[5]) const {   // settled member samples > 25 m: total, leader moving, member pathless, vehicle, leader fighting
+        if (!botIsSmart(player)) return;
+        const SmartBot& s = smart_[(size_t)player];
+        r[0] += s.farN; r[1] += s.farLeaderMoving; r[2] += s.farPathless; r[3] += s.farVehicle; r[4] += s.farLeaderFights;
+    }
+    void smartFightCohesion(int player, double& sum, long& n, long& near20) const {
+        if (!botIsSmart(player)) return;
+        const SmartBot& s = smart_[(size_t)player]; sum += s.fightCohSum; n += s.fightCohN; near20 += s.fightCohNear20;
+    }
     const SmartBot* smartBot(int player) const { return botIsSmart(player) ? &smart_[(size_t)player] : nullptr; }
 private:
     BotNav botNav_;

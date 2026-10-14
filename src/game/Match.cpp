@@ -556,6 +556,7 @@ int Match::findPlayerStart(int p) {
                     if (cl.actor != s.cluster) continue;
                     inScope = squadAnchorScope_ == 1 ? cl.registered : (int)c == active_[P.team];
                 }
+                if (!inScope && squadAnchorScope_ == 3 && squadStartNear_ && squadStartNear_((int)i, anchor)) inScope = true;
                 if (!inScope) continue;
             }
             const float d = core::length(s.pos - anchor);

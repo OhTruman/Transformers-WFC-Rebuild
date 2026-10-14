@@ -41,6 +41,13 @@ Decide whether Smart feels smarter and fair. The Smart AI milestone stays open u
 | **Target choice** | prefer hurt enemies, spread fire across targets, hold fire when a team mate is in the line | shoot the nearest | holds ~390 shots per match for team mates in the line |
 | **Aim** | **same aim as Classic** (user rule: "smarter, same aim") | the original aim | hit rate per clear shot is equal by design |
 
+## Squad tactics (new, 2026-10-14)
+
+Smart bots now play in squads of up to 4 that stay together. On the move, members follow their leader in a wedge. In the leader's fights, they take spots beside it that can see the enemy. Leaders wait for strung-out members.
+
+- **What to watch:** do squads read as a unit? Do members look busy-but-sensible or fidgety? Members adjust their positions around a walking leader, so expect some extra turning back and forth.
+- **Fallback if the fidgeting bothers you:** `WFC_SMARTTUNE=squadTactics=1` keeps the better movement without the tight squads, and `squadTactics=0` is the previous behaviour. Tell Integration which one felt best.
+
 ## Things that would be bugs (please note map + time)
 - A bot labelled `STUCK` for more than a few seconds. Bots stranded off the walkable map for 30 s kill themselves and respawn by design, in both AIs.
 - A bot in cover that never peeks or fires, or retreats forever at full health.

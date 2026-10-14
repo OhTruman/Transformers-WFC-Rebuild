@@ -1509,12 +1509,17 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
     Character& pc = o.pawn();
     const float now = match_.matchTime();
     const core::Vec3 pos = pc.position();
+    { const core::Vec3 v{pc.velocity().x, 0.0f, pc.velocity().z}; if (core::length(v) > 1.0f) s.moveHeading = core::normalize(v); }
+    if (smartTune().squadTrail > 0.0f && pc.moveForm() == Form::Robot) {   // the walked trail (members of this bot's squad follow it)
+        if (b.life < 0.3f) s.trail.clear();
+        if (s.trail.empty() || hdist(s.trail.back(), pos) > 1.5f) { s.trail.push_back(pos); if (s.trail.size() > 24) s.trail.erase(s.trail.begin()); }
+    }
     const int team = match_.players()[(size_t)b.player].team;
     const SmartSkill& sk = smartSkill(b.difficulty);
     const bool visible = b.target >= 0 && b.seen.count(b.target) && b.seen[b.target].visible;
     const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
     if (visible) s.lostTargetAt = now;
-    s.leaderSlow = false; s.regroupFar = false;   // re-set by the squad branches while they apply
+    s.leaderSlow = false; s.regroupFar = false; s.formWedge = false;   // re-set by the squad branches while they apply
     if (s.ownMission) { b.mission = false; s.ownMission = false; }   // re-set below while the action still wants it
     // Vehicle form: hunting, squads, focus, retreat and pickups apply (the Classic transform logic still picks the form); cover and
     // segment breaks are robot-only. WFC_SMARTTUNE vehicle=0 restores the earlier robot-only Smart.
@@ -1599,7 +1604,9 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             // Distance with the height difference counted double: a pickup on the floor below a railing measured 2 m horizontally
             // and drew bots into a nav hole beside it (NAVQ Streets: 4 min ping-pong).
             float bd = 40.0f; core::Vec3 to = pos; bool found = false;
+            core::Vec3 leashP; const bool leashedP = smartLeashCenter(b.player, leashP);   // squadFormation: pickups near the leader
             for (const PickupFactory* f : pickupFactories_) {
+                if (leashedP && f && hdist(f->position(), leashP) > smartTune().squadLeashM) continue;
                 const float fd = f ? hdist(f->position(), pos) + 2.0f * std::fabs(f->position().y - pos.y) : 1e9f;
                 if (f && f->kind() == PickupFactory::Kind::Health && f->available() && fd < bd &&
                     !(now < s.skipPickupUntil && hdist(f->position(), s.skipPickup) < 1.0f)) { bd = fd; to = f->position(); found = true; }
@@ -1695,6 +1702,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                                 (pc.weapon().reloading() || hpFrac < smartTune().coverHurtFrac || s.rand01() < smartTune().coverRangedChance);
         if (visible && (smartExposure(team, myCell) >= smartTune().coverExposure || rangedNeed)) {
             float bestScore = 1e9f; core::Vec3 best = pos; bool found = false;
+            core::Vec3 leash; const bool leashed = smartLeashCenter(b.player, leash);   // squadFormation: cover near the leader
             for (int k = 0; k < 16; ++k) {
                 const float a = 6.2831853f * (float)k / 16.0f;
                 // coverNear: nearer spots (3 / 6 / 10 m), reached before the fight is over (WFC_AIDUEL Molten: 36 % of cover moves
@@ -1705,6 +1713,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                     const int c = botNav_.findCell(q, 2.0f, 3.0f);
                     if (c < 0) continue;
                     const core::Vec3 cc = botNav_.cells()[(size_t)c].centroid;
+                    if (leashed && hdist(cc, leash) > smartTune().squadLeashM) continue;
                     const float dT = hdist(cc, tpos);
                     if (smartClearAt(c, tpos, true) < dT - 1.5f) continue;   // keep a firing line to the target
                     const float ex = smartExposure(team, c);
@@ -1737,22 +1746,15 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
     // that held the hill stood idle beside it).
     const bool tdmLike = matchMode_ == MatchMode::TDM;
     if (!off("squad") && tdmLike && freeGoal && match_.settings().teamGame && smartTune().squadSize > 1.0f && smartTune().squadFollow > 0.0f && !visible) {
-        int rank = 0;
-        for (size_t q = 0; q < (size_t)b.player && q < smart_.size(); ++q) if (smart_[q].active && match_.sameTeam((int)q, b.player)) ++rank;
-        const int squad = rank / (int)smartTune().squadSize;
-        int leader = -1, r = 0;
-        for (size_t q = 0; q < smart_.size(); ++q) {
-            if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
-            if (r++ / (int)smartTune().squadSize != squad) continue;
-            if (participantPawn((int)q)) { leader = (int)q; break; }
-        }
+        const int squad = smartSquadId(b.player);
+        const int leader = smartSquadLeader(squad, match_.players()[(size_t)b.player].team);
         // Help the nearest squad mate in a fight within 50 m (any member, the leader too): members respawn far from their leader
         // (WFC_AIDUEL: 44 % of squad samples within 15 s of a respawn, 54 % over 40 m off), so the leader alone gathered few.
         {
-            int helpT = -1; float helpD = 50.0f; core::Vec3 helpP = pos; int r3 = 0;
+            int helpT = -1; float helpD = 50.0f; core::Vec3 helpP = pos;
             for (size_t q = 0; q < smart_.size(); ++q) {
                 if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
-                if (r3++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
+                if (smartSquadId((int)q) != squad || (int)q == b.player) continue;
                 const Character* mc = participantPawn((int)q);
                 if (!mc) continue;
                 const float md = hdist(mc->position(), pos);
@@ -1772,21 +1774,24 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             }
         }
         if (leader == b.player) {   // the leader waits (not fighting) while its squad is strung out, so the squad arrives together
-            double sum = 0.0; int n = 0; int r2 = 0;
+            double sum = 0.0; int n = 0;
             for (size_t q = 0; q < smart_.size(); ++q) {
                 if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
-                if (r2++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
+                if (smartSquadId((int)q) != squad || (int)q == b.player) continue;
                 if (const Character* mc = participantPawn((int)q)) { sum += hdist(mc->position(), pos); ++n; }
             }
             {   // Slow down (robot form, walking pace) while the members within 120 m are on average over squadSlowM away: they close
                 // the gap without the leader stopping (a member stuck or respawned far off is not waited for; smartSteerPost applies it).
-                double near = 0.0; int nn = 0; int r4 = 0;
+                double near = 0.0; int nn = 0;
                 for (size_t q = 0; q < smart_.size(); ++q) {
                     if (!smart_[q].active || !match_.sameTeam((int)q, b.player)) continue;
-                    if (r4++ / (int)smartTune().squadSize != squad || (int)q == b.player) continue;
+                    if (smartSquadId((int)q) != squad || (int)q == b.player) continue;
                     if (const Character* mc = participantPawn((int)q)) { const float d = hdist(mc->position(), pos); if (d <= 120.0f) { near += d; ++nn; } }
                 }
                 s.leaderSlow = !off("leaderslow") && nn > 0 && near / nn > smartTune().squadSlowM && s.action != SmartBot::Retreat;
+                if (s.leaderSlow && smartTune().squadFormation > 0.0f && smartTune().squadLeaderWalk > 0.0f) {   // no vehicle trip away from the squad
+                    b.wantVehicle = false; b.noVehicleUntil = std::max(b.noVehicleUntil, now + 2.0f);
+                }
             }
             const bool canWait = now >= s.waitCooldownUntil && (s.waitSince < 0.0f || now - s.waitSince < 6.0f);
             if (n > 0 && sum / n > smartTune().squadWaitM && s.action != SmartBot::Retreat && canWait) {
@@ -1833,6 +1838,85 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
             if (lb && lp) {
                 const bool leaderFights = lb->target >= 0 && lb->seen.count(lb->target) && lb->seen.at(lb->target).visible;
                 const int ltgt = leaderFights ? lb->target : (smart_[(size_t)leader].action == SmartBot::Hunt ? smart_[(size_t)leader].actionTarget : -1);
+                if (leaderFights) { const float fd = hdist(lp->position(), pos); s.fightCohSum += fd; ++s.fightCohN; if (fd < 20.0f) ++s.fightCohNear20; }
+                // squadFormation (GAMEPLAY_SQUAD_TACTICS_DESIGN.md): a slot around the leader instead of chasing the fight / the trip.
+                if (smartTune().squadFormation > 0.0f && smartTune().squadMemberWalk > 0.0f && hdist(lp->position(), pos) <= smartTune().squadVehicleRegroupM - 15.0f) {   // hysteresis: vehicle regroup starts 15 m farther (members flipped forms at one threshold)
+                    b.wantVehicle = false; b.noVehicleUntil = std::max(b.noVehicleUntil, now + 2.0f);   // near the leader: on foot, in formation
+                }
+                if (smartTune().squadFormation > 0.0f && botNav_.valid() && pc.moveForm() == Form::Robot) {
+                    const int slot = [&] { int k = 0; for (size_t q = 0; q < (size_t)b.player && q < smart_.size(); ++q)
+                        if ((int)q != leader && smart_[q].active && match_.sameTeam((int)q, b.player) && smartSquadId((int)q) == squad) ++k; return k; }();
+                    const core::Vec3 L = lp->position();
+                    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot);
+                    auto usableSlot = [&](const core::Vec3& q) {
+                        if (botNav_.findCell(q, 0.0f) < 0 || !botNav_.directWalkable(L, q, ag)) return false;
+                        const float e = smartTune().squadSlotEdgeM;   // not on a catwalk edge: floor on every side
+                        if (e > 0.0f) for (const core::Vec3& d : {core::Vec3{e, 0, 0}, core::Vec3{-e, 0, 0}, core::Vec3{0, 0, e}, core::Vec3{0, 0, -e}})
+                            if (botNav_.findCell(q + d, 0.0f) < 0) return false;
+                        return true;
+                    };
+                    if (ltgt >= 0 && participantPawn(ltgt)) {
+                        // Firing line across the threat axis: 6 / 8 / 10 m to the leader's side (sides alternate by slot), 2 m back, with a
+                        // line of sight to the target from eye height.
+                        const core::Vec3 tp = leaderFights ? lb->seen.at(lb->target).pos : smart_[(size_t)leader].actionPos;
+                        core::Vec3 ax = tp - L; ax.y = 0.0f; const float al = core::length(ax);
+                        if (al > 1.0f) {
+                            ax = ax * (1.0f / al);
+                            const core::Vec3 perp{-ax.z, 0.0f, ax.x};
+                            const float side = (slot % 2 == 0) ? 1.0f : -1.0f;
+                            bool found = false; core::Vec3 best = L;
+                            for (float d : {6.0f, 8.0f, 10.0f}) {
+                                for (float sg : {side, -side}) {
+                                    const core::Vec3 q = L + perp * (sg * (d + 2.0f * (float)(slot / 2))) - ax * 2.0f;
+                                    if (!usableSlot(q)) continue;
+                                    if (!botLineOfSight(q + core::Vec3{0, 1.7f, 0}, tp + core::Vec3{0, 1.2f, 0})) continue;
+                                    best = q; found = true; break;
+                                }
+                                if (found) break;
+                            }
+                            if (found) squadGoal(BotGoalKind::Roam, best, 2.0f, -1);
+                            else squadGoal(BotGoalKind::Roam, L, 8.0f, -1);   // no firing spot: hold close to the leader
+                            return;
+                        }
+                    } else if (hdist(L, pos) <= smartTune().squadRegroupM) {
+                        // Wedge behind the leader along its move direction (else its facing): back squadSlotBackM, to the side squadSlotSideM
+                        // (slot 0 left, 1 right, 2+ trailing at twice the depth).
+                        core::Vec3 hd{lp->velocity().x, 0.0f, lp->velocity().z};
+                        // Standing (waiting, looking around): the last move direction, not the sweeping facing - slots swung side to side and
+                        // members reversed (round 3: reversals up on every map).
+                        if (core::length(hd) < 1.0f) hd = core::length(smart_[(size_t)leader].moveHeading) > 0.5f ? smart_[(size_t)leader].moveHeading
+                                                                                                                 : core::forwardFromYawPitch(lp->yaw(), 0.0f);
+                        hd = core::normalize(core::Vec3{hd.x, 0.0f, hd.z});
+                        const core::Vec3 perp{-hd.z, 0.0f, hd.x};
+                        const float back = smartTune().squadSlotBackM * (slot >= 2 ? 1.7f : 1.0f);
+                        const float sideOff = slot == 0 ? -smartTune().squadSlotSideM : slot == 1 ? smartTune().squadSlotSideM : 0.0f;
+                        const core::Vec3 q = L - hd * back + perp * sideOff;
+                        core::Vec3 slotP = usableSlot(q) ? q : L;
+                        if (smartTune().squadTrail > 0.0f) {   // follow the leader's walked trail: 5 m back + 4 m per slot along it
+                            const std::vector<core::Vec3>& tr = smart_[(size_t)leader].trail;
+                            const float want = 5.0f + 4.0f * (float)slot;
+                            float acc = 0.0f; core::Vec3 prev = L; bool got = false;
+                            for (size_t k = tr.size(); k-- > 0;) {
+                                const float seg = hdist(tr[k], prev);
+                                if (acc + seg >= want) { const float t = seg > 1e-3f ? (want - acc) / seg : 0.0f; slotP = prev + (tr[k] - prev) * t; got = true; break; }
+                                acc += seg; prev = tr[k];
+                            }
+                            if (!got && !tr.empty()) slotP = tr.front();
+                        }
+                        if (smartTune().squadSlotFreeze > 0.0f) {   // the leader standing > 2 s: keep the slot target (no re-slotting / fidget)
+                            const bool still = std::sqrt(lp->velocity().x * lp->velocity().x + lp->velocity().z * lp->velocity().z) < 1.0f;
+                            if (!still) { s.leaderStillSince = -1.0f; s.slotFrozen = false; }
+                            else if (s.leaderStillSince < 0.0f) s.leaderStillSince = now;
+                            if (still && now - s.leaderStillSince > 2.0f) {
+                                if (!s.slotFrozen) { s.frozenSlot = slotP; s.slotFrozen = true; }
+                                slotP = s.frozenSlot;
+                            }
+                        }
+                        s.formWedge = true; s.formLeader = leader; s.formOffset = slotP - L;
+                        squadGoal(BotGoalKind::Roam, slotP, 2.5f, -1);
+                        return;
+                    }
+                }
                 if (ltgt >= 0 && participantPawn(ltgt)) {
                     const core::Vec3 tp = leaderFights ? lb->seen.at(lb->target).pos : smart_[(size_t)leader].actionPos;
                     start(SmartBot::Hunt, tp, ltgt);
@@ -1840,7 +1924,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                     return;
                 }
                 if (hdist(lp->position(), pos) > smartTune().squadRegroupM) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
-                    s.regroupFar = hdist(lp->position(), pos) > 45.0f;
+                    s.regroupFar = hdist(lp->position(), pos) > smartTune().squadVehicleRegroupM;
                     // Where the leader is going (a Roam trip), not where it is: chasing its position at the same speed kept a constant
                     // gap, and a chase under the 45 m vehicle-travel range walked while the leader drove to its far goal
                     // (WFC_AISQUADLOG Gorge: 30-90 m trails). Sharing the trip shares the travel form and the arrival point.
@@ -1967,6 +2051,51 @@ bool World::smartMateOnLine(int player, const core::Vec3& eye, const core::Vec3&
 }
 
 // Parallel (each bot's own intent): holding cover means staying on the spot and fighting from it, not the Classic strafe.
+int World::smartSquadId(int p) const {
+    if (!botIsSmart(p)) return -1;
+    if (smartTune().squadDynamic > 0.0f && smart_[(size_t)p].squadId >= 0) return smart_[(size_t)p].squadId;
+    int rank = 0;
+    for (size_t q = 0; q < (size_t)p && q < smart_.size(); ++q) if (smart_[q].active && match_.sameTeam((int)q, p)) ++rank;
+    return rank / std::max(1, (int)smartTune().squadSize);
+}
+
+bool World::smartLeashCenter(int p, core::Vec3& out) const {
+    if (smartTune().squadFormation <= 0.0f || !botIsSmart(p) || matchMode_ != MatchMode::TDM || smartTune().squadSize <= 1.0f) return false;
+    const int ld = smartSquadLeader(smartSquadId(p), match_.players()[(size_t)p].team);
+    if (ld < 0 || ld == p) return false;
+    out = participantPawn(ld)->position();
+    return true;
+}
+
+int World::smartSquadLeader(int squad, int team) const {
+    for (size_t q = 0; q < smart_.size(); ++q)
+        if (smart_[q].active && match_.players()[q].team == team && smartSquadId((int)q) == squad && participantPawn((int)q)) return (int)q;
+    return -1;
+}
+
+void World::smartJoinNearestSquad(int p, const core::Vec3& at) {
+    // The squad whose live leader is nearest the spawn (within 150 m) with room (fewer than squadSize other members); else keep the old one.
+    const int team = match_.players()[(size_t)p].team, cap = std::max(1, (int)smartTune().squadSize);
+    int best = -1; float bestD = 150.0f;
+    std::vector<int> seen;
+    for (size_t q = 0; q < smart_.size(); ++q) {
+        if ((int)q == p || !smart_[q].active || match_.players()[q].team != team) continue;
+        const int sid = smartSquadId((int)q);
+        if (std::find(seen.begin(), seen.end(), sid) != seen.end()) continue;
+        seen.push_back(sid);
+        const int ld = smartSquadLeader(sid, team);
+        if (ld < 0 || ld == p) continue;
+        int members = 0;
+        for (size_t m = 0; m < smart_.size(); ++m)
+            if ((int)m != p && smart_[m].active && match_.players()[m].team == team && smartSquadId((int)m) == sid) ++members;
+        if (members >= cap) continue;
+        const float d = hdist(participantPawn(ld)->position(), at);
+        if (d < bestD) { bestD = d; best = sid; }
+    }
+    if (best >= 0) smart_[(size_t)p].squadId = best;
+    else if (smart_[(size_t)p].squadId < 0) smart_[(size_t)p].squadId = smartSquadId(p);   // keep the fixed one (now explicit)
+}
+
 void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIntent& in) {
     Character& pc = o.pawn();
     // Engaged: in a fight (the target in sight, or seen within the last 4 s: behind cover it usually is not visible).
@@ -1993,8 +2122,8 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
         }
         if (smartTune().squadLeaderStop > 0.0f && nowS >= s.leaderWaitCooldown && sheltered) {
             if (s.leaderWaitSince < 0.0f) s.leaderWaitSince = nowS;
-            if (nowS - s.leaderWaitSince <= 8.0f) waiting = true;
-            else { s.leaderWaitSince = -1.0f; s.leaderWaitCooldown = nowS + 6.0f; }
+            if (nowS - s.leaderWaitSince <= smartTune().squadLeaderWaitS) waiting = true;
+            else { s.leaderWaitSince = -1.0f; s.leaderWaitCooldown = nowS + smartTune().squadLeaderWaitCooldownS; }
         }
         if (waiting) s.leadWaitS += dt; else if (!sheltered && nowS >= s.leaderWaitCooldown) s.leadRefusedS += dt; else s.leadSlowS += dt;
         if (waiting) {
@@ -2002,6 +2131,23 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
             in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting
         } else { in.moveForward *= smartTune().squadSlowFactor; in.moveRight *= smartTune().squadSlowFactor; b.wantVehicle = false; }
     } else if (s.leaderWaitSince >= 0.0f) s.leaderWaitSince = -1.0f;   // the squad closed up: the next wait starts afresh
+    // squadStationKeep: near its wedge slot, hold (leader nearly still) or keep station with the leader (2).
+    s.formHold = false;
+    if (s.formWedge && !engaged && smartTune().squadStationKeep > 0.0f) {
+        if (const Character* lp = participantPawn(s.formLeader)) {
+            core::Vec3 d = lp->position() + s.formOffset - pc.position(); d.y = 0.0f;
+            const core::Vec3 lv0{lp->velocity().x, 0.0f, lp->velocity().z};
+            if (core::length(d) < 3.0f && core::length(lv0) < 1.5f) { in.moveForward = 0.0f; in.moveRight = 0.0f; s.formHold = true; }
+            else if (smartTune().squadStationKeep >= 2.0f && core::length(d) < 6.0f) {
+                const core::Vec3 lv{lp->velocity().x, 0.0f, lp->velocity().z};
+                core::Vec3 want = lv * (1.0f / 6.0f) + d * 0.25f;
+                const float wl = core::length(want);
+                if (wl > 1.0f) want = want * (1.0f / wl);
+                const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f), R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
+                in.moveForward = core::dot(want, F); in.moveRight = core::dot(want, R);
+            }
+        }
+    }
     // A member over 45 m from its leader regroups in vehicle form (the same travel speed as a leader on a trip).
     if (s.regroupFar && !engaged && smartTune().squadLeaderStop > 0.0f && match_.matchTime() >= b.noVehicleUntil) b.wantVehicle = true;
     // A shot held for a team mate on the line (botAimAndFire): sidestep across the line of fire for a clear shot (the side alternates
@@ -2089,6 +2235,7 @@ void World::tickBots(float dt) {
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;
             b.wasSpawned = true; b.yaw = pc.yaw(); b.dithers = dth;
+            if (anySmart_ && botIsSmart(b.player) && smartTune().squadDynamic > 0.0f && match_.settings().teamGame) smartJoinNearestSquad(b.player, pc.position());
         }
         b.life += dt;
         // KillZ (FellOutOfWorld) for participants, as the local pawn.
@@ -2138,7 +2285,7 @@ void World::tickBots(float dt) {
         if (!o->spawned()) continue;   // killed earlier in this pass
         if (anySmart_ && botIsSmart(b.player)) {   // deliberately still this step (the stuck check skips it next step)
             SmartBot& hs = smart_[(size_t)b.player];
-            hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f) &&
+            hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f || hs.formHold) &&
                            in.moveForward == 0.0f && in.moveRight == 0.0f;
         }
         botOffMeshWatch(b, pc, dt);

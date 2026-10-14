@@ -53,6 +53,28 @@ struct SmartTune {
     float squadWaitOpenM = 40.0f, squadWaitOpenDirs = 4.0f;   // sheltered: at most this many of 16 eye-height directions open beyond this range
     float squadLeaderStop = 1.0f;   // 1: a leader whose members are strung out stops (<= 8 s per wait); members over 45 m off regroup in vehicle form
     float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
+    // Squad tactics preset (GAMEPLAY_SQUAD_TACTICS_DESIGN.md; user decision 2026-10-13, Integration ship call 2026-10-14): 2 = formation
+    // squads (wedge / firing line, leader on foot while strung out, slots off catwalk edges, members on foot near the leader, leader waits
+    // 14 s / 4 s, slows at 18 m); 1 = movement only (formation, leader on foot, slot edges; no member walk / longer waits); 0 = off (the
+    // pre-tactics squads). Sets the keys below; any key given explicitly in WFC_SMARTTUNE still overrides.
+    float squadTactics = 2.0f;
+    float squadFormation = 0.0f;    // 1: squad members take slots around their leader - a wedge behind it on the move, a firing line across the
+                                    // threat axis in its fights (GAMEPLAY_SQUAD_TACTICS_DESIGN.md, user decision 2026-10-13)
+    float squadSlotBackM = 6.0f, squadSlotSideM = 5.0f;   // wedge offsets (back / to the side); the firing line uses 6 / 8 / 10 m to the side
+    float squadLeashM = 20.0f;
+    float squadLeaderWalk = 0.0f;   // with squadFormation: a leader whose members are strung out (leaderSlow) stays in robot form - a leader on
+                                    // wheels left its squad behind (NAVQ: leader moving in 55-76 % of the > 25 m samples, vehicle form in 20-59 %)
+    float squadMemberWalk = 0.0f;   // with squadFormation: a member within squadVehicleRegroupM of its leader stays on foot (vehicle form only to catch up)
+    float squadLeaderWaitS = 8.0f, squadLeaderWaitCooldownS = 6.0f;   // a strung-out leader's wait (s) and the time on the move before the next one
+    float squadSlotFreeze = 0.0f;   // with squadFormation: while the leader has stood still > 2 s, a member keeps its wedge slot target (no re-slotting)
+    float squadTrail = 0.0f;        // with squadFormation: on the move, members take a point on their leader's walked trail (5 m back + 4 m per
+                                    // slot) instead of a slot relative to its heading - the heading-relative wedge swung at every corner
+    float squadStationKeep = 0.0f;  // with squadFormation: 1 = deadband - within 3 m of its wedge slot while the leader is nearly still (< 1.5 m/s) a
+                                    // member stands (no dithering around the slot); 2 = also match the leader's velocity within 6 m (measured worse)
+    float squadSlotEdgeM = 0.0f;    // with squadFormation: a slot needs walkable floor this far to each side (not a catwalk edge; 0 = off)      // with squadFormation: a member's cover spots and pickups stay within this of its leader
+    float squadDynamic = 0.0f;      // 1: a respawning member joins the squad whose live leader is nearest its spawn (up to squadSize members),
+                                    // instead of chasing its fixed squad (by player order) across the map
+    float squadVehicleRegroupM = 45.0f;   // a member farther than this from its leader regroups in vehicle form
     float squadSlowFactor = 0.4f;   // the slowed leader's move input scale (0.4 = walking pace)
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
@@ -73,8 +95,10 @@ struct SmartTune {
                                     // that spot, drop the goal and hold off off-mesh rejoins 4 s (0 = off)
     float goalFloorM = 3.0f;        // a non-Attack goal (Roam / Support / objective) counts as reached only within this height too (a goal below a railing
                                     // was "reached" from above and never left) (0 = horizontal only, the Classic rule)
-    float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster
+    float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster,
+                                    // 3 the active cluster plus starts within spawnNearPathM of nav path to the squad leader
                                     // only (any start drew bots to far / raised starts of other clusters: NAVQ Gorge off-mesh 14.7 -> 5.3 %)
+    float spawnNearPathM = 40.0f;   // scope 3: the nav path length from a non-active start to the squad leader
     float routeNoise = 0.25f;       // per-bot seeded route cost noise: cell cost x (1 + routeNoise * hash) so bots do not all share one corridor
 };
 const SmartTune& smartTune();
@@ -89,6 +113,12 @@ struct SmartMemory {
 
 struct SmartBot {
     bool active = false;                 // this participant is driven by Smart (else Classic)
+    int squadId = -1;                    // squadDynamic: the squad joined at the last respawn (-1: the fixed squad by player order)
+    core::Vec3 moveHeading{0, 0, 0};
+    std::vector<core::Vec3> trail;       // squadTrail: positions this bot walked (newest last, a point every 1.5 m, up to 24) - members follow it
+    bool formWedge = false; int formLeader = -1; core::Vec3 formOffset{0, 0, 0}; bool formHold = false;
+    float leaderStillSince = -1.0f; core::Vec3 frozenSlot{0, 0, 0}; bool slotFrozen = false;   // squadSlotFreeze   // squadStationKeep: this think's wedge slot (offset from the leader)     // the last horizontal move direction above 1 m/s (squad wedge heading while the leader stands / looks around)
+    double fightCohSum = 0.0; long fightCohN = 0, fightCohNear20 = 0;   // member-to-leader distance while the leader is engaged (diagnostics)
     unsigned rng = 0x9e3779b9U;          // Smart's own sequence (BotBrain's rng belongs to Classic)
     std::vector<SmartMemory> mem;        // by match player
     float lastHealth = -1.0f;

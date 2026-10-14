@@ -33,12 +33,18 @@ const SmartTune& smartTune() {
     static const SmartTune t = [] {
         SmartTune v;
         const char* e = std::getenv("WFC_SMARTTUNE");
+        {   // squadTactics preset first (explicit keys below override it)
+            if (e) { const char* p = std::strstr(e, "squadTactics="); if (p) v.squadTactics = (float)std::atof(p + 13); }
+            const int t = (int)v.squadTactics;
+            if (t >= 1) { v.squadFormation = 1.0f; v.squadLeaderWalk = 1.0f; v.squadSlotEdgeM = 1.2f; }
+            if (t >= 2) { v.squadMemberWalk = 1.0f; v.squadLeaderWaitS = 14.0f; v.squadLeaderWaitCooldownS = 4.0f; v.squadSlowM = 18.0f; }
+        }
         if (!e) return v;
         struct K { const char* k; float* p; } keys[] = {
             {"coverExposure", &v.coverExposure}, {"coverMaxExposure", &v.coverMaxExposure}, {"coverChance", &v.coverChance},
             {"coverChancePerDiff", &v.coverChancePerDiff}, {"coverRangeM", &v.coverRangeM}, {"coverHurtFrac", &v.coverHurtFrac}, {"coverRangedChance", &v.coverRangedChance}, {"coverHoldS", &v.coverHoldS}, {"coverNear", &v.coverNear}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
             {"routeExposureW", &v.routeExposureW}, {"focusHurtW", &v.focusHurtW}, {"focusMatesW", &v.focusMatesW},
-            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}, {"routeNoise", &v.routeNoise}, {"ditherGuard", &v.ditherGuard}, {"goalFloorM", &v.goalFloorM}, {"spawnNearScope", &v.spawnNearScope}, {"squadSlowFactor", &v.squadSlowFactor}};
+            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}, {"routeNoise", &v.routeNoise}, {"ditherGuard", &v.ditherGuard}, {"goalFloorM", &v.goalFloorM}, {"spawnNearScope", &v.spawnNearScope}, {"squadSlowFactor", &v.squadSlowFactor}, {"squadDynamic", &v.squadDynamic}, {"squadFormation", &v.squadFormation}, {"squadSlotBackM", &v.squadSlotBackM}, {"squadSlotSideM", &v.squadSlotSideM}, {"squadLeashM", &v.squadLeashM}, {"squadLeaderWalk", &v.squadLeaderWalk}, {"squadSlotEdgeM", &v.squadSlotEdgeM}, {"squadStationKeep", &v.squadStationKeep}, {"squadTrail", &v.squadTrail}, {"squadSlotFreeze", &v.squadSlotFreeze}, {"squadMemberWalk", &v.squadMemberWalk}, {"squadLeaderWaitS", &v.squadLeaderWaitS}, {"squadLeaderWaitCooldownS", &v.squadLeaderWaitCooldownS}, {"squadVehicleRegroupM", &v.squadVehicleRegroupM}, {"spawnNearPathM", &v.spawnNearPathM}, {"squadTactics", &v.squadTactics}};
         std::string s = e;
         size_t i = 0;
         while (i < s.size()) {

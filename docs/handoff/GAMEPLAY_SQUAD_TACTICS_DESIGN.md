@@ -74,3 +74,75 @@ Every think (0.25 s), each member that is not the leader gets a **slot** relativ
 - **Strength:** WFC_AIDUEL Smart vs Classic win rate 57-65 % (the user's accepted band).
 - **Identity:** Classic 24/24. BOTTEST 39/39 for both AIs. DETERMINISM 2/2.
 - **Delivery:** a patch against the current integration head, before the package-4 cut (user playtest ~2026-10-21).
+
+## Results (2026-10-14): shipped as the Smart default, `squadTactics = 2`
+
+Integration's ship call; the user judges the formation fidgeting in the playtest.
+
+### Toggle
+
+| `squadTactics` | Behaviour |
+|---|---|
+| **2 (default, A)** | Formation, plus: leader stays on foot while strung out; slots kept off catwalk edges (1.2 m); members on foot within 30 m of the leader (vehicle regroup beyond 45 m, with hysteresis); leader waits 14 s / 4 s cooldown; leader slows at 18 m |
+| 1 (B) | Formation, leader on foot, slot edges (movement only) |
+| 0 | The pre-tactics squads |
+
+Explicit `WFC_SMARTTUNE` keys still override the preset.
+
+### Measured (null-render NAVQ, 6 seeds × 4 maps; AIDUEL 26 matches per map)
+
+**Cohesion** (shipping → A):
+
+| Metric | Shipping | A | Gate |
+|---|---|---|---|
+| Settled, within 15 m | 19.0 % (70.6 m mean) | **41.2 %** (43.6 m mean) | ≥ 22 % |
+| In fight, within 20 m | 9.7 % (91.5 m mean) | **25.2 %** (61.5 m mean) | ≥ 19.7 % |
+
+**Movement for A** (slow / reversals / off-mesh / stucks):
+
+| Map | A | Of which reversals: pathing / follow / fidget |
+|---|---|---|
+| Streets | 5.9 / 5.3 / 4.0 / 1.56 | 4.7 / – / 0.6 |
+| Molten | 1.8 / 3.4 / 2.0 / 0.69 | 2.8 / – / 0.7 |
+| Debris | 4.7 / 3.0 / 1.9 / 1.08 | 2.4 / – / 0.6 |
+| Gorge | 4.6 / 4.6 / 5.0 / 1.23 | 4.05 / – / 0.55 |
+
+- Slow, off-mesh and stucks are at shipping level. Gorge is better.
+- Reversals are above the shipping band on Streets / Molten / Debris.
+- The fidget part (a member within 6 m of a leader slower than 1 m/s) is only about 0.6 per travel-min. Most of the rise is formation-following with a walking leader.
+- NAVQ now reports reversals split three ways: pathing / follow / fidget.
+
+**Strength** (Smart vs Classic AIDUEL, Hard):
+
+| Version | Smart win rate |
+|---|---|
+| A | 70.2 % (104 duels) |
+| B | 54.8 % |
+| Tactics off, current code | 65.4 % |
+
+Kill share for A is 52 % (aim unchanged). **Difficulty ladder for A** (matched difficulty, 56 duels each; ±6.6 points SE):
+
+| Difficulty | Smart win rate |
+|---|---|
+| Easy | 51.8 % |
+| Medium | 60.7 % |
+| Hard | 70.2 % |
+| Expert | 57.1 % |
+
+Easy is ≤ 55 %, so no Easy trim was needed.
+
+**Other gates:**
+- Classic identity: 24/24.
+- BOTTEST: 39/39 for both AIs (a Classic 6.16 ms max under load was noise; the rerun passed 39/39).
+- DETERMINISM: 2/2 for both AIs.
+- 31 + 32 AI cost: 0.20 ms per step.
+
+### Tried and left off by default (tune keys kept)
+
+| Key | What it does | Why it is off |
+|---|---|---|
+| `squadDynamic` (+ `squadVehicleRegroupM`) | Dynamic squads on respawn | 63.7 m cohesion |
+| `squadSlotFreeze` | Freeze slots while the leader is still | No gain |
+| `squadStationKeep` | Deadband / velocity matching | Worse |
+| `squadTrail` | Leader-trail following | Streets worse |
+| `spawnNearScope = 3` | Respawn-scope middle rule | Movement worse |

@@ -171,6 +171,8 @@ public:
     // Which team starts a squad respawn may take: 0 any team start, 1 starts of clusters registered for this game type,
     // 2 the team's active cluster only (the authored FindSpawnPoint set, nearest the squad within it).
     void setSquadAnchorScope(int s) { squadAnchorScope_ = s; }
+    // Scope 3: the active cluster, plus any team start the host accepts as close to the squad (e.g. a short nav path to the anchor).
+    void setSquadStartNear(std::function<bool(int start, const core::Vec3& anchor)> f) { squadStartNear_ = std::move(f); }
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
@@ -252,6 +254,7 @@ private:
     std::function<bool(const std::string&, std::string&)> chassisCheck_;
     std::function<bool(int, core::Vec3&)> squadAnchor_;
     int squadAnchorScope_ = 0;
+    std::function<bool(int, const core::Vec3&)> squadStartNear_;
     int attackingTeam_ = 255, currentRound_ = 0;
     bool betweenRounds_ = false;
     float roundTimeLeft_ = 0.0f, betweenRoundsLeft_ = 0.0f;
