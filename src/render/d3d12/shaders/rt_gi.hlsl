@@ -16,7 +16,9 @@
 #include "rt_common.hlsli"
 
 struct GiTexel { uint pageXY; float3 pos; uint nrm, tan, sub, pad; };
-#ifdef GI_DILATE
+#if defined(GI_PROBE)
+RWStructuredBuffer<float4> Probes : register(u0);       // (probes) 6 per probe: the ambient cube +X -X +Y -Y +Z -Z
+#elif defined(GI_DILATE)
 StructuredBuffer<uint4> Dilate : register(t14);       // (dilate) per gutter texel: dst, src, src sub, 0
 #else
 StructuredBuffer<GiTexel> Texels : register(t14);
@@ -32,6 +34,7 @@ cbuffer GiFrame : register(b0) {
     uint4 Range;        // first texel, texel count, frame index, light count
     float4 Mix;         // minimum blend weight, tangent-y sign, the sun's exponent p, the bounce gain (0 = no bounce)
     uint4 Off;          // GiData offsets: subs, lights, hit page map; instance mask
+    float4 GiExtra;     // x: the static lights' source radius (m: soft, contact-hardening lamp shadows), yzw 0
 };
 
 static const float3 LMB[3] = { float3(0.0, 0.81649658, 0.57735027), float3(-0.70710678, -0.40824829, 0.57735027),
@@ -70,6 +73,18 @@ float3 hitRadiance(uint id, uint prim, float2 bc) {
     const float4 pages = HitSub[sub * 8], coord = HitSub[sub * 8 + 1];
     const float2 luv = uv1 * coord.xy + coord.zw;
     float3 L = float3(0, 0, 0);
+    if (pages.x < -1.5) {                                 // a vertex-lit sub: its RT vertex samples (page 511), blended
+        const uint off = (uint)pages.w, cnt = (uint)coord.x, base = (uint)coord.y;
+        [unroll] for (uint k = 0; k < 3; ++k) {
+            const float3 sc = HitSub[sub * 8 + 2 + k].xyz;
+            float3 v = float3(0, 0, 0);
+            [unroll] for (uint j = 0; j < 3; ++j) {
+                const uint vi = HitIdx[ib + j] - base, e = off + k * cnt + vi;
+                v += Gi[511][int2(e & 4095u, e >> 12)].rgb * (j == 0 ? bary.x : j == 1 ? bary.y : bary.z);
+            }
+            L += v * sc;
+        }
+    } else
     [unroll] for (uint k = 0; k < 3; ++k) {
         const float pg = k == 0 ? pages.x : k == 1 ? pages.y : pages.z;
         const float3 sc = HitSub[sub * 8 + 2 + k].xyz;
@@ -108,7 +123,7 @@ float3 traceRadiance(float3 o, float3 dir, uint mask) {
             const uint4 b = HitInst[id - 0x10000u];
             const uint sub = HitTriSub[b.y + q.CommittedPrimitiveIndex()];
             const float pg = HitSub[sub * 8].x;
-            if (giPageOfHit(pg) >= 0) ++gGi; else if (pg >= 0.0) ++gBake; else ++gNone;
+            if (giPageOfHit(pg) >= 0 || pg < -1.5) ++gGi; else if (pg >= 0.0) ++gBake; else ++gNone;   // (-2: vertex-lit, RT samples)
             gAlb += dot(HitSub[sub * 8 + 5].rgb, float3(0.2126, 0.7152, 0.0722));
         }
     }
@@ -120,7 +135,7 @@ float3 traceRadiance(float3 o, float3 dir, uint mask) {
     return hr;                                            // (the gain is in hitRadiance's capped reflectance)
 }
 
-#ifndef GI_DILATE
+#if !defined(GI_DILATE) && !defined(GI_PROBE)
 [numthreads(64, 1, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= Range.y) return;
@@ -171,7 +186,15 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float3 c = L1.rgb * F;
         if (max(c.r, max(c.g, c.b)) < 1e-4 || dot(N, ldir) < -0.2) continue;
         ++rays;
-        if (occluded(P, ldir, dist - 0.02, mask)) continue;
+        // (item 5) the shadow ray aims at a random point of the light's source sphere: soft, contact-hardening lamp shadows
+        float3 sdir = ldir; float sdist = dist;
+        if (GiExtra.x > 0.0) {
+            float3 t, b; basisFrame(ldir, t, b);
+            const float ra = rnd(seed) * 6.2831853, rr = sqrt(rnd(seed)) * GiExtra.x;
+            const float3 tgt = L0.xyz + (t * cos(ra) + b * sin(ra)) * rr;
+            const float3 dd = tgt - P; sdist = length(dd); sdir = dd / max(sdist, 1e-4);
+        }
+        if (occluded(P, sdir, sdist - 0.02, mask)) continue;
         [unroll] for (uint i = 0; i < 3; ++i) acc[i] += c * max(dot(Bw[i], ldir), 0.0);
     }
     // sky + bounce: uniform hemisphere rays (estimate of (1/pi) integral of L max(B_i . w, 0) dw = 2 / n sum)
@@ -214,7 +237,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
 }
 
-#else
+#elif defined(GI_DILATE)
 // the gutter: each listed texel takes its chart neighbour's value on all three coefficient pages (in list order: the
 // second ring reads the first)
 [numthreads(64, 1, 1)]
@@ -226,5 +249,51 @@ void main(uint3 id : SV_DispatchThreadID) {
     const int lm[3] = { (int)S0.x, (int)S0.y, (int)S0.z };
     [unroll] for (uint i = 0; i < 3; ++i)
         if (lm[i] >= 0) Gi[NonUniformResourceIndex(lm[i])][dst] = Gi[NonUniformResourceIndex(lm[i])][src];
+}
+#else
+// (GI_PROBE) S3: the characters' / movers' ambient - a grid of probes traced at load from the RT lightmap. Per probe
+// (ToSunG.xyz grid origin, ToSunG.w spacing, SunCol.xyz the grid dims, Range.x / .y the probe range, SkyG.w rays) the
+// irradiance per axis as the light environment's ambient cube ((1/pi) integral of L max(a . w, 0) dw: uniform sphere,
+// 4 / n sum), the bounce at hits as the texels see it (hitRadiance x the map's gain, the fitted sky on a miss), and
+// two validity numbers in .w: the share of hits on front faces, the share of rays that hit (a probe inside a wall
+// sees mostly back faces)
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= Range.y) return;
+    const uint i = Range.x + id.x;
+    const uint3 dim = (uint3)SunCol.xyz;
+    const uint3 c = uint3(i % dim.x, (i / dim.x) % dim.y, i / (dim.x * dim.y));
+    const float3 P = ToSunG.xyz + float3(c) * ToSunG.w;
+    const uint n = max((uint)SkyG.w, 1u);
+    uint seed = hash(i * 7919u + 17u);
+    float3 cube[6] = { float3(0, 0, 0), float3(0, 0, 0), float3(0, 0, 0), float3(0, 0, 0), float3(0, 0, 0), float3(0, 0, 0) };
+    uint hits = 0, front = 0;
+    for (uint k = 0; k < n; ++k) {
+        // stratified uniform sphere (Fibonacci + jitter)
+        const float z = 1.0 - 2.0 * ((float)k + rnd(seed)) / (float)n;
+        const float a = 6.2831853 * frac((float)k * 0.61803399 + rnd(seed) * 0.05);
+        const float s = sqrt(max(0.0, 1.0 - z * z));
+        const float3 w = float3(s * cos(a), s * sin(a), z);
+        RayQuery<RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
+        RayDesc r; r.Origin = P; r.Direction = w; r.TMin = 0.0; r.TMax = 2000.0;
+        q.TraceRayInline(Scene, RAY_FLAG_NONE, Off.w, r);
+        while (q.Proceed()) {
+            if (q.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+                maskedOpaque(q.CandidateInstanceID(), q.CandidatePrimitiveIndex(), q.CandidateTriangleBarycentrics()))
+                q.CommitNonOpaqueTriangleHit();
+        }
+        float3 R = SkyG.rgb;
+        if (q.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+            ++hits;
+            if (q.CommittedTriangleFrontFace()) ++front;
+            R = hitRadiance(q.CommittedInstanceID(), q.CommittedPrimitiveIndex(), q.CommittedTriangleBarycentrics());
+        }
+        cube[0] += R * max(w.x, 0.0); cube[1] += R * max(-w.x, 0.0);
+        cube[2] += R * max(w.y, 0.0); cube[3] += R * max(-w.y, 0.0);
+        cube[4] += R * max(w.z, 0.0); cube[5] += R * max(-w.z, 0.0);
+    }
+    const float k4 = 4.0 / (float)n;
+    [unroll] for (uint f = 0; f < 6; ++f)
+        Probes[i * 6 + f] = float4(cube[f] * k4, f == 0 ? (hits ? (float)front / (float)hits : 0.5) : f == 1 ? (float)hits / (float)n : 0.0);
 }
 #endif

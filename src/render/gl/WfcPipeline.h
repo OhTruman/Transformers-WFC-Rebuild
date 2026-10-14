@@ -568,6 +568,13 @@ private:
     GLuint giVlmBo_ = 0, giVlmTex_ = 0;
     size_t giVlmEntries_ = 0; long giVlmMesh_ = -1;
     void giCopyVertexPage();
+    // S3: the characters' / movers' ambient from the RT world - a probe grid traced at load (WFC_RT_GIPROBES=1 for now),
+    // sampled trilinearly in place of the bake's Beast probe term of the light environment's ambient cube
+    std::vector<float> giProbes_;                       // 24 per probe (6 x rgb + w), x fastest
+    std::vector<uint8_t> giProbeOk_;                    // per probe: usable (not inside geometry)
+    float giProbeOrigin_[3] = {0, 0, 0}, giProbeSpacing_ = 1.5f; int giProbeDims_[3] = {0, 0, 0};
+    void giBuildProbes();
+    bool giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const;
     bool giOn() const;
     bool giActive() const;
     void giSetup();

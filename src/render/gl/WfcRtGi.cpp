@@ -4,7 +4,7 @@
 // (rt_gi.hlsl) writes per texel the same three directional coefficients the bake stored (HL2 basis, decode
 // tex.rgb x scale), so every lightmapped shader path applies unchanged: sun (soft, R2's cone) + sky + the map's
 // static lights (Systems' fit_lights.json calibration) + bounce (the previous result read at the hit). Vertex-lit
-// (LMT_1D) meshes keep the bake for now. Opt-in for now: WFC_RT_GI=1 (else the bake, Realistic as before).
+// (LMT_1D) meshes: one texel per vertex. Realistic's default; WFC_RT_GI=0: the bake.
 #include "render/gl/WfcPipeline.h"
 #include "render/d3d12/D3D12RtBridge.h"
 #include "assets/Json.h"
@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <chrono>
 #include <map>
 #include <new>
 #include <set>
@@ -39,10 +40,10 @@ uint32_t octEncode(float x, float y, float z) {
 }
 }  // namespace
 
-// (opt-in until its brightness matches the bake: WFC_RT_GI=1; the default flips once the bounce is calibrated)
+// (Realistic's default since 14 Oct - RT / bake 0.93-1.07 on the five user maps; WFC_RT_GI=0: the bake)
 bool Pipeline::giOn() const {
-    static const bool on = [] { const char* e = std::getenv("WFC_RT_GI"); return e && e[0] == '1'; }();
-    return on && rtInfra_ && !rtFailed_;
+    static const bool off = [] { const char* e = std::getenv("WFC_RT_GI"); return e && e[0] == '0'; }();
+    return !off && rtInfra_ && !rtFailed_;
 }
 
 // one static mesh's lightmapped subs into their pages (called from rtBuildWorld with the mesh's read-back buffers:
@@ -330,7 +331,7 @@ void Pipeline::giSetup() {
         J.sunCol[3] = std::tan(sunArea * 0.017453292f);
     }
     const assets::Json& sky = FL["sky"]["color_linear"];
-    static const int rays = [] { const char* e = std::getenv("WFC_RT_GIRAYS"); return e ? std::max(0, std::atoi(e)) : 8; }();
+    static const int rays = [] { const char* e = std::getenv("WFC_RT_GIRAYS"); return e ? std::max(0, std::atoi(e)) : 32; }();
     for (int c = 0; c < 3; ++c) J.sky[c] = sky[(size_t)c].asFloat(0.0f);
     J.sky[3] = (float)rays;
     // (diagnostics: the terms one at a time) WFC_RT_GILIGHTS=0 no static lights, WFC_RT_GISUN=0 no sun, WFC_RT_GISKY=0 no sky
@@ -339,6 +340,8 @@ void Pipeline::giSetup() {
     if (WFC_ENV("WFC_RT_GISKY") && WFC_ENV("WFC_RT_GISKY")[0] == '0') J.sky[0] = J.sky[1] = J.sky[2] = 0.0f;
     J.mix[0] = 0.05f; J.mix[1] = r1Fit_[2] < 0.0f ? -1.0f : 1.0f; J.mix[2] = r1Fit_[1] > 0.0f ? r1Fit_[1] : 1.0f; J.mix[3] = 1.0f;
     J.subOff = subOff; J.lightOff = lightOff; J.pageMapOff = pageMapOff; J.mask = 0x0Bu;
+    static const float lightSize = [] { const char* e = std::getenv("WFC_RT_GILIGHTSIZE"); return e ? std::max(0.0f, (float)std::atof(e)) : 0.15f; }();
+    J.lightSize = lightSize;                              // (item 5: soft lamp shadows; 0 = hard)
     // the GI arrays (the MDI rows sample arrays): RGBA16F, one level, layer for layer as the lightmap arrays
     constexpr GLenum kArr = 0x8C1A;
     giArrays_.assign(lmArrays_.size(), 0);
@@ -439,6 +442,7 @@ void Pipeline::giSetup() {
     J.mix[3] = gain;
     giSliceFirst_ = 0; giSliceCount_ = giTexels_.size();   // (every layer refreshed once)
     giAfterFrame();
+    if (ran) giBuildProbes();                            // (S3: from the calibrated RT lightmap)
     if (ran) {
         const double r = measure(true);
         LOG_INFO("RT GI check: RT / bake mean ratio %.2f at bounce gain %.3f%s", r, gain, fixedGain >= 0.0f ? " (WFC_RT_GIBOUNCE)" : "");
@@ -449,12 +453,12 @@ void Pipeline::giSetup() {
 }
 
 // per frame (Realistic, before the round trip): a slice of the texels re-traced (rotating), the gutter every 8th frame;
-// the map's lighting is static, so after WFC_RT_GISWEEPS full sweeps (default 8: the running mean has its noise down)
+// the map's lighting is static, so after WFC_RT_GISWEEPS full sweeps (default 32: the running mean has its noise down)
 // the per-frame cost stops (0 = never stops)
 void Pipeline::giFrame() {
     if (!giActive() || giJob_.empty() || giTexels_.empty()) return;
     static const size_t perFrame = [] { const char* e = std::getenv("WFC_RT_GITEXELS"); return e ? (size_t)std::max(0, std::atoi(e)) : (size_t)131072; }();
-    static const int sweeps = [] { const char* e = std::getenv("WFC_RT_GISWEEPS"); return e ? std::max(0, std::atoi(e)) : 8; }();
+    static const int sweeps = [] { const char* e = std::getenv("WFC_RT_GISWEEPS"); return e ? std::max(0, std::atoi(e)) : 32; }();
     if (sweeps > 0 && giSweeps_ >= sweeps) return;
     RtGiJob J = jobOf(giJob_);
     if (giNext_ >= giTexels_.size()) {
@@ -501,6 +505,79 @@ void Pipeline::giAfterFrame() {
         CopyImageSubData(giGlTex_[(size_t)k], GL_TEXTURE_2D, 0, 0, 0, 0, giArrays_[(size_t)a], kArr, 0, 0, 0, layer, w, h, 1);
     }
     glx::textureCacheInvalidate();
+}
+
+// S3: the probe grid over the lightmapped world's bounds (+2 m), WFC_RT_GIPROBESPACING (default 1.5 m; widened to keep
+// <= 4 M probes), WFC_RT_GIPROBERAYS rays each (default 128), traced from the calibrated RT lightmap (the same bounce
+// gain); a probe that sees mostly back faces (inside a wall / floor) is not used
+void Pipeline::giBuildProbes() {
+    giProbes_.clear(); giProbeOk_.clear(); giProbeDims_[0] = giProbeDims_[1] = giProbeDims_[2] = 0;
+    static const bool on = [] { const char* e = std::getenv("WFC_RT_GIPROBES"); return e && e[0] == '1'; }();
+    if (!on || giTexels_.empty() || giJob_.empty()) return;
+    float lo[3] = {1e30f, 1e30f, 1e30f}, hi[3] = {-1e30f, -1e30f, -1e30f};
+    for (const GiTexel& T : giTexels_)
+        for (int c = 0; c < 3; ++c) { lo[c] = std::min(lo[c], T.pos[c]); hi[c] = std::max(hi[c], T.pos[c]); }
+    static const float spacing0 = [] { const char* e = std::getenv("WFC_RT_GIPROBESPACING"); return e ? std::max(0.25f, (float)std::atof(e)) : 1.5f; }();
+    static const int rays = [] { const char* e = std::getenv("WFC_RT_GIPROBERAYS"); return e ? std::max(8, std::atoi(e)) : 128; }();
+    float s = spacing0;
+    int dims[3];
+    for (;;) {
+        for (int c = 0; c < 3; ++c) dims[c] = std::max(2, (int)std::ceil((hi[c] - lo[c] + 4.0f) / s) + 1);
+        if ((double)dims[0] * dims[1] * dims[2] <= 4.0e6) break;
+        s *= 1.25f;
+    }
+    const float origin[3] = {lo[0] - 2.0f, lo[1] - 2.0f, lo[2] - 2.0f};
+    const auto t0 = std::chrono::steady_clock::now();
+    std::vector<float> out;
+    if (!rtBridgeGiProbes(jobOf(giJob_), origin, s, dims, rays, out)) { LOG_WARN("RT GI: probe grid failed - characters keep the bake's ambient"); return; }
+    const size_t n = (size_t)dims[0] * dims[1] * dims[2];
+    // the front-face convention (GL counter-clockwise geometry in D3D12): the majority of open probes see front faces
+    double fs = 0; size_t fn = 0;
+    for (size_t i = 0; i < n; ++i) if (out[i * 24 + 7] > 0.5f) { fs += out[i * 24 + 3]; ++fn; }
+    const bool flip = fn && fs / (double)fn < 0.5;
+    giProbeOk_.assign(n, 0);
+    size_t ok = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const float front = flip ? 1.0f - out[i * 24 + 3] : out[i * 24 + 3];
+        if (out[i * 24 + 7] < 0.05f || front >= 0.75f) { giProbeOk_[i] = 1; ++ok; }   // (open sky, or mostly front faces)
+    }
+    giProbes_.swap(out);
+    for (int c = 0; c < 3; ++c) { giProbeOrigin_[c] = origin[c]; giProbeDims_[c] = dims[c]; }
+    giProbeSpacing_ = s;
+    // the light environments' cached cubes are rebuilt with the probes
+    for (GpuMesh& g : meshes_) for (Sub& sb : g.subs) sb.envReady = false;
+    envCache_.clear();
+    LOG_INFO("RT GI probes: %d x %d x %d at %.2f m (%zu, %zu usable = %.1f %%), %d rays each, %.0f ms (front faces %s)", dims[0], dims[1],
+             dims[2], s, n, ok, n ? 100.0 * ok / n : 0.0, rays,
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), flip ? "clockwise" : "counter-clockwise");
+}
+
+// the ambient cube at p from the 8 surrounding usable probes (trilinear, renormalised); false: none usable / outside
+bool Pipeline::giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const {
+    if (giProbes_.empty() || !giActive()) return false;
+    const float q[3] = {(p.x - giProbeOrigin_[0]) / giProbeSpacing_, (p.y - giProbeOrigin_[1]) / giProbeSpacing_,
+                        (p.z - giProbeOrigin_[2]) / giProbeSpacing_};
+    int i0[3]; float f[3];
+    for (int c = 0; c < 3; ++c) {
+        if (q[c] < 0.0f || q[c] > (float)(giProbeDims_[c] - 1)) return false;
+        i0[c] = std::min((int)q[c], giProbeDims_[c] - 2); f[c] = q[c] - (float)i0[c];
+    }
+    for (int k = 0; k < 6; ++k) cube[k] = {0, 0, 0};
+    float wsum = 0.0f;
+    for (int dz = 0; dz < 2; ++dz)
+        for (int dy = 0; dy < 2; ++dy)
+            for (int dx = 0; dx < 2; ++dx) {
+                const size_t i = ((size_t)(i0[2] + dz) * giProbeDims_[1] + (size_t)(i0[1] + dy)) * giProbeDims_[0] + (size_t)(i0[0] + dx);
+                if (!giProbeOk_[i]) continue;
+                const float w = (dx ? f[0] : 1.0f - f[0]) * (dy ? f[1] : 1.0f - f[1]) * (dz ? f[2] : 1.0f - f[2]);
+                if (w <= 0.0f) continue;
+                const float* v = &giProbes_[i * 24];
+                for (int k = 0; k < 6; ++k) cube[k] = cube[k] + core::Vec3{v[k * 4], v[k * 4 + 1], v[k * 4 + 2]} * w;
+                wsum += w;
+            }
+    if (wsum < 1e-4f) return false;
+    for (int k = 0; k < 6; ++k) cube[k] = cube[k] * (1.0f / wsum);
+    return true;
 }
 
 // the vertex page (D3D12 RGBA32F, 4096 entries per row) -> the RT twin of the MDI sample buffer (GPU-side pack)

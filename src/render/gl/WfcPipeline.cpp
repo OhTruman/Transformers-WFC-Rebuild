@@ -3108,6 +3108,11 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
         gStats.envMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); } } envTimer{tEnv};
     ++gStats.envCalls;
     for (auto& c : env.cube) c = {0, 0, 0};
+    // (S3, RT Realistic with R4 and its probes: the RT world's ambient - sky + bounce - in place of the SkyLights' terms;
+    // the folded lights below stay)
+    core::Vec3 rtAmb[6];
+    const bool rtProbe = giProbeAt(p, rtAmb);
+    if (rtProbe) for (int f = 0; f < 6; ++f) env.cube[f] = rtAmb[f];
     // [CONF] TnRobotForm/TnVehicleForm LightEnvironmentComponent TotalLightCount = 2 (TransGame.xxx):
     // the brightest 2 lights stay direct, everything else is folded into the ambient cube.
     const int maxDirect = dynamicObject ? 2 : 3;
@@ -3118,6 +3123,7 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
         if (dynamicObject ? !l.chDynamic : !l.chStatic) continue;
         core::Vec3 L; float att = 1.0f;
         if (l.type == 3) {
+            if (rtProbe) continue;                         // (S3: the probe holds the sky)
             // UE3 SkyLight: hemisphere irradiance -> ambient cube (+Y upper, -Y lower, sides half each).
             env.cube[2] = env.cube[2] + l.color;
             env.cube[3] = env.cube[3] + l.lowerColor;

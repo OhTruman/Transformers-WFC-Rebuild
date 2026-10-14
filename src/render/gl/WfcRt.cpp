@@ -666,6 +666,9 @@ void Pipeline::rtBuildHit() {
             r[8 + k * 4] = s.lmScale[k][0]; r[8 + k * 4 + 1] = s.lmScale[k][1]; r[8 + k * 4 + 2] = s.lmScale[k][2];
         }
         std::memcpy(r + 4, s.lmCoord, 16);
+        if (s.vlmTex && s.vlmMdiOff >= 0 && subRef[i].first == giVlmMesh_) {   // (R4: a vertex-lit sub - its RT vertex samples)
+            r[0] = -2.0f; r[3] = (float)s.vlmMdiOff; r[4] = (float)s.vlmMdiCnt; r[5] = (float)s.vlmBase;
+        }
         average(i, r + 20);
         average(nSub + i, r + 24);
         if (r[24] < 0.0f) r[24] = r[25] = r[26] = 0.0f;   // (an empty emissive tile: none)

@@ -88,9 +88,14 @@ struct RtGiJob {
     float mix[4] = {0.05f, 1.0f, 1.0f, 1.0f};   // minimum blend weight, tangent-y sign, sun exponent p, bounce on
     uint32_t subOff = 0, lightOff = 0, pageMapOff = 0, mask = 0x0Bu;
     bool dilate = false;
+    float lightSize = 0.0f;                     // (item 5) the static lights' source radius, m (0: hard)
 };
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex);
 void rtBridgeGiQueue(const RtGiJob& j);
 bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk);
+// S3: the probe grid (origin, spacing, dims) traced from the current RT lightmap with the job's offsets / mask / bounce
+// gain, rays per probe; out: 24 floats per probe (6 x (rgb, w): the ambient cube +X -X +Y -Y +Z -Z; w of axis 0 = the
+// share of front-face hits, of axis 1 = the share of rays that hit)
+bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays, std::vector<float>& out);
 
 }  // namespace render
