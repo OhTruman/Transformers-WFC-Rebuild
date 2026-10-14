@@ -133,9 +133,17 @@ void checkWeaponData(Report& r) {
     r.info("put_down_time", g["PutDownTime"].asDouble(), "s", "authored; not yet modelled (no weapon switching)");
     r.info("fine_aim_spread_mult", g["FineAimSpreadModifier"].asDouble(), "", "authored; applied through Character::effectiveSpread (weapon.fine_aim_effective_spread)");
 
-    r.near("damage_at_near", w.damageAt(50), 15.0, 1e-4, "hp", "RangeDamageModifiers: 1.0x at 5000 UU");
-    r.near("damage_at_max_range", w.damageAt(300), 7.5, 1e-4, "hp", "RangeDamageModifiers: 0.5x at 30000 UU");
-    r.info("damage_at_175m", w.damageAt(175), "hp", "linear interpolation between keys assumed (UE3 curve shape unverified)", 11.25);
+    // (2026-10-14, Gameplay 03e4e31a: range damage steps over the authored RangeDamageModifiers points, TnWeapon.
+    //  GetRangeDamageModifier; a default-constructed Weapon has no points = 1.0x everywhere, so the damage rows load the
+    //  authored points from weapon.json into the Weapon, as Weapon::fromDef does from the generated table)
+    game::Weapon wd = w;
+    wd.rangeModCount = 0;
+    for (size_t k = 0; k < rdm.size() && k < 4; ++k) {
+        wd.rangeModM[k] = (float)(rdm[k]["Range"].asDouble() * 0.01); wd.rangeModMul[k] = (float)rdm[k]["Modifier"].asDouble(); ++wd.rangeModCount;
+    }
+    r.near("damage_at_near", wd.damageAt(50), 15.0, 1e-4, "hp", "RangeDamageModifiers: 1.0x at 5000 UU");
+    r.near("damage_at_max_range", wd.damageAt(300), 7.5, 1e-4, "hp", "RangeDamageModifiers: 0.5x at 30000 UU");
+    r.near("damage_at_175m", wd.damageAt(175), 7.5, 1e-4, "hp", "GetRangeDamageModifier steps: beyond the 5000 UU point the 30000 UU point's 0.5x applies (Gameplay 03e4e31a)");
 }
 
 // ---------------------------------------------------------------------------------------------

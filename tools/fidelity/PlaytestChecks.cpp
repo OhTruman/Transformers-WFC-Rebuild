@@ -723,8 +723,14 @@ void checkMapContent(Report& r) {
         if (!loadGlbJson(renderDataDir() + "/decals.glb", dg))
             r.skip("decals_in_render_data", "no render data at " + renderDataDir() + " (set WFC_RENDER_DATA)");
         else
-            r.near("decals_in_render_data", (double)dg["nodes"].size(), mj["decals"].asDouble(), 0, "decals",
-                   "map.json decals vs render data decals.glb nodes (drawn by the WFC path's decal pass)");
+        {   // (2026-10-14, Rendering 480e3149: decals.glb holds one node per (decal, receiver) since static decals sample their
+            //  receiver's lightmap - Streets 64 nodes for 25 decals; the authored count is the number of DISTINCT decal components)
+            std::set<std::string> names;
+            for (size_t k = 0; k < dg["nodes"].size(); ++k) { const assets::Json& n = dg["nodes"][k]; const std::string c = n["extras"]["component"].asString(); names.insert(c.empty() ? n["name"].asString() + "#" + std::to_string(k) : c); }
+            r.near("decals_in_render_data", (double)names.size(), mj["decals"].asDouble(), 0, "decals",
+                   "map.json decals vs distinct decal components in render data decals.glb (" + std::to_string(dg["nodes"].size()) +
+                   " nodes: one per decal and receiver)");
+        }
     }
     r.info("level_emitters_authored", mj["emitters"].asDouble(), "emitters",
            "spawned at runtime by Systems LevelFx - judged by map-audit.ps1 ('level fx: N emitters')");
