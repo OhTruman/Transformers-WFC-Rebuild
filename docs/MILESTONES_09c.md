@@ -674,5 +674,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the original gate; decision: round 3 on F + W + E (leader waits at a slot-able spot; members vehicle only to catch up)
   under a REVISED GATE (settled >= 22 % within 15 m AND in-fight >= 19.7 % within 20 m, movement within 1 SE, AIDUEL
   57-65 %, Classic 24/24); fallback = ship F + W + E after AIDUEL without the +10.
+  00:18 E MILESTONE 1 PROGRESS: 42 / 175 (all Molten, 41 pass + stains_01 at D), 3.2 GPU h, remaining ~8-9 GPU h. DML
+  paused 00:17 -> ~01:00: Rendering's bounce check (counters; fix + recheck in-slot if named) + Gameplay's b74 windowed
+  lockstep set (-OwnWindow). Then undisturbed until morning.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
