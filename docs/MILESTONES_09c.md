@@ -591,5 +591,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   20:45 TEXTURE OVERHAUL STRENGTH DECIDED: E-4x-G3 + negative prompt (user delegated the choice: 'choose whichever one
   looks the best'; G4 invents objects and fails identity). Milestone 1 = the user's five maps (~15 GPU h) in DML windows +
   overnight blocks; level-2 E snapshot after it for an interim package; the rest of the world after the playtest.
+  20:55 Squad spawn scope decided: scope 2 stays (scope 3 = +40 m path starts: cohesion -3.5 m / +2 pts only, Gorge
+  stucks +0.31 past 1 SE, worse on Molten / Debris; kept as an off-by-default tune); regroup-after-respawn = future squad
+  work. Slot B -> Gameplay for the lockstep-under-load repro. MOLTEN 'SHADOWS DO NOT LINE UP' FOUND (Rendering): a black
+  'pit' on the central floor = R3's Realistic world AO hitting an invisible occluder just above the floor that is opaque
+  in the TLAS (masked / unlit / helper mesh); vanishes with WFC_RT_AORAYS=0; popped with characters before a93a3e11 (53.7 %
+  of pixels differ pre / post a93 on that frame). Fix = the TLAS filter (~30 min), then Rust / Gorge checked for the same
+  class. Systems: Molten per-page sun k refit done (9 of 18 pages, clamped sun 11.0 -> 4.8 %; runtime to read pages[i].k);
+  old packages deleted (F: 218 GB free).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
