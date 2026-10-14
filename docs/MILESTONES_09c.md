@@ -1021,5 +1021,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   up the room's purple light) sent to the user. Head df132b5a named to Experimental (regress vs 30b2fa74, Off /
   Faithful identity with the smoke-order diffs expected on character silhouettes only, R4 leak rows). Rendering next:
   barrier blend, option B + 3b, item 3.
+  15:15 REGRESS-8MAP 30b2fa74 vs df132b5a (Experimental, RT off, hold set, card verified clear at 14:54): 8 / 8 PASS,
+  deltas -0.06 .. +0.01 ms (501 2.65 -> 2.61, 502 2.20 -> 2.14, 503 2.78 -> 2.76, 504 2.91 -> 2.89, 507 2.35 -> 2.36,
+  508 2.54 -> 2.49, 509 3.37 -> 3.34, 510 3.16 -> 3.14); 501 rerun pending (Rendering compiled 14:55-14:57 during the
+  hold, self-flagged; rule restated: code edits only during a timed hold). Absolute p90s ~0.3-1 ms above the morning on
+  BOTH arms = machine state (driver pool ~6.8 GB, long uptime); deltas valid; reboot before package-5 timing. The
+  14:52 hold stopped AssetTools on its own within 21 s (20 s re-check live). Barrier: on rt2 12bda047 + Systems' kit
+  the barrier renders as the correct additive field, so the opaque wall is specific to the 56290b7d tree; 3-way bisect
+  (NODISTORTION / v1 barrier move reverted / WEAPONDIRECT) in slot B, prime suspect the v1 move of the immediate
+  barrier draw before fx_.draw into a pass state with blend off. Option B (material-less particles into the sorted
+  translucency, 0.5 m soft depth fade, WFC_FALLBACKIMMEDIATE=1 = old path) coded by Rendering, test pending.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
