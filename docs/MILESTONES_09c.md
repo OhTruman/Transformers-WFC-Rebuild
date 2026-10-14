@@ -1056,5 +1056,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   its working scene (a bot behind the grid: drawn over it or tinted by it?) and reports how its barrier resolved its
   material (decides whether the name fallback is needed); Systems prepares a Leader-owner staging (CPU) for a
   controlled A/B if needed. Cases 1 (smoke on a bot) and 2 (local muzzle flash over a bot) stay verified correct.
+  15:33 CASE 3 CONFIRMED REAL (Rendering, work/barrier_behind.png, frames 1080 / 1200): in the working scene a bot
+  vehicle behind the see-through grid is drawn OVER it (the grid's veil stops at the silhouette): the barrier draws
+  immediately, the queued characters later at the map presentation, and an additive surface writes no depth. Their
+  barrier got its material only through Systems' name fallback (same ExtractedAssets glTF, no other path). FIX =
+  Systems' SYSTEMS_FX_ORDER_3A.patch (flushQueuedCharacters before the barrier / sentry draws + the ensureAbilityModels
+  name fallback), verified by Rendering in its scratch tree with a before / after crop, then merged. Systems' opaque
+  results = the forced barrier on a non-Leader owner (staging). Option B tested green (RT off, Streets staging: the
+  smoke trail veils the body; a muzzle / impact flash in front of a bot shows where the bot used to cover it; 0.6-2.9 %
+  of pixels differ); Off identity pair running, commit after.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
