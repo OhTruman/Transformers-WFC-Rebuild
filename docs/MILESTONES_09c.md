@@ -865,5 +865,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pause -> Quit route (lobby route 0 / 3). Owner confirmations requested for the harness update. PACKAGE 4 PROMOTED:
   work/playtest_slim -> playtest_slim_30b2fa74 (16.60 GB; notes in docs/handoff/PACKAGE_4_30b2fa74.md; tag
   playtest/09c-package4-30b2fa74).
+  11:47 Package 4 promoted by Systems (Play.bat line 2 = '09c 30b2fa74 slim'; README carries the Realistic VRAM note;
+  fallback playtest_slim_c949ab88; playtest_slim_a44aa6db deleted) and announced to the user. Owner confirmations:
+  Gameplay - 15 hp was a test-construction artefact (bare Weapon, no range points), the game deals the authored 7.5 hp
+  at 300 m; Rendering - 64 decal nodes current since 480e3149 (one primitive per decal-receiver); Systems - the 2 voices
+  after the Quit unload are the popup BUTTON_ACCEPT click (map instances 0 / level cues 0). Harness fixes synced
+  1c7c8d35 (Experimental 1cc9605f + 02b9caff). FAST on 30b2fa74 re-reported: wfc_fidelity 100 % Debug + Release, route
+  28 / 0, mapswitch 6, renderstate 7 / 7, totals PASS 58 / KNOWN 2 / PRODUCT 1 (the 79 ms GPU spike under the shared
+  card). Rendering's leak parity rerun in slot A.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
