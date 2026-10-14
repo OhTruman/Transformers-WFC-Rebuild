@@ -737,5 +737,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   game, we'll worry about FPS later'). RT plan v2 gate (c) revised: per-item GPU budgets are reported measurements, not
   merge gates; each item takes its quality-maximising variant; the quality sub-setting is for recovering fps later.
   Hard floors kept: no stalls / hitches, Off + Faithful identity, SETTINGSTEST, Realistic >= ~60 fps at 1440p.
+  02:10 SQUAD TACTICS MERGED 15b89a75 (Gameplay GAMEPLAY_SQUAD_TACTICS.patch; squadTactics preset 2 = on default / 1 =
+  movement-only / 0 = off). Duels Smart vs Classic at matched difficulty: A Hard 70.2 % (104), B 54.8 %, tactics off on
+  the same code 65.4 % (today's squads were already at the top of the band; A adds ~5 pts); ladder for A (56 each,
+  +-6.6 SE): Easy 51.8 / Medium 60.7 / Hard 70.2 / Expert 57.1 -> Easy <= 55 %, no trim. Classic identity 24 / 24,
+  BOTTEST 39 / 39 both (Classic rerun = noise confirmed), DETERMINISM 2 / 2 both, AI cost 0.20 ms. NAVQ reversal column
+  split pathing / follow / fidget permanently (Streets seed 1 on A: 2.29 / 2.45 / 0.95); the follow part is the next
+  target. Playtest guide gains a what-to-watch section with the fallback. Pending from Gameplay: the lockstep input-drop
+  patch after its 07:30 verification.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
