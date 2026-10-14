@@ -958,5 +958,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (the 12 rad/s^2 AI cap loses to the spring torque). DECISION (b): port the AI translation (MoveToTargetLocation at
   the authored AI linear limits) only while unstable (> 30 deg); gates = TIPTEST on the straddle, the tipped-time
   table, NAVQ within 1 SE outside tips vs the 30b2fa74 baseline, identity re-based, BOTTEST / DETERMINISM.
+  13:42 BARRIER CASE RETRACTED then NOT REPRODUCED (Systems): the first staging had the bot 6 m away while spawnBarrier
+  places the barrier 10 m ahead, so the bot really stood in front of it; restaged with the pawn at 14 m (barrier ~4 m
+  in front of the bot): A vs B (+3a) pixel-identical on 56 frames, the bot completely hidden = our barrier renders as a
+  SOLID depth-writing surface. Rendering confirms the barrier / sentry are in neither RT set (static TLAS or the posed
+  skinned dynamic set), so 3a would change nothing for RT. Nothing committed for 3a; it stays a code note for 3b. OPEN
+  FIDELITY QUESTION: the user could see players through the 'grid', so the grid they saw is see-through; Systems checks
+  the original's Barrier ability material in the Game Dump (translucent hex grid, no depth write?) and the package-4
+  exe with HD on / off; if the original is translucent, ours is made translucent and 3a goes in with it. Cases 1 (smoke
+  on a bot) and 2 (local muzzle flash over a bot) are CORRECT on 56290b7d.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
