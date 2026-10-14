@@ -685,7 +685,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   data). Next: Rendering reruns the faith arm 2-3x with WFC_ASYNCJITTER=1 (test-only patch, merging) + detail hashes.
   SQUAD TACTICS ROUND 3 (r3c) hits both cohesion gates: settled 36.8 % within 15 m, in-fight 25.2 % within 20 m; a
   reversal rise (stop-and-go at wedge slots) is being fixed with station-keeping before the full gate.
-  01:05 R4 BOUNCE BUG FIXED, MERGED 64a1ce50 (rt2 a3db582b; still opt-in): the bounce-ray counters named it - rays were
+  00:30 R4 BOUNCE BUG FIXED, MERGED 64a1ce50 (rt2 a3db582b; still opt-in): the bounce-ray counters named it - rays were
   fine (96 % hit static, 91 % on GI pages) but the hit albedo averaged 0.03 with half the subs at 0: the reflection hit
   table built albedo from an 8x8 UV-space tile and UV islands thinner than a tile texel got no fragment (black). Such
   subs now take the mean of the rest (also better proxy reflections); real albedos are dark (Molten 0.058) so the
@@ -694,7 +694,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   in the bake) now lit by nearby lamps (user to judge; image work/wobble/gi_calibrated.png). Per-term Molten: sun + sky
   0.36, lamps + sky 0.38, direct 0.71. Experimental's not-idle-branch item done. Before the default flips: Streets /
   Gorge / Debris check (morning slot, ~15 min); vertex-lit surfaces as bounce sources (48 % of Rust's static hits).
-  WFC_ASYNCJITTER test hook on integration 0e7329cf (Gameplay 1624c398). DML window reopened 01:05, undisturbed until
-  morning.
+  WFC_ASYNCJITTER test hook on integration 0e7329cf (Gameplay 1624c398). DML window reopened 00:30, undisturbed until
+  morning. NEW LEAD on the one-off divergence (Gameplay): in lockstep only mouse deltas are zeroed; window keys /
+  buttons / wheel still reach handleInput and the player bot overrides only movement / fire / jump / dash / transform,
+  so a stray focus click, key, wheel (weapon switch), R, Escape or F9 on the odd run's window changes the sim at that
+  step - fits a single unreproducible split with no logged event. Fix approved: under WFC_LOCKSTEP discard all
+  window-originated input after the pump (scripted inputs kept) + a 'LOCKSTEP input dropped' log line; patch on 64a1ce50.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
