@@ -599,5 +599,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   of pixels differ pre / post a93 on that frame). Fix = the TLAS filter (~30 min), then Rust / Gorge checked for the same
   class. Systems: Molten per-page sun k refit done (9 of 18 pages, clamped sun 11.0 -> 4.8 %; runtime to read pages[i].k);
   old packages deleted (F: 218 GB free).
+  21:10 MOLTEN FIX MERGED a5825b33 (rt2 d128263e): the occluder was InterpActor_11529 (PROP_UND_RepairNodeB, 10 x 10 m, 7-25 cm
+  above the central platform, hidden in TDM) kept in the static TLAS while GL hid it; actor-placed (mover / toggled) subs
+  now stay out of the static TLAS (Molten leaves out 2); Off unchanged by construction, Faithful intended change on maps
+  with actor nodes; WFC_RT_CENSUS diagnostic. The user's Molten shadow report is CLOSED. Rendering parks for the S1 code
+  stretch ~21:20 -> DML window (E milestone 1 at G3) opens.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
