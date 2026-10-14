@@ -82,9 +82,15 @@ float3 hitRadiance(uint id, uint prim, float2 bc) {
             L += Lightmaps[NonUniformResourceIndex((uint)pg)].SampleLevel(LinearClamp, luv, 0).rgb * sc;
         }
     }
-    return HitSub[sub * 8 + 5].rgb * L * (1.0 / 3.0) + HitSub[sub * 8 + 6].rgb;
+    // the albedo x the map's bounce gain (the bake's GI was far stronger than these dark albedos bounce: Beast's intensity
+    // settings were not cooked), each channel capped at 0.8 so bright surfaces cannot run away over the passes
+    const float3 refl = min(HitSub[sub * 8 + 5].rgb * max(Mix.w, 0.0), 0.8);
+    return refl * L * (1.0 / 3.0) + HitSub[sub * 8 + 6].rgb;
 }
 
+// (diagnostics: the bounce rays' fate, summed per wave into Stats bytes 192 ..: hits on static geometry, of them with a
+// GI page / the bake fallback / neither, the hit albedo and radiance luminance x 1e4)
+static uint gStatic = 0, gGi = 0, gBake = 0, gNone = 0; static float gAlb = 0, gRad = 0;
 float3 traceRadiance(float3 o, float3 dir, uint mask) {
     RayQuery<RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> q;
     RayDesc r; r.Origin = o; r.Direction = dir; r.TMin = 0.0; r.TMax = 2000.0;
@@ -95,10 +101,23 @@ float3 traceRadiance(float3 o, float3 dir, uint mask) {
             q.CommitNonOpaqueTriangleHit();
     }
     if (q.CommittedStatus() != COMMITTED_TRIANGLE_HIT) return SkyG.rgb;
+    {
+        const uint id = q.CommittedInstanceID();
+        if (id >= 0x10000u && id < 0x20000u) {
+            ++gStatic;
+            const uint4 b = HitInst[id - 0x10000u];
+            const uint sub = HitTriSub[b.y + q.CommittedPrimitiveIndex()];
+            const float pg = HitSub[sub * 8].x;
+            if (giPageOfHit(pg) >= 0) ++gGi; else if (pg >= 0.0) ++gBake; else ++gNone;
+            gAlb += dot(HitSub[sub * 8 + 5].rgb, float3(0.2126, 0.7152, 0.0722));
+        }
+    }
     if (Mix.w <= 0.0) return float3(0, 0, 0);
     // x the map's bounce gain (WfcRtGi.cpp: fitted at load so the RT lightmap's mean matches the bake's - the bake's
     // GI intensity settings were not cooked)
-    return Mix.w * hitRadiance(q.CommittedInstanceID(), q.CommittedPrimitiveIndex(), q.CommittedTriangleBarycentrics());
+    const float3 hr = hitRadiance(q.CommittedInstanceID(), q.CommittedPrimitiveIndex(), q.CommittedTriangleBarycentrics());
+    gRad += dot(hr, float3(0.2126, 0.7152, 0.0722));
+    return hr;                                            // (the gain is in hitRadiance's capped reflectance)
 }
 
 #ifndef GI_DILATE
@@ -187,6 +206,12 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const uint waveRays = WaveActiveSum(rays);
     if (WaveIsFirstLane()) Stats.InterlockedAdd(0, waveRays);
+    const uint s0 = WaveActiveSum(n), s1 = WaveActiveSum(gStatic), s2 = WaveActiveSum(gGi), s3 = WaveActiveSum(gBake), s4 = WaveActiveSum(gNone);
+    const uint s5 = WaveActiveSum((uint)(gAlb * 1000.0)), s6 = WaveActiveSum((uint)(gRad * 10000.0));
+    if (WaveIsFirstLane()) {
+        Stats.InterlockedAdd(192, s0); Stats.InterlockedAdd(196, s1); Stats.InterlockedAdd(200, s2); Stats.InterlockedAdd(204, s3);
+        Stats.InterlockedAdd(208, s4); Stats.InterlockedAdd(212, s5); Stats.InterlockedAdd(216, s6);
+    }
 }
 
 #else

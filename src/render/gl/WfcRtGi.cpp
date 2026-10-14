@@ -333,7 +333,10 @@ void Pipeline::giSetup() {
     static const int rays = [] { const char* e = std::getenv("WFC_RT_GIRAYS"); return e ? std::max(0, std::atoi(e)) : 8; }();
     for (int c = 0; c < 3; ++c) J.sky[c] = sky[(size_t)c].asFloat(0.0f);
     J.sky[3] = (float)rays;
-    J.lights = nLights;
+    // (diagnostics: the terms one at a time) WFC_RT_GILIGHTS=0 no static lights, WFC_RT_GISUN=0 no sun, WFC_RT_GISKY=0 no sky
+    J.lights = WFC_ENV("WFC_RT_GILIGHTS") && WFC_ENV("WFC_RT_GILIGHTS")[0] == '0' ? 0u : nLights;
+    if (WFC_ENV("WFC_RT_GISUN") && WFC_ENV("WFC_RT_GISUN")[0] == '0') J.toSun[3] = 0.0f;
+    if (WFC_ENV("WFC_RT_GISKY") && WFC_ENV("WFC_RT_GISKY")[0] == '0') J.sky[0] = J.sky[1] = J.sky[2] = 0.0f;
     J.mix[0] = 0.05f; J.mix[1] = r1Fit_[2] < 0.0f ? -1.0f : 1.0f; J.mix[2] = r1Fit_[1] > 0.0f ? r1Fit_[1] : 1.0f; J.mix[3] = 1.0f;
     J.subOff = subOff; J.lightOff = lightOff; J.pageMapOff = pageMapOff; J.mask = 0x0Bu;
     // the GI arrays (the MDI rows sample arrays): RGBA16F, one level, layer for layer as the lightmap arrays
@@ -421,7 +424,7 @@ void Pipeline::giSetup() {
     double ratio = ran ? measure(false) : 0.0;
     if (ran && fixedGain < 0.0f && ratio > 0.05) {
         double g0 = gain, r0 = ratio;
-        double g1 = std::min(4.0, std::max(0.25, gain / ratio));
+        double g1 = std::min(24.0, std::max(0.25, gain / ratio));
         for (int it = 0; it < 3 && ran; ++it) {
             ran = runPasses((float)g1);
             const double r1 = ran ? measure(false) : 0.0;
@@ -429,7 +432,7 @@ void Pipeline::giSetup() {
             gain = (float)g1; ratio = r1;
             if (std::fabs(r1 - 1.0) < 0.02 || std::fabs(r1 - r0) < 1e-4) break;
             const double g2 = g1 + (1.0 - r1) * (g1 - g0) / (r1 - r0);
-            g0 = g1; r0 = r1; g1 = std::min(4.0, std::max(0.25, g2));
+            g0 = g1; r0 = r1; g1 = std::min(24.0, std::max(0.25, g2));
         }
     }
     jobOf(giJob_).mix[3] = gain;                          // (the per-frame slices keep the fitted gain)
