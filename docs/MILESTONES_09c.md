@@ -700,5 +700,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   so a stray focus click, key, wheel (weapon switch), R, Escape or F9 on the odd run's window changes the sim at that
   step - fits a single unreproducible split with no logged event. Fix approved: under WFC_LOCKSTEP discard all
   window-originated input after the pump (scripted inputs kept) + a 'LOCKSTEP input dropped' log line; patch on 64a1ce50.
+  00:50 USER on gi_calibrated: Rust's lamp-lit pillars look right; wants more examples and RT pushed as far as possible
+  so real-time reflections, lighting and shadows make the game feel like a whole new game. Direction to Rendering:
+  Realistic goes beyond the original (S3 bounce + probes, S4 dynamic / weapon light, soft shadows from every light,
+  reflections wherever physical, RT AO); Faithful / Off stay byte-identical; 5-map Off | Faithful | Realistic triptychs
+  + a reflections close-up from the morning check for the user; RT_FULL_PLAN.md v2 (impact per GPU day, perf budgets)
+  reviewed before S3. Lockstep input-drop built (verification = morning slot B with injected window input); squad
+  tactics round-3 reversals = a 45 m form-flip threshold, hysteresis in (walk <= 30 m), measuring.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
