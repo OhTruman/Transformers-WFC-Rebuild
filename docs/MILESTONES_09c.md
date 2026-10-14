@@ -752,5 +752,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   alone -> ~11:00 Experimental regress alone + RT-on rows -> package 4 cut); hard pause at 10:30 if E slips. Rendering
   codes plan-v2 item 1 (probe grid) CPU-only meanwhile; Experimental's identity + self-tests on 15b89a75 all PASS
   (Classic 8 / 8 identical; Smart differs from step 601 = squadTactics acting at 10 s).
+  03:40 E EYE REVIEW, Molten (AssetTools hd_e_eye.py, 88 units, 100 % looked at): 67 accepted (knurled rings, bolts,
+  bevels, cracks, grime, paint chips -> grime clumps; ~1/3 identical to D under tint protection), 17 rejected for
+  invented objects (a face in a door recess, emblems / labels / glyphs / plaques on flat areas, a capsule, gear machinery
+  in the burn, a disc on a circuit board, a redrawn Decepticon logo, warped HIGH MOON text, rock -> blobby cells), 4
+  gate fails; rejects keep D. ~19 % by-eye reject rate = G3's main risk, caught by the full review. Follow-ups after
+  generation: retry rejects at denoise 0.5 + a stronger negative prompt; text / logo mask protection if cheap; per-map
+  contact sheets (accepted + rejected examples) for the user. Live E pack Molten = 132 rows, 997 MB; generation at ~95 /
+  197 on Streets.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
