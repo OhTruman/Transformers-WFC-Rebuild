@@ -643,5 +643,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   almost nothing = a bug (suspect: hit albedo from the reflection hit table, now logged). Commit plan: S1 / S2 land with
   R4 OFF by default (WFC_RT_GI=1 opts in) so a package's Realistic stays as today until RT matches the bake. DML window
   reopened 22:28 (overnight; next check >= 00:30).
+  22:35 S1 + S2 MERGED 5d452363 (rt2 351ea8a6; built green): the runtime RT lightmap is on integration, opt-in via
+  WFC_RT_GI=1; without it Realistic / Faithful / Off are unchanged (Faithful identity 5/5 + SIMHASH on Rendering's tree).
+  Next: the bounce bug (RT / bake 0.77 / 0.88), then the default flips and package 4 is cut.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
