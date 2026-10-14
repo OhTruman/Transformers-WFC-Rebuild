@@ -816,5 +816,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the user's own Codex / APEX python (~1 % of one CPU), not a lane; harness 0b033f94 now counts only lane processes.
   HOLD RULE adopted: a file named PERF_HOLD at <lane>\work\ for every timed run (all lanes' runners poll it). AssetTools
   paused 09:39 -> 10:00 for the rerun. Now: untimed captures, R4 leak rows, the 31 v 32 jitter pair.
+  10:08 PACKAGE 4 BUILT, not promoted (Systems): work/playtest_slim_30b2fa74, 16.60 GB, 0 failures; HD b0-15 (1,875 rows,
+  static check 0 problems, 5 A8R8G8B8 rows valid); Release + PGO; vbake + fit_lights on 10 maps, per-page fit.json
+  byte-identical on the 5 user maps. CAPTURES on 30b2fa74, Rust (Experimental): Off identity vs c949ab88 PASS (SIMHASH
+  0 / 3002 differ, 0 / 25 shots); Faithful identity vs 0e7329cf PASS (0 / 0); Realistic view vs R4-off: SIMHASH 0
+  differ, 25 / 25 shots differ = lighting only (RT GI 1.93 M texels in 47 pages, 2527 subs, 59 MB). Remaining for
+  promote: Systems verify_slim, Experimental FAST.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
