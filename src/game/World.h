@@ -918,6 +918,9 @@ public:
     void tickPrefix(float dt);
     void launchStep();          // the pending background part: on the sim thread (async) or inline
     void joinStep();            // wait for it, publish presented(), run the deferred main-thread work
+    // WFC_ASYNCJITTER=<seed> (determinism self-test): a seeded 0-8 ms sleep on the calling thread - the async background part and the
+    // main thread's frame call it, so step / frame interleavings vary as under CPU contention. The simulation must not change.
+    static void asyncJitter();
     bool stepPending() const { return remainderPending_; }
     bool stepRunning() const { return remainderRunning_; }   // main-thread code must not touch simulation state while true
     // WFC_PLAYERBOT=<difficulty 0..2>: the bot brain drives the LOCAL player through its normal input (movement keys, camera yaw / pitch,

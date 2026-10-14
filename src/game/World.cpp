@@ -31,6 +31,8 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <functional>
+#include <thread>
 
 namespace game {
 
@@ -1854,7 +1856,18 @@ void World::publishPresented() {
     if ((long)f.kills.size() > kCap) f.kills.erase(f.kills.begin(), f.kills.end() - kCap);
 }
 
+void World::asyncJitter() {
+    static const char* env = std::getenv("WFC_ASYNCJITTER");
+    if (!env) return;
+    thread_local unsigned s = 0;
+    if (s == 0) s = (unsigned)std::strtoul(env, nullptr, 10) * 2654435761u + (unsigned)std::hash<std::thread::id>{}(std::this_thread::get_id()) + 1u;
+    s = s * 1664525u + 1013904223u;
+    const unsigned ms = (s >> 16) % 9u;
+    if (ms) std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
+
 void World::finishRemainder() {
+    asyncJitter();   // WFC_ASYNCJITTER: the background part starts late by a seeded 0-8 ms (determinism self-test)
     const double t0 = profNowMs();
     stepRemainder(pendingDt_);
     // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with

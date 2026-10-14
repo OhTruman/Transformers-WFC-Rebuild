@@ -519,6 +519,7 @@ Application::MatchExit Application::runMatch() {
     for (;;) {
         // Async step (WFC_ASYNCSTEP=1): the background part launched after the last frame's draw finishes first. [integration 09c]
         // Joined at the very top of the frame: the QA panel, the diagnostic auto-input hooks and the input below touch the World.
+        game::World::asyncJitter();   // WFC_ASYNCJITTER: the main thread reaches the join at a seeded 0-8 ms offset (determinism self-test)
         world_.joinStep();
         if (smokeFrames > 0 && frame >= smokeFrames) {
             LOG_INFO("smoke test complete: ran %ld frames", frame);
@@ -6502,6 +6503,7 @@ void Application::runAsyncStepTest() {
             if (!async) { world_.handleInput(idle, dt); const double s0 = nowMs(); world_.tick(dt); stepMs += nowMs() - s0; states.push_back(stateOf()); continue; }
             for (int f = 0; f < frames; ++f) {
                 const double t0 = nowMs();
+                game::World::asyncJitter();   // WFC_ASYNCJITTER: main-thread offset before the join (the background part sleeps too)
                 world_.joinStep();
                 const double tj = nowMs();
                 if (f == 0 && i > 0) states.push_back(stateOf());
