@@ -615,5 +615,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the world's), which also restores character shadows on the floor under GI; a load-time calibration log (RT vs bake
   decoded means per page) added. First S1 GPU check (~20 min) at the DML pause; Gameplay's lockstep repro runs as slot B
   in the same pause.
+  21:00 Lockstep-under-load (Gameplay): NO repro in direct boot (Streets 4+5, seed 3, RT off; Classic and Smart; 3 loaded
+  runs + WFC_ASYNCSTEP=0 all identical to the no-load reference). Rendering's odd run first differs at step 727 (~2 s
+  into the match) with no event between 690 and 727 = internal state; player bot, LOCKSTEP_EXACT occlusion waits, sim
+  RNG and wall clock excluded by code. Next: WFC_SIMHASH=700-760 per-pawn detail in Rendering's lockpair runs; a seeded
+  WFC_ASYNCJITTER self-test (lockstep twice with 0-8 ms jitter, equal SIMHASH asserted) in Rendering's configuration.
+  GPU scheduling: a 2-min DML window was wasted at the first S1 check -> rule: 90-min minimum per DML window, Rendering
+  checks batched to one per 2 h with 15 min notice.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
