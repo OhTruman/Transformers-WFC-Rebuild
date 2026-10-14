@@ -1,4 +1,4 @@
-# Experimental regression sweep - 2026-10-13 (integration head 05319349; runtime parts resume on 9a492cfa) - IN PROGRESS
+# Experimental regression sweep - 2026-10-13 (integration head 05319349; runtime parts on 9a492cfa .. 2017eeba) - FINAL
 
 User request (07:40, via Integration): "hunt for bugs, memory leaks, and any problems I have ever resolved or caught."
 Scope here: every fix recorded on integration, plus the human-playtest findings in STATUS.md / docs/MILESTONES_09c.md.
@@ -50,9 +50,9 @@ reads through frontend::openPath), WFC_LOCKSTEP_EXACT, WFC_DRAWCOMBO, the displa
 
 | issue (first reported) | fix | code at head | repro on head |
 |---|---|---|---|
-| Black world / malformed menus on a plain Release launch (M06) | 398b732a render data root | 97 % | map-loss / presentation route: PENDING |
-| Pause menu over gameplay after Resume (M06) | 9aa28ea7 / 6fb19f8 | 86-100 % | presentation route (pause / resume): PENDING |
-| Choose Character soft lock (M06) | 6fb19f8, 3e174831 | 100 % | presentation route: PENDING |
+| Black world / malformed menus on a plain Release launch (M06) | 398b732a render data root | 97 % | map-loss gate PASS on f70a46d5 (section 9); presentation route: not run (unverifiable tonight) |
+| Pause menu over gameplay after Resume (M06) | 9aa28ea7 / 6fb19f8 | 86-100 % | presentation route (pause / resume): not run (unverifiable tonight) |
+| Choose Character soft lock (M06) | 6fb19f8, 3e174831 | 100 % | presentation route: not run (unverifiable tonight) |
 | Extras Movies / Credits soft lock (M06) | 732a5b27 | 96 % | code PASS |
 | Account / rename text entry (M06) | 9dc70ec7, 136ac7a1 | 98-100 % | code PASS |
 | Intro skipped on second boot (M06) | 3e9db972 | 100 % | code PASS |
@@ -64,7 +64,7 @@ reads through frontend::openPath), WFC_LOCKSTEP_EXACT, WFC_DRAWCOMBO, the displa
 | Create a Character class-pick freeze (08k) | 50f07421 | 100 % | code PASS |
 | Menu / lobby / spawn / music-start hitches (08k-08r, M09c) | 3f001109, dfa1f257, e0e7eaf5 | 91-99 % | code PASS |
 | GFx / GL / map memory leaks (M28, killstreak, prefetch) | 1013867d, c2c25d8d, c0678b29 | 97-100 % | leak soak on a17309b7: PASS (plateau; GL live textures flat at 93) - section 5 |
-| Bots hitting team-mates (pawnRayHit) | 5eeb3f79 | 100 % | self-tests (PARTICIPANT) PENDING |
+| Bots hitting team-mates (pawnRayHit) | 5eeb3f79 | 100 % | PARTICIPANT 23 / 23 PASS on 2017eeba (section 4) |
 | Radius damage through walls (HurtRadius LOS) | b749a833 | 100 % | Gameplay sweep |
 | Stranded bots / rejoin | a7234074, a1ee934a, b1e65868 (8d91c7ea's 25 m superseded by 34 m) | 100 % | Gameplay sweep |
 | Settings lost at map change (release() keep list) | 072437aa + WFC_SETTINGSTEST | 100 % | WFC_SETTINGSTEST 6 / 6 PASS (gamma, FSR scale / sharpness, anisotropy, HD, FSR 3.1, Modern); RT row not on head yet (agents/rendering-rt held) |
@@ -73,11 +73,21 @@ reads through frontend::openPath), WFC_LOCKSTEP_EXACT, WFC_DRAWCOMBO, the displa
 | Package paths over MAX_PATH | 60f99c6b, 87aa7da4 | 100 % | verify_slim on the morning refresh |
 | AMD freezes / resets (M09) | 3bffa0a8 guards, 5b72d0fc FX budgets | present (refactored) | see N1: the game does not survive a driver reset |
 
-## 4. In-product self-tests on head (tools/fidelity/selftest-sweep.ps1)
+## 4. In-product self-tests (tools/fidelity/selftest-sweep.ps1) - final run on integration 2017eeba (19:18)
 
-Run so far, before Integration's 08:00 GPU cap stopped the sweep: ASYNCSTEP, BARRIERWALK, BOTNAV 7/7, BOTOBJ 12/12,
-BOTTEST 38/39 (N3), BRAWL, CAM, CHARGE, CHASSIS, CLASSCHANGE, CTF, SETTINGS 6/6, WEAPON 19/19 (N2). PENDING: the rest
-(the sweep resumes where it stopped).
+61 WFC_*TEST switches found in the exe, one process each, 180 s cap, windowed, RT off (parked for the DML window at
+WFC_TILETEST, resumed after). **38 PASS / 0 FAIL / 23 no verdict.** No 0xC0000409, no crash dump except HANGTEST's own, no
+GPU-lost report. Finished tests exit 0 or 1 (a test mode ends with 1); -999 = still running at the cap.
+
+| result | tests (checks passed) |
+|---|---|
+| PASS | ASYNCSTEP 3, BARRIERWALK 4, BOTNAV 8, BOTOBJ 13, BOTTEST 40, CHARGE 10, CHASSIS 15, CLASSCHANGE 27, CTF 13, DETERMINISM 3, DOUBLEJUMP 4, ENGAGE 4, EVENT 17, EVICT 17, EXTRABODY 39, FINEAIM 4, FXOWNER 7, MARKERS 6, MODEPLAY 22, MUZZLE 6, NAVQ 1, PACING 5, PARTICIPANT 23, PRELOAD 2, PROJFX 4, QABOT 8, QA 9, RMUZZLE 5, SCORE 10, SETTINGS 7, SHADOWSELF 32, SPAWNFILL 11, SWITCH 33, TDM 44, VEHFRAME 5, WEAPON 20, XFORM 1, XP 17 |
+| no verdict (diagnostic: measurements / images, no PASS-FAIL line) | BRAWL, CAM, DECAL, DLE, DROP, FOV, FX, HEIGHT, IMPACT, MARKER, MATCH, MODE, PICKUP, RELOAD, RISER, SCALE, SCREEN, SHADOWMASK, SHADOW, VEH (all at their caps: car dash 30, tank 15 / 25, jet 10 / 40) |
+| by design | HANG (the deliberate hang; wrote its dump), TILE and ZPREPASS (run until killed: -999) |
+
+Harness fix during the run: QATEST / QABOTTEST need WFC_QA=1 (their first check is the QA panel switch); without it all
+their checks failed (dbd8723e). Earlier in the day (05319349 / 9a492cfa): N2 WEAPONTEST terminate and N3 BOTTEST 38/39 -
+both PASS now (WEAPON 20, BOTTEST 40).
 
 ## 5. Memory-leak soak (final head a17309b7, Release + PGO, 12:36-13:53)
 
@@ -136,7 +146,7 @@ hd_push) do not affect a memory measurement. Data: work/sweep/soak_a17309b, work
 | Settings precedence: profile vs WFC_* env | PASS (pinned) | Since the frontend's Ray Tracing row, the profile's RayTracing= / HDTextures= are applied at boot and override WFC_RT_MODE / WFC_HDTEXTURES. Every harness profile writer now writes RayTracing (0 by default; Get-BotProfile -RayTracing) next to HDTextures + HDTexturesUserSet=1 (M05.ps1, bot-matrix legacy, m07-frontend, map-loss-gate). lockstep-ab writes each arm's WFC_RT_MODE into that arm's profile. |
 | lockstep-ab marks a Ray Tracing mismatch UNKNOWN | PASS | New columns rt_req / rt_mode / rt_scene / rt_noshaders (lib/Run.ps1 Get-WfcRtState: the last "renderer: Ray Tracing <mode>" line, else inferred from the RT scene: TLAS = Faithful, + reflection hit data = Realistic). UNKNOWN if the mode differs from the request, or an RT-on arm built no RT scene / has no shaders. Checked on Rendering's s5_mat log (Realistic inferred) and a regress-8map head log (Off). |
 | GPU-lost dialog in harness runs | PASS (pinned) | Add-WfcHarnessEnv pins WFC_GPULOST_DIALOG_S=0. |
-| Harness exit codes 0 / 1, no 0xC0000409 | PENDING (runtime) | N2 cause found by Gameplay: the watchdog's global std::thread terminated at static destruction on init-false harness paths (WFC_WEAPONTEST, WFC_PARTICIPANTTEST); a static guard now joins it (integration 51260f56, RenderWatchdog.cpp). The self-test sweep on 51260f56 records every test's exit code. |
+| Harness exit codes 0 / 1, no 0xC0000409 | PASS (2017eeba sweep, section 4) | N2 cause found by Gameplay: the watchdog's global std::thread terminated at static destruction on init-false harness paths (WFC_WEAPONTEST, WFC_PARTICIPANTTEST); a static guard now joins it (integration 51260f56, RenderWatchdog.cpp). The self-test sweep on 51260f56 records every test's exit code. |
 
 ## 8. TDR diagnostic (Integration's analysis, 2026-10-13 morning)
 
@@ -186,3 +196,40 @@ Probe result for the TDR section: **without the robust-context fix, the beginFra
 | 508 | 2.08 | 2.08 | +0.00 |
 | 509 | 2.76 | 2.76 | +0.00 |
 | 510 | 2.53 | 2.53 | +0.00 |
+
+## 11. User playtest 2026-10-13 P0 repros (before a17309b7 / after integration a44aa6db)
+
+Harnesses (tools/fidelity): weapon-wobble.ps1 + wobble.py, weapon-crosstalk.ps1 + crosstalk_flash.py.
+
+Weapon wobble (P0-1; Streets strafe at a deterministic 144 Hz, WFC_RENDERHZ; per-64 px-tile frame-to-frame jitter on the gun
+tiles 7,8 / 8,7 / 6,8 vs the torso tiles in the same run; verdict gun / body within the 60 Hz control's ratio + 0.25 and gun
+sign flips <= body + 0.1):
+
+| build | gun jitter px | gun / body | gun flips (body) | verdict |
+|---|---|---|---|---|
+| a17309b7 | 34.7 | 7.85 | 0.37 (0.02) | FAIL |
+| a17309b7 WFC_WEAPONDIRECT / FSR 3.1 | 33.2 / 34.8 | 7.5 / 8.0 | 0.37 / 0.38 | FAIL |
+| a44aa6db (Rendering rt2 9d949f4b) | 6.3 | 1.38 | 0.03 (0.03) | PASS |
+| 60 Hz control | 2.1-2.3 | 1.08-1.26 | 0.09 | - |
+
+Cause (code read, confirmed by Rendering): the gun drawn at the current step's hand socket while the body is interpolated
+(Pass 25b); not the M1 weapon queue, not motion vectors.
+
+Weapon cross-talk (P0-2; frontend private TDM Streets, idle local player, bots 4v5, 60 s; same bot activity in both runs:
+21 kills, 28 spawns):
+
+| check | a17309b7 | a44aa6db |
+|---|---|---|
+| large muzzle-flash events at the idle player's gun | 21 FAIL | 0 PASS |
+| vehicle-form HUD clip (clip vs capacity) | 60 / 6 FAIL | 60 / 60 PASS |
+| same-weapon ammo drops without input | 0 PASS | 0 PASS |
+| robot-form HUD clip != capacity | 0 PASS | 0 PASS |
+
+Cause (code read, confirmed by Gameplay): World's one WeaponFx re-anchored every step to the local MuzzleFlash socket, so bots'
+local-space muzzle emitters drew on the player's gun; the vehicle HUD sent the vehicle clip with the robot capacity.
+Gameplay's WFC_FXOWNERTEST is the in-product proof (7 / 7 PASS on 2017eeba). (The 4v5: the lobby's extended flag is
+BotsExtended, not ExtendedPlayers - fixed in the harness, 84716b53.)
+
+FAST launch of the a44aa6db slim package (playtest_slim, the Play.bat roots on a subst drive, this lane's own profile so the
+user's saved settings were not touched): frontend to the main menu PASS (11 s), Streets TDM 1200 frames PASS; robust context,
+0 error lines, 0 GPU-lost.
