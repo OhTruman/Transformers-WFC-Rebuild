@@ -102,6 +102,20 @@ Bots think every 0.25 s, staggered. Each decision covers:
 ## Tests
 - `WFC_BOTTEST` (25/25 + phase-2 grenade / repair checks): human + 3 / 4 bots, then 7 v 8 HARD, 120 s each. Checks the roster, spawns, movement, combat,
   stuck time, environment deaths, AI cost, completion and MatchEnd.
+<<<<<<< HEAD
+=======
+  - **Known artefact:** run it with the default sim threads. Under `WFC_SIMTHREADS=2` (a cap used for CPU-only batch runs), the "AI cost per step" check FAILS for Classic AND Smart. 2026-10-13: avg 0.10-0.14 ms per bot, max 8-22 ms; the same build passes 39/39 for both AIs with default threads. That is the thread cap, not a code regression; do not chase it.
+  - Other machine load also inflates the max; the 2026-10-13 regression sweep saw 13.85 ms on a busy machine and 4.59 ms quiet.
+- `WFC_NAVQTEST` (measurement): bot pathing quality on the loaded map. Per bot-minute: slow %, heading reversals, off-mesh %, 5 s idles, stucks / repaths / failed searches. `WFC_NAVQ_SECS`, `WFC_NAVQTRACE=<player>`.
+  - Run it under `WFC_NULLRENDER=1` (CPU only: no window, GPU or audio device) with 6 seeds (`WFC_SEED`) per arm; single matches mislead.
+  - Results 2026-10-13: docs/handoff/GAMEPLAY_PATHING_2026-10-13.md.
+- **Renderer coupling (audit 2026-10-13):** bots and gameplay read nothing decision-relevant from the renderer.
+  - The one render-time read is `drawOwnerRenderAge` in `participantShotFxHook`: the presentation-only impact-squib relevance gate, used in extended lobbies or with `WFC_IMPACTRELEVANCE=1`.
+  - Participant culling is hard-wired off.
+  - Bone and socket reads use the per-step animation pose.
+  - The renderer's visibility query calls const collision only.
+  - So a `WFC_NULLRENDER=1` boot simulates the same match as a GL boot (DETERMINISM digest identical, 2026-10-13). Any renderer-mode SIMHASH divergence comes from another sim input (RNG / step clock).
+>>>>>>> e0353420 (Smart pathing set 2 against integration c949ab88 (docs/handoff/GAMEPLAY_PATHING2.patch) + tables; GAMEPLAY_BOTS.md renderer-coupling note)
 - `WFC_BOTNAVTEST` (7/7 on 9 maps; `WFC_MAP=<map>`): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
 - `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
 - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.

@@ -53,6 +53,7 @@ struct SmartTune {
     float squadWaitOpenM = 40.0f, squadWaitOpenDirs = 4.0f;   // sheltered: at most this many of 16 eye-height directions open beyond this range
     float squadLeaderStop = 1.0f;   // 1: a leader whose members are strung out stops (<= 8 s per wait); members over 45 m off regroup in vehicle form
     float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
+    float squadSlowFactor = 0.4f;   // the slowed leader's move input scale (0.4 = walking pace)
     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
     float outnumberMargin = 2.0f;   // fall back to the nearest ally when known enemies near >= allies near + this ...
@@ -70,7 +71,7 @@ struct SmartTune {
     float ditherGuard = 1.0f;       // a bot that covers > 12 m but nets < 3 m in 6 s outside combat, half of it off the mesh (ping-pong in a
                                     // pocket beside a railing): avoid
                                     // that spot, drop the goal and hold off off-mesh rejoins 4 s (0 = off)
-    float goalFloorM = 3.0f;        // a Roam / Attack goal counts as reached only within this height too (a goal on the floor below a railing
+    float goalFloorM = 3.0f;        // a non-Attack goal (Roam / Support / objective) counts as reached only within this height too (a goal below a railing
                                     // was "reached" from above and never left) (0 = horizontal only, the Classic rule)
     float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster
                                     // only (any start drew bots to far / raised starts of other clusters: NAVQ Gorge off-mesh 14.7 -> 5.3 %)

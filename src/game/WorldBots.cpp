@@ -444,7 +444,9 @@ void World::botThink(BotBody o, BotBrain& b) {
         return true; }()) {}
     else if (haveOg) ng = og;
     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
-             hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f ||
+             (hdist(b.goal.pos, pc.position()) < b.goal.radius &&   // reached; Smart: on the goal's floor too (as botSteer's arrival)
+              !(anySmart_ && botIsSmart(b.player) && smartTune().goalFloorM > 0.0f && std::fabs(b.goal.pos.y - pc.position().y) > smartTune().goalFloorM)) ||
+             now - b.goalTime > 40.0f ||
              (b.goal.kind == BotGoalKind::Roam && !b.path.empty() && b.wp >= b.path.size() && !b.wantRepath))   // the path ended short of the goal: idled up to 40 s (WFC_STUCKWATCH Berth)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;
@@ -864,8 +866,11 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                 b.avoidUntil = nowD + 30.0f;
                 if (b.goal.kind != BotGoalKind::Attack) b.hasGoal = false;
                 b.wantRepath = true; b.hasRejoin = false; b.rejoinUntil = nowD + 4.0f;
-                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action == SmartBot::Retreat && sd.actionTarget == -2) {   // a pickup trip: skip it 2 min
-                    sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; sd.action = SmartBot::None;
+                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action != SmartBot::None) {
+                    // A pickup trip: skip that pickup 2 min. Any other Smart errand (cover / flank / hunt spot) ends too: avoidCells only
+                    // cost paths, so the same spot in an off-mesh pocket was picked again at the next think (Experimental review).
+                    if (sd.action == SmartBot::Retreat && sd.actionTarget == -2) { sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; }
+                    sd.action = SmartBot::None;
                 }
                 if (botNav_.findCell(pos, 0.0f) < 0) {
                     // Off the mesh: every corridor from here starts with the same blocked leg (a pocket beside a railing: the rejoin
@@ -1995,7 +2000,7 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
         if (waiting) {
             in.moveForward = 0.0f; in.moveRight = 0.0f; b.wantVehicle = false;
             in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting
-        } else { in.moveForward *= 0.4f; in.moveRight *= 0.4f; b.wantVehicle = false; }
+        } else { in.moveForward *= smartTune().squadSlowFactor; in.moveRight *= smartTune().squadSlowFactor; b.wantVehicle = false; }
     } else if (s.leaderWaitSince >= 0.0f) s.leaderWaitSince = -1.0f;   // the squad closed up: the next wait starts afresh
     // A member over 45 m from its leader regroups in vehicle form (the same travel speed as a leader on a trip).
     if (s.regroupFar && !engaged && smartTune().squadLeaderStop > 0.0f && match_.matchTime() >= b.noVehicleUntil) b.wantVehicle = true;

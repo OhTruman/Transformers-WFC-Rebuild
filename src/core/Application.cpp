@@ -4748,19 +4748,22 @@ void Application::runNavQualityTest() {
         }
     }
     double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0;
+    double cohSum = 0.0; long cohN = 0, cohNear = 0;
     for (const auto& [p, a] : acc) {
         travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
         if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; dithers += b->dithers; }
+        world_.smartCohesion(p, cohSum, cohN, cohNear);
         smart += world_.botIsSmart(p); ++nb;
         LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
                  a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
     }
     const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
-             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d",
+             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m)",
              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
              dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
-             stucks / botMin, repaths / botMin, noPaths / botMin, dithers);
+             stucks / botMin, repaths / botMin, noPaths / botMin, dithers,
+             cohN > 0 ? cohSum / (double)cohN : 0.0, cohN > 0 ? 100.0 * (double)cohNear / (double)cohN : 0.0);
 }
 
 // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

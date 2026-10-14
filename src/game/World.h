@@ -751,6 +751,12 @@ public:
     const BotBrain* botBrain(int player) const;
     // Smart standing still on purpose this step (holding cover, a squad leader waiting): not a navigation stall (WFC_NAVQTEST).
     bool botHoldingStill(int player) const { return botIsSmart(player) && smart_[(size_t)player].holdStill; }
+    // Smart squad cohesion samples (WFC_NAVQTEST): member-to-leader distance, settled samples (15 s+ after a respawn) and those within 15 m.
+    void smartCohesion(int player, double& sum, long& n, long& near15) const {
+        if (!botIsSmart(player)) return;
+        const SmartBot& s = smart_[(size_t)player];
+        sum += s.cohesionSettledSum; for (long v : s.cohesionSettledBins) n += v; near15 += s.cohesionSettledBins[0];
+    }
     const std::vector<BotBrain>& botBrains() const { return bots_; }
     const BotNav& botNav() const { return botNav_; }
     // The MoveIntent a participant pawn simulated this step (bots: the AI's throttle / strafe / boost / steer, same meaning as the local

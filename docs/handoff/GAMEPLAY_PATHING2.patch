@@ -1,0 +1,118 @@
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 2e932de..bfaf0e7 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -444,7 +444,9 @@ void World::botThink(BotBody o, BotBrain& b) {
+         return true; }()) {}
+     else if (haveOg) ng = og;
+     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
+-             hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f ||
++             (hdist(b.goal.pos, pc.position()) < b.goal.radius &&   // reached; Smart: on the goal's floor too (as botSteer's arrival)
++              !(anySmart_ && botIsSmart(b.player) && smartTune().goalFloorM > 0.0f && std::fabs(b.goal.pos.y - pc.position().y) > smartTune().goalFloorM)) ||
++             now - b.goalTime > 40.0f ||
+              (b.goal.kind == BotGoalKind::Roam && !b.path.empty() && b.wp >= b.path.size() && !b.wantRepath))   // the path ended short of the goal: idled up to 40 s (WFC_STUCKWATCH Berth)
+         ng = botObjectiveGoal(b, pc);
+     else ng = b.goal;
+@@ -864,8 +866,11 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+                 b.avoidUntil = nowD + 30.0f;
+                 if (b.goal.kind != BotGoalKind::Attack) b.hasGoal = false;
+                 b.wantRepath = true; b.hasRejoin = false; b.rejoinUntil = nowD + 4.0f;
+-                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action == SmartBot::Retreat && sd.actionTarget == -2) {   // a pickup trip: skip it 2 min
+-                    sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; sd.action = SmartBot::None;
++                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action != SmartBot::None) {
++                    // A pickup trip: skip that pickup 2 min. Any other Smart errand (cover / flank / hunt spot) ends too: avoidCells only
++                    // cost paths, so the same spot in an off-mesh pocket was picked again at the next think (Experimental review).
++                    if (sd.action == SmartBot::Retreat && sd.actionTarget == -2) { sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; }
++                    sd.action = SmartBot::None;
+                 }
+                 if (botNav_.findCell(pos, 0.0f) < 0) {
+                     // Off the mesh: every corridor from here starts with the same blocked leg (a pocket beside a railing: the rejoin
+@@ -1995,7 +2000,7 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
+         if (waiting) {
+             in.moveForward = 0.0f; in.moveRight = 0.0f; b.wantVehicle = false;
+             in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting
+-        } else { in.moveForward *= 0.4f; in.moveRight *= 0.4f; b.wantVehicle = false; }
++        } else { in.moveForward *= smartTune().squadSlowFactor; in.moveRight *= smartTune().squadSlowFactor; b.wantVehicle = false; }
+     } else if (s.leaderWaitSince >= 0.0f) s.leaderWaitSince = -1.0f;   // the squad closed up: the next wait starts afresh
+     // A member over 45 m from its leader regroups in vehicle form (the same travel speed as a leader on a trip).
+     if (s.regroupFar && !engaged && smartTune().squadLeaderStop > 0.0f && match_.matchTime() >= b.noVehicleUntil) b.wantVehicle = true;
+diff --git a/src/game/BotSmart.h b/src/game/BotSmart.h
+index 9ad9b94..854d600 100644
+--- a/src/game/BotSmart.h
++++ b/src/game/BotSmart.h
+@@ -53,6 +53,7 @@ struct SmartTune {
+     float squadWaitOpenM = 40.0f, squadWaitOpenDirs = 4.0f;   // sheltered: at most this many of 16 eye-height directions open beyond this range
+     float squadLeaderStop = 1.0f;   // 1: a leader whose members are strung out stops (<= 8 s per wait); members over 45 m off regroup in vehicle form
+     float squadSlowM = 25.0f;       // a leader slows to walking pace while its members (within 120 m) average more than this away
++    float squadSlowFactor = 0.4f;   // the slowed leader's move input scale (0.4 = walking pace)
+     float squadWaitM = 1e9f;        // a leader waits while its members are this far away on average (off: a member stuck elsewhere kept
+                                     // its leader idle - BOTTEST)       // members take the leader's goal / target when not fighting (0 = off)
+     float outnumberMargin = 2.0f;   // fall back to the nearest ally when known enemies near >= allies near + this ...
+@@ -70,7 +71,7 @@ struct SmartTune {
+     float ditherGuard = 1.0f;       // a bot that covers > 12 m but nets < 3 m in 6 s outside combat, half of it off the mesh (ping-pong in a
+                                     // pocket beside a railing): avoid
+                                     // that spot, drop the goal and hold off off-mesh rejoins 4 s (0 = off)
+-    float goalFloorM = 3.0f;        // a Roam / Attack goal counts as reached only within this height too (a goal on the floor below a railing
++    float goalFloorM = 3.0f;        // a non-Attack goal (Roam / Support / objective) counts as reached only within this height too (a goal below a railing
+                                     // was "reached" from above and never left) (0 = horizontal only, the Classic rule)
+     float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster
+                                     // only (any start drew bots to far / raised starts of other clusters: NAVQ Gorge off-mesh 14.7 -> 5.3 %)
+diff --git a/src/game/BotSmart.cpp b/src/game/BotSmart.cpp
+index 89a5136..7b124ab 100644
+--- a/src/game/BotSmart.cpp
++++ b/src/game/BotSmart.cpp
+@@ -38,7 +38,7 @@ const SmartTune& smartTune() {
+             {"coverExposure", &v.coverExposure}, {"coverMaxExposure", &v.coverMaxExposure}, {"coverChance", &v.coverChance},
+             {"coverChancePerDiff", &v.coverChancePerDiff}, {"coverRangeM", &v.coverRangeM}, {"coverHurtFrac", &v.coverHurtFrac}, {"coverRangedChance", &v.coverRangedChance}, {"coverHoldS", &v.coverHoldS}, {"coverNear", &v.coverNear}, {"retreatHp", &v.retreatHp}, {"huntConfidence", &v.huntConfidence},
+             {"routeExposureW", &v.routeExposureW}, {"focusHurtW", &v.focusHurtW}, {"focusMatesW", &v.focusMatesW},
+-            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}, {"routeNoise", &v.routeNoise}, {"ditherGuard", &v.ditherGuard}, {"goalFloorM", &v.goalFloorM}, {"spawnNearScope", &v.spawnNearScope}};
++            {"squadSize", &v.squadSize}, {"squadFollow", &v.squadFollow}, {"squadHelp", &v.squadHelp}, {"squadRegroupM", &v.squadRegroupM}, {"squadWaitM", &v.squadWaitM}, {"squadSlowM", &v.squadSlowM}, {"squadLeaderStop", &v.squadLeaderStop}, {"squadWaitCover", &v.squadWaitCover}, {"squadWaitOpenM", &v.squadWaitOpenM}, {"squadWaitOpenDirs", &v.squadWaitOpenDirs}, {"outnumberMargin", &v.outnumberMargin}, {"outnumberHp", &v.outnumberHp}, {"preAim", &v.preAim}, {"flank", &v.flank}, {"flankEtaS", &v.flankEtaS}, {"flankExtraM", &v.flankExtraM}, {"vehicle", &v.vehicle}, {"segBreak", &v.segBreak}, {"pickupSegments", &v.pickupSegments}, {"routeNoise", &v.routeNoise}, {"ditherGuard", &v.ditherGuard}, {"goalFloorM", &v.goalFloorM}, {"spawnNearScope", &v.spawnNearScope}, {"squadSlowFactor", &v.squadSlowFactor}};
+         std::string s = e;
+         size_t i = 0;
+         while (i < s.size()) {
+diff --git a/src/game/World.h b/src/game/World.h
+index 13c94f8..189c0f9 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -751,6 +751,12 @@ public:
+     const BotBrain* botBrain(int player) const;
+     // Smart standing still on purpose this step (holding cover, a squad leader waiting): not a navigation stall (WFC_NAVQTEST).
+     bool botHoldingStill(int player) const { return botIsSmart(player) && smart_[(size_t)player].holdStill; }
++    // Smart squad cohesion samples (WFC_NAVQTEST): member-to-leader distance, settled samples (15 s+ after a respawn) and those within 15 m.
++    void smartCohesion(int player, double& sum, long& n, long& near15) const {
++        if (!botIsSmart(player)) return;
++        const SmartBot& s = smart_[(size_t)player];
++        sum += s.cohesionSettledSum; for (long v : s.cohesionSettledBins) n += v; near15 += s.cohesionSettledBins[0];
++    }
+     const std::vector<BotBrain>& botBrains() const { return bots_; }
+     const BotNav& botNav() const { return botNav_; }
+     // The MoveIntent a participant pawn simulated this step (bots: the AI's throttle / strafe / boost / steer, same meaning as the local
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index b6f40e2..27db682 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -4748,19 +4748,22 @@ void Application::runNavQualityTest() {
+         }
+     }
+     double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0;
++    double cohSum = 0.0; long cohN = 0, cohNear = 0;
+     for (const auto& [p, a] : acc) {
+         travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
+         if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; dithers += b->dithers; }
++        world_.smartCohesion(p, cohSum, cohN, cohNear);
+         smart += world_.botIsSmart(p); ++nb;
+         LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
+                  a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
+     }
+     const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
+     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
+-             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d",
++             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m)",
+              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
+              dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
+-             stucks / botMin, repaths / botMin, noPaths / botMin, dithers);
++             stucks / botMin, repaths / botMin, noPaths / botMin, dithers,
++             cohN > 0 ? cohSum / (double)cohN : 0.0, cohN > 0 ? 100.0 * (double)cohNear / (double)cohN : 0.0);
+ }
+ 
+ // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

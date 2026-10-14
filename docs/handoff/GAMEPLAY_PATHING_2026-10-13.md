@@ -63,3 +63,43 @@ Columns: % of travel time slow (< 1.5 m/s) / heading reversals per travel-minute
 
 - Debris slow time and Molten reversals.
 - One remaining long stall per few matches: a bot slow and off the mesh 40 % of its time without reversing (Streets seed 5).
+
+## Set 2: `GAMEPLAY_PATHING2.patch` (against c949ab88)
+
+### Changes
+
+- **Think-time goal re-pick is floor-aware** (Smart), like botSteer's arrival (Experimental review).
+- **A dither escape ends any Smart errand** (cover / flank / hunt spot), not only pickup trips. avoidCells cost paths, not spot choice.
+- **`squadSlowFactor` tune key** (default 0.4, unchanged).
+- **WFC_NAVQTEST prints squad cohesion:** the settled member-to-leader mean distance and the % within 15 m.
+
+### NAVQ (6 seeds, mean ± standard error)
+
+Columns: slow % / reversals per travel-min / off-mesh % / stucks per bot-min.
+
+| Map | Smart (set 2) | Classic |
+|---|---|---|
+| Streets | 5.1±0.7 / 3.2±0.9 / 3.6±0.6 / 1.25±0.2 | 6.9±1.6 / 3.3±0.8 / 5.9±1.3 / 1.48±0.2 |
+| Molten | 2.2±0.4 / 2.0±0.5 / 1.6±0.1 / 0.67±0.1 | 1.8±0.4 / 2.0±0.5 / 1.5±0.3 / 0.84±0.3 |
+| Debris | 4.4±0.6 / 1.3±0.2 / 2.5±0.4 / 0.91±0.2 | 3.8±0.8 / 1.2±0.3 / 2.1±0.3 / 1.09±0.1 |
+| Gorge | 4.9±1.1 / 3.9±0.4 / 6.4±1.7 / 1.39±0.2 | 5.9±2.1 / 5.0±2.3 / 7.0±2.7 / 2.31±1.1 |
+
+Every remaining Molten / Debris gap is within one standard error: level with Classic within noise.
+
+**Classic identity:** 24/24 summaries identical.
+
+**Self-tests:**
+- BOTTEST 39/39 for both AIs.
+- 31 v 32 AI cost: 0.40 ms per step with the dither guard, 0.43 ms without (no measurable cost).
+- DETERMINISM 2/2 for both AIs.
+
+### DECISION NEEDED: squad respawn scope (cohesion vs movement)
+
+| `spawnNearScope` | Squad member-to-leader distance (settled, 24 runs) | Within 15 m | Gorge slow / rev / off-mesh / stucks |
+|---|---|---|---|
+| 2 (shipping) | 70.6 m | 19 % | 4.9 / 3.9 / 6.4 / 1.39 |
+| 0 (M2 rule) | 55.0 m | 22 % | 13.4 / 9.5 / 14.6 / 2.88 |
+
+Respawning only in the active spawn cluster spreads squads about 15 m further apart. Respawning anywhere keeps them tighter, but Gorge movement is twice as bad.
+
+The user's M2 decision was "squads stay as they are", so this trade is the user's / Integration's call. A middle option is possible: active cluster, plus other-cluster starts that have a short nav path to the squad.
