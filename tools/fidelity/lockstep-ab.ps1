@@ -15,7 +15,9 @@
 # (refused before any run without a frozen root), and HD-on arms of a rep must report the same verified pack, else the row is UNKNOWN.
 param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$Map, [Parameter(Mandatory)][string[]]$Arms,
       [int]$Seed = 1234, [int]$Steps = 9000, [int]$From = 1800, [string]$RenderSize = "", [int]$PlayerBot = 1, [int]$Reps = 1,
-      [int]$Bots = 32, [switch]$Batching, [switch]$ReportOnly)
+      [int]$Bots = 32, [switch]$Batching, [switch]$ReportOnly,
+      # -Width / -Height: the profile window (windowed; 2026-10-14 1440p baselines at the display's native 2560x1440 - no mode change)
+      [int]$Width = 1920, [int]$Height = 1080)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -49,7 +51,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
         if (-not $ReportOnly -and -not (Test-Path $lg)) {
             New-Item -ItemType Directory -Force $d | Out-Null
             $rtArm = [int]$(if ((ArmEnv $extra).WFC_RT_MODE) { (ArmEnv $extra).WFC_RT_MODE } else { 0 })   # (the profile row wins over WFC_RT_MODE at boot)
-            (Get-BotProfile 0 0 1 -Width 1920 -Height 1080 -RayTracing $rtArm) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+            (Get-BotProfile 0 0 1 -Width $Width -Height $Height -RayTracing $rtArm) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
             if (-not (Wait-WfcGpu)) { Res "$label.r$rep.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
             $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$Seed"; WFC_SMOKE_FRAMES = "$($Steps + 600)"; WFC_LOGEVERY = "0"
                     WFC_NOMOUSE = "1"; WFC_SLOWFRAME = "0.01"; WFC_SIMHASH = "0" }   # every frame: 'interval' = wall frame time (PERF frame= is the lockstep dt)
