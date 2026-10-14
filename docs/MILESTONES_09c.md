@@ -646,5 +646,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   22:35 S1 + S2 MERGED 5d452363 (rt2 351ea8a6; built green): the runtime RT lightmap is on integration, opt-in via
   WFC_RT_GI=1; without it Realistic / Faithful / Off are unchanged (Faithful identity 5/5 + SIMHASH on Rendering's tree).
   Next: the bounce bug (RT / bake 0.77 / 0.88), then the default flips and package 4 is cut.
+  23:00 EXPERIMENTAL CPU-ONLY CHECKS on 5d452363 (null render, muted): lockstep SIMHASH identity vs c949ab88 (NAVQ 4v5,
+  7919 steps, 2 seeds x 4 maps): Classic 8/8 identical; Smart 2/8 differ (Streets seed 7 from step 2858, Gorge seed 5 from
+  step 5057 = pathing set 2 firing, expected). Self-tests 4/4: BOTTEST 39/39, CLASSCHANGE 26/26, DETERMINISM 2/2 (digest
+  4e8b5f344b226b4f = Gameplay's), FXOWNER 6/6. Code review of rt2 351ea8a6 R4-off path: no new per-frame passes or GI
+  allocations without WFC_RT_GI (giOn gates raster -> finish -> setup -> frame; giTex() 0 = the bake binds as before);
+  residue with RT on: 2 compute PSOs + a root-signature descriptor table at bridge init, a CPU albedo-log loop at hit-data
+  build; RT Off never initialises the bridge. Morning: GL regress-8map on the package-4 head. Squad regroup design
+  (Gameplay eac44488, on integration 54f46ff9): A + C approved under the cohesion / movement / AIDUEL gate; 00:30 GPU
+  check booked for the bounce bug (new bounce-ray counters).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
