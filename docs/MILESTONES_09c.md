@@ -716,5 +716,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   list + SETTINGSTEST, measured at 1440p within budget with a quality sub-setting, one example image for the user.
   Items 1-2 target package 5 before the ~21 Oct playtest. Morning order fixed: gicheck3 (+ Gameplay slot B) -> R4
   default flip -> example set alone -> Experimental regress alone -> Experimental RT-on rows -> DML reopens.
+  01:20 SQUAD TACTICS ROUND 3 FINAL (Gameplay): candidate A (formation + leader on foot while strung out + slot edge
+  margin + member walk with 30 m hysteresis + leader wait 14 / 4 s + slow at 18 m): settled 43.6 m / 41.2 % within 15 m
+  and in-fight 25.2 % within 20 m (both cohesion gates pass); slow / off-mesh / stucks within noise (Gorge better) but
+  reversals +1.5-2 per travel-min on Streets / Molten / Debris = members fidgeting near a slow or waiting leader (not
+  stucks; five fixes tried, only the form-flip hysteresis helped). Candidate B (movement-only) just under both cohesion
+  gates. DECISION: ship A as the Smart default with a key selecting B / off; the user judges the fidgeting in the
+  playtest; NAVQ fidget counter added; remaining gates (AIDUEL 57-65 %, Classic 24/24, BOTTEST, DETERMINISM, AI cost)
+  then the patch on 64a1ce50.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
