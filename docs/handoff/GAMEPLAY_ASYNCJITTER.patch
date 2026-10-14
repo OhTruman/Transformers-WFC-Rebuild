@@ -1,0 +1,66 @@
+diff --git a/src/game/World.h b/src/game/World.h
+index 189c0f9..93c9d68 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -918,6 +918,9 @@ public:
+     void tickPrefix(float dt);
+     void launchStep();          // the pending background part: on the sim thread (async) or inline
+     void joinStep();            // wait for it, publish presented(), run the deferred main-thread work
++    // WFC_ASYNCJITTER=<seed> (determinism self-test): a seeded 0-8 ms sleep on the calling thread - the async background part and the
++    // main thread's frame call it, so step / frame interleavings vary as under CPU contention. The simulation must not change.
++    static void asyncJitter();
+     bool stepPending() const { return remainderPending_; }
+     bool stepRunning() const { return remainderRunning_; }   // main-thread code must not touch simulation state while true
+     // WFC_PLAYERBOT=<difficulty 0..2>: the bot brain drives the LOCAL player through its normal input (movement keys, camera yaw / pitch,
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 6cc6b0c..0cab9bc 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -31,6 +31,8 @@
+ #include <map>
+ #include <set>
+ #include <sstream>
++#include <functional>
++#include <thread>
+ 
+ namespace game {
+ 
+@@ -1854,7 +1856,18 @@ void World::publishPresented() {
+     if ((long)f.kills.size() > kCap) f.kills.erase(f.kills.begin(), f.kills.end() - kCap);
+ }
+ 
++void World::asyncJitter() {
++    static const char* env = std::getenv("WFC_ASYNCJITTER");
++    if (!env) return;
++    thread_local unsigned s = 0;
++    if (s == 0) s = (unsigned)std::strtoul(env, nullptr, 10) * 2654435761u + (unsigned)std::hash<std::thread::id>{}(std::this_thread::get_id()) + 1u;
++    s = s * 1664525u + 1013904223u;
++    const unsigned ms = (s >> 16) % 9u;
++    if (ms) std::this_thread::sleep_for(std::chrono::milliseconds(ms));
++}
++
+ void World::finishRemainder() {
++    asyncJitter();   // WFC_ASYNCJITTER: the background part starts late by a seeded 0-8 ms (determinism self-test)
+     const double t0 = profNowMs();
+     stepRemainder(pendingDt_);
+     // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 27db682..4a7cdb9 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -519,6 +519,7 @@ Application::MatchExit Application::runMatch() {
+     for (;;) {
+         // Async step (WFC_ASYNCSTEP=1): the background part launched after the last frame's draw finishes first. [integration 09c]
+         // Joined at the very top of the frame: the QA panel, the diagnostic auto-input hooks and the input below touch the World.
++        game::World::asyncJitter();   // WFC_ASYNCJITTER: the main thread reaches the join at a seeded 0-8 ms offset (determinism self-test)
+         world_.joinStep();
+         if (smokeFrames > 0 && frame >= smokeFrames) {
+             LOG_INFO("smoke test complete: ran %ld frames", frame);
+@@ -6502,6 +6503,7 @@ void Application::runAsyncStepTest() {
+             if (!async) { world_.handleInput(idle, dt); const double s0 = nowMs(); world_.tick(dt); stepMs += nowMs() - s0; states.push_back(stateOf()); continue; }
+             for (int f = 0; f < frames; ++f) {
+                 const double t0 = nowMs();
++                game::World::asyncJitter();   // WFC_ASYNCJITTER: main-thread offset before the join (the background part sleeps too)
+                 world_.joinStep();
+                 const double tj = nowMs();
+                 if (f == 0 && i > 0) states.push_back(stateOf());
