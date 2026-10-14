@@ -184,7 +184,8 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
     {   // Beast probe SH at the bounds origin (0x82CCB488: zero, + sky, + probe, + overflow; no floor)
         static const bool noProbes = std::getenv("WFC_NOBEASTPROBES") != nullptr;   // A/B
         core::Vec3 pc[6];
-        if (!noProbes && beastAmbient(toUE(origin), pc))
+        // (S3, RT Realistic with R4: the RT probe grid in place of the bake's Beast probes)
+        if (!noProbes && (giProbeAt(origin, pc) || beastAmbient(toUE(origin), pc)))
             for (int fc = 0; fc < 6; ++fc) env.cube[fc] = env.cube[fc] + pc[fc];
     }
     core::Vec3 lightsSH[6];               // LightsSH (+0x108): direct lights folded into the ambient cube

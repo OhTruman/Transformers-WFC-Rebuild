@@ -31,6 +31,7 @@
 #include "rt_shadow_soft.h"
 #include "rt_gi.h"
 #include "rt_gi_dilate.h"
+#include "rt_gi_probe.h"
 #endif
 #if defined(WFC_RT_DENOISER)
 #include "render/d3d12/D3D12RtDenoise.h"
@@ -608,6 +609,63 @@ public:
 #endif
     }
     void giQueue(const RtGiJob& j) { giJob_ = j; giPending_ = true; }
+    // S3: trace the probe grid (chunked submissions), read it back
+    bool giProbes(const RtGiJob& j0, const float origin[3], float spacing, const int dims[3], int rays, std::vector<float>& out) {
+        out.clear();
+        if (!giReady() || !tlas_ || !psoGiProbe_ || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0) return false;
+        const UINT n = (UINT)dims[0] * (UINT)dims[1] * (UINT)dims[2];
+        rel(giProbeBuf_);
+        giProbeBuf_ = makeBuffer(dev_, (UINT64)n * 96, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        ID3D12Resource* rb = makeBuffer(dev_, (UINT64)n * 96, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
+        if (!giProbeBuf_ || !rb) { rel(giProbeBuf_); rel(rb); return false; }
+        giProbeN_ = n;
+        writeDescriptors();
+        const UINT inc = dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        D3D12_GPU_DESCRIPTOR_HANDLE base = heap_->GetGPUDescriptorHandleForHeapStart();
+        D3D12_GPU_DESCRIPTOR_HANDLE lm = base; lm.ptr += 4ull * kTableN * inc;
+        D3D12_GPU_DESCRIPTOR_HANDLE tG = base; tG.ptr += (4ull * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2ull * kTableN) * inc;
+        const UINT chunk = 16384;
+        bool ok = true;
+        for (UINT first = 0; first < n && ok; first += chunk) {
+            const UINT count = std::min(chunk, n - first);
+            ok = oneShot([&](ID3D12GraphicsCommandList* cl) {
+                float c[28] = {};
+                c[0] = origin[0]; c[1] = origin[1]; c[2] = origin[2]; c[3] = spacing;
+                c[4] = (float)dims[0]; c[5] = (float)dims[1]; c[6] = (float)dims[2];
+                std::memcpy(c + 8, j0.sky, 12); c[11] = (float)rays;
+                const uint32_t u[4] = {first, count, 0u, 0u}; std::memcpy(c + 12, u, 16);
+                std::memcpy(c + 16, j0.mix, 16);
+                const uint32_t o[4] = {j0.subOff, j0.lightOff, j0.pageMapOff, j0.mask}; std::memcpy(c + 20, o, 16);
+                cl->SetComputeRootSignature(rs_);
+                cl->SetDescriptorHeaps(1, &heap_);
+                cl->SetPipelineState(psoGiProbe_);
+                cl->SetComputeRoot32BitConstants(0, 28, c, 0);
+                cl->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());
+                cl->SetComputeRootDescriptorTable(2, tG);
+                cl->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+                cl->SetComputeRootDescriptorTable(4, lm);
+                cl->Dispatch((count + 63) / 64, 1, 1);
+                if (first + count >= n) {                // (the last chunk: copy the grid to the readback buffer)
+                    D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION; b.Transition.pResource = giProbeBuf_;
+                    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+                    b.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS; b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+                    cl->ResourceBarrier(1, &b);
+                    cl->CopyBufferRegion(rb, 0, giProbeBuf_, 0, (UINT64)n * 96);
+                    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+                    cl->ResourceBarrier(1, &b);
+                }
+            }, "GI: probe grid");
+        }
+        if (ok) {
+            void* p = nullptr; D3D12_RANGE r{0, (SIZE_T)n * 96}, none{0, 0};
+            if (SUCCEEDED(rb->Map(0, &r, &p))) { out.resize((size_t)n * 24); std::memcpy(out.data(), p, (size_t)n * 96); rb->Unmap(0, &none); }
+            else ok = false;
+        }
+        rel(rb);
+        rel(giProbeBuf_); giProbeN_ = 0;                 // (the grid lives on the CPU; the GPU copy is not kept)
+        writeDescriptors();
+        return ok && !out.empty();
+    }
     bool giReady() const { return psoGi_ && giTexels_ && !gi_.empty(); }
     // load time: whole passes over every texel, in chunks of one submission each (GL owns the pages around it)
     bool giRunNow(const RtGiJob& j0, int passes, UINT chunk) {
@@ -859,6 +917,8 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGi_))) { psoGi_ = nullptr; LOG_WARN("RT bridge: GI texel PSO failed (the bake stays)"); }
         pd.CS.pShaderBytecode = g_rt_gi_dilate; pd.CS.BytecodeLength = sizeof g_rt_gi_dilate;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGiDil_))) psoGiDil_ = nullptr;
+        pd.CS.pShaderBytecode = g_rt_gi_probe; pd.CS.BytecodeLength = sizeof g_rt_gi_probe;
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGiProbe_))) psoGiProbe_ = nullptr;
         D3D12_QUERY_HEAP_DESC qh{}; qh.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP; qh.Count = 12;
         if (FAILED(dev_->CreateQueryHeap(&qh, __uuidof(ID3D12QueryHeap), (void**)&tsHeap_))) return false;
         for (auto& r : tsReadback_) r = makeBuffer(dev_, 48, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -870,7 +930,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2 * kTableN;   // (+ R4: GI page UAVs, tables E / F)
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 3 * kTableN;   // (+ R4: GI page UAVs, tables E / F / G)
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -933,14 +993,19 @@ private:
         }
         for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
             uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
-        for (int table = 0; table < 2; ++table) {        // R4: E (the texel tracer) / F (the gutter): t1 .. t13 as A .. D
+        for (int table = 0; table < 3; ++table) {        // R4: E (the texel tracer) / F (the gutter) / G (S3 probes): t1 .. t13 as A .. D
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
             sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
             if (table == 0) sbuf(giTexels_, giTexelN_, 32); else sbuf(giDilate_, giDilateN_, 16);
             sbuf(giData_, giDataN_, 16);
-            uav(refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(hit_, DXGI_FORMAT_R32_UINT);
+            if (table == 2) {                            // G: u0 = the probe buffer (structured float4)
+                D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = DXGI_FORMAT_UNKNOWN; u.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+                u.Buffer.NumElements = giProbeBuf_ ? giProbeN_ * 6 : 1; u.Buffer.StructureByteStride = 16;
+                dev_->CreateUnorderedAccessView(giProbeBuf_, nullptr, &u, h); h.ptr += inc;
+            } else uav(refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            uav(hit_, DXGI_FORMAT_R32_UINT);
             uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
     }
@@ -1306,8 +1371,9 @@ private:
 
     // ---- R4 helpers ----
     void giRecord(ID3D12GraphicsCommandList* cl, const RtGiJob& j) {
-        float c[24] = {};
+        float c[28] = {};
         std::memcpy(c, j.toSun, 16); std::memcpy(c + 4, j.sunCol, 16); std::memcpy(c + 8, j.sky, 16);
+        c[24] = j.lightSize;
         const uint32_t u[4] = {j.first, j.count, j.frame, j.lights};
         std::memcpy(c + 12, u, 16); std::memcpy(c + 16, j.mix, 16);
         const uint32_t o[4] = {j.subOff, j.lightOff, j.pageMapOff, j.mask};
@@ -1320,7 +1386,7 @@ private:
         cl->SetComputeRootSignature(rs_);
         cl->SetDescriptorHeaps(1, &heap_);
         cl->SetPipelineState(psoGi_);
-        cl->SetComputeRoot32BitConstants(0, 24, c, 0);
+        cl->SetComputeRoot32BitConstants(0, 28, c, 0);
         cl->SetComputeRootShaderResourceView(1, tlas_->GetGPUVirtualAddress());   // (the static scene: characters do not light the map)
         cl->SetComputeRootDescriptorTable(2, tE);
         cl->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
@@ -1330,9 +1396,9 @@ private:
             for (int r = 0; r < 2; ++r) {
                 D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; cl->ResourceBarrier(1, &ub);
                 cl->SetPipelineState(psoGiDil_);
-                float c2[24]; std::memcpy(c2, c, sizeof c);
+                float c2[28]; std::memcpy(c2, c, sizeof c);
                 const uint32_t ud[4] = {0u, giDilateN_, j.frame, j.lights}; std::memcpy(c2 + 12, ud, 16);
-                cl->SetComputeRoot32BitConstants(0, 24, c2, 0);
+                cl->SetComputeRoot32BitConstants(0, 28, c2, 0);
                 cl->SetComputeRootDescriptorTable(2, tF);
                 cl->Dispatch((giDilateN_ + 63) / 64, 1, 1);
             }
@@ -1374,6 +1440,7 @@ private:
     UINT giTexelN_ = 0, giDilateN_ = 0, giDataN_ = 0; UINT64 giBytes_ = 0;
     ID3D12PipelineState* psoGi_ = nullptr; ID3D12PipelineState* psoGiDil_ = nullptr;
     RtGiJob giJob_; bool giPending_ = false;
+    ID3D12PipelineState* psoGiProbe_ = nullptr; ID3D12Resource* giProbeBuf_ = nullptr; UINT giProbeN_ = 0;
     ID3D12Resource* giStatUp_ = nullptr; ID3D12Resource* giStatRb_ = nullptr;
     bool giTimed_[2] = {false, false}; double giSum_ = 0, giMax_ = 0; int giN_ = 0;
 };
@@ -1439,6 +1506,9 @@ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridg
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
 void rtBridgeGiQueue(const RtGiJob& j) { if (g_bridge) g_bridge->giQueue(j); }
 bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk) { return g_bridge && g_bridge->giRunNow(j, passes, chunk); }
+bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays, std::vector<float>& out) {
+    return g_bridge && g_bridge->giProbes(j, origin, spacing, dims, rays, out);
+}
 
 }  // namespace render
 #else
@@ -1457,5 +1527,6 @@ void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
 void rtBridgeGiQueue(const RtGiJob&) {}
 bool rtBridgeGiRunNow(const RtGiJob&, int, unsigned) { return false; }
+bool rtBridgeGiProbes(const RtGiJob&, const float*, float, const int*, int, std::vector<float>& out) { out.clear(); return false; }
 }  // namespace render
 #endif
