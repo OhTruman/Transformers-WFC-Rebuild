@@ -549,6 +549,15 @@ int Match::findPlayerStart(int p) {
         for (size_t i = 0; i < starts_.size(); ++i) {
             const Start& s = starts_[i];
             if (s.generated || s.ffa || s.team != P.team) continue;
+            if (squadAnchorScope_ > 0) {   // only starts of registered clusters (1) / of the team's active cluster (2)
+                bool inScope = false;
+                for (size_t c = 0; c < clusters_.size() && !inScope; ++c) {
+                    const Cluster& cl = clusters_[c];
+                    if (cl.actor != s.cluster) continue;
+                    inScope = squadAnchorScope_ == 1 ? cl.registered : (int)c == active_[P.team];
+                }
+                if (!inScope) continue;
+            }
             const float d = core::length(s.pos - anchor);
             if (d >= bestD || !safe((int)i)) continue;
             bool enemyNear = false;

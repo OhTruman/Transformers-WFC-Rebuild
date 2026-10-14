@@ -113,7 +113,10 @@ bool Application::init() {
     if (nullRender && wantsFrontendBoot()) { LOG_ERROR("WFC_NULLRENDER: only for direct-boot harnesses (set the harness variable)"); return false; }
     if (nullRender) {
         renderer_ = render::createNullRenderer();
-        LOG_INFO("WFC_NULLRENDER: no window, no GL context, no GPU upload (sim-only harness boot)");
+        LOG_INFO("WFC_NULLRENDER: null render - no window, no GL context, no GPU upload, no audio device (sim-only harness boot)");
+#ifdef _WIN32
+        SetConsoleTitleA("wfc_rebuild NULLRENDER sim (no window / GPU / audio)");   // other lanes' runners can tell it apart (no-op without a console)
+#endif
     } else {
         window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
         if (!window_) { LOG_ERROR("window creation failed"); return false; }
@@ -123,7 +126,7 @@ bool Application::init() {
         if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
     }
 
-    audio_ = audio::createAudio();
+    audio_ = nullRender ? nullptr : audio::createAudio();   // null boot: no audio device either (silent by construction)
     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
 
     // Frontend boot: the match world is loaded later, from the frontend's match launch (Application_Frontend.cpp).
@@ -4709,6 +4712,15 @@ void Application::runNavQualityTest() {
             const core::Vec3 p = pc.position();
             a.aliveT += dt;
             const bool travel = b && !pc.isTransforming() && b->target < 0 && b->wp < b->path.size() && !world_.botHoldingStill(o->matchPlayer());
+            static const int traceP = std::getenv("WFC_NAVQTRACE") ? std::atoi(std::getenv("WFC_NAVQTRACE")) : -1;   // one bot's state every 0.5 s
+            if (b && o->matchPlayer() == traceP && i % 30 == 0) {
+                const game::BotNav::Waypoint* w = b->wp < b->path.size() ? &b->path[b->wp] : nullptr;
+                LOG_INFO("NAVQTRACE t %.1f p%d pos (%.1f %.1f %.1f) cell %d ground %d form %s v %.1f | goal %s (%.1f %.1f %.1f) target %d | wp %zu/%zu next (%.1f %.1f %.1f) act %d | rejoin %d (%.1f %.1f) stuckLvl %d travel %d",
+                         i * dt, b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), (int)pc.onGround(), game::formName(pc.moveForm()),
+                         std::sqrt(pc.velocity().x * pc.velocity().x + pc.velocity().z * pc.velocity().z), game::botGoalName(b->goal.kind),
+                         b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, b->target, b->wp, b->path.size(), w ? w->pos.x : 0.0f, w ? w->pos.y : 0.0f,
+                         w ? w->pos.z : 0.0f, w ? w->action : -1, (int)b->hasRejoin, b->rejoin.x, b->rejoin.z, b->stuckLevel, (int)travel);
+            }
             core::Vec3 v = pc.velocity(); v.y = 0.0f;
             if (travel) {
                 a.travelT += dt;
@@ -4735,20 +4747,20 @@ void Application::runNavQualityTest() {
             a.last = p;
         }
     }
-    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0;
+    double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, stucks = 0, repaths = 0, noPaths = 0, smart = 0, nb = 0, dithers = 0;
     for (const auto& [p, a] : acc) {
         travelT += a.travelT; slowT += a.slowT; offT += a.offT; aliveT += a.aliveT; dist += a.dist; rev += a.rev; idle5 += a.idle5;
-        if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; }
+        if (const game::BotBrain* b = world_.botBrain(p)) { stucks += b->stucks; repaths += b->repaths; noPaths += b->noPaths; dithers += b->dithers; }
         smart += world_.botIsSmart(p); ++nb;
         LOG_INFO("NAVQ bot p%d: alive %.0f s, travel %.0f s, %.0f m, slow %.1f%%, reversals %d, off-mesh %.1f%%, idle5 %d", p, a.aliveT, a.travelT, a.dist,
                  a.travelT > 0 ? 100.0 * a.slowT / a.travelT : 0.0, a.rev, a.travelT > 0 ? 100.0 * a.offT / a.travelT : 0.0, a.idle5);
     }
     const double botMin = std::max(1e-6, aliveT / 60.0), travMin = std::max(1e-6, travelT / 60.0);
     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
-             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min",
+             "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d",
              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
              dist / std::max(1e-6, travelT), 100.0 * slowT / std::max(1e-6, travelT), rev / travMin, 100.0 * offT / std::max(1e-6, travelT), idle5 / botMin,
-             stucks / botMin, repaths / botMin, noPaths / botMin);
+             stucks / botMin, repaths / botMin, noPaths / botMin, dithers);
 }
 
 // WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.

@@ -121,6 +121,17 @@ bool BotNav::load(const std::string& path) {
         ++pid;
     }
     mainPiece_ = best;
+    if (std::getenv("WFC_NAVPORTALAUDIT")) {   // diagnostic: portals whose two cells' floors differ at the shared edge (a walk link over a drop)
+        int bad = 0, total = 0;
+        for (size_t i = 0; i < cells_.size(); ++i)
+            for (const Portal& q : cells_[i].portals) {
+                ++total;
+                const float mx = (q.a.x + q.b.x) * 0.5f, mz = (q.a.z + q.b.z) * 0.5f;
+                const float dh = std::fabs(heightAt(cells_[i], mx, mz) - heightAt(cells_[(size_t)q.to], mx, mz));
+                if (dh > 1.0f) { if (bad < 12) LOG_INFO("botnav: portal %zu -> %d at (%.1f %.1f) floor step %.1f m", i, q.to, mx, mz, dh); ++bad; }
+            }
+        LOG_INFO("botnav: portal audit: %d of %d portals step more than 1 m at the shared edge", bad, total);
+    }
     LOG_INFO("botnav: %s: %zu cells, %zu links, %zu anchors, %d pieces (main %d cells)", path.c_str(), cells_.size(), links_.size(), anchors_.size(), pid, best);
     return valid();
 }
@@ -240,7 +251,7 @@ int BotNav::stepSearch(int maxExpansions) const {
             float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
             if (a.avoid && std::find(a.avoid->begin(), a.avoid->end(), p.to) != a.avoid->end()) tight *= 10.0f;
             if (a.cost && (size_t)p.to < a.cost->size()) tight *= 1.0f + a.costW * (*a.cost)[(size_t)p.to];
-            if (a.noiseSeed) tight *= 1.0f + 0.25f * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
+            if (a.noiseSeed) tight *= 1.0f + a.noiseW * (float)(hashU((unsigned)p.to ^ a.noiseSeed) & 0xffffU) * (1.0f / 65535.0f);
             const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
             if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); push(ng + kSearchWeight * core::length(cells_[(size_t)p.to].centroid - S.goalC), p.to); }
         }

@@ -2360,6 +2360,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
         }
         return false;
     });
+    match_.setSquadAnchorScope((int)smartTune().spawnNearScope);
     match_.begin(s);
     match_.setSnapshotProvider([this](int p) { return participantSnapshot(p); });
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");

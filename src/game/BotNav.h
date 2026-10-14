@@ -30,7 +30,7 @@ public:
     struct Agent { float radius = 1.75f; bool vehicle = false; const std::vector<int>* avoid = nullptr;   // avoid: cells costed x10 (a bot's blocked spots)
                    // Smart AI only (null / 0 for Classic): cell cost x (1 + costW * cost[cell]) (threat exposure), and a per-agent
                    // seeded noise x (1 + 0.25 * hash(cell, noiseSeed)) so bots do not all take one corridor.
-                   const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; };
+                   const std::vector<float>* cost = nullptr; float costW = 0.0f; unsigned noiseSeed = 0; float noiseW = 0.25f; };
 
     bool load(const std::string& path);
     bool valid() const { return !cells_.empty(); }

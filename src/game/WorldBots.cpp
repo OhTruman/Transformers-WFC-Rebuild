@@ -626,7 +626,8 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
-    const bool wants = (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
+    const bool trapped = match_.matchTime() < b.trappedUntil;   // Smart dither escape off the mesh (botSteer)
+    const bool wants = !trapped && (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
     if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
     if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
         botSearchQueue_.pop_front();
@@ -639,6 +640,7 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
             static const bool noRoutes = std::getenv("WFC_SMARTOFF") && std::strstr(std::getenv("WFC_SMARTOFF"), "routes");
             if (!noRoutes && team >= 0 && team < 2 && !smartThreat_[(size_t)team].empty()) { ag.cost = &smartThreat_[(size_t)team]; ag.costW = smartTune().routeExposureW; }
             ag.noiseSeed = 0x9e37u + (unsigned)b.player * 7919u + (unsigned)(match_.matchTime() * 0.1f);
+            ag.noiseW = smartTune().routeNoise;
         }
         if (botNav_.beginSearch(pos, b.goal.pos, ag)) { botSearchOwner_ = b.player; botSearchVehicle_ = vehicle; }
         else botPathFailed(b, vehicle);
@@ -814,7 +816,9 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
                 if (rl > 0.8f) moveDir = rd * (1.0f / rl); else { b.hasRejoin = false; b.wantRepath = true; }
             }
         } else if (b.goal.kind != BotGoalKind::Attack) {
-            b.hasGoal = b.hasGoal && hdist(b.goal.pos, pos) > b.goal.radius;   // arrived: the next think picks a new goal
+            const bool smartFloor = anySmart_ && botIsSmart(b.player) && smartTune().goalFloorM > 0.0f;
+            const bool arrived = hdist(b.goal.pos, pos) <= b.goal.radius && (!smartFloor || std::fabs(b.goal.pos.y - pos.y) <= smartTune().goalFloorM);
+            b.hasGoal = b.hasGoal && !arrived;   // arrived: the next think picks a new goal
         }
         // Corridor done next to an objective (the nav approach cell): walk the last metres onto the flag / bomb / point itself.
         if ((b.path.empty() || b.wp >= b.path.size()) && b.goal.hasTouch && hdist(b.goal.touch, pos) > 0.6f && hdist(b.goal.touch, pos) < 15.0f) {
@@ -842,6 +846,47 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
         if (botNav_.valid() && !botNav_.directWalkable(pos, pos + side * 2.0f, ag)) { b.strafeDir = -b.strafeDir; }
         else moveDir = moveDir + side * sk.strafe;
     }
+    // Smart dithering watch (ditherGuard): travelling, not fighting, robot form.
+    if (anySmart_ && botIsSmart(b.player) && smartTune().ditherGuard > 0.0f && !visible && !vehicle && b.wp < b.path.size()) {
+        const float nowD = match_.matchTime();
+        if (b.ditherT < 0.0f) { b.ditherT = nowD; b.ditherFrom = pos; b.ditherLast = pos; b.ditherPath = 0.0f; b.ditherOff = 0.0f; }
+        b.ditherPath += hdist(pos, b.ditherLast); b.ditherLast = pos;
+        if (botNav_.findCell(pos, 0.0f) < 0) b.ditherOff += dt;
+        if (nowD - b.ditherT >= 6.0f) {
+            // Half the window off the mesh: the ping-pong cases (a pocket beside a railing). On the mesh, milling near a goal is not one
+            // (BOTTEST: a bot holding its roam point tripped the guard and stood 20 s).
+            if (b.ditherPath > 12.0f && hdist(pos, b.ditherFrom) < 3.0f && b.ditherOff >= 3.0f) {
+                ++b.dithers;
+                for (float r : {0.0f, 4.0f}) { const int c = botNav_.findCell(pos, r);
+                    if (c >= 0 && std::find(b.avoidCells.begin(), b.avoidCells.end(), c) == b.avoidCells.end()) b.avoidCells.push_back(c); }
+                if (const int gc = botNav_.findCell(b.goal.pos, 2.0f); gc >= 0 && std::find(b.avoidCells.begin(), b.avoidCells.end(), gc) == b.avoidCells.end())
+                    b.avoidCells.push_back(gc);
+                b.avoidUntil = nowD + 30.0f;
+                if (b.goal.kind != BotGoalKind::Attack) b.hasGoal = false;
+                b.wantRepath = true; b.hasRejoin = false; b.rejoinUntil = nowD + 4.0f;
+                if (SmartBot& sd = smart_[(size_t)b.player]; sd.action == SmartBot::Retreat && sd.actionTarget == -2) {   // a pickup trip: skip it 2 min
+                    sd.skipPickup = sd.actionPos; sd.skipPickupUntil = nowD + 120.0f; sd.action = SmartBot::None;
+                }
+                if (botNav_.findCell(pos, 0.0f) < 0) {
+                    // Off the mesh: every corridor from here starts with the same blocked leg (a pocket beside a railing: the rejoin
+                    // points along it never reach the mesh). Drop the corridor and take the stranded search (wider, drops allowed;
+                    // its 30 s no-way-out rule still applies) for 10 s without new searches.
+                    b.path.clear(); b.wp = 0; ++b.noPaths; b.wantRepath = false; b.rejoinUntil = 0.0f; b.trappedUntil = nowD + 10.0f;
+                    // The way in is the way out: walk straight back to where the bot last stood on the mesh (the stranded branch walks
+                    // to b.rejoin; a nav hole beside a railing let bots in and no corridor led back out). A third trapped escape in one
+                    // life is a strand with no way out: the stranded rule's suicide (the 0.5 m on-mesh tolerance kept resetting its 30 s).
+                    if (hdist(b.lastOnMeshPos, pos) > 1.0f && hdist(b.lastOnMeshPos, pos) < 25.0f) {
+                        b.rejoin = b.lastOnMeshPos; b.hasRejoin = true; b.rejoinUntil = nowD + 8.0f;
+                    }
+                    if (++b.trapEscapes >= 3 && !b.suicideWish) {
+                        LOG_INFO("bots: p%d trapped off the mesh (3 dither escapes) at t %.2f at (%.1f %.1f %.1f): stranded rule", b.player, nowD, pos.x, pos.y, pos.z);
+                        b.suicideWish = true;
+                    }
+                }
+            }
+            b.ditherT = nowD; b.ditherFrom = pos; b.ditherPath = 0.0f; b.ditherOff = 0.0f;
+        }
+    } else b.ditherT = -1.0f;
     // Local avoidance (PC ADAPTATION): pawns block each other (RE addendum 11), so a pawn standing in the corridor ahead (a teammate
     // holding a point, a pawn against a wall) is steered around instead of pushed into.
     if (core::length(moveDir) > 1e-3f && match_.players().size() > 1) {
@@ -1543,13 +1588,17 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                    (now - s.actionSince > 12.0f || (!b.path.empty() && b.wp >= b.path.size() && hdist(pos, s.actionPos) > 2.5f))) {
             // The pickup trip failed (unreachable: the path ends short of it; or 12 s without getting it): skip that pickup for 30 s
             // (BOTOBJ: bots stood idle at a pickup they could not take).
-            s.skipPickup = s.actionPos; s.skipPickupUntil = now + 30.0f; s.action = SmartBot::None;
+            s.skipPickup = s.actionPos; s.skipPickupUntil = now + 90.0f; s.action = SmartBot::None;   // was 30 s: a pickup below a railing drew bots back
         } else if (smartTune().pickupSegments > 0.0f && !visible && now - s.lastHitAt > 3.0f && (s.action != SmartBot::Retreat || s.actionTarget == -2) &&
                    h.current <= h.max - smartTune().pickupSegments * (h.segmentCount > 0 ? h.max / h.segmentCount : 125.0f)) {
+            // Distance with the height difference counted double: a pickup on the floor below a railing measured 2 m horizontally
+            // and drew bots into a nav hole beside it (NAVQ Streets: 4 min ping-pong).
             float bd = 40.0f; core::Vec3 to = pos; bool found = false;
-            for (const PickupFactory* f : pickupFactories_)
-                if (f && f->kind() == PickupFactory::Kind::Health && f->available() && hdist(f->position(), pos) < bd &&
-                    !(now < s.skipPickupUntil && hdist(f->position(), s.skipPickup) < 1.0f)) { bd = hdist(f->position(), pos); to = f->position(); found = true; }
+            for (const PickupFactory* f : pickupFactories_) {
+                const float fd = f ? hdist(f->position(), pos) + 2.0f * std::fabs(f->position().y - pos.y) : 1e9f;
+                if (f && f->kind() == PickupFactory::Kind::Health && f->available() && fd < bd &&
+                    !(now < s.skipPickupUntil && hdist(f->position(), s.skipPickup) < 1.0f)) { bd = fd; to = f->position(); found = true; }
+            }
             if (found) { if (s.action != SmartBot::Retreat) ++s.pickupTrips; start(SmartBot::Retreat, to, -2); setGoal(BotGoalKind::Roam, to, 1.0f, -1); return; }
         }
     }
@@ -2024,6 +2073,7 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
+            const int dth = b.dithers;
             const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             const std::array<int, 4> rs = b.rangeShots, rh = b.rangeHits;
             const std::array<int, 16> tvs = b.tvShots, tvh = b.tvHits; const std::array<int, 20> tro = b.traceOut; const std::array<double, 4> aes = b.aimErrSum; const std::array<int, 4> aen = b.aimErrN; const std::array<double, 16> apa = b.aimParts;
@@ -2033,7 +2083,7 @@ void World::tickBots(float dt) {
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
             b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;
-            b.wasSpawned = true; b.yaw = pc.yaw();
+            b.wasSpawned = true; b.yaw = pc.yaw(); b.dithers = dth;
         }
         b.life += dt;
         // KillZ (FellOutOfWorld) for participants, as the local pawn.

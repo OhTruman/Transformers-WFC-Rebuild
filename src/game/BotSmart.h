@@ -66,6 +66,15 @@ struct SmartTune {
     float flankEtaS = 6.0f;         // a flank route longer than this at run speed (6 m/s) is dropped: the fight moves on before it pays
     float flankExtraM = 15.0f;      // a flank spot may lie at most this much farther (straight line) than the enemy itself
     float preAim = 1.0f;            // with no target in sight, look where a remembered enemy (>= 0.4 sure, <= 45 m) should appear (0 = off)
+    // Pathing (user playtest 2026-10-13: "could definitely be a lot better").
+    float ditherGuard = 1.0f;       // a bot that covers > 12 m but nets < 3 m in 6 s outside combat, half of it off the mesh (ping-pong in a
+                                    // pocket beside a railing): avoid
+                                    // that spot, drop the goal and hold off off-mesh rejoins 4 s (0 = off)
+    float goalFloorM = 3.0f;        // a Roam / Attack goal counts as reached only within this height too (a goal on the floor below a railing
+                                    // was "reached" from above and never left) (0 = horizontal only, the Classic rule)
+    float spawnNearScope = 2.0f;    // squad respawns (spawn-near): 0 any team start (M2), 1 registered clusters, 2 the team's active cluster
+                                    // only (any start drew bots to far / raised starts of other clusters: NAVQ Gorge off-mesh 14.7 -> 5.3 %)
+    float routeNoise = 0.25f;       // per-bot seeded route cost noise: cell cost x (1 + routeNoise * hash) so bots do not all share one corridor
 };
 const SmartTune& smartTune();
 

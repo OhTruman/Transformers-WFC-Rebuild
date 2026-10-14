@@ -101,6 +101,9 @@ struct BotBrain {
     float omEntryT = 0.0f, omEntryLife = 0.0f, omEntryVy = 0.0f, omEntrySinceVeh = 0.0f, omEntrySinceDmg = 0.0f; bool omEntryJet = false; core::Vec3 omEntryPos{};
     bool spawnPosSet = false, spawnLaunchLogged = false; float spawnT = 0.0f; core::Vec3 spawnPos{};   // spawn-launch diagnostic (log only)
     float rejoinDrop = 0.0f;   // height from the bot down to its chosen rejoin cell (log only)
+    // Smart dithering watch: path length vs net displacement over a 6 s window while travelling (a ping-pong between two points).
+    core::Vec3 ditherFrom{0, 0, 0}, ditherLast{0, 0, 0}; float ditherT = -1.0f, ditherPath = 0.0f, ditherOff = 0.0f; int dithers = 0;
+    float trappedUntil = -1.0f; int trapEscapes = 0;   // Smart: dithering off the mesh - no new corridor until then; the stranded search finds the way out
     bool fireWish = false;
     unsigned lastShotSerial = 0;
     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
