@@ -121,9 +121,12 @@ foreach ($run in @(@{ k = "route"; d = (Join-Path $pres "route") }, @{ k = "maps
     if (-not $run.d -or -not (Test-Path (Join-Path $run.d "flow.jsonl"))) { continue }
     $F = Read-FlowLog (Join-Path $run.d "flow.jsonl")
     $al = @(Flow-Ev $F "audio.loaded"); $au = @(Flow-Ev $F "audio.unloaded")
-    $dup = @($au | Where-Object { [int]$_.voices -gt 0 -or [int]$_.instances -gt 0 })
+    # map leftovers only (Systems 2026-10-14: audio.unloaded.voices is the device's every sounding voice, frontend UI included -
+    #  30b2fa74's route unload came 1 ms after the Quit popup's Accept click; a map leftover is an instance or a level cue)
+    $dup = @($au | Where-Object { [int]$_.instances -gt 0 -or ($_.PSObject.Properties['levelCues'] -and [int]$_.levelCues -gt 0) })
+    $uiv = @($au | Where-Object { [int]$_.voices -gt 0 }).Count
     $pcm = @($al | ForEach-Object { [double]$_.pcmMB })
-    Res "audio.$($run.k)" $(if (-not $al.Count) { "UNKNOWN" } elseif ($dup.Count) { "FAIL" } elseif ($au.Count -lt [Math]::Max(0, $al.Count - 1)) { "FAIL" } else { "PASS" }) ("map audio loads {0} ({1}), unloads {2}; voices / instances still alive after an unload: {3}; PCM MB per load {4}" -f $al.Count, (($al | ForEach-Object { $_.level }) -join " -> "), $au.Count, $dup.Count, ($pcm -join " / ")) "Systems"
+    Res "audio.$($run.k)" $(if (-not $al.Count) { "UNKNOWN" } elseif ($dup.Count) { "FAIL" } elseif ($au.Count -lt [Math]::Max(0, $al.Count - 1)) { "FAIL" } else { "PASS" }) ("map audio loads {0} ({1}), unloads {2}; map instances / level cues still alive after an unload: {3} (unloads with other voices sounding, e.g. a UI click: {5}); PCM MB per load {4}" -f $al.Count, (($al | ForEach-Object { $_.level }) -join " -> "), $au.Count, $dup.Count, ($pcm -join " / "), $uiv) "Systems"
     # HUD data the original Hud_GFX branches on (audit 2026-10-05): an unanswered GoalScore makes the team bars use 10
     $un = @(Flow-Ev $F "datastore.unhandled" | ForEach-Object { "$($_.markup)" } | Where-Object { $_ -match '^<CurrentGame:' } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" })
     $goal = @(Flow-Ev $F "datastore.unhandled" | Where-Object { "$($_.markup)" -eq "<CurrentGame:GoalScore>" }).Count
