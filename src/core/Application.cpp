@@ -542,6 +542,21 @@ Application::MatchExit Application::runMatch() {
         if (const char* hz = WFC_ENV("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
 
         if (!window_->pump(frontend_ ? pumped : input)) break;
+        if (lockstep) {
+            // WFC_LOCKSTEP: no window-originated input reaches the game (keys, buttons, wheel, text, pad) - a stray focus click or key on
+            // a run's window changed the simulation once (Rendering's RT-on pair, step 727). Scripted inputs (player bot, WFC_PRESS*, the
+            // frontend script's calls) are applied after this point. Each dropped event is logged so a divergence can be attributed.
+            platform::InputFrame& w = frontend_ ? pumped : input;
+            for (int k = 0; k < (int)platform::Button::Count; ++k) if (w.pressed[k]) LOG_INFO("LOCKSTEP input dropped: button %d", k);
+            for (uint16_t vk : w.keyPresses) LOG_INFO("LOCKSTEP input dropped: key 0x%02x", (unsigned)vk);
+            if (w.mouseWheel != 0.0f) LOG_INFO("LOCKSTEP input dropped: wheel %.1f", w.mouseWheel);
+            if (!w.text.empty()) LOG_INFO("LOCKSTEP input dropped: text (%zu chars)", w.text.size());
+            static bool prevL = false, prevR = false;
+            if (w.mouseLeft && !prevL) LOG_INFO("LOCKSTEP input dropped: left click");
+            if (w.mouseRight && !prevR) LOG_INFO("LOCKSTEP input dropped: right click");
+            prevL = w.mouseLeft; prevR = w.mouseRight;
+            w = platform::InputFrame{};
+        }
         if (frontend_) qaTick(pumped);   // DEBUG QA panel (development builds; F10)
         if (frontend_) playtestOverlayTick(pumped);   // playtest bot overlay (F12 / WFC_BOTOVERLAY), every build
         if (frontend_) input = pumped;

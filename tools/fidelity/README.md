@@ -144,6 +144,7 @@ Run from the worktree root (the reference sheet path is relative). Assets are re
 - `Models::get()` duplicates World's weapon-socket matrix; keep in sync with `World::loadVerticalSlice`.
 - `WorldStub.cpp` replaces `World::fireHitscan` (records shots). World.cpp is not linked.
 - The legacy `tests/GameplayTests.cpp` targets an API that no longer exists (`game/Gameplay.h`) and is not built; this harness supersedes it.
+- **Bot roster key (2026-10-14):** the lobby's extended-roster flag is `BotsExtended=1` (WFC_LOBBY_OPTIONS, the profile, or `?BotsExtended=1` on a direct match URL). `ExtendedPlayers=1` in WFC_LOBBY_OPTIONS is ignored, and the roster clamps to the original 5 a side. identity-capture.sh's default rows (the "64p" ones since 2026-10-12) therefore ran **5 a side**; they stay that way for comparability (every base / head pair ran the same roster). For a real 31 v 32 roster use `ROSTER=64 bash tools/fidelity/identity-capture.sh ...` (BotsExtended, longer timeout). weapon-crosstalk.ps1 uses BotsExtended since 84716b53.
 - The in-game `WFC_SMOKE_FRAMES` path integrates wall-clock time, so its numbers vary per run; prefer this harness for numbers and `capture.ps1` for pictures.
 
 Expectations confirmed from native RE: [RE-EXPECTATIONS.md](RE-EXPECTATIONS.md) (`conf` checks: PASS when the build matches a CONFIRMED original, KNOWN with an owner otherwise).

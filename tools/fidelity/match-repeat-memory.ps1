@@ -14,7 +14,9 @@
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [Alias("Matches")][int]$MatchCount = 6, [int]$Friendly = 3, [int]$Enemy = 4,
       [int]$Goal = 10, [int]$MapId = 508, [int]$Width = 1280, [int]$Height = 720, [string[]]$MapCycle = @(), [int]$Passes = 2, [string[]]$ModeCycle = @("TDM"), [double]$GrowthMb = 15, [switch]$Control, [ValidateSet("Release", "Debug")][string]$Config = "Release",
       # -ExtraEnv "K=V;K=V": extra env for the run (e.g. Systems' WFC_ALLOCPROF=64;WFC_ALLOCPROF_LIVE=64;WFC_ALLOCPROF_EVERY_S=10)
-      [string]$ExtraEnv = "", [switch]$ReportOnly)
+      [string]$ExtraEnv = "", [switch]$ReportOnly,
+      # -RayTracing 0|1|2: the profile's Ray Tracing row (frontend boots apply the profile over WFC_RT_MODE; 2026-10-13 R4 leak rows: 2 + -ExtraEnv WFC_RT_GI=1)
+      [int]$RayTracing = 0)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -34,7 +36,7 @@ $f = if ($Control) { 0 } else { $Friendly }; $e = if ($Control) { 0 } else { $En
 $lg = Join-Path $OutDir "wfc.log"; $fl = Join-Path $OutDir "flow.jsonl"
 if (-not $ReportOnly -and -not (Test-Path $lg)) {
     if (-not (Wait-WfcGpu)) { Res "gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; Write-WfcReport $res (Join-Path $OutDir "report.json") | Out-Null; return }
-    (Get-BotProfile $f $e 1 -Width $Width -Height $Height) | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
+    (Get-BotProfile $f $e 1 -Width $Width -Height $Height -RayTracing $RayTracing) | Set-Content -Encoding ASCII (Join-Path $OutDir "wfc_profile.ini")
     $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
     # re-select the map before EVERY match: after a match the lobby comes back on another map (09b 4fbd0b9: Streets -> Seed),
     # which made matches 2..N a different map (2026-10-06 harness defect)
