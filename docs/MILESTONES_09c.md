@@ -745,5 +745,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   split pathing / follow / fidget permanently (Streets seed 1 on A: 2.29 / 2.45 / 0.95); the follow part is the next
   target. Playtest guide gains a what-to-watch section with the fallback. Pending from Gameplay: the lockstep input-drop
   patch after its 07:30 verification.
+  03:10 E MILESTONE 1 PROGRESS: scope now 197 units (D batch 13 joined the live pack: Molten 88 / Streets 44 / Gorge 27
+  / Rust 27 / Debris 11); 90 done (Molten complete, Streets 2); 86 pass, 4 gate fails stay at D (stains_01 + 3 Molten);
+  5.8 GPU h, ~3.9 min / unit; completion ~10:00. SCHEDULE: the DML window stays open until milestone 1 completes; the
+  morning GPU sequence moves to ~10:00 (gicheck3 + Gameplay's input-drop slot B -> R4 default flip commit -> example set
+  alone -> ~11:00 Experimental regress alone + RT-on rows -> package 4 cut); hard pause at 10:30 if E slips. Rendering
+  codes plan-v2 item 1 (probe grid) CPU-only meanwhile; Experimental's identity + self-tests on 15b89a75 all PASS
+  (Classic 8 / 8 identical; Smart differs from step 601 = squadTactics acting at 10 s).
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
