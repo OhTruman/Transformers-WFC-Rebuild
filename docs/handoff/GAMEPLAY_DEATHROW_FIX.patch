@@ -1,0 +1,36 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index ccf543d..a94afce 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5524,8 +5524,9 @@ void Application::runBotTest() {
+             // Scripted: up to 4 spawned enemy bots (any form, within 10 s) killed through applyMatchDamage with a melee damage type: each
+             // is presented once, with its cue (robot form: TnDeathTypeMelee; vehicle form: the chassis' vehicle DeathSound).
+             // (A match already won by score is over: logged and skipped; the run needs one phase with scripted kills, checked at the end.)
+-            const int p0 = world_.deathPresentations_, c0 = world_.deathCues_;
+-            int n = 0, wantCues = 0, robots = 0;
++            // Only the scripted victims' presentations count: each is measured around its own applyMatchDamage call (the presentation
++            // is synchronous there), so a natural bot-vs-bot death during the window's ticks is not attributed to it.
++            int n = 0, wantCues = 0, robots = 0, sPres = 0, sCues = 0;
+             const char* kMeleeDt = "TransGame.TnDamageTypeMelee";
+             const bool live = world_.match().state() == game::Match::State::InProgress;
+             for (int i = 0; live && n < 4 && i < 600 && world_.match().state() == game::Match::State::InProgress; ++i) {
+@@ -5533,15 +5534,17 @@ void Application::runBotTest() {
+                     if (n >= 4 || !o->spawned() || world_.match().sameTeam(o->matchPlayer(), me)) continue;
+                     const bool veh = o->pawn().moveForm() == game::Form::Vehicle;
+                     const bool cue = !game::AbilityAudio::deathCue(o->pawn().chassis().id, veh, kMeleeDt).empty();
++                    const int p1 = world_.deathPresentations_, c1 = world_.deathCues_;
+                     if (world_.applyMatchDamage(o->matchPlayer(), me, 99999.0f, false, kMeleeDt) && !o->spawned()) { ++n; wantCues += cue; robots += !veh; }
++                    sPres += world_.deathPresentations_ - p1; sCues += world_.deathCues_ - c1;
+                 }
+                 world_.handleInput(idle, dt); world_.tick(dt);
+             }
+             scriptedDeaths += n;
+             if (!live) LOG_INFO("BOTTEST INFO DEATH scripted melee kills skipped: the match is already over (state %d)", (int)world_.match().state());
+-            else check(n >= 1 && wantCues >= 1 && world_.deathPresentations_ - p0 == n && world_.deathCues_ - c0 == wantCues,
++            else check(n >= 1 && wantCues >= 1 && sPres == n && sCues == wantCues,
+                   "DEATH death sound cue for " + std::to_string(n) + " melee kills via applyMatchDamage (" + std::to_string(robots) + " robot form; " +
+-                  std::to_string(world_.deathPresentations_ - p0) + " presentations, " + std::to_string(world_.deathCues_ - c0) + " / " + std::to_string(wantCues) +
++                  std::to_string(sPres) + " presentations, " + std::to_string(sCues) + " / " + std::to_string(wantCues) +
+                   " cues; robot '" + game::AbilityAudio::deathCue("", false, kMeleeDt) + "')");
+         }
+         check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms): avg " + std::to_string(world_.botMsAverage()) + " ms for " + std::to_string(bots) + " bots, max " + std::to_string(world_.botMsMax()) + " ms");
