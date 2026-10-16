@@ -1,0 +1,80 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 2a26c32..0bf308a 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5372,6 +5372,9 @@ void Application::runBotTest() {
+     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
+     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
+     int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
++    // Behaviour-exists rows (grenades, killstreak rewards) count over the phases: a single 120 s phase-2 match ranges 1-16 grenades and
++    // 0-7 rewards by seed (WFC_SEED sweep 2026-10-16), so a per-phase count failed by match luck.
++    int grenadesAll = 0, streaksAll = 0;
+     for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
+         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 4 ? "DM" : "TDM") + "?TimeLimit=" + std::to_string((int)secs + 15) +   // phase 5: FFA 64
+                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
+@@ -5489,7 +5492,8 @@ void Application::runBotTest() {
+         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
+         // Melee is situational (open maps engage at range): logged above; grenades are required.
+         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+-        if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
++        grenadesAll += grenades; streaksAll += streaks;
++        if (phase >= 1) check(streaksAll > 0, "bots trigger killstreak rewards (" + std::to_string(streaksAll) + " over the phases)");
+         {   // kill damage types (the frontend's kill line): every kill should carry its weapon's DamageType class
+             std::map<std::string, int> byType; int emptyKills = 0;
+             for (const game::KillFeedEntry& k : world_.match().killHistory()) {
+@@ -5510,7 +5514,7 @@ void Application::runBotTest() {
+         if (phase >= 1) check(driveSamples > 0, "ground vehicle bots boost by the VEHDEF AI rule (" + std::to_string(driveSamples) + " boost-steps, max nitro starts per bot " + std::to_string(nitroStarts) + ")");
+         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
+         if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
+-        if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
++        if (phase >= 1) check(grenadesAll >= 2, "bots toss grenades (" + std::to_string(grenadesAll) + " over the phases; melee strikes " + std::to_string(melees) + ")");
+         {   // DEATH: every death (kill, suicide, environment) gets the victim's death presentation once - bots die through
+             // applyMatchDamage, which despawns before tickMatch's PlayerKilled event (the sound was skipped for all of them)
+             int deaths = 0;
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index b21d05c..f8edf92 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -1020,6 +1020,14 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+     if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
+ }
+ 
++// The victim's death presentation for a bot death that despawns at once (KillZ fall, the stranded suicide): tickMatch's PlayerKilled
++// event presents only a still-spawned pawn (applyMatchDamage presents its deaths the same way). Presentation only.
++void World::presentBotDeathNow(MatchOpponent& o, const char* damageType) {
++    if (!o.spawned()) return;
++    requestCorpse(o.pawn(), o.matchPlayer(), 100 + o.matchPlayer(), true, damageType);
++    onPawnDeath(o.pawn().chassis().id, o.pawn().moveForm() == Form::Vehicle, damageType, o.pawn().actorLocation());
++}
++
+ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
+     Character& pc = o.pawn();
+     const BotSkill& sk = botSkill(b.difficulty);
+@@ -2268,6 +2276,7 @@ void World::tickBots(float dt) {
+         if (pc.position().y < killZ_) {
+             const Match::KillContext kc = killContext(-1, b.player, "Engine.DmgType_Fell");
+             match_.killed(-1, b.player, false, "Engine.DmgType_Fell", &kc);
++            presentBotDeathNow(*o, "Engine.DmgType_Fell");
+             o->despawn();
+             continue;
+         }
+@@ -2319,6 +2328,7 @@ void World::tickBots(float dt) {
+             b.suicideWish = false; b.offMeshRun = 0.0f;
+             const Match::KillContext kc = killContext(b.player, b.player, "Engine.DmgType_Suicided");
+             match_.killed(b.player, b.player, true, "Engine.DmgType_Suicided", &kc);
++            presentBotDeathNow(*o, "Engine.DmgType_Suicided");
+             o->despawn();
+             LOG_INFO("bots: p%d stranded 30 s with no way back at t %.2f: suicide", b.player, match_.matchTime());
+             continue;
+diff --git a/src/game/World.h b/src/game/World.h
+index 98df6ab..c8bd251 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -688,6 +688,7 @@ public:
+     std::vector<render::MeshHandle> gibMeshes_; bool gibMeshesTried_ = false; // TR_Death_Gibs_p RB_Gib_01..11
+     int corpsesMade_ = 0;                                  // diagnostics (BOTTEST / WFC_CORPSETEST)
+     void requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType);
++    void presentBotDeathNow(MatchOpponent& o, const char* damageType);   // a bot death that despawns before tickMatch's event
+     void spawnCorpse(const CorpseRequest& q);
+     void tickCorpses(float dt);
+     void gibCorpse(Corpse& c);
