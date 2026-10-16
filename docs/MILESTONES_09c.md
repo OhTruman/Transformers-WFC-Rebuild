@@ -1388,6 +1388,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   no matinee player, 570 parent materials / 907 MICs without .mat (matc need unknown), 22 FaceFX assets, the
   runtime-character definitions, a streaming-aware map pipeline. PILOT approved: D5_OME (9 packages / 155 MB) through
   the map pipeline, CPU only, hold-aware, ~1 day, provisional, in AssetTools work/.
+  2026-10-16 03:35 PACKAGE 5 BUILT (Systems, not promoted): Rebuild-Systems/work/playtest_slim_398b27ef, 27.09 GB (keep 46,245
+  / xpr 7,161 / 0 failures), Release + PGO with RT shaders, M5 runtime, HD = push_full_snap_20261016_b0-31 (3,506
+  files, 21.27 GB), overlay push_gltf_wfcmat_20261016 (85 / 85 rows replaced, FROZEN.json verified; post-build
+  check_overlay: the barrier carries WEP_Barrier_Defrag_MATINST, 85 / 85 byte-identical), vbake + fit_lights on 10
+  maps. verify_slim slot opened (Rendering's RT-on exe paused for the RT gate); FAST next; promote quietly as the
+  internal checkpoint. Headlights: the original has no beam cones on vehicles (the LightBeam cones are map props and
+  the pickup beam), so lamp sockets are derived from the vehicles' emissive lamp areas = an INVENTED PLACEMENT for the
+  Realistic-only addition, documented in SYSTEMS_VEHICLE_BEAMS.md; approved.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
