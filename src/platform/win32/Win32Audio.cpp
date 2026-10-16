@@ -338,6 +338,7 @@ struct Voice {
     float dDist = 0.0f, dPan = 0.0f, dAtten = 1.0f;   // diagnostics of the last resolve
     bool active = false;
     bool culled = false;          // last resolve: positional and beyond maxDist -> virtual (no channel, not mixed)
+    bool silent = false;          // last resolve: in range but below SilentChannelCullingThreshold -> virtual too
     bool loop = false;
     int gen = 0;
 };
@@ -538,6 +539,7 @@ public:
     // vehicle engines, projectile flights) do not crowd out audible sounds; the 96 real channels and their stealing rule are
     // unchanged.
     static constexpr int kMaxVoices = 96;
+    static constexpr float kSilentChannelCull = 0.00063096f;  // [CONF] FmodAudioDevice SilentChannelCullingThreshold (-64 dB)
     static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
     std::vector<int> realScratch_;                            // mixBlock: the audible voices this block
     struct MixJob {                                           // mixBlock: a heard voice's snapshot for the unlocked mix
@@ -840,7 +842,7 @@ private:
     // axis, scaled by the 3D amount (0 = centred / 2D, 1 = fully 3D).
     void resolveGains(Voice& v) {
         float g = v.vol * master_;
-        v.culled = false;
+        v.culled = false; v.silent = false;
         if (!v.positional) { v.gL = v.gR = g; v.dPan = 0.0f; v.dAtten = 1.0f; return; }
         core::Vec3 d = v.wpos - lpos_;
         float dist = core::length(d);
@@ -874,6 +876,12 @@ private:
         float ang = (pan + 1.0f) * 0.25f * core::PI;          // equal-power pan: -1 => L, +1 => R
         v.gL = std::cos(ang) * g;
         v.gR = std::sin(ang) * g;
+        // [CONF] Xe-TransEngine.ini [HM_Engine.FmodAudioDevice] SilentChannelCullingThreshold=0.00063096 (-64 dB): a positional
+        // voice that quiet at the listener holds no channel - it is virtual (its timeline advances) and takes a channel again
+        // once it is audible (SleepingComponentPlayInterval 0.25 s in the original; here every mix block). Without it the
+        // map's in-range-but-inaudible emitter loops and far one-shots held most of the 96 channels and the player's own
+        // idle / nearby events were refused (eye-pass audit 2026-10-16).
+        if (std::max(v.gL, v.gR) < kSilentChannelCull) { v.culled = true; v.silent = true; }
     }
 
     // Voices -> MASTER_DRY / MASTER_WET buses (float, full scale 1.0); MASTER_WET runs the zone

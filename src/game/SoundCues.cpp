@@ -996,8 +996,8 @@ void SoundCues::launch(Instance& in, int e) {
     if (ref.v != audio::kInvalidVoice) in.voices.push_back(ref);
     else if (in.owner >= 0 && in.owner < kParticipantOwnerBase) {     // the local player's own sound got no channel
         static int warned = 0;
-        if (warned++ < 20) LOG_WARN("sound cues: no channel for the local player's %s ev%d (all 96 busy with more important sounds)",
-                                    cd.name.c_str(), e);
+        if (warned++ < 20) LOG_WARN("sound cues: no channel for the local player's %s ev%d (refused by the 96-channel pool: every "
+                                    "channel held by an equally protected or more important sound)", cd.name.c_str(), e);
     }
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;
     if (log)
