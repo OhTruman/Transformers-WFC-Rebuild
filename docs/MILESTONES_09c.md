@@ -1396,6 +1396,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   internal checkpoint. Headlights: the original has no beam cones on vehicles (the LightBeam cones are map props and
   the pickup beam), so lamp sockets are derived from the vehicles' emissive lamp areas = an INVENTED PLACEMENT for the
   Realistic-only addition, documented in SYSTEMS_VEHICLE_BEAMS.md; approved.
+  2026-10-16 03:41 CAMPAIGN PILOT D5_OME DONE (AssetTools 248f73f, ~2 min CPU, 2.5 GB peak; docs/handoff/CAMPAIGN_PILOT_D5_OME.md):
+  all 9 map packages via authored streaming from D5_OME_BASE_m; world.glb 1,341 placed / 153 unique meshes (SMCA
+  transforms 1,291 / 1,291 exact); collision, lighting, probes, postprocess, 71 lightmap atlases, vertex lightmaps, nav
+  (123 cells / 210 tactical / 163 air), gameplay, spawns, audio, FX, physics, 36 destructibles, Kismet manifest;
+  structure audit PASS; completeness 33 COMPLETE / 1 PARTIAL / 4 missing lobby metadata; outputs under AssetTools
+  work/campaign_pilot via a new opt-in WFC_VS_ROOT (default unchanged; ExtractedAssets / Game Dump untouched). Two
+  validator stops (sky-card mesh refs; the MP robot check) need a ~20-line campaign mode; streaming currently merges
+  all sublevels visible. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
+  mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
