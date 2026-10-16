@@ -1410,6 +1410,11 @@ private:
     std::map<std::string, int, std::less<>> spriteProg_;   // (transparent: looked up by const char* without a temporary)
     std::string resolveName(const std::string& name) const;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};
+    // (X1, Realistic) the tone curve: log-luminance target (128 x 128, mipmapped), the adapted value (1 x 1 ping-pong)
+    GLuint toneLumProg_ = 0, toneAdaptProg_ = 0, toneLumTex_ = 0, toneLumFbo_ = 0, toneAdaptTex_[2] = {0, 0}, toneAdaptFbo_[2] = {0, 0};
+    int toneIdx_ = 0; bool toneReset_ = true;
+    bool toneFilmicOn() const;
+    void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;
 };
