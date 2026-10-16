@@ -1479,3 +1479,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spot API commit; Experimental FAST rerun of the TDR-window rows on 398b27ef + work/ab prune + client-rect check;
   Systems promotes package 5 quietly on FAST PASS; Gameplay NOINTERACT client-size patch; AssetTools A1_IAC rerun.
   C: free 106 -> 54 GB across the reboot: pagefile.sys 52 GB (system-managed, 0 MB in use) - a user call, left alone.
+  2026-10-16 04:29 USER BAR (04:20): the RT / lighting / fidelity work must make the game look NIGHT AND DAY from the
+  original graphics; the last big item, everything after is small stuff. Eye pass = same-frame side-by-side Off vs
+  Realistic per map; Rendering assesses extra rows beyond plan v3 with costs (exposure / tone mapping, colour bleed,
+  shadow casters, wet response, atmosphere, RT-era effect lights). Merged: NOINTERACT exact client size 7d9edf78
+  (Gameplay, 2560x1440 client verified, SIMHASH 3002 / 3002 identical, shots 600-1500 identical; frame 300 = tracer
+  noise on the same exe), SYSTEMS_MATC58_AUDIT 521f131c (56 / 58 compile with parent + shader fallbacks; MP-first
+  list; the original has no light sources beyond muzzle + death), SYSTEMS_RT_LIGHT_HOOKS 57109d37 (27 effect lights
+  proposed, RT-era, Realistic-only, default off; code waits on Rendering's pick). Pagefile moved to F: (user).
