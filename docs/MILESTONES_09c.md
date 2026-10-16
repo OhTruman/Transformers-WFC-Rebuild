@@ -1646,3 +1646,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Integration BOTTEST at seeds 1 / 5 reads 47 / 48 until audit item 4 (idle 20 s row) lands; seed 7 passes. Next
   Gameplay: item 4, items 5 / 6, ride-height model. AssetTools: ALL campaign maps re-parsed up front (1,942 rows);
   D3B relaunched cache 10.
+  2026-10-16 10:12 RENDERING per-row commits ready on rt2 (push after the Faithful identity at RESUME): X1 tone curve,
+  X2 specular gain 2.5, X4 coloured bounce + emissive hook, X5-1 character AO 3 m, row 4 transient gain 2, soft
+  particles, item 6 + RENDERING_MOLTEN_PLAN.md. ITEM 6 IN RANGE: Rust +45.7 -> ~+3 %, Molten +41.5 -> ~-3 % (the
+  Modern GGX lobe now only where the original material had a specular input; spec gate 3.0). Package data needs
+  materials_pbr.json regenerated with matc_pbr on all 10 maps after the merge (Systems; Rendering's render_m6 Rust /
+  Molten / Streets as the reference). D3B_IAC doc a036639e; the remaining 6 chapters chained. Package-gate base =
+  398b27ef + yaw + drive-probe + the steer sim line (proof after the sheet; d3db6178).
