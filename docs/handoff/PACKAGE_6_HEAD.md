@@ -76,6 +76,10 @@ merged) [PLACEHOLDER: its sheet / views numbers].
 - **Tiled transient lights** (1c94d62e, WFC_TLTILED=0 off): up to 64 dynamic lights per frame in Realistic in 32-px
   tiles (was 8); the first 4 keep RT shadows. Effect lights no longer push muzzle lights out of the cap
   [PLACEHOLDER: confirm the package 5 "transient lights cost at RT off" on the final regress].
+- **Tiled lights gated to Realistic** ([PLACEHOLDER: respin commit]): the tiled path's switch ignored the render mode,
+  so in Off / Faithful any burning muzzle / impact / death light sent the original's 8 lights through the tiled path
+  (tile masks, extra binds, per-pixel fetches) with identical output. Off / Faithful are back on the original 8-light
+  uniform path; Realistic unchanged.
 - **X1 tone curve / grade** (round 3, f486c10a; WFC_RT_TONE=0 off, WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN tune it).
 - **X2 specular gain 2.5** (a6f5c878, WFC_RT_LMSPECGAIN; WFC_RT_LMSPEC=0 off): a Realistic gain on UE3's
   directional-lightmap specular fed by the RT lightmap (x1.0 in Off / Faithful; the shader text is Realistic-only).
@@ -182,6 +186,10 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Effect data decode** (AssetTools 7b1908a, switched 07:59): homing-rocket explosion embers fly (they sat still);
   16 Orbit LODs complete; VelocityOverLife modules carry their Absolute flag. 2,007 LODs identical, 0 unexpected
   changes (docs/handoff/fx_regen/).
+- **Particle LOD data matches the original's authoring**: per-LOD values were checked against each cooked
+  ParticleLODLevel's own PeakActiveParticles (the editor's count). The original's LOD 1 (15-350 m on most death
+  effects) is genuinely heavier than LOD 0 (TF_Death_GibsTrail 26 -> 78 peak particles, Exp_Death Sparks 46 -> 92), and
+  the runtime picks LODs by camera distance exactly as UE3's Automatic method. No data change.
 
 ### Everything else
 
@@ -213,6 +221,10 @@ Off / Faithful stay byte-identical to the original (identity rows).
   Rendering RE item [PLACEHOLDER: shipped or not].
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original) - carried from
   package 5; WFC_TLIGHTSCALE is the lever.
+- **Off-path cost in extended (> 10-player) matches**: each death's presentation (4 gib chunks, each with
+  TF_Death_GibsTrail at the original's LOD 1 authoring for 5 s) adds +1.7..+3.8 ms p90 at 4K RT off vs package 5 on
+  63-bot matches (Gorge: up to ~18,000 sprites and 250 FX draws in the busiest windows). A 10-presentation cap is pending
+  the bisect [PLACEHOLDER: shipped or not]; 5 v 5 (the original's player count) is unaffected.
 - **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
   5 / 6) come after package 6 [PLACEHOLDER: what landed].
 - **Squad follow reversals** (Smart) - carried from package 5.
