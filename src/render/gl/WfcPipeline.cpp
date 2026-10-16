@@ -794,7 +794,9 @@ vec3 wfcFilmShoulder(vec3 c, float s) {
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
     vec3 lc = l > 1e-5 ? c * (wfcShoulder(l, s) / l) : c;
     lc = lc / max(1.0, max(lc.r, max(lc.g, lc.b)));
-    return clamp(mix(pc, lc, 0.5), 0.0, 1.0);
+    // (the eye pass: a point-blank explosion stayed flat yellow - the hue-kept half held its colour at the clip) the
+    // hue-kept share fades out from luminance 1 to 3: very bright light goes to white, as film and eyes do
+    return clamp(mix(pc, lc, 0.5 * (1.0 - smoothstep(1.0, 3.0, l))), 0.0, 1.0);
 }
 void main() {
     vec3 scene = texture(uScene, vUV).rgb;
@@ -8720,7 +8722,7 @@ void Pipeline::endFrame() {
     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
     const bool filmic = toneFilmicOn();                 // (X1, Realistic: the tone curve + the soft HDR bloom)
     if (filmic) toneAdapt();
-    static const float toneBloom = [] { const char* e = std::getenv("WFC_TONE_BLOOM"); return e ? (float)std::atof(e) : 0.8f; }();
+    const float toneBloom = rtdef::toneBloom();
     const bool bloomOn = (post_.bloom || filmic) && !WFC_ENV("WFC_NOBLOOM");
     bool bloom = bloomGatherProg_ && blurProg_ && (bloomOn || dof);
     glx::gpuStamp("post: bloom / DOF gather + blur");
@@ -8740,7 +8742,7 @@ void Pipeline::endFrame() {
         Uniform1f(G("uBloomExposure"), 1.0f);
         // (item 7) the soft bloom's input cap: 64 let a point-blank flash over bright lava flood the frame yellow; 16 keeps
         // explosions white-hot with a contained halo. WFC_TONE_BLOOMMAX=<x>
-        static const float bloomMax = [] { const char* e = std::getenv("WFC_TONE_BLOOMMAX"); return e ? std::max(1.0f, (float)std::atof(e)) : 16.0f; }();
+        const float bloomMax = rtdef::bloomMax();
         Uniform1f(G("uBloomMax"), bloomMax);
         Uniform4f(G("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
         Uniform2f(G("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
@@ -8795,18 +8797,14 @@ void Pipeline::endFrame() {
     if (filmic) {
         // (the key: the maps' measured log-average luminance, 0.020 on Streets and Molten - a typical view keeps its exposure,
         // a dark interior opens up to 1.8x, a bright exterior comes down to 0.7x)
-        static const float key = [] { const char* e = std::getenv("WFC_TONE_KEY"); return e ? (float)std::atof(e) : 0.02f; }();
-        static const float str = [] { const char* e = std::getenv("WFC_TONE_ADAPT"); return e ? (float)std::atof(e) : 0.65f; }();
-        static const float gain = [] { const char* e = std::getenv("WFC_TONE_GAIN"); return e ? (float)std::atof(e) : 1.3f; }();
-        static const float sat = [] { const char* e = std::getenv("WFC_TONE_SAT"); return e ? (float)std::atof(e) : 1.1f; }();
-        static const float con = [] { const char* e = std::getenv("WFC_TONE_CONTRAST"); return e ? (float)std::atof(e) : 1.15f; }();
+        const float key = rtdef::toneKey(), str = rtdef::toneAdapt(), gain = rtdef::toneGain(), sat = rtdef::toneSat(), con = rtdef::toneContrast();
         ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
         ActiveTexture(GL_TEXTURE0);
         Uniform1i(U("uAdapt"), 4);
         // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
         // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
         float mapKey = key;
-        if (!std::getenv("WFC_TONE_KEY")) {
+        if (!rtdef::toneKeySet()) {
             static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
             for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) mapKey = mk.second;
         }

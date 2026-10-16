@@ -25,9 +25,20 @@ inline bool charSun() { static const bool v = envOn("WFC_RT_CHARSUN"); return v;
 inline bool charLampCal() { static const bool v = envOn("WFC_RT_CHARLAMPCAL"); return v; }          // row 8
 inline bool reflTl() { static const bool v = envOn("WFC_RT_REFLTL"); return v; }                    // row 6
 inline bool sunShare() { static const bool v = envOn("WFC_RT_SUNSHARE"); return v; }               // row 2
+// row 2: the most of a pixel's light a character's sun shadow removes (the eye pass: at 1 the shadows were black blobs)
+inline float sunShareMax() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_RT_SUNSHAREMAX", 0.75f))); return v; }
 inline bool probeFill() { static const bool v = envOn("WFC_RT_PROBEFILL"); return v; }             // row 5
 inline bool origSpec() { static const bool v = envOn("WFC_PBR_ORIGSPEC"); return v; }              // Enhanced spec
 inline bool reflTemporal() { static const bool v = envOn("WFC_RT_REFLTEMPORAL"); return v; }       // item 7
+// X1 tone curve parameters (the key is the default; the per-map table in endFrame applies only without WFC_TONE_KEY)
+inline bool toneKeySet() { static const bool v = std::getenv("WFC_TONE_KEY") != nullptr; return v; }
+inline float toneKey() { static const float v = envNum("WFC_TONE_KEY", 0.02f); return v; }
+inline float toneAdapt() { static const float v = envNum("WFC_TONE_ADAPT", 0.65f); return v; }
+inline float toneGain() { static const float v = envNum("WFC_TONE_GAIN", 1.3f); return v; }
+inline float toneSat() { static const float v = envNum("WFC_TONE_SAT", 1.1f); return v; }
+inline float toneContrast() { static const float v = envNum("WFC_TONE_CONTRAST", 1.15f); return v; }
+inline float toneBloom() { static const float v = envNum("WFC_TONE_BLOOM", 0.8f); return v; }
+inline float bloomMax() { static const float v = std::max(1.0f, envNum("WFC_TONE_BLOOMMAX", 16.0f)); return v; }
 }  // namespace rtdef
 }  // namespace wfc
 }  // namespace render
