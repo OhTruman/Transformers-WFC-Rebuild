@@ -1532,3 +1532,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Seed, BrokenHope, Remnant, Complex; existing entries identical, 56 new each): all 10 MP maps covered. Fidelity
   tooling merged 27ab8332 (eye-pass pipeline + client-rect INVALID check, script files by path). Eye-pass proof on
   398b27ef gets slot A at Rendering's next batch boundary.
+  2026-10-16 05:47 PACKAGE 5 PROMOTED (internal checkpoint, no user message): work/playtest_slim = 398b27ef, 27.09 GB,
+  Play.bat = the package exe; fallbacks playtest_slim_30b2fa74 / _c949ab88 kept. HD reject confirmed on the package
+  exe; verify_slim HD runtime row added (b02027a2 -> 049e4e49, fails package 5 as intended, passes 66eb7d73+). Doc
+  aec84406. Gameplay Smart round closed (no code; 24-seed yardstick); mine presentation capture on slot B. Fidelity
+  tooling all synced (package-gate.sh = the one-command final gate). Rendering on the X1 retune batch.
