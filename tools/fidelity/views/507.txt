@@ -1,0 +1,15 @@
+firefight_w1 0.000,141.073,7.000,0.000,139.073,0.000
+firefight_w2 0.000,141.073,7.000,0.000,139.073,0.000
+firefight 0.000,141.073,7.000,0.000,139.073,0.000 busiest fight spot: objective nearest the spawn centroid; target TnKingOfTheHillZone_10388 (TnKingOfTheHillZone); floor -; ceiling 27 m; run 120 m; light sum 14.8; view down 16 deg
+street_w1 145.541,139.220,-79.045,151.603,137.220,-82.545
+street_w2 145.541,139.220,-79.045,151.603,137.220,-82.545
+street 145.541,139.220,-79.045,151.603,137.220,-82.545 street under buildings; target TnBombPlantPoint_6213 (TnBombPlantPoint); floor -; ceiling 41 m; run 120 m; light sum 4.5; view down 16 deg
+dark_w1 -24.968,136.060,-238.982,-24.968,134.060,-245.982
+dark_w2 -24.968,136.060,-238.982,-24.968,134.060,-245.982
+dark -24.968,136.060,-238.982,-24.968,134.060,-245.982 darkest roofed spot (no walled dark interior on this map); target TnHealthPickupFactory_7431 (TnHealthPickupFactory); floor -; ceiling 14 m; run 23 m; light sum 0.0; view down 16 deg
+reflective_w1 -165.018,139.220,-43.468,-165.018,137.220,-50.468
+reflective_w2 -165.018,139.220,-43.468,-165.018,137.220,-50.468
+reflective -165.018,139.220,-43.468,-165.018,137.220,-50.468 glancing view over open floor (no env-mapped / spec floor material found under a target); target TnBombPlantPoint_9741 (TnBombPlantPoint); floor -; ceiling 31 m; run 120 m; light sum 2.8; view down 16 deg
+lane_w1 16.968,131.235,81.588,6.968,128.235,81.588
+lane_w2 16.968,131.235,81.588,6.968,128.235,81.588
+lane 16.968,131.235,81.588,6.968,128.235,81.588 vehicle lane (long flat clear run); target TnKingOfTheHillZone_142 (TnKingOfTheHillZone); floor -; ceiling 11 m; run 120 m; light sum 5.1; view down 17 deg
