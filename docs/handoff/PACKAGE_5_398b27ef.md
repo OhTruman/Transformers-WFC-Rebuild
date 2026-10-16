@@ -1,6 +1,6 @@
 # Package 5: integration 398b27ef (2026-10-16)
 
-Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (size filled at build). Fallback: work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package5-398b27ef.
+Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (27.09 GB: 46,245 files kept + 7,161 .xpr twins; HD pack D 3,506 files / 21.27 GB; glTF overlay push_gltf_wfcmat_20261016, 85 files; promoted 2026-10-16, internal checkpoint, no user announcement). Fallback: work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package5-398b27ef.
 
 Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load (9.4 GB after two days of lane work) and only a reboot clears it.
 
@@ -18,6 +18,7 @@ Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load
 
 ## Known issues
 
+- **HD textures silently off (packages 4 and 5):** the runtime loader read each pack row's byte count as a 32-bit float; the one 89,478,612-byte row (ENV_ORB_D1_Architecture_p Tubes_Road_CLR_TEXSET_Color_NormX, A8R8G8B8 4096) rounds to 89,478,608, so the loader logs "HD texture pack incomplete (1 of 3505 files missing / wrong size): ignored" and the HD row never loads (confirmed on this package's exe, HD forced on: work/verify_398b_hd). The pack itself is correct (index and file agree). Fixed in package 6 (integration 66eb7d73: asDouble at both reads; the fixed exe logs "HD texture pack available: 3505 textures"). verify_slim now has an HD runtime row (b02027a2: a default run re-runs one map with HD forced on and requires the available line), which fails this package.
 - **Transient lights cost at RT off:** +0.03 to +0.23 ms p90 per map (63-bot lockstep), the per-pixel light loop in the lit world pass; nothing else regressed. The real fix (tiled light lists or per-vertex world evaluation) is Rendering's next item.
 - **Vehicle muzzle lights saturate nearby walls** (brightness 25, 5 m radius are the original's authored values, verified; UE3 clipped the same way). If it reads too bright in play, WFC_TLIGHTSCALE or a tone-down is a value change.
 - **Smart tip-over cost:** Gorge stucks 1.26 -> 1.44 and Streets off-mesh 3.85 -> 4.91 per bot-match beyond a weak noise yardstick; the next Smart round's target, with the squad follow reversals.
@@ -33,4 +34,5 @@ Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load
 - regress-8map 30b2fa74 vs 398b27ef, 3 arms x 8 maps (RT off, Classic, lockstep): the lights-off arm within -0.10..+0.04 ms p90 of base on every map (nothing else regressed); lights cost +0.03..+0.23 (limit +0.35). PASS under the re-based rule.
 - Off / Faithful identity vs 30b2fa74 (Rust, Classic): SIMHASH identical; differences only where effects overlap characters (sort + soft fade), the barrier, and the transient lights (baseline changes in all modes); NOINTERACT on-arm determinism 25/25 identical; the cull floor changes only faint light edges.
 - R4 leak rows: GPU dedicated plateau ~2.7 GB over 5 map changes (pool fix).
-- verify_slim -SubstDrive (R4-aware RT gate, SETTINGSTEST, -ForeignCwd, the overlay row) and the FAST gate: filled at build.
+- verify_slim -SubstDrive X: -SkipIntro -SettingsExpected 7 -ForeignCwd (work/verify_398b/REPORT.md): PASS - Streets / Gorge / Debris PASS (91 / 88 / 85 s, 0 outside reads, 282 / 0 / 0 localized), HD pack static 3,505 rows / 3,506 files / 21.27 GB 0 problems, bin vs build_slim.json exact (20 files, M5 runtime), overlay row PASS (barrier wfc_material, 85 / 85 byte-identical), Settings 7 / 7, RT gate build / context / runtime / r4 PASS (V_bake k 0.354, 26 pages). The HD runtime row (added after this verify) FAILS this package: HD silently off (known issue above).
+- FAST gate on 398b27ef: PASS (Experimental's re-report: PASS 58; the single PRODUCT row is the known Berth dark-interior false positive, environment fully drawn).
