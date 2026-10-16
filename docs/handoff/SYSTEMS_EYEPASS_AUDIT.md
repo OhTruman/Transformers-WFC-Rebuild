@@ -44,3 +44,20 @@ PASS = checked and correct.
 
 - Mine detonation (Exp_2500cb_FX) renders: a staged spawn through fxStepSpawn(explosion) in front of the camera shows the flash / fireball / sparks / smoke over ~0.4 s (docs/handoff/eyepass/exp_2500cb_staged_rtoff.png); Gameplay's empty frames were a timing / position question (frames 808-860 vs the spawn at step 1625; a mine at or below the floor is depth-cut).
 - Audio counts from lockstep runs are inflated (the sim outruns the real-time mixer); tools/systems/voice_ab.ps1 -Paced (lockstep + 60 fps cap) gives deterministic real-time numbers.
+
+## 31 v 32 rerun (paced, 2026-10-16)
+
+Build: 06110ef4 + SYSTEMS_IMPACT_NORMAL + SYSTEMS_VOICE_CULL (= what integration merged), RT off, seed 7, 70 s,
+`eyepass_run.ps1 -Paced -Bots 'BotsFriendly=31?BotsEnemy=32?ExtendedPlayers=1'` (without ExtendedPlayers=1 the URL is clamped to
+the original 5 v 5 - 9 bots). 63 bots confirmed on all 5 maps. Deltas vs the 4 v 5 audit only:
+
+- Effect guards: still 0 on every map (13-18 k cue lines per map, no "fx guard").
+- Muzzle / fire-sound sync: 509 local shots, all paired, max 1 ms (unchanged).
+- Late / missing sounds, Kismet audio, map FX data: unchanged (PASS).
+- Impact squib (item 3): no "not spawned" line on any map (fixed).
+- Voice pool (voice_ab.ps1 -Paced, Streets / Gorge, base 06110ef4 vs patched): the 96-channel pool IS saturated at 63 bots, but
+  only for distant bot / world sounds (lowest priority, quietest first); the local player is never refused.
+  Streets: at-96 in 61 -> 33 of 160 samples, refused 1700 -> 1289, stolen 3550 -> 3065. Gorge: 81 -> 56, 2726 -> 2049,
+  5299 -> 4935. The original never ran more than 10 players on 96 channels; whether 31 v 32 wants a bigger pool (e.g. 128) is
+  an extension decision, not a fidelity one - not changed.
+- Unchanged LOW items: vending GLSL (2 materials), Debris decals.glb warning, 1 frame-1 GPU spike per map (load).

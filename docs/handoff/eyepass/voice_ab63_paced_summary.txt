@@ -1,0 +1,4 @@
+MP_IAC_Streets_base    bots 63 local shots 139 | real peak 96 median 94 at-96 61/160 | refused 1700 stolen 3550 | virtual max 55 | local refused 0
+MP_IAC_Streets_new     bots 63 local shots 139 | real peak 96 median 91 at-96 33/160 | refused 1289 stolen 3065 | virtual max 80 | local refused 0
+MP_UND_Gorge_base      bots 63 local shots 129 | real peak 96 median 96 at-96 81/160 | refused 2726 stolen 5299 | virtual max 37 | local refused 0
+MP_UND_Gorge_new       bots 63 local shots 129 | real peak 96 median 94 at-96 56/160 | refused 2049 stolen 4935 | virtual max 49 | local refused 0

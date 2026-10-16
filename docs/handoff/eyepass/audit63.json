@@ -1,0 +1,163 @@
+{
+ "MP_IAC_Rust": {
+  "match_start_s": 18.976,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 5.425,
+    "first_step": -813,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 9.026,
+    "first_step": -597,
+    "example": "GPU frame spike 78.6 ms (cpu 98.3 ms) at frame 1: passes world 78.5, characters+caller 0.0, map FX 0.0, translucency 0.1, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 22.177,
+    "first_step": 192,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 27,
+  "paired_with_fire_cue": 27,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_IAC_Streets": {
+  "match_start_s": 18.273,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 4.968,
+    "first_step": -798,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 8.323,
+    "first_step": -597,
+    "example": "GPU frame spike 76.5 ms (cpu 85.5 ms) at frame 1: passes world 76.4, characters+caller 0.0, map FX 0.0, translucency 0.1, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 22.69,
+    "first_step": 265,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 145,
+  "paired_with_fire_cue": 145,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 1.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_KON_Molten": {
+  "match_start_s": 18.471,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 4.934,
+    "first_step": -812,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 8.521,
+    "first_step": -597,
+    "example": "GPU frame spike 94.2 ms (cpu 103.8 ms) at frame 1: passes world 93.9, characters+caller 0.0, map FX 0.0, translucency 0.2, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 21.887,
+    "first_step": 204,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 101,
+  "paired_with_fire_cue": 101,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_ORB_Debris": {
+  "match_start_s": 19.442,
+  "kinds": {
+   "decals missing": {
+    "count": 1,
+    "first_s": 0.465,
+    "first_step": -1138,
+    "example": "glb: no triangles baked from F:/Transformers Rebuild/Rebuild/work/render/MP_ORB_Debris/decals.glb"
+   },
+   "material fallback": {
+    "count": 4,
+    "first_s": 4.976,
+    "first_step": -867,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 9.492,
+    "first_step": -597,
+    "example": "GPU frame spike 76.1 ms (cpu 87.0 ms) at frame 1: passes world 75.9, characters+caller 0.0, map FX 0.0, translucency 0.1, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 23.292,
+    "first_step": 231,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 97,
+  "paired_with_fire_cue": 97,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_UND_Gorge": {
+  "match_start_s": 18.445,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 5.149,
+    "first_step": -797,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 8.495,
+    "first_step": -597,
+    "example": "GPU frame spike 56.4 ms (cpu 67.4 ms) at frame 1: passes world 56.2, characters+caller 0.0, map FX 0.0, translucency 0.2, post 0.1 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 21.628,
+    "first_step": 190,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 139,
+  "paired_with_fire_cue": 139,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ }
+}
