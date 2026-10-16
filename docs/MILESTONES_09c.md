@@ -2006,3 +2006,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the END of the gate block (~18:30-19:00 their clock); the corpse / mines arms after Gameplay's WFC_NOCORPSE /
   WFC_NOMINEPRES switch build (no switch exists on the head; compiled after the block). The regress + 1b hold clears
   as planned; Systems' RT-off rows + deletion between the holds; AssetTools resumes between on my word.
+  2026-10-16 15:42 OFF-PATH REGRESSION, ranked causes (Rendering, code read): (1) CONFIRMED BUG: tlTiledOn() (aed1c441)
+  checked only WFC_TLTILED, not the mode, so Off / Faithful ran the tiled transient-light path (CPU tile masks per
+  frame, 2 extra binds per lit draw, per-pixel tile + 4 RGBA32F fetches per light) with identical output whenever a
+  transient light burned; fits binds 880 -> 972; est. 0.2-0.6 ms; fix written (tlTiledOn requires rtMode_ == 2),
+  built after the hold clears, identity after the block -> HEAD RESPINS. (2) FX data regen (fx draws 69 -> 122 =
+  overdraw). (3) corpses (vertex / shadow). (4) item-6 data (low prior). Soft particles / tone / temporal / hit data
+  / X2 are mode-gated by construction. Re-gate after the respin = regress (+ delta FAST); eye pass only if Realistic
+  changes. Systems rebuilds the package on the respun head. Hand-over likely tomorrow (late morning / afternoon).
