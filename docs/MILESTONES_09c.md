@@ -1363,6 +1363,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   clustered transient-light fix, item 6 Enhanced calibration, the item 7 polish worth doing, a per-map eye pass on
   the five user maps; then package 6 = the hand-over build with the reboot reminder. Systems reads the vehicle
   headlight / dynamic emissive light data for rows 3 and 7.
+  2026-10-16 03:26 PACKAGE-5 ROWS DONE on 398b27ef (Experimental): regress PASS (re-based), captures PASS, R4 leak PASS, and the
+  NEW RT PERF REFERENCE under NOINTERACT (cea68f4b; docs/handoff/RT_PERF_BASELINE_398b27ef.md + .csv, synced f7c10f94):
+  2560x1440 windowed, 63 bots, transient lights on - p50 / p90 ms Off 1.60-2.07 / 1.96-2.31; Faithful 4.19-5.03 /
+  5.41-7.21; Realistic Rust 9.35 / 11.44, Debris 7.44 / 8.49, Streets 9.19 / 11.69, Molten 9.71 / 11.94, Gorge 8.94 /
+  11.16; Realistic shadow + AO 2.9-4.0 ms (+0.5-0.7 vs 30b2fa74 from items 1 + 2), denoiser 0.9-1.2, reflections
+  1.3-1.9, GI per traced frame 3.3-6.7, RT VRAM 3.9-4.8 GB. Off matches the pre-NOINTERACT series within 0.07.
+  'GO build package 5' sent to Systems (398b27ef, D b0-31, overlay); Rendering has slot A for plan v3 row 1.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
