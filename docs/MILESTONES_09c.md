@@ -1315,6 +1315,17 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Experimental reruns the 3-arm A/B (target within +0.05 ms p90 of 30b2fa74), then regress-8map, captures vs
   a5f53923, and the rt-perf-baseline under NOINTERACT; Systems rebases its view-cone cull + WFC_TLIGHTSCALE patch onto
   it (rides if in before the build).
+  2026-10-16 02:32 3-ARM A/B on 3c007160 (Experimental, 508 / 504 / 503): head +0.19 / +0.25 / +0.20 ms p90 vs 30b2fa74, the
+  lights-off arm within +0.04 / +0.06 / -0.06: the cull radius, per-draw masks and cached uniforms recover almost
+  nothing (within noise on 508 only); the cost stays per-pixel in the lit world pass on every frame (508 slow-frame GPU
+  world 0.70 -> 0.76, 504 0.97 -> 1.09; CPU render +0.03-0.08 from the masks) because with 63 bots firing the lights
+  are alive near most visible geometry. DECISION: package 5 ships with the transient lights ON (the original's
+  behaviour; the user set quality first; ~6-8 % of a 3 ms Off frame, ~2 % at Realistic); the regress verdict is
+  re-based = the lights-off arm within +0.15 of base on every map AND the lights' cost <= +0.35 everywhere, documented
+  as a feature cost; the real fix (tiled / clustered light lists, per-vertex world evaluation, or a nearest cap) is
+  Rendering's package-6 item with a +0.05 target. Systems' view-cone / 150 m cull + WFC_TLIGHTSCALE merged 398b27ef =
+  FINAL PACKAGE-5 HEAD. Experimental: 3-arm regress on all 8 maps, captures, rt-perf-baseline; Systems' windowed
+  cull-numbers run beside the captures.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
