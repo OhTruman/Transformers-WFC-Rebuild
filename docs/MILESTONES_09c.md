@@ -1827,3 +1827,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   CROSSPLAY_NETCODE_DESIGN.md + CROSSPLAY_PROFILE_STATS.md; AssetTools CROSSPLAY_PLATFORM_FEASIBILITY.md (after the
   grid work); Gameplay CROSSPLAY_SIM_DETERMINISM_AUDIT.md (in parallel with the ledge-guard gate). Ledge guard gate
   ETA ~16:00-16:45 (their clock), inside the head freeze.
+  2026-10-16 13:21 CROSSPLAY_SIM_DETERMINISM_AUDIT.md merged 7c398220 (Gameplay, written beside the ledge-guard gate): x64
+  determinism today = SSE2 baseline, no fast-math / FMA, fixed 1/60 dt, seeded xorshift32 + per-bot LCG, order-
+  independent worker pool (SIMHASH = same-exe only); hazards ~400 transcendental / sqrt sites, float thresholds, 8
+  unstable sorts, a host-endian hash; options A strict-float + shared libm + stable sorts + canonical serialisation +
+  cross-build SIMHASH CI (3-6 d; recommended for PC / browser), B fixed-point (weeks), C server-authoritative
+  (UE3's model; PowerPC fallback); a sim-change rule from now on. Feeds Systems' netcode design (fill-in only).
