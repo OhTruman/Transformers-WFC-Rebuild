@@ -1,6 +1,6 @@
 # Package 6: integration <HEAD> (<DATE>)
 
-<!-- SKELETON (Systems; refreshed 2026-10-16 12:40 from docs/MILESTONES_09c.md up to the 12:40 entry). Integration fills
+<!-- SKELETON (Systems; refreshed 2026-10-16 13:05 from docs/MILESTONES_09c.md up to the 12:58 entry). Integration fills
      <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
      PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
 
@@ -14,14 +14,13 @@
    Realistic + Enhanced [PLACEHOLDER: p50 / p90 fps] (the gate's step 1b row; the floor is ~60 fps).
 4. **Where the difference shows best:** reflective floors (robots and gun flashes in them), streets under the tall
    buildings (sun and shadow, coloured bounce light), firefights (explosions, impacts and boost now light the scene),
-   Gorge's interiors (dark corners lit by the lamps and bounce), Molten's lava halls [PLACEHOLDER: if the lava fix ships].
+   Gorge's interiors (dark corners lit by the lamps and bounce), Molten's lava halls (the lava now glows onto the rock).
 5. **Side by side with the original:** press **F9** in a match to cycle Ray Tracing Off -> Faithful -> Realistic in the same
    view (works on a map that loaded with ray tracing on). For the full original look also set HD Textures = Off (from the
    next map). Off / Faithful are the original's image, byte for byte.
 
 **Already known (no need to report):** vehicle muzzle flashes saturate a nearby wall (authored values, as the original);
-several explosions right at the camera fill the screen flat yellow (authored colours); Molten's lava does not light the
-scene yet [PLACEHOLDER: if still open]; no volumetric light shafts yet (package 7) [PLACEHOLDER: if X3 misses]; dead
+several explosions right at the camera fill the screen flat yellow (authored colours); no volumetric light shafts yet (package 7) [PLACEHOLDER: if X3 misses]; dead
 robots do not leave decals / skeletal gibs yet and the death animation choice is approximate; Smart bots' squads can
 reverse direction around a walking leader. Anything else is news.
 
@@ -103,9 +102,9 @@ Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views
 - **X3 volumetrics** (sun shafts / lamp halos / lit fog): v1 (flat grey haze) and v2 (faint haze, no shafts / halos)
   were rejected by eye; parked after v2. [PLACEHOLDER: v3 on the authored open-sky views (lamps picked by screen coverage),
   else package 7.]
-- **Molten** (lava-lit: emissive surfaces as RT light sources + per-map exposure; RENDERING_MOLTEN_PLAN.md)
-  [PLACEHOLDER: the lava-facing gain test (gains 1 / 3 / 6 had no effect before the surface-colour fix; the first test
-  after it had no lava in frame)].
+- **Molten's lava lights the scene** (584c873b, Rendering e233a641; WFC_RT_GIEMISSIVE = 4 in Realistic): with the
+  surface-colour fix the lava's emissive reaches the bounce light; on lava-facing views rock over a lava basin reads
+  contrast 2.13 (gain 1) -> 2.29 (gain 4, a heat glow; 8 reads as a red lamp) vs Off.
 - **Effect lights on by default in Realistic** (Systems 709df0f5 + 5f423157): explosions, impacts, vehicle boost and
   pickups give off light, calibrated per template from the decoded fade curves (SYSTEMS_RT_LIGHT_HOOKS); WFC_FXLIGHTS=0
   off. A deliberate Realistic addition (the original has no such lights); Off / Faithful never add one (the live-list fix
@@ -135,7 +134,7 @@ Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views
 | row 4 transient light gain | WFC_RT_TLGAIN | 2.0 |
 | X2 specular gain | WFC_RT_LMSPECGAIN (WFC_RT_LMSPEC=0 off) | 2.5 |
 | X1 tone curve | WFC_RT_TONE=0; WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN | on (gain 1.3) |
-| X4 coloured bounce / emissive bounce | WFC_RT_GISAT / WFC_RT_GIEMISSIVE | 2.5 / 1.0 |
+| X4 coloured bounce / emissive bounce | WFC_RT_GISAT / WFC_RT_GIEMISSIVE | 2.5 / 4.0 |
 | X5-1 character AO radius | WFC_RT_CHARAORADIUS | 3.0 m |
 | soft particles | WFC_SOFTPARTICLES=0 | on |
 | tiled transient lights | WFC_TLTILED=0 | on |
@@ -165,8 +164,10 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Robots stand only on walkable ground** (f19e0052): ground support needs a surface under ~45 deg (|n.y| >= 0.7, the
   original's WalkableFloorZ); robots no longer snap onto steep faces or get trapped in the two known spots. 2 of ~460
   traverse routes that climbed steep faces are now blocked - the faithful behaviour.
-- Classic was re-baselined four times by design (yaw rate, drive probe, steer sign, walkable floor; reference tables in
-  docs/handoff/vehyaw/, driveprobe/, drivesteer/, walkable/).
+- **Jumps no longer pop robots onto barrier tops or into wall pockets** (63368d05): while rising, a robot lands only on a
+  surface its previous bottom was above (UE3's physFalling rule); NAVQ every |z| < 1.5, traverse routes identical.
+- Classic was re-baselined five times by design (yaw rate, drive probe, steer sign, walkable floor, rise snap; reference
+  tables in docs/handoff/vehyaw/, driveprobe/, drivesteer/, walkable/, risesnap/).
 - **BOTTEST gate robustness** (d817d599): seed-variance tolerant rows, no re-baseline.
 
 ### Audio and effects
@@ -195,8 +196,10 @@ Off / Faithful stay byte-identical to the original (identity rows).
 
 - (CLOSED) Realistic + Enhanced darkness: the Modern shading dropped the original's specular (not the data); fixed eaed3192,
   int_cand3 sheet Realistic + Enhanced 1.30 vs Realistic 1.31.
-- **Molten's lava does not light the scene yet**: the emissive gain had no effect before the RT surface-colour fix; the
-  lava-facing gain test is pending [PLACEHOLDER: closed or still open].
+- (CLOSED pending the eye pass) Molten's lava did not light the scene: fixed by the RT surface-colour fix + emissive gain 4
+  (584c873b) [PLACEHOLDER: confirmed by the final eye pass].
+- **Bright emissive + muzzle flash can wash out yellow** (X1 soft bloom on very bright frames, Molten step 1200)
+  [PLACEHOLDER: the bloom-input cap in item 7 polish shipped or not].
 - **Idle 20 s BOTTEST row** at seeds 1 / 5 (47 / 48 before): the walkable-floor fix f19e0052 addresses the trap
   [PLACEHOLDER: 48 / 48 at seeds 1 / 5 on the head, or still open].
 - **X3 volumetrics**: v1 and v2 rejected by eye; v3 on the authored open-sky views pending [PLACEHOLDER: in or package 7].
@@ -217,7 +220,7 @@ Off / Faithful stay byte-identical to the original (identity rows).
 ## Gates (final head <HEAD>)
 
 <!-- package-gate.sh table (rules final 08:37, Experimental 101b3970 / 78854ddd / d3a6e1e1). Base = 398b27ef + yaw 022e5e34 +
-     drive-probe 56a9beca + the one-line steer + the walkable sim line f19e0052 (gate-base.sh). Regress bars are report rows at
+     drive-probe 56a9beca + the one-line steer + walkable f19e0052 + rise snap 63368d05 (all five sim lines; gate-base.sh). Regress bars are report rows at
      +0.35 ms p90 per map RT off (BISECT above, not a block); blocking = contamination, client rect, different match, final
      vs lights-off parity. GPU block ~2.8-3.1 h. -->
 
@@ -230,5 +233,5 @@ Off / Faithful stay byte-identical to the original (identity rows).
 | Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | int_cand3 sheet 1.31 / 1.30; int_cand4 authored views 1.25-1.88 |
 | verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
 | FAST gate | [PLACEHOLDER] | |
-| BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5 |
+| BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
 | Settings survive map change (WFC_SETTINGSTEST) | [PLACEHOLDER] | new renderer switches in release()'s keep list |
