@@ -1298,6 +1298,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   camera almost fully bright beige (frame mean luminance 38.3 -> 53.1), possibly overbright: Systems verifies the
   authored brightness / radius / exponent vs the original, Rendering verifies linear-before-tonemap and no double
   brightness scale; a correction rides with the cull fix. Row 4 (perf baseline) waits for the fix head.
+  2026-10-16 02:03 MUZZLE-LIGHT BRIGHTNESS VERIFIED (Systems, authored.db): the shooter in shot 1140 is a vehicle; vehicle MG muzzle
+  lights are authored Brightness 25 / Radius 512 cm / FalloffExponent 10, colour (255, 128, 128) -> linear x 25 =
+  (25, 5.5, 5.5); MP rifle-class weapons B 10 / R 3000 cm / exp 75 (effectively ~8 m). Our chain: (byte / 255)^2.2 x
+  Brightness, radius cm / 100, the authored falloff, added once in linear space before the output conversion (no
+  second gamma or brightness). A wall 1-1.5 m from a firing car gets 10-16x its albedo in red-heavy light, so the
+  beige-pink saturation is what the original's numbers produce (UE3 2009 clipped too; no filmic tonemap). DECISION:
+  keep the authored values in every mode (the original look), add a WFC_TLIGHTSCALE tune key (default 1) in Systems'
+  cull patch, note it in the package-5 notes for the user to judge; a real-game capture would settle it. Systems'
+  view-cone cull patch (SYSTEMS_TLIGHT_CULL.patch) rebases onto the cull-fix head once named.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
