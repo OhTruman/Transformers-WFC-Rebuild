@@ -1976,3 +1976,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a pixel moves to a warm white of its own hue by 6, pure white by 48; model orange fire 4x 1.00 / 0.74 / 0.52, 16x
   1.00 / 0.92 / 0.85). Gorge-only recheck on int_cand8 RUNNING (frame_compare bar: near-white 55-62 %, warmth >= +8,
   yellow-green <= 5.6 %); else int_cand7's rule. Then push -> merge + WHITEROLL table (5c4e53ff) = head.
+  2026-10-16 15:24 GORGE RECHECK on int_cand8: step 1080 yellow-green 0.3 % (fixed), warmth +13 (restored: warm cream-
+  white), near-white 80 % vs Off 58 % (the frame stays brighter / wider than the original: exposure adaptation +
+  bloom on a point-blank full-screen explosion). Gorge 1.33 | 1.38. DECISION: ship int_cand8 (clearly better than
+  int_cand7; no third retune); residual = package 7 polish (adaptation on extreme frames). Rendering pushes 0a299fe9
+  + a833c984 -> merge + WHITEROLL table = package 6 head.
