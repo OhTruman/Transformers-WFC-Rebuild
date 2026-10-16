@@ -44,6 +44,7 @@ when package 5 is built. Launch as before: Play.bat (maps the package to F:, or 
   8.28 -> 8.66, Molten 8.68 -> 9.09, Gorge 7.96 -> 8.48 ms (p90 max 10.55). Off and Faithful unchanged.
 - **Reflection artefacts (Realistic / Faithful)** *(carried over unless plan v2 item 3 lands)*: a seam on Molten's
   central platform floor and thin dark lines along bright rims at grazing angles.
+- **Vehicle muzzle lights saturate nearby walls** as the original's numbers do (car / plane guns: Brightness 25 over 5 m): a wall a metre from a firing vehicle flashes near-white. Kept as authored; judge it in play (a tone-down is one value, WFC_TLIGHTSCALE).
 - **Death lights are an approximation:** the original picks a death type per death (also from the victim's motion), so a few deaths light differently (e.g. jet / truck rocket kills of robots stay dark); the real picker is a campaign-phase item.
 - **Driver nonpaged pool** grows with GPU load (AMD); a reboot before a long session clears it.
 
