@@ -2014,3 +2014,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   overdraw). (3) corpses (vertex / shadow). (4) item-6 data (low prior). Soft particles / tone / temporal / hit data
   / X2 are mode-gated by construction. Re-gate after the respin = regress (+ delta FAST); eye pass only if Realistic
   changes. Systems rebuilds the package on the respun head. Hand-over likely tomorrow (late morning / afternoon).
+  2026-10-16 16:20 GATE REGRESS TABLE (RT off, same match, best p90 of 2, base | final | lights-off; delta lights-off -
+  base): Berth 2.16 | 4.04 | 3.99 (+1.83); Seed 2.09 | 4.30 | 4.18 (+2.09); Complex 2.11 | 3.84 | 3.77 (+1.66); Rust
+  2.61 | 4.59 | 4.52 (+1.91); Debris 2.34 | 5.73 | 5.69 (+3.35); Streets 2.09 | 3.99 | 3.97 (+1.88); Molten 2.77 | 4.87
+  | 4.84 (+2.07); Gorge 2.68 | 6.54 | 6.44 (+3.76). All 8 BISECT; effect lights +0.02..+0.12; cost tracks the added
+  dyn + fx draws (Gorge dyn 212 -> 356, fx 127 -> 245) = death bodies' gib / trail / wreck FX + the FX data regen +
+  the tiled path's binds. 1b read UNKNOWN (HD not applied on lockstep-ab's match boot) -> fixed + rerun in the end
+  hold with the bisect. Hold cleared 16:19 (their clock); leak -> eyepass -> FAST running untimed. Rendering builds
+  the tiled mode-gate fix; Gameplay prepares the corpse cost plan + WFC_NOCORPSE / WFC_NOMINEPRES switches.
