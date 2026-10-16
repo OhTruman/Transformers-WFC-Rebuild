@@ -1,0 +1,176 @@
+diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+index 5d0ea5b..7955916 100644
+--- a/src/platform/win32/Win32Window.cpp
++++ b/src/platform/win32/Win32Window.cpp
+@@ -46,29 +46,40 @@ namespace {
+ // recentring off), no capture / clip, fullscreen requests stay windowed, and keys, buttons, wheel, text and the real pad are
+ // ignored at the source (every pump: the frontend, loading and match loops); scripted inputs (injectPad, the frontend script,
+ // the WFC_AUTO* / player-bot hooks) still apply. WFC_NOINTERACTTEST=1 logs a self-check 5 s and 30 s after the window opens.
++// The window is a borderless popup whose client area is exactly the requested size (a framed window larger than the work area
++// was shrunk by Windows - 2560x1417 for a 2560x1440 request - which broke pixel diffs between runs).
+ bool noInteract() { static const bool v = std::getenv("WFC_NOINTERACT") != nullptr; return v; }
+ 
+-// NOINTERACT placement of an outer window of ww x wh: WFC_WINPOS=x,y, else the bottom-right corner of a secondary monitor's
+-// work area when one is attached, else of the primary's (kept fully on screen: off-screen pixels of a GL window are undefined).
+-POINT noInteractPos(int ww, int wh) {
++// NOINTERACT placement of the borderless client of cw x ch: WFC_WINPOS=x,y, else the bottom-right corner of a secondary
++// monitor whose bounds hold the whole client, else of the primary when it holds it, else of any monitor that does (monitor
++// bounds, not the work area: the taskbar may overlap; off-screen pixels of a GL window are undefined). No monitor holds it:
++// the primary's top-left corner, with a warning (the client then runs off the screen).
++POINT noInteractPos(int cw, int ch) {
+     if (const char* s = std::getenv("WFC_WINPOS")) {
+         int x = 0, y = 0;
+         if (std::sscanf(s, "%d,%d", &x, &y) == 2) return POINT{x, y};
+         LOG_WARN("window: WFC_WINPOS '%s' is not x,y; using the corner placement", s);
+     }
+-    struct Pick { HMONITOR primary = nullptr, other = nullptr; } pick;
++    struct Pick {
++        int cw, ch;
++        RECT primary{}, other{}, any{};
++        bool hasPrimary = false, primaryFits = false, otherFits = false, anyFits = false;
++    } pk{cw, ch};
+     EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR m, HDC, LPRECT, LPARAM lp) -> BOOL {
+-        auto* pk = reinterpret_cast<Pick*>(lp);
++        auto* p = reinterpret_cast<Pick*>(lp);
+         MONITORINFO mi{};
+         mi.cbSize = sizeof(mi);
+-        if (GetMonitorInfoW(m, &mi)) { if (mi.dwFlags & MONITORINFOF_PRIMARY) pk->primary = m; else if (!pk->other) pk->other = m; }
++        if (!GetMonitorInfoW(m, &mi)) return TRUE;
++        const bool fits = mi.rcMonitor.right - mi.rcMonitor.left >= p->cw && mi.rcMonitor.bottom - mi.rcMonitor.top >= p->ch;
++        if (mi.dwFlags & MONITORINFOF_PRIMARY) { p->primary = mi.rcMonitor; p->hasPrimary = true; p->primaryFits = fits; }
++        else if (fits && !p->otherFits) { p->other = mi.rcMonitor; p->otherFits = true; }
++        if (fits && !p->anyFits) { p->any = mi.rcMonitor; p->anyFits = true; }
+         return TRUE;
+-    }, reinterpret_cast<LPARAM>(&pick));
+-    MONITORINFO mi{};
+-    mi.cbSize = sizeof(mi);
+-    const HMONITOR m = pick.other ? pick.other : pick.primary;
+-    if (!m || !GetMonitorInfoW(m, &mi)) return POINT{0, 0};
+-    return POINT{std::max(mi.rcWork.left, mi.rcWork.right - ww), std::max(mi.rcWork.top, mi.rcWork.bottom - wh)};
++    }, reinterpret_cast<LPARAM>(&pk));
++    const RECT* m = pk.otherFits ? &pk.other : pk.primaryFits ? &pk.primary : pk.anyFits ? &pk.any : nullptr;
++    if (m) return POINT{m->right - cw, m->bottom - ch};
++    LOG_WARN("NOINTERACT: no monitor holds a %dx%d client; placed at the primary's top-left (part of it is off the screen)", cw, ch);
++    return pk.hasPrimary ? POINT{pk.primary.left, pk.primary.top} : POINT{0, 0};
+ }
+ 
+ // Map a neutral Button to a Win32 virtual key.
+@@ -136,11 +147,12 @@ public:
+         MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, 256);
+ 
+         const bool quiet = noInteract();
++        reqW_ = w; reqH_ = h;
+         POINT at{CW_USEDEFAULT, CW_USEDEFAULT};
+-        if (quiet) at = noInteractPos(r.right - r.left, r.bottom - r.top);
++        if (quiet) { r = RECT{0, 0, w, h}; at = noInteractPos(w, h); }   // borderless: the window is the client
+         // NOINTERACT: never activated by a click or at the first show; APPWINDOW keeps its taskbar button
+-        hwnd_ = CreateWindowExW(quiet ? WS_EX_NOACTIVATE | WS_EX_APPWINDOW : 0, wc.lpszClassName, wtitle, WS_OVERLAPPEDWINDOW,
+-                                at.x, at.y, r.right - r.left, r.bottom - r.top,
++        hwnd_ = CreateWindowExW(quiet ? WS_EX_NOACTIVATE | WS_EX_APPWINDOW : 0, wc.lpszClassName, wtitle,
++                                quiet ? WS_POPUP : WS_OVERLAPPEDWINDOW, at.x, at.y, r.right - r.left, r.bottom - r.top,
+                                 nullptr, nullptr, hinst_, this);
+         if (!hwnd_) { LOG_ERROR("CreateWindowExW failed"); return false; }
+ 
+@@ -157,6 +169,7 @@ public:
+             LOG_INFO("NOINTERACT: no activation / capture / clip (window at %ld,%ld, %ldx%ld, bottom of the z-order; cursor never "
+                      "hidden or moved; keys, mouse, wheel, text and pad ignored; fullscreen stays windowed)",
+                      wr.left, wr.top, wr.right - wr.left, wr.bottom - wr.top);
++            logNoInteractClient();
+         } else {
+             ShowWindow(hwnd_, SW_SHOW);
+             SetForegroundWindow(hwnd_);
+@@ -270,15 +283,29 @@ public:
+             {"cursor clip rect == virtual screen", EqualRect(&clip, &screen) != FALSE},
+             {"cursor never hidden (ShowCursor) or moved (SetCursorPos)", cursorHides_ == 0 && cursorMoves_ == 0},
+             {"WS_EX_NOACTIVATE set, WS_EX_TOPMOST clear", (ex & WS_EX_NOACTIVATE) != 0 && (ex & WS_EX_TOPMOST) == 0},
++            {"client size == requested size", clientMatchesRequest()},
+         };
+         int pass = 0;
+         for (const Check& c : checks) {
+             pass += c.ok ? 1 : 0;
+             LOG_INFO("NOINTERACTTEST %s: %s", c.ok ? "PASS" : "FAIL", c.name);
+         }
+-        LOG_INFO("NOINTERACTTEST SUMMARY: %d/%d checks passed at %.0f s (NOINTERACT %s; clip %ld,%ld-%ld,%ld, screen %ld,%ld-%ld,%ld)",
++        RECT cr{}; GetClientRect(hwnd_, &cr);
++        LOG_INFO("NOINTERACTTEST SUMMARY: %d/%d checks passed at %.0f s (NOINTERACT %s; clip %ld,%ld-%ld,%ld, screen %ld,%ld-%ld,%ld; "
++                 "client %ldx%ld, requested %dx%d)",
+                  pass, (int)(sizeof(checks) / sizeof(checks[0])), t, noInteract() ? "on" : "OFF - negative control",
+-                 clip.left, clip.top, clip.right, clip.bottom, screen.left, screen.top, screen.right, screen.bottom);
++                 clip.left, clip.top, clip.right, clip.bottom, screen.left, screen.top, screen.right, screen.bottom,
++                 cr.right - cr.left, cr.bottom - cr.top, reqW_, reqH_);
++    }
++    bool clientMatchesRequest() const {
++        RECT cr{};
++        return GetClientRect(hwnd_, &cr) && cr.right - cr.left == reqW_ && cr.bottom - cr.top == reqH_;
++    }
++    void logNoInteractClient() const {   // the harness line: the client rectangle in screen coordinates
++        RECT cr{}; GetClientRect(hwnd_, &cr);
++        POINT o{0, 0}; ClientToScreen(hwnd_, &o);
++        LOG_INFO("NOINTERACT: client %ldx%ld at (%ld,%ld)%s", cr.right - cr.left, cr.bottom - cr.top, o.x, o.y,
++                 clientMatchesRequest() ? "" : " - DIFFERS from the request");
+     }
+ 
+     void injectPad(const std::string& button, bool down) override {
+@@ -458,17 +485,21 @@ public:
+             return;
+         }
+         restoreDesktopMode();
++        reqW_ = w; reqH_ = h;
++        if (noInteract()) {   // borderless at exactly w x h, in a monitor corner, bottom of the z-order, not activated
++            SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
++            const POINT at = noInteractPos(w, h);
++            SetWindowPos(hwnd_, HWND_BOTTOM, at.x, at.y, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
++            fullscreen_ = false;
++            logNoInteractClient();
++            return;
++        }
+         SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+         RECT r = {0, 0, w, h};
+         adjustFrame(r, windowDpi());
+         int x = fullscreen_ ? windowedRect_.left : CW_USEDEFAULT, y = fullscreen_ ? windowedRect_.top : CW_USEDEFAULT;
+         if (x == CW_USEDEFAULT) { RECT cur; GetWindowRect(hwnd_, &cur); x = cur.left; y = cur.top; }
+-        if (noInteract()) {   // the corner for the new size, bottom of the z-order, not activated
+-            const POINT at = noInteractPos(r.right - r.left, r.bottom - r.top);
+-            SetWindowPos(hwnd_, HWND_BOTTOM, at.x, at.y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+-        } else {
+-            SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+-        }
++        SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+         fullscreen_ = false;
+     }
+     bool fullscreen() const override { return fullscreen_; }
+@@ -765,8 +796,16 @@ private:
+                 // reactivation (WM_ACTIVATEAPP) switches to ours again
+                 if (wp == SIZE_MINIMIZED && fullscreen_ && modeChanged_) restoreDesktopMode();
+                 return 0;
++            case WM_GETMINMAXINFO:   // NOINTERACT: a client larger than the screen still gets its exact requested size
++                if (noInteract() && reqW_ > 0) {
++                    auto* mm = reinterpret_cast<MINMAXINFO*>(lp);
++                    mm->ptMaxTrackSize.x = std::max<LONG>(mm->ptMaxTrackSize.x, reqW_);
++                    mm->ptMaxTrackSize.y = std::max<LONG>(mm->ptMaxTrackSize.y, reqH_);
++                    return 0;
++                }
++                break;
+             case 0x02E4: {   // WM_GETDPISCALEDSIZE: the window size for the new DPI keeps the client size (no rescale)
+-                if (fullscreen_) return FALSE;
++                if (fullscreen_ || noInteract()) return FALSE;   // (NOINTERACT: borderless, the window is the client)
+                 RECT c; GetClientRect(hwnd, &c);
+                 RECT r = {0, 0, c.right - c.left, c.bottom - c.top};
+                 adjustFrame(r, (UINT)wp);
+@@ -775,7 +814,7 @@ private:
+                 return TRUE;
+             }
+             case 0x02E0: {   // WM_DPICHANGED: moved to a monitor with another scale
+-                if (fullscreen_) return 0;   // the popup already covers its monitor in physical pixels
++                if (fullscreen_ || noInteract()) return 0;   // the popup covers its monitor / is exactly the client
+                 const RECT* sug = reinterpret_cast<const RECT*>(lp);
+                 RECT c; GetClientRect(hwnd, &c);
+                 RECT r = {0, 0, c.right - c.left, c.bottom - c.top};
+@@ -842,6 +881,7 @@ private:
+     bool mouseCaptured_ = false;
+     std::chrono::steady_clock::time_point createdAt_{};
+     int selfTests_ = 0, cursorHides_ = 0, cursorMoves_ = 0;   // WFC_NOINTERACTTEST
++    int reqW_ = 0, reqH_ = 0;   // the requested client size (create / setDisplayMode); NOINTERACT keeps the client exactly at it
+ };
+ 
+ } // namespace
