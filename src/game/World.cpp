@@ -3734,17 +3734,42 @@ void World::draw(render::IRenderer& r) const {
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
-    for (const LiveTransientLight& l : transientLights_) {
-        const float end = std::max(l.lightTime, l.rampIn);
-        float k = 1.0f;
-        if (l.rampIn > 0.0f && l.age < l.rampIn) k = l.age / l.rampIn;
-        else if (l.age > end) k = l.rampOut > 0.0f ? std::max(0.0f, 1.0f - (l.age - end) / l.rampOut) : 0.0f;
-        if (k > 0.0f) r.addTransientLight(l.pos, l.color * k, l.radius, l.falloff);
+    // Transient lights reaching the view only (game-side cull; the renderer additionally masks per draw): the light's sphere
+    // (pos, radius: the whole lit volume) must intersect the camera's view cone - half-angle = the diagonal of the horizontal
+    // FOV at any aspect >= 1, + 5 deg - and lie within kTransientLightMaxDist of the eye. Presentation only.
+    unsigned tlSubmitted = 0;
+    if (!transientLights_.empty()) {
+        constexpr float kTransientLightMaxDist = 150.0f;   // m: beyond it a light covers a handful of pixels
+        const core::Vec3 eye = player_.controller().cameraPos();
+        const core::Vec3 fwd = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
+        const float halfX = 0.5f * player_.controller().fovXDeg() * core::PI / 180.0f;
+        const float half = std::min(std::atan(std::tan(halfX) * 1.41421356f) + 5.0f * core::PI / 180.0f, 1.55f);
+        const float sinA = std::sin(half), cosA = std::cos(half);
+        static const float kScale = [] { const char* e = std::getenv("WFC_TLIGHTSCALE"); const float v = e ? (float)std::atof(e) : 1.0f;
+                                         return std::isfinite(v) && v >= 0.0f ? v : 1.0f; }();   // tune key: brightness x (default 1 = authored)
+        for (const LiveTransientLight& l : transientLights_) {
+            const float end = std::max(l.lightTime, l.rampIn);
+            float k = 1.0f;
+            if (l.rampIn > 0.0f && l.age < l.rampIn) k = l.age / l.rampIn;
+            else if (l.age > end) k = l.rampOut > 0.0f ? std::max(0.0f, 1.0f - (l.age - end) / l.rampOut) : 0.0f;
+            if (k <= 0.0f) continue;
+            const core::Vec3 v = l.pos - eye;
+            const float dist = core::length(v);
+            if (dist > l.radius) {                                      // the eye inside the sphere: always visible
+                if (dist - l.radius > kTransientLightMaxDist) continue;
+                const float along = core::dot(v, fwd);
+                const float axis = std::sqrt(std::max(0.0f, dist * dist - along * along));
+                if (axis * cosA - along * sinA > l.radius) continue;   // signed distance to the cone surface beyond the radius
+            }
+            if (kScale <= 0.0f) continue;
+            r.addTransientLight(l.pos, l.color * (k * kScale), l.radius, l.falloff);
+            ++tlSubmitted;
+        }
     }
-    if (std::getenv("WFC_MUZZLELOG")) {   // submissions per 600 draws (diagnostic)
-        static unsigned frames = 0, lit = 0, sub = 0;
-        sub += (unsigned)transientLights_.size(); lit += transientLights_.empty() ? 0u : 1u;
-        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u submitted", lit, sub); lit = sub = 0; }
+    if (std::getenv("WFC_MUZZLELOG")) {   // live / submitted lights per 600 draws (diagnostic)
+        static unsigned frames = 0, lit = 0, live = 0, sub = 0;
+        live += (unsigned)transientLights_.size(); sub += tlSubmitted; lit += transientLights_.empty() ? 0u : 1u;
+        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u live, %u submitted after the view cull", lit, live, sub); lit = live = sub = 0; }
     }
     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
