@@ -1066,6 +1066,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   vehicle fixes, regress) with no interim; then the next phases in order: the full campaign (+ its textures and ray
   tracing), cross-play multiplayer (PC, web, Xbox 360, PS3, Android / iOS), one final optimization pass, maybe a
   Search-and-Destroy-like mode. Message the user only when done, for questions, or for verification.
+  2026-10-15 22:33 REGRESS-8MAP df132b5a vs ede2fc3c (Experimental, RT off, Classic): 8 / 8 PASS; 501 2.61 -> 2.62, 502 2.15 ->
+  2.19, 503 2.76 -> 2.84, 504 2.92 -> 2.97, 507 2.44 -> 2.46, 508 2.90 -> 2.98, 509 3.83 -> 3.88, 510 3.65 -> 3.24 (one
+  rep, noise). 7 of 8 maps +0.01-0.08 ms p90 (503 / 508 consistent, p50 unchanged) = option B's sorting + soft fade on
+  FX-heavy frames, within the gate (quality-first). One 501 head rep contaminated by a short python from Rendering's
+  session scratchpad during the hold (passes either way); reminder issued. Untimed Classic captures running.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
