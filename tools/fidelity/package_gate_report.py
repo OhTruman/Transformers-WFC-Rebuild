@@ -38,7 +38,10 @@ for m in ['501', '502', '503', '504', '507', '508', '509', '510']:
     rows.append(f"| {m} | {b:.2f} | {h:.2f} | {n:.2f} | {r1:+.2f} | {r2:+.2f} | {wtxt} | {v}{' (' + ', '.join(bad) + ')' if bad else ''} |")
 lines += ["## 1. Regress (3-arm lockstep, RT off, Classic, best p90 of 2, ms)", "",
           "| map | base | final | final lights off | lights off - base (report, <= +0.35) | lights cost (report, <= +0.35) | workload base -> final (same match) | verdict |", "|---|---|---|---|---|---|---|---|"] + rows + [""]
-verdicts.append(("regress", ("UNKNOWN (blocking row)" if not ok else (f"REPORT - {nbis} map(s) above +0.35: per-switch bisect before the hand-over" if nbis else "PASS"))))
+# GATE_REGRESS_NOTE: the attribution of a bisected regress (e.g. the death bodies' cost), printed under the table and in the verdict
+note = os.environ.get("GATE_REGRESS_NOTE", "")
+if note: lines += ["Attribution: " + note, ""]
+verdicts.append(("regress", ("UNKNOWN (blocking row)" if not ok else ((f"REPORT - {nbis} map(s) above +0.35" + (f" - attributed: {note}" if note else ": per-switch bisect before the hand-over")) if nbis else "PASS"))))
 
 # 1b Realistic perf row: report-only; flag p50 > 16.7 ms (the user's 60 fps floor at 1440p). Contamination / client rect / HD not on -> UNKNOWN
 rrows, flags, rbad = [], 0, 0
