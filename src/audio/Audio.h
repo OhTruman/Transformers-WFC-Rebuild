@@ -97,6 +97,9 @@ public:
     // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
     // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).
     virtual void release(Sound) {}
+    // Real-channel limit (FMOD MaxChannels). The original's 96 for its <= 10-player matches; the 16 v 16 / 32 v 32
+    // ExtendedPlayers extension (ours, not the original's) raises it. Backends without a channel pool ignore it.
+    virtual void setChannelLimit(int) {}
     virtual void stopAllVoices() {}
     virtual int activeVoices() const { return -1; }
     virtual size_t residentBytes() const { return 0; }

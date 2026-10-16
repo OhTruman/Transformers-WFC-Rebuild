@@ -2981,6 +2981,9 @@ bool World::launchMatch(const MatchLaunch& l) {
         core::simRandSeed(sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
+    // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
+    // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
+    if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)

@@ -538,7 +538,9 @@ public:
     // back in range. PC ADAPTATION: the logical pool grows to kMaxLogical so 32 v 32's far-away loops (map emitters,
     // vehicle engines, projectile flights) do not crowd out audible sounds; the 96 real channels and their stealing rule are
     // unchanged.
-    static constexpr int kMaxVoices = 96;
+    static constexpr int kMaxVoices = 96;                    // [CONF] MaxChannels (faithful default)
+    static constexpr int kMaxVoicesExtended = 128;           // ExtendedPlayers matches only (our extension)
+    int maxVoices_ = kMaxVoices;                               // under mx_
     static constexpr float kSilentChannelCull = 0.00063096f;  // [CONF] FmodAudioDevice SilentChannelCullingThreshold (-64 dB)
     static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
     std::vector<int> realScratch_;                            // mixBlock: the audible voices this block
@@ -566,7 +568,7 @@ public:
             if (!v.active) { if (freeSlot < 0) freeSlot = i; }
             else if (!v.culled) ++real;
         }
-        if (real < kMaxVoices || startsVirtual) {             // a virtual newcomer needs a slot, never a channel
+        if (real < maxVoices_ || startsVirtual) {             // a virtual newcomer needs a slot, never a channel
             if (freeSlot >= 0) { index = freeSlot; return &voices_[(size_t)freeSlot]; }
             if ((int)voices_.size() < kMaxLogical) { voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back(); }
         }
@@ -673,6 +675,10 @@ public:
         dead.swap(smp.pcm);                                      // the slot goes to the free list (handles carry the generation)
         smp.loopStart = 0.0; smp.loopEnd = -1.0;
         freeSlots_.push_back(idx);
+    }
+    void setChannelLimit(int n) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        maxVoices_ = std::clamp(n, 1, kMaxVoicesExtended);   // over-limit real voices are virtualized by the next update
     }
     void stopAllVoices() override {
         std::lock_guard<std::mutex> lk(mx_);
@@ -913,16 +919,16 @@ private:
             resolveGains(v);
             if (!v.culled) realScratch_.push_back(i);
         }
-        if ((int)realScratch_.size() > kMaxVoices) {
+        if ((int)realScratch_.size() > maxVoices_) {
             auto more = [&](int a, int b) {                       // a more important than b
                 const Voice& x = voices_[(size_t)a]; const Voice& y = voices_[(size_t)b];
                 if (x.protect != y.protect) return x.protect;
                 if (x.priority != y.priority) return x.priority < y.priority;
                 return x.gL + x.gR > y.gL + y.gR;
             };
-            std::nth_element(realScratch_.begin(), realScratch_.begin() + kMaxVoices, realScratch_.end(), more);
-            for (size_t k = kMaxVoices; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
-            stats_.overflowVirtualized += (int)realScratch_.size() - kMaxVoices;
+            std::nth_element(realScratch_.begin(), realScratch_.begin() + maxVoices_, realScratch_.end(), more);
+            for (size_t k = maxVoices_; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
+            stats_.overflowVirtualized += (int)realScratch_.size() - maxVoices_;
         }
         jobs_.clear();
         for (int vi = 0; vi < (int)voices_.size(); ++vi) {
