@@ -16,7 +16,9 @@ for i, b in enumerate(builds):
         a = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32); br = a.max(-1) > 235
         r, g, bl = a[br].mean(0) if br.sum() else (0, 0, 0)
         warm = (r - bl) if br.sum() else 0
+        R, G, Bc = a[..., 0], a[..., 1], a[..., 2]
+        yg = ((G > 150) & (G >= R - 10) & (G - Bc > 60)).mean() * 100   # yellow-green: bright green >= red, far above blue
         S.paste(Image.fromarray(a.astype(np.uint8)).resize((W, H)), (j * W, i * (H + 30) + 30))
-        txt = f"{b} - {m}: near-white {br.mean() * 100:.1f}%  mean RGB {r:.0f},{g:.0f},{bl:.0f}  warmth (R-B) {warm:+.0f}"
+        txt = f"{b} - {m}: near-white {br.mean() * 100:.1f}%  mean RGB {r:.0f},{g:.0f},{bl:.0f}  warmth (R-B) {warm:+.0f}  yellow-green {yg:.1f}%"
         d.text((j * W + 6, i * (H + 30) + 6), txt, fill="white"); print(txt)
 S.save(out); print("->", out)
