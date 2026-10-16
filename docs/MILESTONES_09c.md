@@ -2063,3 +2063,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   PASS (lobby GPU 2180 / 2841 / 2980 / 2974 MB, spread 138 MB); eye pass PASS (1.28 / 1.30); FAST full 7cd22027
   PASS (53 pass, PRODUCT FAIL 0) + delta 4078e47b PASS; mapswitch row HARNESS FAIL (pruned reference exes; map-loss-
   gate fix 3616470c synced; rerun after the hold). BISECT + 1b HOLD set 17:27 (~40 min); pool 6.86 GB.
+  2026-10-16 17:49 BISECT (Berth, RT off, same match, p90 r1 / r2): base 2.14 / 2.14; final 4.07 / 4.08; TLTILED=0
+  4.05 / 4.08; pre-item-6 data 4.06 / 4.10; cand9 (tiled mode gate) 4.00 / 4.04; SOFTPARTICLES=0 4.03 / 4.04;
+  RT_TONE=0 4.04 / 4.03 -> none of them; the tiled fix is -0.04..-0.07 (still merged for correctness). Remaining
+  suspect: death bodies / mines (dyn 122 -> 176); corpse arms on Gameplay's cap + switches tree next (compiling
+  now); else a commit bisect 398b27ef..4078e47b (boundaries: 54ac361d, 050a7796, 9711d354, b9e6f3d8, FX data,
+  02c743cc, f670f8ba). 1b RERUN with Enhanced: PASS all 5 maps (p50 Streets 9.26, Gorge 9.48, Debris 7.32, Rust
+  8.18, Molten 9.30 ms; p90 8.56-11.63; 105-137 fps at 1440p). Hold cleared 17:48 (their clock); pool 6.86 GB.
