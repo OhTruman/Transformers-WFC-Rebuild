@@ -1170,6 +1170,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identity already PASS vs 848b147b); rule restated: timed windows come from Integration, every hold is announced
   first. AssetTools D: batches 0-25 reviewed, b0-24 packed (2,852 textures, 16.9 GB), 26-31 left; D complete
   ~06:30-07:30 (the 'no python' listing was a gap between ~10-min passes).
+  2026-10-16 00:28 Rendering's timed perf window ran 00:11-00:27 (15 of 75 min; completion vs abort asked); hold removed 00:27.
+  DEATH-row fix merged 24c89769 (Gameplay GAMEPLAY_DEATHROW_FIX.patch ed06fd93: the scripted row measures
+  presentations / cues synchronously around each scripted applyMatchDamage call, so natural deaths in the window no
+  longer count; 44 / 44 both AIs at the default seed and at seed 7 on non-PGO; Systems reruns the PGO env on
+  24c89769 with the lights patches rebased).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
