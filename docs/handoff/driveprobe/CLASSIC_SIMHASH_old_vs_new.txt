@@ -1,0 +1,96 @@
+MP_IAC_Streets s1 old 18720 ae4a2a7a0bd7998f new 18720 3acac37f3338607e first-divergent-step 1251
+MP_IAC_Streets s2 old 15875 2cafb84c1e4270db new 12426 0acbac7b1ab865cc first-divergent-step 7653
+MP_IAC_Streets s3 old 18720 1cf2250a80fcfd52 new 18720 1cf2250a80fcfd52 identical
+MP_IAC_Streets s4 old 15330 e69abd3ec2fd3c6a new 15897 5a74a946ee8366a6 first-divergent-step 14380
+MP_IAC_Streets s5 old 17401 f41da061f4a006b0 new 18720 59600e92c5849b4c first-divergent-step 2972
+MP_IAC_Streets s6 old 14662 8b56167160baea3b new 17830 b5d55ffd23d25612 first-divergent-step 3916
+MP_IAC_Streets s7 old 18720 ce48337eb253c86e new 18720 092b2d97cb1ebe00 first-divergent-step 1497
+MP_IAC_Streets s8 old 18720 6adc13fe60ed3410 new 17612 e7852e00e8fd6872 first-divergent-step 10471
+MP_IAC_Streets s9 old 17428 b71b34914260c889 new 17428 b71b34914260c889 identical
+MP_IAC_Streets s10 old 17907 1cc5661e9299c892 new 18720 628c28fabfe5ce09 first-divergent-step 1309
+MP_IAC_Streets s11 old 18720 43793603e4c7afe5 new 18720 4e12625d8e468b46 first-divergent-step 4162
+MP_IAC_Streets s12 old 17075 665aee3113a6ef5b new 16908 32dde5f1814df619 first-divergent-step 1430
+MP_IAC_Streets s13 old 18720 499026c53260186a new 18720 499026c53260186a first-divergent-step 15977
+MP_IAC_Streets s14 old 18720 d65374448f0b7340 new 18720 8bd9f73c72711709 first-divergent-step 11715
+MP_IAC_Streets s15 old 18720 003db099cbee8b1e new 18677 a1a9c304c4649172 first-divergent-step 4378
+MP_IAC_Streets s16 old 18720 e88ea9344dacfb19 new 15995 f9c0209f0e95445e first-divergent-step 6989
+MP_IAC_Streets s17 old 18720 984419d99d27a20c new 18720 540fd54111faa581 first-divergent-step 1080
+MP_IAC_Streets s18 old 14160 be7a1002a99fbc8c new 14160 be7a1002a99fbc8c identical
+MP_IAC_Streets s19 old 18426 4f65a62bf566b544 new 18687 13ea5d48196a59c1 first-divergent-step 1308
+MP_IAC_Streets s20 old 18720 989e9e844a95436b new 12544 b0c25b4ec646a97d first-divergent-step 4123
+MP_IAC_Streets s21 old 18481 16fe13fa7ae977a3 new 17834 3c4bc665765e95eb first-divergent-step 1275
+MP_IAC_Streets s22 old 16597 69c97c64ac6031eb new 16597 69c97c64ac6031eb identical
+MP_IAC_Streets s23 old 16378 1e13a7c5a2807a88 new 18410 6201706ba84aa4c7 first-divergent-step 11435
+MP_IAC_Streets s24 old 18720 033aabaacbe739c8 new 18000 b31eef8aaaf70e6a first-divergent-step 8343
+MP_KON_Molten s1 old 18720 53aa07a4455f0e1d new 17947 3d1ac97bb53ffee2 first-divergent-step 1575
+MP_KON_Molten s2 old 16715 7c2cd20e32a758e7 new 14868 3a113e8b8a97dfc6 first-divergent-step 3575
+MP_KON_Molten s3 old 17656 ebd8463b93f8e94b new 18720 8027f1ab3858f0d3 first-divergent-step 7580
+MP_KON_Molten s4 old 18720 bda341c85dd837a8 new 18720 9b781b6ec48c0cd9 first-divergent-step 1644
+MP_KON_Molten s5 old 15809 b3255abef5f8ac06 new 18720 98eac36559de02f1 first-divergent-step 1748
+MP_KON_Molten s6 old 17024 2540aa0dd72e4d55 new 14243 a1f1d36c66070479 first-divergent-step 1510
+MP_KON_Molten s7 old 18720 ab324db4f1d9d0f5 new 18666 f6e1a6eb094565b0 first-divergent-step 1515
+MP_KON_Molten s8 old 16987 2abb4b45e2bc05a4 new 18720 e1ffb33b8b08b2bc first-divergent-step 1750
+MP_KON_Molten s9 old 16173 d7feb4f9cb50b7fa new 18720 2ef417abdc6fcc20 first-divergent-step 1648
+MP_KON_Molten s10 old 18720 055f78a5cdb3050d new 18720 ac8baf32ac604814 first-divergent-step 1434
+MP_KON_Molten s11 old 17022 27fadc1da83bc9bd new 17910 3369cc462508c644 first-divergent-step 1536
+MP_KON_Molten s12 old 16941 0e08b7039a3bd9cb new 18720 5121ad3117364932 first-divergent-step 5628
+MP_KON_Molten s13 old 18720 e7949852a8c0bd51 new 18720 6b3fb3c807afcee0 first-divergent-step 5423
+MP_KON_Molten s14 old 18720 139d55bcb93ed2e8 new 16408 75fc30865fd1aeba first-divergent-step 1589
+MP_KON_Molten s15 old 18406 7e7493a6d4dfaa93 new 18720 89c9c120bf0799b2 first-divergent-step 1647
+MP_KON_Molten s16 old 17348 576c655345052c08 new 18098 d4ed0056b2ffcf64 first-divergent-step 1512
+MP_KON_Molten s17 old 18596 3f53d5d821ac43d9 new 18645 bce4c1d0388beb97 first-divergent-step 14667
+MP_KON_Molten s18 old 18720 940e540de9bd3243 new 14838 26d243ce4fdfaa54 first-divergent-step 1578
+MP_KON_Molten s19 old 17637 299e3f6ab9b851fd new 15387 a1b7ae469989e444 first-divergent-step 4183
+MP_KON_Molten s20 old 17923 24828d2a96dc658f new 17174 6569895939400059 first-divergent-step 6495
+MP_KON_Molten s21 old 16761 2b90103c1261a9d4 new 16379 4484ec5dd0503168 first-divergent-step 6697
+MP_KON_Molten s22 old 15593 7ccd4c939df311d0 new 16963 eba551e95ad33fa5 first-divergent-step 5083
+MP_KON_Molten s23 old 15615 1c578f9b14ca33d1 new 18720 b97f3350c24d0e6e first-divergent-step 2192
+MP_KON_Molten s24 old 16967 5bfba1893f717480 new 17202 3359766159f33cf5 first-divergent-step 1534
+MP_ORB_Debris s1 old 17582 5e422b5adee70b55 new 17516 d8eea68ce991f670 first-divergent-step 1284
+MP_ORB_Debris s2 old 16963 c41d1687f433890a new 16207 cccf77e7c1ecbf0a first-divergent-step 1188
+MP_ORB_Debris s3 old 18720 b4dd46675fe44839 new 13712 492b40c336346f2e first-divergent-step 1345
+MP_ORB_Debris s4 old 14536 1ea6c2e262589d4c new 14843 23495e21aeecb6a6 first-divergent-step 6298
+MP_ORB_Debris s5 old 16082 04007fa2b4365574 new 17987 a5e703d64e200146 first-divergent-step 7454
+MP_ORB_Debris s6 old 17590 cedd69ec77fc76e0 new 18720 5e3daaa0379ff43f first-divergent-step 1293
+MP_ORB_Debris s7 old 18232 6b5683d1cb3e5cd1 new 18720 3ba8f9f45a5b5d73 first-divergent-step 5467
+MP_ORB_Debris s8 old 17222 2f9f02b654d97f3d new 16748 019a9d113aa0e8a3 first-divergent-step 11879
+MP_ORB_Debris s9 old 18710 f5024a26db7f8ba2 new 17335 69f50e76f93039a7 first-divergent-step 1346
+MP_ORB_Debris s10 old 15668 93ed660a2d751c36 new 16862 9037d16d232f34bb first-divergent-step 3896
+MP_ORB_Debris s11 old 17857 8f6d3aa2e1612174 new 13754 f801eee122e3023d first-divergent-step 1155
+MP_ORB_Debris s12 old 17366 e6fc91c396a00e87 new 17096 f90e9070b1a8651d first-divergent-step 1316
+MP_ORB_Debris s13 old 17614 f29e04290781a851 new 15139 aeba15a43aa7b7f9 first-divergent-step 1151
+MP_ORB_Debris s14 old 18720 5f738e3831fe4a0a new 16944 68dd9de9e131925e first-divergent-step 1153
+MP_ORB_Debris s15 old 17632 ae04a59320bdf4ac new 16890 d90054f4be1d78e4 first-divergent-step 1323
+MP_ORB_Debris s16 old 18195 8d429fc3a26c1d84 new 16569 b4cae8b99d6ace68 first-divergent-step 1255
+MP_ORB_Debris s17 old 18720 252b833e4e284207 new 17850 dafb848785492ca1 first-divergent-step 1311
+MP_ORB_Debris s18 old 9754 e876d98baa03707f new 15267 432f57fcaaf3b46d first-divergent-step 1340
+MP_ORB_Debris s19 old 16346 aa57a8bb259efe68 new 16964 2b5fdc37f2237174 first-divergent-step 14559
+MP_ORB_Debris s20 old 17572 56befa9578d2484f new 18044 7724f5a1bee51ccd first-divergent-step 5486
+MP_ORB_Debris s21 old 13707 f4b78a147859d1dc new 14898 0f9384cd3e8afa47 first-divergent-step 4259
+MP_ORB_Debris s22 old 18720 1471be8986d6bd26 new 13768 84ce7ce781bac06a first-divergent-step 777
+MP_ORB_Debris s23 old 17760 b28fee572dcf180c new 16176 f5b7a23fe3a78a18 first-divergent-step 1255
+MP_ORB_Debris s24 old 18720 3f9bd9790dd1b42b new 17574 f3bcee9eba8962cb first-divergent-step 3963
+MP_UND_Gorge s1 old 18720 0ab3633b2f51d0ba new 18720 0ab3633b2f51d0ba identical
+MP_UND_Gorge s2 old 15186 060fbfdb26ce9c2d new 15186 060fbfdb26ce9c2d identical
+MP_UND_Gorge s3 old 16244 6019fd4d42f305b4 new 16244 6019fd4d42f305b4 identical
+MP_UND_Gorge s4 old 14875 1f9abfe105b1032e new 14875 1f9abfe105b1032e identical
+MP_UND_Gorge s5 old 15388 26127b1ad7fe6914 new 15388 26127b1ad7fe6914 identical
+MP_UND_Gorge s6 old 18571 b4ede46bed93e304 new 18571 b4ede46bed93e304 identical
+MP_UND_Gorge s7 old 16162 5a48768bf463c31b new 18316 06d87e501d61a5a7 first-divergent-step 5587
+MP_UND_Gorge s8 old 14713 a8c64478e4e2e3f9 new 14591 d1662a22d59a3f13 first-divergent-step 13435
+MP_UND_Gorge s9 old 15132 75b4d3ecfbf5a3f9 new 15132 75b4d3ecfbf5a3f9 identical
+MP_UND_Gorge s10 old 18150 9d20c3a9e9a30426 new 18150 4af0fe52617f13ac first-divergent-step 18133
+MP_UND_Gorge s11 old 12363 315d3f331839bd4b new 12363 315d3f331839bd4b identical
+MP_UND_Gorge s12 old 18301 32799f64563400bb new 17316 623363c7580099cb first-divergent-step 9109
+MP_UND_Gorge s13 old 14542 10ae4ae64ccfd872 new 14542 10ae4ae64ccfd872 identical
+MP_UND_Gorge s14 old 18720 501905993a1fff9b new 18720 501905993a1fff9b identical
+MP_UND_Gorge s15 old 13353 54e9ef92cd1de3e6 new 13353 54e9ef92cd1de3e6 identical
+MP_UND_Gorge s16 old 15051 f4c2a9c0341737cd new 16901 ec6703a128e1a9bd first-divergent-step 881
+MP_UND_Gorge s17 old 18720 561c89aa16824540 new 16924 19adf01f000c4ae4 first-divergent-step 881
+MP_UND_Gorge s18 old 15025 d164cfc1f99dcc4e new 15025 d164cfc1f99dcc4e identical
+MP_UND_Gorge s19 old 18720 dc78079057d5389b new 18720 dc78079057d5389b identical
+MP_UND_Gorge s20 old 17362 157e0a867ae805dc new 18219 2242396ba67550e2 first-divergent-step 13173
+MP_UND_Gorge s21 old 17715 a1d6e23143167f77 new 17715 a1d6e23143167f77 identical
+MP_UND_Gorge s22 old 16810 67a1754f8133d5b5 new 16810 67a1754f8133d5b5 identical
+MP_UND_Gorge s23 old 15894 0e25a41b3eaa3e79 new 15894 0e25a41b3eaa3e79 identical
+MP_UND_Gorge s24 old 18720 fb88c3d8904e07b0 new 18720 fb88c3d8904e07b0 identical
