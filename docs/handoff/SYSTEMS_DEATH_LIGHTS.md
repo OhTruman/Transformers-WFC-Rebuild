@@ -1,6 +1,6 @@
 # Death lights (Rendering plan v2 item 4, part 2)
 
-Patch: `SYSTEMS_DEATH_LIGHTS.patch`, applied on top of `SYSTEMS_MUZZLE_LIGHTS.patch` (both against integration ee43bef1;
+Patch: `SYSTEMS_DEATH_LIGHTS.patch`, applied on top of `SYSTEMS_MUZZLE_LIGHTS.patch` (both against integration 2873a071, which carries Rendering's addTransientLight;
 rebased to Rendering's rt2 item 4 head when Integration names it). Data: AssetTools authored.db (read only) via
 `tools/systems/transient_lights.py` -> `src/game/DeathLights.inc` and `SYSTEMS_TRANSIENT_LIGHTS.json` (`ramp_lights`).
 
@@ -38,7 +38,7 @@ motion (Hovering, Airborne, momentum), and a headshot gives HeadShot.
 Presentation only: SIMHASH unaffected. WFC_MUZZLELOG=1 logs every death's choice ("DEATH LIGHT player N chassis form
 (damage type): robot light / vehicle light / none").
 
-Test (headless, null renderer, no window, muted) on ee43bef1 + both patches: WFC_BOTTEST 43/44 with 89 deaths logged, the one FAIL (DEATH melee-kill cue count, 5 presentations for 4 scripted kills: a natural death inside the window) identical on unpatched ee43bef1 (2 runs); WFC_ENGAGETEST 3/3. Robot deaths by TankShell / HomingRocket
+Test (headless, null renderer, no window, muted; Release + PGO, WFC_SEED=7 FLOWSEED=7 AUTODETECT=0) on 2873a071 + both patches: WFC_BOTTEST 44/44 (89 deaths: 32 robot lights, 24 vehicle lights, the rest unlit), WFC_ENGAGETEST 3/3 (8 muzzle lights). Same counts on 24c89769. Robot deaths by TankShell / HomingRocket
 light; vehicle tank deaths light; jets and PlaneRocket / TruckRocket robot deaths stay unlit.
 
 ## Backlog

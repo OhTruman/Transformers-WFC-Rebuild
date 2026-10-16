@@ -1,18 +1,3 @@
---- a/src/render/Renderer.h
-+++ b/src/render/Renderer.h
-@@ -567,6 +567,12 @@
-     // Draw the characters queued so far now (a renderer that queues dynamic meshes; others: nothing). The game calls it
-     // once after its characters, before meshes / effects drawn immediately, so those depth-test against the characters.
-     virtual void flushQueuedCharacters() {}
-+    // A transient gameplay light (UE3 PointLightComponent switched on by game code: weapon muzzle lights), submitted once per
-+    // frame per live light: position and radius in metres, linear colour x Brightness, UE3 falloff
-+    // pow(saturate(1 - (d/R)^2), falloffExponent). The renderer picks the ones it draws. Default: ignored.
-+    virtual void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
-+        (void)pos; (void)color; (void)radius; (void)falloffExponent;
-+    }
- 
-     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
-     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
 --- a/src/game/World.h
 +++ b/src/game/World.h
 @@ -648,6 +648,10 @@
