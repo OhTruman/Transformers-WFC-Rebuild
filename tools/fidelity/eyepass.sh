@@ -22,9 +22,9 @@ for map in $MAPS; do for mode in $MODES; do
   rm -rf $d; mkdir -p $d/shots; cp work/sweep/ident_profile.ini $d/wfc_profile.ini
   case $mode in off) RT=0; HD=0;; real) RT=2; HD=0;; realhd) RT=2; HD=2;; *) echo "unknown mode $mode"; continue;; esac
   sed -i "s/^Width=.*/Width=$W/; s/^Height=.*/Height=$H/; s/^RayTracing=.*/RayTracing=$RT/; s/^HDTextures=.*/HDTextures=$HD/" $d/wfc_profile.ini
-  HDENV="WFC_HDTEXTURES=$HD"; [ "$HD" != 0 ] && HDENV="WFC_HDTEXTURES=$HD WFC_HD_ROOT=$(cygpath -w "$HDROOT")"
+  HDENV=("WFC_HDTEXTURES=$HD"); [ "$HD" != 0 ] && HDENV+=("WFC_HD_ROOT=$(cygpath -w "$HDROOT")")   # (an array: the root has a space)
   echo "$(date +%T) $map $mode (RT $RT, HD $HD)"
-  ( cd $d && env WFC_BOOT=frontend WFC_BOTAI=Classic $HDENV WFC_GPULOST_DIALOG_S=0 WFC_HANG_EXIT_S=60 WFC_MUTE=1 WFC_NOINTERACT=1 \
+  ( cd $d && env WFC_BOOT=frontend WFC_BOTAI=Classic "${HDENV[@]}" WFC_GPULOST_DIALOG_S=0 WFC_HANG_EXIT_S=60 WFC_MUTE=1 WFC_NOINTERACT=1 \
       WFC_SKIPINTRO=1 WFC_NOMOUSE=1 WFC_FLOWSEED=1 WFC_SEED=7 WFC_AUTODETECT=0 WFC_LOGEVERY=0 WFC_LOGTIME=1 WFC_LOCKSTEP=1 \
       WFC_LOCKSTEP_EXACT=1 WFC_SIMHASH=0 WFC_RENDERSIZE=${W}x${H} WFC_PLAYERBOT=1 WFC_SHOTMATCH="$(cygpath -w "$PWD")\\shots,300,1800,60" \
       WFC_LOBBY_OPTIONS="BotsExtended=1;BotsAutobot=31;BotsDecepticon=32;PointsToWin=9999;TimeLimit=600" \
@@ -34,7 +34,7 @@ for map in $MAPS; do for mode in $MODES; do
   grep -E 'SIMHASH [0-9]+ [0-9a-f]{16}' $d/wfc.log | sed -E 's/.*(SIMHASH [0-9]+ [0-9a-f]+).*/\1/' > $d/simhash.txt
   # (2026-10-16) the window must be the requested client size, else the pixels of this run are not comparable
   if grep -q "NOINTERACT: client .* - DIFFERS from the request" $d/wfc.log; then echo "INVALID: $(basename $d) client rect differs from the request: $(grep -m1 -o 'NOINTERACT: client [^-]*' $d/wfc.log)"; touch $d/INVALID_CLIENT_RECT; fi
-  echo "  $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash; $(grep -o 'renderer: Ray Tracing [A-Za-z]*' $d/wfc.log | tail -1); $(grep -m1 -o 'renderer: HD textures [a-z]*' $d/wfc.log); $(grep -m1 -oE 'NOINTERACT: client [0-9]+x[0-9]+[^)]*\)?( - DIFFERS from the request)?' $d/wfc.log)"
+  echo "  $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash; $(grep -o 'renderer: Ray Tracing [A-Za-z]*' $d/wfc.log | tail -1); $(grep -m1 -o 'renderer: HD textures [a-z]*' $d/wfc.log); $(grep -m1 -oE 'HD texture pack available: [0-9]+ textures' $d/wfc.log); $(grep -oE 'NOINTERACT: client [0-9]+x[0-9]+[^)]*\)?( - DIFFERS from the request)?' $d/wfc.log | tail -1) (last = after the mode change)"
 done; done
 PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_sheets.py $O "$MAPS" "$MODES"
 echo "eyepass done $(date +%T): $O"
