@@ -1268,6 +1268,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   58 weapon / prop materials none of the 1,368 compiled keys cover (WEP_DeployedTurret_MATINST, barricade / rocket-
   barrier force fields, battery / heart-crystal props); WEP_Barrier_Defrag_MATINST is compiled, so the barrier's whole
   problem was the missing extras link. Rendering's matc pass over the 58 = package 6 unless trivial.
+  2026-10-16 01:43 glTF overlay frozen as push_gltf_wfcmat_20261016 (FROZEN.json: 85 files, sizes + sha256, source ae6e142;
+  files read-only; refresh.sh verifies before copying). M6 FAMILY REVIEW (Systems db07e55e): 498 / 498 accepted (BC4
+  DX10 full mips, exact sizes; means within 0.02 of target; gloss-source tracking |r| median 0.988, inverted in 495 /
+  495); notes: flat maps mirror flat sources, 37 luma-derived rows at lower confidence, 18 orm_candidate rows stay
+  dielectric roughness only until a metal review. Enhanced row data complete; ships in package 5 only if Rendering's
+  item 6 calibration lands before the cut. Machine 01:42: 0 TDRs, pool 9.4 GB, F: 151 GB; Experimental's untimed rows
+  running on a5f53923.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
