@@ -1837,3 +1837,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   soft-bloom cap 64 -> 16 WFC_TONE_BLOOMMAX; WfcRtDefaults.h one source per default; identity on int_cand5 Off 5 / 5,
   Faithful 5 / 5) + verify RealisticDefaults refltemporal=on aa38b067 (Systems, paired). Rendering: effect-light
   calibration running -> X3 v3 verdict -> eye-pass candidate. Package 6 head still projected for this evening.
+  2026-10-16 13:23 PACKAGE 6 RUNBOOK merged a4d91dbe (Systems, in PACKAGE_6_HEAD.md above the gates): pre-flight (>= 40 GB
+  on F:, head check, 3 input packs), NOPROMOTE=1 JOBS=2 refresh.sh <HEAD> (~45 min; 8 expected lines incl. D 3,506 +
+  M6 498 / 498 FROZEN, HD 4,005 / 21.70 GB), verify_slim -SubstDrive X: with the RT hold (M6 static, 3 maps,
+  settings 7, RT gate incl. rtlights + defaults, HD runtime level 2), report, promote only on Integration's word.
+  F: 91 GB free. Systems on the netcode design as fill-in.
