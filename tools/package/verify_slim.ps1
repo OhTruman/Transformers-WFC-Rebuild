@@ -55,7 +55,8 @@ param(
     [switch]$Strict,
     [string[]]$OmitRoot = @(),   # self-test: leave these data-root variables unset (the check must then FAIL)
     [switch]$NoHd,               # skip the optional HD pack checks (static and runtime)
-    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=1): the pack's textures load (else the first launch must keep HD off)
+    [switch]$HdForced,           # force HD on (WFC_HDTEXTURES=<HdLevel>): the pack's textures load (else the first launch must keep HD off)
+    [int]$HdLevel = 1,           # the HD level -HdForced sets: 1 Faithful, 2 Enhanced (Modern materials + the M6 roughness maps)
     [switch]$StaticOnly,         # file checks only (HD pack), no game runs
     [string]$ExeBin = "",           # candidate exe tree: its *.exe / *.dll replace the package's in the run copy (the package stays as is)
     [string]$RtBuildDir = "",    # the cmake build tree the package's exe came from: rt-build-check's build half (build.ninja, generated/rt)
@@ -126,7 +127,7 @@ foreach ($k in $roots.Keys) { if (-not (Test-Path -LiteralPath $roots[$k])) { Wr
 # count and a supported format. Static check: every row present (+ bytes, format), every DDS under the root indexed (the
 # pack's source dir also holds non-PASS textures that must not ship). Runtime: with a pack, the maps run with
 # WFC_HDTEXTURES=1 and the log must say "HD texture pack available: <rows> textures". -NoHd skips both.
-$hd = [pscustomobject]@{ Root = $null; Where = 'not shipped'; Rows = 0; Files = 0; Bytes = 0L; Problems = @() }
+$hd = [pscustomobject]@{ Root = $null; Where = 'not shipped'; Rows = 0; Files = 0; Bytes = 0L; Problems = @(); PbrRows = 0 }
 if (-not $NoHd) {
     $cands = @(@{ Dir = Join-Path $pkg 'AssetTools\out\hd'; Where = 'AssetTools\out\hd (loader default)' },
                @{ Dir = Join-Path $pkgTop 'hd'; Where = '<package>\hd (needs WFC_HD_ROOT: the loader default is AssetTools\out\hd)' })
@@ -164,9 +165,37 @@ if (-not $NoHd) {
             if ($miss) { $hd.Problems += "$miss of $($rows.Count) rows missing (the loader ignores the whole pack)" }
             if ($size) { $hd.Problems += "$size rows with a wrong byte count (the loader ignores the whole pack)" }
             if ($fmt) { $hd.Problems += "$fmt rows in an unsupported format (the loader ignores the whole pack)" }
+            # M6 modern material maps (HD Enhanced; build_slim --hd-pbr): hd_pbr_index.json beside hd_index.json, dds relative to
+            # the same root. The loader skips a bad row (that material derives its roughness) - a package ships none.
+            $pbrPath = Join-Path $hd.Root 'hd_pbr_index.json'
+            if (Test-Path -LiteralPath $pbrPath) {
+                $PJ = Get-Content -LiteralPath $pbrPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $prows = $null
+                foreach ($k in 'rows', 'textures', 'entries') { $v = $PJ.$k; if ($v -is [array] -and $v.Count) { $prows = $v; break } }
+                if (-not $prows) { $hd.Problems += 'hd_pbr_index.json has no rows' }
+                else {
+                    $hd.PbrRows = $prows.Count
+                    $pbad = 0; $pshown = 0
+                    foreach ($r in $prows) {
+                        if ($r.dds) { [void]$indexed.Add((Norm (Join-Path $hd.Root $r.dds))) }
+                        $f = $r.format -replace '^PF_', ''
+                        $why = $null
+                        if (-not $r.tex -or -not $r.role -or -not $r.dds) { $why = 'tex / role / dds missing' }
+                        elseif ($f -ne 'BC4' -and $f -ne 'BC7') { $why = "format $($r.format)" }
+                        elseif ($r.space -and $r.space -ne 'linear') { $why = "space $($r.space)" }
+                        else {
+                            $fi = Get-Item -LiteralPath (Join-Path $hd.Root $r.dds) -ErrorAction SilentlyContinue
+                            if (-not $fi) { $why = 'file missing' }
+                            elseif ($null -ne $r.bytes -and [long]$r.bytes -ne $fi.Length) { $why = "byte count $($fi.Length) != $($r.bytes)" }
+                        }
+                        if ($why) { $pbad++; if ($pshown++ -lt 10) { $hd.Problems += "M6 row $($r.dds): $why" } }
+                    }
+                    if ($pbad) { $hd.Problems += "$pbad of $($prows.Count) M6 modern material rows bad (the loader skips each: that material derives its roughness)" }
+                }
+            }
             $files = @(Get-ChildItem -LiteralPath $hd.Root -Recurse -File)
             $hd.Files = $files.Count; $hd.Bytes = ($files | Measure-Object -Property Length -Sum).Sum
-            $extra = @($files | Where-Object { $_.Name -ne 'hd_index.json' -and $_.Extension -ne '.txt' -and -not $indexed.Contains((Norm $_.FullName)) })
+            $extra = @($files | Where-Object { $_.Name -ne 'hd_index.json' -and $_.Name -ne 'hd_pbr_index.json' -and $_.Extension -ne '.txt' -and -not $indexed.Contains((Norm $_.FullName)) })
             if ($extra.Count) {
                 $hd.Problems += "$($extra.Count) files in the HD folder not in the index (non-PASS textures must not ship)"
                 foreach ($x in ($extra | Select-Object -First 10)) { $hd.Problems += "unindexed: $($x.FullName.Substring($hd.Root.Length + 1))" }
@@ -174,7 +203,7 @@ if (-not $NoHd) {
         }
     }
 }
-Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
+Write-Host ("HD pack: {0}{1}" -f $hd.Where, $(if ($hd.Root) { ": $($hd.Rows) rows + $($hd.PbrRows) M6 modern material rows, $($hd.Files) files, $([math]::Round($hd.Bytes / 1GB, 2)) GB, $($hd.Problems.Count) problems" } else { '' }))
 
 # ---- the package's bin against build_slim.json (tools/package/build_slim.py): every listed file present, nothing else; the
 # M5 runtime (FidelityFX DLLs + D3D12\D3D12Core.dll) exactly when the manifest's m5_runtime is set; never the D3D12 debug
@@ -279,7 +308,7 @@ try {
         if ($hd.Root) {
             # user 2026-10-12 (reversed the same day): HD is OFF by default - a first launch (no profile, auto-detect as
             # shipped) must keep it off while the pack is accepted; -HdForced checks that the pack's textures load
-            if ($HdForced) { $env:WFC_HDTEXTURES = '1' }
+            if ($HdForced) { $env:WFC_HDTEXTURES = "$HdLevel" }
             # (Frontend 391706f: a scripted boot keeps the seeded defaults unless auto-detect is asked for; windowed, so no
             # display mode switch. The HD default needs the pack and >= 6000 MB of VRAM: frontend::hdTexturesDefault)
             else { $env:WFC_AUTODETECT = '1'; $env:WFC_AUTODETECT_WINDOWED = '1' }
@@ -394,7 +423,20 @@ try {
         }
         if ($hd.Root -and $HdForced -and -not $NoHd) {
             $hdOn = $log | Select-String -SimpleMatch 'renderer: HD textures on' | Select-Object -Last 1
-            if (-not $hdOn) { $reasons += 'HD textures forced on (WFC_HDTEXTURES=1) but the renderer did not turn them on' }
+            if (-not $hdOn) { $reasons += "HD textures forced on (WFC_HDTEXTURES=$HdLevel) but the renderer did not turn them on" }
+        }
+        # HD Enhanced (level 2) with the M6 maps shipped: every row loads ("HD modern material maps: <rows> (hd_pbr_index.json)",
+        # no "rows skipped") and the map runs the Modern materials ("Modern materials on for <map>")
+        if ($hd.Root -and $HdForced -and $HdLevel -eq 2 -and -not $NoHd) {
+            $mm = $log | Select-String -Pattern 'wfc: HD modern material maps: (\d+) \(([^)]+)\)(.*)' | Select-Object -First 1
+            if ($hd.PbrRows -gt 0) {
+                if (-not $mm) { $reasons += 'HD Enhanced: no "HD modern material maps" line (the M6 index was never read)' }
+                elseif ([int]$mm.Matches[0].Groups[1].Value -ne $hd.PbrRows -or $mm.Matches[0].Groups[2].Value -ne 'hd_pbr_index.json' -or $mm.Matches[0].Groups[3].Value -match 'skipped') {
+                    $reasons += "HD Enhanced: M6 maps not all loaded: $($mm.Line.Trim()) (index rows $($hd.PbrRows))"
+                }
+            }
+            $modernOn = $log | Select-String -Pattern 'wfc: Modern materials on for MP_' | Select-Object -First 1
+            if (-not $modernOn) { $reasons += 'HD Enhanced: no "Modern materials on for MP_<map>" line (the match map ran the original materials)' }
         }
         # Modern materials (HD Enhanced): the loader falls back to the original materials per map when materials_pbr.json is
         # missing / unparsable / empty (Rendering a2067e5d) - a package that ships the file must never log the fallback
@@ -596,18 +638,19 @@ $md += 'Per-map detail: <map>\opens.csv (every open, classified), <map>\bin\wfc.
 # parent released it, no RT gate / settings test): it must log "HD texture pack available: <all rows> textures".
 if ($hd.Root -and -not $HdForced -and -not $StaticOnly -and -not $NoHd -and -not $NoHdRuntime) {
     $hdArgs = @{ Package = $Package; WorkDir = (Join-Path $WorkDir 'hd_runtime'); Maps = ($Maps.Split(',')[0]); MatchSeconds = $MatchSeconds;
-                 HdForced = $true; NoRtCheck = $true; NoSettingsTest = $true; NoHdRuntime = $true; TimeoutSeconds = $TimeoutSeconds }
+                 HdForced = $true; NoRtCheck = $true; NoSettingsTest = $true; NoHdRuntime = $true; TimeoutSeconds = $TimeoutSeconds
+                 HdLevel = $(if ($hd.PbrRows -gt 0) { 2 } else { 1 }) }   # Enhanced when the M6 maps ship: D pack + M6 maps + Modern materials
     if ($SkipIntro) { $hdArgs.SkipIntro = $true }
     if ($SubstDrive) { $hdArgs.SubstDrive = $SubstDrive }
     if ($HoldFile) { $hdArgs.HoldFile = $HoldFile }
     if ($ExeBin) { $hdArgs.ExeBin = $ExeBin }
-    Write-Host "HD runtime row: re-running $($hdArgs.Maps) with HD forced on"
+    Write-Host "HD runtime row: re-running $($hdArgs.Maps) with HD forced on (level $($hdArgs.HdLevel))"
     $hdOut = @(& $PSCommandPath @hdArgs 2>&1 | ForEach-Object { "$_" })
     $hdOk = $LASTEXITCODE -eq 0
     $hdRep = Join-Path $hdArgs.WorkDir 'REPORT.md'
     $hdLine = if (Test-Path -LiteralPath $hdRep) { (Select-String -LiteralPath $hdRep -Pattern 'HD: ' | Select-Object -First 1).Line } else { 'no report' }
     $md += ''
-    $md += "HD runtime row (HD forced on, $($hdArgs.Maps)): $(if ($hdOk) { 'PASS' } else { 'FAIL' }) - $hdLine (report $hdRep)"
+    $md += "HD runtime row (HD forced on at level $($hdArgs.HdLevel), $($hdArgs.Maps)): $(if ($hdOk) { 'PASS' } else { 'FAIL' }) - $hdLine (report $hdRep)"
     if (-not $hdOk) { $overall = $false }
     Write-Host "HD runtime row: $(if ($hdOk) { 'PASS' } else { 'FAIL' })"
 }

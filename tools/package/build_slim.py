@@ -16,6 +16,11 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
           AssetTools/work/gltf_wfcmat (the skeletal glTFs with extras.wfc_material): each file replaces the source of the package
           row ExtractedAssets/<path> (packed as that row always was); every file is byte- and sha256-checked against FROZEN.json and
           must name exactly one package row, else the build stops. ExtractedAssets itself is never modified.
+  --hd-pbr  the M6 modern material maps (HD Enhanced; e.g. AssetTools/out/hd/push_m6/pack): hd_pbr_index.json + ONLY the
+          indexed DDS are copied into the same HD root (<out>/Transformers Rebuild/AssetTools/out/hd: the runtime reads
+          hd_pbr_index.json beside hd_index.json, its dds paths relative to that root). Every row is checked as the loader does
+          (tex / role / dds present, BC4 | BC7, space linear, file present, byte count) and, when FROZEN.json sits in the pack
+          folder or its parent, byte + sha256 against it; a row that fails stops the build. Needs --hd.
   --hd-label  a name for the HD pack shipped (e.g. "D"), recorded in build_slim.json; --hd points at that pack's folder
           (any pack in the loader's index layout: hd_index.json + the DDS it names).
   --m5    ship the M5 runtime the exe was built with, taken from --bin (CMake copies it there only when the SDKs were fetched,
@@ -247,6 +252,60 @@ def main():
                 problems.append('HD selection differs from slim_files.tsv: %d only here, %d only in the tsv (e.g. %s)' % (
                     len(mine - tsv_hd), len(tsv_hd - mine), sorted(mine ^ tsv_hd)[:3]))
 
+    # ---- the M6 modern material maps (--hd-pbr: HD Enhanced's roughness maps), into the same HD root ----
+    hd_pbr_src = arg('--hd-pbr')
+    hd_pbr_info = None
+    if hd_pbr_src:
+        hd_pbr_src = os.path.normpath(hd_pbr_src)
+        pidx = os.path.join(hd_pbr_src, 'hd_pbr_index.json')
+        if not hd_src:
+            problems.append('--hd-pbr needs the HD pack (--hd): the runtime reads hd_pbr_index.json beside hd_index.json')
+        elif not os.path.isfile(pidx):
+            problems.append('--hd-pbr: no hd_pbr_index.json in %s' % hd_pbr_src)
+        else:
+            PJ = json.load(open(pidx, encoding='utf-8'))
+            prow = next((PJ[k] for k in ('rows', 'textures', 'entries') if isinstance(PJ.get(k), list) and PJ[k]), None)   # the loader's order
+            frozen, fdir = None, None
+            for d in (hd_pbr_src, os.path.dirname(hd_pbr_src)):
+                if os.path.isfile(os.path.join(d, 'FROZEN.json')):
+                    frozen, fdir = json.load(open(os.path.join(d, 'FROZEN.json'), encoding='utf-8')), d
+                    break
+            fz = {norm(os.path.join(fdir, f['path'])): f for f in (frozen or {}).get('files', [])}
+            taken = {norm(d) for _, d in hd_rows}
+            bad, n = 0, 0
+            for r in prow or []:
+                dds = (r.get('dds') or '').replace('\\', '/')
+                fmt = (r.get('format') or '').replace('PF_', '')
+                src = os.path.join(hd_pbr_src, dds)
+                why = None
+                if not r.get('tex') or not r.get('role') or not dds: why = 'tex / role / dds missing'
+                elif fmt not in ('BC4', 'BC7'): why = 'format %s (the loader takes BC4 / BC7)' % r.get('format')
+                elif r.get('space') not in (None, '', 'linear'): why = 'space %s (the loader takes linear)' % r.get('space')
+                elif not os.path.isfile(src): why = 'file missing'
+                elif r.get('bytes') is not None and os.path.getsize(src) != int(r['bytes']): why = 'byte count %d != %s' % (os.path.getsize(src), r['bytes'])
+                elif frozen is not None:
+                    f = fz.get(norm(src))
+                    if not f: why = 'not in FROZEN.json'
+                    elif f.get('bytes') != os.path.getsize(src): why = 'FROZEN.json byte count %s != %d' % (f.get('bytes'), os.path.getsize(src))
+                    else:
+                        import hashlib
+                        h = hashlib.sha256(open(src, 'rb').read()).hexdigest()
+                        if h != f.get('sha256'): why = 'sha256 differs from FROZEN.json'
+                dest = HD_DEST + '/' + dds
+                if not why and norm(dest) in taken: why = 'destination already shipped by the HD pack'
+                if why:
+                    bad += 1
+                    if bad <= 10: problems.append('HD M6 row %s: %s' % (dds or r.get('key'), why))
+                    continue
+                hd_rows.append((src, dest)); taken.add(norm(dest)); n += 1
+            if not prow: problems.append('--hd-pbr: hd_pbr_index.json has no rows')
+            if bad > 10: problems.append('... %d HD M6 rows failed in all' % bad)
+            hd_rows.append((pidx, HD_DEST + '/hd_pbr_index.json'))
+            hd_pbr_info = {'source': hd_pbr_src, 'name': (frozen or {}).get('name', ''), 'rows': len(prow or []), 'files': n,
+                           'frozen': bool(frozen)}
+            print('HD M6 modern material maps: %d of %d rows from %s%s' % (n, len(prow or []), hd_pbr_src,
+                  ' (FROZEN.json %s: bytes + sha256 checked)' % frozen.get('name', '') if frozen else ' (no FROZEN.json: bytes checked)'))
+
     keep_b = sum(int(r['bytes']) for r in rows if r['action'] == 'keep')
     xpr_b = sum(int(r['bytes']) for r in rows if r['action'] == 'xpr')
     bin_b = sum(os.path.getsize(s) for s, _ in bin_rows)
@@ -258,7 +317,7 @@ def main():
     bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
     manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
                 'm5_runtime': m5, 'vbake': vbake_dir or '', 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
-                'bin_dest': BIN_DEST, 'bin_files': bin_files, 'overlay': overlay_info}
+                'bin_dest': BIN_DEST, 'bin_files': bin_files, 'overlay': overlay_info, 'hd_pbr': hd_pbr_info or ''}
     if plan:
         print('bin files (%d):' % len(bin_files))
         for b in bin_files: print('  ' + b)
