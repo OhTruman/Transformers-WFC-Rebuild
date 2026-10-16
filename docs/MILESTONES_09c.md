@@ -1685,3 +1685,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rebuild-Systems/work/hd_dev_full (junctions; 3505 + 498 verified). Rendering's own Enhanced arms DID load the 498
   maps (WFC_HD_PBR_ROOT) and are still dark -> the 3-arm split decides. NOTE: Rebuild/build/bin is a DEBUG build (no
   PGO, ~4x slower): never a timed / sheet subject; work/render materials_pbr.json needs an exe >= 02c743cc.
+  2026-10-16 11:33 ENHANCED DARKNESS ROOT CAUSE (Rendering; Gorge split vs Off: Realistic + HD textures 1.24, Off +
+  Enhanced 0.99, Realistic + Enhanced 1.04): the Modern lightmapped shader replaced the original's directional-lightmap
+  specular (UE3's formula x the material's SpecularColor, large on this game's metal and rock) with a fixed-F0 0.04 GGX
+  lobe, throwing most of the authored specular away in EVERY mode; X2's gain never reached Modern. Fix in test: Modern
+  takes the original's specular term (WFC_PBR_ORIGSPEC=0 restores the lobe) + X2's gain in Realistic programs; Off +
+  Enhanced now matches Off + HD (1.00), Realistic + Enhanced 1.04 -> 1.11 before X2. Sheet on the fixed Release exe at
+  Rendering's ~13:00 boundary; int_cand2 superseded. Gate tooling: hd_dev_full default, wfcPbrEnvEnergy check 9d11af72.
