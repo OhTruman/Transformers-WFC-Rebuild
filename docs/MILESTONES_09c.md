@@ -1712,3 +1712,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   in-scatter / 10, density x0.3, haze 0.001 / m, stronger sun term, lamp halos from the 4 shadowed lamps, open-sky
   frames; pairs only on a passed eye check. Defaults log line done in source (commits with v2). Experimental eyepass
   on int_cand3 (Release, Enhanced fix) RUNNING since ~12:50.
+  2026-10-16 11:46 RT HIT-DATA BUG (Rendering, from the Molten dig): the per-surface albedo / emissive atlas pass culled
+  back faces (drawSubs re-enabled culling after the pass disabled it), so every surface with a mirrored UV layout drew
+  nothing and got a grey mean albedo + zero emissive (Molten: 1,918 of 3,799 subs "had none", emissive mean 0.001):
+  the lava lit nothing, the GI bounce lost half its colour (why X4 changed so little), reflections showed those
+  surfaces grey. One-line fix built; commits as its own row with per-map "had none" counts; Off / Faithful identity
+  on the export. Batch 8 (Molten emissive 1 / 4 with the fix, X3 v2 pairs) after the sheet; X4 re-scored after.
+  Gameplay ground-snap: combined refined version (slope filter + rise rule + 2.5 m clearance underside test, floors
+  >= 3.94 m clear) in its ~3 h gate.
