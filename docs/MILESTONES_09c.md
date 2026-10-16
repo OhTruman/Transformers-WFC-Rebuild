@@ -1554,3 +1554,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   night-and-day -> Realistic may take a real grade (adaptation 0.65+, bloom 0.8, midtone gain, per-map colour grade);
   Faithful keeps the match. X2: 0 pixels changed (branch not reaching the world shader), debugging. X4 / X5-1 written.
   Eye-pass proof running on 0a9c497f (Experimental, slot A ~45 min); death-body design approved f7b7828d; mines merged.
+  2026-10-16 07:13 EYE-PASS PROOF on 0a9c497f (Experimental, 06:46-07:11): 15 / 15 runs, sim identical across modes,
+  HD pack accepted, client rect valid; sheets Rebuild-Experimental/work/eyepass/0a9c497/. HONEST READ: Off, Realistic
+  and Realistic + HD are near-identical at a glance (Realistic slightly warmer / darker; the HD column flatter on a
+  lit Streets wall at step 1320 -> Rendering checks the HD material response). The night-and-day bar is NOT met at
+  this head; the levers in order of visibility: bold Realistic grade / exposure / bloom (X1), X2 specular, X4 bounce
+  colour, effect lights + headlights ON by default in Realistic after calibration, X5 contact shadows. Every row
+  check from now = an eye-pass sheet. Merged: voice virtual voices + impact normal 9711d354; eyepass fix 98ae68ae;
+  A1_IAC doc 48ad24fc; AssetTools VelocityOverLife decode (Systems regenerates the FX runtime data).
