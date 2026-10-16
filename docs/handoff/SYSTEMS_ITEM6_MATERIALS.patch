@@ -1,0 +1,128 @@
+--- a/tools/render/build_materials.py
++++ b/tools/render/build_materials.py
+@@ -237,6 +237,42 @@
+                     missing = [m for m in missing if m not in found]
+                 if n in found:
+                     break
++        # Item 6 (Systems, SYSTEMS_MATC58_AUDIT): dynamic weapon / prop meshes (sentries, shields, mines, pickups) use MICs
++        # whose cooked body sits in the mesh package while the parent chain lives elsewhere (a stub MIC names a parent no
++        # map package exports). Follow each still-unresolved material's Parent chain through AssetTools' authored.db and
++        # add the packages holding each link (largest cooked copy), plus ENV_AllShader_p for the shared material
++        # functions; fallbacks only supply objects absent from the map's own packages.
++        def chain_root_ok(r, n):
++            q, k = n, 0
++            while q and r.cls(q) == 'MaterialInstanceConstant' and k < 16:
++                q = ((r.obj(q) or {}).get('Parent') or {}).get('ref'); k += 1
++            return bool(q) and r.cls(q) == 'Material'
++        probe = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
++        unresolved = [n for n in sorted((names - {None}) | set(extra)) if not chain_root_ok(probe, n)]
++        if unresolved:
++            import sqlite3
++            adb = sqlite3.connect('file:F:/Transformers Rebuild/AssetTools/manifests/authored.db?mode=ro', uri=True)
++            cooked = {f.lower(): f for f in os.listdir(COOKED)}
++            def holders(path):
++                return [cooked[(r[0] + '.xxx').lower()] for r in adb.execute(
++                    "select package from objects where lower(opath)=? order by serial_size desc", (path.lower(),)) if (r[0] + '.xxx').lower() in cooked]
++            added = []
++            for n in unresolved:
++                q, seen = n, set()
++                while q and q.lower() not in seen and len(seen) < 16:
++                    seen.add(q.lower())
++                    for pk in holders(q)[:2]:
++                        if pk not in ufb and pk not in added: added.append(pk)
++                    row = adb.execute("select props from objects where lower(opath)=? and props like '%Parent%' order by serial_size desc limit 1",
++                                      (q.lower(),)).fetchone()
++                    par = None
++                    if row:
++                        try: par = json.loads(row[0]).get('Parent')
++                        except Exception: par = None
++                    q = par.get('ref') if isinstance(par, dict) else par
++            if 'ENV_AllShader_p.xxx'.lower() in cooked and 'ENV_AllShader_p.xxx' not in ufb: added.append(cooked['env_allshader_p.xxx'])
++            ufb += added
++            print('item 6: %d unresolved material chains; parent / shader packages added as fallbacks: %d' % (len(unresolved), len(added)))
+         if ufb:
+             print('materials from other maps packages: %s' % ', '.join(ufb))
+             repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
+--- a/tools/render/build_materials_only.py
++++ b/tools/render/build_materials_only.py
+@@ -22,6 +22,9 @@
+     src_root, out_root, maps = sys.argv[1], sys.argv[2], sys.argv[3:]
+     fx = [l.strip() for l in open(os.path.join(H, 'fx_materials.txt')) if l.strip()]
+     ui = [l.strip() for l in open(os.path.join(H, 'ui_materials.txt')) if l.strip()]
++    # Item 6 (Systems): the weapon / prop materials of dynamic meshes no map world references (SYSTEMS_MATC58_AUDIT, MP first)
++    sx = [l.split('#')[0].strip() for l in open(os.path.join(H, 'systems_extra_materials.txt'), encoding='utf-8')]
++    sx = [l for l in sx if l]
+     chars = lines([os.path.join(H, 'character_materials.py')])
+     weapons = lines([os.path.join(H, 'weapon_materials.py')])
+     defrag = lines([os.path.join(H, 'energy_death_materials.py'), '--list'])
+@@ -36,7 +39,7 @@
+         scene = lines([os.path.join(H, 'scene_materials.py'), m])
+         fxlib = [l for l in lines([os.path.join(H, 'build_map_fx.py'), '--list-materials', m]) if '.' in l and ' ' not in l]
+         args = [os.path.join(H, 'build_materials.py'), m, out] + chars + ['WEP_IonBlaster_p.WEP_IonBlaster_MATINST'] + \
+-               weapons + fx + ui + scene + fxlib + defrag + abil
++               weapons + fx + ui + scene + fxlib + defrag + abil + sx
+         print('== %s: %d extra materials' % (m, len(args) - 3), flush=True)
+         subprocess.run([PY] + args, check=True)
+ 
+--- /dev/null
++++ b/tools/render/systems_extra_materials.txt
+@@ -0,0 +1,59 @@
++# Item 6 (Systems, SYSTEMS_MATC58_AUDIT): weapon / prop materials of dynamic meshes no map world references.
++# MP first (abilities, pickups, vending), then campaign props. The 2 Omega battery materials are left out (ENV_NormalMap_MF is a cooked stub).
++PROP_NEU_Pickups_p.CodeOfPower.CodeOfPowerCORE_MatINST
++PROP_NEU_Pickups_p.MPBomb.BombCore_MATINST_BAT
++PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_MATINST
++PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_MATINST
++PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_MATINST
++PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST
++PROP_VendingMachine_p.Ammo.AP_VendingMachine_Ammo_MATINST
++PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST
++PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST
++PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST
++PROP_VendingMachine_p.PROP_VendingMachine_Health_MATINST
++PROP_VendingMachine_p.WallSwitch.AP_WallSwitch_MATINST
++WEP_CodeOfPower_p.WEP_CodeOfPower_MATINST
++WEP_DetPack_p.DetPack_StandBy_MAT
++WEP_DetPack_p.WEP_DetPack_MATINST
++WEP_KamikazeMine_p.WEP_KamikazeMine_MATINST
++WEP_SentryAbility_p.WEP_DeployedTurret_MATINST
++WEP_SentryBall_p.WEP_SentryBall_Invis_MAT
++WEP_SentryBall_p.WEP_SentryBall_MATINST
++WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST
++WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_MAT
++WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_MAT
++WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_MAT
++WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_MATINST
++WEP_SentryBlaster01_p.WEP_SentryBlaster01_MATINST
++WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST
++WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MATINST
++WEP_Shield_p.Autobot.WEP_ShieldBruteA_MATINST
++WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST
++WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MASK_MATINST
++WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MATINST
++WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST
++WEP_Shield_p.Decepticon.WEP_Shield_D_MATINST
++# campaign / AI props
++PROP_HeartCrystal_p.HeartCrystal_CLR_Mat
++PROP_HeartCrystal_p.test_heart_MAT
++PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST
++PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2_MATINST
++PROP_NEU_Barricade_p.BarricadeShield_MAT
++PROP_NEU_Barricade_p.Barricade_MAT
++PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarricade_MATINST
++PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST
++PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST
++PROP_NEU_BatteryOS_p.OmegaLiquidSurface_MATINST
++PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST
++PROP_NEU_Battery_p.PROP_NEU_BatteryCorrupted_MATINST
++PROP_NEU_Interacts_p.Bits.PROP_InteractConsole_Bits_MATINST
++PROP_NEU_Interacts_p.PROP_ButtonInteract_MATINST
++PROP_NEU_Interacts_p.PROP_NEU_InteractFoot_MATINST
++PROP_dropship_dec_p.Material.dropshipB_MATINST
++TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST
++TR_SoldierTankAut_VEH_p.VH_SoldierTankAutA_NormSpec_Cust_E_Mat_INST
++TR_SoldierTankDec_VEH_p.VH_SoldierTankDec_NormSpec_Cust_E_Mat_INST
++TR_Trypticon_ROBO_p.RB_TrypticonHead_NormSpec_Cust_E_Mat_INST
++WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MATINST
++WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MATINST
++WEP_TurretBase_p.WEP_TurretBase01_MATINST
