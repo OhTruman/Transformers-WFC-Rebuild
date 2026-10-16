@@ -785,11 +785,17 @@ uniform sampler2D uAdapt;
 uniform vec4 uExpo;      // key, adaptation strength, min, max
 uniform vec3 uToneGrade; // pre-gain, saturation, contrast
 uniform float uBloomMix;
+uniform vec2 uWhiteRoll;   // (X1 white roll) brightest-channel range lo..hi; hi <= lo = off
 layout(location=0) out vec4 oColor;
 // the shoulder: identity below s (the original's authored toe and midtones untouched), an exponential roll-off to 1
 // above it; half per channel (the brightest highlights drift to white, as film does), half on the luminance (hue kept)
 float wfcShoulder(float x, float s) { return x <= s ? x : s + (1.0 - s) * (1.0 - exp(-(x - s) / (1.0 - s))); }
 vec3 wfcFilmShoulder(vec3 c, float s) {
+    // (the eye pass, Gorge step 1080: the per-channel half still rolled red and green to 1 while an adapted-down blue
+    // stayed low - flat yellow) a pixel brighter than uWhiteRoll.x in its brightest channel desaturates toward its
+    // luminance, fully by uWhiteRoll.y: the core of a fireball goes white, its body keeps the orange
+    if (uWhiteRoll.y > uWhiteRoll.x)
+        c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), smoothstep(uWhiteRoll.x, uWhiteRoll.y, max(c.r, max(c.g, c.b))));
     vec3 pc = vec3(wfcShoulder(c.r, s), wfcShoulder(c.g, s), wfcShoulder(c.b, s));
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
     vec3 lc = l > 1e-5 ? c * (wfcShoulder(l, s) / l) : c;
@@ -8811,6 +8817,7 @@ void Pipeline::endFrame() {
         Uniform4f(U("uExpo"), mapKey, str, 0.7f, 1.8f);
         Uniform3f(U("uToneGrade"), gain, sat, con);
         Uniform1f(U("uBloomMix"), 1.0f);
+        Uniform2f(U("uWhiteRoll"), rtdef::whiteRoll() ? rtdef::whiteLo() : 0.0f, rtdef::whiteRoll() ? rtdef::whiteHi() : 0.0f);
     }
     glDrawArrays(GL_TRIANGLES, 0, 3);
     if (fsr) { glx::gpuStamp("post: FSR"); runFsr(vpW_, vpH_, outW, outH); }           // EASU (+ RCAS) into the window
