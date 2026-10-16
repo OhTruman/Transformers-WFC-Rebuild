@@ -1922,3 +1922,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Experimental BUILD_ONLY package-gate c85cc2ad 7cd22027; Systems runbook step 1 (NOPROMOTE refresh + build_slim
   --hd-pbr into work/playtest_slim_c85cc2ad). Disk: Rendering freed 13.7 GB, Systems 29 GB (package 3 tree removed;
   packages 4 + 5 kept); F: 112 GB free.
+  2026-10-16 14:28 DISK ROUND DONE: Rendering 13.7 GB, Systems 29 GB (package 3 tree), AssetTools 8 GB (+ b0-2 / 6 / 12
+  snapshots 17 GB approved), Gameplay 18 GB (68 old int_* trees), Experimental 47 GB (79 archive trees, old eyepass
+  runs); F: ~140 GB free. Kept: packages 4 + 5, hd_dev_full, push_m6, b0-15 / b0-31, the gate base + builds,
+  int_cand6 + int_base6, campaign exports. User's call later: AssetTools push_full (59 GB) + full/ PNG inputs (43
+  GB) + the E archive (6.7 GB). Running: confirming sheet on int_cand6 (Streets started), BUILD_ONLY c85cc2ad /
+  7cd22027 (7cd2202 built), Systems' package build (work/playtest_slim_c85cc2ad). Systems' package build step 1
+  pre-flight OK (113 GB, no hold, 3 inputs).
