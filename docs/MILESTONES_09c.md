@@ -1160,6 +1160,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   AIs (natural deaths Smart 11 / 11 + 40 / 40, Classic 22 / 22 + 54 / 54; scripted melee kills cues 4 / 4); SIMHASH +
   whole NAVQ log identical pristine vs patched. Systems' death lights hook onPawnDeath (fires exactly once per death on
   both paths); muzzle + death lights patches rebase onto the item-4 head.
+  2026-10-16 00:10 Systems rebased SYSTEMS_MUZZLE_LIGHTS + SYSTEMS_DEATH_LIGHTS to ee43bef1 (b87f1d17; one hook in
+  World::onPawnDeath; victim key / headshot / jet from the death record; headless BOTTEST 43 / 44 + ENGAGE 3 / 3, 89
+  deaths lit as expected). The one FAIL is Gameplay's new DEATH row counting a natural bot death inside its 600-tick
+  window under seed 7 (fails on unpatched ee43bef1 too): Gameplay fixes the check to count the scripted victims only.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
