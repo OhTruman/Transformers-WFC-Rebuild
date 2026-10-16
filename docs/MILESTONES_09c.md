@@ -1662,3 +1662,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the RT term. X3 volumetrics: GO for package 6 if the pairs pass (v1 screen-space march built; pairs to the user).
   Authored views rerun deferred to the Release int_cand2 exe. Gameplay: robot ground-snap root causes (no
   WalkableFloorZ 0.7; landing while rising) approved as one commit (both AIs + players, 4th re-baseline).
+  2026-10-16 11:11 MERGED 5f423157: effect lights default-on in Realistic (Systems; + the Off / Faithful live-list fix;
+  "RT-era lights" boot line; verify_slim rtcheck.rtlights), package-gate base switched to 398b27ef + yaw + drive-probe
+  + the one-line steer (Experimental: same match as 3de18d73 True, control False). Rendering RESUMED (held 09:10-11:25):
+  Enhanced-darkness leading cause = DATA (materials_pbr.json predates item 6: the Modern path strips the original's
+  cube term and adds back only the un-matched env; item 6's regen restores it; test first), then Faithful identity,
+  push of the 7 commits, Molten arms, x3pair. Gorge vbake PNGs fail to decode at runtime (R1 sun share falls back):
+  Systems / AssetTools check format vs truncation. User sent pick_510 (Gorge sheet).
