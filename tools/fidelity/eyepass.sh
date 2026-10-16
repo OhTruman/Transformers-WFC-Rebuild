@@ -45,6 +45,8 @@ for map in $MAPS; do for mode in $MODES; do
   # Enhanced (HD 2) arms (Integration 2026-10-16): the M6 roughness maps load from hd_pbr_index.json beside hd_index.json - both lines
   # must be in the log, else the arm ran without the modern material maps: UNKNOWN (EYE_HDROOT = a root with both indexes)
   if [ "$HD" = 2 ]; then mm=$(grep -m1 -oE "HD modern material maps: [0-9]+ \([^)]*\)" $d/wfc.log); mo=$(grep -m1 -oE "Modern materials on for MP_[A-Za-z_]+" $d/wfc.log)
+    pe=$(grep -c "wfcPbrEnvEnergy' undeclared" $d/wfc.log)   # (an exe before 02c743cc cannot compile the energy-matched materials_pbr data)
+    [ "$pe" -gt 0 ] && { echo "  UNKNOWN: $pe PBR programs failed (wfcPbrEnvEnergy undeclared: exe older than the materials_pbr data)"; touch $d/MODERN_UNKNOWN; }
     if [ -n "$mm" ] && [ -n "$mo" ]; then echo "  modern: $mm; $mo"; else echo "  UNKNOWN: modern materials not confirmed (maps: ${mm:-absent}; on: ${mo:-absent})"; touch $d/MODERN_UNKNOWN; fi; fi
 done; done
 PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_sheets.py $O "$MAPS" "$MODES"

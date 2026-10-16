@@ -47,7 +47,7 @@ for m in ['508', '510', '507', '504', '509']:
     if not os.path.exists(rp): rrows.append(f"| {m} | - | - | missing |"); rbad += 1; continue
     d = json.load(open(rp, encoding='utf-8-sig')); L = d['results'] if isinstance(d, dict) and 'results' in d else d
     row = next((r for r in L if r['id'] == 'lockstep.realistic.r1'), None); x = re.search(r'p50 / p90 / p99 ([\d.]+) / ([\d.]+)', str(row and row.get('note')))
-    blk = [r['id'].split('.', 1)[1] for r in L if r['id'].endswith(('contaminated', 'client_rect'))] + (["HD not on"] if row and 'HD requested but not on' in str(row.get('note')) else []) + (["no modern material maps"] if row and 'no modern material maps' in str(row.get('note')) else [])
+    blk = [r['id'].split('.', 1)[1] for r in L if r['id'].endswith(('contaminated', 'client_rect'))] + (["HD not on"] if row and 'HD requested but not on' in str(row.get('note')) else []) + (["no modern material maps"] if row and 'no modern material maps' in str(row.get('note')) else []) + (["PBR programs failed"] if row and 'PBR programs failed' in str(row.get('note')) else [])
     if not x: rrows.append(f"| {m} | - | - | incomplete |"); rbad += 1; continue
     p50, p90 = float(x.group(1)), float(x.group(2)); fl = p50 > 16.7; flags += fl
     rrows.append(f"| {m} | {p50:.2f} | {p90:.2f} | {'UNKNOWN (' + ', '.join(blk) + ')' if blk else ('FLAG: p50 > 16.7 ms (below 60 fps)' if fl else 'ok')} |"); rbad += bool(blk)
