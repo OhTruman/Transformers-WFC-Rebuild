@@ -1496,3 +1496,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   lights in reflections (WFC_RT_REFLTL), row 2 8b29ff13 sun-share shadows (WFC_RT_SUNSHARE), 428bcf7e spot API
   addTransientSpot + transient-light cost reserve. Built, switches in the exe, pushed. Systems FX_LIGHTS headless PASS
   (SIMHASH identical, 44 / 44); Streets crop pending their RT-enabled rebuild.
+  2026-10-16 04:42 NIGHT-AND-DAY ASSESSMENT (Rendering): remaining v3 = row 5 (0.5 d), row 4 (0.25), tiled light fix
+  (1 d, lifts the 8-light cap), row 7 (0.25), item 6, item 7. Extra Realistic-only rows ranked: X1 filmic tone curve +
+  eye adaptation + grade + HDR bloom (1 d, 0.2 ms), X2 RT-shadowed sun + lamp specular on the world (0.75 d, 0.3 ms),
+  X3 volumetric sun shafts / lamp halos / lit fog (2 d, 1-1.5 ms), X4 stronger GI colour bleed (0.5 d), X5 more
+  shadow casters + character AO 4 m + contact shadows (1 d, 0.3 ms), X6 more reflective surfaces + damp sheen (0.5 d,
+  0.3-0.8 ms), X7 2x RT lightmap (1.5 d, +0.5-1.4 GB VRAM); effect-light calibration 0.5 d. Approved now: row 5, X1,
+  row 4, tiled fix, X2, X4, explosion + impact calibration (every option includes them). X3 / X5 / X6 / X7 = user
+  scope-vs-date decision (A: X1+X2+X4 -> ~19 Oct; C: +X5 + effect lights -> ~20-21 Oct; B: all seven -> ~24-25 Oct).
