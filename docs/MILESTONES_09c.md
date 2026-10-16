@@ -1370,6 +1370,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   11.16; Realistic shadow + AO 2.9-4.0 ms (+0.5-0.7 vs 30b2fa74 from items 1 + 2), denoiser 0.9-1.2, reflections
   1.3-1.9, GI per traced frame 3.3-6.7, RT VRAM 3.9-4.8 GB. Off matches the pre-NOINTERACT series within 0.07.
   'GO build package 5' sent to Systems (398b27ef, D b0-31, overlay); Rendering has slot A for plan v3 row 1.
+  2026-10-16 03:28 Plan v3 rows 3 / 7 data (Systems SYSTEMS_VEHICLE_LIGHTS.md a23e1600): no vehicle light components in the
+  original (174 objects / 29 packages; the light beams are translucent cone meshes), no light components on pickups
+  / interactables / destructibles / screens (glow = emission + particles + the FX_Pickups LightBeam_STAT cone); the
+  original's gameplay lights are muzzle + death (shipped) + TnPawn.CloakLight (authored, not wired). DECISIONS:
+  headlights = a Realistic-only deliberate addition (an RT-shadowed spot per vehicle beam cone mesh, colour from its
+  emissive, calibrated to the cone's visual; Systems tables the placements); emissive pickups / shards = Realistic-only
+  point lights from the material emissive; CloakLight wired in all modes (fidelity, Systems patch). Off / Faithful
+  untouched. Package 5 build at 721 / 873 files.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
