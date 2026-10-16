@@ -1098,6 +1098,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   3.27, 510 3.19 -> 3.18), no contamination. The base's own p90 on 503 / 508 came out lower than in the previous run,
   so the earlier '+0.08 option B drift' was run-to-run machine state; resolved unless it recurs. Classic captures
   running.
+  2026-10-15 23:14 Captures e5182075 vs ede2fc3c, Rust, Classic: Off 0 / 25, Faithful 0 / 25, SIMHASH identical (no barrier with
+  a character behind it fell in the 25 shots; the positive evidence for 3b is Rendering's lockstep capture m01500).
+  e5182075 rows complete. WFC_NOMOUSE today only zeroes deltas; Win32Window still SetForegroundWindow + SetFocus at
+  boot and SetCursorPos(centre) every focused frame (the real 'takes my mouse'); no ClipCursor / SetCapture anywhere.
+  Interim told to the user: click back into their own window; the run re-grabs focus only at its next boot.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
