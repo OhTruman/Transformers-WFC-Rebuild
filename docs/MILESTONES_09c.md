@@ -2022,3 +2022,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the tiled path's binds. 1b read UNKNOWN (HD not applied on lockstep-ab's match boot) -> fixed + rerun in the end
   hold with the bisect. Hold cleared 16:19 (their clock); leak -> eyepass -> FAST running untimed. Rendering builds
   the tiled mode-gate fix; Gameplay prepares the corpse cost plan + WFC_NOCORPSE / WFC_NOMINEPRES switches.
+  2026-10-16 16:28 OFF-PATH FX FINDINGS (Systems, tools/systems/fxdata_ab.ps1): the FX data regen is NOT a cause (same exe,
+  current vs pre-regen data: Berth / Gorge FX instances, sprites, draws, map-FX CPU identical within noise); LOD
+  selection by distance IS honoured for spawned effects (WfcMapFx.cpp:584-592; death templates Automatic). Peak
+  driver on Gorge: TF_Death_GibsTrail_FX (#1 runtime spawn, 260 / 60 s; 4 per death x 5 s). DECODE SUSPICION: LOD 1
+  heavier than LOD 0 (lifetime and spawn both x3.33 up; 198 heavier vs 535 lighter pairs) -> AssetTools pstream
+  LOD-order / percentage check. Runtime lacks UE3's SecondsBeforeInactive / MaxDrawDistance culling -> Systems
+  prepares it (WFC_FXCULL=0 off), compile after the block; decision after the bisect. Rendering int_cand9 (+5bce52bb)
+  staged as a bisect arm; FX-data arm dropped.
