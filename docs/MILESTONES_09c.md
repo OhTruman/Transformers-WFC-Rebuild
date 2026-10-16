@@ -1153,6 +1153,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   item 4. New bug for Gameplay: applyMatchDamage despawns the victim before the PlayerKilled event, whose onPawnDeath is
   gated on spawned(), so the victim death sound is skipped for every participant killed that way (fix presentation-only,
   SIMHASH identical, with a headless row).
+  2026-10-16 00:01 DEATH PRESENTATION FIXED, merged ee43bef1 (Gameplay GAMEPLAY_DEATHPRESENT.patch c1c4b440): in applyMatchDamage
+  the still-spawned victim gets onPawnDeath(chassis, vehicle form, last damage type, location) after match_.killed()
+  and before despawn (the same call the PlayerKilled event makes; the event keeps its spawned() gate, no double play;
+  despawn / event order / sim unchanged). AbilityAudio::deathCue() for headless checks. BOTTEST DEATH rows 44 / 44 both
+  AIs (natural deaths Smart 11 / 11 + 40 / 40, Classic 22 / 22 + 54 / 54; scripted melee kills cues 4 / 4); SIMHASH +
+  whole NAVQ log identical pristine vs patched. Systems' death lights hook onPawnDeath (fires exactly once per death on
+  both paths); muzzle + death lights patches rebase onto the item-4 head.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
