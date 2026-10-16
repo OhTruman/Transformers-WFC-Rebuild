@@ -29,6 +29,7 @@
 #include "rt_shadow_ao.h"
 #include "rt_ao_filter.h"
 #include "rt_reflect.h"
+#include "rt_volumetric.h"
 #include "rt_shadow_soft.h"
 #include "rt_gi.h"
 #include "rt_gi_dilate.h"
@@ -155,15 +156,23 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
-            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_); free(soft_); free(lvis_); free(pcol_);
-            rel(hit_); rel(nrm_); rel(vel_);
+            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_); free(soft_); free(lvis_); free(pcol_); free(vol_);
+            rel(hit_); rel(nrm_); rel(vel_); rel(volH_[0]); rel(volH_[1]);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
+            // (X3) the froxel grid: 16-pixel tiles x 64 slices as an 8 x 8 atlas of slices; the integrated grid is shared
+            // with GL, the injected grid's history ping-pong stays in D3D12
+            volTx_ = (w + 15) / 16; volTy_ = (h + 15) / 16;
+            volH_[0] = localTex(volTx_ * 8, volTy_ * 8, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            volH_[1] = localTex(volTx_ * 8, volTy_ * 8, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            volParity_ = 0; volHistValid_ = false;
             nrm_ = localTex(w, h, DXGI_FORMAT_R16G16B16A16_FLOAT);
             vel_ = localTex(w, h, DXGI_FORMAT_R16G16_FLOAT);
             if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(wdepth_, w, h) ||
                 !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !make(refl_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(soft_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) ||
                 !make(lvis_, w, h, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
-                !make(pcol_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !hit_ || !nrm_ || !vel_) {
+                !make(pcol_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) ||
+                !make(vol_, volTx_ * 8, volTy_ * 8, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !hit_ || !nrm_ || !vel_ ||
+                !volH_[0] || !volH_[1]) {
                 LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
             }
             if (heap_) writeDescriptors();
@@ -174,7 +183,7 @@ public:
             }
 #endif
         }
-        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex; t->shadowSoft = soft_.tex; t->lightVis = lvis_.tex; t->prevColor = pcol_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex; t->shadowSoft = soft_.tex; t->lightVis = lvis_.tex; t->prevColor = pcol_.tex; t->vol = vol_.tex;
         return true;
     }
 
@@ -793,8 +802,8 @@ public:
         const clk::time_point t0 = clk::now();
         const UINT64 n = ++value_;
         GLuint64_ v = n; semParam_(sem_, kFenceValue, &v);
-        std::vector<GLuint> tx = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex, lvis_.tex};
-        std::vector<GLenum> ly = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral};
+        std::vector<GLuint> tx = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex, lvis_.tex, vol_.tex};
+        std::vector<GLenum> ly = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral};
         if (atlas_.tex) { tx.push_back(atlas_.tex); ly.push_back(kLayoutShaderRead); }
         if (pcol_.tex) { tx.push_back(pcol_.tex); ly.push_back(kLayoutShaderRead); }   // (item 3: GL wrote it)
         for (GLuint g : giSig_) { tx.push_back(g); ly.push_back(kLayoutGeneral); }   // (R4: the GI pages)
@@ -842,7 +851,7 @@ public:
         allocDone_[a] = done;
         const clk::time_point t2 = clk::now();
         GLuint64_ w = done; semParam_(sem_, kFenceValue, &w);
-        std::vector<GLuint> wt = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex, soft_.tex, lvis_.tex};
+        std::vector<GLuint> wt = {mask_.tex, ao_.tex, dnOut_.tex, refl_.tex, soft_.tex, lvis_.tex, vol_.tex};
         for (GLuint g : giSig_) wt.push_back(g);
         std::vector<GLenum> wl(wt.size(), kLayoutShaderRead);
         waitSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), (GLuint)wt.size(), wt.data(), wl.data());
@@ -958,6 +967,8 @@ private:
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoSoft_))) { LOG_WARN("RT bridge: soft shadow PSO failed"); return false; }
         pd.CS.pShaderBytecode = g_rt_reflect; pd.CS.BytecodeLength = sizeof g_rt_reflect;
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoRefl_))) { LOG_WARN("RT bridge: reflection PSO failed"); return false; }
+        pd.CS.pShaderBytecode = g_rt_volumetric; pd.CS.BytecodeLength = sizeof g_rt_volumetric;   // (X3: a failure leaves no volumetrics)
+        if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoVol_))) { psoVol_ = nullptr; LOG_WARN("RT bridge: volumetric PSO failed"); }
         pd.CS.pShaderBytecode = g_rt_gi; pd.CS.BytecodeLength = sizeof g_rt_gi;   // (R4: a failure leaves Realistic on the bake)
         if (FAILED(dev_->CreateComputePipelineState(&pd, __uuidof(ID3D12PipelineState), (void**)&psoGi_))) { psoGi_ = nullptr; LOG_WARN("RT bridge: GI texel PSO failed (the bake stays)"); }
         pd.CS.pShaderBytecode = g_rt_gi_dilate; pd.CS.BytecodeLength = sizeof g_rt_gi_dilate;
@@ -975,7 +986,7 @@ private:
             dn_.resize(depth_.w, depth_.h, in);
         }
 #endif
-        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2 + 3 * kTableN;   // (+ R4: GI page UAVs, tables E / F / G)
+        D3D12_DESCRIPTOR_HEAP_DESC hd{}; hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; hd.NumDescriptors = 4 * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2 + 3 * kTableN + kTableN;   // (+ X3: table V)   // (+ R4: GI page UAVs, tables E / F / G)
         hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if (FAILED(dev_->CreateDescriptorHeap(&hd, __uuidof(ID3D12DescriptorHeap), (void**)&heap_))) return false;
         stats_ = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
@@ -984,7 +995,7 @@ private:
         for (auto& r : readback_) r = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
         // (item 2) the shadow-light ring: made here, before the descriptors are written (made lazily at the first frame, its
         // SRV stayed null until the next map's descriptor rewrite - every light read radius 0 and was skipped)
-        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 32 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (2 slots x (4 shadow + 4 transient + 4 prev VP + 4 transient colours))
+        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 56 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (+ X3 v3: 4 halo lamps + colours)   // (2 slots x (4 shadow + 4 transient + 4 prev VP + 4 transient colours + 4 shadow colours))
         if (!stats_ || !zeros_ || !readback_[0] || !readback_[1]) return false;
         if (depth_.res) writeDescriptors();
         return true;
@@ -1049,7 +1060,7 @@ private:
         for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
             uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
         uav(lvis_.res, DXGI_FORMAT_R8G8B8A8_UNORM);      // (item 2) u0 space2: the per-light visibility
-        sbuf(lightBuf_, 32, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 4)
+        sbuf(lightBuf_, 56, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 20 float4)
         for (int table = 0; table < 3; ++table) {        // R4: E (the texel tracer) / F (the gutter) / G (S3 probes): t1 .. t13 as A .. D
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
@@ -1065,6 +1076,16 @@ private:
             } else uav(refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT);
             uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
+        }
+        {   // X3 table V: t1 .. t16 as A .. D; u0 the integrated froxel grid (shared), u1 / u2 the injected grid's ping-pong
+            tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
+            tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
+            sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
+            sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
+            sbuf(hMatTex_, hMatTexN_, 48); sbuf(hVtx_, hVerts_ * 2, 16);
+            tex(pcol_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            uav(vol_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
+            uav(volH_[0], DXGI_FORMAT_R16G16B16A16_FLOAT); uav(volH_[1], DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
     }
     void depthCheck(const RtFrame& fr, int slot) {
@@ -1113,13 +1134,16 @@ private:
         if (lightBuf_) {                                 // (Extra2.z = shadow count + 8 x transient count, .w = the slot's base)
             void* lp = nullptr; D3D12_RANGE none{0, 0};
             if (SUCCEEDED(lightBuf_->Map(0, &none, &lp))) {
-                std::memcpy((char*)lp + (size_t)slot * 256, fr.shadowLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 256 + 64, fr.transLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 256 + 128, fr.prevVP, 64);
-                std::memcpy((char*)lp + (size_t)slot * 256 + 192, fr.transColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448, fr.shadowLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 64, fr.transLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 128, fr.prevVP, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 192, fr.transColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 256, fr.shadowColors, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 320, fr.volLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 448 + 384, fr.volColors, 64);
                 lightBuf_->Unmap(0, nullptr);
             }
-            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 16);
+            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 28);
         }
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
@@ -1180,6 +1204,37 @@ private:
             list_->SetComputeRootDescriptorTable(4, lm);
             list_->Dispatch((UINT)(depth_.w + 7) / 8, (UINT)(depth_.h + 7) / 8, 1);
         }
+        if (fr.volumetric && psoVol_ && vol_.res && volH_[0] && volH_[1]) {   // X3: the froxel volumetric light (table V)
+            D3D12_RESOURCE_BARRIER ub{}; ub.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV; list_->ResourceBarrier(1, &ub);
+            list_->SetComputeRootSignature(rs_);
+            list_->SetPipelineState(psoVol_);
+            list_->SetDescriptorHeaps(1, &heap_);
+            float cv[52] = {};
+            std::memcpy(cv, c, sizeof(float) * 28);       // InvViewProj, ToSun, Size, Params
+            cv[23] = 0.0f;
+            std::memcpy(cv + 28, fr.volSun, 16); std::memcpy(cv + 32, fr.volFog, 16);
+            cv[36] = fr.volMisc[0]; cv[37] = 64.0f; cv[38] = (float)volTx_; cv[39] = (float)volTy_;
+            cv[40] = 0.0f; cv[41] = (float)volParity_; cv[42] = (volHistValid_ && fr.prevValid) ? 1.0f : 0.0f;
+            cv[43] = (float)std::min(fr.transLightN, 4);
+            cv[44] = fr.znear; cv[45] = fr.zfar; cv[46] = (float)(slot * 28); cv[47] = fr.volLampK;
+            cv[48] = fr.volHistory; cv[49] = 16.0f; cv[50] = (float)std::min(fr.volLightN, 4); cv[51] = fr.volTransK;
+            list_->SetComputeRoot32BitConstants(0, 52, cv, 0);
+            list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
+            const UINT inc = dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            D3D12_GPU_DESCRIPTOR_HANDLE tV = heap_->GetGPUDescriptorHandleForHeapStart();
+            tV.ptr += (4ull * kTableN + kMaxLm + kMaxTex2D + kMaxTexCube + kMaxLm + 2ull + 3ull * kTableN) * inc;
+            list_->SetComputeRootDescriptorTable(2, tV);
+            list_->SetComputeRootUnorderedAccessView(3, stats_->GetGPUVirtualAddress());
+            D3D12_GPU_DESCRIPTOR_HANDLE lm = heap_->GetGPUDescriptorHandleForHeapStart();
+            lm.ptr += 4ull * kTableN * inc;
+            list_->SetComputeRootDescriptorTable(4, lm);
+            list_->Dispatch((UINT)(volTx_ + 7) / 8, (UINT)(volTy_ + 7) / 8, 64);   // inject (+ temporal)
+            list_->ResourceBarrier(1, &ub);
+            cv[40] = 1.0f;
+            list_->SetComputeRoot32BitConstants(0, 52, cv, 0);
+            list_->Dispatch((UINT)(volTx_ + 7) / 8, (UINT)(volTy_ + 7) / 8, 1);    // integrate
+            volParity_ ^= 1; volHistValid_ = true;
+        } else volHistValid_ = false;
         list_->EndQuery(tsHeap_, D3D12_QUERY_TYPE_TIMESTAMP, (UINT)slot * 6 + 2);
         tsShade_[slot] = fr.reflectShade;
         pollMaterialPso();
@@ -1193,7 +1248,7 @@ private:
             c2[48] = fr.time; c2[49] = fr.pixelSpread;
             const bool reflTlOff = !render::wfc::rtdef::reflTl();   // (v3 row 6 off)
             c2[50] = (fr.prevValid && pcol_.res ? 1.0f : 0.0f) + (reflTlOff ? 0.0f : 2.0f * (float)std::min(fr.transLightN, 4));   // (item 3: the previous frame; v3 row 6: the transient lights)
-            c2[51] = (float)(slot * 20 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
+            c2[51] = (float)(slot * 28 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
             list_->SetComputeRoot32BitConstants(0, 52, c2, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();
@@ -1324,7 +1379,7 @@ public:
     void shutdown() {
         if (!waitIdle()) LOG_WARN("RT bridge: shutdown - the D3D12 queue did not go idle within 5 s");
         clearStaticWorld();
-        for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_, &lvis_, &pcol_}) free(*s);
+        for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_, &lvis_, &pcol_, &vol_}) free(*s);
         for (auto& ps : giPool_) free(ps.first);         // (R4: the pooled GI pages)
         giPool_.clear();
         if (sem_ && deleteSem_) deleteSem_(1, &sem_);
@@ -1416,7 +1471,10 @@ private:
     PFN_DeleteSemaphoresEXT_ deleteSem_ = nullptr;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_, lvis_, pcol_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_, lvis_, pcol_, vol_;
+    ID3D12PipelineState* psoVol_ = nullptr;             // (X3) the volumetric light pass (table V, after E / F / G)
+    ID3D12Resource* volH_[2] = {nullptr, nullptr};       // (X3) the injected froxel grid, history ping-pong
+    int volTx_ = 0, volTy_ = 0, volParity_ = 0; bool volHistValid_ = false;
     ID3D12Resource* lightBuf_ = nullptr;                 // (item 2) the shadow lights, an upload ring of 2 x 4 float4
     std::vector<ID3D12Resource*> mBlas_;                   // masked world: BLAS per set, lookup buffers
     ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;

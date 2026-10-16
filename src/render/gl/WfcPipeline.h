@@ -1411,6 +1411,9 @@ private:
     GLuint toneLumProg_ = 0, toneAdaptProg_ = 0, toneLumTex_ = 0, toneLumFbo_ = 0, toneAdaptTex_[2] = {0, 0}, toneAdaptFbo_[2] = {0, 0};
     int toneIdx_ = 0; bool toneReset_ = true;
     bool reflTemporal(GLuint cur);       // (item 7) the temporal reflection blend into rtReflPrev_
+    int rtVolFrame_ = -1;                 // (X3) the frame whose round trip traced the volumetric light
+    GLuint volApplyProg_ = 0;             // (X3) composites RtTargets::vol over the scene: scene x a + rgb
+    void volApply();
     bool toneFilmicOn() const;
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;

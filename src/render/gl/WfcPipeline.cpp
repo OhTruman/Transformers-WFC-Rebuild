@@ -841,6 +841,36 @@ void main() {
 }
 )";
 
+// (X3) the volumetric light over the scene: the integrated froxel grid (an 8 x 8 atlas of 64 exponential slices of 16-pixel
+// tiles; slice k holds the light scattered toward the eye and the transmittance up to its far edge) read at the pixel's own
+// depth - bilinear between tiles, linear between slices - blended as scene x transmittance + in-scatter (ONE, SRC_ALPHA)
+const char* kVolApplyFS = R"(#version 330 compatibility
+in vec2 vUV;
+uniform sampler2D uVol, uDepth;
+uniform vec2 uNearFar, uRender;
+uniform vec4 uGrid;      // tiles x, tiles y, tile size (px), max distance (m)
+layout(location=0) out vec4 oColor;
+vec4 tileAt(ivec2 t, int s) {
+    s = clamp(s, 0, 63); t = clamp(t, ivec2(0), ivec2(uGrid.xy) - 1);
+    return texelFetch(uVol, ivec2((s % 8) * int(uGrid.x) + t.x, (s / 8) * int(uGrid.y) + t.y), 0);
+}
+vec4 sliceAt(vec2 tp, int s) {
+    vec2 f = tp - 0.5; ivec2 i = ivec2(floor(f)); vec2 w = f - vec2(i);
+    return mix(mix(tileAt(i, s), tileAt(i + ivec2(1, 0), s), w.x), mix(tileAt(i + ivec2(0, 1), s), tileAt(i + ivec2(1, 1), s), w.x), w.y);
+}
+void main() {
+    float d = texture(uDepth, vUV).r;
+    float n = uNearFar.x, f = uNearFar.y;
+    float z = d >= 1.0 ? uGrid.w : 2.0 * n * f / (f + n - (d * 2.0 - 1.0) * (f - n));
+    z = min(z, uGrid.w);
+    float u = log(max(z, 1e-3) / 0.5) / log(max(uGrid.w, 1.5) / 0.5) * 64.0 - 1.0;
+    vec2 tp = vUV * uRender / uGrid.z;
+    vec4 v;
+    if (u < 0.0) v = mix(vec4(0.0, 0.0, 0.0, 1.0), sliceAt(tp, 0), clamp(u + 1.0, 0.0, 1.0));
+    else { int k = int(floor(u)); v = mix(sliceAt(tp, k), sliceAt(tp, k + 1), u - float(k)); }
+    oColor = vec4(max(v.rgb, 0.0), clamp(v.a, 0.0, 1.0));
+}
+)";
 // (X1) the scene's log luminance at 128 x 128 (mipmapped to its mean), and its temporal adaptation into a 1 x 1 target
 const char* kToneLumFS = R"(#version 330 compatibility
 in vec2 vUV;
@@ -1174,7 +1204,7 @@ void Pipeline::release() {
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
     for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
-    for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
+    for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &volApplyProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
         prog(*p);
     buf(distRectBuf_);
@@ -1648,6 +1678,8 @@ bool Pipeline::load(const std::string& mapName) {
         toneLumProg_ = (pv && tl) ? link(pv, tl, "tone.lum") : 0;
         toneAdaptProg_ = (pv && ta) ? link(pv, ta, "tone.adapt") : 0;
         toneReset_ = true;
+        GLuint va = compile(GL_FRAGMENT_SHADER, kVolApplyFS, "vol.apply");
+        volApplyProg_ = (pv && va) ? link(pv, va, "vol.apply") : 0;
     }
     blurProg_ = (pv && bb) ? link(pv, bb, "bloom.blur") : 0;
     GenVertexArrays(1, &postVao_);
@@ -8734,6 +8766,7 @@ void Pipeline::endFrame() {
     // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
+    volApply();                                         // (X3, Realistic: the volumetric light into the HDR scene)
     const bool filmic = toneFilmicOn();                 // (X1, Realistic: the tone curve + the soft HDR bloom)
     if (filmic) toneAdapt();
     const float toneBloom = rtdef::toneBloom();
@@ -8850,8 +8883,35 @@ void Pipeline::endFrame() {
 // sunlit exteriors stop clipping), a filmic shoulder (the ACES fit) instead of the hard clip at 1 (the RT sun no longer
 // bleaches character highlights), a saturation / contrast grade, a soft-knee HDR bloom; the map's own grade and CLUT
 // follow unchanged. Off / Faithful keep the original's post exactly. WFC_RT_TONE=0 off.
+void Pipeline::volApply() {
+    if (rtMode_ != 2 || rtVolFrame_ != frameNo_ || !volApplyProg_ || !rtTargets_.vol || !fbo_) return;
+    glx::gpuStamp("X3: volumetric light apply");
+    ensureSceneDepth();                                  // (first: the copy may change the framebuffer / state)
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, vpW_, vpH_);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_SRC_ALPHA);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+    BindVertexArray(postVao_);
+    UseProgram(volApplyProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, rtTargets_.vol);
+    Uniform1i(cachedUniformLocation(volApplyProg_, "uVol"), 0);
+    Uniform1i(cachedUniformLocation(volApplyProg_, "uDepth"), 1);
+    Uniform2f(cachedUniformLocation(volApplyProg_, "uNearFar"), znear_, zfar_);
+    Uniform2f(cachedUniformLocation(volApplyProg_, "uRender"), (float)vpW_, (float)vpH_);
+    Uniform4f(cachedUniformLocation(volApplyProg_, "uGrid"), (float)((vpW_ + 15) / 16), (float)((vpH_ + 15) / 16), 16.0f, rtdef::x3Dist());
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDisable(GL_BLEND);
+    glx::textureCacheInvalidate();
+}
+
 bool Pipeline::toneFilmicOn() const {
-    static const bool off = [] { const char* e = std::getenv("WFC_RT_TONE"); return e && e[0] == '0'; }();
+    const bool off = !rtdef::tone();
     return !off && rtMode_ == 2 && toneLumProg_ && toneAdaptProg_;
 }
 

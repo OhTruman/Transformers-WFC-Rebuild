@@ -1191,12 +1191,62 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 auto oo = [](bool b) { return b ? "on" : "off"; };
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
-                         "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f whiteroll=%s whitelo=%.1f whitehi=%.1f whitemix=%.2f",
+                         "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f whiteroll=%s whitelo=%.1f whitehi=%.1f whitemix=%.2f "
+                         "x3=%s x3density=%.2f x3haze=%.4f x3sun=%.2f x3lamp=%.2f x3trans=%.2f x3g=%.2f x3dist=%.0f x3history=%.2f",
                          oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
                          rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
                          oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()), rtdef::sunShareMax(),
                          rtdef::toneKey(), rtdef::toneAdapt(), rtdef::toneGain(), rtdef::toneSat(), rtdef::toneContrast(), rtdef::toneBloom(),
-                         rtdef::bloomMax(), oo(rtdef::whiteRoll()), rtdef::whiteLo(), rtdef::whiteHi(), rtdef::whiteMix());
+                         rtdef::bloomMax(), oo(rtdef::whiteRoll()), rtdef::whiteLo(), rtdef::whiteHi(), rtdef::whiteMix(),
+                         oo(rtdef::x3()), rtdef::x3Density(), rtdef::x3Haze(), rtdef::x3Sun(), rtdef::x3Lamp(), rtdef::x3Trans(), rtdef::x3G(),
+                         rtdef::x3Dist(), rtdef::x3History());
+            }
+        }
+        // X3 (Realistic): the froxel volumetric light - the map's sun, its in-view lamps and the transient lights scattered by
+        // the authored height fog (lighting.json fog: density per UE unit x 100 = per metre, its height in m) plus a thin
+        // haze floor. No ambient in-scatter (a constant term was v1 - v3's grey veil). Mode-gated: Realistic with the RT
+        // pass only. WFC_X3=0 off; WFC_X3_DENSITY / _HAZE / _SUN / _LAMP / _TRANS / _G / _DIST / _HISTORY (WfcRtDefaults.h).
+        {
+            fr.volumetric = rtdef::x3() && rtMode_ == 2 && rtTargets_.vol != 0;
+            if (fr.volumetric) {
+                const core::Vec3 sc = sun ? sun->color * rtdef::x3Sun() : core::Vec3{0, 0, 0};
+                fr.volSun[0] = sc.x; fr.volSun[1] = sc.y; fr.volSun[2] = sc.z; fr.volSun[3] = rtdef::x3G();
+                const float fogPerM = fogOn_ ? -fogScale_ * 0.69314718f * 100.0f * rtdef::x3Density() : 0.0f;   // (fogScale_ = -Density / ln 2, per UE unit)
+                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = fogMaxH_ / 100.0f; fr.volFog[3] = rtdef::x3Haze();
+                fr.volMisc[0] = rtdef::x3Dist(); fr.volMisc[1] = 64.0f;
+                fr.volLampK = rtdef::x3Lamp(); fr.volTransK = rtdef::x3Trans(); fr.volHistory = rtdef::x3History();
+                // (v3) the halo lamps: the point / spot lights in view (cull sphere vs the frustum, within 60 m) ranked by
+                // brightness x (radius / distance)^2 - the lamps you see, not the ones the characters used
+                std::vector<std::pair<float, int>> rank;
+                for (size_t li = 0; li < lights_.size(); ++li) {
+                    const Light& L = lights_[li];
+                    if ((L.type != 0 && L.type != 1) || !L.enabled || L.radius <= 0.0f) continue;
+                    const float dist = core::length(L.pos - camPos_);
+                    if (dist > 60.0f + L.radius) continue;
+                    bool out = false;
+                    for (int f = 0; f < 6 && !out; ++f) {
+                        const float* pl = frustum_[f];
+                        const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+                        if (len > 0.0f && pl[0] * L.pos.x + pl[1] * L.pos.y + pl[2] * L.pos.z + pl[3] < -L.radius * len) out = true;
+                    }
+                    if (out) continue;
+                    const float lum = 0.2126f * L.color.x + 0.7152f * L.color.y + 0.0722f * L.color.z;
+                    const float cov = L.radius / std::max(dist, 1.0f);
+                    rank.push_back({-lum * cov * cov, (int)li});
+                }
+                std::sort(rank.begin(), rank.end());
+                fr.volLightN = 0;
+                for (const auto& rk : rank) {
+                    if (fr.volLightN >= 4) break;
+                    const Light& L = lights_[(size_t)rk.second];
+                    core::Vec3 lc = L.color;
+                    auto cal = giLightCal_.find(rk.second);
+                    if (cal != giLightCal_.end()) lc = {cal->second[0], cal->second[1], cal->second[2]};
+                    float* p = fr.volLights[fr.volLightN]; p[0] = L.pos.x; p[1] = L.pos.y; p[2] = L.pos.z; p[3] = L.radius;
+                    float* q = fr.volColors[fr.volLightN]; q[0] = lc.x; q[1] = lc.y; q[2] = lc.z; q[3] = L.falloff;
+                    ++fr.volLightN;
+                }
+                rtVolFrame_ = frameNo_;
             }
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
@@ -1213,6 +1263,12 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 if (L.type != 0 && L.type != 1) continue;
                 rtShadowLight_[n] = u.first;
                 fr.shadowLights[n][0] = L.pos.x; fr.shadowLights[n][1] = L.pos.y; fr.shadowLights[n][2] = L.pos.z; fr.shadowLights[n][3] = L.radius;
+                {   // (X3 v2 lamp halos) the lamp's colour on the RT lightmap's basis where the calibration has it
+                    core::Vec3 lc = L.color;
+                    auto cal = giLightCal_.find(u.first);
+                    if (cal != giLightCal_.end()) lc = {cal->second[0], cal->second[1], cal->second[2]};
+                    fr.shadowColors[n][0] = lc.x; fr.shadowColors[n][1] = lc.y; fr.shadowColors[n][2] = lc.z; fr.shadowColors[n][3] = L.falloff;
+                }
                 ++n;
             }
             fr.shadowLightN = n;

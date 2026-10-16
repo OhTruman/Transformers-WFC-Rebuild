@@ -12,7 +12,7 @@ typedef unsigned int GLuint;
 namespace render {
 
 struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0, lightVis = 0,
-                   prevColor = 0; };   // (item 3) GL writes the finished HDR scene at the frame end; reflections read it at character hits   // render size: depth / mask R32F,
+                   prevColor = 0, vol = 0; };   // (X3) vol: the integrated froxel grid, an 8 x 8 atlas of 64 slices of (w / 16) x (h / 16) tiles, RGBA16F: rgb in-scatter, a transmittance   // (item 3) GL writes the finished HDR scene at the frame end; reflections read it at character hits   // render size: depth / mask R32F,
                                                                  // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
                                                                  // (denoised sun), worldDepth R32F (before the dynamic draws)
 
@@ -42,10 +42,18 @@ struct RtFrame {
     bool softShadow = false;  // (R2) contact-hardening penumbrae after the denoiser -> RtTargets::shadowSoft
     float penumbraTan = 0.0f; // (R2) tan(the sun's half angle) for the penumbra width
     float softMaxRadius = 24.0f;   // (R2) the widest penumbra, pixels
-    bool debugDump = false;   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
+    bool debugDump = false;
+    // X3 (Realistic): the volumetric light pass - the sun's colour x brightness (rgb) + phase g, the medium (density 1 / m,
+    // height falloff 1 / m, fog height m, haze 1 / m), max distance m / steps, ambient in-scatter colour
+    bool volumetric = false;
+    float volSun[4] = {0, 0, 0, 0.6f}, volFog[4] = {0, 0, 0, 0}, volMisc[2] = {150.0f, 24.0f}, volAmb[3] = {0, 0, 0};
+    float volLampK = 1.0f;   // (v2) the lamp halos' strength
+    float volTransK = 1.0f, volHistory = 0.9f;   // (froxels) the transient lights' strength; the history weight
+    float volLights[4][4] = {}, volColors[4][4] = {}; int volLightN = 0;   // (v3) the halo lamps: in view, by coverage x brightness   // (diagnostics) write the denoiser's tile buffers to rt_dump_tiles.bin
     // (item 2) up to 4 point / spot lights shadowed per pixel (xyz position, w radius): RtTargets::lightVis RGBA = each
     // one's visibility - on dynamic pixels from everything, on world pixels from the characters only
     float shadowLights[4][4] = {}; int shadowLightN = 0;
+    float shadowColors[4][4] = {};   // (X3 v2: lamp halos) their linear colour x brightness (rgb), falloff exponent (w)
     // (item 4) up to 4 transient lights (xyz, w radius), traced against everything (world + characters): LightVis channel k
     // bit 1 (bit 0 = shadow light k) - each channel holds (static visible ? 1 : 0) + (transient visible ? 2 : 0), / 255
     float transLights[4][4] = {}; int transLightN = 0;
