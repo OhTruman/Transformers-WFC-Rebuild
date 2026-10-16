@@ -73,6 +73,26 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# Package 6 Realistic defaults (Integration's list, 6155925b; refreshed with the final head): the RT gate's Realistic run (every
+# WFC_* cleared) must log "RT Realistic defaults (first Realistic frame): k=v k=v ..." (Rendering) with these values. Strings
+# compare exactly, numbers within 1e-3. A key the line has but this table lacks is reported (INFO), not a fail.
+$RealisticDefaults = [ordered]@{
+    tone = 'on'          # X1 tone curve (WFC_RT_TONE=0 off; WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN tune it)
+    lmspecgain = 2.5     # X2 specular gain (WFC_RT_LMSPECGAIN)
+    tlgain = 2           # row 4 transient light gain (WFC_RT_TLGAIN)
+    gisat = 2.5          # X4 coloured bounce saturation (WFC_RT_GISAT)
+    giemissive = 1       # X4 emissive bounce gain (WFC_RT_GIEMISSIVE; Molten pending)
+    charao = 3           # X5-1 character AO radius, m (WFC_RT_CHARAORADIUS)
+    softparticles = 'on' # WFC_SOFTPARTICLES=0 off
+    tiled = 'on'         # tiled transient lights (WFC_TLTILED=0 off)
+    charsun = 'on'       # row 1 (WFC_RT_CHARSUN)
+    charlampcal = 'on'   # row 8 (WFC_RT_CHARLAMPCAL)
+    refltl = 'on'        # row 6 (WFC_RT_REFLTL)
+    sunshare = 'on'      # row 2 (WFC_RT_SUNSHARE)
+    probefill = 'on'     # row 5 (WFC_RT_PROBEFILL)
+    origspec = 'on'      # Enhanced: the Modern lobe only where the original had a specular input (WFC_PBR_ORIGSPEC=0 restores it)
+}
+
 function Norm([string]$p) {
     # long-path opens (platform::longPath) log as \\?\F:\... or \\?\UNC\server\...: classify them by the path itself
     if ($p.StartsWith('\\?\UNC\')) { $p = '\\' + $p.Substring(8) } elseif ($p.StartsWith('\\?\')) { $p = $p.Substring(4) }
@@ -577,6 +597,25 @@ try {
             $rtlOk = $rtl -and $rtl.Matches[0].Groups[1].Value -eq 'on' -and $rtl.Matches[0].Groups[2].Value -eq 'on'
             $rtGate.Lines += "$(if ($rtlOk) { 'PASS' } else { 'FAIL' }) rtcheck.rtlights: $(if ($rtl) { $rtl.Line.Trim() } else { 'no RT-era lights line in the Realistic run (an exe before the package 6 default flip)' })"
             if (-not $rtlOk) { $rtGate.Status = 'FAIL' }
+            # Package 6 Realistic defaults ($RealisticDefaults above)
+            $rdl = $rl2 | Select-String -Pattern 'RT Realistic defaults \(first Realistic frame\): (.*)$' | Select-Object -First 1
+            if (-not $rdl) { $rtGate.Lines += "FAIL rtcheck.defaults: no 'RT Realistic defaults' line in the Realistic run (an exe before Rendering's defaults line)"; $rtGate.Status = 'FAIL' }
+            else {
+                $got = @{}
+                foreach ($kv in ($rdl.Matches[0].Groups[1].Value.Trim() -split '\s+')) { $i = $kv.IndexOf('='); if ($i -gt 0) { $got[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } }
+                $bad = @(); $info = @()
+                foreach ($k in $RealisticDefaults.Keys) {
+                    $want = $RealisticDefaults[$k]
+                    if (-not $got.ContainsKey($k)) { $bad += "$k missing"; continue }
+                    $v = $got[$k]; $ok = $false
+                    if ($want -is [string]) { $ok = $v -eq $want }
+                    else { $d = 0.0; $ok = [double]::TryParse($v, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$d) -and [math]::Abs($d - [double]$want) -le 1e-3 }
+                    if (-not $ok) { $bad += "$k=$v (want $want)" }
+                }
+                foreach ($k in $got.Keys) { if (-not $RealisticDefaults.Contains($k)) { $info += "$k=$($got[$k])" } }
+                $rtGate.Lines += "$(if ($bad.Count) { 'FAIL' } else { 'PASS' }) rtcheck.defaults: $($RealisticDefaults.Count - $bad.Count) of $($RealisticDefaults.Count) as expected$(if ($bad.Count) { ' - ' + ($bad -join ', ') })$(if ($info.Count) { '; not in the table: ' + ($info -join ' ') })"
+                if ($bad.Count) { $rtGate.Status = 'FAIL' }
+            }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
         }
     }
