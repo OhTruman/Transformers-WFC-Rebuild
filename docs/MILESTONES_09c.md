@@ -1093,6 +1093,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   WFC_NOINTERACTTEST self-check; SIMHASH and captures identical by design; env-only, never a package default. Every
   lane runner sets it next to WFC_MUTE=1; Experimental pins it in tools/fidelity. Interim tonight: WFC_NOMOUSE=1 and
   windows at the bottom-right. Experimental's timed regress ede2fc3c vs e5182075 running since 22:50.
+  2026-10-15 23:10 REGRESS-8MAP ede2fc3c vs e5182075 (Experimental, RT off, Classic): 8 / 8 PASS, all maps -0.01 to -0.05 ms (501
+  2.57 -> 2.53, 502 2.16 -> 2.11, 503 2.77 -> 2.74, 504 2.90 -> 2.86, 507 2.39 -> 2.38, 508 2.53 -> 2.48, 509 3.30 ->
+  3.27, 510 3.19 -> 3.18), no contamination. The base's own p90 on 503 / 508 came out lower than in the previous run,
+  so the earlier '+0.08 option B drift' was run-to-run machine state; resolved unless it recurs. Classic captures
+  running.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
