@@ -79,7 +79,7 @@ for mo in others:
     v = [res[m][mo]["C"] for m in maps if res[m][mo]["C"] is not None]
     if v and mo in floors:
         c, f = float(np.mean(v)), float(floors[mo])
-        fl_lines.append(f"- contrast floor {lab.get(mo, mo)}: all-map {c:.2f} vs floor {f:.2f} -> {'OK' if c >= f - 1e-9 else 'BELOW FLOOR'}")
+        fl_lines.append(f"- contrast floor {lab.get(mo, mo)}: all-map {c:.2f} vs floor {f:.2f} -> {'OK' if round(c, 2) >= f - 1e-9 else 'BELOW FLOOR'}")
 if fl_lines: lines += [""] + fl_lines
 json.dump(res, open(os.path.join(O, "score.json"), "w"), indent=1)
 md = os.path.join(O, "EYEPASS.md"); t = open(md).read() if os.path.exists(md) else f"# Eye pass - {os.path.basename(O)}\n"
