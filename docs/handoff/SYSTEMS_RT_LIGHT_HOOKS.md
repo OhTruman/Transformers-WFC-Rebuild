@@ -37,3 +37,37 @@ Method: bright emitters = not smoke / cloud / debris / dust / dark; colour = Sta
 Users: weapon classes using the template (explosions / impacts), vehicle forms (boost), factory kinds (pickups). Per-emitter detail (material, colour, size, time): SYSTEMS_RT_LIGHT_HOOKS.json.
 
 Caveats: "size m" is the largest bright sprite including its growth over life (explosion fireballs grow to 18-90 m sprites), so the radius caps decide; the colour is the particle tint and ignores the sprite texture (white rows are texture-coloured: sample the texture if it matters); peak = the overbright factor of the brightest emitter, a relative scale, not a calibrated intensity. Impact rows share templates across many weapons (Impact_AssaultRifle_FX: 6 classes). Rendering calibrates by eye; then the code patch gates on Realistic + a WFC_ key, default off until adopted.
+
+## Fade curves (row 7 calibration; tools/systems/fx_light_curves.py)
+
+Per template, the effect's own brightness over time: bright emitters only, particles spawned by burst / rate, each weighted by its colour x alpha over its life (the runtime's curve layout), summed and normalised; 24 samples in the json (intensity_curve). Fit: rampIn = time to 90 % of the peak, hold until it falls below 50 %, rampOut to 5 %. Caveats: the weight is brightness x particle count, not sprite area, so long-lived bright sparks stretch the impact curves (a short flash may read better: take rampIn / hold and shorten the tail by eye); looping rows (boost, pickups) show one loop and the light is continuous while the effect runs.
+
+| template | effect time s | rampIn s | hold until s | rampOut s | loop |
+|---|---|---|---|---|---|
+| Squib_HomRocket_01_FX | 1.23 | 0.000 | 0.107 | 0.160 |  |
+| Squib_PlasmaCannon_Lrg_FX | 1.85 | 0.000 | 0.161 | 1.207 |  |
+| Explosion_GrenadeLauncher_01_FX | 0.88 | 0.000 | 0.114 | 0.000 |  |
+| Exp_FusionCannon_FX | 1.25 | 0.054 | 0.217 | 0.380 |  |
+| Exp_Energy_MED_FX | 2.16 | 0.000 | 0.750 | 1.407 |  |
+| Squib_HealGrenade_FX | 1.85 | 0.402 | 0.804 | 0.483 |  |
+| Exp_2500cb_FX | 1.09 | 0.000 | 0.142 | 0.142 |  |
+| Squib_PlasmaCannon_Sm_FX | 1.45 | 0.000 | 0.252 | 0.315 |  |
+| Martyrdom_Grenade_FX | 1.42 | 0.000 | 0.123 | 0.185 |  |
+| Impact_AssaultRifle_FX | 3.60 | 0.000 | 0.470 | 2.348 |  |
+| Impact_TurretIon_OLD | 3.10 | 0.000 | 0.674 | 0.000 |  |
+| Squib_EMPShotgun_FX | 1.10 | 0.000 | 0.335 | 0.478 |  |
+| Impact_IonTurret_FX | 3.60 | 0.000 | 0.470 | 2.348 |  |
+| Squib_TurretRepairEnemy_FX | 1.35 | 0.000 | 0.411 | 0.176 |  |
+| Impact_HeavyMG_FX | 3.80 | 0.000 | 0.496 | 2.643 |  |
+| Squib_HeavyPistol_FX | 5.00 | 0.000 | 0.652 | 1.957 |  |
+| Impact_IonBlaster_FX | 0.62 | 0.000 | 0.245 | 0.190 |  |
+| Squib_RepairEnemy_FX | 1.35 | 0.000 | 0.411 | 0.176 |  |
+| Afterburner_D_FX | 1.50 | 0.391 | 0.717 | 0.522 | yes |
+| Trails_Jet_D_FX | 1.60 | 0.348 | 1.113 | 0.278 | yes |
+| Afterburner_A_FX | 1.50 | 0.391 | 0.717 | 0.522 | yes |
+| Booster_1_FX | 2.00 | 0.783 | 1.391 | 0.435 | yes |
+| Trails_Jet_A_FX | 1.60 | 0.348 | 1.113 | 0.278 | yes |
+| bumble_boost_small1_FX | 1.50 | 0.130 | 0.717 | 0.391 | yes |
+| Pickup_FX | 4.00 | 1.391 | 3.130 | 0.696 | yes |
+| HealthPickup_FX | 1.88 | 0.000 | 0.082 | 0.000 | yes |
+| OvershieldPickup_FX | 1.88 | 0.815 | 1.467 | 0.408 | yes |
