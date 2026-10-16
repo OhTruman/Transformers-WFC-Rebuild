@@ -63,6 +63,7 @@ param(
     [switch]$NoRtCheck,          # skip the Ray Tracing gate (a deliberately RT-less package)
     [int]$SettingsExpected = 0,  # WFC_SETTINGSTEST: the number of renderer settings checks expected (0 = any count; all must pass)
     [switch]$NoSettingsTest,     # skip the settings self-test run
+    [switch]$NoHdRuntime,        # skip the HD runtime row (a default run otherwise re-runs one map with HD forced on: the loader must accept the pack)
     [switch]$ForeignCwd,         # start the map runs from a NOT writable working directory (<map>\cwd, write denied to this user): wfc.log / wfc_profile.ini must land beside the exe instead (needs Systems' log-dir patch; the writable-cwd case keeps the cwd for harnesses)
     [string]$RtHoldFile = "",    # the RT gate (only) waits while this file exists: the RT-off steps run first, the gate starts once the RT slot is granted and the file is removed
     [string]$SubstDrive = ""     # e.g. X: map the package to this free drive letter for the run (as Play.bat maps F:), so the game
@@ -581,6 +582,27 @@ $md += "Ray Tracing gate (rt-build-check.ps1, profile RayTracing=2, direct-boot 
 foreach ($x in $rtGate.Lines) { $md += "- $x" }
 $md += ''
 $md += 'Per-map detail: <map>\opens.csv (every open, classified), <map>\bin\wfc.log, <map>\filelog.txt.'
+# ---- the HD runtime row (Integration 2026-10-16): detection ('HD texture pack yes') passes even when the loader then rejects
+# the pack (package 4 / 5: one 89 MB row's byte count failed a float compare, so HD never loaded and no row noticed). A default
+# run therefore re-runs the first map with HD forced on (this script, -HdForced, the same package / subst letter after the
+# parent released it, no RT gate / settings test): it must log "HD texture pack available: <all rows> textures".
+if ($hd.Root -and -not $HdForced -and -not $StaticOnly -and -not $NoHd -and -not $NoHdRuntime) {
+    $hdArgs = @{ Package = $Package; WorkDir = (Join-Path $WorkDir 'hd_runtime'); Maps = ($Maps.Split(',')[0]); MatchSeconds = $MatchSeconds;
+                 HdForced = $true; NoRtCheck = $true; NoSettingsTest = $true; NoHdRuntime = $true; TimeoutSeconds = $TimeoutSeconds }
+    if ($SkipIntro) { $hdArgs.SkipIntro = $true }
+    if ($SubstDrive) { $hdArgs.SubstDrive = $SubstDrive }
+    if ($HoldFile) { $hdArgs.HoldFile = $HoldFile }
+    if ($ExeBin) { $hdArgs.ExeBin = $ExeBin }
+    Write-Host "HD runtime row: re-running $($hdArgs.Maps) with HD forced on"
+    $hdOut = @(& $PSCommandPath @hdArgs 2>&1 | ForEach-Object { "$_" })
+    $hdOk = $LASTEXITCODE -eq 0
+    $hdRep = Join-Path $hdArgs.WorkDir 'REPORT.md'
+    $hdLine = if (Test-Path -LiteralPath $hdRep) { (Select-String -LiteralPath $hdRep -Pattern 'HD: ' | Select-Object -First 1).Line } else { 'no report' }
+    $md += ''
+    $md += "HD runtime row (HD forced on, $($hdArgs.Maps)): $(if ($hdOk) { 'PASS' } else { 'FAIL' }) - $hdLine (report $hdRep)"
+    if (-not $hdOk) { $overall = $false }
+    Write-Host "HD runtime row: $(if ($hdOk) { 'PASS' } else { 'FAIL' })"
+}
 $reportPath = Join-Path $WorkDir 'REPORT.md'
 $md | Set-Content -LiteralPath $reportPath -Encoding UTF8
 Write-Host "$(if ($overall) { 'PASS' } else { 'FAIL' }): report $reportPath"
