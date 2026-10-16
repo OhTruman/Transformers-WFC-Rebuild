@@ -1403,7 +1403,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   structure audit PASS; completeness 33 COMPLETE / 1 PARTIAL / 4 missing lobby metadata; outputs under AssetTools
   work/campaign_pilot via a new opt-in WFC_VS_ROOT (default unchanged; ExtractedAssets / Game Dump untouched). Two
   validator stops (sky-card mesh refs; the MP robot check) need a ~20-line campaign mode; streaming currently merges
-  all sublevels visible. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  all sublevels visible.
+  2026-10-16 03:43 PACKAGE 5 VERIFY PASS (Systems, work/verify_398b/REPORT.md, exe sha256 94938E66...): Streets 91 s / Gorge 88 s
+  / Debris 85 s (-ForeignCwd; 0 outside-package opens), HD D 3,505 rows / 3,506 files / 21.27 GB 0 problems, bin 20
+  files exact with the M5 runtime (FSR 3.1 + frame gen), overlay row PASS (barrier wfc_material; 85 / 85 identical),
+  SETTINGSTEST 7 / 7, RT gate build / context / runtime / R4 PASS (V_bake k 0.354, 26 pages; R4 937,589 texels; per-
+  page k). FAST gate started (Experimental); promote on PASS as the internal checkpoint. CloakLight: the data gives
+  only the component (Brightness 1 / Radius 1024 cm / falloff 2, colour 250,220,120, disabled) - the ramp values and
+  on / off points live in script bytecode with no decompiler; DECISION (b): hold, Gameplay checks its RE notes for the
+  TnBuffCloak / TnCloakLightService values; a guessed glow could reveal cloaked players (gameplay change), so no
+  approximation. Systems builds the INVENTED-PLACEMENT headlight table. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
   27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
   mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
