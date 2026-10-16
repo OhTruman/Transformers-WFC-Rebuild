@@ -1735,3 +1735,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   profile's display / HD / Modern rows like the frontend; + WFC_HDTEXTURES=2 for Enhanced; SIMHASH identical); the
   eye-pass authored views now run at 2560x1440 with the Enhanced column on exes from this head (Experimental f60cad43
   / b41e0e5c). Gameplay walkable-floor (slope-only) gate finished, under analysis.
+  2026-10-16 12:30 WALKABLE-FLOOR FIX MERGED f19e0052 (Gameplay; |n.y| >= 0.7 ground support; both traps escape; 2 of
+  ~460 MAPTRAVERSE routes BLOCKED over steep faces = the faithful player-facing change) = FOURTH CLASSIC RE-BASELINE
+  (docs/handoff/walkable/); gate base += the walkable sim line. Rendering batches 8 / 9: HIT-DATA CULL FIX
+  (a81f7291, push after identity) surfaces with no hit data before -> after: Molten 1918 -> 129 / 3799, Remnant 2373
+  -> 126, Seed 1442 -> 91, Complex 1537 -> 59, BrokenHope 1331 -> 109, Rust 1129 -> 28, Gorge 874 -> 52, Streets 655
+  -> 88, Berth 602 -> 25, Debris 559 -> 30: every map's bounce + reflections now see real albedo. Molten lava gain
+  test inconclusive (frame had no lava in view) -> rerun on a lava-facing authored view. X4 re-scored: subtle (Streets
+  1.1 %). X3 v2 still NOT showable (faint haze, no shafts / halos in these frames: Streets 0.96, Gorge 0.96, Molten
+  0.94). DECISION (b): X3 parked after v2; order = Molten lava source, item 7, row 7 / effect-light calibration, X3 v3
+  on the authored open-sky views (lamp picks by screen coverage), eye pass. Views rerun on int_cand4 running.
