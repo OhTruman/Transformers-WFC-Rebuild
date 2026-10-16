@@ -1822,3 +1822,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   with Experimental ~16:00-17:00 (+1-2 h per fix row). Then: gate-base round if the ledge guard landed, BUILD_ONLY,
   the one-GO gate block (~3 h), Systems' package build + verify in parallel, hand-over after PASS. Head freeze = no
   sim change after the gate base is built; the ledge guard lands only if its gate finishes first.
+  2026-10-16 13:18 USER DECISION: cross-play design + feasibility documents start now (no package 6 impact); code after
+  package 6; order PC-to-PC, PC-to-browser, then PS3 and Xbox 360 towards the end. Assigned: Systems
+  CROSSPLAY_NETCODE_DESIGN.md + CROSSPLAY_PROFILE_STATS.md; AssetTools CROSSPLAY_PLATFORM_FEASIBILITY.md (after the
+  grid work); Gameplay CROSSPLAY_SIM_DETERMINISM_AUDIT.md (in parallel with the ledge-guard gate). Ledge guard gate
+  ETA ~16:00-16:45 (their clock), inside the head freeze.
