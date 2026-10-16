@@ -1048,6 +1048,10 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         static const int aoRays = [] { const char* e = std::getenv("WFC_RT_AORAYS"); return e ? std::max(0, std::atoi(e)) : 2; }();
         static const float aoRadius = [] { const char* e = std::getenv("WFC_RT_AORADIUS"); return e ? (float)std::atof(e) : 1.0f; }();
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
+        // X5 (Realistic): the characters' sky occlusion reaches 3 m - a robot under an overhang, in a doorway, beside a
+        // wall darkens as the world around it does (1 m caught only contact). WFC_RT_CHARAORADIUS=<m>; 0 = the 1 m radius.
+        static const float aoDyn = [] { const char* e = std::getenv("WFC_RT_CHARAORADIUS"); return e ? (float)std::atof(e) : 3.0f; }();
+        fr.aoRadiusDyn = rtMode_ == 2 ? aoDyn : 0.0f;
         std::memcpy(fr.prevVP, rtPrevColVP_, sizeof fr.prevVP); fr.prevValid = rtPrevValid_;   // (item 3: reflection hits off the static world)
         fr.reflect = rtReflPass();                       // (M7 stage 2: Realistic, or WFC_RT_REFLECT)
         static const bool shadeAb = std::getenv("WFC_RT_REFLECT_AB") != nullptr;   // (hit shading off in every other 30-frame block)

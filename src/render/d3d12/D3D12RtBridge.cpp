@@ -1107,7 +1107,7 @@ private:
         c[20] = (float)depth_.w; c[21] = (float)depth_.h; c[22] = (float)fr.frameIndex; c[23] = (float)fr.aoRays;
         c[24] = fr.aoRadius; c[25] = fr.bias; c[26] = (float)(fr.instanceMask & 0xFF); c[27] = fr.sunConeTan;
         std::memcpy(c + 28, fr.ffxReproj, 64);
-        c[44] = fr.znear; c[45] = fr.zfar; c[46] = fr.reflectShade ? 1.0f : 0.0f;
+        c[44] = fr.znear; c[45] = fr.zfar; c[46] = fr.reflectShade ? 1.0f : 0.0f; c[47] = fr.aoRadiusDyn;
         float cE[52] = {};                               // (item 2) Extra2.z = the shadow light count, .w = its ring offset
         if (lightBuf_) {                                 // (Extra2.z = shadow count + 8 x transient count, .w = the slot's base)
             void* lp = nullptr; D3D12_RANGE none{0, 0};
