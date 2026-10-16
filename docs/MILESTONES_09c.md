@@ -1851,3 +1851,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Live leaderboards; per-platform storage; account-free identity = local key pair + fingerprint + name; friend
   standings via signed summaries, global needs an optional server; 8 open questions). Feasibility doc (AssetTools)
   pending behind the grid work. No code before package 6.
+  2026-10-16 13:27 Grid fix (AssetTools): m05's compact grid IDENTICAL to the old code on all 10 MP maps (Streets incl.);
+  the structure-audit rewrite reverted (10 GB on Rust vs 2.2 GB old): campaign uses a coarser WFC_AUDIT_CELL=2 m
+  (default 1 m unchanged, Berth identical). m05 + structure audit now rerunning alone on all 10 chapters (~1.5-2 h).
