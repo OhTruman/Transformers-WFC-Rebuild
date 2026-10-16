@@ -18,9 +18,15 @@
 #   * One graphical WFC process at a time. Each run records exit / hang / abnormal end and Windows display-driver
 #     reset events (System log, Display 4101 / dxgkrnl) in its time window.
 param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir, [string[]]$Configs = @(),
-      [string]$RefExe = "", [string]$RefRenderData = "", [string]$AltRefExe = "", [string]$AltRefRenderData = "", [switch]$ReportOnly)
+      [string]$RefExe = "", [string]$RefRenderData = "", [string]$AltRefExe = "", [string]$AltRefRenderData = "", [switch]$ReportOnly,
+      # -VerifiedRef <json>: per map, the world detail / draws of a visually verified build at the same start (dark maps the pixel
+      #  rule misreads; 2026-10-16 Berth) - a FAIL that still reaches 0.6x its detail and 0.7x its draws reads PASS (same as verified)
+      [string]$VerifiedRef = "")
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Shots.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1")
+$verRef = @{}
+if (-not $VerifiedRef) { $VerifiedRef = Join-Path $PSScriptRoot "results\maploss_ref.json" }
+if (Test-Path $VerifiedRef) { (Get-Content -Raw $VerifiedRef | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $verRef[$_.Name] = $_.Value } }
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
 $Configs = @($Configs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Configs.Count) { $Configs = @("normal", "w1280", "w1920", "lowtex") }
 $root = Get-WfcRoot
@@ -103,6 +109,12 @@ foreach ($cfg in $Configs) {
         $row = [pscustomobject][ordered]@{ config = $cfg; visit = $m.key; map = $m.dir; start = $start; frames = $ws.Count; world_detail = (($ws | ForEach-Object { $_.detail }) -join "/"); black = (($ws | ForEach-Object { $_.black }) -join "/"); verdict = $set
             vc_world = $(if ($vcm) { $vcm.world_med }); vc_world_spawn = $(if ($vcm) { $vcm.world_spawn }); vc_bsp = $(if ($vcm) { $vcm.bsp_med }); vc_materials = $(if ($vcm) { $vcm.materials_med }); ref_detail = $null; ref_exe = $null; ratio = $null }
         if ($start) { $starts["$($m.dir)|$start"] = $true; $refJpg = Join-Path $OutDir ("ref\{0}_{1}.jpg" -f $m.dir, $start); if (Test-Path $refJpg) { $rw = Present-World $refJpg; $row.ref_detail = $rw.detail } }
+        if ($row.verdict -eq "FAIL" -and $verRef.ContainsKey($m.dir)) {
+            $vr = $verRef[$m.dir]; $dm = @($row.world_detail -split "/" | Where-Object { $_ } | ForEach-Object { [double]$_ } | Sort-Object)
+            $dmed = if ($dm.Count) { $dm[[int]($dm.Count / 2)] } else { 0 }
+            $drawOk = ($row.vc_world -ne $null) -and ([double]$row.vc_world -ge 0.7 * [double]$vr.world_draws)
+            if ($dmed -ge 0.6 * [double]$vr.detail_median -and $drawOk) { $row.verdict = "PASS"; $row.ref_exe = "verified $($vr.build)"; $row.ratio = [Math]::Round($dmed / [Math]::Max(0.01, [double]$vr.detail_median), 2); $row.ref_detail = [double]$vr.detail_median }
+        }
         $rows.Add($row)
     }
 }

@@ -1,0 +1,10 @@
+{
+  "MP_IAC_Berth": {
+    "start": "TnTeamPlayerStart_5269",
+    "detail_median": 0.167,
+    "world_draws": 537,
+    "materials": 81,
+    "build": "398b27ef (package 5, promoted 2026-10-16)",
+    "verified": "2026-10-16 05:35, Experimental: visual check of b_1spawn / b_2move / b_3move - the environment is fully drawn (walls, floor, lights); Berth is a dark interior, so the black-fraction rule reads FAIL (same at 10-13). work/fastgate/398b27e_r2/berth_sheet.png"
+  }
+}
