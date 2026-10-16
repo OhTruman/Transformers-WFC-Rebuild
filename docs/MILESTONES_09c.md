@@ -1603,3 +1603,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   regenerates the two entries; fallback = drop the two entries (glTF fallback as package 5). RT gate + HD runtime rows
   run in the RT slot at Rendering's batch 4 boundary, ahead of Experimental's sheet. A1_IAC rerun: 1,211 -> 0 mesh-less
   components; D3B_IAC running. Package 6 doc skeleton merged 64771c71 (26 placeholders).
+  2026-10-16 08:37 PACKAGE-GATE RULES FINAL (Experimental 101b3970 / 78854ddd / d3a6e1e1 synced): base = 398b27ef + yaw
+  022e5e34 (verified same match, identical Classic SIMHASH 600-9600); regress bars = report rows at +0.35 ms p90 per
+  map RT off with draws / binds (BISECT above, not a block); blocking = contamination, client rect, different match,
+  final vs lights-off parity; new step 1b = Realistic + HD Enhanced perf row (1440p, 31v32, 5 maps, FLAG p50 > 16.7
+  ms). GPU block ~2.8-3.1 h. Authored eye-pass views wired 1a49b965 (24 / 25 cameras). Rendering batch 4 ends ~09:10
+  -> Systems RT gate row (5 min) -> Experimental eyepass on Rendering's int_cand exe (WFC_FXLIGHTS=1) = the X3 go /
+  no-go sheet. Rendering: X2 / soft-particle shader text now Realistic-only (Off / Faithful verbatim); item 6 Rust term
+  found (Fresnel shaping on grazing floors, bounded 0.5-1.5x); soft particles for all FX in Realistic
+  (WFC_SOFTPARTICLES) in source; Faithful bloom gather 4.0 kept, RE item on the 360's 7e3 target. Gameplay: Debris
+  cost = Driving hull mid probe below the 0.45 m wheel clearance on all 7 cars (Car4 pinned on a floor lip, v 21 -> 0);
+  one-line clamp in test with a Classic re-baseline; full ride-height model next. AssetTools: WFC_PKG_CACHE proven
+  byte-identical on Gorge; D3B_IAC rerunning (cache 6).
