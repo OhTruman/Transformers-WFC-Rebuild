@@ -1615,3 +1615,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cost = Driving hull mid probe below the 0.45 m wheel clearance on all 7 cars (Car4 pinned on a floor lip, v 21 -> 0);
   one-line clamp in test with a Classic re-baseline; full ride-height model next. AssetTools: WFC_PKG_CACHE proven
   byte-identical on Gorge; D3B_IAC rerunning (cache 6).
+  2026-10-16 08:59 DRIVE-PROBE FIX MERGED 56a9beca (Gameplay): Driving hull probes at or above the 0.45 m wheel clearance
+  (all 7 cars sat below it; a boosted Car4 pinned on a Debris floor lip 21 -> 0 m/s; players too). Gate clean (NAVQ no
+  map worse, VEHTEST new car rows, BOTTEST 46 / 46). SECOND CLASSIC RE-BASELINE (75 / 96 diverge, tables
+  docs/handoff/driveprobe/); package-gate base = 398b27ef + yaw + drive-probe 56a9beca (Experimental rebuilding).
+  Debris Driving slow back to base; the remaining Smart Debris cost = hover / jet slow (next trace), then the
+  ride-height model, then audit items 4 / 5 / 6. Vending matfix data live in work/render (08:50); dry-run map rows +
+  HD runtime PASS; RT gate row at Rendering's boundary.
