@@ -20,7 +20,7 @@
    next map). Off / Faithful are the original's image, byte for byte.
 
 **Already known (no need to report):** vehicle muzzle flashes saturate a nearby wall (authored values, as the original);
-several explosions right at the camera fill the screen flat yellow (authored colours); no volumetric light shafts yet (package 7) [PLACEHOLDER: if X3 misses]; dead
+several explosions right at the camera fill the screen flat yellow (authored colours); no volumetric light shafts or lamp halos (package 7); dead
 robots do not leave decals / skeletal gibs yet and the death animation choice is approximate; Smart bots' squads can
 reverse direction around a walking leader. Anything else is news.
 
@@ -61,7 +61,8 @@ contrast vs Off, Realistic | Enhanced:
 | reflective floor | 1.88 | 1.85 |
 | vehicle lane | 1.37 | 1.46 |
 
-Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views on the head.]
+Enhanced adds on top in 4 of 5 view types. The final eye pass runs on int_eye = integration 7cd22027 (every package 6 row
+merged) [PLACEHOLDER: its sheet / views numbers].
 
 - **Characters take the RT sun** (row 1, bd749603, WFC_RT_CHARSUN): robots and movers in sunlight get the traced sun
   and its shadow, matching the world they stand in.
@@ -99,9 +100,9 @@ Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views
 | Berth | 602 | 25 |
 | Debris | 559 | 30 |
 
-- **X3 volumetrics** (sun shafts / lamp halos / lit fog): v1 (flat grey haze) and v2 (faint haze, no shafts / halos)
-  were rejected by eye; parked after v2. [PLACEHOLDER: v3 on the authored open-sky views (lamps picked by screen coverage),
-  else package 7.]
+- **X3 volumetrics: not in package 6.** v1 (flat grey haze), v2 (faint haze) and v3 (on the 25 authored views: a grey
+  veil that lowered contrast, no readable shafts or halos) were all rejected by eye. The froxel / per-lamp version moves
+  to package 7 (RENDERING_X3_VOLUMETRICS.md).
 - **Molten's lava lights the scene** (584c873b, Rendering e233a641; WFC_RT_GIEMISSIVE = 4 in Realistic): with the
   surface-colour fix the lava's emissive reaches the bounce light; on lava-facing views rock over a lava basin reads
   contrast 2.13 (gain 1) -> 2.29 (gain 4, a heat glow; 8 reads as a red lamp) vs Off.
@@ -140,7 +141,7 @@ Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views
 | tiled transient lights | WFC_TLTILED=0 | on |
 | rows 1 / 8 / 6 / 2 / 5 | WFC_RT_CHARSUN / _CHARLAMPCAL / _REFLTL / _SUNSHARE / _PROBEFILL | on |
 | Enhanced: original specular | WFC_PBR_ORIGSPEC=0 (restores the GGX lobe) | on |
-| X3 volumetrics | [PLACEHOLDER: WFC_X3] | [PLACEHOLDER] |
+| X3 volumetrics | - | not in this build (package 7) |
 
 All are environment-only (no new menu setting; SETTINGSTEST stays 7). The Realistic boot log names them in one line
 ("RT Realistic defaults (first Realistic frame): ...") and verify_slim checks it (rtcheck.defaults, SYSTEMS_VERIFY_RT_DEFAULTS).
@@ -202,7 +203,8 @@ Off / Faithful stay byte-identical to the original (identity rows).
   [PLACEHOLDER: the bloom-input cap in item 7 polish shipped or not].
 - **Idle 20 s BOTTEST row** at seeds 1 / 5 (47 / 48 before): the walkable-floor fix f19e0052 addresses the trap
   [PLACEHOLDER: 48 / 48 at seeds 1 / 5 on the head, or still open].
-- **X3 volumetrics**: v1 and v2 rejected by eye; v3 on the authored open-sky views pending [PLACEHOLDER: in or package 7].
+- **No volumetric lighting in this build** (sun shafts, lamp halos, lit fog): three versions rejected by eye; package 7
+  (RENDERING_X3_VOLUMETRICS.md).
 - **Death bodies, patch 2 deferred**: decals, skeletal gibs, the authored death camera and the full momentum picker come
   after package 6; the death-type choice is still an approximation.
 - **X6 / X7 = package 7** unless pulled in: more reflective surfaces + damp sheen (X6), 2x RT lightmap (X7).
@@ -287,7 +289,7 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 | Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | Faithful identity after Rendering's 7 commits |
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | FLAG p50 > 16.7 ms; floor ~60 fps at 1440p |
 | R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
-| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | int_cand3 sheet 1.31 / 1.30; int_cand4 authored views 1.25-1.88 |
+| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | running on int_eye = 7cd22027 (every row merged); int_cand3 sheet 1.31 / 1.30; int_cand4 authored views 1.25-1.88 |
 | verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
 | FAST gate | [PLACEHOLDER] | |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
