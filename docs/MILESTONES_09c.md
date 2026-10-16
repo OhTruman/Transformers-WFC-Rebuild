@@ -1335,6 +1335,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (pose noise on a distant flier), no lighting difference: the cull removes only lights that do not reach the view.
   Step 2 started 02:36 (hold set; 3 arms x 8 maps, ~45 min). Incident: Rendering launched an exe at 02:35:55 after
   the hold and my pause message; killed by PID at 02:36:37; Experimental reruns any marked row at the end.
+  2026-10-16 03:09 PACKAGE 5 REGRESS PASS (Experimental, 3-arm lockstep x 8 maps, RT off, Classic, 2 reps, 0 contamination; the
+  stray exe ended before the gate started): lights-off arm vs 30b2fa74 -0.10 .. +0.04 on every map (nothing else
+  regressed); the transient lights' cost (head minus lights-off) +0.03 .. +0.23 ms p90 (501 +0.14, 502 +0.15, 503
+  +0.08, 504 +0.18, 507 +0.06, 508 +0.20, 509 +0.03, 510 +0.23), documented; Systems' view-cone cull roughly halved
+  it (508 +0.31 -> +0.20); head vs base within +0.15 on 7 / 8 maps (508 +0.18). Step 4 (rt-perf-baseline on 398b27ef
+  under NOINTERACT, the new reference) running under a hold; the package-5 build starts on 'go' after it. Rendering's
+  launcher now polls the hold every second and kills its own exe.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
