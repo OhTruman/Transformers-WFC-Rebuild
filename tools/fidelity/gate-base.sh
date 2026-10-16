@@ -25,11 +25,12 @@ for c in "$@"; do
     for f in $pf; do unset "last[$f]"; done   # (those files are no longer a commit's copy)
     st "applied file $c: $pf(verified by VERIFY, not byte-checked)"; continue
   fi
-  git cat-file -e $c^{commit} || { st "unknown commit $c"; exit 1; }
-  git show $c -- src > work/gatebase_$N.$c.diff
+  sp=src; case "$c" in *@*) sp=${c#*@}; c=${c%%@*};; esac   # <sha>@<path>: only that path of the commit (e.g. f19e0052@src/game:
+  git cat-file -e $c^{commit} || { st "unknown commit $c"; exit 1; }   #  its Application.cpp hunk is a BOTTEST row, not sim) - still byte-checked
+  git show $c -- $sp > work/gatebase_$N.$c.diff
   (cd $T && patch -p1 --forward < ../../gatebase_$N.$c.diff) >> $L 2>&1 || { st "patch $c failed (see $L)"; exit 1; }
-  for f in $(git show --name-only --format= $c -- src); do last[$f]=$c; done
-  st "applied $c: $(git show --name-only --format= $c -- src | tr '\n' ' ')"
+  for f in $(git show --name-only --format= $c -- $sp); do last[$f]=$c; done
+  st "applied $c ($sp): $(git show --name-only --format= $c -- $sp | tr '\n' ' ')"
 done
 bad=0; for f in "${!last[@]}"; do git show ${last[$f]}:$f | cmp -s - $T/$f && st "  same as ${last[$f]}: $f" || { st "  DIFFERS from ${last[$f]}: $f"; bad=1; }; done
 [ $bad = 0 ] || { st "byte-check failed: a listed commit depends on others - ask Integration for a diff against 398b27ef"; exit 1; }
