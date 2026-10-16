@@ -2077,3 +2077,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   invalid (package 5's regress had both arms framed) -> Experimental compares shot dimensions; a rerun at 1920x1080
   (fits the work area framed) if confirmed. Audio off the list (mixer work on the audio thread; <= 1 mix block of
   mutex wait on voice starts). Gameplay's cap + switches tree building (int_cap, ddea856e + patch 75dd1067).
+  2026-10-16 17:51 CLIENT-SIZE SUSPICION CLEARED (my read of regress/map-501 logs): base framed window 1296x759 = a
+  1280x720 client, head 'NOINTERACT: client 1280x720'; same pixels. The bisect's base 2.14 / final 4.07 equal the
+  720p regress numbers -> likely CPU-bound (slow-frame GPU 2.97 < frame 4.07): gib chunk rigid bodies + skinning
+  per corpse are the suspects; corpse arms on int_cap decide.
