@@ -1699,3 +1699,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   copy after the Release + PGO build. Next: Rendering batch 7 (Molten emissive 1 / 3 / 6, X3 pairs at 1440p for the
   user) -> boundary ~13:15 -> Experimental eyepass on int_cand3 (Release, 2b28bb78 + Enhanced fix). AssetTools A4_ORB
   in m05 (heavy nav), doc ~12:15; 3 chapters left.
+  2026-10-16 11:42 PACKAGE 6 REALISTIC DEFAULTS (6155925b, grepped by Systems): WFC_FXLIGHTS / WFC_HEADLIGHTS on (=0 off),
+  WFC_RT_TLGAIN 2.0, WFC_RT_LMSPECGAIN 2.5 (WFC_RT_LMSPEC=0 off), WFC_RT_TONE on + TONE_ADAPT / BLOOM / CONTRAST / GAIN
+  1.3, WFC_RT_GISAT 2.5 + WFC_RT_GIEMISSIVE 1.0, WFC_RT_CHARAORADIUS 3.0, WFC_SOFTPARTICLES, WFC_TLTILED, rows 1 / 8 /
+  6 / 2 / 5 switches, WFC_PBR_ORIGSPEC; all env-only statics (SETTINGSTEST count stays 7, keep list unaffected).
+  verify_slim gains rtcheck.defaults (SYSTEMS_VERIFY_RT_DEFAULTS.patch, docs ac533161; applied once Rendering logs
+  "RT Realistic defaults (first Realistic frame): k=v ..."). X3 / Molten emissive / ground-snap pending.
