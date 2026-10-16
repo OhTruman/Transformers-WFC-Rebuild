@@ -1145,6 +1145,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Ancestry check: no lane branch contains either commit (lanes normally build from integration-based trees) -> rule: an
   exe is NOINTERACT-capable only if built from >= 4da148bb or with GAMEPLAY_NOINTERACT.patch applied (patch -p1 in
   archive trees); the package-4 exe and the m9c_30b2fa7 / int_a44aa6db trees ignore it; lanes told.
+  2026-10-15 23:52 Lane confirmations: Experimental patched work/ab/m9c_e518207 (patch -p1, rebuilt; PATCHED_NOINTERACT.txt) as
+  the base for the item-3 rows and retired every older tree from windowed runs; Systems runs nothing windowed from
+  pre-4da148bb exes (its lights tests were null render). Systems: SYSTEMS_DEATH_LIGHTS.patch (5f275360) stacks on the
+  muzzle lights patch (data-driven DamageDeathType, 34 lit types, no headshots; car / truck / tank 8 s purple, jets
+  none; BOTTEST 39 / 39 with 78 deaths; CAMPAIGN_BACKLOG.md row for the Gameplay picker); both merge after Rendering's
+  item 4. New bug for Gameplay: applyMatchDamage despawns the victim before the PlayerKilled event, whose onPawnDeath is
+  gated on spawned(), so the victim death sound is skipped for every participant killed that way (fix presentation-only,
+  SIMHASH identical, with a headless row).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
