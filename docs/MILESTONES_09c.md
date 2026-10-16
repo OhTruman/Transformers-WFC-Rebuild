@@ -1883,3 +1883,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   FIX ROW 2: point-blank explosions went flat posterised yellow in Realistic (X1's shoulder kept half the hue at the
   clip) -> the hue-kept share fades out between luminance 1 and 3 so very bright light goes to white; joins the
   batched commit (sun-share cap 0.75 + rtdef keys). Debris (507) landed, all checks pass; Rust, Molten next.
+  2026-10-16 13:58 EYE PASS: Debris (507) read = strong upgrade (street, reflective, lane; Enhanced adds crisp floor
+  detail), no new fix row (shadow blobs covered by the sun-share cap). Rust (504) landed, all checks pass; Molten
+  last, then Experimental's score tables, then Rendering's batched fix commit + identity + one confirming sheet.
