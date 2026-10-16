@@ -38,7 +38,9 @@ run "WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=1 powershell -NoProfile 
 # ---- 2b per-body cost + 5v5 (timed; Integration 2026-10-16): Berth, RT off, 3840x2160, same match, 2 reps -
 #      63 bots: base / respun head / respun head + WFC_NOCORPSE=1 (the bodies' share); 5v5 (the original lobby default): base / head
 st "2b per-body + 5v5: hold set"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
-run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms 'base|$BASE|;;head|work/ab/fast_$r|;;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1"
+NC=";;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1"   # (only if the respun exe has Gameplay's switch - else the arm would silently equal the head)
+[ $WHATIF = 1 ] || grep -q WFC_NOCORPSE work/ab/fast_$r/build-release/bin/wfc_rebuild.exe || { NC=""; st "2b: the respun exe has no WFC_NOCORPSE - nocorpse arm skipped"; }
+run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms 'base|$BASE|;;head|work/ab/fast_$r|$NC' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1"
 run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms 'base|$BASE|;;head|work/ab/fast_$r|' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1"
 run "rm -f work/PERF_HOLD"; st "2b TIMED DONE (hold removed)"
 for f in map-501 map-501-5v5; do [ -f $O/bodies/$f.out ] && grep -oE "lockstep\.[a-z]+\.r[12]: [a-z]+: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+, workload parity [A-Za-z]+; frame p50 / p90 / p99 [0-9.]+ / [0-9.]+" $O/bodies/$f.out | sed -E "s/lockstep\.([a-z]+\.r[12]).*same match as 'base' ([A-Za-z]+).*p99 ([0-9.]+) \/ ([0-9.]+)/$f \1 same=\2 p50 \3 p90 \4/" | tee -a $L; done
