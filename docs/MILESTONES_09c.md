@@ -1890,3 +1890,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   calibration row on Systems' side: explosion rows colour x0.7 (a nearby explosion blew Rust's bright floor to
   white; the yellow cast is the shoulder row) -> patch requested against 77a7b0f7; merges before Rendering's fix
   candidate. Molten last.
+  2026-10-16 13:59 EXPLOSION LIGHT CALIBRATION merged (Systems f3cbbb01: the 9 explosion rows colour x0.7; impacts x0.6 /
+  0.15 s stay; values only). Rendering builds the fix candidate (sun-share cap 0.75, bright-highlight hue fade, rtdef
+  keys) on this head after the Molten read; identity; Systems' paired table; one confirming sheet.
