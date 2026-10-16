@@ -1062,6 +1062,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   to weaponQueue_, drawn before the bodies -> case 3 is fixed by 3b (translucent-only dynamic draws queued into the
   sorted translucency after the characters), coding now, then item 3. Gameplay: NAVQ baseline for 069a0a8f (12 seeds,
   pooled gate rule). Head ede2fc3c named to Experimental. Package 5 ETA ~18-19 Oct.
+  2026-10-15 22:09 USER: 'run nonstop until it's all done' = package 5 (RT plan v2 items 3-4 + 3b, D complete, the effects /
+  vehicle fixes, regress) with no interim; then the next phases in order: the full campaign (+ its textures and ray
+  tracing), cross-play multiplayer (PC, web, Xbox 360, PS3, Android / iOS), one final optimization pass, maybe a
+  Search-and-Destroy-like mode. Message the user only when done, for questions, or for verification.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
