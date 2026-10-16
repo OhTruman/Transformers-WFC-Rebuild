@@ -1164,6 +1164,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   World::onPawnDeath; victim key / headshot / jet from the death record; headless BOTTEST 43 / 44 + ENGAGE 3 / 3, 89
   deaths lit as expected). The one FAIL is Gameplay's new DEATH row counting a natural bot death inside its 600-tick
   window under seed 7 (fails on unpatched ee43bef1 too): Gameplay fixes the check to count the scripted victims only.
+  2026-10-16 00:12 Midnight health: 0 TDRs, pool 9.11 GB, muter 13 sessions silenced, C: 105 / F: 177 GB. Experimental had set a hold
+  at 00:09 on Rendering's direct request (unannounced; AssetTools paused on it); removed, then GRANTED properly by
+  Integration: a 75-min timed window for Rendering's rt-perf-baseline on the items 3 / 4 build (Off + Faithful
+  identity already PASS vs 848b147b); rule restated: timed windows come from Integration, every hold is announced
+  first. AssetTools D: batches 0-25 reviewed, b0-24 packed (2,852 textures, 16.9 GB), 26-31 left; D complete
+  ~06:30-07:30 (the 'no python' listing was a gap between ~10-min passes).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
