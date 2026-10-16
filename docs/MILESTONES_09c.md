@@ -2070,3 +2070,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   now); else a commit bisect 398b27ef..4078e47b (boundaries: 54ac361d, 050a7796, 9711d354, b9e6f3d8, FX data,
   02c743cc, f670f8ba). 1b RERUN with Enhanced: PASS all 5 maps (p50 Streets 9.26, Gorge 9.48, Debris 7.32, Rust
   8.18, Molten 9.30 ms; p90 8.56-11.63; 105-137 fps at 1440p). Hold cleared 17:48 (their clock); pool 6.86 GB.
+  2026-10-16 17:50 MEASUREMENT SUSPICION (mine): the gate's base tree predates 7d9edf78 (NOINTERACT exact client size):
+  an old framed window larger than the work area is shrunk by Windows (2560x1417 for 2560x1440 per the commit), while
+  the final's borderless popup is exactly 3840x2160; Get-WfcClientRect reads only the new log line, so the base
+  passes without one. If the arms rendered different pixel counts, every RT-off delta since the gate started is
+  invalid (package 5's regress had both arms framed) -> Experimental compares shot dimensions; a rerun at 1920x1080
+  (fits the work area framed) if confirmed. Audio off the list (mixer work on the audio thread; <= 1 mix block of
+  mutex wait on voice starts). Gameplay's cap + switches tree building (int_cap, ddea856e + patch 75dd1067).
