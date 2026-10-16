@@ -44,6 +44,9 @@ struct RtFrame {
     // (item 2) up to 4 point / spot lights shadowed per pixel (xyz position, w radius): RtTargets::lightVis RGBA = each
     // one's visibility - on dynamic pixels from everything, on world pixels from the characters only
     float shadowLights[4][4] = {}; int shadowLightN = 0;
+    // (item 4) up to 4 transient lights (xyz, w radius), traced against everything (world + characters): LightVis channel k
+    // bit 1 (bit 0 = shadow light k) - each channel holds (static visible ? 1 : 0) + (transient visible ? 2 : 0), / 255
+    float transLights[4][4] = {}; int transLightN = 0;
 };
 
 bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (a throwaway probe)
@@ -84,7 +87,8 @@ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n);
 // lightmap page its size (0 = none) -> per page a shared GL texture (RGBA16F; 0 = none). A job: constants of one
 // texel range (+ the gutter); queued into the next round trip, or run now in whole passes (load time).
 struct RtGiSetup { std::vector<uint32_t> texels, dilate; std::vector<float> data; std::vector<std::pair<int, int>> pageSize;
-                   int floatPage = -1; };   // (floatPage: RGBA32F - the vertex-lit subs' page)
+                   int floatPage = -1;      // (floatPage: RGBA32F - the vertex-lit subs' page)
+                   std::vector<int> hitToGi; };   // (item 3) reflection hit page -> its GI page: reflections see the RT lightmap
 struct RtGiJob {
     float toSun[4] = {0, 0, 0, 0}, sunCol[4] = {0, 0, 0, 0}, sky[4] = {0, 0, 0, 0};
     uint32_t first = 0, count = 0, frame = 0, lights = 0;

@@ -90,14 +90,29 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     // (item 2) the point / spot shadow lights (Extra2.z of them at ring offset Extra2.w): a hard shadow ray each - on
     // dynamic pixels from everything (a lamp behind a wall no longer lights a robot), on world pixels from the characters
     // only (the RT lightmap holds the world's own lamp shadows; the robots' lamp shadows on the world)
-    float4 lv = float4(1, 1, 1, 1);
-    if (inside && d < 1.0 && Extra2.z > 0.5) {
+    float4 lv = float4(1, 1, 1, 1), tv = float4(1, 1, 1, 1);
+    const float nShadow = fmod(Extra2.z, 8.0), nTrans = floor(Extra2.z / 8.0);
+    if (inside && d < 1.0 && nTrans > 0.5) {   // (item 4) the transient lights: shadowed by everything
+        const float3 p = worldAt(px, d);
+        const float3 eye = worldAt(px, 0.0);
+        const float3 o = p + n * (0.01 + Params.y * length(p - eye));
+        [unroll] for (uint k = 0; k < 4; ++k) {
+            if ((float)k >= nTrans) break;
+            const float4 L = ShadowLights[(uint)Extra2.w + 4 + k];
+            const float3 dl = L.xyz - o;
+            const float dist = length(dl);
+            if (dist >= L.w || dist < 0.05) continue;
+            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x4u) ? 0.0 : 1.0;
+            ++rays;
+        }
+    }
+    if (inside && d < 1.0 && nShadow > 0.5) {
         const float3 p = worldAt(px, d);
         const float3 eye = worldAt(px, 0.0);
         const float3 o = p + n * (0.01 + Params.y * length(p - eye));
         const uint lmask = dynamicPx ? (uint)Params.z : 0x4u;
         [unroll] for (uint k = 0; k < 4; ++k) {
-            if ((float)k >= Extra2.z) break;
+            if ((float)k >= nShadow) break;
             const float4 L = ShadowLights[(uint)Extra2.w + k];
             const float3 dl = L.xyz - o;
             const float dist = length(dl);
@@ -106,7 +121,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             ++rays;
         }
     }
-    if (inside) LightVis[px] = lv;
+    if (inside) LightVis[px] = (step(0.5, lv) + 2.0 * step(0.5, tv)) / 255.0;   // (bit 0: shadow light k, bit 1: transient k)
     if (inside) {
         Mask[px] = float4(outv, dynamicPx ? 1.0 : 0.0, 0.0);
         Normal[px] = float4(n, blockT);

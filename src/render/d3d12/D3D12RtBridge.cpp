@@ -611,6 +611,7 @@ public:
         rel(cl); rel(al);
         for (auto* r : temp) r->Release();
         if (!ok) { giRelease(); return false; }
+        giHitMap_ = S.hitToGi;                           // (item 3: the reflection hits sample the GI pages)
         writeDescriptors();
         for (const Shared& s : gi_) glTex.push_back(s.tex);
         giBytes_ = bytes + (UINT64)(S.texels.size() + S.dilate.size() + S.data.size()) * 4;
@@ -979,7 +980,7 @@ private:
         for (auto& r : readback_) r = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
         // (item 2) the shadow-light ring: made here, before the descriptors are written (made lazily at the first frame, its
         // SRV stayed null until the next map's descriptor rewrite - every light read radius 0 and was skipped)
-        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 8 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);
+        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 16 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (2 slots x (4 shadow + 4 transient))
         if (!stats_ || !zeros_ || !readback_[0] || !readback_[1]) return false;
         if (depth_.res) writeDescriptors();
         return true;
@@ -1020,9 +1021,15 @@ private:
             else uav(table == 1 ? ao_.res : refl_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);
             uav(hit_, DXGI_FORMAT_R32_UINT); uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
         }
-        for (int k = 0; k < kMaxLm; ++k)                 // the lightmap pages (null past the uploaded ones)
+        // (item 3, R4: a page with an RT lightmap twin is read from the GI page - reflections show the ray-traced lighting,
+        // not the bake; the same decode scales apply, as in rt_gi's hitRadiance. WFC_RT_REFLGI=0 = the bake copies)
+        static const bool reflGi = [] { const char* e = std::getenv("WFC_RT_REFLGI"); return !(e && e[0] == '0'); }();
+        for (int k = 0; k < kMaxLm; ++k) {               // the lightmap pages (null past the uploaded ones)
+            const int gp = reflGi && k < (int)giHitMap_.size() ? giHitMap_[(size_t)k] : -1;
+            if (gp >= 0 && gp < (int)gi_.size() && gi_[(size_t)gp].res && (size_t)gp < giFmt_.size()) { tex(gi_[(size_t)gp].res, giFmt_[(size_t)gp]); continue; }
             tex(k < (int)hLm_.size() ? hLm_[(size_t)k].first : nullptr, k < (int)hLm_.size() && hLm_[(size_t)k].second ?
                 DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM);
+        }
         for (int cube = 0; cube < 2; ++cube) {           // the material textures (full mip chains; null past the uploaded ones)
             const auto& v = cube ? hTexCube_ : hTex2D_;
             for (int k = 0; k < (cube ? kMaxTexCube : kMaxTex2D); ++k) {
@@ -1037,7 +1044,7 @@ private:
         for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
             uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
         uav(lvis_.res, DXGI_FORMAT_R8G8B8A8_UNORM);      // (item 2) u0 space2: the per-light visibility
-        sbuf(lightBuf_, 8, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 4)
+        sbuf(lightBuf_, 16, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 4)
         for (int table = 0; table < 3; ++table) {        // R4: E (the texel tracer) / F (the gutter) / G (S3 probes): t1 .. t13 as A .. D
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
@@ -1097,10 +1104,14 @@ private:
         std::memcpy(c + 28, fr.ffxReproj, 64);
         c[44] = fr.znear; c[45] = fr.zfar; c[46] = fr.reflectShade ? 1.0f : 0.0f;
         float cE[52] = {};                               // (item 2) Extra2.z = the shadow light count, .w = its ring offset
-        if (lightBuf_ && fr.shadowLightN > 0) {
+        if (lightBuf_ && (fr.shadowLightN > 0 || fr.transLightN > 0)) {   // (Extra2.z = shadow count + 8 x transient count)
             void* lp = nullptr; D3D12_RANGE none{0, 0};
-            if (SUCCEEDED(lightBuf_->Map(0, &none, &lp))) { std::memcpy((char*)lp + (size_t)slot * 64, fr.shadowLights, 64); lightBuf_->Unmap(0, nullptr); }
-            cE[50] = (float)std::min(fr.shadowLightN, 4); cE[51] = (float)(slot * 4);
+            if (SUCCEEDED(lightBuf_->Map(0, &none, &lp))) {
+                std::memcpy((char*)lp + (size_t)slot * 128, fr.shadowLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 128 + 64, fr.transLights, 64);
+                lightBuf_->Unmap(0, nullptr);
+            }
+            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 8);
         }
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
@@ -1496,10 +1507,11 @@ private:
             giPool_.emplace_back(gi_[k], k < giFmt_.size() ? giFmt_[k] : DXGI_FORMAT_UNKNOWN);
             gi_[k] = Shared{};
         }
-        gi_.clear(); giFmt_.clear(); giSig_.clear();
+        gi_.clear(); giFmt_.clear(); giSig_.clear(); giHitMap_.clear();
         rel(giTexels_); rel(giDilate_); rel(giData_); giTexelN_ = giDilateN_ = giDataN_ = 0; giBytes_ = 0; giPending_ = false;
     }
     std::vector<Shared> gi_; std::vector<GLuint> giSig_;
+    std::vector<int> giHitMap_;                          // (item 3) hit lightmap page -> GI page (-1 none)
     std::vector<DXGI_FORMAT> giFmt_; std::vector<std::pair<Shared, DXGI_FORMAT>> giPool_; size_t giReused_ = 0;
     ID3D12Resource* giTexels_ = nullptr; ID3D12Resource* giDilate_ = nullptr; ID3D12Resource* giData_ = nullptr;
     UINT giTexelN_ = 0, giDilateN_ = 0, giDataN_ = 0; UINT64 giBytes_ = 0;
