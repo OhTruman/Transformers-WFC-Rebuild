@@ -1425,7 +1425,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   GetService(TnCloakLightService), UpdateLight idles while CurrentTime == -1, the exe references the service name only
   in the native registration, and every RampLightProperties instance across 2,438 packages is a death light. Faithful
   = no cloak light; the original's gameplay lights are exactly muzzle + death (both in package 5). FAST gate on
-  398b27ef running (functional rows only, no hold). D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  398b27ef running (functional rows only, no hold).
+  2026-10-16 03:54 TDR (Display 4101, amduw23g stopped responding and recovered) at 03:51:26, the first since 2026-10-13 16:30:
+  Experimental's FAST (frequent short RT-off launches) beside Rendering's RT-on row-1 captures, with the driver
+  nonpaged pool at 10.40 GB (4.4 GB two days ago). Rendering paused until FAST completes; rule until the next
+  reboot: one GPU client at a time, Integration serialises slots; Experimental checks the rows around the reset and
+  reruns them; Rendering discards the capture started 03:52:10. Health 03:53: F: 119 GB free (package 5 + FAST trees;
+  Experimental prunes old archive builds), C: 106 GB, muter 29 sessions silenced. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
   27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
   mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
