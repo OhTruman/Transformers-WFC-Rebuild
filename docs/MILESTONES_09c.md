@@ -1048,6 +1048,20 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   regression), (b') opt-in (WFC_BOTTIP=2); reason: the user's visible bug is fixed at the cost of 3 Smart columns on
   Gorge, which becomes the explicit target of the next Smart pathing round (with the follow reversals). Package-5
   note: Smart bot vehicles self-right (original AI behaviour); Gorge movement slightly worse, next round.
+  2026-10-15 22:09 TEAM PAUSE: every lane session stopped at ~15:40 on 10-14 when the user's usage ran out, and nothing ran until
+  Integration resumed them at 22:00 on 10-15 (~30 h lost; the 10:00 reset did not auto-resume the lanes). State at
+  resume: head 3051cb56; option B (bf602d7c) unmerged; 3a committed with its crop on disk; D freeze NOT done (colour
+  model complete, batches 0-31 built, b0-20 reviewed + packed = 2,411 textures / 13.9 GB; batches 21-31 review + pack
+  overnight, D complete ~08:00-09:00 on 10-16); Experimental's df132b5a leak rows PASS (lobby VRAM +80 MB over 4
+  changes, 100 % pool reuse from the 4th load) and the 501 rerun done 22:05 (final regress 8 / 8 PASS, worst +0.01).
+  Pool 8.59 GB, 0 TDRs. MERGED: option B ceafb8d2 (Rendering bf602d7c: material-less particles into the sorted
+  translucency with a 0.5 m soft fade; Off identity 4 / 5 identical, m01200 differs only on tracer smoke over a
+  vehicle; conflict in GLRenderer.cpp resolved as Rendering specified: queue attempt, then the character flush for
+  declined batches, then the immediate draw) + Systems 3a ede2fc3c (barrier name fallback + one flush before the
+  ability meshes). Rendering's verification: 3a changes 0 px for the barrier because the WEP_-prefixed barrier goes
+  to weaponQueue_, drawn before the bodies -> case 3 is fixed by 3b (translucent-only dynamic draws queued into the
+  sorted translucency after the characters), coding now, then item 3. Gameplay: NAVQ baseline for 069a0a8f (12 seeds,
+  pooled gate rule). Head ede2fc3c named to Experimental. Package 5 ETA ~18-19 Oct.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
