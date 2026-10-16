@@ -241,8 +241,15 @@ Off / Faithful stay byte-identical to the original (identity rows).
   is the faithful body presentation at 63 bots. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
   original's player count): [PLACEHOLDER: measured cost with its few live bodies]. The gib trails' particle load is the original's own LOD authoring (see the
   particle LOD note).
-- **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
-  5 / 6) come after package 6 [PLACEHOLDER: Gameplay - what landed].
+- **Smart ride height / hover**: on top of package 5's tip-over self-righting, package 6 carries the S5 / S6
+  vehicle-movement fixes, all with Classic re-baselines: bot hover vehicles turn at the authored AiMaxAngularSpeed /
+  Acceleration (GAMEPLAY_VEHICLE_YAW); Driving hull probes stay above the 0.45 m wheel clearance, so the seven cars no
+  longer stop dead on floor lips (GAMEPLAY_DRIVE_PROBE); the bot Driving steer sign is fixed, with permanent BOTTEST DRIVE
+  guard rows (GAMEPLAY_DRIVE_STEER); robot ground support honours the authored WalkableFloorZ 0.7
+  (GAMEPLAY_WALKABLE_FLOOR); a rising jump no longer lands on surfaces it passes through (GAMEPLAY_RISE_SNAP). The full
+  ride-height probe model (Driving probes at the authored wheel-contact height, with the faithful 0.34 m Optimus floor probe
+  and no exception; GAMEPLAY_RIDE_HEIGHT_DESIGN) and the bot vehicle ledge guard v3 (GAMEPLAY_LEDGE_GUARD_PKG7) wait for
+  package 7.
 - **Squad follow reversals** (Smart) - carried from package 5.
 - **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
 - [PLACEHOLDER: anything the final gate or eye pass adds]
