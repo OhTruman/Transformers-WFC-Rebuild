@@ -1,0 +1,78 @@
+--- a/src/audio/Audio.h
++++ b/src/audio/Audio.h
+@@ -97,6 +97,9 @@
+     // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
+     // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).
+     virtual void release(Sound) {}
++    // Real-channel limit (FMOD MaxChannels). The original's 96 for its <= 10-player matches; the 16 v 16 / 32 v 32
++    // ExtendedPlayers extension (ours, not the original's) raises it. Backends without a channel pool ignore it.
++    virtual void setChannelLimit(int) {}
+     virtual void stopAllVoices() {}
+     virtual int activeVoices() const { return -1; }
+     virtual size_t residentBytes() const { return 0; }
+--- a/src/platform/win32/Win32Audio.cpp
++++ b/src/platform/win32/Win32Audio.cpp
+@@ -538,7 +538,9 @@
+     // back in range. PC ADAPTATION: the logical pool grows to kMaxLogical so 32 v 32's far-away loops (map emitters,
+     // vehicle engines, projectile flights) do not crowd out audible sounds; the 96 real channels and their stealing rule are
+     // unchanged.
+-    static constexpr int kMaxVoices = 96;
++    static constexpr int kMaxVoices = 96;                    // [CONF] MaxChannels (faithful default)
++    static constexpr int kMaxVoicesExtended = 128;           // ExtendedPlayers matches only (our extension)
++    int maxVoices_ = kMaxVoices;                               // under mx_
+     static constexpr float kSilentChannelCull = 0.00063096f;  // [CONF] FmodAudioDevice SilentChannelCullingThreshold (-64 dB)
+     static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
+     std::vector<int> realScratch_;                            // mixBlock: the audible voices this block
+@@ -566,7 +568,7 @@
+             if (!v.active) { if (freeSlot < 0) freeSlot = i; }
+             else if (!v.culled) ++real;
+         }
+-        if (real < kMaxVoices || startsVirtual) {             // a virtual newcomer needs a slot, never a channel
++        if (real < maxVoices_ || startsVirtual) {             // a virtual newcomer needs a slot, never a channel
+             if (freeSlot >= 0) { index = freeSlot; return &voices_[(size_t)freeSlot]; }
+             if ((int)voices_.size() < kMaxLogical) { voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back(); }
+         }
+@@ -674,6 +676,10 @@
+         smp.loopStart = 0.0; smp.loopEnd = -1.0;
+         freeSlots_.push_back(idx);
+     }
++    void setChannelLimit(int n) override {
++        std::lock_guard<std::mutex> lk(mx_);
++        maxVoices_ = std::clamp(n, 1, kMaxVoicesExtended);   // over-limit real voices are virtualized by the next update
++    }
+     void stopAllVoices() override {
+         std::lock_guard<std::mutex> lk(mx_);
+         for (Voice& v : voices_) v.active = false;
+@@ -913,16 +919,16 @@
+             resolveGains(v);
+             if (!v.culled) realScratch_.push_back(i);
+         }
+-        if ((int)realScratch_.size() > kMaxVoices) {
++        if ((int)realScratch_.size() > maxVoices_) {
+             auto more = [&](int a, int b) {                       // a more important than b
+                 const Voice& x = voices_[(size_t)a]; const Voice& y = voices_[(size_t)b];
+                 if (x.protect != y.protect) return x.protect;
+                 if (x.priority != y.priority) return x.priority < y.priority;
+                 return x.gL + x.gR > y.gL + y.gR;
+             };
+-            std::nth_element(realScratch_.begin(), realScratch_.begin() + kMaxVoices, realScratch_.end(), more);
+-            for (size_t k = kMaxVoices; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
+-            stats_.overflowVirtualized += (int)realScratch_.size() - kMaxVoices;
++            std::nth_element(realScratch_.begin(), realScratch_.begin() + maxVoices_, realScratch_.end(), more);
++            for (size_t k = maxVoices_; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
++            stats_.overflowVirtualized += (int)realScratch_.size() - maxVoices_;
+         }
+         jobs_.clear();
+         for (int vi = 0; vi < (int)voices_.size(); ++vi) {
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2972,6 +2972,9 @@
+         core::simRandSeed(sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+     }
+     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
++    // Real voices: the original's 96 (FmodAudioDevice MaxChannels) for its <= 10-player matches; the ExtendedPlayers extension
++    // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
++    if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
+     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
+     const int nb = addBots(l.bots);
+     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)

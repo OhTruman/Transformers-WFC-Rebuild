@@ -1,0 +1,4 @@
+MP_IAC_Streets_base    real peak 96 median 94 at-96+ 58 at-128 0 /160 | refused 1695 stolen 3541 | virtual max 55 | local refused 0
+MP_IAC_Streets_new     real peak 128 median 100 at-96+ 86 at-128 15 /160 | refused 529 stolen 1880 | virtual max 85 | local refused 0
+MP_UND_Gorge_base      real peak 96 median 96 at-96+ 80 at-128 0 /160 | refused 2656 stolen 5355 | virtual max 36 | local refused 0
+MP_UND_Gorge_new       real peak 128 median 120 at-96+ 121 at-128 24 /160 | refused 779 stolen 3128 | virtual max 50 | local refused 0
