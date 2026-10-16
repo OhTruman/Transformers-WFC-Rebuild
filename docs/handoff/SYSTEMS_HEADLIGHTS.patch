@@ -1,18 +1,3 @@
---- a/src/render/Renderer.h
-+++ b/src/render/Renderer.h
-@@ -574,6 +574,12 @@
-     virtual void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
-         (void)pos; (void)color; (void)radius; (void)falloffExponent;
-     }
-+    // A transient spot light (Rendering plan v3 row 3: vehicle headlights, Realistic only): as addTransientLight plus a unit
-+    // world direction and the cosines of the inner (full) / outer (zero) cone. Default: ignored.
-+    virtual void addTransientSpot(const core::Vec3& pos, const core::Vec3& dir, const core::Vec3& color, float radius,
-+                                  float falloffExponent, float cosInner, float cosOuter) {
-+        (void)pos; (void)dir; (void)color; (void)radius; (void)falloffExponent; (void)cosInner; (void)cosOuter;
-+    }
- 
-     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
-     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -39,6 +39,9 @@
@@ -22,11 +7,11 @@
 +// Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
 +struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
 +#include "game/VehicleHeadlights.inc"
- const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
-     for (const MuzzleLightDef& d : kMuzzleLights)
-         if (cls == d.cls) return &d;
-@@ -3766,6 +3769,51 @@
-             ++tlSubmitted;
+ // RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering
+ // calibrates. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
+ struct FxLightDef { const char* tmpl; float color[3]; float radius, falloff, duration; };
+@@ -3846,6 +3849,51 @@
+             if (d) submit(p, d->color, d->radius, d->falloff);
          }
      }
 +    // Vehicle headlights (Rendering plan v3 row 3; INVENTED PLACEMENT, no original equivalent): Realistic only (RT mode 2), every
