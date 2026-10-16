@@ -37,4 +37,5 @@ for map in $MAPS; do for mode in $MODES; do
   echo "  $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash; $(grep -o 'renderer: Ray Tracing [A-Za-z]*' $d/wfc.log | tail -1); $(grep -m1 -o 'renderer: HD textures [a-z]*' $d/wfc.log); $(grep -m1 -oE 'HD texture pack available: [0-9]+ textures' $d/wfc.log); $(grep -oE 'NOINTERACT: client [0-9]+x[0-9]+[^)]*\)?( - DIFFERS from the request)?' $d/wfc.log | tail -1) (last = after the mode change)"
 done; done
 PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_sheets.py $O "$MAPS" "$MODES"
+PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_score.py $O "$MAPS" "$MODES"   # (difference from Off -> EYEPASS.md, score.json)
 echo "eyepass done $(date +%T): $O"
