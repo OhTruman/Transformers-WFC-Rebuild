@@ -81,7 +81,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
                 const float u1 = rnd(s), u2 = rnd(s);
                 const float r = sqrt(u1), phi = 6.2831853 * u2;
                 const float3 dir = t * (r * cos(phi)) + bt * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1));
-                hit += occluded(o, dir, Params.x, traceMask) ? 1u : 0u;
+                hit += occluded(o, dir, dynamicPx && Extra.w > 0.0 ? Extra.w : Params.x, traceMask) ? 1u : 0u;
             }
             outv.y = 1.0 - (float)hit / (float)nAo;
             rays += nAo;
