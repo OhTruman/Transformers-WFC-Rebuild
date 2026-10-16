@@ -2054,3 +2054,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   03:51 TDR hit at ~10.6 GB -> ~01:00-02:00 tonight). PLAN: all GPU work (block end, bisect + 1b hold, identity,
   respin merge, package rebuild, RT verify rows, regress re-gate) sequenced to end before ~00:00 their clock; later
   TDR-hit rows = UNKNOWN, rerun after the user's morning reboot; no reboot request tonight.
+  2026-10-16 17:06 GATE EYE PASS on 4078e47b: PASS, 0 UNKNOWN / INVALID (views at 2560x1440 with Enhanced included):
+  all maps vs Off: Realistic mean 22.0 / +11.6 / contrast 1.28 / 33 % changed; + Enhanced 22.5 / +11.7 / 1.30 / 34 %
+  (int_cand6 was 1.26 / 1.27). R4 leak rows done 16:39 (their clock). FAST full on 7cd22027 then delta FAST on
+  4078e47b running; block end ~18:15; pool 6,857 MB flat.
