@@ -1431,7 +1431,20 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   nonpaged pool at 10.40 GB (4.4 GB two days ago). Rendering paused until FAST completes; rule until the next
   reboot: one GPU client at a time, Integration serialises slots; Experimental checks the rows around the reset and
   reruns them; Rendering discards the capture started 03:52:10. Health 03:53: F: 119 GB free (package 5 + FAST trees;
-  Experimental prunes old archive builds), C: 106 GB, muter 29 sessions silenced. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  Experimental prunes old archive builds), C: 106 GB, muter 29 sessions silenced.
+  2026-10-16 03:56 PLAN V3 ROWS 1 + 8 VERIFIED (Rendering; commit after the Faithful identity once FAST is done). CAUSE of the
+  user's 'no shadow under buildings': on Streets the original's per-object light visibility (the baked volume) ranked
+  the sun OUT of the robots' light environments in 93-100 % of character draws (Debris: in for 66-83 %), so robots were
+  lit by ambient only, the same in sun and under buildings, and the existing per-pixel RT sun visibility had nothing
+  to shadow. FIX (Realistic only): characters take the RT sun at full per-object visibility and the per-pixel RT sun
+  ray (world + characters) shadows it (Streets: sun direct in 100 % of draws; WFC_RT_CHARSUN=0 off); row 8: the
+  characters' lamps use the RT lightmap's calibrated scale (giLightCal_, Systems' fit; WFC_RT_CHARLAMPCAL=0), one
+  energy basis. Images: work/fsr3/v3r1_m01100.png (robots in the open sunlit to match the walls) and v3r1_m00800.png
+  (a robot under the overhang stays shaded); the Rust pair discarded (TDR window). ESTIMATE for the done condition: ~6
+  days of slot work -> the evening of 2026-10-19 with holds and serialised slots. Harness: the NOINTERACT window's
+  client area varied (2560x1417 vs 1440; placement shrinks the client when window + frame exceed the work area):
+  Gameplay makes NOINTERACT a borderless popup at the exact requested client size within the monitor bounds;
+  Experimental marks captures with a mismatched client rect INVALID. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
   27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
   mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
