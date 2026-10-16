@@ -45,6 +45,9 @@ for map in $MAPS; do for mode in $MODES; do
   # RT-on arms: the one-shot "RT-era lights (first Realistic frame): effect lights on|off, headlights on|off" line (Systems; builds
   # after 2026-10-16 midday) confirms the RT-era lights; absent on older exes (then use lights-check.ps1)
   [ "$RT" != 0 ] && echo "  lights: $(grep -m1 -oE 'RT-era lights[^|]*' $d/wfc.log | head -c 160 || true)"
+  # the Realistic defaults actually in effect (Rendering's one-shot "RT Realistic defaults (first Realistic frame): k=v ..." line;
+  # 04c51243+): recorded per RT run so a sheet names the exact tuning it shows
+  [ "$RT" != 0 ] && grep -m1 -oE 'RT Realistic defaults \(first Realistic frame\):.*' $d/wfc.log > $d/rt_defaults.txt && echo "  defaults: $(cut -c48-400 $d/rt_defaults.txt)"
   # Enhanced (HD 2) arms (Integration 2026-10-16): the M6 roughness maps load from hd_pbr_index.json beside hd_index.json - both lines
   # must be in the log, else the arm ran without the modern material maps: UNKNOWN (EYE_HDROOT = a root with both indexes)
   if [ "$HD" = 2 ]; then mm=$(grep -m1 -oE "HD modern material maps: [0-9]+ \([^)]*\)" $d/wfc.log); mo=$(grep -m1 -oE "Modern materials on for MP_[A-Za-z_]+" $d/wfc.log)
