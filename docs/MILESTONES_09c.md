@@ -1893,3 +1893,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 13:59 EXPLOSION LIGHT CALIBRATION merged (Systems f3cbbb01: the 9 explosion rows colour x0.7; impacts x0.6 /
   0.15 s stay; values only). Rendering builds the fix candidate (sun-share cap 0.75, bright-highlight hue fade, rtdef
   keys) on this head after the Molten read; identity; Systems' paired table; one confirming sheet.
+  2026-10-16 14:05 EYE PASS DONE on int_eye = 7cd22027 (Experimental; 0 UNKNOWN / INVALID; 15 / 15 match runs + 75 / 75
+  views at 1440p, lights on, 3505 + 498 + Modern on). Match sheets vs Off, Realistic | Enhanced contrast: Streets
+  1.15 | 1.16, Gorge 1.31 | 1.30, Debris 1.14 | 1.14, Rust 1.27 | 1.28, Molten 1.45 | 1.48; all 1.26 | 1.27
+  (brighter +11.2). Views (mean of 5 maps): firefight 1.25 | 1.29, street 1.25 | 1.26, dark 1.43 | 1.46, reflective
+  1.88 | 1.84, lane 1.37 | 1.45. The match-sheet drop vs int_cand3 (1.31 -> 1.26, brighter +16.7 -> +11.2) sits in
+  firefight moments = the impact calibration; Rendering confirms the intended level. Fix rows so far: sun-share cap
+  0.75, bright-highlight hue fade (Rendering), explosion x0.7 (merged 3ff0852b). Molten read pending.
