@@ -207,15 +207,17 @@ int AbilityAudio::dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn) 
     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
 }
 
-int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool vehicleForm, const std::string& damageType,
-                            const core::Vec3& pos, float dist) {
-    std::string q;
+std::string AbilityAudio::deathCue(const std::string& chassis, bool vehicleForm, const std::string& damageType) {
     if (vehicleForm) {
         const CharacterAudioProfile* p = CharacterAudio::find(chassis);
-        if (p) q = p->vehicleDeath;
-    } else if (CharacterAudio::isMeleeDamageType(damageType)) {
-        q = CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound");
+        return p ? p->vehicleDeath : std::string();
     }
+    return CharacterAudio::isMeleeDamageType(damageType) ? CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound") : std::string();
+}
+
+int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool vehicleForm, const std::string& damageType,
+                            const core::Vec3& pos, float dist) {
+    const std::string q = deathCue(chassis, vehicleForm, damageType);
     if (q.empty()) return -1;
     if (!cues.hasCue(q.c_str()) && CharacterAudio::find(chassis)) CharacterAudio::loadCues(cues, *CharacterAudio::find(chassis));
     return cues.play(q.c_str(), pos, dist);

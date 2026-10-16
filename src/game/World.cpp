@@ -2955,7 +2955,19 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         }
         const Match::KillContext kc = killContext(instigator, victim, damageType);
         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType, &kc);
-        else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
+        else {
+            match_.killed(instigator, victim, false, damageType, &kc);
+            if (opp) {
+                // [Gameplay] the victim's death presentation (death sound; the onPawnDeath hook) at the pawn as it died, before the
+                // despawn: tickMatch's PlayerKilled event presents only a still-spawned pawn, so every participant killed here went
+                // silent. Presentation only (no sim state; the despawn and the event order are unchanged). Same damage type as the event.
+                if (opp->spawned()) {
+                    const std::string kdt = match_.killHistory().empty() ? damageType : match_.killHistory().back().damageType;
+                    onPawnDeath(opp->pawn().chassis().id, opp->pawn().moveForm() == Form::Vehicle, kdt, opp->pawn().actorLocation());
+                }
+                opp->despawn();
+            }
+        }
     }
     return true;
 }
@@ -6211,6 +6223,8 @@ void World::onPawnHitEffect(const std::string& damageType, const std::string& vi
 }
 
 void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
+    ++deathPresentations_;
+    if (!AbilityAudio::deathCue(chassisId, vehicleForm, damageType).empty()) ++deathCues_;
     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
 }
 

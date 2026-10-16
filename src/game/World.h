@@ -693,6 +693,7 @@ public:
     void requestRoller(int owner);
     const std::vector<RollerMine>& rollerMines() const { return rollers_; }   // every participant's (Rendering / Systems audio: t = age)
     int participantRollerSpawns_ = 0;   // diagnostics: rollers spawned by participants
+    int deathPresentations_ = 0, deathCues_ = 0;   // diagnostics (BOTTEST): victim death presentations (onPawnDeath), those with a death sound cue
     int participantRollersLive() const { int n = 0; for (const RollerMine& m : rollers_) n += m.alive && m.owner != localPlayer_; return n; }
 
     float missileDelay_ = -1.0f;

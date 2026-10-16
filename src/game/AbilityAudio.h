@@ -104,6 +104,8 @@ public:
     // (TnDeathTypeMelee, from a TnDamageTypeMelee kill [selection HIGH]) plays the disintegrate sound. Returns the instance.
     int pawnDeath(SoundCues& cues, const std::string& chassisId, bool vehicleForm, const std::string& damageType,
                   const core::Vec3& pos, float listenerDist);
+    // pawnDeath's cue name (empty = no death sound for this death), without playing it.
+    static std::string deathCue(const std::string& chassisId, bool vehicleForm, const std::string& damageType);
 
     // A non-weapon hit on a pawn (melee / whirlwind / shoulder slam / ram): the damage type's TnHitEffectPlayer entry
     // plays its HitSound - an event of the VICTIM's SoundEventSet - if bCausesBlood, at most every RetriggerTime per

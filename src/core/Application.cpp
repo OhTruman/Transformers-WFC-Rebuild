@@ -5371,6 +5371,7 @@ void Application::runBotTest() {
     using T = game::GameplayEventType;
     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
+    int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
     for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 4 ? "DM" : "TDM") + "?TimeLimit=" + std::to_string((int)secs + 15) +   // phase 5: FFA 64
                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
@@ -5402,6 +5403,7 @@ void Application::runBotTest() {
         if (phase != 4) check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");   // FFA: no teams
         world_.resetBotTiming();
         const int rollerSpawns0 = world_.participantRollerSpawns_;
+        const int deathPres0 = world_.deathPresentations_, deathCues0 = world_.deathCues_;
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
         int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, driveSamples = 0, nitroStarts = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0, rollerSamples = 0;
@@ -5509,6 +5511,39 @@ void Application::runBotTest() {
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
         if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
+        {   // DEATH: every death (kill, suicide, environment) gets the victim's death presentation once - bots die through
+            // applyMatchDamage, which despawns before tickMatch's PlayerKilled event (the sound was skipped for all of them)
+            int deaths = 0;
+            for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
+                const T t = world_.match().gameplayEvents()[e].type;
+                deaths += t == T::Kill || t == T::Suicide || t == T::EnvironmentDeath;
+            }
+            const int pres = world_.deathPresentations_ - deathPres0;
+            check(pres == deaths, "DEATH every death presented (" + std::to_string(pres) + " presentations for " + std::to_string(deaths) +
+                                  " deaths, " + std::to_string(world_.deathCues_ - deathCues0) + " with a death sound cue)");
+            // Scripted: up to 4 spawned enemy bots (any form, within 10 s) killed through applyMatchDamage with a melee damage type: each
+            // is presented once, with its cue (robot form: TnDeathTypeMelee; vehicle form: the chassis' vehicle DeathSound).
+            // (A match already won by score is over: logged and skipped; the run needs one phase with scripted kills, checked at the end.)
+            const int p0 = world_.deathPresentations_, c0 = world_.deathCues_;
+            int n = 0, wantCues = 0, robots = 0;
+            const char* kMeleeDt = "TransGame.TnDamageTypeMelee";
+            const bool live = world_.match().state() == game::Match::State::InProgress;
+            for (int i = 0; live && n < 4 && i < 600 && world_.match().state() == game::Match::State::InProgress; ++i) {
+                for (game::MatchOpponent* o : world_.matchOpponents()) {
+                    if (n >= 4 || !o->spawned() || world_.match().sameTeam(o->matchPlayer(), me)) continue;
+                    const bool veh = o->pawn().moveForm() == game::Form::Vehicle;
+                    const bool cue = !game::AbilityAudio::deathCue(o->pawn().chassis().id, veh, kMeleeDt).empty();
+                    if (world_.applyMatchDamage(o->matchPlayer(), me, 99999.0f, false, kMeleeDt) && !o->spawned()) { ++n; wantCues += cue; robots += !veh; }
+                }
+                world_.handleInput(idle, dt); world_.tick(dt);
+            }
+            scriptedDeaths += n;
+            if (!live) LOG_INFO("BOTTEST INFO DEATH scripted melee kills skipped: the match is already over (state %d)", (int)world_.match().state());
+            else check(n >= 1 && wantCues >= 1 && world_.deathPresentations_ - p0 == n && world_.deathCues_ - c0 == wantCues,
+                  "DEATH death sound cue for " + std::to_string(n) + " melee kills via applyMatchDamage (" + std::to_string(robots) + " robot form; " +
+                  std::to_string(world_.deathPresentations_ - p0) + " presentations, " + std::to_string(world_.deathCues_ - c0) + " / " + std::to_string(wantCues) +
+                  " cues; robot '" + game::AbilityAudio::deathCue("", false, kMeleeDt) + "')");
+        }
         check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms): avg " + std::to_string(world_.botMsAverage()) + " ms for " + std::to_string(bots) + " bots, max " + std::to_string(world_.botMsMax()) + " ms");
         // Let the match run out: it completes and the next one starts clean.
         for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
@@ -5524,6 +5559,7 @@ void Application::runBotTest() {
         int ends = 0; for (const auto& e : world_.match().gameplayEvents()) ends += e.type == T::MatchEnd;
         check(ends == 1, "one MatchEnd record");
     }
+    check(scriptedDeaths >= 1, "DEATH scripted melee kills via applyMatchDamage ran in at least one phase (" + std::to_string(scriptedDeaths) + ")");
     LOG_INFO("BOTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
