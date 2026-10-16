@@ -1653,3 +1653,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   materials_pbr.json regenerated with matc_pbr on all 10 maps after the merge (Systems; Rendering's render_m6 Rust /
   Molten / Streets as the reference). D3B_IAC doc a036639e; the remaining 6 chapters chained. Package-gate base =
   398b27ef + yaw + drive-probe + the steer sim line (proof after the sheet; d3db6178).
+  2026-10-16 11:05 BATCH-4 SHEET (Experimental, int_cand, 15 / 15 runs, sim identical across modes, HD on): Realistic vs
+  Off = Streets 28.6 / +16.1 / 1.14 / 44 %, Gorge 17.5 / +14.4 / 1.46 / 26 %, Debris 25.0 / +9.7 / 1.18 / 40 %, Rust
+  22.5 / +15.5 / 1.26 / 33 %, Molten 19.7 / +11.1 / 1.28 / 31 %; all maps 22.7 / +13.4 / 1.27 / 35 % (was 0.99):
+  contrast +27 %. Dark Gorge views read night-and-day (pick_510 step 780: far wall + door lit where Off is black);
+  lit exteriors a clear step. BUG (top priority, Rendering): Realistic + Enhanced (HD 2) LOSES the RT lighting (all
+  maps 1.05, Streets 0.80; the Enhanced column as dark as Off at Gorge 780): the Modern / PBR path does not take
+  the RT term. X3 volumetrics: GO for package 6 if the pairs pass (v1 screen-space march built; pairs to the user).
+  Authored views rerun deferred to the Release int_cand2 exe. Gameplay: robot ground-snap root causes (no
+  WalkableFloorZ 0.7; landing while rising) approved as one commit (both AIs + players, 4th re-baseline).
