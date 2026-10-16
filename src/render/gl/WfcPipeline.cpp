@@ -2724,6 +2724,18 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at == std::string::npos) mainLM.clear();
     }
     std::string mainUber = kFSMainUber;
+    {   // Realistic soft particles: the fade text joins only programs built in Realistic (Off / Faithful compile the original
+        // text exactly); the runtime sets uSoftFade > 0 for FX draws (sprites, mesh particles) only
+        static const bool softOff = [] { const char* e = std::getenv("WFC_SOFTPARTICLES"); return e && e[0] == '0'; }();
+        const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
+        const size_t at = mainUber.find(anchor), ma = mainUber.find("void main() {");
+        if (rtMode_ == 2 && !softOff && blend >= 2 && at != std::string::npos && ma != std::string::npos) {
+            mainUber.insert(at, "    if (uSoftFade > 0.0 && (uBlend == 2 || uBlend == 3))   // (Realistic soft particles: no hard cut)\n"
+                                "        o.Opacity *= clamp((wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r) - "
+                                "wfcLinearDepth(gl_FragCoord.z)) / uSoftFade, 0.0, 1.0);\n");
+            mainUber.insert(ma, "uniform float uSoftFade;   // (Realistic) soft particles: fade distance, UE units (0 = off)\n");
+        }
+    }
     if (pbrBuild_ && !lightmapped && !mainOverride_) {     // M6 Modern dynamic objects
         static const std::string specOccU = [] { const char* e = std::getenv("WFC_PBR_SPECOCC"); return std::string(e ? e : "4.0"); }();
         mainUber = kFSMainUberModern;
@@ -3868,6 +3880,17 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
     }
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
+    {   // Realistic: every particle (sprites, mesh particles) fades against the scene over 0.5 m - the hard depth cut showed
+        // as stair-steps where explosions / smoke met geometry (option B covered only the material-less particles).
+        // WFC_SOFTPARTICLES=0 off; WFC_SOFTPARTICLES_M=<metres>. Off / Faithful: 0 (the original's hard cut).
+        static const bool softOff = [] { const char* e = std::getenv("WFC_SOFTPARTICLES"); return e && e[0] == '0'; }();
+        static const float softM = [] { const char* e = std::getenv("WFC_SOFTPARTICLES_M"); return e ? std::max(0.01f, (float)std::atof(e)) : 0.5f; }();
+        const GLint loc = ULOC(P, "uSoftFade");
+        const bool soft = !softOff && frameFx_ && rtMode_ == 2 && loc >= 0;
+        if (soft) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+                    Uniform1i(ULOC(P, "uSceneDepth"), 12); }
+        if (loc >= 0) Uniform1f(loc, soft ? softM * 100.0f : 0.0f);
+    }
     if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     for (const Program::Slot& s : P.slots) {
