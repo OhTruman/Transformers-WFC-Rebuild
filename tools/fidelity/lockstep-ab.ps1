@@ -52,12 +52,19 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             New-Item -ItemType Directory -Force $d | Out-Null
             $rtArm = [int]$(if ((ArmEnv $extra).WFC_RT_MODE) { (ArmEnv $extra).WFC_RT_MODE } else { 0 })   # (the profile row wins over WFC_RT_MODE at boot)
             (Get-BotProfile 0 0 1 -Width $Width -Height $Height -RayTracing $rtArm) | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+            # HD 2 (Enhanced) on a match boot (2026-10-16, package gate 1b read 'HD not on'): the match boot applies the profile's HD row
+            # only with the exe's WFC_BOOT_PROFILE hook (01f2316a+), and Get-BotProfile writes HDTextures 0/1 - so for an HD 2 arm the
+            # profile row is rewritten to 2 and WFC_BOOT_PROFILE=1 is added below (WFC_HDTEXTURES=2 stays: the frontend's own override)
+            $hdArm = "$((ArmEnv $extra).WFC_HDTEXTURES)".Trim()
+            $bootProf = ($hdArm -match '^[1-9]') -and $H.Contains("WFC_BOOT_PROFILE")
+            if ($bootProf) { $pf = Join-Path $d "wfc_profile.ini"; (Get-Content $pf) -replace '^HDTextures=.*', "HDTextures=$hdArm" | Set-Content -Encoding ASCII $pf }
             if (-not (Wait-WfcGpu)) { Res "$label.r$rep.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
             $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$Seed"; WFC_SMOKE_FRAMES = "$($Steps + 600)"; WFC_LOGEVERY = "0"
                     WFC_NOMOUSE = "1"; WFC_SLOWFRAME = "0.01"; WFC_SIMHASH = "0" }   # every frame: 'interval' = wall frame time (PERF frame= is the lockstep dt)
             if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "$Seed" }
             if ($PlayerBot -ge 0 -and $H.Contains("WFC_PLAYERBOT")) { $e.WFC_PLAYERBOT = "$PlayerBot" }
             if ($RenderSize) { $e.WFC_RENDERSIZE = $RenderSize }
+            if ($bootProf) { $e.WFC_BOOT_PROFILE = "1" }
             $ae = ArmEnv $extra; foreach ($k in $ae.Keys) { $e[$k] = $ae[$k] }
             $null = Invoke-WfcExe $exe $d $e "run.log" (1800)
         }
