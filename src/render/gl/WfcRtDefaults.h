@@ -39,11 +39,13 @@ inline float toneSat() { static const float v = envNum("WFC_TONE_SAT", 1.1f); re
 inline float toneContrast() { static const float v = envNum("WFC_TONE_CONTRAST", 1.15f); return v; }
 inline float toneBloom() { static const float v = envNum("WFC_TONE_BLOOM", 0.8f); return v; }
 inline float bloomMax() { static const float v = std::max(1.0f, envNum("WFC_TONE_BLOOMMAX", 16.0f)); return v; }
-// X1 white roll (the eye pass, Gorge step 1080): a pixel whose brightest channel is past whiteLo desaturates toward its
-// luminance, fully by whiteHi - fire keeps its orange body and only the core goes white (no flat yellow at the shoulder)
+// X1 white roll (the eye pass, Gorge step 1080): a pixel whose brightest channel is past whiteLo rolls, fully by whiteHi,
+// to a warm white of its own hue (whiteMix of the way to white), then on to pure white by 8 x whiteHi - fire keeps its
+// orange body, its core goes warm white and only the hottest centre white (no flat yellow, no flat white)
 inline bool whiteRoll() { static const bool v = envOn("WFC_TONE_WHITEROLL"); return v; }
-inline float whiteLo() { static const float v = std::max(1.0f, envNum("WFC_TONE_WHITELO", 2.0f)); return v; }
-inline float whiteHi() { static const float v = std::max(whiteLo() + 0.5f, envNum("WFC_TONE_WHITEHI", 16.0f)); return v; }
+inline float whiteLo() { static const float v = std::max(1.0f, envNum("WFC_TONE_WHITELO", 1.5f)); return v; }
+inline float whiteHi() { static const float v = std::max(whiteLo() + 0.5f, envNum("WFC_TONE_WHITEHI", 6.0f)); return v; }
+inline float whiteMix() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_TONE_WHITEMIX", 0.5f))); return v; }
 }  // namespace rtdef
 }  // namespace wfc
 }  // namespace render
