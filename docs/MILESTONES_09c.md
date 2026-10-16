@@ -2107,3 +2107,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 17:58 CORPSE ARMS GO (Experimental hold ~20 min): int_cap default / NOCORPSE / NOMINEPRES + int_csn (head
   + static-pose patch) + int_csb (head rebuilt, control); Berth RT off, 2 reps, frame + GPU p90. Gameplay's CPU-
   heavy headless checks (BOTTEST 12 seeds, SIMHASH) held until the hold clears, then slot B crops (10 / 40 m).
+  2026-10-16 18:00 CPU-BOUND CONFIRMED (Experimental, same frame f2160, SIMHASH equal, 4K): GPU 1.71 vs 1.73 ms; CPU
+  render 1.32 -> 2.92 ms (world 0.34 -> 0.81 at the SAME world draws, chars 0.71 -> 1.19, fx 0.07 -> 0.38, transl
+  0.17 -> 0.51); slow-frame CPU render 2.28 (base) vs 3.37-3.43 (every bisect arm). = per-draw CPU work added on
+  the Off path in src/render/gl between 398b27ef and the head (not corpses alone). Rendering reading the draw path
+  for it (per-draw light / uniform setup, defaults lookups, state); corpse arms show the chars share. mapswitch
+  rerun 7cd22027 PASS 6/6.
