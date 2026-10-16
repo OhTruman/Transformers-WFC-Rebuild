@@ -8929,12 +8929,15 @@ void Pipeline::r1Build() {
     constexpr GLenum kRG8 = 0x822B, kRG = 0x8227, kArr = 0x8C1A;
     std::vector<std::vector<uint8_t>> rgOf(lmTextures_.size());
     std::vector<std::pair<int, int>> sizeOf(lmTextures_.size(), {0, 0});
-    int pages = 0, arrays = 0;
+    int pages = 0, arrays = 0, vbMissing = 0;
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     for (size_t k = 0; k < nameOf.size(); ++k) {
         if (nameOf[k].empty()) continue;
         ImageData im;
-        if (!platform::decodeImage(r1Dir_ + "/vbake_" + nameOf[k] + ".png", im) || !im.valid()) continue;
+        // (vbake bakes only fit.json's pages: a page without its file keeps the bake's sun, counted, not logged per page)
+        const std::string vf = r1Dir_ + "/vbake_" + nameOf[k] + ".png";
+        if (!std::ifstream(platform::longPath(vf))) { ++vbMissing; continue; }
+        if (!platform::decodeImage(vf, im) || !im.valid()) continue;
         std::vector<uint8_t>& rg = rgOf[k];
         rg.resize((size_t)im.w * (size_t)im.h * 2);
         for (size_t i = 0; i < (size_t)im.w * (size_t)im.h; ++i) { rg[i * 2] = im.rgba[i * 4]; rg[i * 2 + 1] = 255; }
@@ -8982,6 +8985,7 @@ void Pipeline::r1Build() {
     const Light* sun = nullptr;                        // the fit's sun: the brightest enabled directional light
     for (const Light& L : lights_) if (L.type == 2 && L.enabled && (!sun || L.brightness > sun->brightness)) sun = &L;
     if (sun) { const core::Vec3 d = core::normalize(sun->dir); r1SunDir_[0] = -d.x; r1SunDir_[1] = -d.y; r1SunDir_[2] = -d.z; }
+    if (vbMissing) LOG_INFO("RT R1 sun swap: %d lightmap pages without a V_bake file (outside fit.json's pages: the bake's sun there)", vbMissing);
     LOG_INFO("RT R1 sun swap: %d V_bake pages (%zu lightmap pages), %d of %zu lightmap arrays mirrored, sun %s", pages,
              lmTextures_.size(), arrays, lmArrays_.size(), sun ? sun->name.c_str() : "none");
 }
