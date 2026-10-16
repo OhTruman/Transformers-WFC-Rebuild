@@ -16,6 +16,7 @@ static constexpr float kStepUpConf = 0.35f; // [CONF] TnRobotForm._MovementCapab
 // WFC_STEPUP=m overrides it for A/B diagnostics only.
 static const float kStepUp = std::getenv("WFC_STEPUP") ? (float)std::atof(std::getenv("WFC_STEPUP")) : kStepUpConf;
 static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
+static constexpr float kWalkableFloorZ = 0.7f;   // Pawn / TnRobotForm WalkableFloorZ [CONF authored] (|n.y|: the collision winding is unreliable)
 // Rigid-body hull extents live in VehicleParams (truck: VH_Optimus_PHYSSYS convex box, CONF).
 
 namespace {
@@ -913,7 +914,8 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         // -> AcrobaticsManager.Fall) from the shared actor location and lands normally.
         float bottomOld = oldPos.y + lift, bottom = p.y + lift;
         float base = c.onGround() ? bottomOld : (v.y <= 0.0f ? std::max(bottomOld, bottom) : bottom);
-        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n)) {
+        // Only walkable faces carry the robot (WalkableFloorZ 0.7 [CONF authored]): a steep face was climbed one step-up at a time.
+        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n, kWalkableFloorZ)) {
             if (bottom <= gy + 0.001f) {        // at/below the floor -> settle on it (incl. step-up)
                 p.y = gy - lift; if (v.y < 0) v.y = 0; grounded = true;
             } else if (c.onGround() && (bottom - gy) <= kSnapDown) {

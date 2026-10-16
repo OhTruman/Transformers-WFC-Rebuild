@@ -65,7 +65,7 @@ void CollisionWorld::cellRange(float x, float z, int& cx, int& cz) const {
 }
 
 bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
-                                  float& outY, core::Vec3& outNormal) const {
+                                  float& outY, core::Vec3& outNormal, float minAbsNy) const {
     if (grid_.empty()) return false;
     int cx, cz;
     cellRange(x, z, cx, cz);
@@ -86,9 +86,9 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
         const float eps = -0.001f;
         if (l1 < eps || l2 < eps || l3 < eps) continue;
         float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
-        if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
+        if (y <= ceil && y > best && std::fabs(t.n.y) >= minAbsNy) { best = y; outNormal = t.n; found = true; }
     }
-    if (dynamicGround(x, z, ceil, best, outNormal)) found = true;   // moving collision sets
+    if (dynamicGround(x, z, ceil, best, outNormal, minAbsNy)) found = true;   // moving collision sets
     if (found) outY = best;
     return found;
 }
@@ -329,7 +329,7 @@ void CollisionWorld::setDynamicPose(int id, const core::Mat4& pose) {
     }
 }
 
-bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const {
+bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal, float minAbsNy) const {
     bool found = false;
     for (size_t si = 0; si < dyn_.size(); ++si) {
         const DynamicSet& s = dyn_[si];
@@ -344,7 +344,7 @@ bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, co
             float l3 = 1.0f - l1 - l2;
             if (l1 < -0.001f || l2 < -0.001f || l3 < -0.001f) continue;
             float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
-            if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
+            if (y <= ceil && y > best && std::fabs(t.n.y) >= minAbsNy) { best = y; outNormal = t.n; found = true; }
         }
     }
     return found;

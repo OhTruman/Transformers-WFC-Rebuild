@@ -5437,7 +5437,14 @@ void Application::runBotTest() {
                     const game::BotBrain* b = world_.botBrain(o->matchPlayer());
                     const bool fighting = b && b->target >= 0;
                     float& sf = stillFor[o->matchPlayer()];
-                    sf = (d < 0.02f && !fighting) ? sf + dt : 0.0f;
+                    // A Smart squad member holding its squad goal while its leader moves (waiting at the shared destination) is not idle.
+                    bool squadWait = false;
+                    if (const game::SmartBot* sb = world_.smartBot(o->matchPlayer()); sb && sb->squadGoalKind >= 0) {
+                        const int ld = world_.smartSquadLeader(world_.smartSquadId(o->matchPlayer()), ps[(size_t)o->matchPlayer()].team);
+                        if (ld >= 0 && ld != o->matchPlayer())
+                            if (const game::Character* lc = world_.participantPawn(ld)) squadWait = std::hypot(lc->velocity().x, lc->velocity().z) > 1.0f;
+                    }
+                    sf = (d < 0.02f && !fighting && !squadWait) ? sf + dt : 0.0f;
                     if (sf > 15.0f && sf - dt <= 15.0f && b) {
                         const game::Character& pw = o->pawn();
                         LOG_INFO("BOTTEST idle 15 s: %s p%d pos (%.1f %.1f %.1f) cell %d form %s xf %d goal %s (%.1f %.1f %.1f) path %zu wp %zu stuckLvl %d noPaths %d target %d ground %d wantVeh %d",

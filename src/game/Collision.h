@@ -19,7 +19,8 @@ public:
 
     // Highest walkable surface at (x,z) with surface Y <= nearY + stepUp.
     // Returns false if nothing found under/near the point.
-    bool groundHeight(float x, float z, float nearY, float stepUp, float& outY, core::Vec3& outNormal) const;
+    // minAbsNy > 0: only faces with |n.y| >= minAbsNy count (WalkableFloorZ; the collision winding is not reliable, hence |n.y|).
+    bool groundHeight(float x, float z, float nearY, float stepUp, float& outY, core::Vec3& outNormal, float minAbsNy = 0.0f) const;
 
     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
@@ -60,7 +61,7 @@ private:
         bool posed = false;
     };
     std::vector<DynamicSet> dyn_;
-    bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const;
+    bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal, float minAbsNy = 0.0f) const;
 
     int cellOf(float x, float z) const;
     void cellRange(float x, float z, int& cx, int& cz) const;
