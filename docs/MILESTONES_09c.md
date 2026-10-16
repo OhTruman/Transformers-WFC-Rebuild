@@ -1692,3 +1692,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   takes the original's specular term (WFC_PBR_ORIGSPEC=0 restores the lobe) + X2's gain in Realistic programs; Off +
   Enhanced now matches Off + HD (1.00), Realistic + Enhanced 1.04 -> 1.11 before X2. Sheet on the fixed Release exe at
   Rendering's ~13:00 boundary; int_cand2 superseded. Gate tooling: hd_dev_full default, wfcPbrEnvEnergy check 9d11af72.
+  2026-10-16 11:39 ENHANCED FIX MERGED eaed3192 (Rendering f400ed81: Modern takes the original's directional-lightmap
+  specular; WFC_PBR_ORIGSPEC=0 restores the lobe): Gorge vs Off, hd_dev_full root, 498 maps loaded: Off + Enhanced
+  +0.2 / 1.00 (= Off + HD textures), Realistic + Enhanced +8.8 / 1.04 -> +12.8 / 1.24 (= Realistic + HD 1.24). V_bake
+  summary line 6155925b. Package 6 build plan clean on a5db23da (Systems): ~27.5 GB, D 3,506 + M6 498 files, ~3 min
+  copy after the Release + PGO build. Next: Rendering batch 7 (Molten emissive 1 / 3 / 6, X3 pairs at 1440p for the
+  user) -> boundary ~13:15 -> Experimental eyepass on int_cand3 (Release, 2b28bb78 + Enhanced fix). AssetTools A4_ORB
+  in m05 (heavy nav), doc ~12:15; 3 chapters left.
