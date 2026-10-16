@@ -56,11 +56,11 @@ PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_sheets.py $O "$MAPS" "$MO
 PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_score.py $O "$MAPS" "$MODES"   # (difference from Off -> EYEPASS.md, score.json)
 # authored fixed-camera views (tools/fidelity/views/<map>.txt, eyepass_views.py): one exe per map x mode, direct boot; EYE_VIEWS=0 skips
 if [ "${EYE_VIEWS:-1}" != 0 ]; then
-  powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/eyepass-views.ps1 -Exe "$exe" -OutDir $O/views -RenderData "${EYE_RENDER_DATA:+$(cygpath -w "$EYE_RENDER_DATA")}" -RtEnv "$EYE_RTENV" -Maps $(echo $MAPS | tr ' ' ',') -Modes $(echo $MODES | tr ' ' '
-' | grep -vx realhd | paste -sd,) -Size 1280x720   # (direct boot: 1280x720, no HD - see eyepass-views.ps1) -HdRoot "$(cygpath -w "$HDROOT")"
+  # direct boot: without the exe's WFC_BOOT_PROFILE hook the views are 1280x720 and have no HD column (eyepass-views.ps1)
+  if grep -q WFC_BOOT_PROFILE "$exe"; then VM="$MODES"; VS=${W}x${H}; else VM=$(echo $MODES | sed 's/realhd//; s/  */ /g'); VS=1280x720; fi
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/eyepass-views.ps1 -Exe "$exe" -OutDir $O/views -RenderData "${EYE_RENDER_DATA:+$(cygpath -w "$EYE_RENDER_DATA")}" -RtEnv "$EYE_RTENV" -Maps $(echo $MAPS | tr ' ' ',') -Modes $(echo $VM | tr ' ' ',') -Size $VS -HdRoot "$(cygpath -w "$HDROOT")"
   for p in $(mine); do powershell -NoProfile -Command "Stop-Process -Id $p -Force"; echo "reaped $p"; done
-  PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_views_sheet.py $O/views "$MAPS" "$(echo $MODES | tr ' ' '
-' | grep -vx realhd | paste -sd' ')" > /dev/null
+  PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_views_sheet.py $O/views "$MAPS" "$VM" > /dev/null
   cat $O/views/EYEPASS.md | sed -n '/## Authored views/,$p' >> $O/EYEPASS.md
 fi
 echo "eyepass done $(date +%T): $O"

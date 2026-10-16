@@ -8,7 +8,9 @@ param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir,
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ }); $Modes = @($Modes | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })   # (-File passes '508,510' as one string)
 $names = @{ "508" = "MP_IAC_Streets"; "510" = "MP_UND_Gorge"; "507" = "MP_ORB_Debris"; "504" = "MP_IAC_Rust"; "509" = "MP_KON_Molten" }
-$Exe = (Resolve-Path $Exe).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
+$Exe = (Resolve-Path $Exe).Path; $bootProfile = Select-String -Path $Exe -Pattern "WFC_BOOT_PROFILE" -SimpleMatch -Quiet   # (Gameplay hook, requested 2026-10-16)
+if ($bootProfile) { Write-Host "exe has WFC_BOOT_PROFILE: the direct boot applies the profile's display / HD rows - full size + Enhanced views" }
+elseif ($PSBoundParameters.ContainsKey("Size") -and $Size -ne "1280x720") { Write-Host "no WFC_BOOT_PROFILE in this exe: views at 1280x720 (requested $Size)"; $Size = "1280x720" } New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 foreach ($m in $Maps) {
     $list = Join-Path $PSScriptRoot "views\$m.txt"; if (-not (Test-Path $list)) { Write-Host "${m}: no views file"; continue }
     $lines = @(Get-Content $list | Where-Object { $_.Trim() }); $kept = @($lines | ForEach-Object { ($_ -split ' ')[0] } | Where-Object { $_ -notmatch '_w\d$' })
@@ -17,12 +19,17 @@ foreach ($m in $Maps) {
         # boot never applies the profile's display / HD rows (Application_Frontend: only the frontend boot does) - the window stays
         # 1280x720 and HD / Modern materials stay off (RT applies: WFC_RT_MODE is read by the renderer). So the views are Off |
         # Realistic at 1280x720; an Enhanced column needs a product-side env hook for the direct boot.
-        if ($mode -eq "realhd") { Write-Host "${m} realhd: skipped - the direct boot cannot apply HD / Modern materials (see the note above)"; continue }
+        if ($mode -eq "realhd" -and -not $bootProfile) { Write-Host "${m} realhd: skipped - the direct boot cannot apply HD / Modern materials (see the note above)"; continue }
         $d = Join-Path $OutDir "$m-$mode"; if (Test-Path $d) { Remove-Item -Recurse -Force $d }; New-Item -ItemType Directory -Force $d | Out-Null
         $rt = @{ off = "0"; real = "2"; realhd = "2" }[$mode]
         $e = @{ WFC_MAP = $names[$m]; WFC_SHOTLIST = $list; WFC_SHOTDIR = $d; WFC_SMOKE_FRAMES = "$(8 * $lines.Count + 24)"; WFC_LOCKSTEP = "1";
                 WFC_RT_MODE = $rt; WFC_RENDERSIZE = $Size; WFC_MUTE = "1"; WFC_NOINTERACT = "1"; WFC_LOGEVERY = "0" }
         if ($mode -eq "realhd") { $e.WFC_HDTEXTURES = "2"; $e.WFC_HD_ROOT = $HdRoot }
+        if ($bootProfile) {   # the profile row decides window size, RT and HD at boot (same template as eyepass.sh's match runs)
+            $e.WFC_BOOT_PROFILE = "1"; $hdl = if ($mode -eq "realhd") { "2" } else { "0" }; $wh = $Size -split 'x'
+            (Get-Content (Join-Path $PSScriptRoot "..\..\work\sweep\ident_profile.ini")) -replace '^Width=.*', "Width=$($wh[0])" -replace '^Height=.*', "Height=$($wh[1])" `
+                -replace '^RayTracing=.*', "RayTracing=$rt" -replace '^HDTextures=.*', "HDTextures=$hdl" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        }
         if ($RenderData) { $e.WFC_RENDER_DATA = $RenderData }
         if ($rt -ne "0" -and $RtEnv) { foreach ($kv in ($RtEnv -split '\s+' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $e[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } }
         $t0 = Get-Date
