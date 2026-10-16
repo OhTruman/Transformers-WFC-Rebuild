@@ -60,7 +60,7 @@ uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // (item 4) 
 uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // (v3 row 3) spot axis + cos(outer) (-2 = point); cos(inner)
 // (v3 row 2) a character's sun shadow on the world removes the sun's share of the pixel's irradiance (the R1 fit: k x sun_linear
 // x N.L^p against the decoded lightmap irradiance) instead of darkening to the map's ModShadowColor
-uniform int uSunShare; uniform vec3 uSunE; uniform vec3 uToSun; uniform float uSunP;
+uniform int uSunShare; uniform vec3 uSunE; uniform vec3 uToSun; uniform float uSunP; uniform float uSunShareMax;
 vec3 wfcWorldAt(ivec2 q) { vec2 ndc = (vec2(q) + 0.5) / uSize * 2.0 - 1.0; float d = texelFetch(uDepth, q, 0).r;
     vec4 w = uInvVP * vec4(ndc, d * 2.0 - 1.0, 1.0); return w.xyz / w.w; }
 out vec4 oFactor;
@@ -81,7 +81,7 @@ void main() {
             ivec2 px1 = ivec2(min(p.x + 1, int(uSize.x) - 1), p.y), py1 = ivec2(p.x, min(p.y + 1, int(uSize.y) - 1));
             vec3 N = normalize(cross(wfcWorldAt(px1) - P, wfcWorldAt(py1) - P));
             float es = dot(uSunE, vec3(0.2126, 0.7152, 0.0722)) * pow(abs(dot(N, uToSun)), uSunP);
-            float share = clamp(es / lw, 0.0, 1.0);
+            float share = clamp(es / lw, 0.0, uSunShareMax);   // (a shadowed spot keeps its sky / bounce light: never black)
             f = vec3(mix(1.0 - share, 1.0, vis)) * mix(1.0, ao, uAoStrength);
         }
     }
@@ -1030,6 +1030,7 @@ void Pipeline::rtDynMid() {
             Uniform3f(cachedUniformLocation(cp, "uSunE"), r1Fit_[0] * r1Sun_[0], r1Fit_[0] * r1Sun_[1], r1Fit_[0] * r1Sun_[2]);
             Uniform3f(cachedUniformLocation(cp, "uToSun"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
             Uniform1f(cachedUniformLocation(cp, "uSunP"), r1Fit_[1]);
+            Uniform1f(cachedUniformLocation(cp, "uSunShareMax"), rtdef::sunShareMax());
         }
         if ((tlOk || sunOk) && nb == 0) {
             ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis);
@@ -1190,10 +1191,12 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 auto oo = [](bool b) { return b ? "on" : "off"; };
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
-                         "refltemporal=%s",
+                         "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f",
                          oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
                          rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
-                         oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()));
+                         oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()), rtdef::sunShareMax(),
+                         rtdef::toneKey(), rtdef::toneAdapt(), rtdef::toneGain(), rtdef::toneSat(), rtdef::toneContrast(), rtdef::toneBloom(),
+                         rtdef::bloomMax());
             }
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
