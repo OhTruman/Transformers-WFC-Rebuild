@@ -1229,6 +1229,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   A/B 30b2fa74 / a5f53923 / a5f53923 + WFC_NOTRANSIENTLIGHTS=1 on 508 / 504 / 503 (archive builds of 2873a071 and
   76b077e8 at -j 4 only if needed). Package 5 does not promote on a5f53923 as is; Rendering and Systems asked for the
   transient-light cull options (per-draw light lists by radius, a nearest / brightest cap, lifetimes).
+  2026-10-16 01:24 Analyses while the bisect runs. Systems: 4v5 fight = 50-97 % of draws carry a light (~2.6 per lit draw, bursts
+  of 6-9); 31v32 estimate 15-30 live vs the nearest-8 cap; the game side costs < 32 virtual calls per frame, so the
+  cost is renderer-side. Rendering (code read): the transient term is in every lit program with no per-draw cull - a
+  per-pixel loop over the <= 8 applied lights whenever any light is live, 3-4 string-keyed uniform lookups per program
+  bind (chars CPU +0.07), and a register-count rise that may cost occupancy even at zero lights; the world is MDI
+  multi-draw so a per-draw cull needs per-sub mask bits in the row data; robots-in-reflections does zero work at RT
+  off; option B nets -0.1 to -0.2. FIX (pre-approved): cached uniform locations now; per-draw light masks for non-MDI
+  draws + per-sub mask bits for the world if the lights-off arm removes the cost, or the transient term in its own
+  program variant if the cost is static. Gate: regress vs 30b2fa74 within +0.15 on every map at RT off, Faithful
+  identity, SIMHASH unchanged, the lights still show.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
