@@ -26,7 +26,7 @@
      core::Vec3 vehicleShotMuzzle_{0, 0, 0};
      // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
      struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f;
-@@ -1355,6 +1359,8 @@
+@@ -1356,6 +1360,8 @@
  
      // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
      WeaponFx fx_;
@@ -118,7 +118,7 @@
      }
      // Event-driven audio via edge detection on pawn state.
      {   TickTimer tt26(26);   // [integration 09c] WFC_TICKPROF glue.localAudio (character audio, cues, level audio)
-@@ -3645,6 +3685,12 @@
+@@ -3657,6 +3697,12 @@
              r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
      // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
      // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.

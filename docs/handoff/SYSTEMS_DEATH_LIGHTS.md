@@ -1,6 +1,6 @@
 # Death lights (Rendering plan v2 item 4, part 2)
 
-Patch: `SYSTEMS_DEATH_LIGHTS.patch`, applied on top of `SYSTEMS_MUZZLE_LIGHTS.patch` (both against integration d169d1ce;
+Patch: `SYSTEMS_DEATH_LIGHTS.patch`, applied on top of `SYSTEMS_MUZZLE_LIGHTS.patch` (both against integration ee43bef1;
 rebased to Rendering's rt2 item 4 head when Integration names it). Data: AssetTools authored.db (read only) via
 `tools/systems/transient_lights.py` -> `src/game/DeathLights.inc` and `SYSTEMS_TRANSIENT_LIGHTS.json` (`ramp_lights`).
 
@@ -33,12 +33,12 @@ motion (Hovering, Airborne, momentum), and a headshot gives HeadShot.
 - Ramp: brightness 0 -> 1 over RampInTime, held until LightTime from the start, then RampOutTime (0 = off). Whether the
   original's LightTime counts from the start or after the ramp-in is code-side (the script bytecode is not decompiled).
 - The light sits at the victim's actor location at the death (Translation 0), keyed per victim (a new death restarts it).
-- Participants: spawned in applyMatchDamage before the pawn despawns. Local player: at the PlayerKilled event.
+- One hook: World::onPawnDeath (Gameplay ee43bef1, once per death on every path). The victim (light key), headshot and vehicle form type come from the newest death record whose victim pawn matches the chassis and position.
 
 Presentation only: SIMHASH unaffected. WFC_MUZZLELOG=1 logs every death's choice ("DEATH LIGHT player N chassis form
 (damage type): robot light / vehicle light / none").
 
-Test (headless, null renderer, no window, muted): WFC_BOTTEST 39/39 with 78 deaths. Robot deaths by TankShell / HomingRocket
+Test (headless, null renderer, no window, muted) on ee43bef1 + both patches: WFC_BOTTEST 43/44 with 89 deaths logged, the one FAIL (DEATH melee-kill cue count, 5 presentations for 4 scripted kills: a natural death inside the window) identical on unpatched ee43bef1 (2 runs); WFC_ENGAGETEST 3/3. Robot deaths by TankShell / HomingRocket
 light; vehicle tank deaths light; jets and PlaneRocket / TruckRocket robot deaths stay unlit.
 
 ## Backlog
