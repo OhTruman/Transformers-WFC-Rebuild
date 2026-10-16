@@ -2058,3 +2058,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   all maps vs Off: Realistic mean 22.0 / +11.6 / contrast 1.28 / 33 % changed; + Enhanced 22.5 / +11.7 / 1.30 / 34 %
   (int_cand6 was 1.26 / 1.27). R4 leak rows done 16:39 (their clock). FAST full on 7cd22027 then delta FAST on
   4078e47b running; block end ~18:15; pool 6,857 MB flat.
+  2026-10-16 17:28 PACKAGE 6 GATE BLOCK DONE (17:27 their clock) on 4078e47b vs 7cd22027: regress REPORT 8/8 BISECT
+  (+1.66..+3.76 ms p90 at RT off; lights +0.02..+0.12); 1b UNKNOWN (HD 2 not applied; rerun in the hold); R4 leak
+  PASS (lobby GPU 2180 / 2841 / 2980 / 2974 MB, spread 138 MB); eye pass PASS (1.28 / 1.30); FAST full 7cd22027
+  PASS (53 pass, PRODUCT FAIL 0) + delta 4078e47b PASS; mapswitch row HARNESS FAIL (pruned reference exes; map-loss-
+  gate fix 3616470c synced; rerun after the hold). BISECT + 1b HOLD set 17:27 (~40 min); pool 6.86 GB.
