@@ -6,6 +6,7 @@ param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir,
       [string[]]$Modes = @("off", "real", "realhd"), [string]$Size = "2560x1440",
       [string]$HdRoot = "F:\Transformers Rebuild\AssetTools\out\hd\push_full_snap_20261016_b0-31\pack", [string]$RenderData = "", [string]$RtEnv = "")
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
+$Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ }); $Modes = @($Modes | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })   # (-File passes '508,510' as one string)
 $names = @{ "508" = "MP_IAC_Streets"; "510" = "MP_UND_Gorge"; "507" = "MP_ORB_Debris"; "504" = "MP_IAC_Rust"; "509" = "MP_KON_Molten" }
 $Exe = (Resolve-Path $Exe).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 foreach ($m in $Maps) {
