@@ -1581,3 +1581,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   leave the hull wreck with chunks + smoke, dissolving; base showed only the kill-feed icon. BOTTEST 46 / 46 both AIs
   ("every presented death has a corpse"), NAVQ 16 / 16 identical, SIMHASH identical. Crops docs/handoff/deathbody/.
   Patch 2 (decals, skeletal gibs, authored death camera, full momentum picker) after package 6.
+  2026-10-16 07:47 RENDERING STATUS: X1 rounds 2 / 3 still read "the same game" (a tone curve alone cannot reach the
+  bar); X2 root cause = the port already applies UE3's directional-lightmap specular, so new X2 = a Realistic gain on
+  that term fed by the RT lightmap (2.5-4; x1.0 in Off / Faithful); X4 bounce saturation 2.5 incl. probes; X5-1 works
+  (robots darker under cover); effect-light calibration batch (gain 1 / 2 / 3) next, then default-on in Realistic.
+  DECISION RULE: if the next sheet still reads "same game", X3 volumetrics move INTO package 6 (quality over date) and
+  X7 is reconsidered; X3 design written in the gaps. Death bodies a6e9ea67 (archive-build fix); mines closed dc5f5a61.
