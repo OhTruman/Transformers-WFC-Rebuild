@@ -1764,3 +1764,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   5 / 5, Faithful 5 / 5. Rendering: lava test on the 509 authored views (gain 1 / 4 / 8, tone off diagnostic), then
   item 7 temporal reflections (WFC_RT_REFLTEMPORAL). Experimental: walkable gate base same-match check running.
   Systems: rtcheck.defaults run against a Release build of this head at Rendering's boundary.
+  2026-10-16 12:55 MOLTEN LAVA LIGHTS (Rendering e233a641 -> 584c873b): no existing view faced lava, so 4 lava-facing views
+  were built from bsp.glb's MoltenFloor primitives; with the cull fix the emissive gain works: rock over a lava basin
+  contrast 2.13 (gain 1) -> 2.29 (4) -> 2.45 (8) vs Off with a growing orange tint; Realistic default WFC_RT_GIEMISSIVE
+  = 4 (heat glow; 8 reads as a red lamp). Findings: X1's tone curve carries a large share of Realistic's lift on these
+  views; the step-1200 yellow washout = X1 soft bloom on very bright emissive + muzzle flash -> cap the bloom input
+  on emissive-heavy frames in item 7 polish. Next: item 7 temporal reflections test, effect-light calibration, X3
+  v3, eye pass; next RT boundary ~14:15 (Rendering's clock) -> Systems' rtcheck.defaults run (giemissive=4.00).
