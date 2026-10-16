@@ -1678,3 +1678,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay ground-snap: both traps fixed but Classic Streets / Molten stucks up (z ~2) -> split (1) / (2); (2) refined
   to "land while rising only on a surface the previous bottom was above"; underside test by enclosure proposed.
   PACKAGE_6_HEAD.md refreshed b85227e7 (30 placeholders); m6pbr manifest ca6b94ed.
+  2026-10-16 11:30 ENHANCED ROW PACKAGING: package 5 shipped the D pack only (no hd_pbr_index.json / m6), so its
+  Enhanced row derived every roughness value and verify never ran level 2; build_slim --hd-pbr + verify_slim M6 static
+  row + -HdLevel 2 merged 65dddbe4 (Systems); eyepass / lockstep-ab / package-gate now require "HD modern material
+  maps: N" for every HD 2 arm (51a2a75a, a5db23da); shared dev HD root with both indexes =
+  Rebuild-Systems/work/hd_dev_full (junctions; 3505 + 498 verified). Rendering's own Enhanced arms DID load the 498
+  maps (WFC_HD_PBR_ROOT) and are still dark -> the 3-arm split decides. NOTE: Rebuild/build/bin is a DEBUG build (no
+  PGO, ~4x slower): never a timed / sheet subject; work/render materials_pbr.json needs an exe >= 02c743cc.
