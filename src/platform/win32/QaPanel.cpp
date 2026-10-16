@@ -23,7 +23,8 @@ public:
         wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
         wc.lpszClassName = L"WfcQaPanel";
         RegisterClassW(&wc);
-        hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"WFC QA (debug only - not original)",
+        const DWORD ex = std::getenv("WFC_NOINTERACT") ? WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE : WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+        hwnd_ = CreateWindowExW(ex, wc.lpszClassName, L"WFC QA (debug only - not original)",
                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 640, nullptr, nullptr, wc.hInstance, this);
         auto label = [&](const wchar_t* t, int x) {
             CreateWindowW(L"STATIC", t, WS_CHILD | WS_VISIBLE, x, 8, 170, 18, hwnd_, nullptr, wc.hInstance, nullptr);

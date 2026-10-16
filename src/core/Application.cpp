@@ -585,7 +585,7 @@ Application::MatchExit Application::runMatch() {
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
         static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
-        if (WFC_ENV("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
+        if (WFC_ENV("WFC_NOMOUSE") || WFC_ENV("WFC_NOINTERACT") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
         if (const char* as = WFC_ENV("WFC_AUTOSTRAFE")) {
             // =alt: left / right alternating every 90 loop frames (gun-judder harness); any other value: right.
             static long strafeFrames = 0;

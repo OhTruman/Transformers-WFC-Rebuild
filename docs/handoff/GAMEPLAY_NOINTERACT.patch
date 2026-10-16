@@ -1,0 +1,249 @@
+diff --git a/src/platform/win32/Win32Window.cpp b/src/platform/win32/Win32Window.cpp
+index cb5c86b..5d0ea5b 100644
+--- a/src/platform/win32/Win32Window.cpp
++++ b/src/platform/win32/Win32Window.cpp
+@@ -14,6 +14,7 @@
+ #include "core/Log.h"
+ 
+ #include <cmath>
++#include <cstdio>
+ #include <cstdlib>
+ #include <chrono>
+ #include <thread>
+@@ -39,6 +40,37 @@ const wchar_t* displayRestoreFilePath() {
+ 
+ namespace {
+ 
++// WFC_NOINTERACT=1 (automated runs; env only, never a package default) [PC ADAPTATION, tooling]: the run never takes the user's
++// focus, cursor or input. The window is shown without activation (WS_EX_NOACTIVATE + SW_SHOWNOACTIVATE, no SetForegroundWindow /
++// SetFocus, bottom of the z-order, never topmost) in a corner out of the way, the cursor is never hidden or moved (mouse-look
++// recentring off), no capture / clip, fullscreen requests stay windowed, and keys, buttons, wheel, text and the real pad are
++// ignored at the source (every pump: the frontend, loading and match loops); scripted inputs (injectPad, the frontend script,
++// the WFC_AUTO* / player-bot hooks) still apply. WFC_NOINTERACTTEST=1 logs a self-check 5 s and 30 s after the window opens.
++bool noInteract() { static const bool v = std::getenv("WFC_NOINTERACT") != nullptr; return v; }
++
++// NOINTERACT placement of an outer window of ww x wh: WFC_WINPOS=x,y, else the bottom-right corner of a secondary monitor's
++// work area when one is attached, else of the primary's (kept fully on screen: off-screen pixels of a GL window are undefined).
++POINT noInteractPos(int ww, int wh) {
++    if (const char* s = std::getenv("WFC_WINPOS")) {
++        int x = 0, y = 0;
++        if (std::sscanf(s, "%d,%d", &x, &y) == 2) return POINT{x, y};
++        LOG_WARN("window: WFC_WINPOS '%s' is not x,y; using the corner placement", s);
++    }
++    struct Pick { HMONITOR primary = nullptr, other = nullptr; } pick;
++    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR m, HDC, LPRECT, LPARAM lp) -> BOOL {
++        auto* pk = reinterpret_cast<Pick*>(lp);
++        MONITORINFO mi{};
++        mi.cbSize = sizeof(mi);
++        if (GetMonitorInfoW(m, &mi)) { if (mi.dwFlags & MONITORINFOF_PRIMARY) pk->primary = m; else if (!pk->other) pk->other = m; }
++        return TRUE;
++    }, reinterpret_cast<LPARAM>(&pick));
++    MONITORINFO mi{};
++    mi.cbSize = sizeof(mi);
++    const HMONITOR m = pick.other ? pick.other : pick.primary;
++    if (!m || !GetMonitorInfoW(m, &mi)) return POINT{0, 0};
++    return POINT{std::max(mi.rcWork.left, mi.rcWork.right - ww), std::max(mi.rcWork.top, mi.rcWork.bottom - wh)};
++}
++
+ // Map a neutral Button to a Win32 virtual key.
+ int vkFor(Button b) {
+     switch (b) {
+@@ -103,8 +135,12 @@ public:
+         wchar_t wtitle[256];
+         MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, 256);
+ 
+-        hwnd_ = CreateWindowExW(0, wc.lpszClassName, wtitle, WS_OVERLAPPEDWINDOW,
+-                                CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
++        const bool quiet = noInteract();
++        POINT at{CW_USEDEFAULT, CW_USEDEFAULT};
++        if (quiet) at = noInteractPos(r.right - r.left, r.bottom - r.top);
++        // NOINTERACT: never activated by a click or at the first show; APPWINDOW keeps its taskbar button
++        hwnd_ = CreateWindowExW(quiet ? WS_EX_NOACTIVATE | WS_EX_APPWINDOW : 0, wc.lpszClassName, wtitle, WS_OVERLAPPEDWINDOW,
++                                at.x, at.y, r.right - r.left, r.bottom - r.top,
+                                 nullptr, nullptr, hinst_, this);
+         if (!hwnd_) { LOG_ERROR("CreateWindowExW failed"); return false; }
+ 
+@@ -112,9 +148,20 @@ public:
+         if (!initGL()) return false;
+ 
+         setUiBindings(UiBindings::defaults(false));
+-        ShowWindow(hwnd_, SW_SHOW);
+-        SetForegroundWindow(hwnd_);
+-        SetFocus(hwnd_);
++        createdAt_ = std::chrono::steady_clock::now();
++        if (quiet) {
++            focused_ = false;   // no window input is read (pump)
++            ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
++            SetWindowPos(hwnd_, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
++            RECT wr; GetWindowRect(hwnd_, &wr);
++            LOG_INFO("NOINTERACT: no activation / capture / clip (window at %ld,%ld, %ldx%ld, bottom of the z-order; cursor never "
++                     "hidden or moved; keys, mouse, wheel, text and pad ignored; fullscreen stays windowed)",
++                     wr.left, wr.top, wr.right - wr.left, wr.bottom - wr.top);
++        } else {
++            ShowWindow(hwnd_, SW_SHOW);
++            SetForegroundWindow(hwnd_);
++            SetFocus(hwnd_);
++        }
+         return true;
+     }
+ 
+@@ -141,6 +188,7 @@ public:
+             DispatchMessageW(&msg);
+         }
+         if (wantClose_) return false;
++        noInteractSelfTest();
+ 
+         // Poll keyboard/mouse buttons via async state (kept in platform layer).
+         for (int i = 0; i < (int)Button::Count; ++i) {
+@@ -162,6 +210,7 @@ public:
+             input.mouseDX = float(p.x - center.x);
+             input.mouseDY = float(p.y - center.y);
+             SetCursorPos(center.x, center.y);
++            ++cursorMoves_;
+         }
+ 
+         pollGamepad(input);
+@@ -187,6 +236,9 @@ public:
+             ScreenToClient(hwnd_, &p);
+             if (p.x >= 0 && p.y >= 0 && p.x < width_ && p.y < height_) { input.mouseX = p.x; input.mouseY = p.y; }
+         }
++        if (noInteract()) {   // NOINTERACT: window messages that arrive unfocused (the wheel over an inactive window) are dropped
++            wheel_ = 0; typed_.clear(); keyPresses_.clear(); focused_ = false;
++        }
+         input.mouseWheel = wheel_ / (float)WHEEL_DELTA;
+         wheel_ = 0;
+         input.text.swap(typed_);
+@@ -196,6 +248,39 @@ public:
+         return true;
+     }
+ 
++    // WFC_NOINTERACTTEST=1: 5 s and 30 s after the window opened, check that the run holds no capture, has no clip, is not the
++    // foreground window, has not hidden or moved the cursor and is neither topmost nor activatable. Without WFC_NOINTERACT it
++    // is a negative control (the foreground check fails when the run was started from the foreground).
++    void noInteractSelfTest() {
++        static const bool test = std::getenv("WFC_NOINTERACTTEST") != nullptr;
++        if (!test || selfTests_ >= 2) return;
++        const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - createdAt_).count();
++        if (t < (selfTests_ == 0 ? 5.0 : 30.0)) return;
++        ++selfTests_;
++        RECT clip{}, screen{GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN), 0, 0};
++        screen.right = screen.left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
++        screen.bottom = screen.top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
++        GetClipCursor(&clip);
++        const LONG_PTR ex = GetWindowLongPtrW(hwnd_, GWL_EXSTYLE);
++        const HWND fg = GetForegroundWindow();
++        struct Check { const char* name; bool ok; } checks[] = {
++            {"GetCapture() == NULL", GetCapture() == nullptr},
++            {"GetForegroundWindow() != ours", fg != hwnd_},
++            {"GetFocus() != ours", GetFocus() != hwnd_},
++            {"cursor clip rect == virtual screen", EqualRect(&clip, &screen) != FALSE},
++            {"cursor never hidden (ShowCursor) or moved (SetCursorPos)", cursorHides_ == 0 && cursorMoves_ == 0},
++            {"WS_EX_NOACTIVATE set, WS_EX_TOPMOST clear", (ex & WS_EX_NOACTIVATE) != 0 && (ex & WS_EX_TOPMOST) == 0},
++        };
++        int pass = 0;
++        for (const Check& c : checks) {
++            pass += c.ok ? 1 : 0;
++            LOG_INFO("NOINTERACTTEST %s: %s", c.ok ? "PASS" : "FAIL", c.name);
++        }
++        LOG_INFO("NOINTERACTTEST SUMMARY: %d/%d checks passed at %.0f s (NOINTERACT %s; clip %ld,%ld-%ld,%ld, screen %ld,%ld-%ld,%ld)",
++                 pass, (int)(sizeof(checks) / sizeof(checks[0])), t, noInteract() ? "on" : "OFF - negative control",
++                 clip.left, clip.top, clip.right, clip.bottom, screen.left, screen.top, screen.right, screen.bottom);
++    }
++
+     void injectPad(const std::string& button, bool down) override {
+         const uint32_t m = padByName(button);
+         if (!m) { LOG_WARN("input: injectPad unknown button '%s'", button.c_str()); return; }
+@@ -360,6 +445,10 @@ public:
+ 
+     void setDisplayMode(int w, int h, bool full) override {
+         // Windowed: a client area of w x h. Fullscreen: the monitor at w x h (applyFullscreenMode).
++        if (full && noInteract()) {
++            LOG_INFO("NOINTERACT: fullscreen %dx%d requested; staying windowed at that client size", w, h);
++            full = false;
++        }
+         if (full) {
+             reapplyGaveUp_ = false;                          // (an explicit request: the loop guard starts afresh)
+             if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
+@@ -374,7 +463,12 @@ public:
+         adjustFrame(r, windowDpi());
+         int x = fullscreen_ ? windowedRect_.left : CW_USEDEFAULT, y = fullscreen_ ? windowedRect_.top : CW_USEDEFAULT;
+         if (x == CW_USEDEFAULT) { RECT cur; GetWindowRect(hwnd_, &cur); x = cur.left; y = cur.top; }
+-        SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++        if (noInteract()) {   // the corner for the new size, bottom of the z-order, not activated
++            const POINT at = noInteractPos(r.right - r.left, r.bottom - r.top);
++            SetWindowPos(hwnd_, HWND_BOTTOM, at.x, at.y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
++        } else {
++            SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
++        }
+         fullscreen_ = false;
+     }
+     bool fullscreen() const override { return fullscreen_; }
+@@ -426,8 +520,9 @@ public:
+     void setMouseCaptured(bool captured) override {
+         if (captured == mouseCaptured_) return;
+         mouseCaptured_ = captured;
++        if (noInteract()) return;   // NOINTERACT: the cursor is never hidden or moved
+         ShowCursor(!captured);
+-        if (captured) { POINT c = centerScreen(); SetCursorPos(c.x, c.y); }
++        if (captured) { POINT c = centerScreen(); SetCursorPos(c.x, c.y); ++cursorHides_; ++cursorMoves_; }
+     }
+ 
+ private:
+@@ -612,7 +707,7 @@ private:
+ 
+     void pollGamepad(InputFrame& input) {
+         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
+-        if (noPad) { padBits_ = fakePad_; return; }
++        if (noPad || noInteract()) { padBits_ = fakePad_; return; }   // (NOINTERACT: the user's controller is theirs)
+         XINPUT_STATE st{};
+         if (XInputGetState(0, &st) == ERROR_SUCCESS) {
+             static bool logged = false;
+@@ -689,10 +784,10 @@ private:
+                 LOG_INFO("window: monitor DPI %u, client stays %dx%d", (unsigned)HIWORD(wp), (int)(c.right - c.left), (int)(c.bottom - c.top));
+                 return 0;
+             }
+-            case WM_SETFOCUS: focused_ = true; return 0;
++            case WM_SETFOCUS: focused_ = !noInteract(); return 0;
+             case WM_MOUSEWHEEL: wheel_ += GET_WHEEL_DELTA_WPARAM(wp); return 0;
+             case WM_SETCURSOR:
+-                if (LOWORD(lp) == HTCLIENT && (cursorHidden_ || mouseCaptured_)) { SetCursor(nullptr); return TRUE; }
++                if (LOWORD(lp) == HTCLIENT && (cursorHidden_ || mouseCaptured_) && !noInteract()) { SetCursor(nullptr); return TRUE; }
+                 break;
+             case WM_KILLFOCUS: focused_ = false; return 0;
+             case WM_ACTIVATEAPP:
+@@ -745,6 +840,8 @@ private:
+     bool focused_ = true;
+     bool wantClose_ = false;
+     bool mouseCaptured_ = false;
++    std::chrono::steady_clock::time_point createdAt_{};
++    int selfTests_ = 0, cursorHides_ = 0, cursorMoves_ = 0;   // WFC_NOINTERACTTEST
+ };
+ 
+ } // namespace
+diff --git a/src/platform/win32/QaPanel.cpp b/src/platform/win32/QaPanel.cpp
+index 7f9bbd2..764d762 100644
+--- a/src/platform/win32/QaPanel.cpp
++++ b/src/platform/win32/QaPanel.cpp
+@@ -23,7 +23,8 @@ public:
+         wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+         wc.lpszClassName = L"WfcQaPanel";
+         RegisterClassW(&wc);
+-        hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"WFC QA (debug only - not original)",
++        const DWORD ex = std::getenv("WFC_NOINTERACT") ? WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE : WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
++        hwnd_ = CreateWindowExW(ex, wc.lpszClassName, L"WFC QA (debug only - not original)",
+                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 640, nullptr, nullptr, wc.hInstance, this);
+         auto label = [&](const wchar_t* t, int x) {
+             CreateWindowW(L"STATIC", t, WS_CHILD | WS_VISIBLE, x, 8, 170, 18, hwnd_, nullptr, wc.hInstance, nullptr);
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 0222b83..ca0c486 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -585,7 +585,7 @@ Application::MatchExit Application::runMatch() {
+ 
+         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
+         static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
+-        if (WFC_ENV("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
++        if (WFC_ENV("WFC_NOMOUSE") || WFC_ENV("WFC_NOINTERACT") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
+         if (const char* as = WFC_ENV("WFC_AUTOSTRAFE")) {
+             // =alt: left / right alternating every 90 loop frames (gun-judder harness); any other value: right.
+             static long strafeFrames = 0;
