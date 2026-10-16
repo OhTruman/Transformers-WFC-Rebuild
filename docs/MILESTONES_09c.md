@@ -2093,3 +2093,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   drawDynamicMeshPosed; skip sample / skin once static; ~30 min; look unchanged by construction); plan 2 (GPU
   skinned path for the animating phase) only if the arms still call for it. Corpse arms (default / NOCORPSE /
   NOMINEPRES) on int_cap in a ~15 min hold after the mapswitch reruns.
+  2026-10-16 17:55 STATIC-POSE FIX written (Gameplay docs/handoff/GAMEPLAY_CORPSE_STATIC_POSE.patch vs ddea856e: poseStatic
+  skips sample / blend / skin once the clip ended and the blend is done; drawDynamicMeshPosed with a unique pose
+  serial; cap dropped; NOCORPSE / NOMINEPRES kept). Trees int_csb (head) + int_csn (head + patch) compiling (~30
+  min) -> the corpse-arm hold waits for BUILDS DONE; arms default / NOCORPSE / NOMINEPRES (int_cap) + int_csn.
+  Slot B (4 windowed crops, 10 / 40 m byte-compare) after the hold. Respin = 5bce52bb + this patch.
