@@ -1220,6 +1220,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Experimental's package-5 rows on a5f53923 started (regress 30b2fa74 vs a5f53923 timed; Classic captures Off /
   Faithful / Realistic vs 30b2fa74 + the NOINTERACT on-arm determinism pair; R4 leak rows; rt-perf-baseline under
   NOINTERACT as the new reference); ~1 h 45.
+  2026-10-16 01:23 BLOCK: regress-8map 30b2fa74 vs a5f53923 (RT off, Classic, lockstep, best p90 of 2): 6 / 8 maps BLOCK - 501 2.72
+  -> 2.86, 502 2.17 -> 2.42, 503 2.76 -> 3.07, 504 2.82 -> 3.14, 507 2.37 -> 2.45, 508 2.54 -> 2.92, 509 3.40 -> 3.58,
+  510 3.05 -> 3.34; real (both reps, same match, p50 up; 508 slow frames 405 -> 661: GPU world 0.71 -> 0.80,
+  translucency 0.55 -> 0.70-0.79, fx 0.40 -> 0.05 by design, chars CPU 0.61 -> 0.68, draws +7, binds +10). Per-head
+  A/Bs through e5182075 sum to <= +0.05, so ~+0.25 ms sits in 2873a071 (items 3 / 4), 76b077e8 (transient lights -
+  the only RT-off feature, prime suspect) or a5f53923 (robots in reflections). Bisect by switch first: a timed 3-arm
+  A/B 30b2fa74 / a5f53923 / a5f53923 + WFC_NOTRANSIENTLIGHTS=1 on 508 / 504 / 503 (archive builds of 2873a071 and
+  76b077e8 at -j 4 only if needed). Package 5 does not promote on a5f53923 as is; Rendering and Systems asked for the
+  transient-light cull options (per-draw light lists by radius, a nearest / brightest cap, lifetimes).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
