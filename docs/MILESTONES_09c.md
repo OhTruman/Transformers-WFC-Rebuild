@@ -1726,3 +1726,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   +20.1 / 1.50 | 1.48; ALL 1.31 | 1.30 (batch 4: 1.27 | 1.05; proof 0.99). ENHANCED FIXED. User sent pick_509 (Molten).
   Authored views INVALID again (direct-boot runs took size / RT / HD from env only; fixed to write the profile):
   rerun on Rendering's post-cull-fix candidate at their boundary. Rendering RESUMED for batch 8. A4_ORB doc 6c2a9548.
+  2026-10-16 12:14 Authored eye-pass views: the direct map boot never applies the profile's display / HD / Modern rows
+  (frontend path only), so views run Off | Realistic at 1280x720 for now (4a5c8711); a direct-boot profile hook
+  (WFC_SHOTLIST / WFC_BOOT_PROFILE=1 applies setDisplayMode + HD / Modern like the frontend path) requested from
+  Gameplay as a harness-only patch. PACKAGE_6_HEAD.md updated d1b03903 (25 placeholders). D3A_IAC doc a30c2c64;
+  A2_KON running, D1_ORB last. Rendering batch 8 (Molten with the cull fix, X3 v2 pairs) running since ~13:20.
