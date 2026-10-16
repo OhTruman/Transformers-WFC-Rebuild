@@ -1,6 +1,6 @@
 # Package 6: integration <HEAD> (<DATE>)
 
-<!-- SKELETON (Systems; refreshed 2026-10-16 12:12 from docs/MILESTONES_09c.md up to the 12:11 entry). Integration fills
+<!-- SKELETON (Systems; refreshed 2026-10-16 12:40 from docs/MILESTONES_09c.md up to the 12:40 entry). Integration fills
      <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
      PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
 
@@ -28,8 +28,20 @@ the 498 modern maps). Realistic | Realistic + Enhanced vs Off (mean / brighter /
 | all maps | contrast 1.31 | 1.30 |
 
 (The proof sheet on 0a9c497f read 0.99 - Realistic indistinguishable from Off; batch 4 read 1.27 | 1.05.) Dark Gorge views
-read night-and-day (far wall and door lit where Off is black). [PLACEHOLDER: the final sheet on the head, incl. the RT
-hit-data fix and X3 if it ships.]
+read night-and-day (far wall and door lit where Off is black).
+
+Authored views on int_cand4 (25 views x Off / Realistic / Enhanced at 1440p, WFC_BOOT_PROFILE; all checks pass), mean
+contrast vs Off, Realistic | Enhanced:
+
+| view type | Realistic | Enhanced |
+|---|---|---|
+| firefight | 1.26 | 1.29 |
+| street under buildings | 1.25 | 1.27 |
+| dark interior | 1.44 | 1.48 |
+| reflective floor | 1.88 | 1.85 |
+| vehicle lane | 1.37 | 1.46 |
+
+Enhanced adds on top in 4 of 5 view types. [PLACEHOLDER: the final sheet / views on the head.]
 
 - **Characters take the RT sun** (row 1, bd749603, WFC_RT_CHARSUN): robots and movers in sunlight get the traced sun
   and its shadow, matching the world they stand in.
@@ -50,13 +62,29 @@ hit-data fix and X3 if it ships.]
 - **X5-1 character AO 3 m** (cabb416b, WFC_RT_CHARAORADIUS): robots darker under cover.
 - **Soft particles** for every effect in Realistic (70315129, WFC_SOFTPARTICLES=0 off): smoke and flames fade into the
   surfaces they touch instead of cutting hard lines.
-- **RT surface colours fixed** (Rendering, [PLACEHOLDER: commit]): the RT hit-data pass culled back faces, so about half of
-  all surfaces with a mirrored UV layout got a grey albedo and no emissive (Molten: 1,918 of 3,799). Bounce light now
-  carries their colour, reflections show them in colour, and emissive surfaces such as the lava can light the scene.
-- **X3 volumetrics** (sun shafts / lamp halos / lit fog) [PLACEHOLDER: v1 was not shown (flat grey haze); v2 ships only if
-  its eye check and the user pairs pass].
+- **RT surface colours fixed** (Rendering a81f7291, [PLACEHOLDER: integration commit]): the RT hit-data pass culled back
+  faces, so every surface with a mirrored UV layout got a grey albedo and no emissive. Bounce light, reflections and
+  emissive lighting now see the real colours. Surfaces without hit data, before -> after:
+
+| map | before | after |
+|---|---|---|
+| Molten | 1,918 | 129 (of 3,799) |
+| Remnant | 2,373 | 126 |
+| Seed | 1,442 | 91 |
+| Complex | 1,537 | 59 |
+| BrokenHope | 1,331 | 109 |
+| Rust | 1,129 | 28 |
+| Gorge | 874 | 52 |
+| Streets | 655 | 88 |
+| Berth | 602 | 25 |
+| Debris | 559 | 30 |
+
+- **X3 volumetrics** (sun shafts / lamp halos / lit fog): v1 (flat grey haze) and v2 (faint haze, no shafts / halos)
+  were rejected by eye; parked after v2. [PLACEHOLDER: v3 on the authored open-sky views (lamps picked by screen coverage),
+  else package 7.]
 - **Molten** (lava-lit: emissive surfaces as RT light sources + per-map exposure; RENDERING_MOLTEN_PLAN.md)
-  [PLACEHOLDER: the emissive gain after the RT surface-colour fix - gains 1 / 3 / 6 had no effect before it].
+  [PLACEHOLDER: the lava-facing gain test (gains 1 / 3 / 6 had no effect before the surface-colour fix; the first test
+  after it had no lava in frame)].
 - **Effect lights on by default in Realistic** (Systems 709df0f5 + 5f423157): explosions, impacts, vehicle boost and
   pickups give off light, calibrated per template from the decoded fade curves (SYSTEMS_RT_LIGHT_HOOKS); WFC_FXLIGHTS=0
   off. A deliberate Realistic addition (the original has no such lights); Off / Faithful never add one (the live-list fix
@@ -113,8 +141,11 @@ Off / Faithful stay byte-identical to the original (identity rows).
   cars sat below it and a boosted car could stop dead on a Debris floor lip, players too).
 - **Bots steer correctly in vehicle form** (3de18d73: both AIs steered away from their heading error until boost dropped
   them to hover; every map better or equal; the Debris Smart cost closed). Two permanent DRIVE guard rows in BOTTEST.
-- Classic was re-baselined three times by design (yaw rate, drive probe, steer sign; reference tables in
-  docs/handoff/vehyaw/, driveprobe/, drivesteer/) [PLACEHOLDER: a fourth for the robot ground-snap fix if it ships].
+- **Robots stand only on walkable ground** (f19e0052): ground support needs a surface under ~45 deg (|n.y| >= 0.7, the
+  original's WalkableFloorZ); robots no longer snap onto steep faces or get trapped in the two known spots. 2 of ~460
+  traverse routes that climbed steep faces are now blocked - the faithful behaviour.
+- Classic was re-baselined four times by design (yaw rate, drive probe, steer sign, walkable floor; reference tables in
+  docs/handoff/vehyaw/, driveprobe/, drivesteer/, walkable/).
 - **BOTTEST gate robustness** (d817d599): seed-variance tolerant rows, no re-baseline.
 
 ### Audio and effects
@@ -134,7 +165,8 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **HD textures actually load.** Packages 4 and 5 silently ignored the pack (the loader read a row's byte count as a
   float; 89,478,612 rounded). Fixed 66eb7d73; the exe logs "HD texture pack available: 3505 textures"; verify_slim has
   an HD runtime row that requires that line (dry run on 64771c71: PASS).
-- Harness-only: WFC_NOINTERACT exact client size (7d9edf78, 2560x1440 verified), voice_ab.ps1 -Paced (audio counts
+- Harness-only: WFC_BOOT_PROFILE=1 (e22321e8: direct map boots apply the profile's display / HD / Modern rows like the
+  frontend, so authored views run at 1440p with the Enhanced column), WFC_NOINTERACT exact client size (7d9edf78, 2560x1440 verified), voice_ab.ps1 -Paced (audio counts
   from lockstep + 60 fps), eye-pass pipeline (27ab8332) + authored views (1a49b965), package-gate.sh + gate-base.sh,
   verify_slim rtcheck.rtlights, tools/systems/off_identity.ps1.
 
@@ -142,11 +174,11 @@ Off / Faithful stay byte-identical to the original (identity rows).
 
 - (CLOSED) Realistic + Enhanced darkness: the Modern shading dropped the original's specular (not the data); fixed eaed3192,
   int_cand3 sheet Realistic + Enhanced 1.30 vs Realistic 1.31.
-- **Molten's lava does not light the scene yet** (emissive gain had no effect before the RT surface-colour fix)
-  [PLACEHOLDER: closed by the fix + gain, or still open].
-- **Idle 20 s BOTTEST row** reads 47 / 48 at seeds 1 / 5 (seed 7 passes) until the robot ground-snap fix (slope filter +
-  rise rule + 2.5 m clearance underside test, in its gate) lands [PLACEHOLDER: landed or not].
-- **X3 volumetrics**: v1 rejected (flat grey haze); v2 pending its eye check and the user pairs [PLACEHOLDER: in or package 7].
+- **Molten's lava does not light the scene yet**: the emissive gain had no effect before the RT surface-colour fix; the
+  lava-facing gain test is pending [PLACEHOLDER: closed or still open].
+- **Idle 20 s BOTTEST row** at seeds 1 / 5 (47 / 48 before): the walkable-floor fix f19e0052 addresses the trap
+  [PLACEHOLDER: 48 / 48 at seeds 1 / 5 on the head, or still open].
+- **X3 volumetrics**: v1 and v2 rejected by eye; v3 on the authored open-sky views pending [PLACEHOLDER: in or package 7].
 - **Death bodies, patch 2 deferred**: decals, skeletal gibs, the authored death camera and the full momentum picker come
   after package 6; the death-type choice is still an approximation.
 - **X6 / X7 = package 7** unless pulled in: more reflective surfaces + damp sheen (X6), 2x RT lightmap (X7).
@@ -156,7 +188,7 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original) - carried from
   package 5; WFC_TLIGHTSCALE is the lever.
 - **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
-  4 / 5 / 6) come after the ground-snap fix [PLACEHOLDER: what landed].
+  5 / 6) come after package 6 [PLACEHOLDER: what landed].
 - **Squad follow reversals** (Smart) - carried from package 5.
 - **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
 - [PLACEHOLDER: anything the final gate or eye pass adds]
@@ -164,7 +196,7 @@ Off / Faithful stay byte-identical to the original (identity rows).
 ## Gates (final head <HEAD>)
 
 <!-- package-gate.sh table (rules final 08:37, Experimental 101b3970 / 78854ddd / d3a6e1e1). Base = 398b27ef + yaw 022e5e34 +
-     drive-probe 56a9beca + the one-line steer (gate-base.sh; same match as 3de18d73). Regress bars are report rows at
+     drive-probe 56a9beca + the one-line steer + the walkable sim line f19e0052 (gate-base.sh). Regress bars are report rows at
      +0.35 ms p90 per map RT off (BISECT above, not a block); blocking = contamination, client rect, different match, final
      vs lights-off parity. GPU block ~2.8-3.1 h. -->
 
@@ -174,7 +206,7 @@ Off / Faithful stay byte-identical to the original (identity rows).
 | Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | Faithful identity after Rendering's 7 commits |
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | FLAG p50 > 16.7 ms; floor ~60 fps at 1440p |
 | R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
-| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | int_cand3: 1.31 / 1.30; authored views rerun pending |
+| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | int_cand3 sheet 1.31 / 1.30; int_cand4 authored views 1.25-1.88 |
 | verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
 | FAST gate | [PLACEHOLDER] | |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5 |
