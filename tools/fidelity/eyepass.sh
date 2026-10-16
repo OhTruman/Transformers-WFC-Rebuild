@@ -32,6 +32,8 @@ for map in $MAPS; do for mode in $MODES; do
       timeout 900 "$exe" > run.out 2>&1 )
   for p in $(mine); do powershell -NoProfile -Command "Stop-Process -Id $p -Force"; echo "reaped $p"; done
   grep -E 'SIMHASH [0-9]+ [0-9a-f]{16}' $d/wfc.log | sed -E 's/.*(SIMHASH [0-9]+ [0-9a-f]+).*/\1/' > $d/simhash.txt
+  # (2026-10-16) the window must be the requested client size, else the pixels of this run are not comparable
+  if grep -q "NOINTERACT: client .* - DIFFERS from the request" $d/wfc.log; then echo "INVALID: $(basename $d) client rect differs from the request: $(grep -m1 -o 'NOINTERACT: client [^-]*' $d/wfc.log)"; touch $d/INVALID_CLIENT_RECT; fi
   echo "  $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash; $(grep -o 'renderer: Ray Tracing [A-Za-z]*' $d/wfc.log | tail -1); $(grep -m1 -o 'renderer: HD textures [a-z]*' $d/wfc.log); $(grep -m1 -oE 'NOINTERACT: client [0-9]+x[0-9]+[^)]*\)?( - DIFFERS from the request)?' $d/wfc.log)"
 done; done
 PYTHONDONTWRITEBYTECODE=1 "$PY" tools/fidelity/eyepass_sheets.py $O "$MAPS" "$MODES"

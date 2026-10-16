@@ -128,7 +128,9 @@ foreach ($r in $rows) {
     if (($r.rt_req -eq 0 -and $r.rt_mode -ne 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -eq 0) -or ($r.rt_req -gt 0 -and $r.rt_mode -ne $r.rt_req -and $r.rt_modeLogged)) { $hdOk = $false; $occNote += " Ray Tracing mode {0} but {1} requested (profile vs WFC_RT_MODE?)" -f $r.rt_mode, $r.rt_req }
     elseif ($r.rt_req -gt 0 -and ($r.rt_noshaders -or -not $r.rt_scene)) { $hdOk = $false; $occNote += " Ray Tracing requested but no RT scene{0}" -f $(if ($r.rt_noshaders) { " (build without the RT shaders)" } else { "" }) }
     elseif ($r.rt_req -gt 0) { $occNote += " Ray Tracing mode {0}, scene built" -f $r.rt_req }
-    $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-WfcContaminated $cm   # (lane processes only: Run.ps1)
+    $cm = Join-Path $OutDir ("{0}-r{1}\CONTAMINATED.txt" -f $r.arm, $r.rep); $contam = Test-WfcContaminated $cm
+    $crect = Get-WfcClientRect (Join-Path $OutDir ("{0}-r{1}\wfc.log" -f $r.arm, $r.rep))
+    if ($crect.differs) { $contam = $true; Res "$($r.arm).r$($r.rep).client_rect" "UNKNOWN" ("INVALID: the game window's client rect differs from the request ({0})" -f $crect.line) "Gameplay" }   # (lane processes only: Run.ps1)
     $st = if (-not $r.steps -or $contam) { "UNKNOWN" } elseif (-not $sameMatch) { "FAIL" } elseif (-not $parity -or -not $hdOk) { "UNKNOWN" } else { "PASS" }
     if ($contam) { Res "$($r.arm).r$($r.rep).contaminated" "UNKNOWN" ("foreign process during the row - rerun: " + ((Get-Content $cm) -join " | ")) "Experimental" }
     Res "$($r.arm).r$($r.rep)" $st ("{0}: steps {1} ({2}-{3}), same match as '{4}' {5}, workload parity {6}$occNote; frame p50 / p90 / p99 {7} / {8} / {9} ms over {10} frames; slow frames {11}: GPU {12} (world {13}, fx {14}, transl {15}, post {16}), CPU render {17}, outside {19}; all frames: chars CPU {18}, draws {20} (dyn {21}, fx {22}), binds {23}" -f `

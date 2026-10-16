@@ -40,6 +40,8 @@ run() {   # run <sha> <map> <tag>
       timeout $TMO "$exe" > run.out 2>&1 )
   for p in $(mine); do powershell -NoProfile -Command "Stop-Process -Id $p -Force"; echo "reaped $p"; done
   grep -E 'SIMHASH [0-9]+ [0-9a-f]{16}' $d/wfc.log | sed -E 's/.*(SIMHASH [0-9]+ [0-9a-f]+).*/\1/' > $d/simhash.txt
+  # (2026-10-16) the window must be the requested client size, else the pixels of this run are not comparable
+  if grep -q "NOINTERACT: client .* - DIFFERS from the request" $d/wfc.log; then echo "INVALID: $(basename $d) client rect differs from the request: $(grep -m1 -o 'NOINTERACT: client [^-]*' $d/wfc.log)"; touch $d/INVALID_CLIENT_RECT; fi
   echo "$(date +%H:%M:%S) $(basename $d): $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash, size $(grep -o 'window [0-9]*x[0-9]*' $d/wfc.log | head -1)"
 }
 for m in $MAPS; do
