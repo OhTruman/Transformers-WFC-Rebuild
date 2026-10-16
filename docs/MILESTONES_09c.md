@@ -1868,3 +1868,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   7cd22027 exactly (Release; every Realistic row merged, effect lights + headlights default-on, impact calibration
   in): Experimental runs match sheets + authored views + scores; Rendering reads per map and sends fix rows; the head
   = last fix row + Gameplay's ledge guard.
+  2026-10-16 13:37 Ledge guard v1 (Gameplay): gate PASS (BOTTEST 48 / 48 x 12, NAVQ no map worse, trench entries 1 + 2
+  -> 0) but NOT rare (127-423 episodes per seed, 2-4 % of vehicle travel = micro-braking everywhere) -> v2 tightened
+  (probe > 1 m off-mesh; drop > max(2.5 m, 0.35 x distance)) re-gating, ETA ~14:30 (their clock), ships only if rare
+  and the trench stays at 0, else package 7. AssetTools: structure audit passes at 2 m on A1; m05 still over the cap
+  on A1 -> WFC_M05_CELL for the campaign, A1 retry at the chain's end. PACKAGE_6_HEAD.md 15f1ea21 (X3 out resolved).
