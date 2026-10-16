@@ -1108,6 +1108,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   only); Gameplay's NOINTERACT self-test run is the exception (it must not grab: that is the test; the windowed
   control run is skipped, SIMHASH identity proven under null render instead). Experimental pinned WFC_NOMOUSE=1 in
   tools/fidelity (b4f419d9 -> integration 72201064) as the interim (deltas only).
+  2026-10-15 23:30 WFC_NOINTERACT VERIFIED (Gameplay, patched e5182075; 3 windowed lockstep frontend TDM runs, 63 bots, 3002
+  frames): NOINTERACTTEST 6 / 6 at 5 s in all runs (GetCapture NULL, not foreground, not focus, clip == virtual screen,
+  cursor never hidden or moved, WS_EX_NOACTIVATE, not topmost); an external 250 ms watcher: 0 foreground / 0 clipped
+  / 0 centred samples; F9 / R / Escape / wheel / click posted every 2 s through the frontend and the match: no
+  disturbance, dropped at the source; SIMHASH 3002 / 3002 identical across runs, 5 / 5 shots byte-identical; the
+  window opened on a secondary monitor's work-area corner. Windowless SIMHASH on / off pair then the patch.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
