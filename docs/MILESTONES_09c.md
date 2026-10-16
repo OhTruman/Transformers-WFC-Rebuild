@@ -1879,3 +1879,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   other maps' rows + the tone / bloom keys into rtdef (one commit, identity, one confirming sheet; Systems' paired
   table patch). Realistic + Enhanced level with Realistic on Streets. Gorge / Debris / Rust / Molten landing ~6 min
   each.
+  2026-10-16 13:52 EYE PASS: Gorge (510) read = clear upgrade (firefight floor, reflective floor, lane; Enhanced level);
+  FIX ROW 2: point-blank explosions went flat posterised yellow in Realistic (X1's shoulder kept half the hue at the
+  clip) -> the hue-kept share fades out between luminance 1 and 3 so very bright light goes to white; joins the
+  batched commit (sun-share cap 0.75 + rtdef keys). Debris (507) landed, all checks pass; Rust, Molten next.
