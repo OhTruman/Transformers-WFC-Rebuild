@@ -14,7 +14,8 @@
 #   bash tools/fidelity/package-gate.sh <final sha> <penultimate sha> [--whatif]      (env: BUILD_ONLY=1, SKIP_BUILD=1, SWITCH_FLIPS=1)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 F=${1:?final sha}; P=${2:?penultimate sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
-f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e_walk}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw + drive-probe + steer + walkable f19e0052"}
+f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e_rise}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw + drive-probe + steer + walkable + rise-snap 63368d05"}
+# (gate-base.sh rise ... f19e0052@src/game 63368d05@src/game/CharacterMovement.cpp: same match as 63368d05 on Streets; control: the walkable base diverges)
 # (gate-base.sh walk 022e5e34 56a9beca gatebase/steer_3de18d73_vs_398b27ef.patch f19e0052@src/game: same match as f19e0052 on Streets;
 #  control: the steer base diverges from it)
 # (rebuild with tools/fidelity/gate-base.sh <name> <sim commits...> when another sim change lands; steer = gatebase/steer_3de18d73_vs_398b27ef.patch; verified same match vs 3de18d73 on Streets, and the yaw + drive-probe base diverges from it)
