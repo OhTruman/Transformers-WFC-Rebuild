@@ -1958,3 +1958,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1.26 | 1.30, street 1.25 | 1.27, dark 1.44 | 1.47, reflective 1.89 | 1.85, lane 1.37 | 1.46. Rendering: Streets,
   Debris, Rust GO; Gorge no-go on step 1080 (white roll in int_cand7); Molten read pending. Identity on int_cand7
   running (GO), then the Gorge-only rerun, then the merge = package 6 head. USER: HD working trees deletion approved.
+  2026-10-16 15:00 Molten GO on int_cand6 -> all five maps GO except Gorge's step-1080 frame. int_cand7 identity PASS
+  (Off 5 / 5, Faithful 5 / 5, SIMHASH equal vs int_base6). Gorge-only eyepass on int_cand7 RUNNING (Experimental);
+  then Rendering pushes 0a299fe9 -> merge paired with the WHITEROLL table = package 6 head -> Systems' package
+  rebuild + Experimental's final gate tree -> Systems' RT verify row -> the one-GO gate block.
