@@ -1929,3 +1929,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   GB) + the E archive (6.7 GB). Running: confirming sheet on int_cand6 (Streets started), BUILD_ONLY c85cc2ad /
   7cd22027 (7cd2202 built), Systems' package build (work/playtest_slim_c85cc2ad). Systems' package build step 1
   pre-flight OK (113 GB, no hold, 3 inputs).
+  2026-10-16 14:28 PACKAGE 6 BUILT on c85cc2ad (Systems, NOPROMOTE): work/playtest_slim_c85cc2ad 27.53 GB (keep 46,744 +
+  xpr 7,161; HD 4,005 files / 21.70 GB = D 3,506 + M6 498 / 498 FROZEN; overlay 85 / 85; vbake 10 maps; failures 0;
+  Release + PGO + RT shaders). verify_slim RT-off rows all PASS (HD static 0 problems, bin 20 / 20, overlay, maps
+  Streets / Gorge / Debris, settings 7 / 7); the RT gate row waits for the card after the confirming sheet. F: 148
+  GB free (AssetTools deleted b0-2 / 6 / 12).
