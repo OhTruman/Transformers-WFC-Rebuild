@@ -915,7 +915,10 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         float bottomOld = oldPos.y + lift, bottom = p.y + lift;
         float base = c.onGround() ? bottomOld : (v.y <= 0.0f ? std::max(bottomOld, bottom) : bottom);
         // Only walkable faces carry the robot (WalkableFloorZ 0.7 [CONF authored]): a steep face was climbed one step-up at a time.
-        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n, kWalkableFloorZ)) {
+        // Rising (airborne, v.y > 0): only a surface the previous bottom was already above is landed on (UE3 physFalling); a rising jump
+        // was snapped onto any surface within MaxStepHeight above the feet (a pawn in a barrier's footprint popped onto its top).
+        const bool rising = !c.onGround() && v.y > 0.0f;
+        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n, kWalkableFloorZ) && !(rising && gy > bottomOld + 0.001f)) {
             if (bottom <= gy + 0.001f) {        // at/below the floor -> settle on it (incl. step-up)
                 p.y = gy - lift; if (v.y < 0) v.y = 0; grounded = true;
             } else if (c.onGround() && (bottom - gy) <= kSnapDown) {
