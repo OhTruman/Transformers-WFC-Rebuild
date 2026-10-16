@@ -1934,3 +1934,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Release + PGO + RT shaders). verify_slim RT-off rows all PASS (HD static 0 problems, bin 20 / 20, overlay, maps
   Streets / Gorge / Debris, settings 7 / 7); the RT gate row waits for the card after the confirming sheet. F: 148
   GB free (AssetTools deleted b0-2 / 6 / 12).
+  2026-10-16 14:40 CONFIRMING SHEET on int_cand6 (= c85cc2ad code): Streets GO (black shadow blobs gone: soft grey with
+  floor detail; no regression vs int_eye), Gorge + Debris landed (0 UNKNOWN / INVALID), Rust + Molten in ~15 min;
+  the defaults line confirms sunsharemax 0.75 + the tone keys. Gate trees for c85cc2ad / 7cd22027 BUILT (BUILD_ONLY,
+  14:21-14:29 their clock, link-render OK). Sequence after DONE: Systems RT gate row (5 min) + HD runtime row ->
+  Rendering's last go -> the one-GO gate block (~3 h).
