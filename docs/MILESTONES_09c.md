@@ -1900,3 +1900,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1.88 | 1.84, lane 1.37 | 1.45. The match-sheet drop vs int_cand3 (1.31 -> 1.26, brighter +16.7 -> +11.2) sits in
   firefight moments = the impact calibration; Rendering confirms the intended level. Fix rows so far: sun-share cap
   0.75, bright-highlight hue fade (Rendering), explosion x0.7 (merged 3ff0852b). Molten read pending.
+  2026-10-16 14:06 Molten (509) read = strong upgrade, no new row; firefight level confirmed intended (the brightness
+  figure fell because the green-white wash left; contrast and views hold). FIX CANDIDATE int_cand6 = 3ff0852b +
+  Rendering 18483783 (sun-share cap 0.75, highlight hue fade, rtdef keys); identity running; Experimental staged for
+  the confirming sheet. LEDGE GUARD -> PACKAGE 7 (v2 rare and blocks the trench, but ~half its episodes fire over
+  collision holes / mesh edges, not real drops; v3 = downward segment cast); nothing from it in package 6. SIM FREEZE
+  in effect: gate base = rise-snap 63368d05 final. Head = 18483783 merge + Systems' table.
