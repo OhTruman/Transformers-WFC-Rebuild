@@ -2,7 +2,7 @@
 # NOINTERACT, with the effect / audio diagnostics on (cue log, audio timing, muzzle log, level / match audio logs, log time)
 # and a few captures per map. One exe at a time, killed by PID on timeout; waits for PERF_HOLD.
 param([Parameter(Mandatory)] [string]$Bin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\eyepass',
-      [string]$MapList = 'MP_IAC_Streets,MP_IAC_Rust,MP_KON_Molten,MP_UND_Gorge,MP_ORB_Debris', [int]$Seconds = 70, [string]$Seed = '7')
+      [string]$MapList = 'MP_IAC_Streets,MP_IAC_Rust,MP_KON_Molten,MP_UND_Gorge,MP_ORB_Debris', [int]$Seconds = 70, [string]$Seed = '7', [string]$Bots = 'BotsFriendly=4?BotsEnemy=5', [switch]$Paced)
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
 foreach ($map in ($MapList -split ',')) {
     $dir = Join-Path $Out $map; $shots = Join-Path $dir 'shots'
@@ -15,7 +15,8 @@ foreach ($map in ($MapList -split ',')) {
     $env:WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; $env:WFC_RT_MODE = '0'
     $env:WFC_LOGTIME = '1'; $env:WFC_CUELOG = '1'; $env:WFC_AUDIOTIME = '1'; $env:WFC_MUZZLELOG = '1'; $env:WFC_LEVELAUDIOLOG = '1'; $env:WFC_MATCHAUDIOLOG = '1'
     $env:WFC_BOOT = 'match'; $env:WFC_MATCH_SECONDS = "$Seconds"; $env:WFC_SMOKE_FRAMES = '2000000'
-    $env:WFC_MATCH_URL = "$map" + '?GameModeTag=TDM?BotsFriendly=4?BotsEnemy=5?PointsToWin=1000'
+    $env:WFC_MATCH_URL = "$($map)?GameModeTag=TDM?$($Bots)?PointsToWin=1000"
+    if ($Paced) { $env:WFC_FRAMELIMIT = '60' }
     $env:WFC_SHOTMATCH = ($shots -replace '\\', '/') + ',600,4200,600'
     $t0 = Get-Date
     $p = Start-Process -FilePath (Join-Path $Bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru; $null = $p.Handle
