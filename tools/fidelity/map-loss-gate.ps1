@@ -25,7 +25,7 @@ param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir,
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Shots.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1")
 $verRef = @{}
-if (-not $VerifiedRef) { $VerifiedRef = Join-Path $PSScriptRoot "results\maploss_ref.json" }
+if (-not $VerifiedRef) { $VerifiedRef = Join-Path $PSScriptRoot "ref\maploss_ref.json" }
 if (Test-Path $VerifiedRef) { (Get-Content -Raw $VerifiedRef | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $verRef[$_.Name] = $_.Value } }
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
 $Configs = @($Configs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Configs.Count) { $Configs = @("normal", "w1280", "w1920", "lowtex") }
