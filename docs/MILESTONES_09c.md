@@ -1071,6 +1071,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rep, noise). 7 of 8 maps +0.01-0.08 ms p90 (503 / 508 consistent, p50 unchanged) = option B's sorting + soft fade on
   FX-heavy frames, within the gate (quality-first). One 501 head rep contaminated by a short python from Rendering's
   session scratchpad during the hold (passes either way); reminder issued. Untimed Classic captures running.
+  2026-10-15 22:37 CAPTURES ede2fc3c vs df132b5a, Rust, Classic (Experimental): SIMHASH 3002 / 3002 identical in Off and Faithful
+  (tip-over is Smart-only); world, HUD and characters identical; 9 / 25 shots differ in both modes on material-less
+  particles only (tracer beams, muzzle flashes, an explosion fireball, impact sparks: up to 78 k px, 10-21 k beyond 8
+  levels) where they overlap each other (the new sort) or pass within the 0.5 m soft fade of ANY geometry or
+  character = option B's documented scope (UE3 DepthBiasedAlpha against all depth). PASS. ede2fc3c rows complete.
+  Rendering's 3b second attempt (the barrier is drawn unposed from the shared dynVao_, so the deferred draw gets a
+  pooled per-frame vertex copy) building.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
