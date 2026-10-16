@@ -1859,3 +1859,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   white wash on Molten's floor) -> Systems table change: impact rows colour x0.6, duration 0.25 -> 0.15 s (patch in
   progress; merges before the eye-pass candidate); boost / pickups rechecked in the eye pass. X3 v3 view runs going
   (~25 min) -> verdict -> eye-pass candidate.
+  2026-10-16 13:30 IMPACT LIGHT CALIBRATION MERGED fefb3fed (Systems e4874fd1: the 9 impact rows colour x0.6, duration 0.25 ->
+  0.15 s via gen_fxlights.py CALIBRATION; explosions / boost / pickups byte-unchanged; values only, Realistic path).
+  Eye-pass candidate = Rendering's export of this head after the X3 v3 verdict.
