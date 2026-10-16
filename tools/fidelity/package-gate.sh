@@ -13,14 +13,16 @@
 #   bash tools/fidelity/package-gate.sh <final sha> <penultimate sha> [--whatif]      (env: BUILD_ONLY=1, SKIP_BUILD=1, SWITCH_FLIPS=1)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 F=${1:?final sha}; P=${2:?penultimate sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
-f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e}   # (the package-5 base, built by the same m05 build-target as the heads)
+f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e_yaw}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw 022e5e34"}
+# (base = package 5 398b27ef + only Gameplay's bot vehicle yaw-rate fix 022e5e34, patch -p1, byte-checked, same m05 build-target: the yaw fix
+#  changes the Classic match from step ~602, and lockstep arms must play the same match - verified 2026-10-16 vs a6e9ea67 on Streets)
 O=work/package-gate/$f; mkdir -p $O; L=$O/gate.log
 export PYTHONDONTWRITEBYTECODE=1 WFC_GATE_IGNORE_HOLD=1 WFC_GATE_GPU_GRACE_MIN=0 WFC_MUTE=1 WFC_NOINTERACT=1
 st() { echo "$(date +%T) $*" | tee -a $L; }
 run() { if [ $WHATIF = 1 ]; then echo "WHATIF: $*" | tee -a $L; else eval "$@"; fi; }
 busy() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | ? { (\$_.Name -eq 'python.exe' -and \"\$(\$_.ExecutablePath) \$(\$_.CommandLine)\" -like '*Transformers Rebuild*' -and \"\$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '\r'; }
 mine() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process -Filter \"Name='wfc_rebuild.exe'\" | ? { \$_.ExecutablePath -like '*Rebuild-Experimental*' }).Count" | tr -d '\r'; }
-st "PACKAGE GATE final $F, penultimate $P, base 398b27ef$( [ $WHATIF = 1 ] && echo ' (WHATIF: commands printed, nothing run)')"
+st "PACKAGE GATE final $F, penultimate $P, base $GATE_BASE_NAME$( [ $WHATIF = 1 ] && echo ' (WHATIF: commands printed, nothing run)')"
 [ -d "$BASE/build-release/bin" ] || { st "missing base $BASE"; [ $WHATIF = 1 ] || exit 1; }
 
 # ---- 0 builds (CPU)
