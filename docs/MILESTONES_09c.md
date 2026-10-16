@@ -1862,3 +1862,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 13:30 IMPACT LIGHT CALIBRATION MERGED fefb3fed (Systems e4874fd1: the 9 impact rows colour x0.6, duration 0.25 ->
   0.15 s via gen_fxlights.py CALIBRATION; explosions / boost / pickups byte-unchanged; values only, Realistic path).
   Eye-pass candidate = Rendering's export of this head after the X3 v3 verdict.
+  2026-10-16 13:34 X3 VOLUMETRICS OUT OF PACKAGE 6 (Rendering v3 on the 25 authored views: a grey veil that lifts blacks
+  and lowers contrast, Gorge reflective 0.80, Streets reflective 0.79, Molten firefight 0.84; no readable shafts or
+  halos) -> package 7 as the froxel / per-lamp version; code uncommitted. EYE PASS STARTED on int_eye = integration
+  7cd22027 exactly (Release; every Realistic row merged, effect lights + headlights default-on, impact calibration
+  in): Experimental runs match sheets + authored views + scores; Rendering reads per map and sends fix rows; the head
+  = last fix row + Gameplay's ledge guard.
