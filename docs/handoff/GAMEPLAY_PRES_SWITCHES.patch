@@ -1,0 +1,23 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index a748401..4af3e85 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -6008,7 +6008,8 @@ void World::tickKillstreakItems(float dt) {
+             KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
+             m.audioKey = ++projAudioKey_;                  // [Systems M08p]
+             mines_.push_back(m);
+-            {   // [Gameplay] presentation: spawned with the owner's rotation, the flight trail from spawn
++            static const bool noMinePres = std::getenv("WFC_NOMINEPRES") != nullptr;   // harness (perf bisects): no mine presentation
++            if (!noMinePres) {   // [Gameplay] presentation: spawned with the owner's rotation, the flight trail from spawn
+                 ensureAbilityModels();
+                 MinePres& mp = minePres_[m.audioKey];
+                 mp.yaw = pc.yaw();
+@@ -6846,6 +6847,8 @@ const char* damageDeathType(const std::string& dmg) {
+ 
+ void World::requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType) {
+     const assets::SkinnedModel* mdl = pawn.currentModel();
++    static const bool noCorpse = std::getenv("WFC_NOCORPSE") != nullptr;   // harness (perf bisects): the death light only, no body / gibs / wreck
++    if (noCorpse) mdl = nullptr;
+     if (!mdl || !mdl->valid()) { spawnDeathLight(pawn.chassis().id, pawn.moveForm() == Form::Vehicle, damageType, pawn.actorLocation()); return; }   // no body: the light alone
+     CorpseRequest q;
+     q.player = player; q.owner = owner; q.model = mdl; q.world = pawn.meshMatrix(pawn.form()); q.pose = pawn.displayPose();
