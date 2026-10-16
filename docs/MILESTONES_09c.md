@@ -2001,3 +2001,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   WFC_SOFTPARTICLES=0, WFC_RT_TONE=0, death bodies / mines off (switch from Gameplay), DATA arms (pre-FX-regen
   map_fx_runtime, pre-item-6 materials). Rendering asked to rank causes during the hold. Hand-over may slip if a code
   fix + re-gate is needed.
+  2026-10-16 15:41 BISECT PLAN (Experimental work/bisect_501.sh): Berth RT off, Classic, same match, 2 reps, arms base /
+  final / TLTILED=0 / SOFTPARTICLES=0 / RT_TONE=0 / pre-FX-regen data / pre-item-6 data; runs as a ~25 min hold at
+  the END of the gate block (~18:30-19:00 their clock); the corpse / mines arms after Gameplay's WFC_NOCORPSE /
+  WFC_NOMINEPRES switch build (no switch exists on the head; compiled after the block). The regress + 1b hold clears
+  as planned; Systems' RT-off rows + deletion between the holds; AssetTools resumes between on my word.
