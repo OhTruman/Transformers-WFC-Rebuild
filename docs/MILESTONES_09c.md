@@ -2113,3 +2113,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the Off path in src/render/gl between 398b27ef and the head (not corpses alone). Rendering reading the draw path
   for it (per-draw light / uniform setup, defaults lookups, state); corpse arms show the chars share. mapswitch
   rerun 7cd22027 PASS 6/6.
+  2026-10-16 18:02 GATE COMPLETE on 4078e47b (PACKAGE-GATE.md): mapswitch PASS 6/6 both heads; FAST 7cd22027 + 4078e47b
+  PASS 59 / KNOWN 1 / PRODUCT FAIL 0 / HARNESS FAIL 0; regress REPORT 8 BISECT; 1b REPORT >= 60 fps; leak PASS;
+  eyepass sheets. CORPSE HOLD running (~20 min): base, int_csb, int_cap, +NOCORPSE, +NOMINEPRES, int_csn.
+  WINDOW HYPOTHESIS (Rendering): the GL diff adds ~0.05-0.15 ms per frame of per-bind work at most; the uniform
+  CPU doubling fits the NOINTERACT window change 7d9edf78 (borderless WS_POPUP + WS_EX_NOACTIVATE at HWND_BOTTOM
+  vs the base's framed overlapped window: a different present / DWM path). DECISIVE ARM: int_cand10 = head +
+  Win32Window.cpp from 398b27ef (Rendering builds after the hold) vs int_csb in a short hold.
