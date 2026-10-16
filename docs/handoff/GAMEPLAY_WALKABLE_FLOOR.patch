@@ -1,0 +1,108 @@
+diff --git a/src/game/Collision.h b/src/game/Collision.h
+index 0928327..126d361 100644
+--- a/src/game/Collision.h
++++ b/src/game/Collision.h
+@@ -19,7 +19,8 @@ public:
+ 
+     // Highest walkable surface at (x,z) with surface Y <= nearY + stepUp.
+     // Returns false if nothing found under/near the point.
+-    bool groundHeight(float x, float z, float nearY, float stepUp, float& outY, core::Vec3& outNormal) const;
++    // minAbsNy > 0: only faces with |n.y| >= minAbsNy count (WalkableFloorZ; the collision winding is not reliable, hence |n.y|).
++    bool groundHeight(float x, float z, float nearY, float stepUp, float& outY, core::Vec3& outNormal, float minAbsNy = 0.0f) const;
+ 
+     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
+     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+@@ -60,7 +61,7 @@ private:
+         bool posed = false;
+     };
+     std::vector<DynamicSet> dyn_;
+-    bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const;
++    bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal, float minAbsNy = 0.0f) const;
+ 
+     int cellOf(float x, float z) const;
+     void cellRange(float x, float z, int& cx, int& cz) const;
+diff --git a/src/game/Collision.cpp b/src/game/Collision.cpp
+index 3e574e9..fecbc8f 100644
+--- a/src/game/Collision.cpp
++++ b/src/game/Collision.cpp
+@@ -65,7 +65,7 @@ void CollisionWorld::cellRange(float x, float z, int& cx, int& cz) const {
+ }
+ 
+ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
+-                                  float& outY, core::Vec3& outNormal) const {
++                                  float& outY, core::Vec3& outNormal, float minAbsNy) const {
+     if (grid_.empty()) return false;
+     int cx, cz;
+     cellRange(x, z, cx, cz);
+@@ -86,9 +86,9 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
+         const float eps = -0.001f;
+         if (l1 < eps || l2 < eps || l3 < eps) continue;
+         float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
+-        if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
++        if (y <= ceil && y > best && std::fabs(t.n.y) >= minAbsNy) { best = y; outNormal = t.n; found = true; }
+     }
+-    if (dynamicGround(x, z, ceil, best, outNormal)) found = true;   // moving collision sets
++    if (dynamicGround(x, z, ceil, best, outNormal, minAbsNy)) found = true;   // moving collision sets
+     if (found) outY = best;
+     return found;
+ }
+@@ -329,7 +329,7 @@ void CollisionWorld::setDynamicPose(int id, const core::Mat4& pose) {
+     }
+ }
+ 
+-bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const {
++bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal, float minAbsNy) const {
+     bool found = false;
+     for (size_t si = 0; si < dyn_.size(); ++si) {
+         const DynamicSet& s = dyn_[si];
+@@ -344,7 +344,7 @@ bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, co
+             float l3 = 1.0f - l1 - l2;
+             if (l1 < -0.001f || l2 < -0.001f || l3 < -0.001f) continue;
+             float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
+-            if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
++            if (y <= ceil && y > best && std::fabs(t.n.y) >= minAbsNy) { best = y; outNormal = t.n; found = true; }
+         }
+     }
+     return found;
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index 206811a..47cb7c6 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -16,6 +16,7 @@ static constexpr float kStepUpConf = 0.35f; // [CONF] TnRobotForm._MovementCapab
+ // WFC_STEPUP=m overrides it for A/B diagnostics only.
+ static const float kStepUp = std::getenv("WFC_STEPUP") ? (float)std::atof(std::getenv("WFC_STEPUP")) : kStepUpConf;
+ static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
++static constexpr float kWalkableFloorZ = 0.7f;   // Pawn / TnRobotForm WalkableFloorZ [CONF authored] (|n.y|: the collision winding is unreliable)
+ // Rigid-body hull extents live in VehicleParams (truck: VH_Optimus_PHYSSYS convex box, CONF).
+ 
+ namespace {
+@@ -913,7 +914,8 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+         // -> AcrobaticsManager.Fall) from the shared actor location and lands normally.
+         float bottomOld = oldPos.y + lift, bottom = p.y + lift;
+         float base = c.onGround() ? bottomOld : (v.y <= 0.0f ? std::max(bottomOld, bottom) : bottom);
+-        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n)) {
++        // Only walkable faces carry the robot (WalkableFloorZ 0.7 [CONF authored]): a steep face was climbed one step-up at a time.
++        if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n, kWalkableFloorZ)) {
+             if (bottom <= gy + 0.001f) {        // at/below the floor -> settle on it (incl. step-up)
+                 p.y = gy - lift; if (v.y < 0) v.y = 0; grounded = true;
+             } else if (c.onGround() && (bottom - gy) <= kSnapDown) {
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index c5a660f..761e5a6 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5437,7 +5437,14 @@ void Application::runBotTest() {
+                     const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+                     const bool fighting = b && b->target >= 0;
+                     float& sf = stillFor[o->matchPlayer()];
+-                    sf = (d < 0.02f && !fighting) ? sf + dt : 0.0f;
++                    // A Smart squad member holding its squad goal while its leader moves (waiting at the shared destination) is not idle.
++                    bool squadWait = false;
++                    if (const game::SmartBot* sb = world_.smartBot(o->matchPlayer()); sb && sb->squadGoalKind >= 0) {
++                        const int ld = world_.smartSquadLeader(world_.smartSquadId(o->matchPlayer()), ps[(size_t)o->matchPlayer()].team);
++                        if (ld >= 0 && ld != o->matchPlayer())
++                            if (const game::Character* lc = world_.participantPawn(ld)) squadWait = std::hypot(lc->velocity().x, lc->velocity().z) > 1.0f;
++                    }
++                    sf = (d < 0.02f && !fighting && !squadWait) ? sf + dt : 0.0f;
+                     if (sf > 15.0f && sf - dt <= 15.0f && b) {
+                         const game::Character& pw = o->pawn();
+                         LOG_INFO("BOTTEST idle 15 s: %s p%d pos (%.1f %.1f %.1f) cell %d form %s xf %d goal %s (%.1f %.1f %.1f) path %zu wp %zu stuckLvl %d noPaths %d target %d ground %d wantVeh %d",
