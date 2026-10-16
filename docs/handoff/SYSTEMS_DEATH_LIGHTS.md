@@ -30,8 +30,7 @@ motion (Hovering, Airborne, momentum), and a headshot gives HeadShot.
   types without a DamageDeathType (e.g. TnDamageTypePlaneRocket, TnDamageTypeTruckRocket, whose death type the picker
   takes from the victim's motion) have no light.
 - Not picked: Hovering / Airborne from the victim's motion state.
-- Ramp: brightness 0 -> 1 over RampInTime, held until LightTime from the start, then RampOutTime (0 = off). Whether the
-  original's LightTime counts from the start or after the ramp-in is code-side (the script bytecode is not decompiled).
+- Ramp (confirmed by Gameplay's RE, GAMEPLAY_CLOAKLIGHT_RE.md on agents/gameplay fb5e40c3: TnRampLightManager.UpdateLight): LightTime counts from the trigger; brightness = min(t / RampInTime, 1) x Brightness, the last RampOutTime of LightTime ramps down, off after LightTime. The rebuild's ramp gives the same curve for every authored light (RampOutTime is 0 in all of them).
 - The light sits at the victim's actor location at the death (Translation 0), keyed per victim (a new death restarts it).
 - One hook: World::onPawnDeath (Gameplay ee43bef1, once per death on every path). The victim (light key), headshot and vehicle form type come from the newest death record whose victim pawn matches the chassis and position.
 

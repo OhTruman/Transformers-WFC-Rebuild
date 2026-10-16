@@ -28,8 +28,6 @@ Source: AssetTools authored.db (read only; every exported object, class defaults
 - Map-placed dynamic light actors (Toggleable / Movable point, spot, directional and sky lights) exist in 71 campaign and
   cinematic packages. In the MP maps there is exactly one: MP_ESC_Remnant_ART_m PointLightToggleable_1918, already in the
   bake-lights audit (SYSTEMS_BAKE_LIGHTS_AUDIT.json, the Remnant extra light).
-- The original's gameplay lights are therefore exactly what package 5 ships: weapon muzzle lights, death ramp lights, and
-  the pawn CloakLight (not wired yet: its ramp values are set in code; the component is radius 1024 cm default, colour
-  (250,220,120), unshadowed).
+- The original's gameplay lights are therefore exactly what package 5 ships: weapon muzzle lights and death ramp lights. TnPawn.CloakLight exists but the original never turns it on (Gameplay RE, GAMEPLAY_CLOAKLIGHT_RE.md on agents/gameplay fb5e40c3: only the death-light service calls TriggerLight; the cloak manager stays at CurrentTime -1); not wired, by design.
 
 Anything beyond these (headlights, pickup glow lights, screen lights) is an RT-era addition, not a restoration.
