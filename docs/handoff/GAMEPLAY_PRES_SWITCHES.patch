@@ -11,7 +11,7 @@ index b759835..55c1cf9 100644
      };
      struct CorpseRequest {
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index a748401..d52af87 100644
+index a748401..18538d3 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -6008,7 +6008,8 @@ void World::tickKillstreakItems(float dt) {
@@ -56,3 +56,11 @@ index a748401..d52af87 100644
      Corpse c;
      c.player = q.player; c.owner = q.owner; c.model = q.model; c.world = q.world; c.start = q.pose; c.vehicle = q.vehicle; c.jet = q.jet;
      c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis;
+@@ -6930,6 +6949,7 @@ void World::spawnCorpse(const CorpseRequest& q) {
+     spawnDeathLight(q.chassis, q.vehicle, q.damageType, q.pos, (c.mods & 8u) ? 1 : 0);   // the light of the same entry
+     corpses_.push_back(std::move(c));
+     ++corpsesMade_;
++    if (std::getenv("WFC_CORPSETEST")) { int act = 0; for (const Corpse& o : corpses_) act += !o.retired; LOG_INFO("CORPSE active units %d of %zu", act, corpses_.size()); }
+ }
+ 
+ void World::gibCorpse(Corpse& c) {
