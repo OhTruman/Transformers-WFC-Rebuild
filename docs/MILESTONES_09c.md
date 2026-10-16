@@ -1630,3 +1630,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   now: Systems RT gate row -> Experimental eyepass on int_cand (X3 go / no-go) -> RESUME. Gameplay: bot Driving steer
   sign INVERTED for both AIs (bots steer away from the heading error until the boost drops them to hover); one-line
   fix in test + permanent BOTTEST row + third Classic re-baseline. gate-base.sh scripted (c34c177a).
+  2026-10-16 09:33 Systems SYSTEMS_FXLIGHTS_DEFAULT_ON ready (9a11a073; docs merged fec179ff): effect lights default-on
+  in Realistic (WFC_FXLIGHTS=0 off), headlights confirmed default-on; fix: rtOnly lights no longer enter the live
+  transient list outside Realistic (protects Off / Faithful identity); verify_slim gains rtcheck.rtlights; SIMHASH
+  identical, Off identity Gorge 16 / 16 + Streets; the 3 min RT crop runs at the sheet's end, then the patch merges.
+  BOTTEST "bots toss grenades (2)" FAILS at 56a9beca itself (45 / 46; Gameplay reproducing on a clean export; must
+  read 46 / 46 before the head). Gameplay steer-sign fix PASSES (every map better or equal both AIs; Debris Smart
+  within noise of pre-yaw; BOTTEST 48 / 48 with the new DRIVE guard rows, 46 / 48 with the old sign); patch + third
+  re-baseline after the grenade item. Rendering: RT-off identity + item 6 recaptures beside the sheet; next sheet exe
+  = Release int_cand2. AssetTools: objtree reference-cycle fix (byte-identical), D3B ~1 h, D2_COR next (cache 10).
