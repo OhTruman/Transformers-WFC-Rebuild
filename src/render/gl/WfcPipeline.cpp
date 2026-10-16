@@ -4465,7 +4465,9 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 }
             }
             static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;   // diagnostics: winding check
-            if (P.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+            // (the RT hit data's UV-space tiles: never culled - a mirrored UV layout winds the other way, and the earlier
+            // disable above was overridden here: half of Molten's subs got no albedo / emissive, the lava lit nothing)
+            if (P.twoSided || noCull || rtUvAtlas_) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             switch (P.blend) {
                 case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
                 case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
