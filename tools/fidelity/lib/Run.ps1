@@ -11,6 +11,9 @@
 # (user 2026-10-13) silent by default for EVERY process a harness starts, including those launched without Add-WfcHarnessEnv
 # (unit-test exes, bash launchers started from a harness): WFC_MUTE=1 in this process's environment unless the caller set it
 if (-not $env:WFC_MUTE) { $env:WFC_MUTE = "1" }
+# (user 2026-10-15) lane game windows never take the mouse / focus: WFC_NOINTERACT=1 (Gameplay, integration 4da148bb; keeps
+# fullscreen requests windowed - a fullscreen row passes WFC_NOINTERACT = "" in its env, which removes it for that launch)
+if (-not $env:WFC_NOINTERACT) { $env:WFC_NOINTERACT = "1" }
 function Add-WfcHarnessEnv([hashtable]$Env) {
     $e = if ($Env) { $Env.Clone() } else { @{} }
     if (-not $e.ContainsKey("WFC_AUTODETECT")) { $e.WFC_AUTODETECT = "0" }
@@ -27,6 +30,7 @@ function Add-WfcHarnessEnv([hashtable]$Env) {
     # (user 2026-10-15: lane game windows must not take the mouse / focus - interim until WFC_NOINTERACT lands: no mouse look in the
     #  game; a harness that drives the mouse sets WFC_NOMOUSE itself)
     if (-not $e.ContainsKey("WFC_NOMOUSE")) { $e.WFC_NOMOUSE = "1" }
+    if (-not $e.ContainsKey("WFC_NOINTERACT")) { $e.WFC_NOINTERACT = "1" }
     Assert-WfcHdRoot $e
     return $e
 }
