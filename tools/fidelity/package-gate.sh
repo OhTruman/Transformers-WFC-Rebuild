@@ -14,7 +14,8 @@
 #   bash tools/fidelity/package-gate.sh <final sha> <penultimate sha> [--whatif]      (env: BUILD_ONLY=1, SKIP_BUILD=1, SWITCH_FLIPS=1)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 F=${1:?final sha}; P=${2:?penultimate sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
-f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e_yaw}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw 022e5e34"}
+f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e_yaw_probe}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw 022e5e34 + drive-probe 56a9beca"}
+# (rebuild with tools/fidelity/gate-base.sh <name> <sim commits...> when another sim change lands; verified same match vs 56a9beca on Streets)
 # (base = package 5 398b27ef + only Gameplay's bot vehicle yaw-rate fix 022e5e34, patch -p1, byte-checked, same m05 build-target: the yaw fix
 #  changes the Classic match from step ~602, and lockstep arms must play the same match - verified 2026-10-16 vs a6e9ea67 on Streets)
 O=work/package-gate/$f; mkdir -p $O/regress $O/rtperf; L=$O/gate.log
