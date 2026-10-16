@@ -1939,3 +1939,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the defaults line confirms sunsharemax 0.75 + the tone keys. Gate trees for c85cc2ad / 7cd22027 BUILT (BUILD_ONLY,
   14:21-14:29 their clock, link-render OK). Sequence after DONE: Systems RT gate row (5 min) + HD runtime row ->
   Rendering's last go -> the one-GO gate block (~3 h).
+  2026-10-16 14:42 CONFIRMING SHEET: Debris GO; Gorge NO-GO on one frame (step 1080: a full-screen explosion still flat
+  yellow-green in Realistic / Enhanced while Off is white + orange; the shoulder fix moved only the luminance half,
+  the per-channel half rolls R / G to 1 while B stays low under the exposure adaptation) -> FIX: very bright pixels
+  (brightest channel > 1) desaturate toward white before the shoulder; everything else untouched. HEAD MOVES: int_cand7
+  = 3ff0852b + 18483783 + fix; after the sheet's DONE the card goes to Rendering (identity + Gorge step-1080 confirm,
+  ~25 min) -> merge = new head -> Systems rebuilds the package (~45 min) + Experimental rebuilds the final gate tree
+  (~10 min) -> Systems' RT verify row -> the one-GO gate. Sim base unchanged. Head ~1 h later than planned.
