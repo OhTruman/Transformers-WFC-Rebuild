@@ -1546,3 +1546,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   audio PASS. Systems X5 caster list + fade curves merged bb5ac029. AssetTools A1_IAC: two ray-grid audits skipped
   "pending", destructibles stage cached (33 min -> seconds, byte-identical); doc pending. Package-gate BUILD_ONLY
   shakedown clean (11 min); eye-pass proof on 0a9c497f with HD on waits for Rendering's batch boundary (~06:30).
+  2026-10-16 06:48 TILED TRANSIENT LIGHTS MERGED 1c94d62e (Rendering aed1c441: 64 lights / frame in Realistic, per-32-px
+  tiles, first 4 keep RT shadows, WFC_TLTILED=0; fixes effect lights pushing muzzle lights out of the 8 cap). Off /
+  Faithful identity holds with tiled + X1 + X2 + HD fix in the exe (5 / 5, SIMHASH f3db6ef032d17b93). Item 6 now real
+  (HD pack accepted, Modern on): Rust energy-matched +19.3 % / Molten +6.7 % vs target +-5 %, Rust needs a pass. X1
+  retune: keeps the original's toe / midtones, stops plate bleaching, but is subtle (Streets 10-15 % darker); NOT yet
+  night-and-day -> Realistic may take a real grade (adaptation 0.65+, bloom 0.8, midtone gain, per-map colour grade);
+  Faithful keeps the match. X2: 0 pixels changed (branch not reaching the world shader), debugging. X4 / X5-1 written.
+  Eye-pass proof running on 0a9c497f (Experimental, slot A ~45 min); death-body design approved f7b7828d; mines merged.
