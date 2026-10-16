@@ -1516,3 +1516,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   its authored hologram (package 5 known issue closed). Other 5 MP maps regenerating. New gap for Gameplay: kamikaze
   mines have no presentation (World never draws mines_). Experimental resumed 05:00 (FAST table ~40 min; combined
   final gate sized ~3.5 h GPU block). AssetTools A1_IAC running (10 GB chapter cap); validator campaign mode DONE.
+  2026-10-16 05:32 FAST 398b27ef post-reboot rerun (Experimental 05:04-05:30): NO product fails (PASS 51 / HARNESS 1 /
+  KNOWN 2 / INFO 2 / PARTIAL 2 / UNKNOWN 1); the first run's BROKEN rows were the 03:51 TDR (GL reset 0x8255). The
+  mapswitch row needs an empty card (all lanes paused, running now); package 5 promotes on its DONE. Prune: 89 trees,
+  45.5 GB freed. Row 5 merged 70310b02 (WFC_RT_PROBEFILL).
+  HD PACK NEVER LOADED (Systems' finding): the HD / HdPbr index loaders read sizes via asFloat; 89,478,612 rounded to
+  89,478,608, one row counted as wrong-size and the whole pack was ignored, so HD textures were OFF in packages 4 and 5
+  (verify_slim's map rows ran HD = Off). Fixed 66eb7d73 (asDouble). The snapshots are correct; AssetTools' re-snapshot
+  cancelled. Package 6 = the first build where HD actually shows; verify_slim gains the HD-accepted runtime row.
