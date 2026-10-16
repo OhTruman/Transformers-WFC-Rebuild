@@ -1,0 +1,236 @@
+{
+ "MP_ESC_BrokenHope": {
+  "counts": {
+   "lods": 2568,
+   "identical": 1669,
+   "Absolute=false only": 889,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 7,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2",
+   "Shard_FadeOut_FX/Shard_2 LOD0",
+   "Shard_FadeOut_FX/Shard_2 LOD1",
+   "Shard_FX/Shard_2 LOD0",
+   "Shard_FX/Shard_2 LOD1"
+  ],
+  "other": []
+ },
+ "MP_ESC_Remnant": {
+  "counts": {
+   "lods": 2343,
+   "identical": 1541,
+   "Absolute=false only": 786,
+   "Orbit completed": 13,
+   "(also Absolute=false)": 6,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "Fire_Energon_FX/Embers_Dup LOD0",
+   "Fire_Energon_FX/Embers_Dup LOD1",
+   "Fire_Energon_FX/Embers_Dup LOD2",
+   "Fire_Energon_Lrg_FX/Embers_Dup LOD0",
+   "Fire_Energon_Lrg_FX/Embers_Dup LOD1",
+   "Fire_Energon_Lrg_FX/Embers_Dup LOD2",
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2",
+   "Shard_FadeOut_FX/Shard_2 LOD0",
+   "Shard_FadeOut_FX/Shard_2 LOD1",
+   "Shard_FX/Shard_2 LOD0",
+   "Shard_FX/Shard_2 LOD1"
+  ],
+  "other": []
+ },
+ "MP_IAC_Berth": {
+  "counts": {
+   "lods": 2031,
+   "identical": 1378,
+   "Absolute=false only": 647,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_IAC_Rust": {
+  "counts": {
+   "lods": 2023,
+   "identical": 1370,
+   "Absolute=false only": 647,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_IAC_Seed": {
+  "counts": {
+   "lods": 2200,
+   "identical": 1476,
+   "Absolute=false only": 718,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_IAC_Streets": {
+  "counts": {
+   "lods": 2083,
+   "identical": 1407,
+   "Absolute=false only": 670,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_KON_Molten": {
+  "counts": {
+   "lods": 2042,
+   "identical": 1388,
+   "Absolute=false only": 648,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_ORB_Debris": {
+  "counts": {
+   "lods": 2180,
+   "identical": 1495,
+   "Absolute=false only": 679,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_UND_Complex": {
+  "counts": {
+   "lods": 2061,
+   "identical": 1401,
+   "Absolute=false only": 654,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ },
+ "MP_UND_Gorge": {
+  "counts": {
+   "lods": 2029,
+   "identical": 1372,
+   "Absolute=false only": 651,
+   "(also Absolute=false)": 6,
+   "Orbit completed": 3,
+   "VelOverLife gained": 3
+  },
+  "top_level_changes": [],
+  "velOverLife": [
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD0",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD1",
+   "Squib_HomRocket_01_FX/Embers_Dup_Dup LOD2"
+  ],
+  "orbit": [
+   "TF_Death_Energy_Med_FX/Sparkler LOD0",
+   "TF_Death_Energy_Med_FX/Sparkler LOD1",
+   "TF_Death_Energy_Med_FX/Sparkler LOD2"
+  ],
+  "other": []
+ }
+}
