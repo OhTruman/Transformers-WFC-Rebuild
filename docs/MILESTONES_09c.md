@@ -2144,3 +2144,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   RESPIN GATE GO at 18:27: package-respin.sh 9350f19b 4078e47b (timed 8-map regress -> delta FAST -> 2b per-body +
   5v5 -> PACKAGE-GATE.md). Systems idle until the regress hold clears, then the 4078e47b package deletion + RT-off
   verify rows; RT + HD rows after the block.
+  2026-10-16 18:35 USER DECISION: PACKAGE 6 IS HELD until volumetric lighting (froxel X3) is implemented and passes the
+  eye check (contrast >= 1.28 / 1.30, shafts not haze). Rendering starts the froxel version now (~2-3 days);
+  Gameplay's GPU-skinned corpses (package 7 item 1) move into package 6; the respin gate + verify finish and
+  playtest_slim_9350f19b is promoted quietly as the pre-volumetric checkpoint (no hand-over). Hand-over = when
+  volumetrics pass; the user is told ~19 Oct.
