@@ -1,0 +1,35 @@
+--- a/src/game/FxLights.inc
++++ b/src/game/FxLights.inc
+@@ -5,13 +5,13 @@
+     {"FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX", {3.39f, 6.42f, 2.131f}, 2.5f, 2.0f, 0.15f},   // impact (spawnImpact)
+     {"FX_AssaultRifle_p.FX.Impact_HeavyMG_FX", {3.525f, 6.42f, 2.247f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+     {"FX_EMPShotgun_p.FX.Squib_EMPShotgun_FX", {3.467f, 6.42f, 2.202f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+-    {"FX_Explosives_p.FX.Exp_2500cb_FX", {11.9f, 11.9f, 4.796f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_Explosives_p.FX.Exp_Energy_MED_FX", {2.477f, 1.88f, 12.7f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_Explosives_p.FX.Martyrdom_Grenade_FX", {9.9f, 9.573f, 5.108f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_FusionCannon_p.FX.Exp_FusionCannon_FX", {9.4f, 9.4f, 9.4f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_GrenadeLauncher_p.FX.Explosion_GrenadeLauncher_01_FX", {13.8f, 12.517f, 2.111f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_Explosives_p.FX.Exp_2500cb_FX", {8.33f, 8.33f, 3.357f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_Explosives_p.FX.Exp_Energy_MED_FX", {1.734f, 1.316f, 8.89f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_Explosives_p.FX.Martyrdom_Grenade_FX", {6.93f, 6.701f, 3.576f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_FusionCannon_p.FX.Exp_FusionCannon_FX", {6.58f, 6.58f, 6.58f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_GrenadeLauncher_p.FX.Explosion_GrenadeLauncher_01_FX", {9.66f, 8.762f, 1.478f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+     {"FX_HeavyPistol_p.FX.Squib_HeavyPistol_FX", {6.651f, 6.651f, 6.78f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+-    {"FX_HomingRocket_p.FX.Squib_HomRocket_01_FX", {13.3f, 13.167f, 12.369f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_HomingRocket_p.FX.Squib_HomRocket_01_FX", {9.31f, 9.217f, 8.658f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+     {"FX_IonBlaster_p.FX.Impact_IonBlaster_FX", {3.78f, 3.78f, 3.78f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+     {"FX_Navigation_p.Afterburner_A_FX", {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
+     {"FX_Navigation_p.Afterburner_D_FX", {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
+@@ -22,9 +22,9 @@
+     {"FX_Pickups_p.FX.HealthPickup_FX", {0.147f, 4.238f, 11.3f}, 4.0f, 2.0f, 0.0f},   // pickup factory
+     {"FX_Pickups_p.FX.OvershieldPickup_FX", {0.188f, 2.952f, 9.4f}, 4.0f, 2.0f, 0.0f},   // pickup factory
+     {"FX_Pickups_p.FX.Pickup_FX", {1.2f, 0.96f, 0.36f}, 1.0f, 2.0f, 0.0f},   // pickup factory
+-    {"FX_PlasmaCannon_p.FX.Squib_HealGrenade_FX", {0.0f, 0.106f, 13.3f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Lrg_FX", {5.2f, 5.002f, 4.878f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+-    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Sm_FX", {5.617f, 6.9f, 6.521f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_PlasmaCannon_p.FX.Squib_HealGrenade_FX", {0.0f, 0.074f, 9.31f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Lrg_FX", {3.64f, 3.502f, 3.414f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Sm_FX", {3.932f, 4.83f, 4.564f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
+     {"FX_RepairBeam_p.FX.Squib_RepairEnemy_FX", {1.012f, 1.096f, 1.92f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+     {"FX_RepairBeam_p.FX.Squib_TurretRepairEnemy_FX", {1.012f, 1.096f, 1.92f}, 4.0f, 2.0f, 0.15f},   // impact (spawnImpact)
+     {"FX_TurretIonBlaster_p.FX.Impact_IonTurret_FX", {3.39f, 6.42f, 2.131f}, 2.8f, 2.0f, 0.15f},   // impact (spawnImpact)

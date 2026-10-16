@@ -12,7 +12,10 @@ def F(x):
 # Calibration per kind on top of the hooks' proposals (Rendering, Realistic lockstep Streets / Gorge / Molten, transient gain 2,
 # 2026-10-16): explosions read right (Streets m01500); impacts threw a green-white wash over a stretch of floor (Molten
 # m01100) -> colour x 0.6 and a 0.15 s flash instead of a 0.25 s glow. Boost / pickups: rechecked in the eye pass.
-CALIBRATION = {'impact (spawnImpact)': {'colour': 0.6, 'duration_s': 0.15}}   # keyed by the hooks' kind
+# Eye pass (Rendering, Rust pick_504 step 840): a nearby explosion blew Rust's bright floor out to white -> explosion
+# colour x 0.7 (radius / duration unchanged; Streets' explosion still reads strong at 0.7).
+CALIBRATION = {'impact (spawnImpact)': {'colour': 0.6, 'duration_s': 0.15},   # keyed by the hooks' kind
+               'explosion (radiusDamage / projectile impact)': {'colour': 0.7}}
 
 rows = json.load(open(sys.argv[1], encoding='utf-8'))['rows']
 fx = {}
