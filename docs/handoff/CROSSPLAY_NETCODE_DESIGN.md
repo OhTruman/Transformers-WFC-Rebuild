@@ -132,7 +132,7 @@ Per tick per human ~10 bytes of command; packets carry R = 8 ticks of redundancy
 | match | humans | upstream per peer (to host) | downstream per peer (from host) | host upstream (to all) |
 |---|---|---|---|---|
 | 5 v 5, 10 humans | 10 | (60 + 8 x 10) x 60 = 8.4 KB/s | (60 + 8 x 10 x 10) x 60 = 51 KB/s | 9 x 51 = 460 KB/s |
-| 5 v 5, 2 humans + 8 bots | 2 | 8.4 KB/s | 8.4 KB/s (the 2 humans' bundle) | 8.4 KB/s |
+| 5 v 5, 2 humans + 8 bots | 2 | 8.4 KB/s | (60 + 8 x 10 x 2) x 60 = 13.2 KB/s | 13.2 KB/s |
 | 16 v 16, 32 humans | 32 | 8.4 KB/s | (60 + 8 x 10 x 32) x 60 = 157 KB/s | 31 x 157 = 4.9 MB/s |
 
 Redundancy dominates. With R = 3 (enough for 1-2 losses) and the bundle carrying each human's commands only since the
