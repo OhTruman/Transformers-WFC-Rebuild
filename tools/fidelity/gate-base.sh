@@ -1,7 +1,8 @@
 #!/bin/bash
 # GATE BASE (package 6, Integration 2026-10-16): the package-gate regress base = package 5 398b27ef + ONLY the integration commits
 # that change the Classic simulation (yaw 022e5e34, drive probe, ride height, ...), so base / final / lights-off play the same match.
-#   bash tools/fidelity/gate-base.sh <name> <sim commit> [<sim commit> ...]      e.g. gate-base.sh yaw_probe 022e5e34 <probe sha>
+#   bash tools/fidelity/gate-base.sh <name> <sim commit | patch file> [...]      e.g. gate-base.sh yaw_probe 022e5e34 <probe sha>
+#   (a patch FILE = a minimal sim-only diff against 398b27ef, e.g. tools/fidelity/gatebase/steer_3de18d73_vs_398b27ef.patch)
 # Steps: m05 build-target 398b27ef (Release only, third_party) into work/ab/fast_398b27e_<name>; each commit's src/ diff applied
 # in order with patch -p1 (git apply is a no-op in archive trees); every patched file byte-checked against the LAST listed commit
 # that touched it (git show <sha>:<path>); Release rebuilt; link-render (render data, NOINTERACT / RT shaders). Then verify with
@@ -18,6 +19,12 @@ st "build 398b27ef -> $T"
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref 398b27ef -Name fast_398b27e_$N -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party >> $L 2>&1 || { st "build-target failed"; exit 1; }
 declare -A last
 for c in "$@"; do
+  if [ -f "$c" ]; then   # a minimal sim-only diff against 398b27ef (when a commit's other hunks need non-sim history): applied, not byte-checked;
+    (cd $T && patch -p1 --forward < "$OLDPWD/$c") >> $L 2>&1 || { st "patch $c failed (see $L)"; exit 1; }   # the VERIFY same-match row proves it
+    pf=$(grep '^+++ ' "$c" | sed -E 's#^[+]{3} b/([^[:space:]]+).*#\1#' | tr '\n' ' ')
+    for f in $pf; do unset "last[$f]"; done   # (those files are no longer a commit's copy)
+    st "applied file $c: $pf(verified by VERIFY, not byte-checked)"; continue
+  fi
   git cat-file -e $c^{commit} || { st "unknown commit $c"; exit 1; }
   git show $c -- src > work/gatebase_$N.$c.diff
   (cd $T && patch -p1 --forward < ../../gatebase_$N.$c.diff) >> $L 2>&1 || { st "patch $c failed (see $L)"; exit 1; }
