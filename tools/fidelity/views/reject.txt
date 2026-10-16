@@ -1,0 +1,1 @@
+508 TnTeamPlayerStart_15496 lane camera renders inside a debris pile (under-floor look) on the 2026-10-16 test pass

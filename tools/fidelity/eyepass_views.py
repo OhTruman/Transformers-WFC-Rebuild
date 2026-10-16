@@ -132,7 +132,7 @@ def views(mid):
                 sides = [col.ray(tgt, unit(az_l + s * math.pi / 2, math.radians(30)), 80)[0] for s in (-1, 1)]
                 side_h = [s * math.sin(math.radians(30)) for s in sides]
                 far = tgt + np.array([look[0], 0, look[2]]) * min(run, 60); gf = ground(far + [0, 1, 0], pawn); flat = gf is not None and abs(gf[1] - g0[1]) < 1.5
-                cands.append(dict(cls=cls, actor=actor, c=c, t=tgt, up=up, walls=walls, light=light, fmat=fmat, el=el_l, run=run, side_h=side_h, flat=flat, dist=dist,
+                cands.append(dict(cls=cls, actor=actor, c=c, t=tgt, up=up, walls=walls, light=light, fmat=fmat, el=el_l, run=run, side_h=side_h, flat=flat, dist=dist, same_floor=abs((c[1] - gc) - g0[1]) <= 3.0,
                                   open=sum(w > 25 for w in walls)))
     col, pawn, bsp = colW, pawnW, bspW
     if not cands: return []
@@ -151,13 +151,21 @@ def views(mid):
              ("dark", ((s_dark, "dark interior (ceiling within 12 m, walled on 7+ of 16 sides within 20 m, darkest quarter of the light sum)"), (s_dark2, "darkest roofed spot (no walled dark interior on this map)"))),
              ("reflective", ((s_refl, "reflective floor"), (s_refl2, "glancing view over open floor (no env-mapped / spec floor material found under a target)"))),
              ("lane", ((s_lane, "vehicle lane (long flat clear run)"), (lambda k: min(k["run"], 120), "longest clear run (no flat 30 m lane on this map)"))))
-    out, used = [], set()
+    # views/reject.txt: "<map id> <target actor> <reason>" - targets whose camera renders wrong (inside unlisted geometry);
+    # found by eye on the test-render pass, the next-best candidate is used instead
+    rj = os.path.join(OUT, "reject.txt")
+    rejected = {l.split()[1] for l in open(rj) if l.strip() and l.split()[0] == mid} if os.path.exists(rj) else set()
+    out, used = [], set(rejected)
     for case, rules in cases:
-        for fn, why in rules:
-            best = max((k for k in cands if k["actor"] not in used), key=fn, default=None)
+        best = None
+        for strict in (True, False):   # strict: the camera stands on its target's floor (+-3 m); loose: over a gap / another level
+            for fn, why in rules:
+                best = max((k for k in cands if k["actor"] not in used and (k["same_floor"] or not strict)), key=fn, default=None)
+                if best is not None and fn(best) > 0: break
             if best is not None and fn(best) > 0: break
         else:
             out.append((case, None, f"{rules[0][1]}: no candidate on this map")); continue
+        if not best["same_floor"]: why += " [camera not on the target's floor]"
         used.add(best["actor"]); out.append((case, best, f"{why}; target {best['actor']} ({best['cls']}); floor {best['fmat'] or '-'}; ceiling {best['up']:.0f} m; run {min(best['run'], 120):.0f} m; light sum {best['light']:.1f}; view down {best['el']:.0f} deg"))
     return out
 
