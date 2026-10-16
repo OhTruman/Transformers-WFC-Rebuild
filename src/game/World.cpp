@@ -39,6 +39,12 @@ struct MuzzleLightDef { const char* cls; float radius; float color[3]; float fal
 #include "game/MuzzleLights.inc"
 struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
 #include "game/DeathLights.inc"
+// [Gameplay] The original's death entries / pickers' data (tools/gameplay/death_entries.py, authored.db).
+struct DeathEntryDef { const char* types[3]; int nTypes; const char* anim; float blendIn, tMin, tMax, aiMin, aiMax; unsigned mods; };
+struct DamageDeathTypeDef { const char* damage; const char* death; };
+struct DeathChooserDef { const char* group; const char* anim; int weight; };
+struct ChassisDeathDef { const char* chassis; const char* robotDeaths; const char* vehicleDeaths; const char* hull; float transfer; };
+#include "game/DeathEntries.inc"
 // Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
 struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
 #include "game/VehicleHeadlights.inc"
@@ -1486,7 +1492,7 @@ void World::spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& s
     addTransientLight(l);   // one MuzzleFlashLight component per weapon: a new shot restarts it
 }
 
-void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
+void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos, int lit) {
     // The victim's death record (newest first): its player (the light's key), headshot and pawn (the vehicle form type).
     int player = -1;
     bool headshot = false, jet = false;
@@ -1498,7 +1504,9 @@ void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, cons
         break;
     }
     const DeathLightDef* d = nullptr;
-    if (vehicleForm) {
+    if (lit >= 0) {   // [Gameplay] the corpse's picked death entry carries TnDeathModifierTriggerLight (body and light agree)
+        if (lit) d = vehicleForm ? &kVehicleDeathLight : &kRobotDeathLight;
+    } else if (vehicleForm) {
         if (!jet) d = &kVehicleDeathLight;   // SharedJetDeaths: no light
     } else if (!headshot) {
         for (const char* t : kLitRobotDeathDamageTypes)
@@ -1949,6 +1957,7 @@ void World::joinStep() {
     deferredWeaponLoads_.clear();
     if (!deferredHooks_.empty()) { std::vector<std::function<void()>> hooks; hooks.swap(deferredHooks_); for (auto& h : hooks) h(); }
     if (!fxOps_.empty()) { std::vector<FxOp> ops; ops.swap(fxOps_); for (const FxOp& op : ops) runFxOp(op); }
+    tickCorpses(pendingDt_);   // [Gameplay] presentation only (main thread, after the deferred corpse requests ran)
 }
 
 // The background part's presented() goes to presentedBack_: the front's unconsumed queues stay first, the back's follow.
@@ -3076,6 +3085,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
                 // silent. Presentation only (no sim state; the despawn and the event order are unchanged). Same damage type as the event.
                 if (opp->spawned()) {
                     const std::string kdt = match_.killHistory().empty() ? damageType : match_.killHistory().back().damageType;
+                    requestCorpse(opp->pawn(), victim, 100 + victim, true, kdt);   // [Gameplay] the death body (presentation only)
                     onPawnDeath(opp->pawn().chassis().id, opp->pawn().moveForm() == Form::Vehicle, kdt, opp->pawn().actorLocation());
                 }
                 opp->despawn();
@@ -3100,6 +3110,8 @@ void World::clearMatchActors() {
     rollers_.clear();
     beacons_.clear();
     buffShots_.clear();
+    for (Corpse& c : corpses_) for (CorpseChunk& k : c.chunks) if (k.fx >= 0) fxStepStop(k.fx);
+    corpses_.clear();
     for (auto& kv : minePres_) if (kv.second.fx >= 0) fxStepStop(kv.second.fx);
     minePres_.clear(); mineFades_.clear();
     mines_.clear();
@@ -3534,11 +3546,14 @@ void World::tickMatch(float dt) {
                     const std::string dt = match_.killHistory().empty() ? std::string() : match_.killHistory().back().damageType;
                     if (e.player == localPlayer_) {
                         const Character& vp = player_.pawn();
+                        requestCorpse(vp, localPlayer_, 0, playerBotDifficulty() >= 0, dt);   // [Gameplay] the death body
                         onPawnDeath(vp.chassis().id, vp.moveForm() == Form::Vehicle, dt, vp.actorLocation());
                     } else
                         for (MatchOpponent* o : opponents_)
-                            if (o->matchPlayer() == e.player && o->spawned())
+                            if (o->matchPlayer() == e.player && o->spawned()) {
+                                requestCorpse(o->pawn(), e.player, 100 + e.player, true, dt);
                                 onPawnDeath(o->pawn().chassis().id, o->pawn().moveForm() == Form::Vehicle, dt, o->pawn().actorLocation());
+                            }
                 }
                 if (e.player == localPlayer_) localDead_ = true;
                 for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
@@ -3677,6 +3692,7 @@ void World::draw(render::IRenderer& r) const {
     }
     if (drawProf) dpActors += profNowMs() - dp0;
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
+    drawCorpses(r);   // [Gameplay] death bodies (their pawn's draw owner and colours)
     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
     // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
     // without the particle API, or a template missing from this map's FX data) [fallback, not original].
@@ -3771,6 +3787,7 @@ void World::draw(render::IRenderer& r) const {
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
     drawMines(r);   // [Gameplay] kamikaze mines (owner 0: the local player's mines, its character colours)
+    drawCorpseGibs(r);   // [Gameplay] gib chunks and vehicle hull wrecks
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
     // Transient lights reaching the view only (game-side cull; the renderer additionally masks per draw): the light's sphere
@@ -6523,7 +6540,7 @@ void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const st
     ++deathPresentations_;
     if (!AbilityAudio::deathCue(chassisId, vehicleForm, damageType).empty()) ++deathCues_;
     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
-    spawnDeathLight(chassisId, vehicleForm, damageType, pos);
+    // [Gameplay] the death light comes with the corpse (requestCorpse / spawnCorpse: the light of the picked death entry)
 }
 
 void World::onLocalKillstreakActivated(const std::string& id, int team) {
@@ -6795,6 +6812,266 @@ void World::drawMines(render::IRenderer& r) const {
         int seeking = 0; for (const KamikazeMine& m : mines_) seeking += m.t >= 2.0f;
         LOG_INFO("MINEPRES drew %d mine mesh(es): %zu live (%d past the hover, %zu trails), %zu fading; explosion effects so far %d", minePresDraws_, mines_.size(), seeking,
                  (size_t)std::count_if(minePres_.begin(), minePres_.end(), [](const auto& kv) { return kv.second.fx >= 0; }), mineFades_.size(), projectileFxExplosions_);
+    }
+}
+
+// ---- [Gameplay] corpses (GAMEPLAY_DEATH_BODY_DESIGN.md patch 1; RE pass 5 s12 addenda 10, 17-25) ----
+namespace {
+const DeathEntryDef* deathBlueprint(const std::string& name, size_t& n) {
+    if (name == "SharedCarDeaths") { n = sizeof(kSharedCarDeaths) / sizeof(kSharedCarDeaths[0]); return kSharedCarDeaths; }
+    if (name == "SharedTankDeaths") { n = sizeof(kSharedTankDeaths) / sizeof(kSharedTankDeaths[0]); return kSharedTankDeaths; }
+    if (name == "SharedJetDeaths") { n = sizeof(kSharedJetDeaths) / sizeof(kSharedJetDeaths[0]); return kSharedJetDeaths; }
+    n = sizeof(kSharedRobotDeaths) / sizeof(kSharedRobotDeaths[0]); return kSharedRobotDeaths;   // SharedRobotDeaths (and unknown sets)
+}
+const ChassisDeathDef* chassisDeath(const std::string& id) {
+    for (const ChassisDeathDef& c : kChassisDeaths) if (id == c.chassis) return &c;
+    return nullptr;
+}
+const char* damageDeathType(const std::string& dmg) {
+    for (const DamageDeathTypeDef& d : kDamageDeathTypes) if (dmg == d.damage) return d.death;
+    return "";
+}
+}  // namespace
+
+void World::requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType) {
+    const assets::SkinnedModel* mdl = pawn.currentModel();
+    if (!mdl || !mdl->valid()) { spawnDeathLight(pawn.chassis().id, pawn.moveForm() == Form::Vehicle, damageType, pawn.actorLocation()); return; }   // no body: the light alone
+    CorpseRequest q;
+    q.player = player; q.owner = owner; q.model = mdl; q.world = pawn.meshMatrix(pawn.form()); q.pose = pawn.displayPose();
+    q.chassis = pawn.chassis().id; q.damageType = damageType; q.vehicle = pawn.moveForm() == Form::Vehicle;
+    q.jet = q.vehicle && pawn.vehicleParams().form == VehicleFormType::Jet; q.ai = ai;
+    q.airborne = !q.vehicle && !pawn.onGround(); q.hovering = !q.vehicle && pawn.hoverState_ > 0;
+    q.pos = pawn.actorLocation(); q.vel = pawn.velocity(); q.fwd = core::forwardFromYawPitch(pawn.yaw(), 0.0f);
+    // The killing hit (the newest kill / suicide record for this victim): headshot and the killer's position (the momentum types).
+    for (auto it = match_.gameplayEvents().rbegin(); it != match_.gameplayEvents().rend(); ++it) {
+        if (it->victim != player || (it->type != GameplayEventType::Kill && it->type != GameplayEventType::Suicide && it->type != GameplayEventType::EnvironmentDeath)) continue;
+        q.headshot = it->headshot;
+        const Character* k = it->instigator == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(it->instigator);
+        if (k && it->instigator != player) { q.killerPos = k->actorLocation(); q.haveKiller = true; }
+        break;
+    }
+    presentHook([this, q] { spawnCorpse(q); });
+}
+
+void World::spawnCorpse(const CorpseRequest& q) {
+    if (corpses_.size() >= 32) corpses_.erase(corpses_.begin());   // a cap for very large matches (oldest first)
+    Corpse c;
+    c.player = q.player; c.owner = q.owner; c.model = q.model; c.world = q.world; c.start = q.pose; c.vehicle = q.vehicle; c.jet = q.jet;
+    c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis;
+    c.rng = 0x9e3779b9u ^ (unsigned)(q.player * 7919) ^ (unsigned)(match_.matchTime() * 1000.0f);
+    // TnDeathFactory.Create -> Picker.Pick: the first entry, in authored order, all of whose Types are active; none -> the default death
+    // (no animation, TotalTime 1.0). TnVehicleDeathPicker: Car (car / truck) / Tank + Moving (over 50 UU/s) or Stationary; Plane.
+    // TnRobotDeathPicker: Martyrdom (not modelled), HeadShot, Hovering, Airborne, one momentum type, the damage type's DamageDeathType.
+    const ChassisDeathDef* cd = chassisDeath(q.chassis);
+    const std::string bpName = cd ? (q.vehicle ? cd->vehicleDeaths : cd->robotDeaths) : (q.vehicle ? "SharedCarDeaths" : "SharedRobotDeaths");
+    size_t n = 0; const DeathEntryDef* bp = deathBlueprint(q.vehicle && !*bpName.c_str() ? std::string("SharedCarDeaths") : bpName, n);
+    std::vector<std::string> active;
+    const bool moving = std::hypot(q.vel.x, q.vel.z) > 0.5f;
+    if (q.vehicle) {
+        if (q.jet) active.push_back("Plane");
+        else if (bpName == "SharedTankDeaths") { active.push_back("Tank"); active.push_back(moving ? "MovingTank" : "StationaryTank"); }
+        else { active.push_back("Car"); active.push_back(moving ? "MovingCar" : "StationaryCar"); }
+    } else {
+        if (q.headshot) active.push_back("HeadShot");
+        if (q.hovering) active.push_back("Hovering");
+        if (q.airborne) active.push_back("Airborne");
+        // Momentum: TearOffMomentum yaw in the pawn's frame (the push away from the killer; PROV until the hit momentum is kept).
+        core::Vec3 m = q.haveKiller ? q.pos - q.killerPos : core::Vec3{0, 0, 0}; m.y = 0.0f;
+        const float ml = core::length(m);
+        const float cosA = ml > 1e-3f ? core::dot(m * (1.0f / ml), core::Vec3{q.fwd.x, 0.0f, q.fwd.z}) : 1.0f;
+        active.push_back(cosA >= 0.7071f ? "ForwardMomentum" : cosA <= -0.7071f ? "BackwardMomentum" : "SideMomentum");
+        const char* dt = damageDeathType(q.damageType);
+        if (*dt) active.push_back(dt);
+    }
+    const DeathEntryDef* e = nullptr;
+    for (size_t i = 0; i < n && !e; ++i) {
+        bool all = bp[i].nTypes > 0;
+        for (int k = 0; k < bp[i].nTypes && all; ++k) all = std::find(active.begin(), active.end(), bp[i].types[k]) != active.end();
+        if (all) e = &bp[i];
+    }
+    float tMin = 1.0f, tMax = 1.0f;
+    if (e) {
+        c.entry = e->types[0]; c.animName = e->anim; c.mods = e->mods; c.blendIn = e->blendIn;
+        tMin = e->tMin; tMax = e->tMax;
+        if (q.ai && (e->aiMin > 0.0f || e->aiMax > 0.0f)) { tMin = e->aiMin; tMax = e->aiMax; }   // TotalTimeForAI when authored
+        c.headShrink = (e->mods & 1u) != 0; c.defrag = (e->mods & 2u) != 0;
+        if (e->mods & 4u) c.fxAt = c.frand() * 0.5f;   // PlayEffect after Delay U(0, 0.5)
+    }
+    c.total = tMin + (tMax - tMin) * c.frand();
+    // The animation: an AnimSet chooser group (weighted pick of the anims this model has), else a clip of that name, else none (the
+    // animator's lookup fails: the pose holds, as the default death).
+    if (*c.animName) {
+        int wsum = 0;
+        for (const DeathChooserDef& ch : kDeathChoosers) if (!std::strcmp(ch.group, c.animName) && ch.weight > 0 && c.model->clipByName(ch.anim) >= 0) wsum += ch.weight;
+        if (wsum > 0) {
+            int pick = (int)(c.frand() * (float)wsum);
+            for (const DeathChooserDef& ch : kDeathChoosers)
+                if (!std::strcmp(ch.group, c.animName) && ch.weight > 0 && c.model->clipByName(ch.anim) >= 0) { if ((pick -= ch.weight) < 0) { c.clip = c.model->clipByName(ch.anim); break; } }
+        } else c.clip = c.model->clipByName(c.animName);
+    }
+    if (c.headShrink) c.headNode = c.model->nodeByName("C_Spine04_Head_XB");
+    c.pose = c.start;
+    assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
+    static const bool log = std::getenv("WFC_CORPSETEST") != nullptr;
+    if (log) LOG_INFO("CORPSE p%d %s %s: entry %s, anim %s (clip %d%s), TotalTime %.2f s, damage %s%s", q.player, q.chassis.c_str(), q.vehicle ? (q.jet ? "jet" : "vehicle") : "robot",
+                      c.entry, *c.animName ? c.animName : "none", c.clip, c.clip >= 0 ? (" " + c.model->clips[(size_t)c.clip].name).c_str() : "", c.total,
+                      q.damageType.c_str(), q.headshot ? ", headshot" : "");
+    spawnDeathLight(q.chassis, q.vehicle, q.damageType, q.pos, (c.mods & 8u) ? 1 : 0);   // the light of the same entry
+    corpses_.push_back(std::move(c));
+    ++corpsesMade_;
+}
+
+void World::gibCorpse(Corpse& c) {
+    c.gibbed = true;
+    // TnPawn.Dying.Gib -> the form's PlayGib: the gibs blueprint's effect state at PositionSocket (+100 UU up for the chunk cone).
+    const char* fx = c.jet ? "FX_Explosives_p.FX.Exp_Death_Lrg_FX" : c.vehicle ? "FX_Explosives_p.FX.TF_Death_MED_FX" : "FX_Explosives_p.FX.Exp_Death_FX";
+    const core::Vec3 at = c.pos + core::Vec3{0, c.vehicle ? 0.0f : 0.5f, 0};
+    if (renderer_) fxStepSpawn(fx, at, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+    if (!gibMeshesTried_ && renderer_) {
+        gibMeshesTried_ = true;
+        for (int i = 1; i <= 11; ++i) {
+            char nm[96]; std::snprintf(nm, sizeof nm, "/../content/TR_Death_Gibs_p/Static/RB_Gib_%02d_STAT.gltf", i);
+            render::MeshData md;
+            if (assets::loadGlb(assetRoot() + nm, md)) { for (render::Material& M : md.mats) { M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } const render::MeshHandle h = renderer_->uploadMesh(md); if (h != render::kInvalidMesh) gibMeshes_.push_back(h); }
+        }
+    }
+    // HmGibsDestructionEffect: NumChunks 4, LinearSpeed U(800, 2000) UU/s (jets U(2000, 4000)) in a 60 deg half-cone about +Z from a
+    // 100 UU sphere 100 UU up, AngularSpeed U(12000, 20000) (rotator units / s) about a random axis, LifeSpan 5, TF_Death_GibsTrail_FX.
+    for (int i = 0; i < 4 && !gibMeshes_.empty(); ++i) {
+        CorpseChunk k;
+        k.mesh = (int)(c.frand() * (float)gibMeshes_.size()) % (int)gibMeshes_.size();
+        const float th = 6.2831853f * c.frand(), cz = 1.0f - c.frand() * 0.5f, sz = std::sqrt(std::max(0.0f, 1.0f - cz * cz));
+        const core::Vec3 dir{std::cos(th) * sz, cz, std::sin(th) * sz};
+        const float sp = (c.jet ? 20.0f + 20.0f * c.frand() : 8.0f + 12.0f * c.frand());
+        k.p = c.pos + core::Vec3{0, 1.0f, 0} + core::Vec3{c.frand() - 0.5f, c.frand() - 0.5f, c.frand() - 0.5f} * 2.0f;
+        k.v = dir * sp + c.vel * (c.vehicle ? 0.5f : 0.0f);
+        k.axis = core::normalize(core::Vec3{c.frand() - 0.5f, c.frand() - 0.5f, c.frand() - 0.5f} + core::Vec3{1e-3f, 0, 0});
+        k.w = (12000.0f + 8000.0f * c.frand()) * (6.2831853f / 65536.0f);
+        if (renderer_) k.fx = fxStepSpawnPlain("FX_Explosives_p.FX.TF_Death_GibsTrail_FX", k.p, core::normalize(k.v + core::Vec3{1e-3f, 0, 0}), core::Vec3{0, 1, 0});
+        c.chunks.push_back(k);
+    }
+    // TnSkeletalGibSpawner (vehicles): the form's DefaultSkeletalGibTemplate hull at PositionSocket, TransferVelocityMultiplier x the vehicle's
+    // velocity plus the radial force U(300, 700) (PROV: a rigid upward kick; no per-bone physics), LifeSpan U(3, 5) (jets 7), the Defrag
+    // energy-death material after Delay U(0.5, 1.0) over TransitionTime 4.5 s (jets: no delay, 6 s).
+    if (c.vehicle) {
+        const ChassisDeathDef* cd = chassisDeath(c.chassis);
+        if (cd && *cd->hull && renderer_) {
+            auto it = hullMeshes_.find(cd->hull);
+            if (it == hullMeshes_.end()) {
+                std::unique_ptr<render::MeshData> md = std::make_unique<render::MeshData>();
+                if (assets::loadGlb(assetRoot() + "/../" + cd->hull, *md)) { for (render::Material& M : md->mats) { M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } fxPrewarm(*renderer_, *md, 0); }
+                else md.reset();
+                it = hullMeshes_.emplace(cd->hull, std::move(md)).first;
+            }
+            if (it->second) {
+                c.hull = it->second.get();
+                c.hullPos = c.pos;   // the hull keeps the vehicle mesh frame of the death (same skeleton root)
+                c.hullVel = c.vel * cd->transfer + core::Vec3{0, 3.0f + 4.0f * c.frand(), 0};
+                c.hullLife = c.jet ? 7.0f : 3.0f + 2.0f * c.frand();
+                c.hullDefragDelay = c.jet ? 0.0f : 0.5f + 0.5f * c.frand();
+                c.hullDefragTime = c.jet ? 6.0f : 4.5f;
+            }
+        }
+    }
+}
+
+void World::tickCorpses(float dt) {
+    if (corpses_.empty() || dt <= 0.0f) return;
+    const float g = 9.8f;
+    for (size_t i = 0; i < corpses_.size();) {
+        Corpse& c = corpses_[i];
+        c.t += dt;
+        if (!c.gibbed) {
+            if (c.clip >= 0) {
+                assets::LocalPose cp;
+                assets::samplePose(*c.model, c.clip, c.t, false, cp);   // the death clip from its start (clamped at its end)
+                const float a = c.blendIn > 0.0f ? std::min(1.0f, c.t / c.blendIn) : 1.0f;
+                assets::blendPose(c.start, cp, a, c.pose);             // from the pawn's last pose over BlendInTime
+            }
+            if (c.headNode >= 0 && (size_t)c.headNode < c.pose.s.size()) c.pose.s[(size_t)c.headNode] = core::Vec3{0.1f, 0.1f, 0.1f};   // ControlBone HeadSkelControl 0.1
+            assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
+            if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
+                c.fxAt = -1.0f;
+                if (renderer_) {
+                    if (c.vehicle) fxStepSpawn(c.frand() < 0.5f ? "FX_Explosives_p.FX.TF_Death_Buildup_FX" : "FX_Explosives_p.FX.TF_Death_MED_FX", c.pos + core::Vec3{0, 1.0f, 0}, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+                    else {
+                        core::Vec3 head = c.pos + core::Vec3{0, 3.0f, 0};
+                        const int hn = c.model->nodeByName("C_Spine04_Head_XB");
+                        if (hn >= 0 && (size_t)hn < c.glob.size()) { const core::Mat4 w = c.world * c.glob[(size_t)hn]; head = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+                        fxStepSpawn("FX_Explosives_p.FX.Exp_Death_Sm_FX", head, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+                        fxStepSpawn("FX_Explosives_p.FX.Exp_Death_Sm_FX", c.pos + core::Vec3{0, 1.5f, 0}, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1}, -1, true);
+                    }
+                }
+            }
+            if (c.t >= c.total) gibCorpse(c);   // _GibTimer = TotalTime
+        }
+        bool live = !c.gibbed;
+        for (CorpseChunk& k : c.chunks) {
+            k.age += dt;
+            if (k.age >= 5.0f) { if (k.fx >= 0) { fxStepStop(k.fx); k.fx = -1; } continue; }
+            live = true;
+            if (!k.rest) {
+                k.v.y -= g * dt;
+                k.p = k.p + k.v * dt;
+                k.ang += k.w * dt;
+                float gy; core::Vec3 gn;
+                if (collision_.valid() && k.v.y < 0.0f && collision_.groundHeight(k.p.x, k.p.z, k.p.y + 0.5f, 0.6f, gy, gn) && k.p.y <= gy + 0.15f) {
+                    k.p.y = gy + 0.15f; k.v = core::Vec3{k.v.x * 0.3f, -k.v.y * 0.2f, k.v.z * 0.3f}; k.w *= 0.5f;
+                    if (std::fabs(k.v.y) < 0.5f) { k.rest = true; k.w = 0.0f; }
+                }
+                if (k.fx >= 0) fxStepMove(k.fx, k.p, core::Vec3{0, 1, 0}, core::Vec3{0, 0, -1});
+            }
+        }
+        if (c.hull) {
+            c.hullAge += dt;
+            if (c.hullAge >= c.hullLife) c.hull = nullptr;
+            else {
+                live = true;
+                if (!c.hullRest) {
+                    c.hullVel.y -= g * dt;
+                    c.hullPos = c.hullPos + c.hullVel * dt;
+                    float gy; core::Vec3 gn;
+                    if (collision_.valid() && c.hullVel.y < 0.0f && collision_.groundHeight(c.hullPos.x, c.hullPos.z, c.hullPos.y + 1.0f, 1.5f, gy, gn) && c.hullPos.y <= gy) {
+                        c.hullPos.y = gy; c.hullVel = core::Vec3{c.hullVel.x * 0.5f, 0.0f, c.hullVel.z * 0.5f};
+                        if (std::hypot(c.hullVel.x, c.hullVel.z) < 0.3f) c.hullRest = true;
+                    }
+                }
+            }
+        }
+        if (!live) { corpses_.erase(corpses_.begin() + (long)i); continue; }   // removed (the original: TotalTime + 1 s; chunks / wreck live on)
+        ++i;
+    }
+}
+
+void World::drawCorpses(render::IRenderer& r) const {
+    for (const Corpse& c : corpses_) {
+        if (c.gibbed || c.mesh.positions.empty()) continue;
+        r.setDrawOwner(c.owner);
+        if (c.owner) r.setCharacterColors(render::CharacterColors{});
+        // Melee deaths: TnDeathModifierSetMaterial, the form's EnergyDeathMaterial with Defrag 1 -> 0 over TransitionTime 3 s.
+        if (c.defrag) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - c.t / 3.0f));
+        r.drawDynamicMesh(c.mesh, c.world, core::Vec3{1, 1, 1});
+        if (c.defrag) r.setDrawEnergyDeath(-1.0f);
+        r.setDrawOwner(0);
+    }
+}
+
+void World::drawCorpseGibs(render::IRenderer& r) const {
+    for (const Corpse& c : corpses_) {
+        for (const CorpseChunk& k : c.chunks)
+            if (k.age < 5.0f && k.mesh >= 0 && (size_t)k.mesh < gibMeshes_.size()) {
+                r.drawMesh(gibMeshes_[(size_t)k.mesh], core::Mat4::translate(k.p) * core::Mat4::rotateY(k.ang) * core::Mat4::rotateX(k.ang * 0.7f), core::Vec3{1, 1, 1});
+            }
+        if (c.hull) {
+            r.setDrawOwner(c.owner);
+            if (c.owner) r.setCharacterColors(render::CharacterColors{});
+            const float dt0 = c.hullAge - c.hullDefragDelay;
+            const bool df = dt0 >= 0.0f;
+            if (df) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - dt0 / c.hullDefragTime));
+            r.drawDynamicMesh(*c.hull, core::Mat4::translate(c.hullPos - c.pos) * c.world, core::Vec3{1, 1, 1});
+            if (df) r.setDrawEnergyDeath(-1.0f);
+            r.setDrawOwner(0);
+        }
     }
 }
 

@@ -5403,7 +5403,7 @@ void Application::runBotTest() {
         if (phase != 4) check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");   // FFA: no teams
         world_.resetBotTiming();
         const int rollerSpawns0 = world_.participantRollerSpawns_;
-        const int deathPres0 = world_.deathPresentations_, deathCues0 = world_.deathCues_;
+        const int deathPres0 = world_.deathPresentations_, deathCues0 = world_.deathCues_, corpses0 = world_.corpsesMade();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
         int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, driveSamples = 0, nitroStarts = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0, rollerSamples = 0;
@@ -5521,6 +5521,9 @@ void Application::runBotTest() {
             const int pres = world_.deathPresentations_ - deathPres0;
             check(pres == deaths, "DEATH every death presented (" + std::to_string(pres) + " presentations for " + std::to_string(deaths) +
                                   " deaths, " + std::to_string(world_.deathCues_ - deathCues0) + " with a death sound cue)");
+            // [Gameplay] every presented death leaves a death body (the corpse plays its picked entry, then gibs; presentation only)
+            check(world_.corpsesMade() - corpses0 == pres, "DEATH every presented death has a corpse (" + std::to_string(world_.corpsesMade() - corpses0) +
+                                                          " corpses for " + std::to_string(pres) + " presentations)");
             // Scripted: up to 4 spawned enemy bots (any form, within 10 s) killed through applyMatchDamage with a melee damage type: each
             // is presented once, with its cue (robot form: TnDeathTypeMelee; vehicle form: the chassis' vehicle DeathSound).
             // (A match already won by score is over: logged and skipped; the run needs one phase with scripted kills, checked at the end.)

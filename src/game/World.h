@@ -654,7 +654,45 @@ public:
     // TnDeathModifierTriggerLight (TnPawn.DeathLight + TnRampLightManager) for a death presented by onPawnDeath: car / truck / tank
     // vehicle forms (SharedCar / SharedTankDeaths) and robot forms killed by a damage type whose DamageDeathType is a lit
     // SharedRobotDeaths entry, not a headshot. APPROXIMATION of TnDeathPicker (no motion-state pick; Integration 2026-10-15).
-    void spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos);
+    void spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos, int lit = -1);
+    // [Gameplay] Presentation-only corpses (GAMEPLAY_DEATH_BODY_DESIGN.md): never read by the sim. Created where a death is presented
+    // (the pawn still spawned), on the main thread (presentHook), ticked per step in joinStep, drawn in draw().
+    struct CorpseChunk { int mesh = -1; core::Vec3 p{}, v{}, axis{0, 1, 0}; float ang = 0.0f, w = 0.0f, age = 0.0f; int fx = -1; bool rest = false; };
+    struct Corpse {
+        int player = -1, owner = 0;                       // draw owner: 0 the local pawn, 100 + match player a participant
+        std::string chassis;
+        const assets::SkinnedModel* model = nullptr;      // the pawn's displayed model at death
+        core::Mat4 world;                                 // its mesh matrix at death
+        assets::LocalPose start, pose;                    // the last displayed pose; this step's
+        int clip = -1; float blendIn = 0.2f, t = 0.0f, total = 1.0f;
+        bool vehicle = false, jet = false, headShrink = false, defrag = false, gibbed = false;
+        int headNode = -1;
+        unsigned mods = 0; const char* entry = "Default"; const char* animName = "";
+        core::Vec3 pos{}, vel{};
+        float fxAt = -1.0f;                               // PlayEffect modifier: start time (-1 none / done)
+        render::MeshData mesh; std::vector<core::Mat4> glob;
+        // Gib: chunks and the vehicle hull wreck
+        std::vector<CorpseChunk> chunks;
+        const render::MeshData* hull = nullptr; core::Vec3 hullPos{}, hullVel{}; float hullAge = 0.0f, hullLife = 0.0f;
+        float hullDefragDelay = 0.0f, hullDefragTime = 4.5f; bool hullRest = false;
+        unsigned rng = 1u;
+        float frand() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xffffffu) / 16777216.0f; }
+    };
+    struct CorpseRequest {
+        int player = -1, owner = 0; const assets::SkinnedModel* model = nullptr; core::Mat4 world; assets::LocalPose pose;
+        std::string chassis, damageType; bool vehicle = false, jet = false, headshot = false, airborne = false, hovering = false, ai = true;
+        core::Vec3 pos{}, vel{}, fwd{1, 0, 0}, killerPos{}; bool haveKiller = false;
+    };
+    std::vector<Corpse> corpses_;
+    std::map<std::string, std::unique_ptr<render::MeshData>> hullMeshes_;   // hull wreck glTFs by path (bind pose)
+    std::vector<render::MeshHandle> gibMeshes_; bool gibMeshesTried_ = false; // TR_Death_Gibs_p RB_Gib_01..11
+    int corpsesMade_ = 0;                                  // diagnostics (BOTTEST / WFC_CORPSETEST)
+    void requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType);
+    void spawnCorpse(const CorpseRequest& q);
+    void tickCorpses(float dt);
+    void gibCorpse(Corpse& c);
+    void drawCorpses(render::IRenderer& r) const;
+    void drawCorpseGibs(render::IRenderer& r) const;
     void tickTransientLights(float dt);
     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
@@ -1330,6 +1368,8 @@ public:
     bool guidedMissileAlive() const { return missile_.alive; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
+    size_t corpseCount() const { return corpses_.size(); }   // presentation diagnostics
+    int corpsesMade() const { return corpsesMade_; }
     int kamikazeMineDraws() const { return minePresDraws_; }               // presentation diagnostics
     size_t kamikazeMineFades() const { return mineFades_.size(); }
     bool kamikazeMineModelLoaded() const { return mineModel_.valid(); }

@@ -349,6 +349,8 @@ public:
     int overShieldGrants() const { return overShieldGrants_; }
     bool overShield_ = false;
     int overShieldGrants_ = 0;
+    // [Gameplay] the displayed local pose of currentModel() (every layer applied), for the corpse that replaces a dead pawn.
+    const assets::LocalPose& displayPose() const { return finalPose_; }
     const assets::SkinnedModel* currentModel() const {
         return form_ == Form::Robot ? robotModel_ : vehicleModel_;
     }

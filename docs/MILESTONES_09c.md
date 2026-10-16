@@ -1576,3 +1576,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cooked package natively), so nothing ships and the Gorge / Berth in-game checks are cancelled. Campaign: 1,442 rows
   re-parsed (D5 80, A1 1,231, A5 131); chapters rerunning to pick up the recovered meshes and lights. Package-gate
   base for package 6 = 398b27ef + yaw 022e5e34 (same match across the 3 arms; Experimental builds it).
+  2026-10-16 07:38 DEATH BODIES MERGED (Gameplay GAMEPLAY_DEATH_BODY.patch, fcc567dd): presentation-only corpse plays
+  the picked death entry from the last pose (melee Defrag sweep, explosion, headshot, fall / crawl) then gibs; vehicles
+  leave the hull wreck with chunks + smoke, dissolving; base showed only the kill-feed icon. BOTTEST 46 / 46 both AIs
+  ("every presented death has a corpse"), NAVQ 16 / 16 identical, SIMHASH identical. Crops docs/handoff/deathbody/.
+  Patch 2 (decals, skeletal gibs, authored death camera, full momentum picker) after package 6.
