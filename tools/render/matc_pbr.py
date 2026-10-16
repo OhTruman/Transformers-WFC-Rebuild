@@ -19,8 +19,10 @@ glsl_emu.py is the definition):
                else SpecularColor, else DiffuseColor; mask / spec / gloss-named first, then by name - Systems'
                pick_parent), the body also sets wfcPbrRoughMap = that map's .r, sampled with the parent's own UV (a new
                texture slot; the runtime replaces uPbrRoughOn != 0 by whether the map exists).
-  environment: wfcPbrEnv = the material's own first cube map along its own direction expression, at the roughness level
-               (wfcSampleCubeRough: textureLod at roughness x (the cube's levels - 1)) - the Modern image-based specular.
+  environment: wfcPbrEnv = what the original added into its diffuse (its own weighted cube term: the original
+               DiffuseColor minus the stripped base, rule 1 materials only; 0 elsewhere) - energy-matched, the Modern
+               shading only Fresnel-shapes it (item 6, 2026-10-16). --raw-env: the earlier mapping, the material's own
+               first cube map along its own direction expression at the roughness level, unweighted.
   metallic 0, F0 0.04 (no reviewed metal rows yet). HUD-marker / team-state materials (FriendlyColor, EnemyColor, ...,
   PingOpacity) are never remapped: no entry (the runtime keeps the original program).
 
@@ -49,6 +51,7 @@ class KeepOriginal(Exception):
 
 
 VIEW_MEAN = '--view-mean' in sys.argv
+RAW_ENV = '--raw-env' in sys.argv            # (A/B) the earlier environment mapping: the raw cube on every material with one
 
 
 # ------------------------------------------------------------------ lexer / parser (expressions of the matc subset)
@@ -404,6 +407,14 @@ def pbr_body(glsl, info, hook=None):
         elif dc:
             base_rule = 1
         lines_out = copies + ['%so.DiffuseColor = max(%s, vec3(0.0));' % (ind, dt)]
+        # (energy-matched environment, item 6) what the original added into its diffuse - its own weighted cube term
+        # (rule 1's dropped additive view operands, under every factor applied around them) = the original diffuse minus
+        # the stripped base. The Modern shading reflects exactly that, Fresnel-shaped; nothing where the original added
+        # none (the raw cube with --raw-env, the earlier mapping). wfcPbr* lines are outside --check.
+        if base_rule == 1 and dropped and not RAW_ENV:
+            lines_out = ['%svec3 wfcPbrOrigDiff = vec3(%s);' % (ind, rhs)] + lines_out + \
+                        ['%swfcPbrEnv = max(wfcPbrOrigDiff - o.DiffuseColor, vec3(0.0));' % ind,
+                         '%swfcPbrEnvEnergy = 1.0;' % ind]
         # Systems' metallic hook rows (m6_mapping.json pbr_hooks: metallic_paint / weapon_metal_mask): metallic, F0
         # (unmixed; the shading mixes F0 = mix(0.04, f0, metallic) and scales the diffuse by 1 - metallic) and, where
         # given, the base colour (the robots' tinted-paint temporary instead of the stripped base)
@@ -456,7 +467,8 @@ def pbr_body(glsl, info, hook=None):
         a = _first_call_args(rhs[mc.start():], rhs[mc.start():mc.end() - 1])
         if a and len(a) >= 2:
             env_slot = int(a[0])
-            out.append('    wfcPbrEnv = wfcSampleCubeRough(%d, %s, wfcPbrRoughness(o.SpecularPower)).rgb;' % (env_slot, a[1]))
+            if RAW_ENV:                                  # (the earlier mapping: the raw cube, unweighted)
+                out.append('    wfcPbrEnv = wfcSampleCubeRough(%d, %s, wfcPbrRoughness(o.SpecularPower)).rgb;' % (env_slot, a[1]))
         break
     meta = dict(roughness_parent=parent, rough_slot=rough_slot, rough_uv=rough_uv, base_rule=base_rule, env_slot=env_slot)
     if hook: meta['hook'] = True                         # (only when true: output without --hooks stays byte-identical)
