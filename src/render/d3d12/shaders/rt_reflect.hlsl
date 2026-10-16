@@ -136,7 +136,7 @@ bool shadeMaterial(HitGeom h, float3 P, float3 rayDir, float coneWidth, out floa
 // (item 3) a hit off the static world (characters, masked, movers): the previous frame's image at the hit point, when it was
 // on screen there (the characters as they were drawn - no robot-shaped black holes in floors); else a dim constant
 float3 shadeFromPrevFrame(float3 P) {
-    if (Extra2.z < 0.5) return float3(0.05, 0.05, 0.05);
+    if (fmod(Extra2.z, 2.0) < 0.5) return float3(0.05, 0.05, 0.05);
     const uint b = (uint)Extra2.w;
     const float4 clip = ShadowLights[b] * P.x + ShadowLights[b + 1] * P.y + ShadowLights[b + 2] * P.z + ShadowLights[b + 3];
     if (clip.w <= 1e-4) return float3(0.05, 0.05, 0.05);
@@ -144,14 +144,46 @@ float3 shadeFromPrevFrame(float3 P) {
     if (any(uv < 0.0) || any(uv > 1.0)) return float3(0.05, 0.05, 0.05);
     return max(PrevColor.Load(int3(int2(uv * Size.xy), 0)).rgb, 0.0);
 }
+// (v3 row 6) the frame's transient lights (muzzle flashes, death ramps) at a reflection hit: Lambert with the hit's normal
+// (or a half-lit proxy), UE3 falloff, unshadowed; their count in Extra2.z / 2, positions at ring Extra2.w - 4, colours at +4
+float3 transientAt(float3 P, float3 N, float3 albedo) {
+    const uint n = (uint)floor(Extra2.z / 2.0);
+    float3 s = float3(0, 0, 0);
+    [loop] for (uint k = 0; k < 4; ++k) {
+        if (k >= n) break;
+        const float4 L = ShadowLights[(uint)Extra2.w - 4 + k], C = ShadowLights[(uint)Extra2.w + 4 + k];
+        const float3 d = L.xyz - P;
+        const float x2 = dot(d, d) / max(L.w * L.w, 1e-6);
+        if (x2 >= 1.0) continue;
+        const float att = pow(saturate(1.0 - x2), C.w);
+        const float ndl = all(N == 0.0) ? 0.5 : saturate(dot(N, normalize(d)));
+        s += albedo * C.rgb * att * ndl;
+    }
+    return s;
+}
+// (v3 row 6) a reflection ray passing close to a transient light picks up its glow (the flash itself in a glossy floor)
+float3 transientGlow(float3 o, float3 dir, float tHit) {
+    const uint n = (uint)floor(Extra2.z / 2.0);
+    float3 s = float3(0, 0, 0);
+    [loop] for (uint k = 0; k < 4; ++k) {
+        if (k >= n) break;
+        const float4 L = ShadowLights[(uint)Extra2.w - 4 + k], C = ShadowLights[(uint)Extra2.w + 4 + k];
+        const float t = dot(L.xyz - o, dir);
+        if (t <= 0.0 || (tHit > 0.0 && t > tHit)) continue;
+        const float3 q = o + dir * t - L.xyz;
+        s += C.rgb * 0.08 * exp(-dot(q, q) / 0.09);   // (a ~0.3 m glow core)
+    }
+    return s;
+}
 float3 shadeHit(uint id, uint prim, float2 bc, float3 P, float3 rayDir, float coneWidth) {
     if (id < 0x10000u || id >= 0x20000u) return shadeFromPrevFrame(P);
     const HitGeom h = hitGeom(id, prim, bc);
+    const float3 tl = transientAt(P, float3(0, 0, 0), HitSub[h.sub * 8 + 5].rgb);   // (v3 row 6)
 #ifdef WFC_RT_MATERIALS
     float3 r;
-    if (shadeMaterial(h, P, rayDir, coneWidth, r)) return r;
+    if (shadeMaterial(h, P, rayDir, coneWidth, r)) return r + tl;
 #endif
-    return shadeProxy(h);
+    return shadeProxy(h) + tl;
 }
 
 // the closest hit along the ray (masked candidates committed where opaque): hit distance (-1 = miss) + its radiance
@@ -169,7 +201,7 @@ float closestHit(float3 o, float3 dir, float tMax, uint mask, float coneAtOrigin
     const float t = q.CommittedRayT();
     if (Extra.z > 0.5)
         radiance = shadeHit(q.CommittedInstanceID(), q.CommittedPrimitiveIndex(), q.CommittedTriangleBarycentrics(), o + dir * t,
-                            dir, coneAtOrigin + t * Extra2.y);
+                            dir, coneAtOrigin + t * Extra2.y) + transientGlow(o, dir, t);   // (v3 row 6: the flash's glow)
     return t;
 }
 
