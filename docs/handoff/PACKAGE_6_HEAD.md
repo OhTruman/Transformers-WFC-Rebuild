@@ -10,8 +10,8 @@
 2. **Start with Play.bat** (not the exe directly).
 3. **Settings > Graphics:** resolution 2560x1440; **Ray Tracing = Realistic**; **HD Textures = Enhanced** (HD textures +
    modern materials). Both apply from the next map, so set them in the menus before you start a match. **FPS Counter = On**
-   shows the cost in the top-right corner. Expected at 1440p with 31 v 32: Realistic [PLACEHOLDER: p50 / p90 fps],
-   Realistic + Enhanced [PLACEHOLDER: p50 / p90 fps] (the gate's step 1b row; the floor is ~60 fps).
+   shows the cost in the top-right corner. Measured at 1440p with 31 v 32 (the gate's step 1b row): Realistic p50 7.2-9.4 ms / p90 8.4-11.4 ms
+   (about 106-139 fps); Realistic + Enhanced p50 7.3-9.5 ms / p90 8.6-11.6 ms (105-137 fps). The floor is ~60 fps.
 4. **Where the difference shows best:** reflective floors (robots and gun flashes in them), streets under the tall
    buildings (sun and shadow, coloured bounce light), firefights (explosions, impacts and boost now light the scene),
    Gorge's interiors (dark corners lit by the lamps and bounce), Molten's lava halls (the lava now glows onto the rock).
@@ -24,8 +24,9 @@ several explosions right at the camera fill the screen flat yellow (authored col
 robots do not leave decals / skeletal gibs yet and the death animation choice is approximate; Smart bots' squads can
 reverse direction around a walking leader. Anything else is news.
 
-Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (<SIZE> GB: <N> files kept +
-<N> .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay <OVERLAY>, <N> files; promoted <DATE>). This is the
+Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (27.53 GB: 46,744 files kept +
+7,161 .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay
+push_gltf_wfcmat_20261016, 85 files; promoted <DATE>). This is the
 hand-over build the user playtests. Fallbacks: work/playtest_slim_398b27ef (package 5, internal checkpoint),
 work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package6-<HEAD>.
 
@@ -61,8 +62,11 @@ contrast vs Off, Realistic | Enhanced:
 | reflective floor | 1.88 | 1.85 |
 | vehicle lane | 1.37 | 1.46 |
 
-Enhanced adds on top in 4 of 5 view types. The final eye pass runs on int_eye = integration 7cd22027 (every package 6 row
-merged) [PLACEHOLDER: its sheet / views numbers].
+Enhanced adds on top in 4 of 5 view types.
+
+Final eye pass on the gate (0 UNKNOWN), all maps vs Off: Realistic mean 22.0 / brighter +11.6 / contrast 1.28 / 33 % of
+pixels changed; Realistic + Enhanced 22.5 / +11.7 / 1.30 / 34 %. Per map, contrast Realistic | Enhanced (confirming
+sheet): Streets 1.15 | 1.17, Gorge 1.32 | 1.28, Debris 1.14 | 1.14, Rust 1.27 | 1.28, Molten 1.45 | 1.48.
 
 - **Characters take the RT sun** (row 1, bd749603, WFC_RT_CHARSUN): robots and movers in sunlight get the traced sun
   and its shadow, matching the world they stand in.
@@ -72,11 +76,15 @@ merged) [PLACEHOLDER: its sheet / views numbers].
   surfaces.
 - **Probe fill** (row 5, 70310b02, WFC_RT_PROBEFILL).
 - **Transient light gain 2** (row 4, 03aa1294, WFC_RT_TLGAIN).
-- **Row 7** [PLACEHOLDER: Rendering - what it is, commit, switch].
+- **Row 7 (dynamic emissive lights)**: muzzle, impact and explosion effects and vehicle headlights cast real light in
+  Realistic - the effect lights (FxLights.inc / VehicleHeadlights.inc, default-on in Realistic since 5f423157,
+  WFC_FXLIGHTS=0 off) through Rendering's transient point / spot light API (addTransientSpot, 428bcf7e) and the tiled
+  lights, calibrated to the RT lightmap (impacts colour x0.6 / 0.15 s, explosions x0.7; 3ff0852b). No separate Rendering
+  commit or switch.
 - **Tiled transient lights** (1c94d62e, WFC_TLTILED=0 off): up to 64 dynamic lights per frame in Realistic in 32-px
   tiles (was 8); the first 4 keep RT shadows. Effect lights no longer push muzzle lights out of the cap
   [PLACEHOLDER: confirm the package 5 "transient lights cost at RT off" on the final regress].
-- **Tiled lights gated to Realistic** ([PLACEHOLDER: respin commit]): the tiled path's switch ignored the render mode,
+- **Tiled lights gated to Realistic** (b0f5ac45): the tiled path's switch ignored the render mode,
   so in Off / Faithful any burning muzzle / impact / death light sent the original's 8 lights through the tiled path
   (tile masks, extra binds, per-pixel fetches) with identical output. Off / Faithful are back on the original 8-light
   uniform path; Realistic unchanged.
@@ -87,7 +95,7 @@ merged) [PLACEHOLDER: its sheet / views numbers].
 - **X5-1 character AO 3 m** (cabb416b, WFC_RT_CHARAORADIUS): robots darker under cover.
 - **Soft particles** for every effect in Realistic (70315129, WFC_SOFTPARTICLES=0 off): smoke and flames fade into the
   surfaces they touch instead of cutting hard lines.
-- **RT surface colours fixed** (Rendering a81f7291, [PLACEHOLDER: integration commit]): the RT hit-data pass culled back
+- **RT surface colours fixed** (Rendering a81f7291, integration f670f8ba): the RT hit-data pass culled back
   faces, so every surface with a mirrored UV layout got a grey albedo and no emissive. Bounce light, reflections and
   emissive lighting now see the real colours. Surfaces without hit data, before -> after:
 
@@ -129,7 +137,8 @@ merged) [PLACEHOLDER: its sheet / views numbers].
   1.04 -> 1.24 (= Realistic + HD).
 - **The Enhanced roughness maps ship** (65dddbe4): the 498 reviewed M6 roughness maps (push_m6) sit beside the D pack;
   package 5 shipped neither the maps nor their index, so its Enhanced row derived every roughness value.
-- **Item 7 polish** [PLACEHOLDER: Rendering - temporal reflections / lightmap super-sample, if any shipped].
+- **Item 7 polish** (ae2b3246): temporal reflections (WFC_RT_REFLTEMPORAL) and the X1 soft-bloom input cap at 16
+  (WFC_TONE_BLOOMMAX); the lightmap super-sample is deferred.
 
 ### Realistic defaults (all on in Realistic only; set the switch to turn one off - harness / diagnostics, never a package default)
 
@@ -205,31 +214,35 @@ Off / Faithful stay byte-identical to the original (identity rows).
 
 - (CLOSED) Realistic + Enhanced darkness: the Modern shading dropped the original's specular (not the data); fixed eaed3192,
   int_cand3 sheet Realistic + Enhanced 1.30 vs Realistic 1.31.
-- (CLOSED pending the eye pass) Molten's lava did not light the scene: fixed by the RT surface-colour fix + emissive gain 4
-  (584c873b) [PLACEHOLDER: confirmed by the final eye pass].
-- **Bright emissive + muzzle flash can wash out yellow** (X1 soft bloom on very bright frames, Molten step 1200)
-  [PLACEHOLDER: the bloom-input cap in item 7 polish shipped or not].
-- **Idle 20 s BOTTEST row** at seeds 1 / 5 (47 / 48 before): the walkable-floor fix f19e0052 addresses the trap
-  [PLACEHOLDER: 48 / 48 at seeds 1 / 5 on the head, or still open].
+- (CLOSED) Molten's lava did not light the scene: fixed by the RT surface-colour fix + emissive gain 4 (584c873b),
+  confirmed by the final eye pass (Molten contrast 1.45 | 1.48).
+- (CLOSED) Bright emissive + muzzle flash washed out yellow (X1 soft bloom on very bright frames, Molten step 1200): the
+  bloom input is capped at 16 (ae2b3246) and very bright pixels roll toward white (the white roll).
+- (CLOSED) Idle 20 s BOTTEST row at seeds 1 / 5 (47 / 48 before): BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn) after
+  the walkable-floor fix f19e0052.
 - **No volumetric lighting in this build** (sun shafts, lamp halos, lit fog): three versions rejected by eye; package 7
   (RENDERING_X3_VOLUMETRICS.md).
 - **Death bodies, patch 2 deferred**: decals, skeletal gibs, the authored death camera and the full momentum picker come
   after package 6; the death-type choice is still an approximation.
 - **X6 / X7 = package 7** unless pulled in: more reflective surfaces + damp sheen (X6), 2x RT lightmap (X7).
 - **Explosion close-ups saturate**: Exp_2500cb_FX (mine) is authored HDR yellow (modulate glow x60/60/20); several at the
-  camera fill the screen flat yellow-green. Data, not a bug; the HDR clamp point vs the 360's 7e3 scene target is a
-  Rendering RE item [PLACEHOLDER: shipped or not].
+  camera fill the screen flat yellow-green. Data, not a bug. Rendering RE item, not shipped as a change: Faithful keeps the
+  original 4.0 gather clamp (RENDERING_FAITHFUL_HDR_CLAMP.md: no evidence yet for the 360's 7e3 point). In Realistic the flat
+  yellow-green close-up is fixed by the white roll (25ca9c1d + 54105396: a very bright pixel goes to a warm white of its
+  own hue) and the soft-bloom input cap of 16 (ae2b3246): Gorge step 1080 reads yellow-green 0.3 % (Off 5.6 %), warmth +13.
+  It still covers more of the frame than Off (near-white 80 % vs 58 %): package 7 item 1 (RENDERING_PACKAGE7_POLISH.md,
+  exposure adaptation on extreme frames).
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original) - carried from
   package 5; WFC_TLIGHTSCALE is the lever.
 - **Off-path cost in extended (> 10-player) matches - reduced in the respin, the rest is package 7**: at 63 bots RT off,
   the death bodies are the whole regression vs package 5 (about 0.2 ms per live body; the mines cost nothing): 1.87 ms
-  p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay [PLACEHOLDER: commit]: a body
+  p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay 9350f19b: a body
   whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; the rest
   is the faithful body presentation at 63 bots. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
   original's player count): [PLACEHOLDER: measured cost with its few live bodies]. The gib trails' particle load is the original's own LOD authoring (see the
   particle LOD note).
 - **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
-  5 / 6) come after package 6 [PLACEHOLDER: what landed].
+  5 / 6) come after package 6 [PLACEHOLDER: Gameplay - what landed].
 - **Squad follow reversals** (Smart) - carried from package 5.
 - **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
 - [PLACEHOLDER: anything the final gate or eye pass adds]
@@ -301,11 +314,11 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 | gate | result | notes |
 |---|---|---|
 | regress-8map (3 arms x 8 maps, RT off, Classic, lockstep) vs the gate base | [PLACEHOLDER] | report rows +0.35 ms p90 per map |
-| Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | Faithful identity after Rendering's 7 commits |
-| Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | FLAG p50 > 16.7 ms; floor ~60 fps at 1440p |
-| R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
-| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | running on int_eye = 7cd22027 (every row merged); int_cand3 sheet 1.31 / 1.30; int_cand4 authored views 1.25-1.88 |
+| Off / Faithful identity (Rust, Classic): SIMHASH + frames | PASS | respin vs 4078e47b: Off 5 / 5 + Faithful 5 / 5 byte-identical, SIMHASH 088bd3b99da5768e x 4 |
+| Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | PASS | p50 Streets 9.26 / Gorge 9.48 / Debris 7.32 / Rust 8.18 / Molten 9.30 ms; p90 10.33 / 11.63 / 8.56 / 10.35 / 10.35 (105-137 fps); Realistic alone p50 7.2-9.4 / p90 8.4-11.4 |
+| R4 leak rows (GPU dedicated over 5 map changes) | PASS | lobby GPU 2180 / 2841 / 2980 / 2974 MB, plateau spread 138 MB |
+| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | PASS (0 UNKNOWN) | all maps contrast 1.28 / 1.30 (Realistic / + Enhanced); per map 1.14-1.48; authored views 1.25-1.88 |
 | verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
-| FAST gate | [PLACEHOLDER] | |
-| BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
-| Settings survive map change (WFC_SETTINGSTEST) | [PLACEHOLDER] | new renderer switches in release()'s keep list |
+| FAST gate | PASS 59 / KNOWN 1 (ribbon / beam FX) / PRODUCT FAIL 0 / HARNESS FAIL 0 | on 7cd22027 and the 4078e47b delta; [PLACEHOLDER: the respun 9350f19b delta] |
+| BOTTEST / NAVQ / SIMHASH (both AIs) | PASS | BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn); | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
+| Settings survive map change (WFC_SETTINGSTEST) | PASS 7 / 7 | verify rehearsal on 4078e47b; [PLACEHOLDER: the 9350f19b verify] |
