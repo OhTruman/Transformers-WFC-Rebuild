@@ -1078,6 +1078,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   character = option B's documented scope (UE3 DepthBiasedAlpha against all depth). PASS. ede2fc3c rows complete.
   Rendering's 3b second attempt (the barrier is drawn unposed from the shared dynVao_, so the deferred draw gets a
   pooled per-frame vertex copy) building.
+  2026-10-15 22:46 3b MERGED e5182075 (rt2 848b147b): a dynamic draw whose subs are all translucent (the barrier force field,
+  shields) goes into the sorted translucency pass after the characters, replayed like the weapon queue; unposed
+  drawDynamicMesh from the shared dynVao_ gets a per-frame pooled vertex copy (WFC_DYNTRANSIMMEDIATE=1 = old order).
+  USER CASE 3 FIXED in a real lockstep Rust match (work/fsr3/3b_id1500.png: two vehicles behind a barrier, drawn over
+  it before, veiled after; image sent to the user). Off identity vs 77d9e02c: SIMHASH unchanged; m01500 differs only on
+  that barrier (0.26 % px), m01200 as option B; baseline change in every mode. Systems' 3a flush stays (harmless,
+  helps muzzle-flash meshes); the barrier-name fallback still needed. Head e5182075 named to Experimental. Rendering
+  on item 3 (reflections from the RT lightmap, roughness-aware Fresnel for the Molten seam, grazing black lines).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
