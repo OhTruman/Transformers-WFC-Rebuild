@@ -1972,3 +1972,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   near-white ~55-62 % (Off 58.3), warmth >= +8, yellow-green <= 5.6 %. Systems' WHITEROLL table reissued with the final
   values (27 / 27), staged 5c4e53ff; pairs with the merge. Then: identity -> Gorge recheck -> push -> merge = head ->
   package rebuild + final gate tree -> RT verify row -> the gate block.
+  2026-10-16 15:17 int_cand8 identity PASS (Off 5 / 5, Faithful 5 / 5; retune a833c984: roll after the shoulder, past 1.5
+  a pixel moves to a warm white of its own hue by 6, pure white by 48; model orange fire 4x 1.00 / 0.74 / 0.52, 16x
+  1.00 / 0.92 / 0.85). Gorge-only recheck on int_cand8 RUNNING (frame_compare bar: near-white 55-62 %, warmth >= +8,
+  yellow-green <= 5.6 %); else int_cand7's rule. Then push -> merge + WHITEROLL table (5c4e53ff) = head.
