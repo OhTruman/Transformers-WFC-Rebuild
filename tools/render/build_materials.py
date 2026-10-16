@@ -237,6 +237,42 @@ def main():
                     missing = [m for m in missing if m not in found]
                 if n in found:
                     break
+        # Item 6 (Systems, SYSTEMS_MATC58_AUDIT): dynamic weapon / prop meshes (sentries, shields, mines, pickups) use MICs
+        # whose cooked body sits in the mesh package while the parent chain lives elsewhere (a stub MIC names a parent no
+        # map package exports). Follow each still-unresolved material's Parent chain through AssetTools' authored.db and
+        # add the packages holding each link (largest cooked copy), plus ENV_AllShader_p for the shared material
+        # functions; fallbacks only supply objects absent from the map's own packages.
+        def chain_root_ok(r, n):
+            q, k = n, 0
+            while q and r.cls(q) == 'MaterialInstanceConstant' and k < 16:
+                q = ((r.obj(q) or {}).get('Parent') or {}).get('ref'); k += 1
+            return bool(q) and r.cls(q) == 'Material'
+        probe = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
+        unresolved = [n for n in sorted((names - {None}) | set(extra)) if not chain_root_ok(probe, n)]
+        if unresolved:
+            import sqlite3
+            adb = sqlite3.connect('file:F:/Transformers Rebuild/AssetTools/manifests/authored.db?mode=ro', uri=True)
+            cooked = {f.lower(): f for f in os.listdir(COOKED)}
+            def holders(path):
+                return [cooked[(r[0] + '.xxx').lower()] for r in adb.execute(
+                    "select package from objects where lower(opath)=? order by serial_size desc", (path.lower(),)) if (r[0] + '.xxx').lower() in cooked]
+            added = []
+            for n in unresolved:
+                q, seen = n, set()
+                while q and q.lower() not in seen and len(seen) < 16:
+                    seen.add(q.lower())
+                    for pk in holders(q)[:2]:
+                        if pk not in ufb and pk not in added: added.append(pk)
+                    row = adb.execute("select props from objects where lower(opath)=? and props like '%Parent%' order by serial_size desc limit 1",
+                                      (q.lower(),)).fetchone()
+                    par = None
+                    if row:
+                        try: par = json.loads(row[0]).get('Parent')
+                        except Exception: par = None
+                    q = par.get('ref') if isinstance(par, dict) else par
+            if 'ENV_AllShader_p.xxx'.lower() in cooked and 'ENV_AllShader_p.xxx' not in ufb: added.append(cooked['env_allshader_p.xxx'])
+            ufb += added
+            print('item 6: %d unresolved material chains; parent / shader packages added as fallbacks: %d' % (len(unresolved), len(added)))
         if ufb:
             print('materials from other maps packages: %s' % ', '.join(ufb))
             repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx', 'UI_GFxHud_p.xxx'] + ufb)
