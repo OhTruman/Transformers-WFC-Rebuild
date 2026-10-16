@@ -376,6 +376,43 @@ void runVehicleTests() {
             };
             rest(car, "car  ");
             rest(tank, "tank ");
+            // Car boost continuity: every Driving probe sits at or above the 0.45 m wheel clearance (the car hulls ride 0.32-0.48 m
+            // above the ground on their wheels in the original), so sub-clearance lips do not stop a boosting car. Head-on steps,
+            // then a 0.35 m riser met at 36 deg (forward . face normal 0.81, under the 0.866 frontal threshold: the Debris lip).
+            {
+                static ChassisDef car4;
+                const bool ok4 = loadChassisDef(vs, "Car4", car4);
+                for (const ChassisDef* d : {&car, ok4 ? &car4 : nullptr}) {
+                    if (!d) continue;
+                    const char* nm = d == &car ? "Car2" : "Car4";
+                    for (float hstep : {0.1f, 0.2f, 0.3f, 0.35f, 0.4f, 0.5f}) {
+                        CollisionWorld ws = makeWorld(hstep, -20.0f, -21.5f);
+                        Sim s(&ws, 2.0f); s.c.setChassis(d);
+                        MoveIntent b; b.wantBoost = true;
+                        s.step(MoveIntent{}, 120);
+                        s.step(b, 30);
+                        int drops = 0; bool was = s.c.vehicleState().driving;
+                        for (int k = 0; k < 120; ++k) { s.step(b); bool dr = s.c.vehicleState().driving; if (was && !dr) ++drops; was = dr; }
+                        LOG_INFO("VEHTEST %s boost over a %.2f m step: %d Driving drops, end z %.1f (0 drops expected below the 0.45 m clearance)", nm, hstep, drops, s.c.position().z);
+                    }
+                    {
+                        CollisionWorld ws = makeWorld(0.35f, -20.0f, -60.0f);
+                        Sim s(&ws, 2.0f); s.c.setChassis(d);
+                        s.c.setYaw(0.6283f);   // 36 deg off the riser normal
+                        MoveIntent b; b.wantBoost = true;
+                        s.step(MoveIntent{}, 120);
+                        s.step(b, 30);
+                        float minSp = 1e9f; bool crossed = false;
+                        for (int k = 0; k < 150; ++k) {
+                            s.step(b);
+                            if (s.c.position().z < -19.0f) crossed = true;
+                            if (s.c.position().z < -14.0f && !crossed) minSp = std::min(minSp, hspeed(s.c));
+                        }
+                        LOG_INFO("VEHTEST %s boost into a 0.35 m riser at 36 deg: %s, min speed at the riser %.1f m/s, driving %d",
+                                 nm, crossed ? "crossed" : "BLOCKED", minSp > 1e8f ? -1.0f : minSp, (int)s.c.vehicleState().driving);
+                    }
+                }
+            }
             // Car hover dash: dominant stick axis (right) -> sideways 30 m/s for 0.5 s [CONF TnCarForm.Hovering.DoDash].
             {
                 Sim s(&w, 2.0f); s.c.setChassis(&car); s.step(MoveIntent{}, 120);

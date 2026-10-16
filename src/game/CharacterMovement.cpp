@@ -682,7 +682,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // a sloped face is pushed up it, which the chassis-ground / spring code reproduces; near-vertical faces block.
     // (Pass 20 skipped only n.y > 0.7, so 45-60 deg ramp faces stopped the truck dead.) [PROV: probes approximate the
     // RB box contact]
-    const float probes[3] = {vs.driving ? 0.45f : VP.hullBottom + 0.15f, 0.5f * (VP.hullBottom + VP.hullTop), VP.hullTop - 0.1f};
+    // In Driving every probe stays at or above the 0.45 m wheel clearance: the mid probe of a low hull fell below it (0.30 m on
+    // Truck4) and a sub-clearance floor lip stopped the car dead [PROV: the wheels / RB box climb such lips].
+    const float clr = vs.driving ? 0.45f : -1e9f;
+    const float probes[3] = {vs.driving ? 0.45f : VP.hullBottom + 0.15f, std::max(clr, 0.5f * (VP.hullBottom + VP.hullTop)), std::max(clr, VP.hullTop - 0.1f)};
     bool hullBlocked = false;
     // Wall sliding friction [CONF RE pass 4 A5 addenda: NxMaterial friction combine MULTIPLY]: car / truck PHYSMAT mu 0.2 x ENV
     // concrete / metal 0.5 = 0.10 (0.14 on the engine default material; the per-face material is not resolved: the ENV value)
