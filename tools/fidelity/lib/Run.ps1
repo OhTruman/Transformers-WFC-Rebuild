@@ -24,6 +24,9 @@ function Add-WfcHarnessEnv([hashtable]$Env) {
     # (user 2026-10-13: every game exe a lane launches must be silent - integration WFC_MUTE=1: zero device output, the mix and cue
     #  logic unchanged, so audio harness rows still measure the same; builds before it ignore the variable)
     if (-not $e.ContainsKey("WFC_MUTE")) { $e.WFC_MUTE = "1" }
+    # (user 2026-10-15: lane game windows must not take the mouse / focus - interim until WFC_NOINTERACT lands: no mouse look in the
+    #  game; a harness that drives the mouse sets WFC_NOMOUSE itself)
+    if (-not $e.ContainsKey("WFC_NOMOUSE")) { $e.WFC_NOMOUSE = "1" }
     Assert-WfcHdRoot $e
     return $e
 }
