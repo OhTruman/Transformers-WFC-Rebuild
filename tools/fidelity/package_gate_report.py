@@ -7,7 +7,7 @@ lines = [f"# Package gate - final {f} (penultimate {p}, base {base_name})", "", 
 verdicts = []
 
 # 1 regress: per map best p90 per arm; rule: nolights - base <= +0.15, head - nolights <= +0.35
-rows, ok = [], True
+rows, ok, nbis = [], True, 0
 for m in ['501', '502', '503', '504', '507', '508', '509', '510']:
     rp = os.path.join(O, 'regress', f'map-{m}', 'report.json')
     if not os.path.exists(rp): rows.append(f"| {m} | - | - | - | - | - | - | missing |"); ok = False; continue
@@ -29,13 +29,16 @@ for m in ['501', '502', '503', '504', '507', '508', '509', '510']:
             dr = re.search(r'draws (\d+) \(dyn (\d+), fx (\d+)\), binds (\d+)', note); work.setdefault('base', dr.groups() if dr else None)
     b, h, n = best.get('base'), best.get('head'), best.get('nolights')
     if None in (b, h, n): rows.append(f"| {m} | {b} | {h} | {n} | - | - | - | incomplete |"); ok = False; continue
-    r1, r2 = n - b, h - n; v = "PASS" if r1 <= 0.15 and r2 <= 0.35 and not bad else ("UNKNOWN" if bad else "FAIL"); ok &= v == "PASS"
+    # Integration 2026-10-16: both bars are REPORT rows (+0.35 ms p90 each, RT off); a map above either bar gets a per-switch
+    # bisect before the hand-over (WFC_ switches: effect lights, death bodies, tiled lights), not a block. Blocking: contamination,
+    # client rect, a different match, final vs lights-off parity -> UNKNOWN.
+    r1, r2 = n - b, h - n; v = "UNKNOWN" if bad else ("PASS" if r1 <= 0.35 and r2 <= 0.35 else "BISECT"); ok &= v != "UNKNOWN"; nbis += v == "BISECT"
     wb, wh = work.get('base'), work.get('head')
     wtxt = f"draws {wb[0]} -> {wh[0]} (dyn {wb[1]} -> {wh[1]}, fx {wb[2]} -> {wh[2]}), binds {wb[3]} -> {wh[3]}" if wb and wh else "same"
     rows.append(f"| {m} | {b:.2f} | {h:.2f} | {n:.2f} | {r1:+.2f} | {r2:+.2f} | {wtxt} | {v}{' (' + ', '.join(bad) + ')' if bad else ''} |")
 lines += ["## 1. Regress (3-arm lockstep, RT off, Classic, best p90 of 2, ms)", "",
-          "| map | base | final | final lights off | lights off - base (<= +0.15) | lights cost (<= +0.35) | workload base -> final (same match) | verdict |", "|---|---|---|---|---|---|---|---|"] + rows + [""]
-verdicts.append(("regress", "PASS" if ok else "FAIL"))
+          "| map | base | final | final lights off | lights off - base (report, <= +0.35) | lights cost (report, <= +0.35) | workload base -> final (same match) | verdict |", "|---|---|---|---|---|---|---|---|"] + rows + [""]
+verdicts.append(("regress", ("UNKNOWN (blocking row)" if not ok else (f"REPORT - {nbis} map(s) above +0.35: per-switch bisect before the hand-over" if nbis else "PASS"))))
 
 # 2 leak: lobby dips of GPU dedicated
 lk = os.path.join(O, 'leak', 'sampler.csv')

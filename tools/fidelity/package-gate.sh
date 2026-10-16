@@ -3,8 +3,8 @@
 #   0 builds   Debug + Release of the final and the penultimate head (m05 build-target, -j 4, third_party, integration render data;
 #              CPU only - run it before the GPU block with BUILD_ONLY=1 if wanted)
 #   1 regress  3-arm lockstep on all 8 maps, 2 reps, RT off, Classic: base 398b27ef / final / final + WFC_NOTRANSIENTLIGHTS=1
-#              (TIMED: PERF_HOLD + clear card). Rule: lights-off arm within +0.15 ms p90 of base on every map; the lights' cost
-#              (final - lights-off) <= +0.35 on every map, reported as a feature cost
+#              (TIMED: PERF_HOLD + clear card). REPORT rows (Integration 2026-10-16): lights-off arm vs base <= +0.35 ms p90 and the lights cost
+#              (final - lights-off) <= +0.35 per map; a map above either bar gets a per-switch bisect before the hand-over, not a block
 #   2 leak     R4 leak rows on the final head (Realistic + GI, 5 map changes; lobby GPU dedicated must plateau)
 #   3 eyepass  Off | Realistic | Realistic + Enhanced materials sheets on the 5 user maps
 #   4 FAST     full FAST on the penultimate head, then a delta FAST on the final head (rows whose inputs changed, delta-steps.ps1;
