@@ -1785,3 +1785,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   200f8047). PACKAGE_6_HEAD.md refreshed 45fe5514 (28 placeholders; lava closed pending the eye pass; new known issue:
   bloom washout on bright emissive + muzzle flash until item 7's cap). Waiting: Rendering item 7 (temporal reflections
   WFC_RT_REFLTEMPORAL; Systems' table patch f3c56f1b pairs with it), boundary -> Systems rtcheck row -> RESUME.
+  2026-10-16 13:05 BOTTEST AI-cost row -> average + p99 (Gameplay; 48 / 48 on all 12 seeds; test row only). Third
+  Streets pocket: no longer a trap with both snap fixes (bot escapes 25.9 m in 20 s); still the top robot-slow spot
+  (narrow off-mesh gap) -> entry replay, fix proposal with evidence.
