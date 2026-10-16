@@ -43,7 +43,8 @@ verdicts.append(("regress", ("UNKNOWN (blocking row)" if not ok else (f"REPORT -
 # 1b Realistic perf row: report-only; flag p50 > 16.7 ms (the user's 60 fps floor at 1440p). Contamination / client rect / HD not on -> UNKNOWN
 rrows, flags, rbad = [], 0, 0
 for m in ['508', '510', '507', '504', '509']:
-    rp = os.path.join(O, 'rtperf', f'map-{m}', 'report.json')
+    rp = os.path.join(O, 'rtperf2', f'map-{m}', 'report.json')   # (rtperf2 = the rerun with HD 2 applied, 2026-10-16; else the first run)
+    if not os.path.exists(rp): rp = os.path.join(O, 'rtperf', f'map-{m}', 'report.json')
     if not os.path.exists(rp): rrows.append(f"| {m} | - | - | missing |"); rbad += 1; continue
     d = json.load(open(rp, encoding='utf-8-sig')); L = d['results'] if isinstance(d, dict) and 'results' in d else d
     row = next((r for r in L if r['id'] == 'lockstep.realistic.r1'), None); x = re.search(r'p50 / p90 / p99 ([\d.]+) / ([\d.]+)', str(row and row.get('note')))
