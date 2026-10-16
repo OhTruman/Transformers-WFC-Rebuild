@@ -2050,3 +2050,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   deaths (the original's 10-player cap never produced them). DECISION: Gameplay prepares a 10-presentation cap in
   > 10-player matches (oldest dissolves first, 5v5 untouched, WFC_CORPSECAP); in the respin if the bisect's corpse
   arm shows > ~1 ms p90, else package 7 with the trail distance LOD.
+  2026-10-16 17:03 TDR LEDGER day 4: 0 TDRs (05:02-17:02 their clock); nonpaged pool 1.7 -> 6.9 GB (0.43 GB/h; the
+  03:51 TDR hit at ~10.6 GB -> ~01:00-02:00 tonight). PLAN: all GPU work (block end, bisect + 1b hold, identity,
+  respin merge, package rebuild, RT verify rows, regress re-gate) sequenced to end before ~00:00 their clock; later
+  TDR-hit rows = UNKNOWN, rerun after the user's morning reboot; no reboot request tonight.
