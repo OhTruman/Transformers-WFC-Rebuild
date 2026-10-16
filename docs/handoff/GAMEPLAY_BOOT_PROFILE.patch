@@ -1,0 +1,72 @@
+diff --git a/src/core/Application.h b/src/core/Application.h
+index a6f269c..3cd93a1 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -36,6 +36,7 @@ private:
+     void drawFrontendFrame();
+     void attachPresenter();
+     static void applyStartupGraphics();   // before the renderer exists: settings it can only take at start-up (frame generation)
++    void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
+     void shutdownFrontend();
+     std::unique_ptr<frontend::FrontendRuntime> frontend_;
+     bool escWasDown_ = false;
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index e38198c..c5a660f 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -157,6 +157,7 @@ bool Application::init() {
+         std::string url = u; world_.setMap(game::World::canonicalMapName(url.substr(0, url.find('?'))));
+     }
+     LOG_INFO("map: %s", world_.mapName().c_str());
++    if (!nullRender && std::getenv("WFC_BOOT_PROFILE")) applyBootProfile();   // harness: the profile's display / graphics rows on the direct boot
+     world_.load(*renderer_);
+     // Gameplay's measurement mode is WFC_PICKUPTEST=1. [integration] Rendering's presentation diagnostic shares the
+     // name with a comma form (<factory>,<take>,<respawn>; see run()), so that form must not exit here.
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 88f4769..c44b0c4 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -417,6 +417,43 @@ void Application::applyStartupGraphics() {
+                                                                  {"provenance", "PC EXTENSION"}});
+ }
+ 
++// WFC_BOOT_PROFILE=1 (harness: authored eye-pass views on the direct boot): the stored profile's display row, graphics extensions,
++// Modern materials and ray tracing, applied as the frontend boot applies them (attachPresenter), before the map loads.
++void Application::applyBootProfile() {
++    if (!window_ || !renderer_) return;
++    frontend::LocalProfile p;
++    {
++        std::ifstream f(core::userFilePath(frontend::LocalProfile::kFile));
++        if (f) p.loadFrom(f);
++    }
++    const auto& d = p.display;
++    const frontend::HardwareFacts hw = gatherHardwareFacts(renderer_, window_);
++    LOG_INFO("boot profile: display %dx%d%s vsync %d, HD %d, ray tracing %d (direct boot, WFC_BOOT_PROFILE)", d.width, d.height,
++             d.fullscreen ? " fullscreen" : "", (int)d.vsync, d.hdTextures, d.rayTracing);
++    if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
++    window_->setVSync(d.vsync);
++    int cap = d.frameLimit;
++    if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
++    const char* by = applyFrameLimit(renderer_, window_, cap, pacingFg_);
++    pacingHz_ = cap;
++    frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
++    appliedUpscaling_ = d.upscaling;
++    appliedHdTextures_ = frontend::hdTexturesEffective(d.hdTextures, hw.hdTexturePack, hw.hdEnhanced);
++    appliedAnisotropy_ = d.anisotropy;
++    int up = d.upscaling, af = d.anisotropy, hd = appliedHdTextures_;
++    bool env = false;
++    const char* gx = applyGraphicsExtensions(renderer_, up, hd, af, env);
++    frontend::FlowTrace::emit("display.graphicsExtensions", {{"upscaling", std::to_string(up)}, {"hdTextures", std::to_string(hd)},
++                                                             {"anisotropy", std::to_string(af)},
++                                                             {"source", env ? "env override" : "profile"}, {"by", gx}, {"when", "boot"},
++                                                             {"provenance", "PC EXTENSION"}});
++    applyModernMaterials(renderer_, hd, "boot");
++    appliedRayTracing_ = d.rayTracing;
++    frontend::FlowTrace::emit("display.rayTracing", {{"mode", std::to_string(d.rayTracing)}, {"by", applyRayTracing(renderer_, d.rayTracing, hw.rtAvailable)},
++                                                     {"when", "boot"}, {"provenance", "PC EXTENSION"}});
++    applyGamma(renderer_, p.getInt("GammaSetting"));
++}
++
+ bool Application::wantsFrontendBoot() {
+     if (const char* b = std::getenv("WFC_BOOT")) return std::strcmp(b, "match") != 0;
+     if (std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY")) return true;
