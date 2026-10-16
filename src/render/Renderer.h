@@ -564,6 +564,9 @@ public:
 
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;
+    // Draw the characters queued so far now (a renderer that queues dynamic meshes; others: nothing). The game calls it
+    // once after its characters, before meshes / effects drawn immediately, so those depth-test against the characters.
+    virtual void flushQueuedCharacters() {}
 
     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).

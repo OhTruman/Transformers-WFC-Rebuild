@@ -3634,6 +3634,11 @@ void World::draw(render::IRenderer& r) const {
         repairSquibDraw_ = false;
     }
 
+    // Every character is queued by now: draw them before the barrier / sentry meshes (Pipeline::drawDynamic draws those
+    // immediately - it queues only skinned characters with a light environment - so queued characters drawn after them
+    // covered the translucent barrier grid: user playtest 2026-10-14) and before the effects below (meshes and particle
+    // fallbacks, drawn immediately too). One flush per frame: nothing is queued after it.
+    r.flushQueuedCharacters();
     for (const BarrierState& bs : barriers_) if (bs.alive && !bs.mesh.positions.empty()) r.drawDynamicMesh(bs.mesh, bs.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())
@@ -4962,6 +4967,12 @@ void World::ensureAbilityModels() {
         const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";
         if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
             assets::loadAnimationsByName(ext + "WEP_Barrier_ANIM.anim.gltf", barrierModel_);
+            // The export carries no extras.wfc_material for the barrier, so the renderer fell back to an opaque lit surface
+            // (user 2026-10-14: the grid must be see-through). Its compiled material is the package's
+            // WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST (ENV_ForceField_Defrag_MAT: BLEND_Additive, unlit, distortion,
+            // depth-biased alpha), present in every MP map's materials_glsl.json.
+            for (render::Material& mt : barrierModel_.mats)
+                if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "WEP_Shield_p.Barrier." + mt.sourceName;
             resolveModelTextures(barrierModel_);
             if (renderer_) { render::MeshData md; md.subs = barrierModel_.subs; md.mats = barrierModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(barrierModel_); }
         } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");

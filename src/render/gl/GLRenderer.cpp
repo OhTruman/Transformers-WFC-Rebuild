@@ -1778,6 +1778,8 @@ public:
         glEnd();
     }
 
+    void flushQueuedCharacters() override { if (wfc_.active()) { wfc_.flushQueuedCharacters(); glLoadMatrixf(view_.m); } }
+
     void drawParticles(const ParticleBatch& b) override {
         if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         watchdog::phase("drawParticles");
