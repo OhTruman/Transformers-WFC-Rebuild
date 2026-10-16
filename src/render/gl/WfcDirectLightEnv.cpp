@@ -239,6 +239,9 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
                 I = Imax;
             }
         }
+        if (li == rtSunLight_ && rtCharSun()) {    // (v3 row 1, Realistic) the sun at full visibility: the RT ray shadows it per pixel
+            I = intensityAt(l, origin); visTarget = 1.0f;
+        }
         core::Vec3 color = l.colorByte * I;   // LightColor / 255 * IntensityAt
         auto& ls = st.lights[li];             // SmoothAndRank: linear, no overshoot, inside updates only
         float vis = visTarget;

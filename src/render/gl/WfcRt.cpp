@@ -1071,6 +1071,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             fr.toSun[0] = -d.x; fr.toSun[1] = -d.y; fr.toSun[2] = -d.z; fr.toSun[3] = (worldShadows || rtMode_ == 2) ? 2.0f : 1.0f;
             if (r1Active() && r1ClearedFrame_ == frameNo_) fr.toSun[3] = 3.0f;   // (R1: the world's own sun visibility too; R4 keeps 2: its lightmap holds the world's sun shadows, world pixels take the characters' only)
             rtSunDir_[0] = -d.x; rtSunDir_[1] = -d.y; rtSunDir_[2] = -d.z;
+            rtSunLight_ = (int)(sun - lights_.data());
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
         // last frame (up to 4), traced per pixel; the characters drawn after this pass map their env lights to them

@@ -4354,6 +4354,22 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform3fv(P.uAmb, 6, &env->cube[0].x);
                 Uniform1i(P.uNumLights, env->n);
                 Uniform4fv(P.uLPos, 3, &env->pos[0][0]);
+                static const bool sunDiag = std::getenv("WFC_SUNDIAG") != nullptr;   // (v3 row 1, diagnostics)
+                if (sunDiag && dynamicObject && envSamples_) {
+                    static int draws = 0, direct = 0; static double lumSum = 0.0;
+                    int sun = -1;
+                    for (size_t li = 0; li < lights_.size(); ++li)
+                        if (lights_[li].type == 2 && lights_[li].enabled && (sun < 0 || lights_[li].brightness > lights_[(size_t)sun].brightness)) sun = (int)li;
+                    ++draws;
+                    for (int i = 0; i < env->n && i < 3; ++i)
+                        if (env->light[i] == sun) { ++direct; lumSum += 0.2126 * env->col[i][0] + 0.7152 * env->col[i][1] + 0.0722 * env->col[i][2]; }
+                    if (draws == 600) {
+                        LOG_INFO("SUNDIAG (600 character draws): the sun (light %d) a direct env light in %d (%.0f %%), its slot luminance %.3f avg"
+                                 " - else folded into the ambient or invisible to the light environment", sun, direct, 100.0 * direct / 600.0,
+                                 direct ? lumSum / direct : 0.0);
+                        draws = direct = 0; lumSum = 0.0;
+                    }
+                }
                 if (dynamicObject && rtShadowLightsOn()) {     // (item 2) its env lights among the RT pass's shadow lights
                     int sl[3] = {-1, -1, -1};
                     for (int i = 0; i < env->n && i < 3; ++i) {
