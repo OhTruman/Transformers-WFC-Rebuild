@@ -664,6 +664,7 @@ public:
                 const uint32_t u[4] = {first, count, 0u, 0u}; std::memcpy(c + 12, u, 16);
                 std::memcpy(c + 16, j0.mix, 16);
                 const uint32_t o[4] = {j0.subOff, j0.lightOff, j0.pageMapOff, j0.mask}; std::memcpy(c + 20, o, 16);
+                c[24] = j0.lightSize; c[25] = j0.bounceSat; c[26] = j0.emissiveGain;   // (X4: the probes see the same saturated bounce)
                 cl->SetComputeRootSignature(rs_);
                 cl->SetDescriptorHeaps(1, &heap_);
                 cl->SetPipelineState(psoGiProbe_);
@@ -1453,7 +1454,7 @@ private:
     void giRecord(ID3D12GraphicsCommandList* cl, const RtGiJob& j) {
         float c[28] = {};
         std::memcpy(c, j.toSun, 16); std::memcpy(c + 4, j.sunCol, 16); std::memcpy(c + 8, j.sky, 16);
-        c[24] = j.lightSize;
+        c[24] = j.lightSize; c[25] = j.bounceSat; c[26] = j.emissiveGain;
         const uint32_t u[4] = {j.first, j.count, j.frame, j.lights};
         std::memcpy(c + 12, u, 16); std::memcpy(c + 16, j.mix, 16);
         const uint32_t o[4] = {j.subOff, j.lightOff, j.pageMapOff, j.mask};

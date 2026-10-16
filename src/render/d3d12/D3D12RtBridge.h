@@ -100,6 +100,8 @@ struct RtGiJob {
     uint32_t subOff = 0, lightOff = 0, pageMapOff = 0, mask = 0x0Bu;
     bool dilate = false;
     float lightSize = 0.0f;                     // (item 5) the static lights' source radius, m (0: hard)
+    float emissiveGain = 1.0f;                  // (Molten plan a) emissive surfaces as GI light sources
+    float bounceSat = 1.0f;                     // (X4) the bounce reflectance's saturation (luminance kept; 1 = the albedo's)
 };
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex);
 double rtBridgeVramMB();                                  // (leak diagnostics) the process's local video memory, MB (0: unknown)
