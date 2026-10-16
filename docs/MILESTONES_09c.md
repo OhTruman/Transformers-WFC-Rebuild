@@ -1378,6 +1378,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   emissive, calibrated to the cone's visual; Systems tables the placements); emissive pickups / shards = Realistic-only
   point lights from the material emissive; CloakLight wired in all modes (fidelity, Systems patch). Off / Faithful
   untouched. Package 5 build at 721 / 873 files.
+  2026-10-16 03:30 CAMPAIGN ASSET INVENTORY (AssetTools, read-only; docs/handoff/CAMPAIGN_ASSET_INVENTORY.md): 10 chapters (A1_IAC,
+  A2_KON, A3_COR, A4_ORB, A5_TRY, D1_ORB, D2_COR, D3A_IAC, D3B_IAC, D5_OME), 1,167 packages / 421 map packages / 420
+  streaming sublevels (2.48 GB on disk, 6.08 GB uncompressed), the map pipeline run on 0 of 10 (actor-summary JSON
+  only); nav data present (17,875 NavigationCell, 175,184 TnReachSpec); campaign-only assets 1,468 static + 199
+  skeletal meshes, 449 AnimSets, 281 particle systems, 6,008 sound cues, 3,601 matinees, 3,185 Kismet sequences, 57
+  TR_ characters (25 map-referenced, 32 runtime-spawned); textures: 2,490 of 3,429 already in the frozen D pack, ~3 new,
+  346 UI textures a separate decision; blockers: 127,556 Kismet objects (11 of 40 High Moon classes without RE decomp),
+  no matinee player, 570 parent materials / 907 MICs without .mat (matc need unknown), 22 FaceFX assets, the
+  runtime-character definitions, a streaming-aware map pipeline. PILOT approved: D5_OME (9 packages / 155 MB) through
+  the map pipeline, CPU only, hold-aware, ~1 day, provisional, in AssetTools work/.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
