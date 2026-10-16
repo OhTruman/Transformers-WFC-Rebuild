@@ -2128,3 +2128,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (-0.39 ms); GPU-skinned corpses incl. the shadow pass + instanced gib chunks = PACKAGE 7 ITEM 1 (floor = the
   NOCORPSE arm). Regress row stays REPORT with that attribution. cand10 cancelled. Sequence: Gameplay checks +
   crops -> respin sha -> Systems build -> timed 8-map regress + delta FAST -> verify rows -> promote.
+  2026-10-16 18:15 RESPIN TOOLING: tools/fidelity/package-respin.sh (Experimental 4086a4b9; build Debug + Release, timed
+  8-map 3-arm regress vs the rise-snap base, delta FAST vs 4078e47b, PACKAGE-GATE.md with the attribution line and
+  the carried rows named); package 7 design RENDERING_CORPSE_GPU_PATH.md merged (CPU-skinned bodies skip the
+  dynQueue_ batching, so their casters / shadow projection / draws run per draw: the GPU half of the 0.2 ms per
+  body; fix = drawSkinnedGpu per body part, fallback posed). Per-body arm set + a 5v5 pair after the regress for
+  the doc numbers. Package 6 doc known issue reworded (Systems a945713c+).
