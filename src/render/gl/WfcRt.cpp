@@ -56,6 +56,9 @@ uniform vec4 uSLCol[4];   // calibrated rgb, w: falloff exponent (< 0: linear)
 uniform vec4 uSLDir[4];   // forward, w: cos(outer) (-2 = point)
 uniform vec4 uSLCosI;
 uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // (item 4) the transient lights (xyz, 1 / radius; rgb, falloff)
+// (v3 row 2) a character's sun shadow on the world removes the sun's share of the pixel's irradiance (the R1 fit: k x sun_linear
+// x N.L^p against the decoded lightmap irradiance) instead of darkening to the map's ModShadowColor
+uniform int uSunShare; uniform vec3 uSunE; uniform vec3 uToSun; uniform float uSunP;
 vec3 wfcWorldAt(ivec2 q) { vec2 ndc = (vec2(q) + 0.5) / uSize * 2.0 - 1.0; float d = texelFetch(uDepth, q, 0).r;
     vec4 w = uInvVP * vec4(ndc, d * 2.0 - 1.0, 1.0); return w.xyz / w.w; }
 out vec4 oFactor;
@@ -68,6 +71,18 @@ void main() {
     vis = vis > 0.985 ? 1.0 : vis;                  // (the 8-bit denoised visibility tops out just under 1: unlit pixels exact)
     float ao = s.w > 0.985 ? 1.0 : s.w;          // (the filtered AO)
     vec3 f = mix(uModShadow, vec3(1.0), vis) * mix(1.0, ao, uAoStrength);
+    if (uSunShare != 0 && vis < 1.0) {
+        vec4 lum = texelFetch(uLum, p, 0);
+        float lw = dot(lum.rgb, vec3(0.2126, 0.7152, 0.0722));
+        if (lum.a > 0.5 && lw > 1e-4) {
+            vec3 P = wfcWorldAt(p);
+            ivec2 px1 = ivec2(min(p.x + 1, int(uSize.x) - 1), p.y), py1 = ivec2(p.x, min(p.y + 1, int(uSize.y) - 1));
+            vec3 N = normalize(cross(wfcWorldAt(px1) - P, wfcWorldAt(py1) - P));
+            float es = dot(uSunE, vec3(0.2126, 0.7152, 0.0722)) * pow(abs(dot(N, uToSun)), uSunP);
+            float share = clamp(es / lw, 0.0, 1.0);
+            f = vec3(mix(1.0 - share, 1.0, vis)) * mix(1.0, ao, uAoStrength);
+        }
+    }
     if (uLB > 0) {
         vec4 lum = texelFetch(uLum, p, 0);
         float lw = dot(lum.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -926,7 +941,16 @@ void Pipeline::rtDynMid() {
         rtLampWorldN_ = nb;
         // (item 4) the transient lights' RT shadows on the world: the same inputs (bound here when 2B did not)
         const bool tlOk = !r1 && tlN_ > 0 && rtMrtWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ && t.lightVis;
-        if (tlOk && nb == 0) {
+        static const bool sunShareOff = [] { const char* e = std::getenv("WFC_RT_SUNSHARE"); return e && e[0] == '0'; }();
+        const bool sunOk = !sunShareOff && !r1 && rtMode_ == 2 && giActive() && rtMrtWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ &&
+                           r1Fit_[0] > 0.0f && sun;
+        Uniform1i(cachedUniformLocation(cp, "uSunShare"), sunOk ? 1 : 0);
+        if (sunOk) {
+            Uniform3f(cachedUniformLocation(cp, "uSunE"), r1Fit_[0] * r1Sun_[0], r1Fit_[0] * r1Sun_[1], r1Fit_[0] * r1Sun_[2]);
+            Uniform3f(cachedUniformLocation(cp, "uToSun"), rtSunDir_[0], rtSunDir_[1], rtSunDir_[2]);
+            Uniform1f(cachedUniformLocation(cp, "uSunP"), r1Fit_[1]);
+        }
+        if ((tlOk || sunOk) && nb == 0) {
             ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis);
             ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, r1SunTex_);
             ActiveTexture(GL_TEXTURE0 + 5); glBindTexture(GL_TEXTURE_2D, t.worldDepth);
