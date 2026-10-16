@@ -1419,7 +1419,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   singles (jets, Car2, Tank2), 2 without a forward lamp (Tank, Minion3); position in vehicle root space, lamp normal,
   emissive colour, area; caveats: geometric only, some roof / cab-height picks (the JSON lists every cluster incl.
   bumper pairs), the emissive is the default skin's blue energon glow so the headlight colour is Rendering's call.
-  Handed to Rendering for plan v3 row 3. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  Handed to Rendering for plan v3 row 3.
+  2026-10-16 03:53 CLOAK LIGHT CLOSED (Gameplay RE, fb5e40c3, docs/handoff/GAMEPLAY_CLOAKLIGHT_RE.md, merged fc00f731): the shipped
+  game never enables TnPawn.CloakLight - TriggerLight's only callers are the two death-light paths, nothing calls
+  GetService(TnCloakLightService), UpdateLight idles while CurrentTime == -1, the exe references the service name only
+  in the native registration, and every RampLightProperties instance across 2,438 packages is a death light. Faithful
+  = no cloak light; the original's gameplay lights are exactly muzzle + death (both in package 5). FAST gate on
+  398b27ef running (functional rows only, no hold). D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
   27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
   mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
