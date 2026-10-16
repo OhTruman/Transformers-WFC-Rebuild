@@ -1307,6 +1307,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   keep the authored values in every mode (the original look), add a WFC_TLIGHTSCALE tune key (default 1) in Systems'
   cull patch, note it in the package-5 notes for the user to judge; a real-game capture would settle it. Systems'
   view-cone cull patch (SYSTEMS_TLIGHT_CULL.patch) rebases onto the cull-fix head once named.
+  2026-10-16 02:16 TRANSIENT-LIGHT CULL FIX MERGED 3c007160 (rt2 5fa83761): per-light cull radius (1 / 512 floor: an exponent-75
+  light reaches 0.28 R; documented visual change invisible after tonemap), per-draw light masks for non-MDI draws,
+  cached uniform locations. Checks: Faithful identity 5 / 5 + SIMHASH; lights still show at muzzle parameters (12.9 %
+  of pixels Realistic / 15.3 % Faithful on Molten); Rendering confirmed the renderer side of the units chain (added
+  once in linear before fog / tonemap, UE3 falloff, no second brightness). NEW PACKAGE-5 CANDIDATE = 3c007160:
+  Experimental reruns the 3-arm A/B (target within +0.05 ms p90 of 30b2fa74), then regress-8map, captures vs
+  a5f53923, and the rt-perf-baseline under NOINTERACT; Systems rebases its view-cone cull + WFC_TLIGHTSCALE patch onto
+  it (rides if in before the build).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
