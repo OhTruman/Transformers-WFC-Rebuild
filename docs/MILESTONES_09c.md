@@ -2098,3 +2098,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   serial; cap dropped; NOCORPSE / NOMINEPRES kept). Trees int_csb (head) + int_csn (head + patch) compiling (~30
   min) -> the corpse-arm hold waits for BUILDS DONE; arms default / NOCORPSE / NOMINEPRES (int_cap) + int_csn.
   Slot B (4 windowed crops, 10 / 40 m byte-compare) after the hold. Respin = 5bce52bb + this patch.
+  2026-10-16 17:58 RESPIN COMMIT 1 MERGED: b0f5ac45 (= rt2 5bce52bb) tiled transient lights Realistic-only; identity vs
+  clean 4078e47b: Off 5/5 + Faithful 5/5 byte-identical, SIMHASH 088bd3b99da5768e x4; Realistic unchanged by
+  construction (eye pass stands). drawDynamicMesh cost per call (Rendering): CPU bounds scan + full interleaved
+  vertex build (~0.5 MB / character) + 2 STREAM_DRAW uploads into one shared dyn VBO / IBO; frustum cull only.
+  GPU path for corpses = IRenderer::drawSkinnedMesh (GpuSkin.h helpers; stable key per corpse, 512 shared rows,
+  <= 128 bones, serial bump on pose change) = plan 2; plan 1 (drawDynamicMeshPosed + serial) = the respin.
