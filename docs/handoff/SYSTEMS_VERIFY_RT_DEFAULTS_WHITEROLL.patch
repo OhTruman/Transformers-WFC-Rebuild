@@ -1,12 +1,13 @@
 --- a/tools/package/verify_slim.ps1
 +++ b/tools/package/verify_slim.ps1
-@@ -100,6 +100,9 @@
+@@ -100,6 +100,10 @@
      tonecontrast = 1.15  # X1 contrast (WFC_TONE_CONTRAST)
      tonebloom = 0.8      # X1 bloom (WFC_TONE_BLOOM)
      bloommax = 16        # X1 soft-bloom input cap (WFC_TONE_BLOOMMAX)
 +    whiteroll = 'on'     # X1 very bright pixels desaturate toward white before the shoulder (WFC_TONE_WHITEROLL=0 off)
-+    whitelo = 2          # white-roll start (WFC_TONE_WHITELO)
-+    whitehi = 16         # white-roll end (WFC_TONE_WHITEHI)
++    whitelo = 1.5        # white-roll start (WFC_TONE_WHITELO; retuned after the Gorge recheck)
++    whitehi = 6          # white-roll end (WFC_TONE_WHITEHI)
++    whitemix = 0.5       # white-roll strength, keeps the warm tint (WFC_TONE_WHITEMIX)
  }
  
  function Norm([string]$p) {
