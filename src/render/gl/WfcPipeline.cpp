@@ -8130,7 +8130,10 @@ void Pipeline::selectTransientLights() {
 }
 
 bool Pipeline::tlTiledOn() const {
-    const bool off = !rtdef::tiled();
+    // Realistic only: Off / Faithful keep the original's 8-light uniform path (the tiled path drew the same 8 lights
+    // identically but paid the tile-mask build, two texture binds per lit draw and the per-pixel texel fetches -
+    // the package 6 gate's Off p90 regression on Berth)
+    const bool off = !rtdef::tiled() || rtMode_ != 2;
     return !off;
 }
 
