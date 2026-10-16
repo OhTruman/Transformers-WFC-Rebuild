@@ -71,6 +71,16 @@ for m in maps:
 for mo in others:
     v = [res[m][mo] for m in maps if res[m][mo]["dL"] is not None]
     if v: lines.append(f"| **all maps** | {lab.get(mo, mo)} | {sum(x['pairs'] for x in v)} | {np.mean([x['dL'] for x in v]):.1f} | {np.mean([x['dB'] for x in v]):+.1f} | {np.mean([x['C'] for x in v]):.2f} | {np.mean([x['dM'] for x in v]):+.1f} | {np.mean([x['chg'] for x in v]):.1f} | |")
+# contrast floors (user 2026-10-16 via Integration: a volumetric candidate must keep the package 6 checkpoint's look): EYE_CONTRAST_MIN
+# "real=1.28,realhd=1.30" (the default) - the all-map mean contrast ratio per mode against its floor; a FLOOR line per mode
+floors = dict(kv.split("=") for kv in os.environ.get("EYE_CONTRAST_MIN", "real=1.28,realhd=1.30").split(",") if "=" in kv)
+fl_lines = []
+for mo in others:
+    v = [res[m][mo]["C"] for m in maps if res[m][mo]["C"] is not None]
+    if v and mo in floors:
+        c, f = float(np.mean(v)), float(floors[mo])
+        fl_lines.append(f"- contrast floor {lab.get(mo, mo)}: all-map {c:.2f} vs floor {f:.2f} -> {'OK' if round(c, 2) >= f - 1e-9 else 'BELOW FLOOR'}")
+if fl_lines: lines += [""] + fl_lines
 json.dump(res, open(os.path.join(O, "score.json"), "w"), indent=1)
 md = os.path.join(O, "EYEPASS.md"); t = open(md).read() if os.path.exists(md) else f"# Eye pass - {os.path.basename(O)}\n"
 t = t.split("\n## Difference from")[0].rstrip("\n") + "\n" + "\n".join(lines) + "\n"
