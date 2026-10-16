@@ -49,6 +49,8 @@ foreach ($m in $Maps) {
 $rows | Export-Csv -NoTypeInformation -Encoding ASCII (Join-Path $OutDir "rt-perf-baseline.csv")
 $md = New-Object System.Collections.Generic.List[string]
 $md.Add("# RT perf baseline - $(Split-Path $Root -Leaf), ${Width}x${Height} windowed, 31 v 32 bots + player bot, lockstep steps $From-$Steps")
+$flags = "WFC_NOINTERACT={0}, WFC_MUTE={1}, WFC_NOMOUSE={2}" -f $(if ($env:WFC_NOINTERACT) { $env:WFC_NOINTERACT } else { "off" }), $(if ($env:WFC_MUTE) { $env:WFC_MUTE } else { "off" }), $(if ($env:WFC_NOMOUSE) { $env:WFC_NOMOUSE } else { "off" })
+$md.Add(""); $md.Add("Run conditions: $flags. (2026-10-16: rows under WFC_NOINTERACT are their own reference series - window pacing differs - never diff them against pre-NOINTERACT rows.)")
 $md.Add(""); $md.Add("GPU ms per RT pass = the product's RT summary averages over the run; frame p50 / p90 over the measured steps (ms).")
 $md.Add(""); $md.Add("| map | mode | frame p50 | frame p90 | shadow+AO | denoiser | reflections | GI tracer (per traced frame) | RT VRAM MB | frames |")
 $md.Add("|---|---|---|---|---|---|---|---|---|---|")

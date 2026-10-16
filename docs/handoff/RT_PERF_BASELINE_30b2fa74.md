@@ -25,3 +25,5 @@ range (SIMHASH, all 5 maps). Rust was rerun: its first pass overlapped AssetTool
 2.29 clean; first pass kept in work/perf/rt_baseline_30b2fa7/contaminated_1226). Faithful reflections 0 = no RT reflection pass
 in Faithful. GI tracer = GPU ms per frame that traced a slice (R4 sweeps stop after WFC_RT_GISWEEPS); RT VRAM = the RT device's.
 Re-run for a diff: tools/fidelity/rt-perf-baseline.ps1 -Root work\ab\<build> -OutDir <dir>.
+
+> Run conditions: pre-WFC_NOINTERACT series (interactive window, WFC_MUTE=1, WFC_NOMOUSE=1). Not comparable with rows taken under WFC_NOINTERACT; package 5 re-records the reference under NOINTERACT.
