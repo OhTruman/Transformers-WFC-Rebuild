@@ -1817,3 +1817,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   in a later Rendering commit with its own table patch. USER QUESTION (cross-play now?): recommended design docs now
   (netcode / determinism across platforms, platform feasibility, profile + stats model) with Systems + AssetTools in
   gaps, code after package 6; awaiting the user's answer + platform order.
+  2026-10-16 13:14 SCHEDULE: Rendering projects the package 6 head for ~17:00-19:00 today (their clock): item 7 push
+  ~13:30, effect-light calibration ~14:30-15:00, X3 v3 verdict ~15:30 (out of package 6 if still weak), eye pass
+  with Experimental ~16:00-17:00 (+1-2 h per fix row). Then: gate-base round if the ledge guard landed, BUILD_ONLY,
+  the one-GO gate block (~3 h), Systems' package build + verify in parallel, hand-over after PASS. Head freeze = no
+  sim change after the gate base is built; the ledge guard lands only if its gate finishes first.
