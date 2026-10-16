@@ -1,6 +1,6 @@
 # Package 6: integration <HEAD> (<DATE>)
 
-<!-- SKELETON (Systems; refreshed 2026-10-16 11:13 from docs/MILESTONES_09c.md up to the 11:11 entry). Integration fills
+<!-- SKELETON (Systems; refreshed 2026-10-16 12:12 from docs/MILESTONES_09c.md up to the 12:11 entry). Integration fills
      <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
      PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
 
@@ -15,9 +15,21 @@ Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load
 
 ### Realistic lighting (ray-tracing plan v3 and the extra X rows; Realistic only, Off / Faithful unchanged)
 
-Batch-4 sheet (Experimental, 5 user maps, Realistic vs Off, eyepass_score): contrast +27 % overall (1.27, was 0.99); dark
-Gorge views read night-and-day (far wall and door lit where Off is black); lit exteriors a clear step
-[PLACEHOLDER: the final sheet's numbers on the head].
+Eye-pass sheet on int_cand3 (Experimental, Release with the Enhanced fix, 5 user maps, same frames; all checks pass incl.
+the 498 modern maps). Realistic | Realistic + Enhanced vs Off (mean / brighter / contrast / % of pixels):
+
+| map | Realistic | Realistic + Enhanced contrast |
+|---|---|---|
+| Streets | 27.4 / +18.2 / 1.17 / 43 % | 1.15 |
+| Gorge | 22.8 / +17.6 / 1.44 | 1.47 |
+| Debris | 25.6 / +8.2 / 1.15 | 1.13 |
+| Rust | 26.5 / +19.5 / 1.29 | 1.29 |
+| Molten | 23.8 / +20.1 / 1.50 | 1.48 |
+| all maps | contrast 1.31 | 1.30 |
+
+(The proof sheet on 0a9c497f read 0.99 - Realistic indistinguishable from Off; batch 4 read 1.27 | 1.05.) Dark Gorge views
+read night-and-day (far wall and door lit where Off is black). [PLACEHOLDER: the final sheet on the head, incl. the RT
+hit-data fix and X3 if it ships.]
 
 - **Characters take the RT sun** (row 1, bd749603, WFC_RT_CHARSUN): robots and movers in sunlight get the traced sun
   and its shadow, matching the world they stand in.
@@ -26,20 +38,25 @@ Gorge views read night-and-day (far wall and door lit where Off is black); lit e
 - **Transient lights in reflections** (row 6, 9007d194, WFC_RT_REFLTL): gun blasts and death glows show on reflective
   surfaces.
 - **Probe fill** (row 5, 70310b02, WFC_RT_PROBEFILL).
-- **Transient light gain 2** (row 4) [PLACEHOLDER: commit, switch].
+- **Transient light gain 2** (row 4, 03aa1294, WFC_RT_TLGAIN).
 - **Row 7** [PLACEHOLDER: Rendering - what it is, commit, switch].
 - **Tiled transient lights** (1c94d62e, WFC_TLTILED=0 off): up to 64 dynamic lights per frame in Realistic in 32-px
   tiles (was 8); the first 4 keep RT shadows. Effect lights no longer push muzzle lights out of the cap
   [PLACEHOLDER: confirm the package 5 "transient lights cost at RT off" on the final regress].
-- **X1 tone curve / grade** (round 3) [PLACEHOLDER: commit, final values].
-- **X2 specular gain 2.5**: a Realistic gain on UE3's directional-lightmap specular fed by the RT lightmap (x1.0 in Off /
-  Faithful; the shader text is Realistic-only, Off / Faithful verbatim) [PLACEHOLDER: commit].
-- **X4 coloured bounce** (GI saturation 2.5 incl. probes) + emissive hook [PLACEHOLDER: commit].
-- **X5-1 character AO 3 m** (robots darker under cover) [PLACEHOLDER: commit].
-- **Soft particles** for every effect in Realistic (WFC_SOFTPARTICLES) [PLACEHOLDER: commit, default].
-- **X3 volumetrics** (screen-space march v1: sun shafts / lamp halos / lit fog) [PLACEHOLDER: GO only if the pairs pass].
+- **X1 tone curve / grade** (round 3, f486c10a; WFC_RT_TONE=0 off, WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN tune it).
+- **X2 specular gain 2.5** (a6f5c878, WFC_RT_LMSPECGAIN; WFC_RT_LMSPEC=0 off): a Realistic gain on UE3's
+  directional-lightmap specular fed by the RT lightmap (x1.0 in Off / Faithful; the shader text is Realistic-only).
+- **X4 coloured bounce** (6acb65ad, WFC_RT_GISAT 2.5 incl. probes) + emissive bounce hook (WFC_RT_GIEMISSIVE).
+- **X5-1 character AO 3 m** (cabb416b, WFC_RT_CHARAORADIUS): robots darker under cover.
+- **Soft particles** for every effect in Realistic (70315129, WFC_SOFTPARTICLES=0 off): smoke and flames fade into the
+  surfaces they touch instead of cutting hard lines.
+- **RT surface colours fixed** (Rendering, [PLACEHOLDER: commit]): the RT hit-data pass culled back faces, so about half of
+  all surfaces with a mirrored UV layout got a grey albedo and no emissive (Molten: 1,918 of 3,799). Bounce light now
+  carries their colour, reflections show them in colour, and emissive surfaces such as the lava can light the scene.
+- **X3 volumetrics** (sun shafts / lamp halos / lit fog) [PLACEHOLDER: v1 was not shown (flat grey haze); v2 ships only if
+  its eye check and the user pairs pass].
 - **Molten** (lava-lit: emissive surfaces as RT light sources + per-map exposure; RENDERING_MOLTEN_PLAN.md)
-  [PLACEHOLDER: what shipped].
+  [PLACEHOLDER: the emissive gain after the RT surface-colour fix - gains 1 / 3 / 6 had no effect before it].
 - **Effect lights on by default in Realistic** (Systems 709df0f5 + 5f423157): explosions, impacts, vehicle boost and
   pickups give off light, calibrated per template from the decoded fade curves (SYSTEMS_RT_LIGHT_HOOKS); WFC_FXLIGHTS=0
   off. A deliberate Realistic addition (the original has no such lights); Off / Faithful never add one (the live-list fix
@@ -51,9 +68,35 @@ Gorge views read night-and-day (far wall and door lit where Off is black); lit e
   all 10 maps); the sentry turret draws its authored hologram (package 5 known issue closed); the two vending-machine
   materials compile (matc AppendVector fix, Systems regen: exactly those 2 entries changed per map). Modern energy now in
   range (Rust +45.7 -> ~+3 %, Molten +41.5 -> ~-3 %: the Modern GGX lobe only where the original had a specular input);
-  materials_pbr.json regenerated on all 10 maps with the energy marker (oracle 0 differ)
-  [PLACEHOLDER: 601f5a1d merge + data switch; final energy numbers].
+  materials_pbr.json regenerated on all 10 maps with the energy marker (oracle 0 differ; item 6 merged 02c743cc, data
+  switched).
+- **Enhanced keeps the original specular** (eaed3192): the Modern shading had replaced the game's directional-lightmap
+  specular (large on its metal and rock) with a fixed-F0 GGX lobe, so Enhanced looked as dark as Off; it now takes the
+  original's term (WFC_PBR_ORIGSPEC=0 restores the lobe). Gorge: Off + Enhanced = Off + HD (1.00), Realistic + Enhanced
+  1.04 -> 1.24 (= Realistic + HD).
+- **The Enhanced roughness maps ship** (65dddbe4): the 498 reviewed M6 roughness maps (push_m6) sit beside the D pack;
+  package 5 shipped neither the maps nor their index, so its Enhanced row derived every roughness value.
 - **Item 7 polish** [PLACEHOLDER: Rendering - temporal reflections / lightmap super-sample, if any shipped].
+
+### Realistic defaults (all on in Realistic only; set the switch to turn one off - harness / diagnostics, never a package default)
+
+| feature | switch | default |
+|---|---|---|
+| effect lights / headlights | WFC_FXLIGHTS=0 / WFC_HEADLIGHTS=0 | on |
+| row 4 transient light gain | WFC_RT_TLGAIN | 2.0 |
+| X2 specular gain | WFC_RT_LMSPECGAIN (WFC_RT_LMSPEC=0 off) | 2.5 |
+| X1 tone curve | WFC_RT_TONE=0; WFC_TONE_ADAPT / _BLOOM / _CONTRAST / _GAIN | on (gain 1.3) |
+| X4 coloured bounce / emissive bounce | WFC_RT_GISAT / WFC_RT_GIEMISSIVE | 2.5 / 1.0 |
+| X5-1 character AO radius | WFC_RT_CHARAORADIUS | 3.0 m |
+| soft particles | WFC_SOFTPARTICLES=0 | on |
+| tiled transient lights | WFC_TLTILED=0 | on |
+| rows 1 / 8 / 6 / 2 / 5 | WFC_RT_CHARSUN / _CHARLAMPCAL / _REFLTL / _SUNSHARE / _PROBEFILL | on |
+| Enhanced: original specular | WFC_PBR_ORIGSPEC=0 (restores the GGX lobe) | on |
+| X3 volumetrics | [PLACEHOLDER: WFC_X3] | [PLACEHOLDER] |
+
+All are environment-only (no new menu setting; SETTINGSTEST stays 7). The Realistic boot log names them in one line
+("RT Realistic defaults (first Realistic frame): ...") and verify_slim checks it (rtcheck.defaults, SYSTEMS_VERIFY_RT_DEFAULTS).
+Off / Faithful stay byte-identical to the original (identity rows).
 
 ### Gameplay
 
@@ -97,13 +140,13 @@ Gorge views read night-and-day (far wall and door lit where Off is black); lit e
 
 ## Known issues
 
-- **Realistic + Enhanced (HD 2) darkness**: in the batch-4 sheet the Enhanced column lost the RT lighting (as dark as Off
-  at Gorge step 780). Leading cause = data (materials_pbr.json predated item 6: the Modern path stripped the original's
-  cube term and added back only the un-matched env); fixed by the regenerated materials_pbr.json with the 601f5a1d merge
-  [PLACEHOLDER: confirmed on the head or still open].
-- **Idle 20 s BOTTEST row** reads 47 / 48 at seeds 1 / 5 (seed 7 passes) until the robot ground-snap fix (no
-  WalkableFloorZ 0.7; landing while rising) lands [PLACEHOLDER: landed or not].
-- **X3 volumetrics** pending the user pairs [PLACEHOLDER: in or package 7].
+- (CLOSED) Realistic + Enhanced darkness: the Modern shading dropped the original's specular (not the data); fixed eaed3192,
+  int_cand3 sheet Realistic + Enhanced 1.30 vs Realistic 1.31.
+- **Molten's lava does not light the scene yet** (emissive gain had no effect before the RT surface-colour fix)
+  [PLACEHOLDER: closed by the fix + gain, or still open].
+- **Idle 20 s BOTTEST row** reads 47 / 48 at seeds 1 / 5 (seed 7 passes) until the robot ground-snap fix (slope filter +
+  rise rule + 2.5 m clearance underside test, in its gate) lands [PLACEHOLDER: landed or not].
+- **X3 volumetrics**: v1 rejected (flat grey haze); v2 pending its eye check and the user pairs [PLACEHOLDER: in or package 7].
 - **Death bodies, patch 2 deferred**: decals, skeletal gibs, the authored death camera and the full momentum picker come
   after package 6; the death-type choice is still an approximation.
 - **X6 / X7 = package 7** unless pulled in: more reflective surfaces + damp sheen (X6), 2x RT lightmap (X7).
@@ -131,8 +174,8 @@ Gorge views read night-and-day (far wall and door lit where Off is black); lit e
 | Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | Faithful identity after Rendering's 7 commits |
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | FLAG p50 > 16.7 ms; floor ~60 fps at 1440p |
 | R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
-| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | night-and-day bar; Enhanced column must keep the RT lighting |
-| verify_slim -SubstDrive X: (maps, HD static + HD runtime, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS |
+| Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | [PLACEHOLDER] | int_cand3: 1.31 / 1.30; authored views rerun pending |
+| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
 | FAST gate | [PLACEHOLDER] | |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5 |
 | Settings survive map change (WFC_SETTINGSTEST) | [PLACEHOLDER] | new renderer switches in release()'s keep list |
