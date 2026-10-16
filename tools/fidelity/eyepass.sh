@@ -42,6 +42,9 @@ for map in $MAPS; do for mode in $MODES; do
   # (2026-10-16) the window must be the requested client size, else the pixels of this run are not comparable
   if grep -q "NOINTERACT: client .* - DIFFERS from the request" $d/wfc.log; then echo "INVALID: $(basename $d) client rect differs from the request: $(grep -m1 -o 'NOINTERACT: client [^-]*' $d/wfc.log)"; touch $d/INVALID_CLIENT_RECT; fi
   echo "  $(ls $d/shots | wc -l) shots, $(wc -l < $d/simhash.txt) simhash; $(grep -o 'renderer: Ray Tracing [A-Za-z]*' $d/wfc.log | tail -1); $(grep -m1 -o 'renderer: HD textures [a-z]*' $d/wfc.log); $(grep -m1 -oE 'HD texture pack available: [0-9]+ textures' $d/wfc.log); $(grep -oE 'NOINTERACT: client [0-9]+x[0-9]+[^)]*\)?( - DIFFERS from the request)?' $d/wfc.log | tail -1) (last = after the mode change)"
+  # RT-on arms: the one-shot "RT-era lights (first Realistic frame): effect lights on|off, headlights on|off" line (Systems; builds
+  # after 2026-10-16 midday) confirms the RT-era lights; absent on older exes (then use lights-check.ps1)
+  [ "$RT" != 0 ] && echo "  lights: $(grep -m1 -oE 'RT-era lights[^|]*' $d/wfc.log | head -c 160 || true)"
   # Enhanced (HD 2) arms (Integration 2026-10-16): the M6 roughness maps load from hd_pbr_index.json beside hd_index.json - both lines
   # must be in the log, else the arm ran without the modern material maps: UNKNOWN (EYE_HDROOT = a root with both indexes)
   if [ "$HD" = 2 ]; then mm=$(grep -m1 -oE "HD modern material maps: [0-9]+ \([^)]*\)" $d/wfc.log); mo=$(grep -m1 -oE "Modern materials on for MP_[A-Za-z_]+" $d/wfc.log)
