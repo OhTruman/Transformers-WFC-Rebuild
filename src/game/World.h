@@ -676,6 +676,7 @@ public:
         const render::MeshData* hull = nullptr; core::Vec3 hullPos{}, hullVel{}; float hullAge = 0.0f, hullLife = 0.0f;
         float hullDefragDelay = 0.0f, hullDefragTime = 4.5f; bool hullRest = false;
         unsigned rng = 1u;
+        bool poseStatic = false; uint64_t poseSerial = 0; // the pose stopped changing (clip ended, blend done): skinned once, drawn cached
         float frand() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xffffffu) / 16777216.0f; }
     };
     struct CorpseRequest {
@@ -684,6 +685,7 @@ public:
         core::Vec3 pos{}, vel{}, fwd{1, 0, 0}, killerPos{}; bool haveKiller = false;
     };
     std::vector<Corpse> corpses_;
+    uint64_t corpsePoseSerial_ = 0;                        // unique pose serials for drawDynamicMeshPosed (corpses move in corpses_)
     std::map<std::string, std::unique_ptr<render::MeshData>> hullMeshes_;   // hull wreck glTFs by path (bind pose)
     std::vector<render::MeshHandle> gibMeshes_; bool gibMeshesTried_ = false; // TR_Death_Gibs_p RB_Gib_01..11
     int corpsesMade_ = 0;                                  // diagnostics (BOTTEST / WFC_CORPSETEST)

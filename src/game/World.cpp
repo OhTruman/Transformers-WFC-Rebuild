@@ -6008,7 +6008,8 @@ void World::tickKillstreakItems(float dt) {
             KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
             m.audioKey = ++projAudioKey_;                  // [Systems M08p]
             mines_.push_back(m);
-            {   // [Gameplay] presentation: spawned with the owner's rotation, the flight trail from spawn
+            static const bool noMinePres = std::getenv("WFC_NOMINEPRES") != nullptr;   // harness (perf bisects): no mine presentation
+            if (!noMinePres) {   // [Gameplay] presentation: spawned with the owner's rotation, the flight trail from spawn
                 ensureAbilityModels();
                 MinePres& mp = minePres_[m.audioKey];
                 mp.yaw = pc.yaw();
@@ -6846,6 +6847,8 @@ const char* damageDeathType(const std::string& dmg) {
 
 void World::requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType) {
     const assets::SkinnedModel* mdl = pawn.currentModel();
+    static const bool noCorpse = std::getenv("WFC_NOCORPSE") != nullptr;   // harness (perf bisects): the death light only, no body / gibs / wreck
+    if (noCorpse) mdl = nullptr;
     if (!mdl || !mdl->valid()) { spawnDeathLight(pawn.chassis().id, pawn.moveForm() == Form::Vehicle, damageType, pawn.actorLocation()); return; }   // no body: the light alone
     CorpseRequest q;
     q.player = player; q.owner = owner; q.model = mdl; q.world = pawn.meshMatrix(pawn.form()); q.pose = pawn.displayPose();
@@ -6992,7 +6995,7 @@ void World::tickCorpses(float dt) {
     for (size_t i = 0; i < corpses_.size();) {
         Corpse& c = corpses_[i];
         c.t += dt;
-        if (!c.gibbed) {
+        if (!c.gibbed && !c.poseStatic) {
             if (c.clip >= 0) {
                 assets::LocalPose cp;
                 assets::samplePose(*c.model, c.clip, c.t, false, cp);   // the death clip from its start (clamped at its end)
@@ -7001,6 +7004,11 @@ void World::tickCorpses(float dt) {
             }
             if (c.headNode >= 0 && (size_t)c.headNode < c.pose.s.size()) c.pose.s[(size_t)c.headNode] = core::Vec3{0.1f, 0.1f, 0.1f};   // ControlBone HeadSkelControl 0.1
             assets::skinPose(*c.model, c.pose, c.glob, c.mesh);
+            c.poseSerial = ++corpsePoseSerial_;
+            const bool clipDone = c.clip < 0 || c.t >= c.model->clips[(size_t)c.clip].duration;
+            if (clipDone && c.t >= c.blendIn) c.poseStatic = true;   // the last change: skinned, cached from here on
+        }
+        if (!c.gibbed) {
             if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
                 c.fxAt = -1.0f;
                 if (renderer_) {
@@ -7061,7 +7069,7 @@ void World::drawCorpses(render::IRenderer& r) const {
         if (c.owner) r.setCharacterColors(render::CharacterColors{});
         // Melee deaths: TnDeathModifierSetMaterial, the form's EnergyDeathMaterial with Defrag 1 -> 0 over TransitionTime 3 s.
         if (c.defrag) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - c.t / 3.0f));
-        r.drawDynamicMesh(c.mesh, c.world, core::Vec3{1, 1, 1});
+        r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // cached while the pose is static
         if (c.defrag) r.setDrawEnergyDeath(-1.0f);
         r.setDrawOwner(0);
     }
@@ -7079,7 +7087,7 @@ void World::drawCorpseGibs(render::IRenderer& r) const {
             const float dt0 = c.hullAge - c.hullDefragDelay;
             const bool df = dt0 >= 0.0f;
             if (df) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - dt0 / c.hullDefragTime));
-            r.drawDynamicMesh(*c.hull, core::Mat4::translate(c.hullPos - c.pos) * c.world, core::Vec3{1, 1, 1});
+            r.drawDynamicMeshPosed(*c.hull, core::Mat4::translate(c.hullPos - c.pos) * c.world, core::Vec3{1, 1, 1}, 1u);   // bind mesh, never re-posed
             if (df) r.setDrawEnergyDeath(-1.0f);
             r.setDrawOwner(0);
         }
