@@ -1127,6 +1127,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   f3cfadde (lib/Run.ps1 process-wide + per launch, identity-capture.sh with NOINTERACT=0 = env -u since any value
   counts as on, capacity-stress -Fullscreen deletes it; synced e1659fff); Rendering applies the patch uncommitted on
   rt2 with WFC_NOINTERACT=1 in all launchers; Gameplay's runners set it. Head e1659fff (code 4da148bb).
+  2026-10-15 23:47 USER: 'That fixed it!' (the mouse). Item 4 inputs (Systems): SYSTEMS_MUZZLE_LIGHTS.patch (0a4fa3a9, the
+  original muzzle light values; merges after Rendering's addTransientLight lands, keeping Rendering's Renderer.h
+  declaration); death lights DECISION: (b) now, Systems - vehicle-form car / tank death -> 8 s purple light, robot
+  death except melee / headshot / energy -> 2 s white ramp light, documented as an approximation of the original's
+  death-type selection; (a) a real death-type picker (anims, gibs, lights) = Gameplay in the campaign phase after
+  package 5 (docs/handoff/CAMPAIGN_BACKLOG.md). Gates: SIMHASH unaffected, headless ENGAGE / DEATH rows, captures treat
+  the new lights as a baseline change.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
