@@ -36,6 +36,7 @@ private:
     void drawFrontendFrame();
     void attachPresenter();
     static void applyStartupGraphics();   // before the renderer exists: settings it can only take at start-up (frame generation)
+    void applyBootProfile();              // WFC_BOOT_PROFILE=1: the direct boot applies the profile's display / graphics rows (harness)
     void shutdownFrontend();
     std::unique_ptr<frontend::FrontendRuntime> frontend_;
     bool escWasDown_ = false;

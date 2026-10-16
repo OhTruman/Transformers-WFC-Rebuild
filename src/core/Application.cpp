@@ -157,6 +157,7 @@ bool Application::init() {
         std::string url = u; world_.setMap(game::World::canonicalMapName(url.substr(0, url.find('?'))));
     }
     LOG_INFO("map: %s", world_.mapName().c_str());
+    if (!nullRender && std::getenv("WFC_BOOT_PROFILE")) applyBootProfile();   // harness: the profile's display / graphics rows on the direct boot
     world_.load(*renderer_);
     // Gameplay's measurement mode is WFC_PICKUPTEST=1. [integration] Rendering's presentation diagnostic shares the
     // name with a comma form (<factory>,<take>,<respawn>; see run()), so that form must not exit here.
