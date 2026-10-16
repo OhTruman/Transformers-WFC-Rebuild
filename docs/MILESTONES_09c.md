@@ -2120,3 +2120,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   CPU doubling fits the NOINTERACT window change 7d9edf78 (borderless WS_POPUP + WS_EX_NOACTIVATE at HWND_BOTTOM
   vs the base's framed overlapped window: a different present / DWM path). DECISIVE ARM: int_cand10 = head +
   Win32Window.cpp from 398b27ef (Rendering builds after the hold) vs int_csb in a short hold.
+  2026-10-16 18:14 CORPSE ARMS (Berth, RT off, 4K, same match, p90 r1 / r2 | GPU | CPU render | dyn): base 2.13 / 2.14
+  | 2.10 | 2.12 | 122; int_csb (head) 4.00 / 4.01 | 2.91 | 3.38 | 176; int_cap 3.87 / 3.89; +NOCORPSE 2.19 / 2.19 |
+  2.10 | 2.07 | 124-126; +NOMINEPRES 3.89 / 3.88; int_csn (static pose) 3.62 / 3.61 | 2.99 | 3.47 | 176. VERDICT:
+  the death bodies are the whole RT-off regression (~0.2 ms per live body, CPU + GPU; mines 0; window style
+  cleared: the NOCORPSE arm ran the head's borderless window). DECISION: respin = b0f5ac45 + the static-pose patch
+  (-0.39 ms); GPU-skinned corpses incl. the shadow pass + instanced gib chunks = PACKAGE 7 ITEM 1 (floor = the
+  NOCORPSE arm). Regress row stays REPORT with that attribution. cand10 cancelled. Sequence: Gameplay checks +
+  crops -> respin sha -> Systems build -> timed 8-map regress + delta FAST -> verify rows -> promote.
