@@ -16,7 +16,12 @@
 #   renderstate m07-renderstate -OnlyVariants normal (Release): world frame after every overlay, GL entry state
 #   mechanics   one direct-boot Streets run: move, jump, fire, reload, repeated transform; weapon FX warnings
 #   audio/res   from the runs above: audio load / unload per map visit (duplication), working set / GL census
-param([Parameter(Mandatory)][string]$Ref, [string]$Prev = "", [string]$Name = "", [switch]$Build, [switch]$ReportOnly, [string]$OutDir = "")
+# DELTA FAST (package 6, Integration 2026-10-16): -Steps weapontest,chassistest,route,mapswitch,renderstate,mechanics runs only those
+# GPU rows; every other row's evidence is copied from -ReuseFrom <a full FAST OutDir of the penultimate head> and re-reported, so
+# the report stays complete (copied rows are noted "reused from <dir>"). Unit ctest always runs. delta-steps.ps1 picks the steps
+# from the changed paths between the two heads.
+param([Parameter(Mandatory)][string]$Ref, [string]$Prev = "", [string]$Name = "", [switch]$Build, [switch]$ReportOnly, [string]$OutDir = "",
+      [string[]]$Steps = @(), [string]$ReuseFrom = "")
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 if (-not $env:WFC_GATE_GPU_WAIT_MIN) { $env:WFC_GATE_GPU_WAIT_MIN = "20" }   # FAST: never wait hours for the GPU
@@ -25,6 +30,15 @@ $sha = (& git -C $root rev-parse --verify "$Ref^{commit}").Trim(); $short = $sha
 $tgt = Join-Path $root "work\ab\$Name"; if (-not $OutDir) { $OutDir = Join-Path $root "work\fastgate\$short" }
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $glog = Join-Path $OutDir "gate.log"; function Note($s) { Add-Content -Encoding UTF8 $glog $s; Write-Host $s }
+$Steps = @($Steps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })
+$stepDirs = @{ weapontest = "selftest_weapontest"; chassistest = "selftest_chassistest"; route = "route"; mapswitch = "mapswitch"; renderstate = "renderstate"; mechanics = "mechanics" }
+if ($Steps.Count -and $ReuseFrom -and -not $ReportOnly) {
+    foreach ($k in $stepDirs.Keys) {
+        if ($Steps -contains $k) { continue }
+        $src = Join-Path $ReuseFrom $stepDirs[$k]; $dst = Join-Path $OutDir $stepDirs[$k]
+        if ((Test-Path $src) -and -not (Test-Path $dst)) { Copy-Item -Recurse $src $dst; Note "delta: $k reused from $src (inputs unchanged)" }
+    }
+}
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "fast.$id" $status $null $note $owner }
 $t00 = Get-Date
 
@@ -59,6 +73,8 @@ if ($Prev) { $pv = (& git -C $root rev-parse --verify "$Prev^{commit}" 2>$null);
 # ---------- one GPU slot helper: run a step or record GPU CONTENTION (UNKNOWN, never a product failure)
 function Slot([string]$step, [scriptblock]$sb) {
     $t0 = Get-Date; Note ("[{0:HH:mm:ss}] {1}" -f $t0, $step)
+    $reuse = $Steps.Count -and $Steps -notcontains $step
+    if ($reuse) { Note "  (delta: not rerun - the reused evidence is re-reported)"; $script:ReportOnly = $true; try { & $sb *>&1 | Select-Object -Last 1 | ForEach-Object { Note "  $_" } } catch { Note "  ERROR $_" } finally { $script:ReportOnly = $false }; return }
     if ($ReportOnly) { try { & $sb *>&1 | Select-Object -Last 1 | ForEach-Object { Note "  $_" } } catch { Note "  ERROR $_" }; return }
     if (-not (Wait-WfcGpu)) { Res "$step.gpu" "UNKNOWN" "DRIVER / GPU CONTENTION: other sessions' renderers held the GPU past $($env:WFC_GATE_GPU_WAIT_MIN) min - step not run (not a product result)" "Experimental"; Note "  GPU busy: skipped"; return }
     try { & $sb *>&1 | Select-Object -Last 1 | ForEach-Object { Note "  $_" } } catch { Note "  ERROR $_"; Res "$step.harness" "FAIL" "TEST/HARNESS DEFECT: $_" "Experimental" }
