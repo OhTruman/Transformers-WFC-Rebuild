@@ -2707,6 +2707,20 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                 "                + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SP) * l1 * uLMScale[1]\n"
                 "                + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SP) * l2 * uLMScale[2];\n"
                 "        c += o.SpecularColor * Ls;\n");
+        // X2 (Realistic): the same UE3 directional-lightmap specular, fed by the RT lightmap, x WFC_RT_LMSPECGAIN - metal,
+        // glass and polished floors catch the sun and the lamps clearly. Its text joins only programs built in Realistic:
+        // Off / Faithful compile the original text exactly (even an unused uniform branch beside it moved single pixels by
+        // one level). A mode switch into / out of Realistic takes it at the next map load. WFC_RT_LMSPEC=0 off.
+        static const bool lmSpecOff = [] { const char* e = std::getenv("WFC_RT_LMSPEC"); return e && e[0] == '0'; }();
+        if (at != std::string::npos && rtMode_ == 2 && !lmSpecOff) {
+            const std::string spec = "        c += o.SpecularColor * Ls;\n";
+            const size_t s = mainLM.find(spec, at);
+            const size_t u = mainLM.find("uniform int uVertexLM;");
+            if (s != std::string::npos && u != std::string::npos) {
+                mainLM.insert(s + spec.size(), "        c += o.SpecularColor * Ls * uRtLMSpec;   // (X2: the extra over the original)\n");
+                mainLM.insert(u, "uniform float uRtLMSpec;   // (X2) the Realistic lightmap specular's extra gain\n");
+            }
+        }
         if (at == std::string::npos) mainLM.clear();
     }
     std::string mainUber = kFSMainUber;
@@ -3770,6 +3784,15 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
         Uniform1f(ULOC(P, "uSkinAlpha"), skinAlpha_);
         Uniform1i(ULOC(P, "uBoneTex"), 18);
+    }
+    {   // X2: the Realistic programs' extra lightmap specular (gain - 1 over the original term; 0 outside Realistic)
+        static const float lmSpecGain = [] { const char* e = std::getenv("WFC_RT_LMSPECGAIN"); return e ? (float)std::atof(e) : 2.5f; }();
+        const GLint loc = ULOC(P, "uRtLMSpec");
+        if (loc >= 0) Uniform1f(loc, rtMode_ == 2 ? lmSpecGain - 1.0f : 0.0f);
+        static int binds = 0, withSpec = 0;   // (diagnostics, WFC_LMSPECDIAG: how many lightmapped binds carry the X2 term)
+        static const bool diag = std::getenv("WFC_LMSPECDIAG") != nullptr;
+        if (diag) { ++binds; if (loc >= 0) ++withSpec;
+                    if (binds % 20000 == 0) LOG_INFO("LMSPECDIAG: %d of %d binds carry the X2 term (rtMode %d, gain %.2f)", withSpec, binds, rtMode_, lmSpecGain); }
     }
     {   // (item 4) the transient lights
         const bool tiled = tlAllN_ > 0 && tlDataTex_ && tlTileTex_ && P.uTLAllN >= 0;
