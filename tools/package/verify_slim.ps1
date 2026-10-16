@@ -91,6 +91,7 @@ $RealisticDefaults = [ordered]@{
     sunshare = 'on'      # row 2 (WFC_RT_SUNSHARE)
     probefill = 'on'     # row 5 (WFC_RT_PROBEFILL)
     origspec = 'on'      # Enhanced: the Modern lobe only where the original had a specular input (WFC_PBR_ORIGSPEC=0 restores it)
+    refltemporal = 'on'  # item 7 temporal reflections (WFC_RT_REFLTEMPORAL; Rendering 8d50190a)
 }
 
 function Norm([string]$p) {
