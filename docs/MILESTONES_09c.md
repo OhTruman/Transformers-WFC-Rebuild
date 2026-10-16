@@ -1595,3 +1595,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   colour = authored HDR yellow (data), not a bug; renderer items for Rendering: HDR scene-target clamp point, soft
   particles for all translucent particles. Gameplay: corner-anticipation arm 1 null; diagnostic NAVQ split running.
   AssetTools: D5 + A5 reruns recover all meshes; A5_TRY doc b9e6f3d8; A1 rerun in progress, then D3B_IAC.
+  2026-10-16 08:13 VERIFY DRY RUN on 64771c71 (Systems, today's work/render): static rows all PASS (HD static 0 problems,
+  bin 20 / 20, overlay 85 / 85, settings 7 / 7; package render data byte-identical to work/render). Map rows Streets /
+  Gorge / Debris FAIL on one cause: the two vending-machine MATINSTs from the item 6 data log "shader compile failed
+  (UBER) 0:94 constructor too many arguments" (verify fails any [error] line) = a REGRESSION vs package 5 that the dry
+  run caught early. Decision: Rendering fixes the matc codegen before the package 6 head (priority raised), Systems
+  regenerates the two entries; fallback = drop the two entries (glTF fallback as package 5). RT gate + HD runtime rows
+  run in the RT slot at Rendering's batch 4 boundary, ahead of Experimental's sheet. A1_IAC rerun: 1,211 -> 0 mesh-less
+  components; D3B_IAC running. Package 6 doc skeleton merged 64771c71 (26 placeholders).
