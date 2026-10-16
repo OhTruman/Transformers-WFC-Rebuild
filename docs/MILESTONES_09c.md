@@ -1352,6 +1352,17 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   energy basis for world and characters; ordered by visible impact, quality first, Off / Faithful untouched. (The run
   the user watched may have been an Off / Faithful arm or package 4.) Package-5 notes written
   (docs/handoff/PACKAGE_5_398b27ef.md); tag playtest/09c-package5-398b27ef.
+  2026-10-16 03:25 RT PLAN V3 merged 0c44256d (Rendering c59145c1): 8 rows, order 1, 8, 3, 5, 6, 4, 7, 2; row 1 (robots shadowed
+  under buildings) verified first with a before / after image. USER (03:40): 'I can wait on getting a playable build
+  ... I want the highest quality looking ray tracing, shadows, reflections, color and everything in between ... when
+  somebody shoots I want it cast on the walls and reflected off reflective surfaces and the colour from the gun blast
+  cast on other players near it ... tie the entire world into one atmosphere. Keep working until you get there and
+  let me know when it's done.' => PACKAGE 5 = INTERNAL CHECKPOINT (built, verified and promoted quietly as the lanes'
+  base; no hand-over message). DONE CONDITION for the RT phase: plan v3 complete at the quality-maximising variant
+  (incl. gun-blast light reflected on reflective surfaces and the blast colour on nearby players), the tiled /
+  clustered transient-light fix, item 6 Enhanced calibration, the item 7 polish worth doing, a per-map eye pass on
+  the five user maps; then package 6 = the hand-over build with the reboot reminder. Systems reads the vehicle
+  headlight / dynamic emissive light data for rows 3 and 7.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
