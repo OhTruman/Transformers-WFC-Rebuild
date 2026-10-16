@@ -2134,3 +2134,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   dynQueue_ batching, so their casters / shadow projection / draws run per draw: the GPU half of the 0.2 ms per
   body; fix = drawSkinnedGpu per body part, fallback posed). Per-body arm set + a 5v5 pair after the regress for
   the doc numbers. Package 6 doc known issue reworded (Systems a945713c+).
+  2026-10-16 18:21 PACKAGE 6 RESPIN HEAD = 9350f19b (code: b0f5ac45 tiled lights Realistic-only + 9350f19b static-pose
+  bodies + WFC_NOCORPSE / WFC_NOMINEPRES; docs since 4078e47b). Debug build OK (WFC_NOCORPSE string in the exe).
+  Sequence: Systems step 1 (build + copy) -> Experimental package-respin.sh 9350f19b 4078e47b (BUILD_ONLY ahead;
+  timed 8-map regress, delta FAST, per-body + 5v5 pair) -> Systems verify rows (RT-off, then RT + HD) -> promote +
+  doc numbers + hand-over. All GPU work before ~00:00 their clock.
