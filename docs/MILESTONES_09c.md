@@ -1705,3 +1705,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   6 / 2 / 5 switches, WFC_PBR_ORIGSPEC; all env-only statics (SETTINGSTEST count stays 7, keep list unaffected).
   verify_slim gains rtcheck.defaults (SYSTEMS_VERIFY_RT_DEFAULTS.patch, docs ac533161; applied once Rendering logs
   "RT Realistic defaults (first Realistic frame): k=v ..."). X3 / Molten emissive / ground-snap pending.
+  2026-10-16 11:43 BATCH 7 (Rendering): Molten emissive gain 1 / 3 / 6 = no effect (+5.0 / 1.12 at every gain): the RT
+  hit emissive for the lava is near zero -> find why (texture / MIC emissive not sampled by the hit data, or lava
+  excluded from the static scene) before tuning. X3 v1: NOT shown (flat grey haze, too dense, frames mostly covered:
+  Streets 3.8 / 0.94, Gorge 6.6 / 0.88, Molten 14.6 / 0.82 washed out; no banding, no leaks). X3 v2 building: ambient
+  in-scatter / 10, density x0.3, haze 0.001 / m, stronger sun term, lamp halos from the 4 shadowed lamps, open-sky
+  frames; pairs only on a passed eye check. Defaults log line done in source (commits with v2). Experimental eyepass
+  on int_cand3 (Release, Enhanced fix) RUNNING since ~12:50.
