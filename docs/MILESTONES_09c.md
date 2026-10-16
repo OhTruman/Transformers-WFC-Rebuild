@@ -1946,3 +1946,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   = 3ff0852b + 18483783 + fix; after the sheet's DONE the card goes to Rendering (identity + Gorge step-1080 confirm,
   ~25 min) -> merge = new head -> Systems rebuilds the package (~45 min) + Experimental rebuilds the final gate tree
   (~10 min) -> Systems' RT verify row -> the one-GO gate. Sim base unchanged. Head ~1 h later than planned.
+  2026-10-16 14:46 int_cand7 READY (Rendering 0a299fe9 local: white roll = pixels whose brightest channel passes 2
+  desaturate toward luminance, fully by 16; WFC_TONE_WHITEROLL / _WHITELO / _WHITEHI; defaults line + whiteroll=on
+  whitelo=2.0 whitehi=16.0; offline model: orange fire 4x -> warm white, 8x -> white; <= 2 untouched). Systems'
+  WHITEROLL table patch staged (dc715a55, applies with the merge). Order after the int_cand6 sheet DONE: Rendering
+  identity on int_cand7 (~20 min) -> Experimental Gorge-only eyepass on int_cand7 (step-1080 check) -> push -> merge
+  = new head -> Systems package rebuild + Experimental final gate tree -> Systems RT verify row -> the gate block.
