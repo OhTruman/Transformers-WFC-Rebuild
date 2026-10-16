@@ -2149,3 +2149,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay's GPU-skinned corpses (package 7 item 1) move into package 6; the respin gate + verify finish and
   playtest_slim_9350f19b is promoted quietly as the pre-volumetric checkpoint (no hand-over). Hand-over = when
   volumetrics pass; the user is told ~19 Oct.
+  2026-10-16 18:36 X3 FROXEL VOLUMETRICS PLAN (Rendering, approved, coding now): 160x90 tiles x 64 exponential slices
+  to 120 m (~0.92 M froxels) in a 1280x720 RGBA16F 2D atlas on the existing GL <-> D3D12 2D sharing; D3D12 compute
+  inject (authored height fog + thin haze floor; sun 1 RayQuery shadow ray HG g 0.6, 4 RT-shadowed lamps, transient
+  lights unshadowed; NO ambient in-scatter = v1-v3's veil) + temporal reprojection blend 0.9; integrate per column;
+  GL apply before the X1 tone curve. Realistic-only (rtMode_ == 2), WFC_X3=0 off, WFC_X3_DENSITY / HAZE / G, rtdef
+  + defaults line (Systems pairs), keep list + SETTINGSTEST. Est. code 6-8 h, first sheet ~10-12 h, finish ~14-16 h;
+  cost ~0.7-0.9 ms p50 at 1440p, ~15 MB. Eye bar: shafts / depth, contrast >= 1.28 / 1.30 or it does not ship.
+  REBOOT PLANNED ~21:30 (after the gate + verify; pool 6.9 GB) so the overnight exe runs start clean; all sessions
+  restart; lanes commit WIP + resume notes by 21:15. Clocks: lanes = mine now.
