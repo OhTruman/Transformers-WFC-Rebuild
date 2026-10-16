@@ -1138,6 +1138,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (PID 26216); the session muter was restarted (12 h backstop, until 11:47) and silenced it within a second;
   Rendering told to put WFC_MUTE=1 + WFC_NOINTERACT=1 on every launcher incl. ad-hoc runs. Rule: muter as a backstop
   while the user is at the PC, env flags on every launch.
+  2026-10-15 23:52 ROOT CAUSE (Rendering): rt2 does not contain c246ed3e (WFC_MUTE) nor 4da148bb (NOINTERACT), so every exe built
+  from the branch ignored both flags although the env was set; only the muter silenced them. Fixed by applying both
+  diffs UNCOMMITTED in Rendering's worktree, work/base_head and work/fx_tree, all rebuilt; the unmuted identity run
+  killed; all launchers (run1.ps1, lockex / lockpair / lockrt, fxstage_ab, the mrm_tools harness copy) set both flags.
+  Ancestry check: no lane branch contains either commit (lanes normally build from integration-based trees) -> rule: an
+  exe is NOINTERACT-capable only if built from >= 4da148bb or with GAMEPLAY_NOINTERACT.patch applied (patch -p1 in
+  archive trees); the package-4 exe and the m9c_30b2fa7 / int_a44aa6db trees ignore it; lanes told.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
