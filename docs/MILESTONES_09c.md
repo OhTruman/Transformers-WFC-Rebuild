@@ -1260,6 +1260,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   target_mean_roughness; no ORM / metal maps (18 orm_candidate rows flagged); sheets m6_001..063. Forwarded to Systems
   (review) and Rendering (matc pbr, item 6); the Enhanced row ships in package 5 only if calibrated before the cut,
   else package 6. AssetTools next: the exporter wfc_material item + the missing-MATINST audit.
+  2026-10-16 01:42 EXPORTER wfc_material DONE (AssetTools scripts/wfc/gltf_wfcmat.py): 85 WEP_ / PROP_ skeletal glTFs regenerated to
+  AssetTools/work/gltf_wfcmat/content/... at the same relative paths (148 / 151 materials resolved from the authored
+  DB, 3 dummy slots), identical except materials[i].extras, buffer URIs unchanged. DECISION: ExtractedAssets stays
+  read-only; package 5 OVERLAYS the 85 files in the build (Systems refresh.sh step + a verify_slim row checking the
+  barrier glTF's extras); dev builds keep World's name fallback. AUDIT: work/gltf_wfcmat/missing_matinst_audit.json =
+  58 weapon / prop materials none of the 1,368 compiled keys cover (WEP_DeployedTurret_MATINST, barricade / rocket-
+  barrier force fields, battery / heart-crystal props); WEP_Barrier_Defrag_MATINST is compiled, so the barrier's whole
+  problem was the missing extras link. Rendering's matc pass over the 58 = package 6 unless trivial.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
