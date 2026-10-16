@@ -1,0 +1,2766 @@
+{
+ "generated_by": "tools/systems/matc58_audit.py",
+ "summary": {
+  "OK": 56,
+  "ERROR CompileError": 2
+ },
+ "materials": [
+  {
+   "material": "PROP_HeartCrystal_p.HeartCrystal_CLR_Mat",
+   "meshes": [
+    "PROP_HeartCrystal_p.IAC_HeartCrystal_SKEL"
+   ],
+   "class": "Material",
+   "packages": [
+    "A3_COR_OmegaFacility_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 480,
+   "parent_packages": [],
+   "chain": [
+    "PROP_HeartCrystal_p.HeartCrystal_CLR_Mat"
+   ],
+   "root_class": "Material",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 14,
+   "textures": [
+    {
+     "object": "PROP_HeartCrystal_p.HeartCrystal_GLOW",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_HeartCrystal_p.test_heart_MAT",
+   "meshes": [
+    "PROP_HeartCrystal_p.IAC_HeartCrystal_SKEL"
+   ],
+   "class": "Material",
+   "packages": [
+    "A3_COR_OmegaFacility_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 520,
+   "parent_packages": [],
+   "chain": [
+    "PROP_HeartCrystal_p.test_heart_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "TwoSided": true,
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 28,
+   "textures": [
+    {
+     "object": "ENV_ORB_Spacedome_p.GodRays.ENV_ORB_LightRays_mask",
+     "file": true
+    },
+    {
+     "object": "ENV_ORB_Spacedome_p.GodRays.ENV_ORB_LightRays_maskB",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": true
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST",
+   "meshes": [
+    "PROP_NEU_Barricade_p.NEU_Barricade2_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoInt_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2088,
+   "parent_packages": [
+    "A1_IAC_Armory_m.xxx",
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST",
+    "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+    "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 50,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.ChainLinkFence_02_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2_MATINST",
+   "meshes": [
+    "PROP_NEU_Barricade_p.NEU_Barricade2_SKEL",
+    "PROP_NEU_Barricade_p.NEU_Barricade2_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoInt_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3764,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 65,
+   "textures": [
+    {
+     "object": "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2_TEXSET.TPRO_NEU_Barricade2_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2_TEXSET.TPRO_NEU_Barricade2_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Metal_01_TiledNORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.BarricadeShield_MAT",
+   "meshes": [
+    "PROP_NEU_Barricade_p.AP_Barricade_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaFacility_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 1748,
+   "parent_packages": [
+    "A1_IAC_Armory_m.xxx",
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Barricade_p.BarricadeShield_MAT",
+    "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketForceField_MATINST",
+    "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+    "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 50,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.ChainLinkFence_02_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.Barricade_MAT",
+   "meshes": [
+    "PROP_NEU_Barricade_p.AP_Barricade_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaFacility_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2880,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Barricade_p.Barricade_MAT",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 61,
+   "textures": [
+    {
+     "object": "PROP_NEU_Barricade_p.Barricade_CLR_TEXSET.Barricade_CLR_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Barricade_p.Barricade_CLR_TEXSET.Barricade_CLR_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Metal_01_TiledNORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarricade_MATINST",
+   "meshes": [
+    "PROP_NEU_Barricade_p.AP_ShieldPosition_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_Command_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4268,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarricade_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 57,
+   "textures": [
+    {
+     "object": "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarricade_TEXSET.TPRO_NEU_RocketBarricade_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarricade_TEXSET.TPRO_NEU_RocketBarricade_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST",
+   "meshes": [
+    "PROP_NEU_Barricade_p.AP_ShieldPosition_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_Command_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2107,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST",
+    "FX_Materials_p.Materials.Soundwave_ShieldBarrier_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "TwoSided": true,
+   "bUsedWithStaticLighting": false,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "FX_Textures_p.Textures.SmokeTile_CLR",
+     "file": true
+    },
+    {
+     "object": "FX_Textures_p.Textures.Lightning_02_CLR",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": true
+  },
+  {
+   "material": "PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST",
+   "meshes": [
+    "PROP_NEU_BatteryOS_p.NEU_Battery_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaSupreme_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 5000,
+   "parent_packages": [
+    "A1_IAC_DecoInt_Art_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST",
+    "ENV_AllShader_p.Special.ENV_Refractive_Glass_Trans_Mat"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 114,
+   "textures": [
+    {
+     "object": "PROP_NEU_BatteryOS_p.BatteryOmega_Glass_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_BatteryOS_p.FluidRed_Cubemap",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_BatteryOS_p.BatteryOmega_Glass_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_BatteryOS_p.OmegaBatterySpikes_MATINST",
+   "meshes": [
+    "PROP_NEU_BatteryOS_p.NEU_BatterySpikes_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaSupreme_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2104,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_BatteryOS_p.OmegaBatterySpikes_MATINST",
+    "PROP_NEU_BatteryOS_p.OmegaBattery_MATINST",
+    "ENV_AllShader_p.Release.ENV_Lerped_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "ERROR CompileError: missing function ENV_AllShader_p.Functions.Lighting.ENV_NormalMap_MF",
+   "trace": [
+    "  File \"F:\\Transformers Rebuild/Rebuild-Rendering/tools/render\\matc.py\", line 646, in x_Function",
+    "    raise CompileError('missing function %s' % fpath)",
+    "matc.CompileError: missing function ENV_AllShader_p.Functions.Lighting.ENV_NormalMap_MF"
+   ]
+  },
+  {
+   "material": "PROP_NEU_BatteryOS_p.OmegaBattery_MATINST",
+   "meshes": [
+    "PROP_NEU_BatteryOS_p.NEU_Battery_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaSupreme_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4288,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_BatteryOS_p.OmegaBattery_MATINST",
+    "ENV_AllShader_p.Release.ENV_Lerped_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "ERROR CompileError: missing function ENV_AllShader_p.Functions.Lighting.ENV_NormalMap_MF",
+   "trace": [
+    "  File \"F:\\Transformers Rebuild/Rebuild-Rendering/tools/render\\matc.py\", line 646, in x_Function",
+    "    raise CompileError('missing function %s' % fpath)",
+    "matc.CompileError: missing function ENV_AllShader_p.Functions.Lighting.ENV_NormalMap_MF"
+   ]
+  },
+  {
+   "material": "PROP_NEU_BatteryOS_p.OmegaLiquidSurface_MATINST",
+   "meshes": [
+    "PROP_NEU_BatteryOS_p.NEU_Battery_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaSupreme_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 1176,
+   "parent_packages": [
+    "A1_IAC_HGHWY3_Art_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_BatteryOS_p.OmegaLiquidSurface_MATINST",
+    "ENV_ORB_CoolantRoom_p.Material.Coolant_Parent_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "matc": "OK",
+   "glsl_lines": 53,
+   "textures": [
+    {
+     "object": "ENV_ORB_CoolantRoom_p.Material.Fluid1_Norm",
+     "file": true
+    },
+    {
+     "object": "ENV_IAC_Shader_p.Material.IaconCity_Cubemap",
+     "file": false
+    }
+   ],
+   "textures_missing": [
+    "ENV_IAC_Shader_p.Material.IaconCity_Cubemap"
+   ],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST",
+   "meshes": [
+    "PROP_NEU_BatteryOS_p.NEU_Battery_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_OmegaSupreme_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3084,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST",
+    "ENV_ORB_PowerCorridor_p.Materials.TryptiGelGlass_Mat"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 92,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM_XY_DXT1",
+     "file": true
+    },
+    {
+     "object": "ENV_ORB_CoolantRoom_p.Material.Fluid1_Norm",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Metals_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_BatteryOS_p.FluidRed_Cubemap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Battery_p.PROP_NEU_BatteryCorrupted_MATINST",
+   "meshes": [
+    "PROP_NEU_Battery_p.NEU_BatteryCorrupted_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "D3A_IAC_CourtTrans_DESIGN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3332,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Battery_p.PROP_NEU_BatteryCorrupted_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 66,
+   "textures": [
+    {
+     "object": "PROP_NEU_Battery_p.PROP_NEU_Battery_NORM",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Battery_p.PROP_NEU_BatteryCorrupted_MASK",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Metal_01_TiledNORM",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Battery_p.PROP_NEU_Battery_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Interacts_p.Bits.PROP_InteractConsole_Bits_MATINST",
+   "meshes": [
+    "PROP_NEU_Interacts_p.InteractConsole01_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoInt_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4136,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Interacts_p.Bits.PROP_InteractConsole_Bits_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 58,
+   "textures": [
+    {
+     "object": "PROP_NEU_Interacts_p.Bits.InteractConsole01_Bits_NORM",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Interacts_p.Bits.InteractConsole01_Bits_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Metals_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Interacts_p.Bits.InteractConsole01_Bits_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Interacts_p.PROP_ButtonInteract_MATINST",
+   "meshes": [
+    "PROP_NEU_Interacts_p.RallyTotemInteract_SKEL",
+    "PROP_NEU_Interacts_p.RallyTotemInteract_SKEL",
+    "PROP_COR_Design_p.Flashbang_SKEL",
+    "PROP_COR_Design_p.Flashbang_SKEL",
+    "PROP_NEU_Interacts_p.AP_ButtonInteract_SKEL",
+    "PROP_NEU_Interacts_p.AP_ButtonInteract_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoEnd_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3588,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Interacts_p.PROP_ButtonInteract_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 70,
+   "textures": [
+    {
+     "object": "PROP_NEU_Interacts_p.ButtonInteract_CLR_TEXSET.ButtonInteract_CLR_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Interacts_p.ButtonInteract_CLR_TEXSET.ButtonInteract_CLR_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Metal_01_TiledNORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Interacts_p.PROP_NEU_InteractFoot_MATINST",
+   "meshes": [
+    "PROP_NEU_Interacts_p.RallyTotemInteract_SKEL",
+    "PROP_NEU_Interacts_p.RallyTotemInteract_SKEL",
+    "PROP_NEU_Interacts_p.AP_ButtonInteract_SKEL",
+    "PROP_NEU_Interacts_p.AP_ButtonInteract_SKEL",
+    "WEP_TurretBase_p.WEP_TurretBase01_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoEnd_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3436,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Interacts_p.PROP_NEU_InteractFoot_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 65,
+   "textures": [
+    {
+     "object": "PROP_NEU_Interacts_p.InteractConsole01_Foot_CLR_TEXSET.InteractConsole01_Foot_CLR_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Interacts_p.InteractConsole01_Foot_CLR_TEXSET.InteractConsole01_Foot_CLR_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_GLB_Textures.DetailNorm.MetalScratch_1_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Metals_CUBEMAP",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Pickups_p.CodeOfPower.CodeOfPowerCORE_MatINST",
+   "meshes": [
+    "WEP_CodeOfPower_p.WEP_CodeOfPower1H_SKEL",
+    "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_IAC_Berth_BASE_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_IAC_Berth_BASE_m"
+   ],
+   "serial_size": 2556,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_Pickups_p.CodeOfPower.CodeOfPowerCORE_MatINST",
+    "PROP_NEU_Pickups_p.CodeOfPower.CodeOfPower_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 58,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Energon_River.ElectricArcs_512",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Debug.DiffClouds_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.fractalMaps",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.DiffClouds_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_WHT",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Water_NORMENV_EnergonRiver_MAT",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Pickups_p.MPBomb.BombCore_MATINST_BAT",
+   "meshes": [
+    "PROP_NEU_Pickups_p.MPBomb.NEU_MPBombExplode_SKEL",
+    "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL",
+    "WEP_MPBomb_p.NEU_MPBomb_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_IAC_Berth_BASE_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_IAC_Berth_BASE_m"
+   ],
+   "serial_size": 188,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_Pickups_p.MPBomb.BombCore_MATINST_BAT",
+    "PROP_NEU_Pickups_p.MPBomb.BombCore_MAT"
+   ],
+   "root_class": "Material",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 20,
+   "textures": [
+    {
+     "object": "PROP_HeartCrystal_p.HeartCrystal_GLOW",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_MATINST",
+   "meshes": [
+    "PROP_NEU_Pickups_p.MPBomb.NEU_MPBombExplode_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_IAC_Berth_BASE_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_IAC_Berth_BASE_m"
+   ],
+   "serial_size": 3084,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 80,
+   "textures": [
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBombExplode_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_MATINST",
+   "meshes": [
+    "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL",
+    "WEP_MPBomb_p.NEU_MPBomb_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_IAC_Berth_BASE_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_IAC_Berth_BASE_m"
+   ],
+   "serial_size": 3200,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 80,
+   "textures": [
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.MPBomb.PROP_NEU_MPBomb_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_MATINST",
+   "meshes": [
+    "PROP_NEU_Pickups_p.RallyTotem.NEU_RallyTotem_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "D3A_IAC_Sentinel_DESIGN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2128,
+   "parent_packages": [],
+   "chain": [
+    "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_MATINST",
+    "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_MAT"
+   ],
+   "root_class": "Material",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 47,
+   "textures": [
+    {
+     "object": "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_NORM",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_CLR",
+     "file": true
+    },
+    {
+     "object": "PROP_NEU_Pickups_p.RallyTotem.PROP_RallyTotem_MASK",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 2760,
+   "parent_packages": [
+    "A1_IAC_DecoInt_Art_m.xxx"
+   ],
+   "chain": [
+    "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST",
+    "ENV_AllShader_p.Special.ENV_Refractive_Glass_Trans_Mat"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 82,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM_XY_DXT1",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_SPEC",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.Ammo.AP_VendingMachine_Ammo_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 3872,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_VendingMachine_p.Ammo.AP_VendingMachine_Ammo_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 57,
+   "textures": [
+    {
+     "object": "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_TEXTSET.AP_VendingMachineAmmo_TEXTSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_TEXTSET.AP_VendingMachineAmmo_TEXTSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Desaturated_Glass_CUBEMAP",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 842,
+   "parent_packages": [],
+   "chain": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.Material.Ammo_Screen_MATINST",
+    "PROP_VendingMachine_p.Material.VendingMachine_Screen_MAT"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Unlit",
+   "matc": "OK",
+   "glsl_lines": 58,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.ENV_Leather_HEIGHT",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.Textures.PROP_VendingMachine_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.Textures.AmmoScreen_Ammo_KMine_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.AP_VendingMachine_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 938,
+   "parent_packages": [],
+   "chain": [
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST",
+    "PROP_VendingMachine_p.Material.Health_Screen_MATINST",
+    "PROP_VendingMachine_p.Material.VendingMachine_Screen_MAT"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Unlit",
+   "matc": "OK",
+   "glsl_lines": 58,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.ENV_Leather_HEIGHT",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.Textures.PROP_VendingMachine_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.Textures.HealScreen_Ray_OShiel_Cube_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.AP_VendingMachine_SKEL",
+    "PROP_VendingMachine_p.WallSwitch.AP_WallSwitch_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 2448,
+   "parent_packages": [
+    "A1_IAC_DecoInt_Art_m.xxx"
+   ],
+   "chain": [
+    "PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST",
+    "ENV_AllShader_p.Special.ENV_Refractive_Glass_Trans_Mat"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 82,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM_XY_DXT1",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_SPEC",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.PROP_VendingMachine_Health_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.AP_VendingMachine_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 2648,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_VendingMachine_p.PROP_VendingMachine_Health_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 46,
+   "textures": [
+    {
+     "object": "PROP_VendingMachine_p.PROP_VendingMachine_Health_TEXTSET.PROP_VendingMachine_Health_TEXTSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.PROP_VendingMachine_Health_TEXTSET.PROP_VendingMachine_Health_TEXTSET_Masks_NormY",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_VendingMachine_p.WallSwitch.AP_WallSwitch_MATINST",
+   "meshes": [
+    "PROP_VendingMachine_p.WallSwitch.AP_WallSwitch_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_ESC_BrokenHope_Base_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_ESC_BrokenHope_Base_m"
+   ],
+   "serial_size": 4084,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_VendingMachine_p.WallSwitch.AP_WallSwitch_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 57,
+   "textures": [
+    {
+     "object": "PROP_VendingMachine_p.WallSwitch.WallSwitch_TEXTSET.WallSwitch_TEXTSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_VendingMachine_p.WallSwitch.WallSwitch_TEXTSET.WallSwitch_TEXTSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Metals_CUBEMAP",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "PROP_dropship_dec_p.Material.dropshipB_MATINST",
+   "meshes": [
+    "PROP_dropship_dec_p.CP_DropShip_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_Elevator_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3484,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "PROP_dropship_dec_p.Material.dropshipB_MATINST",
+    "ENV_IAC_Shader_p.Material.IAC_Base_Shader_MAT",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 65,
+   "textures": [
+    {
+     "object": "PROP_dropship_dec_p.DropShipCargo_DEC_TEXSET.DropShipCargo_DEC_TEXSET_Color_NormX",
+     "file": true
+    },
+    {
+     "object": "PROP_dropship_dec_p.DropShipCargo_DEC_TEXSET.DropShipCargo_DEC_TEXSET_Masks_NormY",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.fractalNoise_Norm",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST",
+   "meshes": [
+    "PROP_NEU_Battery_p.NEU_BatteryCorrupted_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_HGHWY2_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 1452,
+   "parent_packages": [
+    "A1_IAC_HGHWY2_Art_m.xxx"
+   ],
+   "chain": [
+    "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST",
+    "ENV_AllShader_p.Special.DarkEnergonCrystal_MAT"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 81,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Special.TPRO_CorruptorSpikes_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Ice_crystals_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Ice_crystals_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "TR_SoldierTankAut_VEH_p.VH_SoldierTankAutA_NormSpec_Cust_E_Mat_INST",
+   "meshes": [
+    "WEP_SoldierTank_p.WEP_SoldierTankAut_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoEnd_Art_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4424,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "TR_SoldierTankAut_VEH_p.VH_SoldierTankAutA_NormSpec_Cust_E_Mat_INST",
+    "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 102,
+   "textures": [
+    {
+     "object": "TR_SoldierTankAut_VEH_p.VH_SoldierTankAut_NORM",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankAut_VEH_p.VH_SoldierTankAut_SpecPwr_DifLum_EnrGlow",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankAut_VEH_p.VH_SoldierTankAut_GrungeClr",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankAut_VEH_p.VH_SoldierTankAut_CustAB_AuxGlow",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "TR_SoldierTankDec_VEH_p.VH_SoldierTankDec_NormSpec_Cust_E_Mat_INST",
+   "meshes": [
+    "WEP_SoldierTank_p.WEP_SoldierTankDec_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoEnd_Art_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4540,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "TR_SoldierTankDec_VEH_p.VH_SoldierTankDec_NormSpec_Cust_E_Mat_INST",
+    "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 102,
+   "textures": [
+    {
+     "object": "TR_SoldierTankDec_VEH_p.VH_TankDec_Norm",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankDec_VEH_p.VH_TankDec_SpecPwr_DiffLum_EnrGlow",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankDec_VEH_p.VH_TankDec_GrungeClr",
+     "file": true
+    },
+    {
+     "object": "TR_SoldierTankDec_VEH_p.VH_TankDec_CustAB_AuxGlow",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "TR_Trypticon_ROBO_p.RB_TrypticonHead_NormSpec_Cust_E_Mat_INST",
+   "meshes": [
+    "WEP_TrypticonHeadMortar_p.WEP_TrypHeadCannonCover_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A4_ORB_CogRoom_CINE_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4568,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "TR_Trypticon_ROBO_p.RB_TrypticonHead_NormSpec_Cust_E_Mat_INST",
+    "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 102,
+   "textures": [
+    {
+     "object": "TR_Trypticon_ROBO_p.RB_TrypticonHead_Norm",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "TR_Trypticon_ROBO_p.RB_TrypticonHead_SpecPwr_DiffLum_EnrGlow",
+     "file": true
+    },
+    {
+     "object": "TR_Trypticon_ROBO_p.RB_TrypticonHead_GrungeClr",
+     "file": true
+    },
+    {
+     "object": "TR_Trypticon_ROBO_p.RB_TrypticonHead_CustAB_AuxGlow",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_CodeOfPower_p.WEP_CodeOfPower_MATINST",
+   "meshes": [
+    "WEP_CodeOfPower_p.WEP_CodeOfPower1H_SKEL",
+    "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "MP_IAC_Berth_BASE_m.xxx"
+   ],
+   "mp_map_packages": [
+    "MP_IAC_Berth_BASE_m"
+   ],
+   "serial_size": 3452,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_CodeOfPower_p.WEP_CodeOfPower_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 80,
+   "textures": [
+    {
+     "object": "WEP_CodeOfPower_p.PROP_NEU_CodeOfPower_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Desaturated_Glass_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "WEP_CodeOfPower_p.PROP_NEU_CodeOfPower_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_CodeOfPower_p.PROP_NEU_CodeOfPower_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_DetPack_p.DetPack_StandBy_MAT",
+   "meshes": [
+    "WEP_DetPack_p.AP_DetPack_SKEL"
+   ],
+   "class": "Material",
+   "packages": [
+    "A2_KON_Dungeons2_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 328,
+   "parent_packages": [],
+   "chain": [
+    "WEP_DetPack_p.DetPack_StandBy_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 13,
+   "textures": [],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_DetPack_p.WEP_DetPack_MATINST",
+   "meshes": [
+    "WEP_DetPack_p.AP_DetPack_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "D1_ORB_DarkEnergon_DGN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4020,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_DetPack_p.WEP_DetPack_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_DetPack_p.WEP_DetPack_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_DetPack_p.WEP_DetPack_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_DetPack_p.WEP_DetPack_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_KamikazeMine_p.WEP_KamikazeMine_MATINST",
+   "meshes": [
+    "WEP_KamikazeMine_p.WEP_KamikazeMine_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3724,
+   "parent_packages": [],
+   "chain": [
+    "WEP_KamikazeMine_p.WEP_KamikazeMine_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 103,
+   "textures": [
+    {
+     "object": "WEP_KamikazeMine_p.WEP_KamikazeMine_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_KamikazeMine_p.WEP_KamikazeMine_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_KamikazeMine_p.WEP_KamikazeMine_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryAbility_p.WEP_DeployedTurret_MATINST",
+   "meshes": [
+    "WEP_SentryAbility_p.WEP_SentryDeploy_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2680,
+   "parent_packages": [],
+   "chain": [
+    "WEP_SentryAbility_p.WEP_DeployedTurret_MATINST",
+    "WEP_SentryAbility_p.WEP_SentryAbility_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 104,
+   "textures": [
+    {
+     "object": "WEP_SentryAbility_p.TPRO_DeployedTurret_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.ENV_Metals_CUBEMAP",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryAbility_p.TPRO_DeployedTurret_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryAbility_p.TPRO_DeployedTurret_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBall_p.WEP_SentryBall_Invis_MAT",
+   "meshes": [
+    "WEP_SentryBall_p.WEP_SentryBall_Invis_SKEL"
+   ],
+   "class": "Material",
+   "packages": [
+    "D3A_IAC_CourtTrans_DESIGN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 324,
+   "parent_packages": [],
+   "chain": [
+    "WEP_SentryBall_p.WEP_SentryBall_Invis_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 10,
+   "textures": [],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBall_p.WEP_SentryBall_MATINST",
+   "meshes": [
+    "WEP_SentryBall_p.WEP_SentryBall_Lrg_SKEL",
+    "WEP_TrypticonTailSentry_p.WEP_TrypTailSentryBall_SKEL",
+    "WEP_SentryBall_p.WEP_SentryBall_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_Intr1_Vig_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4384,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBall_p.WEP_SentryBall_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 76,
+   "textures": [
+    {
+     "object": "WEP_SentryBall_p.WEP_SentryBall_NORM",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBall_p.WEP_SentryBall_CLR",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBall_p.WEP_SentryBall_MASK",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST",
+   "meshes": [
+    "WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_SKEL",
+    "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_SKEL",
+    "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2136,
+   "parent_packages": [
+    "A1_IAC_Armory_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST",
+    "ENV_AllShader_p.Special.ENV_Refractive_Glass_Opaque_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 78,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_MAT",
+   "meshes": [
+    "WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_SKEL",
+    "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_SKEL",
+    "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3800,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_MAT",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_Norm",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBase.WEP_SentryBase_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_MAT",
+   "meshes": [
+    "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_AirRaid_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3800,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_MAT",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryBlaster.WEP_SentryBlaster_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_MAT",
+   "meshes": [
+    "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3936,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_MAT",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.SentryRepair.WEP_SentryRepair_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_MATINST",
+   "meshes": [
+    "WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_Courtyard2_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3664,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.SentryRocket.WEP_SentryRocket_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_RocketLauncher_p.WEP_RocketLauncher_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_RocketLauncher_p.WEP_RocketLauncher_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_RocketLauncher_p.WEP_RocketLauncher_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_SentryBlaster01_p.WEP_SentryBlaster01_MATINST",
+   "meshes": [
+    "WEP_SentryBlaster01_p.WEP_SentryBlaster01_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_City_Vig_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 4092,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_SentryBlaster01_p.WEP_SentryBlaster01_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 62,
+   "textures": [
+    {
+     "object": "WEP_SentryBlaster01_p.WEP_SentryBlaster01_NORM",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.WEP_SentryBlaster01_MASK",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.Textures.Metal_01_TiledNORM",
+     "file": true
+    },
+    {
+     "object": "WEP_SentryBlaster01_p.WEP_SentryBlaster01_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Lrg_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_Strts1_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2436,
+   "parent_packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "chain": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST",
+    "WEP_Shared_p.Barrier.WEP_Barrier_MATINST",
+    "WEP_Shared_p.Barrier.WEP_Barrier_A_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 88,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM_XY_DXT1",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Lrg_SKEL",
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 720,
+   "parent_packages": [],
+   "chain": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MATINST",
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "TwoSided": true,
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 30,
+   "textures": [
+    {
+     "object": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Glow_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_EnergonSigns_p.Energon_noise__CLR",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": true
+  },
+  {
+   "material": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "D3B_IAC_BottomInt_VIG_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3432,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Autobot.WEP_ShieldBruteA_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Lrg_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2436,
+   "parent_packages": [],
+   "chain": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST",
+    "WEP_Shared_p.Barrier.WEP_Barrier_MATINST",
+    "WEP_Shared_p.Barrier.WEP_Barrier_A_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 88,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM_XY_DXT1",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.Iacon_Streets_CubeMap",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.fractalMaps",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MASK_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Lrg_SKEL",
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoFoyer_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 864,
+   "parent_packages": [],
+   "chain": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MASK_MATINST",
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MATINST",
+    "WEP_Shield_p.Autobot.WEP_ShieldBruteA_MASK_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Additive",
+   "LightingModel": "MLM_Unlit",
+   "TwoSided": true,
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 30,
+   "textures": [
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Glow_MASK",
+     "file": true
+    },
+    {
+     "object": "PROP_EnergonSigns_p.Energon_noise__CLR",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Additive",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": true
+  },
+  {
+   "material": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A3_COR_Caves_Split_Vig_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3664,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldHeavy_D_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_Soundwave_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3042,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST",
+    "FX_Materials_p.Materials.Energon_Base_01_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Translucent",
+   "LightingModel": "MLM_Unlit",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithParticleSprites": true,
+   "bUsedWithBeamTrails": true,
+   "matc": "OK",
+   "glsl_lines": 76,
+   "textures": [
+    {
+     "object": "FX_Textures_p.Textures.lightningring_02_CLR",
+     "file": true
+    },
+    {
+     "object": "FX_Textures_p.Textures.DiffClouds_CLR",
+     "file": true
+    },
+    {
+     "object": "FX_Textures_p.energon_tile_CLR",
+     "file": true
+    },
+    {
+     "object": "FX_Textures_p.Textures.ShieldACircuitUVs_01_CLR",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_Shield_D_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Translucent",
+   "info_lighting_model": "MLM_Unlit",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_Shield_p.Decepticon.WEP_Shield_D_MATINST",
+   "meshes": [
+    "WEP_Shield_p.Decepticon.WEP_ShieldHeavy_D_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A2_KON_Soundwave_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 844,
+   "parent_packages": [],
+   "chain": [
+    "WEP_Shield_p.Decepticon.WEP_Shield_D_MATINST",
+    "TR_AllShader_p.Release.CHR_MidPhong_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_MediumLambert",
+   "bUsedWithSkeletalMesh": true,
+   "matc": "OK",
+   "glsl_lines": 34,
+   "textures": [
+    {
+     "object": "TR_AllShader_p.Textures.Pixel_4_NORM",
+     "file": true
+    },
+    {
+     "object": "WEP_Shield_p.Decepticon.WEP_Shield_D_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.Pixel_4_WHT",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D",
+     "file": false
+    }
+   ],
+   "textures_missing": [
+    "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D"
+   ],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_MediumLambert",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MATINST",
+   "meshes": [
+    "WEP_TrypticonHeadMortar_p.WEP_TrypHeadCannon_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A4_ORB_FallingTryp_DSN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3452,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MATINST",
+    "WEP_Shared_p.WEP_BASE_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 90,
+   "textures": [
+    {
+     "object": "WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MATINST",
+   "meshes": [
+    "WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A4_ORB_FallingTryp_DSN_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 2532,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MATINST",
+    "WEP_Shared_p.WEP_PhongMain_MAT"
+   ],
+   "root_class": "Material",
+   "BlendMode": "BLEND_Masked",
+   "LightingModel": "MLM_Phong",
+   "bUsedWithSkeletalMesh": true,
+   "bUsedWithStaticLighting": false,
+   "bIsMasked": true,
+   "matc": "OK",
+   "glsl_lines": 80,
+   "textures": [
+    {
+     "object": "ENV_AllShader_p.Textures.Pixel_4_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MASK",
+     "file": true
+    },
+    {
+     "object": "WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_CLR",
+     "file": true
+    },
+    {
+     "object": "TR_AllShader_p.Textures.PistonChamber_EMISS",
+     "file": true
+    },
+    {
+     "object": "WEP_Shared_p.Textures.WEP_Defrag_Alphas",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Masked",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  },
+  {
+   "material": "WEP_TurretBase_p.WEP_TurretBase01_MATINST",
+   "meshes": [
+    "WEP_TurretBase_p.WEP_TurretBase01_SKEL"
+   ],
+   "class": "MaterialInstanceConstant",
+   "packages": [
+    "A1_IAC_DecoEnd_Design_m.xxx"
+   ],
+   "mp_map_packages": [],
+   "serial_size": 3236,
+   "parent_packages": [
+    "A1_IAC_Base_m.xxx"
+   ],
+   "chain": [
+    "WEP_TurretBase_p.WEP_TurretBase01_MATINST",
+    "PROP_NEU_Interacts_p.InteractConsole01_MATINST",
+    "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat"
+   ],
+   "root_class": "Material",
+   "LightingModel": "MLM_Phong",
+   "matc": "OK",
+   "glsl_lines": 76,
+   "textures": [
+    {
+     "object": "WEP_TurretBase_p.WEP_TurretBase_NORM",
+     "file": true
+    },
+    {
+     "object": "ENV_GLB_Textures.DetailNorm.MetalScratch_1_NORM",
+     "file": true
+    },
+    {
+     "object": "WEP_TurretBase_p.WEP_TurretBase01_CLR",
+     "file": true
+    },
+    {
+     "object": "ENV_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP_Metals_A_Center",
+     "file": true
+    },
+    {
+     "object": "WEP_TurretBase_p.WEP_TurretBase01_MASK",
+     "file": true
+    }
+   ],
+   "textures_missing": [],
+   "notes": [],
+   "info_blend_mode": "BLEND_Opaque",
+   "info_lighting_model": "MLM_Phong",
+   "info_two_sided": false
+  }
+ ]
+}
