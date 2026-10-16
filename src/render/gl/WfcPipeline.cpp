@@ -3866,6 +3866,9 @@ void Pipeline::flushTranslucency() {
             std::fill(dynParam_, dynParam_ + 4, 1.0f);
         } else if (it.kind == 2) {
             drawFallbackSprites(fallbackPool_[(size_t)it.idx]);
+        } else if (it.kind == 3) {
+            weaponQueue_.push_back(dynTrans_[(size_t)it.idx]);   // (empty here: flushDynQueue drew the weapons)
+            flushWeaponQueue();
         } else {
             SpriteBatch& b = spritePool_[(size_t)it.idx];
             std::copy(b.dyn, b.dyn + 4, dynParam_);
@@ -3995,6 +3998,7 @@ void Pipeline::flushTranslucency() {
     auto itemName = [&](size_t i) -> std::string {
         if (const SpriteBatch* b = batchOf(i)) return "sprites " + b->mat;
         if (q[i].kind == 2) return std::string("fallback particles");
+        if (q[i].kind == 3) return std::string("translucent dynamic mesh");
         const TransSub& t = transSubs_[(size_t)q[i].idx];
         const GpuMesh& g = meshes_[(size_t)t.meshIdx];
         return (size_t)t.sub < g.subs.size() ? "mesh " + g.subs[(size_t)t.sub].matName : std::string("mesh ?");
@@ -4058,7 +4062,7 @@ void Pipeline::flushTranslucency() {
         }
         LOG_INFO("TRANSPROF frame %d: translucency %.3f ms GPU over %zu items; top:%s", frameNo_, total, tpName.size() - 1, s.c_str());
     }
-    q.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0;     // capacities kept for the next frame
+    q.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0; dynTrans_.clear(); dynTransBufUsed_ = 0;     // capacities kept for the next frame
     flushingTrans_ = false;
 }
 
@@ -6932,6 +6936,57 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         envForm_ = -1;
         return;
     }
+    // a dynamic mesh with translucent subs only (the barrier's additive force field, whose WEP_ name made it a weapon):
+    // the sorted translucency pass, after the characters - drawn at the call or with the weapons, the characters queued
+    // behind it were drawn over it later (user playtest 2026-10-14, bots behind the grid). WFC_DYNTRANSIMMEDIATE=1 = A/B
+    static const bool dynTransImmediate = std::getenv("WFC_DYNTRANSIMMEDIATE") != nullptr;
+    static const bool immediateTransDyn = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
+    if (!dynTransImmediate && !immediateTransDyn && deferTrans_ && !flushingTrans_ && !flushingDyn_ && !flushingWeapons_ && !warmup_ &&
+        (skinDraw_ ? drawVao != dynVao_ : !cacheKey) && !g.subs.empty() && !occluded) {
+        bool allTrans = true;
+        for (const Sub& s : g.subs) if (s.prog < 0 || (size_t)s.prog >= progs_.size() || progs_[(size_t)s.prog].blend < 2) { allTrans = false; break; }
+        if (allTrans) {
+            GLuint vaoT = g.vao;
+            if (!skinDraw_) {                               // (the shared dynVao_: a pooled copy for the deferred draw)
+                if (dynTransBufUsed_ == dynTransBufs_.size()) {
+                    DynTransBuf nb; GenVertexArrays(1, &nb.vao); GenBuffers(1, &nb.vbo); GenBuffers(1, &nb.ibo);
+                    dynTransBufs_.push_back(nb);
+                }
+                const DynTransBuf& tb = dynTransBufs_[dynTransBufUsed_++];
+                static std::vector<float> vt;
+                buildVertices(m, vt);
+                BindVertexArray(tb.vao);
+                BindBuffer(GL_ARRAY_BUFFER, tb.vbo);
+                BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(vt.size() * sizeof(float)), vt.data(), GL_STREAM_DRAW);
+                BindBuffer(GL_ELEMENT_ARRAY_BUFFER, tb.ibo);
+                BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STREAM_DRAW);
+                setupAttribs();
+                BindVertexArray(0);
+                vaoT = tb.vao;
+            }
+            DynDraw d;
+            d.g = &g; d.vao = vaoT; d.model = model;
+            if (skinDraw_) d.sk = *skinDraw_; else { d.sk = SkinDraw{}; d.sk.vao = vaoT; d.sk.mn = bmn; d.sk.mx = bmx; d.unposed = true; }
+            d.skinMode = skinMode_; d.skinRow = skinRow_; d.skinBones = skinBones_; d.skinAlpha = skinAlpha_;
+            d.poseBlend = poseBlend_; d.poseAlpha = poseAlpha_;
+            d.envSamples = envSamples_; d.envForm = envForm_; d.envC = envBoundsCenter_; d.envE = envBoundsExtent_;
+            d.owner = drawOwner_; d.hasParams = drawParams_ != nullptr; if (drawParams_) d.params = *drawParams_;
+            std::copy(fxColor_, fxColor_ + 4, d.fxColor); std::copy(dynParam_, dynParam_ + 4, d.dynParam);
+            if (envForm_ >= 0) {
+                auto de = dle_.find(envForm_);
+                if (de != dle_.end()) { d.hasEnv = true; d.envInit = de->second.initialized; d.env = de->second.env; }
+            }
+            if (auto cc = charColorsBy_.find(drawOwner_); cc != charColorsBy_.end()) { d.hasCc = true; d.cc = cc->second; }
+            dynTrans_.push_back(std::move(d));
+            transQueue_.push_back({viewDepth(core::transformPoint(model, (bmn + bmx) * 0.5f)), 3, (int)dynTrans_.size() - 1});
+            poseBlend_ = 0; poseAlpha_ = 1.0f;
+            inDynamicDraw_ = false;
+            dynamicMaskDraw_ = false;
+            envSamples_ = nullptr;
+            envForm_ = -1;
+            return;
+        }
+    }
     static const bool weaponDirect = std::getenv("WFC_WEAPONDIRECT") != nullptr;   // A/B: weapons drawn at the call
     if (weapon && !weaponDirect && !flushingDyn_ && !flushingWeapons_ && skinDraw_ && drawVao != dynVao_ && !warmup_) {
         DynDraw d;                                       // drawn in order at the next other draw (flushWeaponQueue)
@@ -6982,7 +7037,7 @@ bool Pipeline::charDeferOn() const {
 
 void Pipeline::restoreDynDraw(const DynDraw& d) {
     static thread_local SkinDraw sk;                    // (skinDraw_ pointed at drawSkinned's stack copy)
-    sk = d.sk; skinDraw_ = &sk;
+    sk = d.sk; skinDraw_ = d.unposed ? nullptr : &sk;
     d.g->vao = d.vao;
     skinMode_ = d.skinMode; skinRow_ = d.skinRow; skinBones_ = d.skinBones; skinAlpha_ = d.skinAlpha;
     poseBlend_ = d.poseBlend; poseAlpha_ = d.poseAlpha;
@@ -8008,7 +8063,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glx::gpuStamp("world: before the MDI");
     depthDirty_ = true;
-    transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0;
+    transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0; fallbackUsed_ = 0; dynTrans_.clear(); dynTransBufUsed_ = 0;
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
