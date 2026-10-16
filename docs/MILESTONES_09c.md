@@ -1967,3 +1967,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (work/eyepass/int_cand7/step1080_before_after.png). Quality rule: ONE retune to keep warmth (int_cand8), identity,
   6 min Gorge recheck; else ship int_cand7 as is. Systems holds the WHITEROLL table for the final values. Head ~40
   min later.
+  2026-10-16 15:12 WHITE-ROLL RETUNE (Rendering, int_cand8 building): whitelo 1.5, whitehi 6, new WFC_TONE_WHITEMIX 0.5
+  (partial desaturation keeps the warm tint); target on the Gorge step-1080 frame (frame_compare.py, 22fb09a2):
+  near-white ~55-62 % (Off 58.3), warmth >= +8, yellow-green <= 5.6 %. Systems' WHITEROLL table reissued with the final
+  values (27 / 27), staged 5c4e53ff; pairs with the merge. Then: identity -> Gorge recheck -> push -> merge = head ->
+  package rebuild + final gate tree -> RT verify row -> the gate block.
