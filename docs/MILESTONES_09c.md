@@ -1788,3 +1788,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 13:05 BOTTEST AI-cost row -> average + p99 (Gameplay; 48 / 48 on all 12 seeds; test row only). Third
   Streets pocket: no longer a trap with both snap fixes (bot escapes 25.9 m in 20 s); still the top robot-slow spot
   (narrow off-mesh gap) -> entry replay, fix proposal with evidence.
+  2026-10-16 13:06 Rendering item 7 (8d50190a, local): temporal reflections default-on in Realistic (WFC_RT_REFLTEMPORAL;
+  3x3 neighbourhood clamp, 25 % new per frame; neutral on held views, benefit in motion), soft-bloom cap 64 -> 16
+  (WFC_TONE_BLOOMMAX; the point-blank flash keeps the robot behind it readable), WfcRtDefaults.h (one source per
+  default; defaults line + refltemporal, - x3). Sequence: Systems rtcheck row (running) -> Rendering identity on
+  int_cand5 -> push -> merge paired with Systems' table patch -> RESUME: effect-light calibration, X3 v3, eye pass.
