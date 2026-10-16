@@ -14,7 +14,7 @@ foreach ($name in @($runs.Keys | Where-Object { -not $Only -or $_ -eq $Only })) 
     New-Item -ItemType Directory -Force -Path $bin, $shots | Out-Null
     Copy-Item -Path (Join-Path $runs[$name] '*') -Destination $bin -Recurse -Force -Exclude 'wfc.log', 'wfc_profile.ini', 'wfc_crash_*'
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
-    $env:WFC_MUTE = '1'; $env:WFC_FXSTAGE = '1'; $env:WFC_LOBBY_OPTIONS = 'BotsAutobot=4;BotsDecepticon=4'; $env:WFC_LOCKSTEP = '1'; $env:WFC_AUTODETECT = '0'; $env:WFC_NOMOUSE = '1'; $env:WFC_SKIPINTRO = '1'; $env:WFC_GPULOST_DIALOG_S = '0'
+    $env:WFC_MUTE = '1'; $env:WFC_NOINTERACT = '1'; $env:WFC_FXSTAGE = '1'; $env:WFC_LOBBY_OPTIONS = 'BotsAutobot=4;BotsDecepticon=4'; $env:WFC_LOCKSTEP = '1'; $env:WFC_AUTODETECT = '0'; $env:WFC_NOMOUSE = '1'; $env:WFC_SKIPINTRO = '1'; $env:WFC_GPULOST_DIALOG_S = '0'
     $env:WFC_BOOT = 'frontend'; $env:WFC_SEED = '7'; $env:WFC_FLOWSEED = '7'; $env:WFC_RT_MODE = '0'
     # (verify_slim's route: party lobby -> private TDM on Streets (508) -> InGame, then $Seconds of play)
     $env:WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$Seconds;quit"
