@@ -1086,6 +1086,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   that barrier (0.26 % px), m01200 as option B; baseline change in every mode. Systems' 3a flush stays (harmless,
   helps muzzle-flash meshes); the barrier-name fallback still needed. Head e5182075 named to Experimental. Rendering
   on item 3 (reflections from the RT lightmap, roughness-aware Fresnel for the Molten seam, grazing black lines).
+  2026-10-15 23:10 USER: 'make it so all the bots stop taking control of my mouse when I'm working' -> WFC_NOINTERACT=1
+  (Gameplay, today): the window is created / shown without activation (WS_EX_NOACTIVATE, SW_SHOWNOACTIVATE, no
+  SetForegroundWindow / SetFocus anywhere), never ClipCursor / SetCapture / ShowCursor(FALSE), window keys dropped
+  (lockstep input-drop path), window placed out of the work area (WFC_WINPOS override), boot log line, a
+  WFC_NOINTERACTTEST self-check; SIMHASH and captures identical by design; env-only, never a package default. Every
+  lane runner sets it next to WFC_MUTE=1; Experimental pins it in tools/fidelity. Interim tonight: WFC_NOMOUSE=1 and
+  windows at the bottom-right. Experimental's timed regress ede2fc3c vs e5182075 running since 22:50.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
