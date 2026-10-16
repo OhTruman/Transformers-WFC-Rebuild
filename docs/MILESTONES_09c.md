@@ -1326,6 +1326,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering's package-6 item with a +0.05 target. Systems' view-cone / 150 m cull + WFC_TLIGHTSCALE merged 398b27ef =
   FINAL PACKAGE-5 HEAD. Experimental: 3-arm regress on all 8 maps, captures, rt-perf-baseline; Systems' windowed
   cull-numbers run beside the captures.
+  2026-10-16 02:35 Step 3 PASS (Experimental): 3c007160 vs a5f53923 captures on Rust, Classic, SIMHASH 3002 / 3002 identical, Off
+  = Faithful: 13 / 25 shots differ from 720 on, all faint light-edge shifts from the 1 / 512 cull floor (max channel
+  5-31 on 10 shots; 53 on 1200; 87 on 720 in a 540 px box at a light's cut-off edge); no missing or extra lights.
+  Step 2 next: the 3-arm regress on all 8 maps on 398b27ef (~45 min hold), then step 4.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
