@@ -1330,6 +1330,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   = Faithful: 13 / 25 shots differ from 720 on, all faint light-edge shifts from the 1 / 512 cull floor (max channel
   5-31 on 10 shots; 53 on 1200; 87 on 720 in a 540 px box at a light's cut-off edge); no missing or extra lights.
   Step 2 next: the 3-arm regress on all 8 maps on 398b27ef (~45 min hold), then step 4.
+  2026-10-16 02:37 Systems' view-cone / 150 m cull numbers (Molten 4v5 + playerbot lockstep, RT off, 3 x 600-draw windows):
+  submitted lights 2,453 -> 1,798 (-27 %) with 61 capture pairs cull vs base 44 identical and 17 within 0.09 % px
+  (pose noise on a distant flier), no lighting difference: the cull removes only lights that do not reach the view.
+  Step 2 started 02:36 (hold set; 3 arms x 8 maps, ~45 min). Incident: Rendering launched an exe at 02:35:55 after
+  the hold and my pause message; killed by PID at 02:36:37; Experimental reruns any marked row at the end.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
