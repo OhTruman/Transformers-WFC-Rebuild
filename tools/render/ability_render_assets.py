@@ -9,13 +9,16 @@ import json
 import os
 import sys
 
-MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'AssetTools', 'manifests',
-                        'mp_content', 'ability_assets.json')
+# AssetTools: WFC_ASSETTOOLS (a tools copy outside the worktree layout), else three levels up from tools/render. A missing
+# manifest is an error - an empty result silently dropped the ability / turret FX systems from every map's FX build.
+ASSETTOOLS = os.environ.get('WFC_ASSETTOOLS') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..',
+                                                              'AssetTools')
+MANIFEST = os.path.join(ASSETTOOLS, 'manifests', 'mp_content', 'ability_assets.json')
 
 
 def _assets():
     if not os.path.exists(MANIFEST):
-        return {}
+        raise SystemExit('ability_render_assets: %s not found (set WFC_ASSETTOOLS to the AssetTools folder)' % MANIFEST)
     return json.load(open(MANIFEST, encoding='utf-8')).get('abilities') or {}
 
 
