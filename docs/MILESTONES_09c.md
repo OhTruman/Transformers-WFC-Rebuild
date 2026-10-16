@@ -1247,6 +1247,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   row-data changes; the 1 / 512 floor is a documented visual change invisible after tonemap. Sequence: Experimental's
   3-arm bisect (after rows 2-3) -> Rendering's Faithful identity + lights check + commit -> merge -> Experimental's
   regress-8map on the merged head decides package 5.
+  2026-10-16 01:33 D COMPLETE FROZEN (AssetTools, 01:33): push_full_snap_20261016_b0-31, 3,505 rows, 21.27 GB (levels D 1,458 / C
+  1,202 / B 226 / A 619; 2,062 DXT1 / 1,438 DXT5 / 5 A8R8G8B8; every file byte-checked, 0 stale, max path 248); the
+  rest of the 3,771-texture selection stays original by eye (sky / glow / FX gradients, faction UI logos, flares); a
+  final fix keys eye caps by each texture's own path (a shared EditorTextureSet name had leaked a cap onto CanyonFloor_A
+  / CellBlocks, rebuilt). = package 5's HD pack; Systems runs the static check now. AssetTools next: M6 roughness
+  (490), then the exporter wfc_material item.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
