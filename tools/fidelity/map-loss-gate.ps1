@@ -131,6 +131,9 @@ foreach ($k in @($starts.Keys)) {
     $shots = @(); for ($w = 0; $w -lt 4; $w++) { $shots += @{ name = "warm$w"; c = $cam.c; t = $cam.t } }; $shots += $cam
     $useAlt = $mapDir -ne "MP_IAC_Streets"; $rx = if ($useAlt) { $AltRefExe } else { $RefExe }; $rr = if ($useAlt) { $AltRefRenderData } else { $RefRenderData }
     if (NoGui) { Write-Host "reference shot skipped: GPU busy (optional corroboration)"; continue }
+    # (2026-10-16: the m5int / m6int reference trees were pruned for disk; a missing reference is skipped like a busy GPU - the
+    #  pixel rule and the verified reference (ref\maploss_ref.json) still decide; pass -RefExe / -AltRefExe to restore it)
+    if (-not (Test-Path $rx)) { Write-Host "reference shot skipped: no reference exe at $rx (optional corroboration)"; continue }
     $tmp = Join-Path $refDir "tmp_$mapDir"; $null = Invoke-ShotList $rx $tmp $shots @{ WFC_BOOT = "match"; WFC_MAP = $mapDir } $rr @($shots | ForEach-Object { $_.name })
     $src = Join-Path $tmp "${mapDir}_$actor.jpg"; if (Test-Path $src) { Copy-Item $src $jpg; "{0} <- {1}" -f $jpg, $rx | Add-Content (Join-Path $refDir "provenance.txt") }
 }
