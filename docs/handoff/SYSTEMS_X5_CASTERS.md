@@ -58,7 +58,7 @@ Caps: one barrier per Leader, one sentry per Scientist (TnAbilitySpawnSentry kil
 | MP_UND_Gorge | WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL | 2 | [1.75, 4.55, 0.68] |
 | MP_UND_Gorge | PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL | 1 | [2.19, 3.11, 1.25] |
 
-All visible at once where the camera sees them (static placement, 10-30 per map); small (0.5-1 m), so shadows are cheap and read on the floor under each pickup.
+Static placement, a few per map (counts above; the ammo crate is the common one, Code of Power / MP bomb on the maps that have those modes). Health and overshield pickups are mesh particles drawn by their FX emitters, so they are not in this list. Small (0.6-1.3 m ammo crates; Code of Power 4.5 m tall): cheap shadows that read on the floor.
 
 ## Effect meshes
 
@@ -67,7 +67,7 @@ All visible at once where the camera sees them (static placement, 10-30 per map)
 
 ## Not drawn by the rebuild (no caster until drawn)
 
-- Dropped weapons (HmDroppedPickup: a dead pawn's weapon on the floor): not presented; Gameplay item.
+- Dropped weapons (HmDroppedPickup: a dead pawn's weapon on the floor): no draw for them in World (grep); Gameplay item.
 - Kamikaze mines (minepooper): simulated, never drawn; reported to Gameplay.
 
-Suggested order for X5: sentries > pickups > projectile bodies (rockets, grenades) > ammo crate / roller; never the barrier.
+Suggested order for X5: sentries > pickup meshes > thrown grenades; later, once drawn, mines, dropped weapons and the ammo crate / roller / guided missile; never the barrier (additive force field).

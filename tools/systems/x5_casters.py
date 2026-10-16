@@ -101,13 +101,16 @@ L += ['', 'Caps: one barrier per Leader, one sentry per Scientist (TnAbilitySpaw
 for m, d in out['pickups'].items():
     for k, v in d.items():
         L.append('| %s | %s | %d | %s |' % (m, k, v['count'], v['size_m']))
-L += ['', 'All visible at once where the camera sees them (static placement, 10-30 per map); small (0.5-1 m), so shadows are '
-      'cheap and read on the floor under each pickup.', '', '## Effect meshes', '']
+L += ['', 'Static placement, a few per map (counts above; the ammo crate is the common one, Code of Power / MP bomb on the '
+      'maps that have those modes). Health and overshield pickups are mesh particles drawn by their FX emitters, so they '
+      'are not in this list. Small (0.6-1.3 m ammo crates; Code of Power 4.5 m tall): cheap shadows that read on the floor.', '',
+      '## Effect meshes', '']
 for e in out['effect_meshes']:
     L.append('- %s: %s, size %s m. Too small and short-lived to matter; skip.' % (e['mesh'], e['what'], e['size_m']))
 L += ['', '## Not drawn by the rebuild (no caster until drawn)', '',
-      '- Dropped weapons (HmDroppedPickup: a dead pawn\'s weapon on the floor): not presented; Gameplay item.',
+      '- Dropped weapons (HmDroppedPickup: a dead pawn\'s weapon on the floor): no draw for them in World (grep); Gameplay item.',
       '- Kamikaze mines (minepooper): simulated, never drawn; reported to Gameplay.', '',
-      'Suggested order for X5: sentries > pickups > projectile bodies (rockets, grenades) > ammo crate / roller; never the barrier.']
+      'Suggested order for X5: sentries > pickup meshes > thrown grenades; later, once drawn, mines, dropped weapons and the ammo '
+      'crate / roller / guided missile; never the barrier (additive force field).']
 open(__import__('sys').argv[2], 'w', encoding='utf-8').write('\n'.join(L) + '\n')
 print('\n'.join(L[:40]))
