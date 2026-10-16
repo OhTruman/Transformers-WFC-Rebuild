@@ -817,7 +817,15 @@ public:
     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
     double botMsAverage() const { return botTicks_ ? botMsAccum_ / (double)botTicks_ : 0.0; }
     double botMsMax() const { return botMsMax_; }
-    void resetBotTiming() { botMsAccum_ = 0.0; botMsMax_ = 0.0; botTicks_ = 0; }
+    // The q-quantile (0..1) of the per-step AI cost since the last reset (BOTTEST gates on p99, not one step's max).
+    double botMsQuantile(double q) const {
+        if (botMsSamples_.empty()) return 0.0;
+        std::vector<float> v = botMsSamples_;
+        const size_t k = std::min(v.size() - 1, (size_t)(q * (double)v.size()));
+        std::nth_element(v.begin(), v.begin() + (std::ptrdiff_t)k, v.end());
+        return v[k];
+    }
+    void resetBotTiming() { botMsAccum_ = 0.0; botMsMax_ = 0.0; botTicks_ = 0; botMsSamples_.clear(); }
     // Participant (non-local) shots this step, for presentation layers (tracers / muzzle / sounds of bots): weapon id, the trace
     // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
     // hitPlayer: pawn hit (-1 world / none). pellet: index within one fire event (NumShotsToFire): stock Weapon.InstantFire plays the fire
@@ -1163,6 +1171,7 @@ private:
     void applyShockwave(Character& pc, int self);   // TnAbilityShockwave.Shockwave for any participant
     bool botTryAbility(BotBody o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
+    std::vector<float> botMsSamples_;   // per-step AI cost (ms) since resetBotTiming (BOTTEST p99)
     std::vector<ParticipantShot> participantShots_;
     // Participants' held weapons: the player's weapon models (weaponModelFor) posed per participant, with their fire / reload
     // event animations, drawn at each pawn's weapon socket.

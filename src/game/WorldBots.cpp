@@ -2500,7 +2500,7 @@ void World::tickBots(float dt) {
         }
     }
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    botMsAccum_ += ms; botMsMax_ = std::max(botMsMax_, ms); ++botTicks_;
+    botMsAccum_ += ms; botMsMax_ = std::max(botMsMax_, ms); ++botTicks_; botMsSamples_.push_back((float)ms);
     // WFC_BOTPERF=<seconds> (diagnostics, any match): participants alive, AI ms per step (avg / max over the window), path searches /
     // failures, live projectiles.
     static const float perfEvery = std::getenv("WFC_BOTPERF") ? (float)std::atof(std::getenv("WFC_BOTPERF")) : 0.0f;
