@@ -71,4 +71,7 @@ Hover / tank / jet are unchanged (their hover simulation already places the hull
 - the Debris lip spot (−63.4, 130.3, −61.2) replay;
 - Classic SIMHASH re-baseline.
 
-**Open question for Integration:** if Optimus's lower floor probe blocks boost lanes the rebuild's maps rely on, should the faithful ride height ship anyway (the original's Optimus would also stop), or should Optimus keep a 0.45 m floor probe as a documented exception?
+**Decided (Integration, 2026-10-16):** Optimus ships faithful (0.19 m ride height, 0.34 m floor probe), with no physics exception: the original's Optimus was blocked by those lips as well, and the bar is the original.
+
+- **Added gate:** truck-chassis NAVQ / MAPTRAVERSE routes must not regress.
+- **If truck bots stick at 0.35-0.45 m lips:** the fix is a bot path rule (route trucks around what they cannot climb), never a physics exception.
