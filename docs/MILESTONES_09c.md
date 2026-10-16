@@ -1854,3 +1854,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 13:27 Grid fix (AssetTools): m05's compact grid IDENTICAL to the old code on all 10 MP maps (Streets incl.);
   the structure-audit rewrite reverted (10 GB on Rust vs 2.2 GB old): campaign uses a coarser WFC_AUDIT_CELL=2 m
   (default 1 m unchanged, Berth identical). m05 + structure audit now rerunning alone on all 10 chapters (~1.5-2 h).
+  2026-10-16 13:28 EFFECT-LIGHT CALIBRATION (Rendering; lockstep Streets / Gorge / Molten, on vs off, transient gain 2):
+  lights change 11-40 % of a frame's pixels where they burn; explosions read right (keep); impacts too strong (green-
+  white wash on Molten's floor) -> Systems table change: impact rows colour x0.6, duration 0.25 -> 0.15 s (patch in
+  progress; merges before the eye-pass candidate); boost / pickups rechecked in the eye pass. X3 v3 view runs going
+  (~25 min) -> verdict -> eye-pass candidate.
