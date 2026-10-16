@@ -1342,6 +1342,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   it (508 +0.31 -> +0.20); head vs base within +0.15 on 7 / 8 maps (508 +0.18). Step 4 (rt-perf-baseline on 398b27ef
   under NOINTERACT, the new reference) running under a hold; the package-5 build starts on 'go' after it. Rendering's
   launcher now polls the hold every second and kills its own exe.
+  2026-10-16 03:20 USER DIRECTION for package 6 (watching a lane run): more interactive shadows, most notably buildings shadowing
+  the players / bots under them on the open-skybox map; vehicle lights and weapon fire casting on the ground; all
+  lighting interacting across the entire map ('one place'); more objects casting shadows, more lights casting light and
+  reflections; colour cast between surfaces and characters by position. Rendering writes RT_FULL_PLAN v3 as a gap
+  analysis after package 5 promotes: sun / sky shadows from static geometry onto characters and vehicles, characters
+  casting sun shadows onto the world, vehicle headlights as shadowed dynamic lights, muzzle light on the ground,
+  coloured bounce onto characters, dynamic lights + characters in reflections, emissive surfaces as light sources, one
+  energy basis for world and characters; ordered by visible impact, quality first, Off / Faithful untouched. (The run
+  the user watched may have been an Off / Faithful arm or package 4.) Package-5 notes written
+  (docs/handoff/PACKAGE_5_398b27ef.md); tag playtest/09c-package5-398b27ef.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
