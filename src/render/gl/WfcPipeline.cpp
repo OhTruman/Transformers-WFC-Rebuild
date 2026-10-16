@@ -430,6 +430,7 @@ static void r1ShaderText(std::string& fs, size_t mainStart, bool lm) {
 const char* kFSPbrHelpers = R"(
 float wfcPbrRoughMap = -1.0;
 vec3 wfcPbrEnv = vec3(0.0);
+float wfcPbrEnvEnergy = 0.0;     // (item 6) 1 = the pbr body sets the energy-matched env (matc_pbr 2026-10-16+); 0 = the raw cube
 float wfcPbrMetallic = 0.0;      // (Systems' per-master metallic / F0 rows, when the pbr body sets them; else dielectric)
 vec3 wfcPbrF0 = vec3(0.04);
 float wfcPbrRoughness(float sp) {
@@ -496,11 +497,19 @@ void main() {
         float aL = clamp(a + kPbrLmLobe, 0.0, 1.0), a2L = aL * aL;
         vec3 V = normalize(m.cameraVector);
         float NoV = clamp(dot(n, V), 1e-4, 1.0);
-        c += wfcPbrSpec(n, V, LMB0, a2L, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2L, NoV, F0) * l1 * uLMScale[1]
-           + wfcPbrSpec(n, V, LMB2, a2L, NoV, F0) * l2 * uLMScale[2];
+        // (item 6) the lightmap lobes' specular only where the original material had a specular input: a material authored
+        // matte (SpecularColor 0: 275 of Streets' 605) stays matte - on Rust the Fresnel sheen on such floors was +19 %
+        float specIn = clamp(max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) * @SPECIN@, 0.0, 1.0);
+        c += specIn * (wfcPbrSpec(n, V, LMB0, a2L, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2L, NoV, F0) * l1 * uLMScale[1]
+           + wfcPbrSpec(n, V, LMB2, a2L, NoV, F0) * l2 * uLMScale[2]);
         vec2 ab = wfcEnvBrdf(rough, NoV);
-        float occ = clamp(dot(L, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
-        c += wfcPbrEnv * (F0 * ab.x + ab.y) * occ;
+        // (item 6) wfcPbrEnv = what the original added into its diffuse (its weighted cube term; 0 where it added none),
+        // lit by the lightmap as the original's diffuse was; the split-sum BRDF divided by its mean over the view only
+        // shapes it (brighter at grazing angles, dimmer facing) - the average brightness stays the original's
+        vec3 em = vec3(0.0);
+        for (int j = 0; j < 4; ++j) { vec2 q = wfcEnvBrdf(rough, 0.125 + 0.25 * float(j)); em += F0 * q.x + q.y; }
+        if (wfcPbrEnvEnergy > 0.5) c += wfcPbrEnv * L * clamp((F0 * ab.x + ab.y) / max(em * 0.25, vec3(1e-3)), 0.5, 1.5);   // (the view shaping bounded: grazing floors ran to several x)
+        else c += wfcPbrEnv * (F0 * ab.x + ab.y) * clamp(dot(L, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);   // (data before the item 6 regen)
     }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
@@ -560,6 +569,7 @@ void main() {
         vec3 V = normalize(uCamPos - vPos);
         float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough, a2 = a * a;
         float NoV = clamp(dot(Nw, V), 1e-4, 1.0);
+        float specIn = clamp(max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) * @SPECIN@, 0.0, 1.0);   // (item 6: matte stays matte)
         for (int i = 0; i < 3; ++i) {
             if (i >= uNumLights) break;
             vec3 L; float att = 1.0;
@@ -580,13 +590,15 @@ void main() {
             float NoH = clamp(dot(Nw, H), 0.0, 1.0), VoH = clamp(dot(V, H), 0.0, 1.0);
             vec3 F = F0 + (vec3(1.0) - F0) * pow(1.0 - VoH, 5.0);
             vec3 spec = wfcGgxD(NoH, a2) * wfcSmithVis(NoV, NoL, a2) * F * NoL * 3.14159265;
-            direct += (o.DiffuseColor * (1.0 - metal) * NoL + spec) * uLCol[i].rgb * att * uLSpot[i].w;
+            direct += (o.DiffuseColor * (1.0 - metal) * NoL + spec * specIn) * uLCol[i].rgb * att * uLSpot[i].w;
         }
         c += ambient * (1.0 - uDLAC * S);
         c += direct * (1.0 - S);
         vec2 ab = wfcEnvBrdf(rough, NoV);
-        float occ = clamp(dot(amb, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);
-        c += wfcPbrEnv * (F0 * ab.x + ab.y) * occ;
+        vec3 em = vec3(0.0);   // (item 6: as the lightmapped main, lit by the ambient term)
+        for (int j = 0; j < 4; ++j) { vec2 q = wfcEnvBrdf(rough, 0.125 + 0.25 * float(j)); em += F0 * q.x + q.y; }
+        if (wfcPbrEnvEnergy > 0.5) c += wfcPbrEnv * amb * clamp((F0 * ab.x + ab.y) / max(em * 0.25, vec3(1e-3)), 0.5, 1.5);   // (the view shaping bounded: grazing floors ran to several x)
+        else c += wfcPbrEnv * (F0 * ab.x + ab.y) * clamp(dot(amb, vec3(0.2126, 0.7152, 0.0722)) * kPbrSpecOcc, 0.0, 1.0);   // (data before the item 6 regen)
     }
     wfcTranslucentOut(c, o.Opacity);
     c = wfcCanvasOut(wfcFog(c));
@@ -1952,10 +1964,16 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
 // (relative to the root), format BC4 | BC7, space linear, optional bytes. A bad row is skipped (that map only: the
 // material derives the value), never the pack. Only read when HD textures are on (hdPbrTexture).
 struct HdPbrEntry { std::string dds, fmt; long long bytes = -1; };
+// (item 6) the M6 maps' root: WFC_HD_PBR_ROOT when the maps ship apart from the colour pack (AssetTools' push_m6/pack),
+// else the HD root
+std::string hdPbrRoot() {
+    if (const char* e = std::getenv("WFC_HD_PBR_ROOT")) if (*e) return e;
+    return hdRoot();
+}
 const std::map<std::pair<std::string, std::string>, HdPbrEntry>& hdPbrIndex() {
     static const std::map<std::pair<std::string, std::string>, HdPbrEntry> idx = [] {
         std::map<std::pair<std::string, std::string>, HdPbrEntry> m;
-        const std::string root = hdRoot();
+        const std::string root = hdPbrRoot();
         std::string t = readText(root + "/hd_pbr_index.json"), name = "hd_pbr_index.json";
         if (t.empty()) { t = readText(root + "/hd_modern_index.json"); name = "hd_modern_index.json"; }
         assets::Json J;
@@ -2031,7 +2049,7 @@ GLuint Pipeline::hdPbrTexture(const std::string& textureObject, const std::strin
     auto it = idx.find({key, r});
     if (it != idx.end()) {
         int w = 0, h = 0; std::vector<std::vector<uint8_t>> lv;
-        if (readDdsBc(hdRoot() + "/" + it->second.dds, it->second.fmt, w, h, lv)) {
+        if (readDdsBc(hdPbrRoot() + "/" + it->second.dds, it->second.fmt, w, h, lv)) {
             glGenTextures(1, &tex);
             glBindTexture(GL_TEXTURE_2D, tex);
             const GLenum gf = it->second.fmt == "BC4" ? 0x8DBB /*COMPRESSED_RED_RGTC1*/ : 0x8E8C /*COMPRESSED_RGBA_BPTC_UNORM*/;
@@ -2691,6 +2709,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos) mainLM.replace(at, 9, specOcc);
         at = mainLM.find("@LMLOBE@");
         if (at != std::string::npos) mainLM.replace(at, 8, lmLobe);
+        static const std::string specIn = [] { const char* e = std::getenv("WFC_PBR_SPECIN"); return std::string(e ? e : "3.0"); }();
+        at = mainLM.find("@SPECIN@");
+        if (at != std::string::npos) mainLM.replace(at, 8, specIn);
     }
     else if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
         code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
@@ -2741,6 +2762,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         mainUber = kFSMainUberModern;
         const size_t at = mainUber.find("@SPECOCC@");
         if (at != std::string::npos) mainUber.replace(at, 9, specOccU);
+        static const std::string specInU = [] { const char* e = std::getenv("WFC_PBR_SPECIN"); return std::string(e ? e : "3.0"); }();
+        const size_t si = mainUber.find("@SPECIN@");
+        if (si != std::string::npos) mainUber.replace(si, 8, specInU);
     }
     const size_t mainStart = fs.size();
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
