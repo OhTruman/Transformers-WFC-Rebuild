@@ -1113,7 +1113,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s x3=%s",
                          on("WFC_RT_TONE") ? "on" : "off", on("WFC_RT_LMSPEC") ? num("WFC_RT_LMSPECGAIN", 2.5f) : 1.0f,
-                         num("WFC_RT_TLGAIN", 2.0f), num("WFC_RT_GISAT", 2.5f), num("WFC_RT_GIEMISSIVE", 1.0f),
+                         num("WFC_RT_TLGAIN", 2.0f), num("WFC_RT_GISAT", 2.5f), num("WFC_RT_GIEMISSIVE", 4.0f),
                          num("WFC_RT_CHARAORADIUS", 3.0f), on("WFC_SOFTPARTICLES") ? "on" : "off", on("WFC_TLTILED") ? "on" : "off",
                          on("WFC_RT_CHARSUN") ? "on" : "off", on("WFC_RT_CHARLAMPCAL") ? "on" : "off", on("WFC_RT_REFLTL") ? "on" : "off",
                          on("WFC_RT_SUNSHARE") ? "on" : "off", on("WFC_RT_PROBEFILL") ? "on" : "off", on("WFC_PBR_ORIGSPEC") ? "on" : "off",
