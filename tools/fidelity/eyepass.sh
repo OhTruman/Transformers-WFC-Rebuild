@@ -12,7 +12,7 @@
 #   bash tools/fidelity/eyepass.sh <build, e.g. 398b27e> [maps "508 510 507 504 509"] [modes "off real realhd"]
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 B=${1:?build name (work/ab/m9c_<name>)}; MAPS=${2:-"508 510 507 504 509"}; MODES=${3:-"off real realhd"}
-W=${EYE_W:-2560}; H=${EYE_H:-1440}; HDROOT=${EYE_HDROOT:-"F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack"}
+W=${EYE_W:-2560}; H=${EYE_H:-1440}; HDROOT=${EYE_HDROOT:-"F:/Transformers Rebuild/Rebuild-Systems/work/hd_dev_full"}   # (Systems 2026-10-16: package layout, D pack + M6 roughness pack; read only)
 O=work/eyepass/$B; mkdir -p $O; PY="F:/Transformers Rebuild/AssetTools/bin/py/python.exe"
 # EYE_EXE=<exe>: run another tree's exe in place (read only; e.g. Rendering's candidate) - it is reaped by its own Windows PID, never
 # by path; EYE_RENDER_DATA=<dir> sets WFC_RENDER_DATA; EYE_RTENV="K=V K=V" is added to the RT-on modes (e.g. WFC_FXLIGHTS=1 WFC_HEADLIGHTS=1)
