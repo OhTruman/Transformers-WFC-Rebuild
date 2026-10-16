@@ -2139,3 +2139,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Sequence: Systems step 1 (build + copy) -> Experimental package-respin.sh 9350f19b 4078e47b (BUILD_ONLY ahead;
   timed 8-map regress, delta FAST, per-body + 5v5 pair) -> Systems verify rows (RT-off, then RT + HD) -> promote +
   doc numbers + hand-over. All GPU work before ~00:00 their clock.
+  2026-10-16 18:27 RESPIN PACKAGE BUILT: work/playtest_slim_9350f19b 27.53 GB (D 3,506 + M6 498 / 498, overlay 85 / 85,
+  vbake 10, failures 0; NOPROMOTE). Experimental fast_9350f19 Debug + Release built (WFC_NOCORPSE present).
+  RESPIN GATE GO at 18:27: package-respin.sh 9350f19b 4078e47b (timed 8-map regress -> delta FAST -> 2b per-body +
+  5v5 -> PACKAGE-GATE.md). Systems idle until the regress hold clears, then the 4078e47b package deletion + RT-off
+  verify rows; RT + HD rows after the block.
