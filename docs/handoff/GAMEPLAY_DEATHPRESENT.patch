@@ -1,0 +1,155 @@
+diff --git a/src/game/AbilityAudio.h b/src/game/AbilityAudio.h
+index 60d5a50..75dfc8c 100644
+--- a/src/game/AbilityAudio.h
++++ b/src/game/AbilityAudio.h
+@@ -104,6 +104,8 @@ public:
+     // (TnDeathTypeMelee, from a TnDamageTypeMelee kill [selection HIGH]) plays the disintegrate sound. Returns the instance.
+     int pawnDeath(SoundCues& cues, const std::string& chassisId, bool vehicleForm, const std::string& damageType,
+                   const core::Vec3& pos, float listenerDist);
++    // pawnDeath's cue name (empty = no death sound for this death), without playing it.
++    static std::string deathCue(const std::string& chassisId, bool vehicleForm, const std::string& damageType);
+ 
+     // A non-weapon hit on a pawn (melee / whirlwind / shoulder slam / ram): the damage type's TnHitEffectPlayer entry
+     // plays its HitSound - an event of the VICTIM's SoundEventSet - if bCausesBlood, at most every RetriggerTime per
+diff --git a/src/game/AbilityAudio.cpp b/src/game/AbilityAudio.cpp
+index bccd6bb..bc267d6 100644
+--- a/src/game/AbilityAudio.cpp
++++ b/src/game/AbilityAudio.cpp
+@@ -207,15 +207,17 @@ int AbilityAudio::dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn)
+     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
+ }
+ 
+-int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool vehicleForm, const std::string& damageType,
+-                            const core::Vec3& pos, float dist) {
+-    std::string q;
++std::string AbilityAudio::deathCue(const std::string& chassis, bool vehicleForm, const std::string& damageType) {
+     if (vehicleForm) {
+         const CharacterAudioProfile* p = CharacterAudio::find(chassis);
+-        if (p) q = p->vehicleDeath;
+-    } else if (CharacterAudio::isMeleeDamageType(damageType)) {
+-        q = CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound");
++        return p ? p->vehicleDeath : std::string();
+     }
++    return CharacterAudio::isMeleeDamageType(damageType) ? CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound") : std::string();
++}
++
++int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool vehicleForm, const std::string& damageType,
++                            const core::Vec3& pos, float dist) {
++    const std::string q = deathCue(chassis, vehicleForm, damageType);
+     if (q.empty()) return -1;
+     if (!cues.hasCue(q.c_str()) && CharacterAudio::find(chassis)) CharacterAudio::loadCues(cues, *CharacterAudio::find(chassis));
+     return cues.play(q.c_str(), pos, dist);
+diff --git a/src/game/World.h b/src/game/World.h
+index 4d09687..8be69fb 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -693,6 +693,7 @@ public:
+     void requestRoller(int owner);
+     const std::vector<RollerMine>& rollerMines() const { return rollers_; }   // every participant's (Rendering / Systems audio: t = age)
+     int participantRollerSpawns_ = 0;   // diagnostics: rollers spawned by participants
++    int deathPresentations_ = 0, deathCues_ = 0;   // diagnostics (BOTTEST): victim death presentations (onPawnDeath), those with a death sound cue
+     int participantRollersLive() const { int n = 0; for (const RollerMine& m : rollers_) n += m.alive && m.owner != localPlayer_; return n; }
+ 
+     float missileDelay_ = -1.0f;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index e3dc88c..b025f2b 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -2955,7 +2955,19 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
+         }
+         const Match::KillContext kc = killContext(instigator, victim, damageType);
+         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType, &kc);
+-        else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
++        else {
++            match_.killed(instigator, victim, false, damageType, &kc);
++            if (opp) {
++                // [Gameplay] the victim's death presentation (death sound; the onPawnDeath hook) at the pawn as it died, before the
++                // despawn: tickMatch's PlayerKilled event presents only a still-spawned pawn, so every participant killed here went
++                // silent. Presentation only (no sim state; the despawn and the event order are unchanged). Same damage type as the event.
++                if (opp->spawned()) {
++                    const std::string kdt = match_.killHistory().empty() ? damageType : match_.killHistory().back().damageType;
++                    onPawnDeath(opp->pawn().chassis().id, opp->pawn().moveForm() == Form::Vehicle, kdt, opp->pawn().actorLocation());
++                }
++                opp->despawn();
++            }
++        }
+     }
+     return true;
+ }
+@@ -6211,6 +6223,8 @@ void World::onPawnHitEffect(const std::string& damageType, const std::string& vi
+ }
+ 
+ void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
++    ++deathPresentations_;
++    if (!AbilityAudio::deathCue(chassisId, vehicleForm, damageType).empty()) ++deathCues_;
+     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
+ }
+ 
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index ca0c486..ccf543d 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5371,6 +5371,7 @@ void Application::runBotTest() {
+     using T = game::GameplayEventType;
+     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
+     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
++    int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
+     for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
+         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 4 ? "DM" : "TDM") + "?TimeLimit=" + std::to_string((int)secs + 15) +   // phase 5: FFA 64
+                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
+@@ -5402,6 +5403,7 @@ void Application::runBotTest() {
+         if (phase != 4) check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");   // FFA: no teams
+         world_.resetBotTiming();
+         const int rollerSpawns0 = world_.participantRollerSpawns_;
++        const int deathPres0 = world_.deathPresentations_, deathCues0 = world_.deathCues_;
+         const size_t ev0 = world_.match().gameplayEvents().size();
+         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
+         int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, driveSamples = 0, nitroStarts = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0, rollerSamples = 0;
+@@ -5509,6 +5511,39 @@ void Application::runBotTest() {
+         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
+         if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
+         if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
++        {   // DEATH: every death (kill, suicide, environment) gets the victim's death presentation once - bots die through
++            // applyMatchDamage, which despawns before tickMatch's PlayerKilled event (the sound was skipped for all of them)
++            int deaths = 0;
++            for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
++                const T t = world_.match().gameplayEvents()[e].type;
++                deaths += t == T::Kill || t == T::Suicide || t == T::EnvironmentDeath;
++            }
++            const int pres = world_.deathPresentations_ - deathPres0;
++            check(pres == deaths, "DEATH every death presented (" + std::to_string(pres) + " presentations for " + std::to_string(deaths) +
++                                  " deaths, " + std::to_string(world_.deathCues_ - deathCues0) + " with a death sound cue)");
++            // Scripted: up to 4 spawned enemy bots (any form, within 10 s) killed through applyMatchDamage with a melee damage type: each
++            // is presented once, with its cue (robot form: TnDeathTypeMelee; vehicle form: the chassis' vehicle DeathSound).
++            // (A match already won by score is over: logged and skipped; the run needs one phase with scripted kills, checked at the end.)
++            const int p0 = world_.deathPresentations_, c0 = world_.deathCues_;
++            int n = 0, wantCues = 0, robots = 0;
++            const char* kMeleeDt = "TransGame.TnDamageTypeMelee";
++            const bool live = world_.match().state() == game::Match::State::InProgress;
++            for (int i = 0; live && n < 4 && i < 600 && world_.match().state() == game::Match::State::InProgress; ++i) {
++                for (game::MatchOpponent* o : world_.matchOpponents()) {
++                    if (n >= 4 || !o->spawned() || world_.match().sameTeam(o->matchPlayer(), me)) continue;
++                    const bool veh = o->pawn().moveForm() == game::Form::Vehicle;
++                    const bool cue = !game::AbilityAudio::deathCue(o->pawn().chassis().id, veh, kMeleeDt).empty();
++                    if (world_.applyMatchDamage(o->matchPlayer(), me, 99999.0f, false, kMeleeDt) && !o->spawned()) { ++n; wantCues += cue; robots += !veh; }
++                }
++                world_.handleInput(idle, dt); world_.tick(dt);
++            }
++            scriptedDeaths += n;
++            if (!live) LOG_INFO("BOTTEST INFO DEATH scripted melee kills skipped: the match is already over (state %d)", (int)world_.match().state());
++            else check(n >= 1 && wantCues >= 1 && world_.deathPresentations_ - p0 == n && world_.deathCues_ - c0 == wantCues,
++                  "DEATH death sound cue for " + std::to_string(n) + " melee kills via applyMatchDamage (" + std::to_string(robots) + " robot form; " +
++                  std::to_string(world_.deathPresentations_ - p0) + " presentations, " + std::to_string(world_.deathCues_ - c0) + " / " + std::to_string(wantCues) +
++                  " cues; robot '" + game::AbilityAudio::deathCue("", false, kMeleeDt) + "')");
++        }
+         check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms): avg " + std::to_string(world_.botMsAverage()) + " ms for " + std::to_string(bots) + " bots, max " + std::to_string(world_.botMsMax()) + " ms");
+         // Let the match run out: it completes and the next one starts clean.
+         for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+@@ -5524,6 +5559,7 @@ void Application::runBotTest() {
+         int ends = 0; for (const auto& e : world_.match().gameplayEvents()) ends += e.type == T::MatchEnd;
+         check(ends == 1, "one MatchEnd record");
+     }
++    check(scriptedDeaths >= 1, "DEATH scripted melee kills via applyMatchDamage ran in at least one phase (" + std::to_string(scriptedDeaths) + ")");
+     LOG_INFO("BOTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+ }
+ 
