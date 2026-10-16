@@ -1524,3 +1524,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   89,478,608, one row counted as wrong-size and the whole pack was ignored, so HD textures were OFF in packages 4 and 5
   (verify_slim's map rows ran HD = Off). Fixed 66eb7d73 (asDouble). The snapshots are correct; AssetTools' re-snapshot
   cancelled. Package 6 = the first build where HD actually shows; verify_slim gains the HD-accepted runtime row.
+  2026-10-16 05:40 FAST 398b27ef FINAL = PASS (58 PASS; the one PRODUCT row = the known Berth dark-interior false
+  positive, environment fully drawn; mapswitch ran alone 05:30-05:35): Systems promotes package 5 as the internal
+  checkpoint (HD-off known issue noted in its doc). HD loader fix VERIFIED on the integration exe (66eb7d73,
+  WFC_HDFORCE, b0-31): "HD texture pack available: 3505 textures". Both snapshots pass AssetTools' new integrity pass
+  (hd_pack_integrity.py; hd_snapshot.py renames a failed snapshot _FAILED). Item 6 data batch 2 switched in (Berth,
+  Seed, BrokenHope, Remnant, Complex; existing entries identical, 56 new each): all 10 MP maps covered. Fidelity
+  tooling merged 27ab8332 (eye-pass pipeline + client-rect INVALID check, script files by path). Eye-pass proof on
+  398b27ef gets slot A at Rendering's next batch boundary.
