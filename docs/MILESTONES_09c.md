@@ -1208,6 +1208,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (slot B, Rendering paused) -> Experimental's rows (regress vs 30b2fa74, captures, leak, rt-perf-baseline under
   NOINTERACT) -> after the D complete freeze: Systems builds package 5 -> verify -> FAST -> reboot reminder -> promote.
   Rendering's robots-in-reflections joins if it lands before the build.
+  2026-10-16 00:59 ROBOTS IN REFLECTIONS MERGED a5f53923 (rt2 54d9d039): reflection rays that hit characters / non-static geometry
+  take the previous frame's HDR image at the hit point (new shared target t16) instead of a dark constant; Faithful
+  identity 5 / 5 + SIMHASH. PACKAGE-5 CANDIDATE HEAD = a5f53923 (Experimental patches the delta; base 30b2fa74).
+  Rendering next: item 7 polish (temporal reflections, R4 lightmap super-sample on the blurriest pages); item 6 =
+  Modern calibration against the D pack + M6 roughness (E dropped).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
