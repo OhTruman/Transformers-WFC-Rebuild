@@ -1751,3 +1751,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Enhanced adds on top in 4 of 5 view types. User sent views_507 (Debris). Rendering RESUMED (identity -> push of the
   cull fix + defaults line -> Molten lava-facing gains -> item 7 -> calibration -> X3 v3 on the views -> eye pass).
   Experimental: gate base += walkable (f19e0052@src/game) building. A2_KON doc e4f1912a; D1_ORB (last) running.
+  2026-10-16 12:46 CAMPAIGN PIPELINE COMPLETE: all 10 chapters exported (AssetTools; CAMPAIGN_PIPELINE_SUMMARY.md,
+  04a6ab8b): 430 levels, 158,484 placed meshes, 45,949 nav nodes, 196 streaming states, 97 min total, no stage over
+  6.1 GB (m05 / structure audit pending the grid fix, now in progress). Blockers for the campaign phase: Kismet
+  127,610 objects / 15 custom classes without decomp (2 used in all 10 chapters), 3,605 InterpData, 94 FaceFX, 377
+  pickup factories, 1,112 unique matc materials. Recommended order: streaming-state runtime, core Kismet + 4 classes,
+  pickup discovery, pawn factories / AI, matinee, matc, dialog; first level D5_OME, then A5_TRY. AssetTools now: grid
+  fix, then Kismet class RE + streaming runtime design notes. PACKAGE_6_HEAD.md: how-to-play section 04198d4d.
