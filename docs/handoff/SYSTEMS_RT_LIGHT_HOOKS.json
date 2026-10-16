@@ -1,0 +1,2458 @@
+{
+ "note": "RT-era additions (no original light): proposals for Rendering",
+ "rows": [
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_HomingRocket_p.FX.Squib_HomRocket_01_FX",
+   "users": 5,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.MuzzleFlash_White_Mat",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 750.0,
+     "time_s": 0.4,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      7.0,
+      10.0,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 2250.0,
+     "time_s": 0.4,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 20.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_MOD_MAT",
+     "colour": [
+      100.0,
+      100.0,
+      100.0
+     ],
+     "peak": 100.0,
+     "size_uu": 4500.0,
+     "time_s": 1.35,
+     "loops": 1
+    },
+    {
+     "emitter": "RollingFire_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_02_MAT",
+     "colour": [
+      10.0,
+      8.0,
+      1.0
+     ],
+     "peak": 10.0,
+     "size_uu": 4000.0,
+     "time_s": 0.85,
+     "loops": 1
+    },
+    {
+     "emitter": "Exp_Lead",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_02_MAT",
+     "colour": [
+      10.0,
+      8.0,
+      1.0
+     ],
+     "peak": 10.0,
+     "size_uu": 2000.0,
+     "time_s": 0.5,
+     "loops": 1
+    },
+    {
+     "emitter": "RollingFire_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 2000.0,
+     "time_s": 0.65,
+     "loops": 1
+    },
+    {
+     "emitter": "Fire_A_Dup",
+     "material": "FX_Materials_p.Materials.Fire_Anim_03_MAT",
+     "colour": [
+      2.5,
+      1.25,
+      1.25
+     ],
+     "peak": 2.5,
+     "size_uu": 250.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Embers_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Embers_Anim_MAT",
+     "colour": [
+      100.0,
+      100.0,
+      100.0
+     ],
+     "peak": 100.0,
+     "size_uu": 45.0,
+     "time_s": 0.95,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    0.99,
+    0.93
+   ],
+   "peak": 100.0,
+   "size_m": 45.0,
+   "looping": false,
+   "time_s": 1.35,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 13.3,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Lrg_FX",
+   "users": 3,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 4050.0,
+     "time_s": 2.1,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 4050.0,
+     "time_s": 2.1,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 20.0,
+     "time_s": 0.73,
+     "loops": 1
+    },
+    {
+     "emitter": "Noise",
+     "material": "FX_Materials_p.Materials.Explosion_MAT",
+     "colour": [
+      0.5,
+      1.0,
+      0.5
+     ],
+     "peak": 1.0,
+     "size_uu": 2000.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Fire_A",
+     "material": "FX_Materials_p.Materials.Fire_Anim_03_MAT",
+     "colour": [
+      2.5,
+      1.25,
+      1.25
+     ],
+     "peak": 2.5,
+     "size_uu": 600.0,
+     "time_s": 1.59,
+     "loops": 1
+    },
+    {
+     "emitter": "Fire_D",
+     "material": "FX_Materials_p.Materials.Fire_Anim_02_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 600.0,
+     "time_s": 1.59,
+     "loops": 1
+    },
+    {
+     "emitter": "ElectricArcs_Straight_Dup_Dup",
+     "material": "FX_Materials_p.MatInst.Lightning_Anim_03_UP_MAT_INST",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 800.0,
+     "time_s": 0.64,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    0.962,
+    0.938
+   ],
+   "peak": 5.0,
+   "size_m": 40.5,
+   "looping": false,
+   "time_s": 2.1,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 5.2,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_GrenadeLauncher_p.FX.Explosion_GrenadeLauncher_01_FX",
+   "users": 2,
+   "emitters": [
+    {
+     "emitter": "RollingFire_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_02_MAT",
+     "colour": [
+      20.0,
+      6.0,
+      2.0
+     ],
+     "peak": 20.0,
+     "size_uu": 6000.0,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Basic_Particle_MOD_MAT",
+     "colour": [
+      120.0,
+      120.0,
+      20.0
+     ],
+     "peak": 120.0,
+     "size_uu": 4000.0,
+     "time_s": 0.4,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      10.0,
+      10.0,
+      1.0
+     ],
+     "peak": 10.0,
+     "size_uu": 30.0,
+     "time_s": 0.34,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    0.907,
+    0.153
+   ],
+   "peak": 120.0,
+   "size_m": 60.0,
+   "looping": false,
+   "time_s": 1.0,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 13.8,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_FusionCannon_p.FX.Exp_FusionCannon_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "GLOW_Rays",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 4500.0,
+     "time_s": 0.33,
+     "loops": 1
+    },
+    {
+     "emitter": "ExplosionAnim",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_02_MAT",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 3000.0,
+     "time_s": 1.1,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Multiply",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      3.019,
+      3.019,
+      3.019
+     ],
+     "peak": 3.02,
+     "size_uu": 4500.0,
+     "time_s": 1.5,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Rays_Red",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      8.0,
+      8.0,
+      8.0
+     ],
+     "peak": 8.0,
+     "size_uu": 3000.0,
+     "time_s": 0.25,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks",
+     "material": "FX_Materials_p.Materials.Sparks_01_MAT",
+     "colour": [
+      25.0,
+      25.0,
+      25.0
+     ],
+     "peak": 25.0,
+     "size_uu": 30.0,
+     "time_s": 1.05,
+     "loops": 1
+    },
+    {
+     "emitter": "FlameTrailSlow",
+     "material": "FX_Materials_p.Materials.Embers_Anim_MAT",
+     "colour": [
+      25.0,
+      25.0,
+      25.0
+     ],
+     "peak": 25.0,
+     "size_uu": 600.0,
+     "time_s": 1.0,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "peak": 25.0,
+   "size_m": 45.0,
+   "looping": false,
+   "time_s": 1.5,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 9.4,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_Explosives_p.FX.Exp_Energy_MED_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "Sparks_Dup",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      7.329,
+      8.102,
+      10.029
+     ],
+     "peak": 10.03,
+     "size_uu": 20.0,
+     "time_s": 2.5,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_LONG_Dup",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      7.329,
+      8.102,
+      10.029
+     ],
+     "peak": 10.03,
+     "size_uu": 16.0,
+     "time_s": 1.09,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Multiply_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.354,
+      1.354,
+      1.539
+     ],
+     "peak": 1.54,
+     "size_uu": 6000.0,
+     "time_s": 1.45,
+     "loops": 1
+    },
+    {
+     "emitter": "Trail1_Dup",
+     "material": "FX_Materials_p.Materials.Streak_Mat",
+     "colour": [
+      10.0,
+      5.0,
+      80.0
+     ],
+     "peak": 80.0,
+     "size_uu": 10.0,
+     "time_s": 1.07,
+     "loops": 2
+    },
+    {
+     "emitter": "Trail1_Dup",
+     "material": "FX_Materials_p.Materials.Streak_Mat",
+     "colour": [
+      10.0,
+      5.0,
+      80.0
+     ],
+     "peak": 80.0,
+     "size_uu": 10.0,
+     "time_s": 1.57,
+     "loops": 2
+    },
+    {
+     "emitter": "Trail1_Dup",
+     "material": "FX_Materials_p.Materials.Streak_Mat",
+     "colour": [
+      10.0,
+      5.0,
+      80.0
+     ],
+     "peak": 80.0,
+     "size_uu": 10.0,
+     "time_s": 2.08,
+     "loops": 2
+    },
+    {
+     "emitter": "Sparkler",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 20.0,
+     "time_s": 1.7,
+     "loops": 1
+    },
+    {
+     "emitter": "Spray_Dup",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      15.0
+     ],
+     "peak": 15.0,
+     "size_uu": 10.0,
+     "time_s": 2.24,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.195,
+    0.148,
+    1.0
+   ],
+   "peak": 80.0,
+   "size_m": 60.0,
+   "looping": false,
+   "time_s": 2.5,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 12.7,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_PlasmaCannon_p.FX.Squib_HealGrenade_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      0.0,
+      0.0,
+      21.048
+     ],
+     "peak": 21.05,
+     "size_uu": 1800.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      0.0,
+      0.0,
+      21.048
+     ],
+     "peak": 21.05,
+     "size_uu": 1800.0,
+     "time_s": 2.1,
+     "loops": 1
+    },
+    {
+     "emitter": "RollingFire",
+     "material": "FX_Materials_p.Materials.ExplosionWhite_Anim_MAT",
+     "colour": [
+      0.0,
+      0.1,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 1600.0,
+     "time_s": 0.85,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      0.0,
+      1.0,
+      100.0
+     ],
+     "peak": 100.0,
+     "size_uu": 20.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_Collision_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      0.0,
+      1.0,
+      100.0
+     ],
+     "peak": 100.0,
+     "size_uu": 40.0,
+     "time_s": 2.2,
+     "loops": 1
+    },
+    {
+     "emitter": "lectro_Dup_Dup",
+     "material": "FX_Materials_p.Materials.arcball01_MAT",
+     "colour": [
+      0.0,
+      0.1,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 1200.0,
+     "time_s": 1.4,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.0,
+    0.008,
+    1.0
+   ],
+   "peak": 100.0,
+   "size_m": 18.0,
+   "looping": false,
+   "time_s": 2.2,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 13.3,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_Explosives_p.FX.Exp_2500cb_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "Sparks",
+     "material": "FX_Materials_p.Materials.Sparks_01_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      0.1
+     ],
+     "peak": 1.0,
+     "size_uu": 120.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_LONG",
+     "material": "FX_Materials_p.Materials.Sparks_01_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      0.1
+     ],
+     "peak": 1.0,
+     "size_uu": 40.0,
+     "time_s": 1.1,
+     "loops": 1
+    },
+    {
+     "emitter": "RollingFire_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_MAT",
+     "colour": [
+      15.0,
+      15.0,
+      15.0
+     ],
+     "peak": 15.0,
+     "size_uu": 3200.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Multiply",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      60.0,
+      60.0,
+      20.0
+     ],
+     "peak": 60.0,
+     "size_uu": 9000.0,
+     "time_s": 0.25,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Flat",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      60.0,
+      60.0,
+      20.0
+     ],
+     "peak": 60.0,
+     "size_uu": 9000.0,
+     "time_s": 0.25,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    0.403
+   ],
+   "peak": 60.0,
+   "size_m": 90.0,
+   "looping": false,
+   "time_s": 1.1,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 11.9,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Sm_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.MuzzleFlash_White_Mat",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 750.0,
+     "time_s": 1.6,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      7.0,
+      10.0,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 1800.0,
+     "time_s": 0.7,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      7.0,
+      10.0,
+      10.0
+     ],
+     "peak": 10.0,
+     "size_uu": 1800.0,
+     "time_s": 0.7,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 20.0,
+     "time_s": 0.38,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_MAT",
+     "colour": [
+      1.0,
+      2.0,
+      1.0
+     ],
+     "peak": 2.0,
+     "size_uu": 750.0,
+     "time_s": 0.25,
+     "loops": 1
+    },
+    {
+     "emitter": "Noise_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_MAT",
+     "colour": [
+      1.0,
+      2.0,
+      1.0
+     ],
+     "peak": 2.0,
+     "size_uu": 650.0,
+     "time_s": 0.42,
+     "loops": 1
+    },
+    {
+     "emitter": "Fire_A_Dup",
+     "material": "FX_Materials_p.Materials.Fire_Anim_03_MAT",
+     "colour": [
+      2.5,
+      1.25,
+      1.25
+     ],
+     "peak": 2.5,
+     "size_uu": 150.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "Fire_D_Dup",
+     "material": "FX_Materials_p.Materials.Fire_Anim_02_MAT",
+     "colour": [
+      5.0,
+      5.0,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 150.0,
+     "time_s": 1.3,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.814,
+    1.0,
+    0.945
+   ],
+   "peak": 10.0,
+   "size_m": 18.0,
+   "looping": false,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 6.9,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "explosion (radiusDamage / projectile impact)",
+   "template": "FX_Explosives_p.FX.Martyrdom_Grenade_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "Sparks",
+     "material": "FX_Materials_p.Materials.Sparks_01_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      0.1
+     ],
+     "peak": 1.0,
+     "size_uu": 60.0,
+     "time_s": 1.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_LONG",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      0.1
+     ],
+     "peak": 1.0,
+     "size_uu": 32.0,
+     "time_s": 1.1,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Rays",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      1.0,
+      0.3,
+      0.1
+     ],
+     "peak": 1.0,
+     "size_uu": 6000.0,
+     "time_s": 0.25,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Rays_Red",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      3.0,
+      2.0,
+      1.0
+     ],
+     "peak": 3.0,
+     "size_uu": 6000.0,
+     "time_s": 0.25,
+     "loops": 1
+    },
+    {
+     "emitter": "RollingFire_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Explosion_Anim_MAT",
+     "colour": [
+      15.0,
+      15.0,
+      15.0
+     ],
+     "peak": 15.0,
+     "size_uu": 1600.0,
+     "time_s": 0.45,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Multiply",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      30.0,
+      30.0,
+      10.0
+     ],
+     "peak": 30.0,
+     "size_uu": 4500.0,
+     "time_s": 0.6,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    0.967,
+    0.516
+   ],
+   "peak": 30.0,
+   "size_m": 60.0,
+   "looping": false,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 12.0,
+    "brightness": 9.9,
+    "duration_s": 1.0,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX",
+   "users": 6,
+   "emitters": [
+    {
+     "emitter": "Flare_Tall",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      5.598,
+      5.393,
+      4.982
+     ],
+     "peak": 5.6,
+     "size_uu": 75.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Long",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.55,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      20.0,
+      40.0,
+      10.0
+     ],
+     "peak": 40.0,
+     "size_uu": 100.0,
+     "time_s": 4.1,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.528,
+    1.0,
+    0.332
+   ],
+   "peak": 40.0,
+   "size_m": 1.0,
+   "looping": false,
+   "time_s": 4.1,
+   "proposal": {
+    "radius_m": 2.5,
+    "brightness": 10.7,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_TurretIonBlaster_p.FX.Impact_TurretIon_OLD",
+   "users": 3,
+   "emitters": [
+    {
+     "emitter": "Flash",
+     "material": "FX_Weapons_p.Materials.MuzzleFlash_01_MAT",
+     "colour": [
+      2.2,
+      2.1,
+      5.0
+     ],
+     "peak": 5.0,
+     "size_uu": 1500.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 1200.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 1200.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOWHole",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      4.0,
+      4.0,
+      4.0
+     ],
+     "peak": 4.0,
+     "size_uu": 225.0,
+     "time_s": 4.1,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      1.395,
+      0.996,
+      0.897
+     ],
+     "peak": 1.4,
+     "size_uu": 20.0,
+     "time_s": 1.2,
+     "loops": 1
+    },
+    {
+     "emitter": "lectro_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.arcball01_MAT",
+     "colour": [
+      2.2,
+      1.0,
+      2.0
+     ],
+     "peak": 2.2,
+     "size_uu": 280.0,
+     "time_s": 0.5,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.849,
+    0.726,
+    1.0
+   ],
+   "peak": 5.0,
+   "size_m": 15.0,
+   "looping": false,
+   "time_s": 4.1,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 5.2,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_EMPShotgun_p.FX.Squib_EMPShotgun_FX",
+   "users": 2,
+   "emitters": [
+    {
+     "emitter": "Flare_Tall_Dup",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      5.598,
+      5.393,
+      4.982
+     ],
+     "peak": 5.6,
+     "size_uu": 75.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Flat_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      3.737,
+      4.982,
+      2.491
+     ],
+     "peak": 4.98,
+     "size_uu": 675.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Long_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.55,
+     "loops": 1
+    },
+    {
+     "emitter": "EdgeGlow_Dup",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      1.627,
+      2.5,
+      1.25
+     ],
+     "peak": 2.5,
+     "size_uu": 150.0,
+     "time_s": 1.25,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      20.0,
+      40.0,
+      10.0
+     ],
+     "peak": 40.0,
+     "size_uu": 100.0,
+     "time_s": 1.1,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.54,
+    1.0,
+    0.343
+   ],
+   "peak": 40.0,
+   "size_m": 6.75,
+   "looping": false,
+   "time_s": 1.25,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 10.7,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_TurretIonBlaster_p.FX.Impact_IonTurret_FX",
+   "users": 2,
+   "emitters": [
+    {
+     "emitter": "Flare_Tall",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      5.598,
+      5.393,
+      4.982
+     ],
+     "peak": 5.6,
+     "size_uu": 112.5,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Long",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 4.0,
+     "time_s": 0.55,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      20.0,
+      40.0,
+      10.0
+     ],
+     "peak": 40.0,
+     "size_uu": 100.0,
+     "time_s": 4.1,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.528,
+    1.0,
+    0.332
+   ],
+   "peak": 40.0,
+   "size_m": 1.12,
+   "looping": false,
+   "time_s": 4.1,
+   "proposal": {
+    "radius_m": 2.8,
+    "brightness": 10.7,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_RepairBeam_p.FX.Squib_TurretRepairEnemy_FX",
+   "users": 2,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.MuzzleFlash_White_Mat",
+     "colour": [
+      0.5,
+      0.6,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 900.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.25,
+      1.0,
+      1.5
+     ],
+     "peak": 1.5,
+     "size_uu": 1200.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOWHole",
+     "material": "FX_Materials_p.Materials.ParticleBase_BW_MAT",
+     "colour": [
+      0.531,
+      0.492,
+      0.676
+     ],
+     "peak": 0.68,
+     "size_uu": 450.0,
+     "time_s": 1.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      0.498,
+      0.498,
+      1.993
+     ],
+     "peak": 1.99,
+     "size_uu": 5.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "ElectricRing",
+     "material": "FX_Materials_p.Materials.ElectroRing01_Mat",
+     "colour": [
+      1.0,
+      1.5,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 400.0,
+     "time_s": 0.35,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.527,
+    0.571,
+    1.0
+   ],
+   "peak": 2.0,
+   "size_m": 12.0,
+   "looping": false,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 3.2,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_AssaultRifle_p.FX.Impact_HeavyMG_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "Flare_Tall",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      5.598,
+      5.393,
+      4.982
+     ],
+     "peak": 5.6,
+     "size_uu": 75.0,
+     "time_s": 0.6,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      3.737,
+      4.982,
+      2.491
+     ],
+     "peak": 4.98,
+     "size_uu": 675.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Flat",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      3.737,
+      4.982,
+      2.491
+     ],
+     "peak": 4.98,
+     "size_uu": 675.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 6.0,
+     "time_s": 0.95,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Long",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      14.948,
+      29.894,
+      9.965
+     ],
+     "peak": 29.89,
+     "size_uu": 6.0,
+     "time_s": 0.55,
+     "loops": 1
+    },
+    {
+     "emitter": "EdgeGlow",
+     "material": "FX_Materials_p.Materials.flareball01_MAT",
+     "colour": [
+      1.627,
+      2.5,
+      1.25
+     ],
+     "peak": 2.5,
+     "size_uu": 150.0,
+     "time_s": 4.8,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      20.0,
+      40.0,
+      10.0
+     ],
+     "peak": 40.0,
+     "size_uu": 100.0,
+     "time_s": 3.1,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.549,
+    1.0,
+    0.35
+   ],
+   "peak": 40.0,
+   "size_m": 6.75,
+   "looping": false,
+   "time_s": 4.8,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 10.7,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_HeavyPistol_p.FX.Squib_HeavyPistol_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "Flames",
+     "material": "FX_Materials_p.Materials.Fire_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 179.6,
+     "time_s": 1.1,
+     "loops": 1
+    },
+    {
+     "emitter": "bulletholeglow_Dup",
+     "material": "FX_Materials_p.Materials.ParticleBase_BW_MAT",
+     "colour": [
+      50.0,
+      50.0,
+      50.0
+     ],
+     "peak": 50.0,
+     "size_uu": 200.0,
+     "time_s": 1.75,
+     "loops": 1
+    },
+    {
+     "emitter": "Flame",
+     "material": "FX_Materials_p.Materials.Fire_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 35.9,
+     "time_s": 2.5,
+     "loops": 1
+    },
+    {
+     "emitter": "Spark_Base",
+     "material": "FX_Materials_p.Materials.Sparks_Base_Mat",
+     "colour": [
+      0.996,
+      0.996,
+      0.996
+     ],
+     "peak": 1.0,
+     "size_uu": 400.0,
+     "time_s": 0.28,
+     "loops": 1
+    },
+    {
+     "emitter": "DirectionalBase",
+     "material": "FX_Materials_p.Materials.Sparks_Base_Mat",
+     "colour": [
+      0.996,
+      0.996,
+      0.996
+     ],
+     "peak": 1.0,
+     "size_uu": 500.0,
+     "time_s": 0.28,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 25.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_Collision",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 25.0,
+     "time_s": 2.2,
+     "loops": 1
+    },
+    {
+     "emitter": "bulletholeglow",
+     "material": "FX_Materials_p.Materials.ParticleBase_BW_MAT",
+     "colour": [
+      50.0,
+      50.0,
+      50.0
+     ],
+     "peak": 50.0,
+     "size_uu": 200.0,
+     "time_s": 5.0,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.981,
+    0.981,
+    1.0
+   ],
+   "peak": 50.0,
+   "size_m": 5.0,
+   "looping": false,
+   "time_s": 5.0,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 11.3,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_IonBlaster_p.FX.Impact_IonBlaster_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Weapons_p.Materials.MuzzleFlash_01_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 225.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      8.0,
+      8.0,
+      8.0
+     ],
+     "peak": 8.0,
+     "size_uu": 750.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      8.0,
+      8.0,
+      8.0
+     ],
+     "peak": 8.0,
+     "size_uu": 750.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      0.996,
+      0.996,
+      0.996
+     ],
+     "peak": 1.0,
+     "size_uu": 10.0,
+     "time_s": 0.8,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "peak": 8.0,
+   "size_m": 7.5,
+   "looping": false,
+   "time_s": 0.8,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 6.3,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "impact (spawnImpact)",
+   "template": "FX_RepairBeam_p.FX.Squib_RepairEnemy_FX",
+   "users": 1,
+   "emitters": [
+    {
+     "emitter": "GLOW_Dup",
+     "material": "FX_Materials_p.Materials.MuzzleFlash_White_Mat",
+     "colour": [
+      0.5,
+      0.6,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 525.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOW",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      1.25,
+      1.0,
+      1.5
+     ],
+     "peak": 1.5,
+     "size_uu": 1200.0,
+     "time_s": 0.35,
+     "loops": 1
+    },
+    {
+     "emitter": "GLOWHole",
+     "material": "FX_Materials_p.Materials.ParticleBase_BW_MAT",
+     "colour": [
+      0.531,
+      0.492,
+      0.676
+     ],
+     "peak": 0.68,
+     "size_uu": 450.0,
+     "time_s": 1.6,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_bolts_Dup",
+     "material": "FX_Materials_p.Materials.Spark_Tail_MAT",
+     "colour": [
+      0.498,
+      0.498,
+      1.993
+     ],
+     "peak": 1.99,
+     "size_uu": 5.0,
+     "time_s": 0.8,
+     "loops": 1
+    },
+    {
+     "emitter": "ElectricRing",
+     "material": "FX_Materials_p.Materials.ElectroRing01_Mat",
+     "colour": [
+      1.0,
+      1.5,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 400.0,
+     "time_s": 0.35,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    0.527,
+    0.571,
+    1.0
+   ],
+   "peak": 2.0,
+   "size_m": 12.0,
+   "looping": false,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 3.2,
+    "duration_s": 0.25,
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.Afterburner_D_FX",
+   "users": 25,
+   "emitters": [
+    {
+     "emitter": "thruster_streak_Dup",
+     "material": "FX_Navigation_p.Afterburn_02_MAT",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 21.0,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "thruster_Energon_Dup",
+     "material": "FX_Navigation_p.Afterburn_Circuitry_02_MAT",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 18.0,
+     "time_s": 0.9,
+     "loops": 1
+    },
+    {
+     "emitter": "Particle Emitter_Dup",
+     "material": "FX_Materials_p.Materials.ElectroRing01_Mat",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 200.0,
+     "time_s": 0.4,
+     "loops": 1
+    },
+    {
+     "emitter": "thruster_base_Dup_Dup",
+     "material": "FX_Navigation_p.Afterburn_02_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 8.0,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": "thruster_Energon_Dup_Dup",
+     "material": "FX_Navigation_p.Afterburn_Circuitry_02_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 7.0,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      12.0,
+      6.0,
+      3.0
+     ],
+     "peak": 12.0,
+     "size_uu": 600.0,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_burst",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      15.0,
+      12.0,
+      12.0
+     ],
+     "peak": 15.0,
+     "size_uu": 8.0,
+     "time_s": 1.3,
+     "loops": 1
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      12.0,
+      6.0,
+      3.0
+     ],
+     "peak": 12.0,
+     "size_uu": 200.0,
+     "time_s": 1.0,
+     "loops": 0
+    },
+    {
+     "emitter": "MOD_Glow",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 160.0,
+     "time_s": 1.0,
+     "loops": 0
+    },
+    {
+     "emitter": "lightcone_Dup",
+     "material": "FX_Materials_p.MatInst.LightCylinder_Rays_MAT_INST",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 0.6,
+     "time_s": 1.5,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    1.0,
+    0.722,
+    0.611
+   ],
+   "peak": 15.0,
+   "size_m": 6.0,
+   "looping": true,
+   "time_s": 1.5,
+   "proposal": {
+    "radius_m": 6.0,
+    "brightness": 8.0,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.FX.Trails_Jet_D_FX",
+   "users": 20,
+   "emitters": [
+    {
+     "emitter": "Trail",
+     "material": "FX_Materials_p.Materials.Tracer_MOD_MAT",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 14.0,
+     "time_s": 1.6,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "peak": 2.0,
+   "size_m": 0.14,
+   "looping": true,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 1.0,
+    "brightness": 3.2,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.Afterburner_A_FX",
+   "users": 19,
+   "emitters": [
+    {
+     "emitter": "thruster_streak_Dup",
+     "material": "FX_Navigation_p.Afterburn_02_MAT",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 21.0,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "thruster_Energon_Dup",
+     "material": "FX_Navigation_p.Afterburn_Circuitry_02_MAT",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 18.0,
+     "time_s": 0.9,
+     "loops": 1
+    },
+    {
+     "emitter": "Particle Emitter_Dup",
+     "material": "FX_Materials_p.Materials.ElectroRing01_Mat",
+     "colour": [
+      3.0,
+      3.0,
+      3.0
+     ],
+     "peak": 3.0,
+     "size_uu": 200.0,
+     "time_s": 0.4,
+     "loops": 1
+    },
+    {
+     "emitter": "thruster_base_Dup_Dup",
+     "material": "FX_Navigation_p.Afterburn_02_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 8.0,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": "thruster_Energon_Dup_Dup",
+     "material": "FX_Navigation_p.Afterburn_Circuitry_02_MAT",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 7.0,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      12.0,
+      6.0,
+      3.0
+     ],
+     "peak": 12.0,
+     "size_uu": 600.0,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "Sparks_burst",
+     "material": "FX_Materials_p.Materials.Spark_MAT",
+     "colour": [
+      15.0,
+      12.0,
+      12.0
+     ],
+     "peak": 15.0,
+     "size_uu": 8.0,
+     "time_s": 1.3,
+     "loops": 1
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      12.0,
+      6.0,
+      3.0
+     ],
+     "peak": 12.0,
+     "size_uu": 200.0,
+     "time_s": 1.0,
+     "loops": 0
+    },
+    {
+     "emitter": "MOD_Glow",
+     "material": "FX_Materials_p.Materials.Glow_Mod_MAT",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 160.0,
+     "time_s": 1.0,
+     "loops": 0
+    },
+    {
+     "emitter": "lightcone_Dup",
+     "material": "FX_Materials_p.MatInst.LightCylinder_Rays_MAT_INST",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 0.6,
+     "time_s": 1.5,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    1.0,
+    0.722,
+    0.611
+   ],
+   "peak": 15.0,
+   "size_m": 6.0,
+   "looping": true,
+   "time_s": 1.5,
+   "proposal": {
+    "radius_m": 6.0,
+    "brightness": 8.0,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.Booster_1_FX",
+   "users": 13,
+   "emitters": [
+    {
+     "emitter": null,
+     "material": "FX_Navigation_p.Boostermaterial_02_MAT",
+     "colour": [
+      0.5,
+      0.5,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 4.8,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": null,
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      0.6,
+      0.8,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 100.0,
+     "time_s": 2.5,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    0.55,
+    0.65,
+    1.0
+   ],
+   "peak": 1.0,
+   "size_m": 1.0,
+   "looping": true,
+   "time_s": 2.5,
+   "proposal": {
+    "radius_m": 2.5,
+    "brightness": 2.0,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.FX.Trails_Jet_A_FX",
+   "users": 12,
+   "emitters": [
+    {
+     "emitter": "Trail_Dup",
+     "material": "FX_Materials_p.Materials.Tracer_MOD_MAT",
+     "colour": [
+      2.0,
+      2.0,
+      2.0
+     ],
+     "peak": 2.0,
+     "size_uu": 14.0,
+     "time_s": 1.6,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "peak": 2.0,
+   "size_m": 0.14,
+   "looping": true,
+   "time_s": 1.6,
+   "proposal": {
+    "radius_m": 1.0,
+    "brightness": 3.2,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "vehicle boost (BoostFx socket)",
+   "template": "FX_Navigation_p.bumble_boost_small1_FX",
+   "users": 10,
+   "emitters": [
+    {
+     "emitter": "thruster",
+     "material": "FX_Navigation_p.Boostermaterial_02_MAT",
+     "colour": [
+      0.993,
+      0.583,
+      0.049
+     ],
+     "peak": 0.99,
+     "size_uu": 10.3,
+     "time_s": 1.0,
+     "loops": 1
+    },
+    {
+     "emitter": "Particle Emitter_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      15.108,
+      4.5,
+      0.15
+     ],
+     "peak": 15.11,
+     "size_uu": 78.2,
+     "time_s": 0.9,
+     "loops": 1
+    },
+    {
+     "emitter": "loopcone",
+     "material": "FX_Navigation_p.Boostermaterial_02_MAT",
+     "colour": [
+      1.069,
+      0.592,
+      0.159
+     ],
+     "peak": 1.07,
+     "size_uu": 5.5,
+     "time_s": 1.5,
+     "loops": 0
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      0.8,
+      0.8,
+      0.3
+     ],
+     "peak": 0.8,
+     "size_uu": 91.7,
+     "time_s": 1.1,
+     "loops": 0
+    },
+    {
+     "emitter": "Cone_thrust_Dup",
+     "material": "FX_Navigation_p.bumble_boostcone_MAT",
+     "colour": [
+      15.108,
+      4.5,
+      0.15
+     ],
+     "peak": 15.11,
+     "size_uu": 291.8,
+     "time_s": 0.9,
+     "loops": 1
+    }
+   ],
+   "colour": [
+    1.0,
+    0.332,
+    0.024
+   ],
+   "peak": 15.11,
+   "size_m": 2.92,
+   "looping": true,
+   "time_s": 1.5,
+   "proposal": {
+    "radius_m": 6.0,
+    "brightness": 8.0,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "pickup factory",
+   "template": "FX_Pickups_p.FX.Pickup_FX",
+   "users": "ammo / weapon / objective factories",
+   "emitters": [
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "FX_Materials_p.Materials.LightVolume_WepPickup_MAT",
+     "colour": [
+      0.5,
+      0.4,
+      0.15
+     ],
+     "peak": 0.5,
+     "size_uu": 2.0,
+     "time_s": 4.0,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    1.0,
+    0.8,
+    0.3
+   ],
+   "peak": 0.5,
+   "size_m": 0.02,
+   "looping": true,
+   "time_s": 4.0,
+   "proposal": {
+    "radius_m": 1.0,
+    "brightness": 1.2,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "pickup factory",
+   "template": "FX_Pickups_p.FX.HealthPickup_FX",
+   "users": "health factories",
+   "emitters": [
+    {
+     "emitter": "GlowMut",
+     "material": "FX_Materials_p.Materials.Glow_Mod_Depth_MAT",
+     "colour": [
+      0.0,
+      12.5,
+      25.0
+     ],
+     "peak": 25.0,
+     "size_uu": 606.7,
+     "time_s": 2.0,
+     "loops": 0
+    },
+    {
+     "emitter": "GlowADD",
+     "material": "FX_Materials_p.Materials.ParticleBase_BW_MAT",
+     "colour": [
+      0.0,
+      15.0,
+      50.0
+     ],
+     "peak": 50.0,
+     "size_uu": 323.6,
+     "time_s": 1.0,
+     "loops": 0
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 0.8,
+     "time_s": 1.0,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    0.013,
+    0.375,
+    1.0
+   ],
+   "peak": 50.0,
+   "size_m": 6.07,
+   "looping": true,
+   "time_s": 2.0,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 11.3,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  },
+  {
+   "kind": "pickup factory",
+   "template": "FX_Pickups_p.FX.OvershieldPickup_FX",
+   "users": "overshield factories",
+   "emitters": [
+    {
+     "emitter": "GlowMut",
+     "material": "FX_Materials_p.Materials.Glow_Mod_Depth_MAT",
+     "colour": [
+      0.0,
+      7.5,
+      25.0
+     ],
+     "peak": 25.0,
+     "size_uu": 1011.2,
+     "time_s": 2.0,
+     "loops": 0
+    },
+    {
+     "emitter": "GlowADD",
+     "material": "FX_Materials_p.Materials.Basic_Particle_Add_MAT",
+     "colour": [
+      0.0,
+      7.5,
+      25.0
+     ],
+     "peak": 25.0,
+     "size_uu": 505.6,
+     "time_s": 2.0,
+     "loops": 0
+    },
+    {
+     "emitter": "Particle Emitter_Dup_Dup",
+     "material": "",
+     "colour": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "peak": 1.0,
+     "size_uu": 0.7,
+     "time_s": 1.0,
+     "loops": 0
+    }
+   ],
+   "colour": [
+    0.02,
+    0.314,
+    1.0
+   ],
+   "peak": 25.0,
+   "size_m": 10.11,
+   "looping": true,
+   "time_s": 2.0,
+   "proposal": {
+    "radius_m": 4.0,
+    "brightness": 9.4,
+    "duration_s": "continuous",
+    "falloff": 2.0
+   }
+  }
+ ]
+}
