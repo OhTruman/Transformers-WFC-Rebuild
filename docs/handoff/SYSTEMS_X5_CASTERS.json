@@ -1,0 +1,409 @@
+{
+ "projectiles": [
+  {
+   "weapon": "FlakGrenades",
+   "mesh": "content/WEP_Grenade_p/WEP_Grenade_Flak_STAT.gltf",
+   "size_m": [
+    0.41,
+    0.67,
+    0.41
+   ],
+   "drawn": true
+  },
+  {
+   "weapon": "FlashBangs",
+   "mesh": "content/WEP_Grenade_p/WEP_Grenade_Flashbang_STAT.gltf",
+   "size_m": [
+    0.41,
+    0.67,
+    0.41
+   ],
+   "drawn": true
+  },
+  {
+   "weapon": "HealGrenades",
+   "mesh": "content/WEP_Grenade_p/WEP_Grenade_Heal_STAT.gltf",
+   "size_m": [
+    0.41,
+    0.67,
+    0.41
+   ],
+   "drawn": true
+  }
+ ],
+ "deployables": [
+  {
+   "ability": "Barrier",
+   "class": "SkeletalMesh",
+   "mesh": "WEP_Shield_p.Barrier.WEP_Barrier_SKEL",
+   "gltf": "content/WEP_Shield_p/Barrier/WEP_Barrier_SKEL.gltf",
+   "size_m": [
+    1.39,
+    8.25,
+    17.66
+   ],
+   "drawn": true
+  },
+  {
+   "ability": "GuidedMissile",
+   "class": "StaticMesh",
+   "mesh": "WEP_Rocket_p.WEP_OmegaRocket_STAT",
+   "gltf": "content/WEP_Rocket_p/WEP_OmegaRocket_STAT.gltf",
+   "size_m": [
+    3.87,
+    2.1,
+    2.17
+   ],
+   "drawn": false
+  },
+  {
+   "ability": "Killstreak_GuidedMissileStreak",
+   "class": "StaticMesh",
+   "mesh": "WEP_Rocket_p.WEP_OmegaRocket_STAT",
+   "gltf": "content/WEP_Rocket_p/WEP_OmegaRocket_STAT.gltf",
+   "size_m": [
+    3.87,
+    2.1,
+    2.17
+   ],
+   "drawn": false
+  },
+  {
+   "ability": "SpawnAmmoCrate",
+   "class": "SkeletalMesh",
+   "mesh": "WEP_TurretIonGun_p.WEP_TurretIonGun_SKEL",
+   "gltf": "content/WEP_TurretIonGun_p/WEP_TurretIonGun_SKEL.gltf",
+   "size_m": [
+    5.23,
+    1.49,
+    1.51
+   ],
+   "drawn": false
+  },
+  {
+   "ability": "SpawnAmmoCrate",
+   "class": "StaticMesh",
+   "mesh": "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT",
+   "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+   "size_m": [
+    0.61,
+    0.88,
+    1.28
+   ],
+   "drawn": false
+  },
+  {
+   "ability": "SpawnSentry",
+   "class": "StaticMesh",
+   "mesh": "WEP_Rocket_p.WEP_StandardRocket_STAT",
+   "gltf": "content/WEP_Rocket_p/WEP_StandardRocket_STAT.gltf",
+   "size_m": [
+    2.78,
+    0.54,
+    0.62
+   ],
+   "drawn": false
+  },
+  {
+   "ability": "SpawnSentry (World::loadSentry)",
+   "class": "SkeletalMesh",
+   "mesh": "WEP_SentryAbility_p.WEP_SentryDeploy_SKEL",
+   "gltf": "content/WEP_SentryAbility_p/WEP_SentryDeploy_SKEL.gltf",
+   "size_m": [
+    5.2,
+    2.31,
+    2.75
+   ],
+   "drawn": true
+  },
+  {
+   "ability": "KamikazeMines (minepooper / Leader grenade)",
+   "class": "StaticMesh",
+   "mesh": "WEP_KamikazeMine_p (weapon mesh)",
+   "gltf": "VerticalSlice/Weapons/KamikazeMines/weapon.glb",
+   "size_m": [
+    2.54,
+    1.19,
+    0.96
+   ],
+   "drawn": false,
+   "note": "World never draws mines_ (Gameplay item)"
+  }
+ ],
+ "pickups": {
+  "MP_ESC_BrokenHope": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 3,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   }
+  },
+  "MP_ESC_Remnant": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 6,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   }
+  },
+  "MP_IAC_Berth": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 5,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 3,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 2,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_IAC_Rust": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 6,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_IAC_Seed": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 9,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_IAC_Streets": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 14,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_KON_Molten": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 16,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_ORB_Debris": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 5,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_UND_Complex": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 10,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  },
+  "MP_UND_Gorge": {
+   "PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT": {
+    "count": 7,
+    "gltf": "content/PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf",
+    "size_m": [
+     0.61,
+     0.88,
+     1.28
+    ]
+   },
+   "WEP_CodeOfPower_p.WEP_CodeOfPower2H_SKEL": {
+    "count": 2,
+    "gltf": "content/WEP_CodeOfPower_p/WEP_CodeOfPower2H_SKEL.gltf",
+    "size_m": [
+     1.75,
+     4.55,
+     0.68
+    ]
+   },
+   "PROP_NEU_Pickups_p.MPBomb.NEU_MPBomb_SKEL": {
+    "count": 1,
+    "gltf": "content/PROP_NEU_Pickups_p/MPBomb/NEU_MPBomb_SKEL.gltf",
+    "size_m": [
+     2.19,
+     3.11,
+     1.25
+    ]
+   }
+  }
+ },
+ "effect_meshes": [
+  {
+   "mesh": "content/FX_GrenadeLauncher_p/GrenadeAmmo_STAT.gltf",
+   "what": "shell casings (Shell_AssaultRifle_FX: 1 per shot, 1 s)",
+   "size_m": [
+    0.28,
+    0.2,
+    0.2
+   ]
+  },
+  {
+   "mesh": "content/FX_IonBlaster_p/IonBlaster_Mag_STAT.gltf",
+   "what": "dropped magazines (Magazine_IonBlaster_FX: 1 per reload, 3 s)",
+   "size_m": [
+    0.38,
+    0.13,
+    0.09
+   ]
+  }
+ ]
+}
