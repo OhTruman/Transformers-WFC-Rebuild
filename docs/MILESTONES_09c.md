@@ -1799,3 +1799,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   ground vehicles (both AIs, bot steering only; probe position + v x 0.6 s; off-mesh + no floor within 2.5 m below ->
   brake / no boost, steer to the waypoint; drop / jump links exempt; the original's vehicle AI nav is unrecovered),
   Classic re-baseline, gate + activation counts per map / seed. Systems' rtcheck row rerunning (setup slip, no GPU use).
+  2026-10-16 13:11 verify_slim RT gate on 04c51243 (Systems): PASS every row incl. rtcheck.rtlights (effect lights on,
+  headlights on) and rtcheck.defaults 14 / 14 (tone on, lmspecgain 2.5, tlgain 2.0, gisat 2.5, giemissive 1.0 at that
+  head, charao 3.0, softparticles, tiled, rows 1 / 8 / 6 / 2 / 5, origspec); the run's exit 1 = the HD-less dry-run
+  probe (verify predates the probe patch). Rendering: identity on int_cand5 -> push 8d50190a (item 7) -> RESUME.
