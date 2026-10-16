@@ -2657,10 +2657,12 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
                           "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
                           "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
+                          "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
                           "uniform int uTLVisOn; uniform sampler2D uTLVis;   // (Realistic, characters: the RT visibility, LightVis bit 1)\n"
                           "vec3 wfcTransientLights(vec3 N, MatOut o) {\n"
                           "    vec4 tv = uTLVisOn != 0 ? floor(mod(floor(texelFetch(uTLVis, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5), 4.0) / 2.0) : vec4(1.0);\n"
                           "    vec3 V = normalize(uCamPos - vPos), Rv = reflect(-V, N), s = vec3(0.0);\n"
+                          "    bool spec = max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) > 0.0;   // (most world materials: none)\n"
                           "    for (int k = 0; k < 8; ++k) {\n"
                           "        if (k >= uTLN) break;\n"
                           "        if (((uTLMask >> k) & 1) == 0) continue;\n"
@@ -2669,9 +2671,13 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                           "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
                           "        float att = pow(clamp(1.0 - x2, 0.0, 1.0), uTLCol[k].w);\n"
                           "        if (att <= 0.0) continue;\n"
-                          "        vec3 L = normalize(d);\n"
-                          "        float sp = pow(max(clamp(dot(Rv, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));\n"
-                          "        s += (o.DiffuseColor * max(dot(N, L), 0.0) + o.SpecularColor * sp) * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n"
+                          "        vec3 L = d * inversesqrt(max(dot(d, d), 1e-8));\n"
+                          "        if (uTLDir[k].w > -1.5) { float cn = clamp((dot(-L, uTLDir[k].xyz) - uTLDir[k].w) / max(uTLCosI[k >> 2][k & 3] - uTLDir[k].w, 1e-4), 0.0, 1.0); att *= cn * cn; if (att <= 0.0) continue; }\n"
+                          "        float ndl = max(dot(N, L), 0.0);\n"
+                          "        if (ndl <= 0.0 && !spec) continue;\n"
+                          "        vec3 lit = o.DiffuseColor * ndl;\n"
+                          "        if (spec) lit += o.SpecularColor * pow(max(clamp(dot(Rv, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));\n"
+                          "        s += lit * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n"
                           "    }\n    return s;\n}\n");
         }
     }
@@ -2894,7 +2900,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.uViewProj = U("uViewProj"); P.uModel = U("uModel"); P.uCamPos = U("uCamPos"); P.uTime = U("uTime");
     P.uTwoSided = U("uTwoSided"); P.uClip = U("uClip"); P.uMasked = U("uMasked"); P.uLit = U("uLit");
     P.uTLN = U("uTLN"); P.uTLPos = U("uTLPos"); P.uTLCol = U("uTLCol"); P.uTLVisOn = U("uTLVisOn"); P.uTLVis = U("uTLVis");
-    P.uTLMask = U("uTLMask"); P.uTLCut = U("uTLCut");
+    P.uTLMask = U("uTLMask"); P.uTLCut = U("uTLCut"); P.uTLDir = U("uTLDir"); P.uTLCosI = U("uTLCosI");
     P.uLMCoord = U("uLMCoord"); P.uLMScale = U("uLMScale"); P.uAmb = U("uAmb"); P.uNumLights = U("uNumLights");
     P.uLPos = U("uLPos"); P.uLDir = U("uLDir"); P.uLCol = U("uLCol"); P.uLSpot = U("uLSpot");
     P.uFogOn = U("uFogOn"); P.uFogMaxH = U("uFogMaxH"); P.uFogScale = U("uFogScale"); P.uFogStart = U("uFogStart");
@@ -3675,6 +3681,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
             Uniform1i(P.uTLN, tlN_);
             if (tlN_ > 0) {
                 Uniform4fv(P.uTLPos, 8, &tlPos_[0][0]); Uniform4fv(P.uTLCol, 8, &tlCol_[0][0]); Uniform4fv(P.uTLCut, 2, tlCut_);
+                Uniform4fv(P.uTLDir, 8, &tlDir_[0][0]); Uniform4fv(P.uTLCosI, 2, tlCosI_);
                 Uniform1i(P.uTLMask, 0xFF);                // (per-draw masks narrow it in drawSubs)
             }
             const bool vis = tlN_ > 0 && inDynamicDraw_ && rtShadowLightsOn() && rtMaskActive_ && rtTargets_.lightVis;
@@ -7799,10 +7806,17 @@ void Pipeline::spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& faci
     }
 }
 
-void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
+void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent,
+                                 const core::Vec3* spotDir, float cosInner, float cosOuter) {
     if (!(radius > 0.0f) || !std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z) || tlights_.size() >= 256) return;
     if (!(color.x > 0.0f || color.y > 0.0f || color.z > 0.0f)) return;
-    tlights_.push_back({pos, color, radius, std::max(falloffExponent, 0.0f)});
+    TransientLight L{pos, color, radius, std::max(falloffExponent, 0.0f)};
+    if (spotDir && core::length(*spotDir) > 1e-6f) {   // (v3 row 3) a spot: its axis and cone
+        L.dir = core::normalize(*spotDir);
+        L.cosO = std::min(std::max(cosOuter, -1.0f), 0.9999f);
+        L.cosI = std::min(std::max(cosInner, L.cosO + 1e-4f), 1.0f);
+    }
+    tlights_.push_back(L);
 }
 
 // (item 4, at the frame start: camera set) the lights collected since the last frame start; the 8 that reach the camera
@@ -7823,6 +7837,16 @@ void Pipeline::selectTransientLights() {
     std::vector<std::pair<float, size_t>> rank;
     for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
         const TransientLight& L = tlightsDraw_[i];
+        {   // off-screen: its cull sphere (falloff < 1/512) outside a frustum plane lights no visible pixel
+            const float cut = L.falloff > 1e-3f ? std::sqrt(1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff)) * L.radius : L.radius;
+            bool out = false;
+            for (int f = 0; f < 6 && !out; ++f) {
+                const float* pl = frustum_[f];
+                const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+                if (len > 0.0f && pl[0] * L.pos.x + pl[1] * L.pos.y + pl[2] * L.pos.z + pl[3] < -cut * len) out = true;
+            }
+            if (out) continue;
+        }
         const float d = core::length(L.pos - camPos_) / L.radius;
         const float reach = std::max(0.0f, 1.0f - std::min(d, 4.0f) * 0.25f);   // (a light near the camera ranks high)
         rank.push_back({-(L.color.x + L.color.y + L.color.z) * (0.1f + reach), i});
@@ -7835,6 +7859,8 @@ void Pipeline::selectTransientLights() {
         tlCol_[tlN_][0] = L.color.x; tlCol_[tlN_][1] = L.color.y; tlCol_[tlN_][2] = L.color.z; tlCol_[tlN_][3] = L.falloff;
         // (the cull sphere: falloff pow(1 - x^2, e) < 1/512 past x^2 = 1 - (1/512)^(1/e); e = 75 -> 0.28 of the radius)
         tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
+        tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
+        tlCosI_[tlN_] = L.cosI;
         ++tlN_;
     }
 }
@@ -8185,7 +8211,6 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
-    selectTransientLights();                           // (item 4) the transient lights collected since the last frame start
     znear_ = cam.znear; zfar_ = cam.zfar;
     if (motionVectorsOn()) {
         detectCameraCut(cam);
@@ -8226,6 +8251,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
             for (int c = 0; c < 4; ++c) pl[c] = row(3, c) + sg * row(i, c);
         }
     }
+    selectTransientLights();                           // (item 4) after the frustum: lights whose cull sphere is off-screen are dropped
 }
 
 // Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,

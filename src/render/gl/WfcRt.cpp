@@ -56,6 +56,7 @@ uniform vec4 uSLCol[4];   // calibrated rgb, w: falloff exponent (< 0: linear)
 uniform vec4 uSLDir[4];   // forward, w: cos(outer) (-2 = point)
 uniform vec4 uSLCosI;
 uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // (item 4) the transient lights (xyz, 1 / radius; rgb, falloff)
+uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // (v3 row 3) spot axis + cos(outer) (-2 = point); cos(inner)
 // (v3 row 2) a character's sun shadow on the world removes the sun's share of the pixel's irradiance (the R1 fit: k x sun_linear
 // x N.L^p against the decoded lightmap irradiance) instead of darkening to the map's ModShadowColor
 uniform int uSunShare; uniform vec3 uSunE; uniform vec3 uToSun; uniform float uSunP;
@@ -118,6 +119,7 @@ void main() {
                 if (k >= uTLN) break;
                 vec3 d = uTLPos[k].xyz - P, dn = d * uTLPos[k].w;
                 float att = pow(clamp(1.0 - dot(dn, dn), 0.0, 1.0), uTLCol[k].w);
+                if (uTLDir[k].w > -1.5) { float cn = clamp((dot(-normalize(d), uTLDir[k].xyz) - uTLDir[k].w) / max(uTLCosI[k >> 2][k & 3] - uTLDir[k].w, 1e-4), 0.0, 1.0); att *= cn * cn; }
                 float e = dot(uTLCol[k].rgb, vec3(0.2126, 0.7152, 0.0722)) * att * abs(dot(N, normalize(d)));
                 eAll += e;
                 if (k < 4 && tv[k] < 0.5) eBlocked += e;
@@ -962,7 +964,8 @@ void Pipeline::rtDynMid() {
             Uniform2f(cachedUniformLocation(cp, "uSize"), (float)vpW_, (float)vpH_);
         }
         Uniform1i(cachedUniformLocation(cp, "uTLN"), tlOk ? tlN_ : 0);
-        if (tlOk) { Uniform4fv(cachedUniformLocation(cp, "uTLPos"), 8, &tlPos_[0][0]); Uniform4fv(cachedUniformLocation(cp, "uTLCol"), 8, &tlCol_[0][0]); }
+        if (tlOk) { Uniform4fv(cachedUniformLocation(cp, "uTLPos"), 8, &tlPos_[0][0]); Uniform4fv(cachedUniformLocation(cp, "uTLCol"), 8, &tlCol_[0][0]);
+                    Uniform4fv(cachedUniformLocation(cp, "uTLDir"), 8, &tlDir_[0][0]); Uniform4fv(cachedUniformLocation(cp, "uTLCosI"), 2, tlCosI_); }
     }
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);

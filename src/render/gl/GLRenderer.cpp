@@ -1782,6 +1782,10 @@ public:
     void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) override {
         if (wfc_.active()) wfc_.addTransientLight(pos, color, radius, falloffExponent);
     }
+    void addTransientSpot(const core::Vec3& pos, const core::Vec3& dir, const core::Vec3& color, float radius, float falloffExponent,
+                          float cosInner, float cosOuter) override {
+        if (wfc_.active()) wfc_.addTransientLight(pos, color, radius, falloffExponent, &dir, cosInner, cosOuter);
+    }
 
     void drawParticles(const ParticleBatch& b) override {
         if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)

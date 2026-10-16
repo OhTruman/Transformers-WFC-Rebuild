@@ -574,6 +574,12 @@ public:
     virtual void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
         (void)pos; (void)color; (void)radius; (void)falloffExponent;
     }
+    // A transient SPOT light (v3 row 3: vehicle headlights, Realistic): as addTransientLight plus its unit direction and the
+    // cone (cosines of the inner / outer half angles; full brightness inside the inner, a smooth fade to the outer).
+    virtual void addTransientSpot(const core::Vec3& pos, const core::Vec3& dir, const core::Vec3& color, float radius,
+                                  float falloffExponent, float cosInner, float cosOuter) {
+        (void)pos; (void)dir; (void)color; (void)radius; (void)falloffExponent; (void)cosInner; (void)cosOuter;
+    }
 
     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
