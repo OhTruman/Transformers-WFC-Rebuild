@@ -1745,3 +1745,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1.1 %). X3 v2 still NOT showable (faint haze, no shafts / halos in these frames: Streets 0.96, Gorge 0.96, Molten
   0.94). DECISION (b): X3 parked after v2; order = Molten lava source, item 7, row 7 / effect-light calibration, X3 v3
   on the authored open-sky views (lamp picks by screen coverage), eye pass. Views rerun on int_cand4 running.
+  2026-10-16 12:40 AUTHORED VIEWS on int_cand4 (25 views x Off / Realistic / Enhanced at 1440p via WFC_BOOT_PROFILE; all
+  checks pass): mean contrast vs Off, Realistic | Enhanced: firefight 1.26 | 1.29, street under buildings 1.25 |
+  1.27, dark interior 1.44 | 1.48 (little brightness, +6.5), reflective floor 1.88 | 1.85, vehicle lane 1.37 | 1.46;
+  Enhanced adds on top in 4 of 5 view types. User sent views_507 (Debris). Rendering RESUMED (identity -> push of the
+  cull fix + defaults line -> Molten lava-facing gains -> item 7 -> calibration -> X3 v3 on the views -> eye pass).
+  Experimental: gate base += walkable (f19e0052@src/game) building. A2_KON doc e4f1912a; D1_ORB (last) running.
