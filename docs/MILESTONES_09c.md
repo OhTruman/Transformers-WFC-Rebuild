@@ -1775,3 +1775,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   same match True vs f19e0052, control False). verify_slim RealisticDefaults giemissive 4 paired with 584c873b
   (a981db7f). Systems' rtcheck.defaults RT row runs at Rendering's next boundary (04c51243 exe, 1.00 table = row
   mechanics check); the 4.00 pairing is verified in the final package gate.
+  2026-10-16 12:58 RISE-SNAP RULE MERGED 63368d05 (Gameplay: while rising, land only on a surface the previous bottom was
+  above; UE3 physFalling; fixes the barrier-top / pocket pops; NAVQ every |z| < 1.5, MAPTRAVERSE identical) = FIFTH
+  CLASSIC RE-BASELINE (docs/handoff/risesnap/); gate base += 63368d05@CharacterMovement.cpp (Experimental). BOTTEST
+  "AI cost per step" row to be gated on average + p99 (wall-clock flake). Next Gameplay: the third Streets pocket.
+  Systems: the dry-run map-row FAIL = the missing HD folder's pack/hd_index.json probe (not a regression; package 6
+  ships HD at the root; verify backlog: optional probe). 584c873b Release build for the final gate in progress.
