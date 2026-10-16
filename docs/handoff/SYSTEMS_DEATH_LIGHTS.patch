@@ -1,0 +1,193 @@
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -651,7 +651,11 @@
+     // HmWeaponMesh.MuzzleFlashLight: the fired weapon class's muzzle light at its MuzzleFlash socket for MuzzleFlashDuration
+     // (one light per shooter; a new shot restarts it). Drawn through IRenderer::addTransientLight.
+     void spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner);
+-    void tickMuzzleLights(float dt);
++    // TnDeathModifierTriggerLight (TnPawn.DeathLight + TnRampLightManager) for a death presented by onPawnDeath: car / truck / tank
++    // vehicle forms (SharedCar / SharedTankDeaths) and robot forms killed by a damage type whose DamageDeathType is a lit
++    // SharedRobotDeaths entry, not a headshot. APPROXIMATION of TnDeathPicker (no motion-state pick; Integration 2026-10-15).
++    void spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos);
++    void tickTransientLights(float dt);
+     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
+     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
+     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f;
+@@ -1360,8 +1364,13 @@
+ 
+     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
+     WeaponFx fx_;
+-    struct LiveMuzzleLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, left = 0.0f; int owner = 0; };
+-    std::vector<LiveMuzzleLight> muzzleLights_;
++    // A live gameplay light: muzzle (rampIn 0, lightTime = MuzzleFlashDuration) or death ramp (RampLightProperties: brightness
++    // ramps 0 -> 1 over rampIn, holds until lightTime from the start, then ramps out over rampOut). key: shooter / 1000 + victim.
++    struct LiveTransientLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, rampIn = 0.0f, lightTime = 0.0f,
++                                rampOut = 0.0f, age = 0.0f; int key = 0; };
++    std::vector<LiveTransientLight> transientLights_;
++    int unkeyedDeaths_ = 0;
++    void addTransientLight(const LiveTransientLight& l);
+     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
+ 
+     audio::IAudio* audio_ = nullptr;
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -37,6 +37,8 @@
+ namespace {
+ struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; };
+ #include "game/MuzzleLights.inc"
++struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
++#include "game/DeathLights.inc"
+ const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
+     for (const MuzzleLightDef& d : kMuzzleLights)
+         if (cls == d.cls) return &d;
+@@ -1454,25 +1456,60 @@
+ void World::spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner) {
+     const MuzzleLightDef* d = muzzleLightFor(weaponClass);
+     if (!d) return;
+-    LiveMuzzleLight l;
++    LiveTransientLight l;
+     l.pos = {socketWorld.m[12], socketWorld.m[13], socketWorld.m[14]};
+     l.color = {d->color[0], d->color[1], d->color[2]};
+-    l.radius = d->radius; l.falloff = d->falloff; l.left = d->duration; l.owner = owner;
++    l.radius = d->radius; l.falloff = d->falloff; l.lightTime = d->duration; l.key = owner;
+     static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+     static int logged = 0;
+     if (log && logged < 40) {
+         ++logged;
+         LOG_INFO("MUZZLE LIGHT %s owner %d at %.2f,%.2f,%.2f r %.2f m colour %.2f,%.2f,%.2f falloff %.0f for %.2f s", weaponClass.c_str(),
+-                 owner, l.pos.x, l.pos.y, l.pos.z, l.radius, l.color.x, l.color.y, l.color.z, l.falloff, l.left);
++                 owner, l.pos.x, l.pos.y, l.pos.z, l.radius, l.color.x, l.color.y, l.color.z, l.falloff, l.lightTime);
+     }
+-    for (LiveMuzzleLight& o : muzzleLights_)
+-        if (o.owner == owner) { o = l; return; }   // one MuzzleFlashLight component per weapon: a new shot restarts it
+-    muzzleLights_.push_back(l);
++    addTransientLight(l);   // one MuzzleFlashLight component per weapon: a new shot restarts it
+ }
+ 
+-void World::tickMuzzleLights(float dt) {
+-    for (size_t i = 0; i < muzzleLights_.size();) {
+-        if ((muzzleLights_[i].left -= dt) <= 0.0f) { muzzleLights_[i] = muzzleLights_.back(); muzzleLights_.pop_back(); }
++void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
++    // The victim's death record (newest first): its player (the light's key), headshot and pawn (the vehicle form type).
++    int player = -1;
++    bool headshot = false, jet = false;
++    for (auto it = match_.gameplayEvents().rbegin(); it != match_.gameplayEvents().rend(); ++it) {
++        if (it->type != GameplayEventType::Kill && it->type != GameplayEventType::Suicide && it->type != GameplayEventType::EnvironmentDeath) continue;
++        const Character* p = it->victim == localPlayer_ ? &player_.pawn() : participantPawn(it->victim);
++        if (!p || p->chassis().id != chassisId || core::length(p->actorLocation() - pos) > 0.01f) continue;
++        player = it->victim; headshot = it->headshot; jet = p->chassis().vehicle.form == VehicleFormType::Jet;
++        break;
++    }
++    const DeathLightDef* d = nullptr;
++    if (vehicleForm) {
++        if (!jet) d = &kVehicleDeathLight;   // SharedJetDeaths: no light
++    } else if (!headshot) {
++        for (const char* t : kLitRobotDeathDamageTypes)
++            if (damageType == t) { d = &kRobotDeathLight; break; }
++    }
++    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
++    if (log) LOG_INFO("DEATH LIGHT player %d %s %s (%s%s): %s", player, chassisId.c_str(), vehicleForm ? (jet ? "jet" : "vehicle") : "robot",
++                      damageType.c_str(), headshot ? ", headshot" : "", d == &kVehicleDeathLight ? "vehicle light" : d ? "robot light" : "none");
++    if (!d) return;
++    LiveTransientLight l;
++    l.pos = pos;
++    l.color = {d->color[0], d->color[1], d->color[2]};
++    l.radius = d->radius; l.falloff = d->falloff; l.rampIn = d->rampIn; l.lightTime = d->lightTime; l.rampOut = d->rampOut;
++    l.key = player >= 0 ? 1000 + player : 100000 + (unkeyedDeaths_++ & 1023);   // the victim pawn's DeathLight component
++    addTransientLight(l);
++}
++
++void World::addTransientLight(const LiveTransientLight& l) {
++    for (LiveTransientLight& o : transientLights_)
++        if (o.key == l.key) { o = l; return; }
++    transientLights_.push_back(l);
++}
++
++void World::tickTransientLights(float dt) {
++    for (size_t i = 0; i < transientLights_.size();) {
++        LiveTransientLight& l = transientLights_[i];
++        if ((l.age += dt) >= std::max(l.lightTime, l.rampIn) + l.rampOut) { l = transientLights_.back(); transientLights_.pop_back(); }
+         else ++i;
+     }
+ }
+@@ -2262,7 +2299,7 @@
+         bool have = weaponSocketWorld("MuzzleFlash", ms);
+         sysprof::Scope sp(sysprof::FxTick);
+         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
+-        tickMuzzleLights(dt);
++        tickTransientLights(dt);
+     }
+     // Event-driven audio via edge detection on pawn state.
+     {   TickTimer tt26(26);   // [integration 09c] WFC_TICKPROF glue.localAudio (character audio, cues, level audio)
+@@ -3697,10 +3734,16 @@
+             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
+     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
+-    for (const LiveMuzzleLight& l : muzzleLights_) r.addTransientLight(l.pos, l.color, l.radius, l.falloff);
++    for (const LiveTransientLight& l : transientLights_) {
++        const float end = std::max(l.lightTime, l.rampIn);
++        float k = 1.0f;
++        if (l.rampIn > 0.0f && l.age < l.rampIn) k = l.age / l.rampIn;
++        else if (l.age > end) k = l.rampOut > 0.0f ? std::max(0.0f, 1.0f - (l.age - end) / l.rampOut) : 0.0f;
++        if (k > 0.0f) r.addTransientLight(l.pos, l.color * k, l.radius, l.falloff);
++    }
+     if (std::getenv("WFC_MUZZLELOG")) {   // submissions per 600 draws (diagnostic)
+         static unsigned frames = 0, lit = 0, sub = 0;
+-        sub += (unsigned)muzzleLights_.size(); lit += muzzleLights_.empty() ? 0u : 1u;
++        sub += (unsigned)transientLights_.size(); lit += transientLights_.empty() ? 0u : 1u;
+         if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u submitted", lit, sub); lit = sub = 0; }
+     }
+     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+@@ -6272,6 +6315,7 @@
+     ++deathPresentations_;
+     if (!AbilityAudio::deathCue(chassisId, vehicleForm, damageType).empty()) ++deathCues_;
+     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
++    spawnDeathLight(chassisId, vehicleForm, damageType, pos);
+ }
+ 
+ void World::onLocalKillstreakActivated(const std::string& id, int team) {
+--- /dev/null
++++ b/src/game/DeathLights.inc
+@@ -0,0 +1,42 @@
++// GENERATED by tools/systems/transient_lights.py from AssetTools authored.db (read only); do not edit.
++// TnDeathModifierTriggerLight ramp lights: radius (m), linear colour x Brightness, FalloffExponent, RampInTime,
++// LightTime, RampOutTime (s). Robot: TR_Deaths_p.SharedRobotDeaths; vehicle: SharedCarDeaths (= SharedTankDeaths).
++static const DeathLightDef kRobotDeathLight = {20.48f, {7.9692f, 7.9692f, 10.0f}, 10.0f, 2.00f, 2.00f, 0.00f};
++static const DeathLightDef kVehicleDeathLight = {5.12f, {14.9735f, 5.0274f, 16.8262f}, 10.0f, 0.20f, 8.00f, 0.00f};
++// Damage types whose DamageDeathType is a lit SharedRobotDeaths entry (TnDeathTypeAirborne, TnDeathTypeExplosive, TnDeathTypeHovering, TnDeathTypePoke, TnDeathTypeRapidShot, TnDeathTypeSingleShot).
++static const char* const kLitRobotDeathDamageTypes[] = {
++    "TransGame.TnDamageTypeAssaultRifle",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeBurstRifle",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeCarMachineGun",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeDeathBlossomRocket",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeEmpShotgun",   // TnDeathTypeSingleShot
++    "TransGame.TnDamageTypeEnvironment",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeEnvironmentExplosion",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeEnvironmentNoDowned",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeFlakGrenade",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeGatlingGun",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeGrenadeLauncher",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeHeavyIonBlaster",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeHeavyMG",   // TnDeathTypeSingleShot
++    "TransGame.TnDamageTypeHeavyPistol",   // TnDeathTypeSingleShot
++    "TransGame.TnDamageTypeHeavyRocketTurret",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeHomingRocket",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeIonBlaster",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeKamikazeMine",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeMartyrGrenade",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeMountedIonBlaster",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeMountedRocketTurret",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeOmegaBeam",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeOmegaRocket",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeOmegaShootingFrenzyRocket",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypePlasmaCannon",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypePoke",   // TnDeathTypePoke
++    "TransGame.TnDamageTypeRepairEnemy",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeRocketTurret",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeRollerMine",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeSentryGun",   // TnDeathTypeRapidShot
++    "TransGame.TnDamageTypeSentryRocket",   // TnDeathTypeExplosive
++    "TransGame.TnDamageTypeShotgun",   // TnDeathTypeSingleShot
++    "TransGame.TnDamageTypeSniperRifle",   // TnDeathTypeSingleShot
++    "TransGame.TnDamageTypeTankShell",   // TnDeathTypeExplosive
++};

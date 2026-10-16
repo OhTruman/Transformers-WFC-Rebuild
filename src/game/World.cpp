@@ -34,6 +34,18 @@
 #include <functional>
 #include <thread>
 
+namespace {
+struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; };
+#include "game/MuzzleLights.inc"
+struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
+#include "game/DeathLights.inc"
+const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
+    for (const MuzzleLightDef& d : kMuzzleLights)
+        if (cls == d.cls) return &d;
+    return nullptr;
+}
+}  // namespace
+
 namespace game {
 
 // Systems section profiler (WFC_SYSPROF=1): CPU ms per section, averaged over 120 drawn frames.
@@ -189,6 +201,7 @@ void World::load(render::IRenderer& renderer) {
         // Anchored to the shooter's own socket (WeaponFx owner = participant), never to the local held weapon: the shared fx_
         // drew bot flashes at the player's muzzle (playtest 2026-10-13 "my gun appears to randomly fire").
         if (firstPellet && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle, shot.player);
+        if (firstPellet) spawnMuzzleLight(cls, muzzle, shot.player);
         if (!projectile) {
             if (firstPellet) fx_.spawnTracer(wfx->tracer, from, shot.to);
             // [integration 09c] Pawn.EffectIsRelevant for a non-local shooter's impact (RE 4cce28f / Gameplay): the shooter's mesh
@@ -809,6 +822,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     if (pellet_ == 0) {
     if (vehShot) { core::Vec3 vm; if (spawnVehicleMuzzleFlash(fxClass, vm)) muzzle = vm; }
     else if (wfx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
+    if (!vehShot && weaponSocketWorld("MuzzleFlash", ms)) spawnMuzzleLight(fxClass, ms, localPlayer_);
     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
     }
     if (wfx && dist < range - 0.01f)
@@ -1432,10 +1446,72 @@ bool World::spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& 
     vehicleFlashSerial_ = vehicleShotSerial_;
     const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass);
     if (wfx && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, sw);
+    spawnMuzzleLight(weaponClass, sw, localPlayer_);
     static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
     if (log) LOG_INFO("VEHICLE MUZZLE shot %d socket %d %s at %.2f,%.2f,%.2f", vehicleShotSerial_, vehicleShotSocket_,
                       wfx ? wfx->muzzle.c_str() : "(no fx)", sw.m[12], sw.m[13], sw.m[14]);
     return true;
+}
+
+void World::spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner) {
+    const MuzzleLightDef* d = muzzleLightFor(weaponClass);
+    if (!d) return;
+    LiveTransientLight l;
+    l.pos = {socketWorld.m[12], socketWorld.m[13], socketWorld.m[14]};
+    l.color = {d->color[0], d->color[1], d->color[2]};
+    l.radius = d->radius; l.falloff = d->falloff; l.lightTime = d->duration; l.key = owner;
+    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+    static int logged = 0;
+    if (log && logged < 40) {
+        ++logged;
+        LOG_INFO("MUZZLE LIGHT %s owner %d at %.2f,%.2f,%.2f r %.2f m colour %.2f,%.2f,%.2f falloff %.0f for %.2f s", weaponClass.c_str(),
+                 owner, l.pos.x, l.pos.y, l.pos.z, l.radius, l.color.x, l.color.y, l.color.z, l.falloff, l.lightTime);
+    }
+    addTransientLight(l);   // one MuzzleFlashLight component per weapon: a new shot restarts it
+}
+
+void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
+    // The victim's death record (newest first): its player (the light's key), headshot and pawn (the vehicle form type).
+    int player = -1;
+    bool headshot = false, jet = false;
+    for (auto it = match_.gameplayEvents().rbegin(); it != match_.gameplayEvents().rend(); ++it) {
+        if (it->type != GameplayEventType::Kill && it->type != GameplayEventType::Suicide && it->type != GameplayEventType::EnvironmentDeath) continue;
+        const Character* p = it->victim == localPlayer_ ? &player_.pawn() : participantPawn(it->victim);
+        if (!p || p->chassis().id != chassisId || core::length(p->actorLocation() - pos) > 0.01f) continue;
+        player = it->victim; headshot = it->headshot; jet = p->chassis().vehicle.form == VehicleFormType::Jet;
+        break;
+    }
+    const DeathLightDef* d = nullptr;
+    if (vehicleForm) {
+        if (!jet) d = &kVehicleDeathLight;   // SharedJetDeaths: no light
+    } else if (!headshot) {
+        for (const char* t : kLitRobotDeathDamageTypes)
+            if (damageType == t) { d = &kRobotDeathLight; break; }
+    }
+    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+    if (log) LOG_INFO("DEATH LIGHT player %d %s %s (%s%s): %s", player, chassisId.c_str(), vehicleForm ? (jet ? "jet" : "vehicle") : "robot",
+                      damageType.c_str(), headshot ? ", headshot" : "", d == &kVehicleDeathLight ? "vehicle light" : d ? "robot light" : "none");
+    if (!d) return;
+    LiveTransientLight l;
+    l.pos = pos;
+    l.color = {d->color[0], d->color[1], d->color[2]};
+    l.radius = d->radius; l.falloff = d->falloff; l.rampIn = d->rampIn; l.lightTime = d->lightTime; l.rampOut = d->rampOut;
+    l.key = player >= 0 ? 1000 + player : 100000 + (unkeyedDeaths_++ & 1023);   // the victim pawn's DeathLight component
+    addTransientLight(l);
+}
+
+void World::addTransientLight(const LiveTransientLight& l) {
+    for (LiveTransientLight& o : transientLights_)
+        if (o.key == l.key) { o = l; return; }
+    transientLights_.push_back(l);
+}
+
+void World::tickTransientLights(float dt) {
+    for (size_t i = 0; i < transientLights_.size();) {
+        LiveTransientLight& l = transientLights_[i];
+        if ((l.age += dt) >= std::max(l.lightTime, l.rampIn) + l.rampOut) { l = transientLights_.back(); transientLights_.pop_back(); }
+        else ++i;
+    }
 }
 
 bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
@@ -2223,6 +2299,7 @@ void World::stepRemainder(float dt) {
         bool have = weaponSocketWorld("MuzzleFlash", ms);
         sysprof::Scope sp(sysprof::FxTick);
         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
+        tickTransientLights(dt);
     }
     // Event-driven audio via edge detection on pawn state.
     {   TickTimer tt26(26);   // [integration 09c] WFC_TICKPROF glue.localAudio (character audio, cues, level audio)
@@ -3657,6 +3734,18 @@ void World::draw(render::IRenderer& r) const {
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
+    for (const LiveTransientLight& l : transientLights_) {
+        const float end = std::max(l.lightTime, l.rampIn);
+        float k = 1.0f;
+        if (l.rampIn > 0.0f && l.age < l.rampIn) k = l.age / l.rampIn;
+        else if (l.age > end) k = l.rampOut > 0.0f ? std::max(0.0f, 1.0f - (l.age - end) / l.rampOut) : 0.0f;
+        if (k > 0.0f) r.addTransientLight(l.pos, l.color * k, l.radius, l.falloff);
+    }
+    if (std::getenv("WFC_MUZZLELOG")) {   // submissions per 600 draws (diagnostic)
+        static unsigned frames = 0, lit = 0, sub = 0;
+        sub += (unsigned)transientLights_.size(); lit += transientLights_.empty() ? 0u : 1u;
+        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u submitted", lit, sub); lit = sub = 0; }
+    }
     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
@@ -6226,6 +6315,7 @@ void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const st
     ++deathPresentations_;
     if (!AbilityAudio::deathCue(chassisId, vehicleForm, damageType).empty()) ++deathCues_;
     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
+    spawnDeathLight(chassisId, vehicleForm, damageType, pos);
 }
 
 void World::onLocalKillstreakActivated(const std::string& id, int team) {

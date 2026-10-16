@@ -1,0 +1,172 @@
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -648,6 +648,10 @@
+     // [Systems M08h] HmWeaponMesh.PlayFireEffects for a vehicle shot: the fired weapon's MuzzleFlash template at its
+     // CurrentSocket, once per shot (serial). Returns the muzzle position (tracer start) or false.
+     bool spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& muzzleOut);
++    // HmWeaponMesh.MuzzleFlashLight: the fired weapon class's muzzle light at its MuzzleFlash socket for MuzzleFlashDuration
++    // (one light per shooter; a new shot restarts it). Drawn through IRenderer::addTransientLight.
++    void spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner);
++    void tickMuzzleLights(float dt);
+     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
+     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
+     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f;
+@@ -1356,6 +1360,8 @@
+ 
+     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
+     WeaponFx fx_;
++    struct LiveMuzzleLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, left = 0.0f; int owner = 0; };
++    std::vector<LiveMuzzleLight> muzzleLights_;
+     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
+ 
+     audio::IAudio* audio_ = nullptr;
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -34,6 +34,16 @@
+ #include <functional>
+ #include <thread>
+ 
++namespace {
++struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; };
++#include "game/MuzzleLights.inc"
++const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
++    for (const MuzzleLightDef& d : kMuzzleLights)
++        if (cls == d.cls) return &d;
++    return nullptr;
++}
++}  // namespace
++
+ namespace game {
+ 
+ // Systems section profiler (WFC_SYSPROF=1): CPU ms per section, averaged over 120 drawn frames.
+@@ -189,6 +199,7 @@
+         // Anchored to the shooter's own socket (WeaponFx owner = participant), never to the local held weapon: the shared fx_
+         // drew bot flashes at the player's muzzle (playtest 2026-10-13 "my gun appears to randomly fire").
+         if (firstPellet && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle, shot.player);
++        if (firstPellet) spawnMuzzleLight(cls, muzzle, shot.player);
+         if (!projectile) {
+             if (firstPellet) fx_.spawnTracer(wfx->tracer, from, shot.to);
+             // [integration 09c] Pawn.EffectIsRelevant for a non-local shooter's impact (RE 4cce28f / Gameplay): the shooter's mesh
+@@ -809,6 +820,7 @@
+     if (pellet_ == 0) {
+     if (vehShot) { core::Vec3 vm; if (spawnVehicleMuzzleFlash(fxClass, vm)) muzzle = vm; }
+     else if (wfx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
++    if (!vehShot && weaponSocketWorld("MuzzleFlash", ms)) spawnMuzzleLight(fxClass, ms, localPlayer_);
+     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
+     }
+     if (wfx && dist < range - 0.01f)
+@@ -1432,12 +1444,39 @@
+     vehicleFlashSerial_ = vehicleShotSerial_;
+     const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass);
+     if (wfx && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, sw);
++    spawnMuzzleLight(weaponClass, sw, localPlayer_);
+     static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+     if (log) LOG_INFO("VEHICLE MUZZLE shot %d socket %d %s at %.2f,%.2f,%.2f", vehicleShotSerial_, vehicleShotSocket_,
+                       wfx ? wfx->muzzle.c_str() : "(no fx)", sw.m[12], sw.m[13], sw.m[14]);
+     return true;
+ }
+ 
++void World::spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner) {
++    const MuzzleLightDef* d = muzzleLightFor(weaponClass);
++    if (!d) return;
++    LiveMuzzleLight l;
++    l.pos = {socketWorld.m[12], socketWorld.m[13], socketWorld.m[14]};
++    l.color = {d->color[0], d->color[1], d->color[2]};
++    l.radius = d->radius; l.falloff = d->falloff; l.left = d->duration; l.owner = owner;
++    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
++    static int logged = 0;
++    if (log && logged < 40) {
++        ++logged;
++        LOG_INFO("MUZZLE LIGHT %s owner %d at %.2f,%.2f,%.2f r %.2f m colour %.2f,%.2f,%.2f falloff %.0f for %.2f s", weaponClass.c_str(),
++                 owner, l.pos.x, l.pos.y, l.pos.z, l.radius, l.color.x, l.color.y, l.color.z, l.falloff, l.left);
++    }
++    for (LiveMuzzleLight& o : muzzleLights_)
++        if (o.owner == owner) { o = l; return; }   // one MuzzleFlashLight component per weapon: a new shot restarts it
++    muzzleLights_.push_back(l);
++}
++
++void World::tickMuzzleLights(float dt) {
++    for (size_t i = 0; i < muzzleLights_.size();) {
++        if ((muzzleLights_[i].left -= dt) <= 0.0f) { muzzleLights_[i] = muzzleLights_.back(); muzzleLights_.pop_back(); }
++        else ++i;
++    }
++}
++
+ bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
+     const Weapon& w = player_.pawn().weapon();
+     if (shownWeapon_ != (w.def ? w.def->id : "IonBlaster")) return false;
+@@ -2223,6 +2262,7 @@
+         bool have = weaponSocketWorld("MuzzleFlash", ms);
+         sysprof::Scope sp(sysprof::FxTick);
+         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
++        tickMuzzleLights(dt);
+     }
+     // Event-driven audio via edge detection on pawn state.
+     {   TickTimer tt26(26);   // [integration 09c] WFC_TICKPROF glue.localAudio (character audio, cues, level audio)
+@@ -3657,6 +3697,12 @@
+             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
+     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
++    for (const LiveMuzzleLight& l : muzzleLights_) r.addTransientLight(l.pos, l.color, l.radius, l.falloff);
++    if (std::getenv("WFC_MUZZLELOG")) {   // submissions per 600 draws (diagnostic)
++        static unsigned frames = 0, lit = 0, sub = 0;
++        sub += (unsigned)muzzleLights_.size(); lit += muzzleLights_.empty() ? 0u : 1u;
++        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u submitted", lit, sub); lit = sub = 0; }
++    }
+     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
+     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
+--- /dev/null
++++ b/src/game/MuzzleLights.inc
+@@ -0,0 +1,51 @@
++// GENERATED by tools/systems/transient_lights.py from AssetTools authored.db (read only); do not edit.
++// HmWeaponMesh.MuzzleFlashLight per weapon class (WeaponMeshTemplate), WP_Fire flashes with the light enabled:
++// class, radius (m), linear colour x Brightness, FalloffExponent, MuzzleFlashDuration (s).
++static const MuzzleLightDef kMuzzleLights[] = {
++    {"TransContent.TnWeaponAssaultRifle", 30.00f, {2.6736f, 2.8012f, 10.0f}, 75.0f, 0.10f},   // WEP_AssaultRifle_p.AssaultRifle_WEPMESH
++    {"TransContent.TnWeaponAssaultRiflePlane", 5.12f, {25.0f, 5.488f, 5.488f}, 10.0f, 0.10f},   // WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH
++    {"TransContent.TnWeaponAssaultRifleVehicle", 5.12f, {25.0f, 5.488f, 5.488f}, 10.0f, 0.10f},   // WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH
++    {"TransContent.TnWeaponBazooka", 8.00f, {1.0976f, 1.0976f, 5.0f}, 10.0f, 0.10f},   // WEP_Bazooka_p.Bazooka_WEPMESH
++    {"TransContent.TnWeaponBomb", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_MPBomb_p.MPBomb_WEPMESH
++    {"TransContent.TnWeaponBombingRunVehicle", 5.12f, {7.7795f, 18.0668f, 23.9342f}, 10.0f, 0.10f},   // WEP_Rocket_p.Rocket_Vehicle_WEPMESH
++    {"TransContent.TnWeaponBruteRocketLauncher", 7.00f, {1.0976f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_RocketLauncher_p.RocketLauncher_WEPMESH
++    {"TransContent.TnWeaponBurstRifle", 30.00f, {10.0f, 10.0f, 2.1952f}, 75.0f, 0.10f},   // WEP_BurstRifle_p.BurstRifle_WEPMESH
++    {"TransContent.TnWeaponEmpShotgun", 30.00f, {2.1952f, 2.1952f, 10.0f}, 75.0f, 0.10f},   // WEP_EMPShotgun_p.EMPShotgun_WEPMESH
++    {"TransContent.TnWeaponGatlingGun", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_TurretIonGun_p.TurretIonGun_WEPMESH
++    {"TransContent.TnWeaponGrenadeLauncher", 30.00f, {10.0f, 0.0f, 0.0f}, 75.0f, 1.00f},   // WEP_GrenadeLauncher_p.GrenadeLauncher_WEPMESH
++    {"TransContent.TnWeaponHeavyMG", 30.00f, {10.0f, 2.1952f, 2.1952f}, 75.0f, 0.10f},   // WEP_HeavyMG_p.HeavyMG_WEPMESH
++    {"TransContent.TnWeaponHeavyPistol", 30.00f, {10.0f, 5.0543f, 5.0543f}, 75.0f, 0.30f},   // WEP_HeavyPistol_p.HeavyPistol_WEPMESH
++    {"TransContent.TnWeaponHeavyRocketTurret", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_TurretRocket_p.Turret_Rocket_WEPMESH
++    {"TransContent.TnWeaponHomingRocketVehicle", 5.12f, {23.9342f, 18.0668f, 4.7616f}, 10.0f, 0.10f},   // WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPMESH
++    {"TransContent.TnWeaponIonBlaster", 30.00f, {2.6736f, 2.8012f, 10.0f}, 75.0f, 0.10f},   // WEP_IonBlaster_p.IonBlaster_WEPMESH
++    {"TransContent.TnWeaponLaserVehicle", 7.00f, {5.488f, 0.0f, 5.488f}, 10.0f, 0.10f},   // WEP_Laser_Vehicle_AI_p.Laser_Vehicle_WEPMESH
++    {"TransContent.TnWeaponMountedHeavyIonBlaster", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_TurretIonGun_p.TurretIonBase_WEPMESH
++    {"TransContent.TnWeaponMountedRocketTurret", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_TurretRocket_p.TurretRocketBase_WEPMESH
++    {"TransContent.TnWeaponOmegaShootingFrenzyArm", 5.12f, {25.0f, 0.6939f, 0.6939f}, 10.0f, 0.10f},   // WEP_Omega_AI_p.OMEGA_ShootingFrenzy_AI_WEPMESH
++    {"TransContent.TnWeaponOmegaTurret", 5.12f, {25.0f, 0.6939f, 0.6939f}, 10.0f, 0.10f},   // WEP_OmegaTurret_p.OmegaSupremeTurret_WEPMESH
++    {"TransContent.TnWeaponPlaneMachineGun", 5.12f, {25.0f, 5.488f, 5.488f}, 10.0f, 0.10f},   // WEP_PlaneMachineGun_p.PlaneMachineGun_WEPMESH
++    {"TransContent.TnWeaponPlaneStrafingRun", 5.12f, {25.0f, 5.488f, 5.488f}, 10.0f, 0.10f},   // WEP_PlaneMachineGun_p.PlaneMachineGun_WEPMESH
++    {"TransContent.TnWeaponPlasmaCannon", 30.00f, {25.0f, 0.0f, 0.0f}, 75.0f, 0.10f},   // WEP_PlasmaCannon_p.PlasmaCannon_WEPMESH
++    {"TransContent.TnWeaponRocketLauncher", 7.00f, {1.0976f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_RocketLauncher_p.RocketLauncher_WEPMESH
++    {"TransContent.TnWeaponRocketPlane", 5.12f, {7.7795f, 18.0668f, 23.9342f}, 10.0f, 0.10f},   // WEP_RocketVh_p.Rocket_Vehicle_WEPMESH
++    {"TransContent.TnWeaponRocketTemp", 5.12f, {7.7795f, 18.0668f, 23.9342f}, 10.0f, 0.10f},   // WEP_Rocket_p.Rocket_WEPMESH
++    {"TransContent.TnWeaponRocketVehicle", 5.12f, {7.7795f, 18.0668f, 23.9342f}, 10.0f, 0.10f},   // WEP_RocketVh_p.Rocket_Vehicle_WEPMESH
++    {"TransContent.TnWeaponSentryHomingRocket", 7.00f, {5.488f, 1.794f, 0.0f}, 10.0f, 0.10f},   // WEP_SentryBlaster01_p.HomingRocketSentry_WEPMESH
++    {"TransContent.TnWeaponSentryRocket", 7.00f, {25.0f, 5.488f, 0.0f}, 10.0f, 0.10f},   // WEP_SentryBlaster01_p.RocketSentry_WEPMESH
++    {"TransContent.TnWeaponShotgun", 30.00f, {2.1952f, 2.1952f, 10.0f}, 75.0f, 0.10f},   // WEP_Shotgun_p.Shotgun_WEPMESH
++    {"TransContent.TnWeaponSniperRifle", 30.00f, {2.1952f, 0.0f, 0.0f}, 75.0f, 0.10f},   // WEP_SniperRifle_p.SniperRifle_WEPMESH
++    {"TransContent.TnWeaponStarscreamRocketVehicle", 5.12f, {7.7795f, 18.0668f, 23.9342f}, 10.0f, 0.10f},   // WEP_RocketVh_p.Rocket_Vehicle_WEPMESH
++    {"TransContent.TnWeaponStarscreamShotgun", 30.00f, {2.1952f, 2.1952f, 10.0f}, 75.0f, 0.10f},   // WEP_Starscream_AI_p.Starscream_EMPShotgun_AI_WEPMESH
++    {"TransContent.TnWeaponTankCannon", 20.00f, {15.559f, 6.3765f, 15.559f}, 10.0f, 0.10f},   // WEP_TankCannon_p.TankCannon_Vehicle_WEPMESH
++    {"TransContent.TnWeaponTankCannonHeavy", 40.00f, {31.118f, 12.753f, 31.118f}, 10.0f, 0.10f},   // WEP_TankCannon_AI_p.TankVehicleCannonHeavy_AI_WEPMESH
++    {"TransContent.TnWeaponTankMachineGun", 10.00f, {25.0f, 25.0f, 25.0f}, 10.0f, 0.10f},   // WEP_SoldierTank_p.TankVehicleMG_AI_WEPMESH
++    {"TransContent.TnWeaponTankRobotCannonHeavyAutobot", 20.48f, {25.0f, 25.0f, 25.0f}, 10.0f, 0.10f},   // WEP_SoldierTank_p.TankRobotAutHeavyCannon_AI_WEPMESH
++    {"TransContent.TnWeaponTankRobotCannonHeavyDecepticon", 20.48f, {25.0f, 25.0f, 25.0f}, 10.0f, 0.10f},   // WEP_SoldierTank_p.TankRobotDecHeavyCannon_AI_WEPMESH
++    {"TransContent.TnWeaponTankRobotGatlingGunAutobot", 20.48f, {25.0f, 25.0f, 25.0f}, 10.0f, 0.10f},   // WEP_SoldierTank_p.SoldierTankAutGatling_AI_WEPMESH
++    {"TransContent.TnWeaponTankRobotGatlingGunDecepticon", 20.48f, {25.0f, 25.0f, 25.0f}, 10.0f, 0.10f},   // WEP_SoldierTank_p.SoldierTankDecGatling_AI_WEPMESH
++    {"TransContent.TnWeaponTrypticonShoulderCannon", 20.00f, {25.0f, 0.6939f, 14.6493f}, 10.0f, 0.10f},   // WEP_TrypticonShoulderCannon_p.TrypticonShoulderCannon_WEPMESH
++    {"TransContent.TnWeaponTrypticonTailRocketSentry", 7.00f, {4.9379f, 0.6637f, 0.0044f}, 10.0f, 0.10f},   // WEP_TrypticonTailSentry_p.TrypticonTailRocketSentry_WEPMESH
++    {"TransContent.TnWeaponWarshipHomingRocketSentry", 7.00f, {4.9379f, 0.6637f, 0.0044f}, 10.0f, 0.10f},   // WEP_SentryBlaster01_p.WarshipHomingRocketSentry_WEPMESH
++    {"TransGame.TnWeaponDefaultSentryAbility", 5.12f, {25.0f, 0.6939f, 0.6939f}, 10.0f, 0.10f},   // WEP_SentryAbility_p.Default_WEPMESH
++    {"TransGame.TnWeaponRocketSentryAbility", 7.00f, {25.0f, 0.0f, 0.0f}, 10.0f, 0.10f},   // WEP_SentryAbility_p.Rocket_WEPMESH
++};

@@ -648,6 +648,14 @@ public:
     // [Systems M08h] HmWeaponMesh.PlayFireEffects for a vehicle shot: the fired weapon's MuzzleFlash template at its
     // CurrentSocket, once per shot (serial). Returns the muzzle position (tracer start) or false.
     bool spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& muzzleOut);
+    // HmWeaponMesh.MuzzleFlashLight: the fired weapon class's muzzle light at its MuzzleFlash socket for MuzzleFlashDuration
+    // (one light per shooter; a new shot restarts it). Drawn through IRenderer::addTransientLight.
+    void spawnMuzzleLight(const std::string& weaponClass, const core::Mat4& socketWorld, int owner);
+    // TnDeathModifierTriggerLight (TnPawn.DeathLight + TnRampLightManager) for a death presented by onPawnDeath: car / truck / tank
+    // vehicle forms (SharedCar / SharedTankDeaths) and robot forms killed by a damage type whose DamageDeathType is a lit
+    // SharedRobotDeaths entry, not a headshot. APPROXIMATION of TnDeathPicker (no motion-state pick; Integration 2026-10-15).
+    void spawnDeathLight(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos);
+    void tickTransientLights(float dt);
     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f;
@@ -1356,6 +1364,13 @@ private:
 
     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
     WeaponFx fx_;
+    // A live gameplay light: muzzle (rampIn 0, lightTime = MuzzleFlashDuration) or death ramp (RampLightProperties: brightness
+    // ramps 0 -> 1 over rampIn, holds until lightTime from the start, then ramps out over rampOut). key: shooter / 1000 + victim.
+    struct LiveTransientLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, rampIn = 0.0f, lightTime = 0.0f,
+                                rampOut = 0.0f, age = 0.0f; int key = 0; };
+    std::vector<LiveTransientLight> transientLights_;
+    int unkeyedDeaths_ = 0;
+    void addTransientLight(const LiveTransientLight& l);
     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
 
     audio::IAudio* audio_ = nullptr;
