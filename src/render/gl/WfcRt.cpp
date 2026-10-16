@@ -55,13 +55,14 @@ uniform vec4 uSLPos[4];   // xyz, radius
 uniform vec4 uSLCol[4];   // calibrated rgb, w: falloff exponent (< 0: linear)
 uniform vec4 uSLDir[4];   // forward, w: cos(outer) (-2 = point)
 uniform vec4 uSLCosI;
+uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // (item 4) the transient lights (xyz, 1 / radius; rgb, falloff)
 vec3 wfcWorldAt(ivec2 q) { vec2 ndc = (vec2(q) + 0.5) / uSize * 2.0 - 1.0; float d = texelFetch(uDepth, q, 0).r;
     vec4 w = uInvVP * vec4(ndc, d * 2.0 - 1.0, 1.0); return w.xyz / w.w; }
 out vec4 oFactor;
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
     vec4 s = texelFetch(uSao, p, 0);
-    if (uLVView != 0) { vec4 v = texelFetch(uLVis, p, 0); float m = min(min(v.x, v.y), min(v.z, v.w)); oFactor = vec4(m, m, s.z > 0.5 ? 1.0 : m, 1.0); return; }
+    if (uLVView != 0) { vec4 v = mod(floor(texelFetch(uLVis, p, 0) * 255.0 + 0.5), 2.0); float m = min(min(v.x, v.y), min(v.z, v.w)); oFactor = vec4(m, m, s.z > 0.5 ? 1.0 : m, 1.0); return; }
     if (s.z > 0.5) { oFactor = vec4(1.0); return; }
     float vis = texelFetch(uVis, p, 0).r;
     vis = vis > 0.985 ? 1.0 : vis;                  // (the 8-bit denoised visibility tops out just under 1: unlit pixels exact)
@@ -70,7 +71,7 @@ void main() {
     if (uLB > 0) {
         vec4 lum = texelFetch(uLum, p, 0);
         float lw = dot(lum.rgb, vec3(0.2126, 0.7152, 0.0722));
-        vec4 lv = texelFetch(uLVis, p, 0);
+        vec4 lv = mod(floor(texelFetch(uLVis, p, 0) * 255.0 + 0.5), 2.0);   // (bit 0: the shadow lights)
         if (lum.a > 0.5 && lw > 1e-4 && min(min(lv.x, lv.y), min(lv.z, lv.w)) < 0.5) {
             vec3 P = wfcWorldAt(p);
             ivec2 px1 = ivec2(min(p.x + 1, int(uSize.x) - 1), p.y), py1 = ivec2(p.x, min(p.y + 1, int(uSize.y) - 1));
@@ -88,6 +89,26 @@ void main() {
             }
             float share = clamp(dot(E, vec3(0.2126, 0.7152, 0.0722)) / lw, 0.0, 1.0);
             f *= 1.0 - share;
+        }
+    }
+    if (uTLN > 0) {   // (item 4) the transient lights blocked at this world pixel (LightVis bit 1, lights 0..3)
+        vec4 lum = texelFetch(uLum, p, 0);
+        vec4 tv = floor(mod(floor(texelFetch(uLVis, p, 0) * 255.0 + 0.5), 4.0) / 2.0);
+        if (lum.a > 0.5 && min(min(tv.x, tv.y), min(tv.z, tv.w)) < 0.5) {
+            vec3 P = wfcWorldAt(p);
+            ivec2 px1 = ivec2(min(p.x + 1, int(uSize.x) - 1), p.y), py1 = ivec2(p.x, min(p.y + 1, int(uSize.y) - 1));
+            vec3 N = normalize(cross(wfcWorldAt(px1) - P, wfcWorldAt(py1) - P));
+            float eAll = 0.0, eBlocked = 0.0;
+            for (int k = 0; k < 8; ++k) {
+                if (k >= uTLN) break;
+                vec3 d = uTLPos[k].xyz - P, dn = d * uTLPos[k].w;
+                float att = pow(clamp(1.0 - dot(dn, dn), 0.0, 1.0), uTLCol[k].w);
+                float e = dot(uTLCol[k].rgb, vec3(0.2126, 0.7152, 0.0722)) * att * abs(dot(N, normalize(d)));
+                eAll += e;
+                if (k < 4 && tv[k] < 0.5) eBlocked += e;
+            }
+            float lw = dot(lum.rgb, vec3(0.2126, 0.7152, 0.0722));
+            if (eBlocked > 0.0) f *= clamp((lw + eAll - eBlocked) / max(lw + eAll, 1e-4), 0.0, 1.0);
         }
     }
     oFactor = vec4(f, 1.0);
@@ -903,6 +924,21 @@ void Pipeline::rtDynMid() {
         if (lvView && t.lightVis) { ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis); ActiveTexture(GL_TEXTURE0); Uniform1i(cachedUniformLocation(cp, "uLVis"), 3); }
         Uniform1i(cachedUniformLocation(cp, "uLVView"), lvView && t.lightVis ? 1 : 0);
         rtLampWorldN_ = nb;
+        // (item 4) the transient lights' RT shadows on the world: the same inputs (bound here when 2B did not)
+        const bool tlOk = !r1 && tlN_ > 0 && rtMrtWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ && t.lightVis;
+        if (tlOk && nb == 0) {
+            ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_2D, t.lightVis);
+            ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, r1SunTex_);
+            ActiveTexture(GL_TEXTURE0 + 5); glBindTexture(GL_TEXTURE_2D, t.worldDepth);
+            ActiveTexture(GL_TEXTURE0);
+            Uniform1i(cachedUniformLocation(cp, "uLVis"), 3); Uniform1i(cachedUniformLocation(cp, "uLum"), 4);
+            Uniform1i(cachedUniformLocation(cp, "uDepth"), 5);
+            float inv[16];
+            if (invert(viewProj_.m, inv)) UniformMatrix4fv(cachedUniformLocation(cp, "uInvVP"), 1, GL_FALSE, inv);
+            Uniform2f(cachedUniformLocation(cp, "uSize"), (float)vpW_, (float)vpH_);
+        }
+        Uniform1i(cachedUniformLocation(cp, "uTLN"), tlOk ? tlN_ : 0);
+        if (tlOk) { Uniform4fv(cachedUniformLocation(cp, "uTLPos"), 8, &tlPos_[0][0]); Uniform4fv(cachedUniformLocation(cp, "uTLCol"), 8, &tlCol_[0][0]); }
     }
     BindVertexArray(postVao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -1052,6 +1088,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 ++n;
             }
             fr.shadowLightN = n;
+            for (int k = 0; k < tlN_ && k < 4; ++k) { std::memcpy(fr.transLights[k], tlPos_[k], 16); fr.transLights[k][3] = 1.0f / std::max(tlPos_[k][3], 1e-6f); }
+            fr.transLightN = std::min(tlN_, 4);
             static int frames = 0; static double sumUsed = 0, sumN = 0, sumWorld = 0;   // (diagnostics, every 600 frames)
             sumUsed += (double)use.size(); sumN += n; sumWorld += rtLampWorldN_;
             if (++frames == 600) {

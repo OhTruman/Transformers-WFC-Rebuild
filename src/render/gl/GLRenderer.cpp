@@ -1758,6 +1758,10 @@ public:
         glEnd();
     }
 
+    void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) override {
+        if (wfc_.active()) wfc_.addTransientLight(pos, color, radius, falloffExponent);
+    }
+
     void drawParticles(const ParticleBatch& b) override {
         if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
         watchdog::phase("drawParticles");

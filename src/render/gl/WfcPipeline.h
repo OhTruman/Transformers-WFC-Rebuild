@@ -278,6 +278,10 @@ public:
     // COMBINE RGB scale, alpha or additive blend, no depth write) plus a soft depth fade against the scene, characters
     // included. tex = a GL texture name (0: untextured); false = not queued (the caller draws it as before)
     bool queueFallbackSprites(unsigned tex, bool additive, float rgbScale, const Sprite* s, size_t n);
+    // item 4: the original's transient point lights (muzzle flashes, death / cloak ramps; IRenderer::addTransientLight):
+    // collected during a frame, applied from the next frame start (the 8 strongest at the camera), per pixel on the lit
+    // world and characters in every mode (bForceDynamicLight: the original lit the lightmapped world with them too)
+    void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent);
 
 private:
     struct Sub {
@@ -359,6 +363,10 @@ private:
     // kind 2: a material-less particle batch (queueFallbackSprites)
     struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
     std::vector<FallbackBatch> fallbackPool_;
+    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; };
+    std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
+    float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;   // (item 4) the applied lights as uniforms
+    void selectTransientLights();
     size_t fallbackUsed_ = 0;
     GLuint fallbackProg_ = 0, fallbackVao_ = 0, fallbackVbo_ = 0, fallbackIbo_ = 0; size_t fallbackIboQuads_ = 0;
     void drawFallbackSprites(const FallbackBatch& b);

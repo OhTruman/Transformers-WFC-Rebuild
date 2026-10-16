@@ -321,6 +321,7 @@ void Pipeline::giSetup() {
         S.pageSize[(size_t)kGiVertexPage] = {4096, vRows};
         S.floatPage = kGiVertexPage;
     }
+    S.hitToGi = giHitPageGl_;                            // (item 3: reflection hits read the GI pages)
     S.texels.resize(giTexels_.size() * 8);
     std::memcpy(S.texels.data(), giTexels_.data(), giTexels_.size() * sizeof(GiTexel));
     for (size_t i = 0; i + 2 < giDilate_.size(); i += 3) S.dilate.insert(S.dilate.end(), {giDilate_[i], giDilate_[i + 1], giDilate_[i + 2], 0u});

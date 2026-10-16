@@ -564,6 +564,13 @@ public:
 
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;
+    // A transient point light for the frame being drawn (the original's muzzle-flash and death / cloak ramp lights,
+    // bForceDynamicLight: they light the lightmapped world and the characters per pixel). Call once per frame per live
+    // light, before or during the frame's draws: position (m), linear colour x brightness, radius (m), UE3 falloff
+    // exponent (pow(saturate(1 - (d / radius)^2), exponent)). Renderers without dynamic lights ignore it.
+    virtual void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
+        (void)pos; (void)color; (void)radius; (void)falloffExponent;
+    }
 
     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).

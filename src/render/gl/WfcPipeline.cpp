@@ -2522,18 +2522,27 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "uniform float uRtGloss;\n"
               "vec3 wfcRtGlossMix(vec3 c, float sp, vec3 spec, vec3 n, vec3 V) {\n"
               "    if (uRtReflOn == 0 || uRtGloss <= 0.0) return c;\n"
-              "    float gate = smoothstep(" + std::string(rtGlossLo()) + ", " + std::string(rtGlossHi()) + ", sp) * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n"
+              // (item 3) every lit surface reflects (dielectric F0 0.04, x its specular colour's strength); roughness - from
+              // SpecularPower - blurs it over the target's mips and lowers the grazing Fresnel (Schlick with roughness), so
+              // rough floors take a faint blurred layer and glossy ones a sharp one, with no on / off edge between materials
+              // (the former SpecularPower gate drew Molten's floor seam). WFC_RT_GLOSSLO / _HI still set a gate when given.
+              "    float gate = " + std::string(std::getenv("WFC_RT_GLOSSLO") || std::getenv("WFC_RT_GLOSSHI")
+                    ? "smoothstep(" + std::string(rtGlossLo()) + ", " + std::string(rtGlossHi()) + ", sp)" : std::string("1.0")) +
+              " * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n"
               "    if (gate <= 0.0) return c;\n"
               "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
               "    if (p.w <= 0.0) return c;\n"
               "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
               "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;\n"
-              "    float rough = clamp(sqrt(2.0 / (max(sp, 0.0) + 2.0)), 0.02, 1.0);\n"
+              "    float rough = clamp(pow(2.0 / (max(sp, 0.0) + 2.0), 0.25), 0.02, 1.0);\n"   // (perceptual roughness: Blinn-Phong n -> GGX alpha, its square root)
               "    ivec2 rs = textureSize(uRtRefl, 0);\n"
-              "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))) * 0.5);\n"
+              "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))));\n"
               "    if (r.a <= 1e-3) return c;\n"
               "    float NoV = clamp(dot(normalize(n), normalize(V)), 0.0, 1.0);\n"
-              "    float k = (0.04 + 0.96 * pow(1.0 - NoV, 5.0)) * gate * uRtGloss * clamp(r.a, 0.0, 1.0);\n"
+              "    float k = (0.04 + (max(1.0 - rough, 0.04) - 0.04) * pow(1.0 - NoV, 5.0)) * gate * uRtGloss * clamp(r.a, 0.0, 1.0);\n"
+              // (item 3) a rough surface keeps most of its own lighting at grazing angles: the layer's share is capped by
+              // the roughness (rim bands no longer turn into the dark geometry they reflect)
+              "    k = min(k, 0.25 + 0.75 * (1.0 - rough) * (1.0 - rough));\n"
               "    return mix(c, r.rgb / r.a, clamp(k, 0.0, 1.0));\n"
               "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
@@ -2640,6 +2649,27 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     r1CheckGl();
     const bool r1Text = r1Map_ && rtShadowAoOn() && !r1Suppress_;
     if (r1Text) r1ShaderText(fs, mainStart, lightmapped && !mainOverride_);
+    if (lit && !mainOverride_) {   // (item 4) the transient point lights, per pixel (UE3 point light: Lambert + Phong)
+        const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
+        const size_t at = fs.find(anchor, mainStart), ma = fs.find("void main() {", mainStart);
+        if (at != std::string::npos && ma != std::string::npos && at > ma) {
+            fs.insert(at, "    if (uLit != 0 && uTLN > 0) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
+            fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
+                          "uniform int uTLVisOn; uniform sampler2D uTLVis;   // (Realistic, characters: the RT visibility, LightVis bit 1)\n"
+                          "vec3 wfcTransientLights(vec3 N, MatOut o) {\n"
+                          "    vec4 tv = uTLVisOn != 0 ? floor(mod(floor(texelFetch(uTLVis, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5), 4.0) / 2.0) : vec4(1.0);\n"
+                          "    vec3 V = normalize(uCamPos - vPos), Rv = reflect(-V, N), s = vec3(0.0);\n"
+                          "    for (int k = 0; k < 8; ++k) {\n"
+                          "        if (k >= uTLN) break;\n"
+                          "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
+                          "        float att = pow(clamp(1.0 - dot(dn, dn), 0.0, 1.0), uTLCol[k].w);\n"
+                          "        if (att <= 0.0) continue;\n"
+                          "        vec3 L = normalize(d);\n"
+                          "        float sp = pow(max(clamp(dot(Rv, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));\n"
+                          "        s += (o.DiffuseColor * max(dot(N, L), 0.0) + o.SpecularColor * sp) * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n"
+                          "    }\n    return s;\n}\n");
+        }
+    }
     if (rtShadowAoOn() && lightmapped && !mainOverride_ && lit) {   // (item 2B: the decoded lightmap irradiance -> target 1)
         const std::string lAnchor = "vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];";
         const std::string tAnchor = "    wfcTranslucentOut(c, o.Opacity);\n";
@@ -2675,7 +2705,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         sub("uniform vec2 uShadowMaskTexelOffset;", "uniform vec2 uShadowMaskTexelOffset;\nuniform sampler2D uRtAo;\nuniform vec3 uRtSunDir;\nuniform int uRtOn;\n"
             "uniform sampler2D uRtLVis;\nuniform vec3 uRtLSlot;\n"   // (item 2: a point / spot env light's RT visibility, -1 = none)
             "float wfcRtLV(int i) { int s = int(floor((i == 0 ? uRtLSlot.x : i == 1 ? uRtLSlot.y : uRtLSlot.z) + 0.5)); if (uRtOn == 0 || s < 0) return 1.0;"
-            " vec4 v = texture(uRtLVis, gl_FragCoord.xy / uViewport); return s == 0 ? v.x : s == 1 ? v.y : s == 2 ? v.z : v.w; }");
+            " vec4 v = mod(floor(texelFetch(uRtLVis, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5), 2.0); return s == 0 ? v.x : s == 1 ? v.y : s == 2 ? v.z : v.w; }");
         sub("vec3 ambient = o.DiffuseColor * amb;", "vec3 ambient = o.DiffuseColor * amb * texture(uRtAo, gl_FragCoord.xy / uViewport).w;");
         // the RT sun visibility (bound as uShadowMask while the RT path draws) shadows the sun only (the directional light
         // pointing at uRtSunDir): the original's one mask came from the environment's dominant shadow light, which indoors
@@ -3632,6 +3662,17 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
         Uniform1f(ULOC(P, "uSkinAlpha"), skinAlpha_);
         Uniform1i(ULOC(P, "uBoneTex"), 18);
+    }
+    {   // (item 4) the transient lights
+        const GLint tn = ULOC(P, "uTLN");
+        if (tn >= 0) {
+            Uniform1i(tn, tlN_);
+            if (tlN_ > 0) { Uniform4fv(ULOC(P, "uTLPos"), 8, &tlPos_[0][0]); Uniform4fv(ULOC(P, "uTLCol"), 8, &tlCol_[0][0]); }
+            const bool vis = tlN_ > 0 && inDynamicDraw_ && rtShadowLightsOn() && rtMaskActive_ && rtTargets_.lightVis;
+            Uniform1i(ULOC(P, "uTLVisOn"), vis ? 1 : 0);
+            if (vis) { ActiveTexture(GL_TEXTURE0 + 29); glBindTexture(GL_TEXTURE_2D, rtTargets_.lightVis); ActiveTexture(GL_TEXTURE0 + 10);
+                       Uniform1i(ULOC(P, "uTLVis"), 29); }
+        }
     }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         Uniform3f(ULOC(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
@@ -7721,6 +7762,44 @@ void Pipeline::spriteAppendTo(const Sprite* sp, size_t n, const core::Vec3& faci
     }
 }
 
+void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent) {
+    if (!(radius > 0.0f) || !std::isfinite(pos.x) || !std::isfinite(pos.y) || !std::isfinite(pos.z) || tlights_.size() >= 256) return;
+    if (!(color.x > 0.0f || color.y > 0.0f || color.z > 0.0f)) return;
+    tlights_.push_back({pos, color, radius, std::max(falloffExponent, 0.0f)});
+}
+
+// (item 4, at the frame start: camera set) the lights collected since the last frame start; the 8 that reach the camera
+// the most (brightness x their falloff at the camera's distance, those whose sphere holds the camera first)
+void Pipeline::selectTransientLights() {
+    static const char* test = std::getenv("WFC_TLTEST");   // (diagnostics) r,g,b,radius,exp: one light 4 m ahead, 1 m up
+    if (test) {
+        float v[5] = {1, 1, 1, 6, 2};
+        std::sscanf(test, "%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4]);
+        const core::Vec3 fwd{-camView_.m[2], -camView_.m[6], -camView_.m[10]};
+        addTransientLight(camPos_ + fwd * 4.0f + core::Vec3{0, 1, 0}, {v[0], v[1], v[2]}, v[3], v[4]);
+    }
+    tlightsDraw_.swap(tlights_);
+    tlights_.clear();
+    static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
+    tlN_ = 0;
+    if (off || tlightsDraw_.empty()) return;
+    std::vector<std::pair<float, size_t>> rank;
+    for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
+        const TransientLight& L = tlightsDraw_[i];
+        const float d = core::length(L.pos - camPos_) / L.radius;
+        const float reach = std::max(0.0f, 1.0f - std::min(d, 4.0f) * 0.25f);   // (a light near the camera ranks high)
+        rank.push_back({-(L.color.x + L.color.y + L.color.z) * (0.1f + reach), i});
+    }
+    std::sort(rank.begin(), rank.end());
+    for (const auto& r : rank) {
+        if (tlN_ >= 8) break;
+        const TransientLight& L = tlightsDraw_[r.second];
+        tlPos_[tlN_][0] = L.pos.x; tlPos_[tlN_][1] = L.pos.y; tlPos_[tlN_][2] = L.pos.z; tlPos_[tlN_][3] = 1.0f / L.radius;
+        tlCol_[tlN_][0] = L.color.x; tlCol_[tlN_][1] = L.color.y; tlCol_[tlN_][2] = L.color.z; tlCol_[tlN_][3] = L.falloff;
+        ++tlN_;
+    }
+}
+
 bool Pipeline::queueFallbackSprites(unsigned tex, bool additive, float rgbScale, const Sprite* sp, size_t n) {
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     static const bool off = std::getenv("WFC_FALLBACKIMMEDIATE") != nullptr;   // A/B: the immediate fixed-function draw
@@ -8067,6 +8146,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
+    selectTransientLights();                           // (item 4) the transient lights collected since the last frame start
     znear_ = cam.znear; zfar_ = cam.zfar;
     if (motionVectorsOn()) {
         detectCameraCut(cam);
@@ -8468,7 +8548,7 @@ void Pipeline::r1BindDraw(int prog, int lm0, int arr) {
     if (prog < 0 || (size_t)prog >= progs_.size()) return;
     const Program& P = progs_[(size_t)prog];
     const GLint lumOn = ULOC(P, "uRtLumOn");            // (item 2B)
-    if (lumOn >= 0) Uniform1i(lumOn, r1WorldMrt_ && rtLampShadowsWorld() ? 1 : 0);
+    if (lumOn >= 0) Uniform1i(lumOn, r1WorldMrt_ && rtMrtWorld() ? 1 : 0);   // (2B and item 4: the irradiance target)
     const GLint on = ULOC(P, "uR1On");
     static int toldOn = 0, toldOff = 0;
     if (on < 0) { if (r1WorldMrt_ && toldOff++ < 3) LOG_INFO("RT R1: program %d has no uR1On (no sun-swap text)", prog); return; }
