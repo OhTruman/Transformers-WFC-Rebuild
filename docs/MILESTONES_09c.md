@@ -1487,3 +1487,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   noise on the same exe), SYSTEMS_MATC58_AUDIT 521f131c (56 / 58 compile with parent + shader fallbacks; MP-first
   list; the original has no light sources beyond muzzle + death), SYSTEMS_RT_LIGHT_HOOKS 57109d37 (27 effect lights
   proposed, RT-era, Realistic-only, default off; code waits on Rendering's pick). Pagefile moved to F: (user).
+  2026-10-16 04:41 USER DECISIONS: no preview build (waits for the full package 6); second RT worker = Systems
+  (effect-light hooks WFC_FXLIGHTS, item 6 material compile, row 3 headlights; src/render stays Rendering's);
+  per-row gates = Off / Faithful identity + one crop, the 3-arm regress / leak rows / capture sets once on the final
+  head; Experimental builds the same-frame Off | Realistic eye-pass pipeline + penultimate-head FAST. Target ~17 Oct.
+  PLAN V3 ROWS MERGED (rt2, Off / Faithful byte-identical to 848b147b, 5 / 5 + SIMHASH): row 1 bd749603 characters
+  take the RT sun (WFC_RT_CHARSUN), row 8 5ab0a45c lamp calibration (WFC_RT_CHARLAMPCAL), row 6 9007d194 transient
+  lights in reflections (WFC_RT_REFLTL), row 2 8b29ff13 sun-share shadows (WFC_RT_SUNSHARE), 428bcf7e spot API
+  addTransientSpot + transient-light cost reserve. Built, switches in the exe, pushed. Systems FX_LIGHTS headless PASS
+  (SIMHASH identical, 44 / 44); Streets crop pending their RT-enabled rebuild.
