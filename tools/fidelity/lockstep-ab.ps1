@@ -75,6 +75,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
         $hd2Req = [bool]((Add-WfcHarnessEnv (ArmEnv $extra)).WFC_HDTEXTURES -match '^\s*2'); $hdMaps = 0
         $pbrErr = if ($hd2Req -and (Test-Path $lg)) { @(Select-String -Path $lg -Pattern "wfcPbrEnvEnergy' undeclared" -SimpleMatch).Count } else { 0 }
         if ($hd2Req -and (Test-Path $lg)) { $mm = Select-String -Path $lg -Pattern 'HD modern material maps: (\d+)' | Select-Object -First 1; if ($mm) { $hdMaps = [int]$mm.Matches[0].Groups[1].Value } }
+        $modOn = if ($hd2Req -and (Test-Path $lg)) { [bool](Select-String -Path $lg -Pattern 'Modern materials on for MP_' -SimpleMatch -Quiet) } else { $false }
         # walk the log: SIMHASH <step> <hash> marks the current sim step; PERF / SLOWFRAME lines belong to it
         $step = -1; $hash = @{}; $ft = New-Object System.Collections.Generic.List[double]; $sf = New-Object System.Collections.Generic.List[object]; $occT = 0; $occS = 0
         foreach ($l in [IO.File]::ReadLines($lg)) {
@@ -93,7 +94,7 @@ for ($rep = 1; $rep -le $Reps; $rep++) {
             gpu_transl = [Math]::Round((Mean (& $col 12)), 2); gpu_post = [Math]::Round((Mean (& $col 13)), 2); cpu_render = [Math]::Round((Mean (& $col 1)), 2)
             cpu_chars = [Math]::Round((Mean (& $colA 3)), 2); outside = [Math]::Round((Mean (& $col 7)), 2)
             draws = [Math]::Round((Mean (& $colA 14)), 0); draws_dyn = [Math]::Round((Mean (& $colA 15)), 0); draws_fx = [Math]::Round((Mean (& $colA 16)), 0); binds = [Math]::Round((Mean (& $colA 17)), 0)
-            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd2_req = $hd2Req; hd_maps = $hdMaps; pbr_err = $pbrErr; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root; rt_req = $rtReq; rt_mode = $rs.mode; rt_modeLogged = $rs.modeLogged; rt_scene = $rs.scene; rt_noshaders = $rs.noShaders
+            occ_tested = $occT; occ_skipped = $occS; hd_req = $hdReq; hd2_req = $hd2Req; hd_maps = $hdMaps; modern_on = $modOn; pbr_err = $pbrErr; hd_on = $hs.on; hd_pack = $hs.pack; hd_root = $hs.root; rt_req = $rtReq; rt_mode = $rs.mode; rt_modeLogged = $rs.modeLogged; rt_scene = $rs.scene; rt_noshaders = $rs.noShaders
             hashes = ($rng | ForEach-Object { $hash[$_] }) -join ',' })
     }
 }
@@ -130,6 +131,7 @@ foreach ($r in $rows) {
     $hdOk = $true; $hdRef = @($rows | Where-Object { $_.rep -eq $r.rep -and $_.hd_on })[0]
     if ($r.hd_req -and (-not $r.hd_on -or $r.hd_pack -le 0)) { $hdOk = $false; $occNote += " HD requested but not on (pack ignored / incomplete: no 'HD texture pack available' line)" }
     elseif ($r.hd2_req -and $r.pbr_err -gt 0) { $hdOk = $false; $occNote += " HD 2: $($r.pbr_err) PBR programs failed (wfcPbrEnvEnergy undeclared: the exe is older than the materials_pbr data)" }
+    elseif ($r.hd2_req -and $r.hd_maps -gt 0 -and -not $r.modern_on) { $hdOk = $false; $occNote += " HD 2: modern material maps loaded but no 'Modern materials on for MP_<map>' line" }
     elseif ($r.hd2_req -and $r.hd_maps -le 0) { $hdOk = $false; $occNote += " HD 2 requested but no modern material maps (no 'HD modern material maps: N' line: the root lacks hd_pbr_index.json)" }
     elseif (-not $r.hd_req -and $r.hd_on) { $hdOk = $false; $occNote += " HD on although not requested" }
     elseif ($r.hd_on -and $hdRef -and ($r.hd_pack -ne $hdRef.hd_pack -or $r.hd_root -ne $hdRef.hd_root)) {
