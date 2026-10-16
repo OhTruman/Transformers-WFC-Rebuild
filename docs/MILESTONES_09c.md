@@ -1571,3 +1571,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   AssetTools tag-parser fix moved up (package 6; ~2 h; recovers 2 Gorge audio triggers + Berth blocking volume /
   decal; ships via the package overlay, ExtractedAssets untouched); A5_TRY ran clean (4.5 min). Rendering keeps an
   integration-head export for identity (no rebase, per CLAUDE.md).
+  2026-10-16 07:37 TAG-PARSER FIX DONE (AssetTools f384c7b; authored_reparse.py with exact undo): detector 0 on all 10
+  MP maps, vs_validate 45 checks 0 FAIL each; the 4 MP objects' runtime files are byte-identical (exporters read the
+  cooked package natively), so nothing ships and the Gorge / Berth in-game checks are cancelled. Campaign: 1,442 rows
+  re-parsed (D5 80, A1 1,231, A5 131); chapters rerunning to pick up the recovered meshes and lights. Package-gate
+  base for package 6 = 398b27ef + yaw 022e5e34 (same match across the 3 arms; Experimental builds it).
