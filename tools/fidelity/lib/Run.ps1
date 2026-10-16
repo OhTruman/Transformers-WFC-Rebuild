@@ -91,6 +91,19 @@ function Test-WfcLanePython($proc) {
 }
 # Whether a CONTAMINATED.txt names a lane's process (another game exe, or a lane python per Test-WfcLanePython); files written
 # before 2026-10-14 also list unrelated pythons, so the report re-reads them line by line.
+# The game window's client rect (Integration 2026-10-16: under NOINTERACT a 2560x1440 request came out 2560x1417 on some runs,
+# which breaks pixel diffs and frame-time comparisons). Heads from dd4bbca1 log "NOINTERACT: client WxH at (x,y)" at boot and after
+# each setDisplayMode, with " - DIFFERS from the request" when the client is not the requested size: that row is INVALID. Older
+# heads log no such line (unknown, not invalid).
+function Get-WfcClientRect([string]$WfcLog) {
+    $o = [pscustomobject]@{ known = $false; w = 0; h = 0; differs = $false; line = "" }
+    if (-not (Test-Path $WfcLog)) { return $o }
+    foreach ($l in [IO.File]::ReadLines((Resolve-Path $WfcLog).Path)) {
+        $m = [regex]::Match($l, 'NOINTERACT: client (\d+)x(\d+) at \((-?\d+),(-?\d+)\)( - DIFFERS from the request)?')
+        if ($m.Success) { $o.known = $true; $o.w = [int]$m.Groups[1].Value; $o.h = [int]$m.Groups[2].Value; if ($m.Groups[5].Success) { $o.differs = $true }; $o.line = $m.Value }
+    }
+    return $o
+}
 function Test-WfcContaminated([string]$Path) {
     if (-not (Test-Path $Path)) { return $false }
     foreach ($l in (Get-Content $Path)) {
