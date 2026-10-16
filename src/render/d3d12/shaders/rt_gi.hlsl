@@ -35,7 +35,7 @@ cbuffer GiFrame : register(b0) {
     uint4 Range;        // first texel, texel count, frame index, light count
     float4 Mix;         // minimum blend weight, tangent-y sign, the sun's exponent p, the bounce gain (0 = no bounce)
     uint4 Off;          // GiData offsets: subs, lights, hit page map; instance mask
-    float4 GiExtra;     // x: the static lights' source radius (m: soft, contact-hardening lamp shadows), yzw 0
+    float4 GiExtra;     // x: the static lights' source radius (m: soft, contact-hardening lamp shadows), y: the bounce saturation (X4), z: the emissive gain, w 0
 };
 
 static const float3 LMB[3] = { float3(0.0, 0.81649658, 0.57735027), float3(-0.70710678, -0.40824829, 0.57735027),
@@ -100,8 +100,16 @@ float3 hitRadiance(uint id, uint prim, float2 bc) {
     }
     // the albedo x the map's bounce gain (the bake's GI was far stronger than these dark albedos bounce: Beast's intensity
     // settings were not cooked), each channel capped at 0.8 so bright surfaces cannot run away over the passes
-    const float3 refl = min(HitSub[sub * 8 + 5].rgb * max(Mix.w, 0.0), 0.8);
-    return refl * L * (1.0 / 3.0) + HitSub[sub * 8 + 6].rgb;
+    float3 refl = min(HitSub[sub * 8 + 5].rgb * max(Mix.w, 0.0), 0.8);
+    // (X4, Realistic) the bounce keeps more of the surface's colour - a red container tints the robot beside it, lava
+    // reddens the walls over it: the reflectance's chroma x GiExtra.y around its luminance (the fitted brightness kept)
+    if (GiExtra.y > 0.0 && GiExtra.y != 1.0) {
+        const float l = dot(refl, float3(0.2126, 0.7152, 0.0722));
+        refl = min(max(l + (refl - l) * GiExtra.y, 0.0), 0.8);
+    }
+    // (Molten plan a, Realistic) emissive surfaces (lava, glowing conduits) as light sources: GiExtra.z scales what a
+    // bounce ray picks up from them (0 = 1: the material estimate as is)
+    return refl * L * (1.0 / 3.0) + HitSub[sub * 8 + 6].rgb * (GiExtra.z > 0.0 ? GiExtra.z : 1.0);
 }
 
 // (diagnostics: the bounce rays' fate, summed per wave into Stats bytes 192 ..: hits on static geometry, of them with a
