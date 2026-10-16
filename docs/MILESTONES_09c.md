@@ -2043,3 +2043,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   package 7 polish (WFC_FXINACTIVE=0). The respin's FX lever = the LOD data. LOD DECODE CHECK REASSIGNED to Systems
   (AssetTools' session blocked on a permission prompt): original ParticleLODLevel bytes via ue3obj vs decoded, bug
   hunt in a copy of pstream.py, regen into their work/, before / after pair counts + sprite A/B.
+  2026-10-16 16:40 LOD DECODE CHECK: NO BUG (Systems, pstream.system read-only on the cooked objects): the authored
+  PeakActiveParticles per LOD confirm LOD 1 is heavier in the original (GibsTrail Spray_Blue 6 / 17 / 2 / 2, _Dup
+  26 / 78 / 6 / 3; Exp_Death 4 emitters heavier at LOD 1, 0 lighter); our decode matches each LOD object; the mid-
+  range load is the original's authoring. Off-path delta = the tiled gate (fixed, cand9) + gib trails of 63-bot
+  deaths (the original's 10-player cap never produced them). DECISION: Gameplay prepares a 10-presentation cap in
+  > 10-player matches (oldest dissolves first, 5v5 untouched, WFC_CORPSECAP); in the respin if the bisect's corpse
+  arm shows > ~1 ms p90, else package 7 with the trail distance LOD.
