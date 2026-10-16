@@ -1281,6 +1281,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   AssetTools/work/gltf_wfcmat and stops unless 85 of 85 rows are replaced; verify_slim static row check_overlay.py
   (the shipped barrier glTF carries the Barrier_Defrag MATINST extras; all 85 byte-identical to FROZEN; package 4 fails
   it by design). Systems ready for 'build package 5' once the cull-fix head passes regress.
+  2026-10-16 02:01 BISECT (Experimental, 3-arm lockstep, RT off, Classic, 508 / 504 / 503, 2 reps, same match, 0 contamination):
+  a5f53923 + WFC_NOTRANSIENTLIGHTS=1 equals 30b2fa74 within -0.04 .. +0.01 ms (508 2.96 / 3.27 / 2.97; 504 3.30 / 3.53 /
+  3.26; 503 3.28 / 3.48 / 3.27), so the whole regression is the transient lights: GPU per-pixel cost in the lit world
+  pass (slow-frame GPU world 0.70 -> 0.78-0.80; p50 1.82 -> 1.93; chars CPU and draws equal between head and lights
+  off) = up to 8 lights evaluated in every lit world shader whenever any light is alive, which with 63 bots is always.
+  Translucency 0.47 -> 0.64 on both head and lights-off = option B / 3b, not part of the regression. Rows 2-3 on
+  a5f53923: captures vs 30b2fa74 Off 14 / 25, Faithful 14 / 25, Realistic 25 / 25 (expected sets), NOINTERACT
+  determinism pair 0 / 25, SIMHASH identical; R4 leak rows done. Target for the cull fix: within +0.05 ms p90 of base;
+  Experimental reruns the same 3-arm A/B on the merged head; Systems adds a game-side view-cone cull as a small patch.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
