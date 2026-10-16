@@ -1856,7 +1856,7 @@ const std::unordered_map<std::string, HdEntry>& hdIndex() {
             if (fmt == "BC1") fmt = "DXT1"; else if (fmt == "BC3") fmt = "DXT5"; else if (fmt == "BC2") fmt = "DXT3";
             if (key.empty() || dds.empty()) continue;
             std::ifstream f(platform::longPath(root + "/" + dds), std::ios::binary | std::ios::ate);   // [Systems] long paths
-            const long long want = (long long)r["bytes"].asFloat(-1.0f);
+            const long long want = (long long)r["bytes"].asDouble(-1.0);   // double: a 32-bit float cannot hold sizes above 2^24 exactly (89,478,612 -> 89,478,608 rejected the whole HD pack)
             if (!f || (want >= 0 && (long long)f.tellg() != want)) {
                 if (!missing) LOG_WARN("wfc: HD texture pack: first missing / wrong-size file %s (%s)", dds.c_str(), !f ? "missing" : "size");
                 ++missing; continue;
@@ -1898,7 +1898,7 @@ const std::map<std::pair<std::string, std::string>, HdPbrEntry>& hdPbrIndex() {
             if (fmt.compare(0, 3, "PF_") == 0) fmt = fmt.substr(3);
             std::transform(tex.begin(), tex.end(), tex.begin(), ::tolower);
             std::transform(role.begin(), role.end(), role.begin(), ::tolower);
-            const long long want = (long long)r["bytes"].asFloat(-1.0f);
+            const long long want = (long long)r["bytes"].asDouble(-1.0);   // double: a 32-bit float cannot hold sizes above 2^24 exactly (89,478,612 -> 89,478,608 rejected the whole HD pack)
             std::ifstream f(root + "/" + dds, std::ios::binary | std::ios::ate);
             if (tex.empty() || role.empty() || dds.empty() || (fmt != "BC4" && fmt != "BC7") || (!space.empty() && space != "linear") ||
                 !f || (want >= 0 && (long long)f.tellg() != want)) { ++bad; continue; }
