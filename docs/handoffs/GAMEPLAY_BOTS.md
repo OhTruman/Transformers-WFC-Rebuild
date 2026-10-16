@@ -105,7 +105,12 @@ Bots think every 0.25 s, staggered. Each decision covers:
   - **Known artefact:** run it with the default sim threads. Under `WFC_SIMTHREADS=2` (a cap used for CPU-only batch runs), the "AI cost per step" check FAILS for Classic AND Smart. 2026-10-13: avg 0.10-0.14 ms per bot, max 8-22 ms; the same build passes 39/39 for both AIs with default threads. That is the thread cap, not a code regression; do not chase it.
   - Other machine load also inflates the max; the 2026-10-13 regression sweep saw 13.85 ms on a busy machine and 4.59 ms quiet.
 - `WFC_NAVQTEST` (measurement): bot pathing quality on the loaded map. Per bot-minute: slow %, heading reversals, off-mesh %, 5 s idles, stucks / repaths / failed searches. `WFC_NAVQ_SECS`, `WFC_NAVQTRACE=<player>`.
-  - Run it under `WFC_NULLRENDER=1` (CPU only: no window, GPU or audio device) with 6 seeds (`WFC_SEED`) per arm; single matches mislead.
+  - Run it under `WFC_NULLRENDER=1` (CPU only: no window, GPU or audio device); single matches mislead.
+  - **Yardstick (Integration decision 2026-10-16):** 24 seeds per arm (`WFC_SEED` 1-24, about 5 s per run), gated per column with a z-score.
+    - z = delta / sqrt(SE_ref² + SE_arm²) over the per-seed values (`work/pass29/navq_cmp.js` on agents/gameplay).
+    - The reference for Smart on 7d9edf78 is `work/pass29/c09` (seeds 1-12 = the 069a0a8f baseline lines, seeds 13-24 new).
+    - The older |mean(s7-12) - mean(s1-6)| noise reference is retired: it was implausibly small on some columns (Debris slow 0.07 %).
+    - The same build differs between seed groups 1-12 and 13-24 by as much as the deltas it was used to call (Gorge stucks 1.44 vs 1.69, Streets off-mesh 4.91 vs 5.94 %).
   - Results 2026-10-13: docs/handoff/GAMEPLAY_PATHING_2026-10-13.md.
 - **Renderer coupling (audit 2026-10-13):** bots and gameplay read nothing decision-relevant from the renderer.
   - The one render-time read is `drawOwnerRenderAge` in `participantShotFxHook`: the presentation-only impact-squib relevance gate, used in extended lobbies or with `WFC_IMPACTRELEVANCE=1`.
@@ -117,7 +122,7 @@ Bots think every 0.25 s, staggered. Each decision covers:
 - `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
 - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.
 
-## Tipped bot vehicles (2026-10-14): Smart self-rights by default; Gorge movement cost is the next round's target
+## Tipped bot vehicles (2026-10-14): Smart self-rights by default; the Gorge movement cost was noise (2026-10-16)
 
 **User report (package 4):** "a car tipped over and it was still moving forward even though the car was tipped forward".
 
@@ -211,10 +216,22 @@ The contact-relative gate (REL) is [PROV], a deviation from the original's absol
 
 When the righting is forced onto Classic (WFC_BOTTIP), the SIMHASH divergence starts one step after the first unstable bot hover step (Gorge s2 713 -> 714, Molten s3 770 -> 771, Streets s1 1127 -> 1128).
 
-### Next round (open)
+### Resolved 2026-10-16: no movement cost (`docs/handoff/GAMEPLAY_SMART_ROUND_7d9edf78.md`)
 
-- Find why righting degrades Gorge movement. Candidates: righting while the stuck / dither logic reverses the bot; or bots taking routes that only the player path could climb.
-- Consider porting the full AI translation as one unit.
+Self-righting on (the shipped default) vs `WFC_BOTTIP=-1`, Smart, 24 seeds, on integration 7d9edf78. No column is significant:
+
+| Map | Change | z |
+|---|---|---|
+| Gorge | stucks 1.54 -> 1.57 | 0.1 |
+| Gorge | off-mesh 5.11 -> 5.81 % | 0.9 |
+| Gorge | slow 4.55 -> 5.52 % | 1.45 (largest) |
+| Streets | off-mesh 5.02 -> 5.42 % | 0.4 |
+
+- Molten and Debris lean better with righting on.
+- Integration decision: self-righting stays as shipped.
+- The 12-seed regressions in the tables above were within the seed-group spread.
+- Squad follow reversals (the other item of that round) are closed as a design item: `docs/handoff/GAMEPLAY_SQUAD_SLOT_REDESIGN.md` (after package 6).
+- Still open, not a regression: porting the full AI translation as one unit.
 
 ### Diagnostics
 

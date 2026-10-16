@@ -3100,6 +3100,8 @@ void World::clearMatchActors() {
     rollers_.clear();
     beacons_.clear();
     buffShots_.clear();
+    for (auto& kv : minePres_) if (kv.second.fx >= 0) fxStepStop(kv.second.fx);
+    minePres_.clear(); mineFades_.clear();
     mines_.clear();
     missile_ = GuidedMissile{}; missileDelay_ = -1.0f;
     // The local player's world-level combat state (the pawn's own buffs reset with its respawn).
@@ -3768,6 +3770,7 @@ void World::draw(render::IRenderer& r) const {
     for (const Sentry& se : sentries_)
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+    drawMines(r);   // [Gameplay] kamikaze mines (owner 0: the local player's mines, its character colours)
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
     // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
     // Transient lights reaching the view only (game-side cull; the renderer additionally masks per draw): the light's sphere
@@ -4012,7 +4015,7 @@ void World::evictUnusedAssets() {
     auto useModel = [&](const assets::SkinnedModel& m) { for (const render::Material& M : m.mats) { used.insert(M.tex); used.insert(M.emissiveTexHandle); } };
     for (const auto& kv : chassisCache_) { useModel(kv.second->robot); useModel(kv.second->vehicle); useModel(kv.second->arm); }
     for (const auto& kv : weaponModels_) if (kv.second) useModel(*kv.second);
-    useModel(barrierModel_); useModel(sentryModel_); useModel(weaponModel_);
+    useModel(barrierModel_); useModel(sentryModel_); useModel(weaponModel_); useModel(mineModel_);
     for (auto it = texCache_.begin(); it != texCache_.end();) {
         if (pinnedTex_.count(it->first) || used.count(it->second)) { ++it; continue; }
         if (renderer_ && it->second != render::kInvalidTexture) rmReleaseTex(*renderer_, it->second, 0);
@@ -5242,6 +5245,18 @@ void World::ensureAbilityModels() {
             if (renderer_) { render::MeshData md; md.subs = sentryModel_.subs; md.mats = sentryModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(sentryModel_); }
         } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
     }
+    if (!mineModelTried_ && onMainThread()) {   // [Gameplay] kamikaze mine (MinePooper) presentation
+        mineModelTried_ = true;
+        const std::string ext = assetRoot() + "/../content/WEP_KamikazeMine_p/";
+        if (assets::loadSkinnedGlb(ext + "WEP_KamikazeMine_SKEL.gltf", mineModel_) && mineModel_.valid()) {
+            assets::loadAnimationsByName(ext + "WEP_KamikazeMine_ANIM.anim.gltf", mineModel_);
+            // The export carries no extras.wfc_material: the compiled original is WEP_KamikazeMine_p.WEP_KamikazeMine_MATINST.
+            for (render::Material& mt : mineModel_.mats)
+                if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "WEP_KamikazeMine_p." + mt.sourceName;
+            resolveModelTextures(mineModel_);
+            if (renderer_) { render::MeshData md; md.subs = mineModel_.subs; md.mats = mineModel_.mats; fxPrewarm(*renderer_, md, 0); prewarmSkin(mineModel_); }
+        } else LOG_ERROR("kamikaze mine: WEP_KamikazeMine_SKEL unavailable (mines not drawn)");
+    }
 }
 
 void World::spawnBarrier(BarrierState& slot) {
@@ -5952,6 +5967,10 @@ void World::tickKillstreakItems(float dt) {
     // dropped turret pickup is not re-takeable here [PARTIAL].
     if (pc.tempWeapon_ == 2 && (pc.isTransforming() || pc.form() == Form::Vehicle || pc.tempDropRequested_ || localDead_)) pc.removeTempWeapon();
     pc.tempDropRequested_ = false;
+    for (size_t i = 0; i < mineFades_.size();) {   // [Gameplay] FadingOut ghosts (presentation): FadeOutTime 1 s
+        if ((mineFades_[i].age += dt) >= 1.0f) { mineFades_.erase(mineFades_.begin() + (long)i); continue; }
+        ++i;
+    }
     // MinePooper: every 2.0 s while the 15 s buff lasts, spawn at owner + (400, 100, 0) rotated.
     if (pc.minePooperRemain_ > 0.0f && !localDead_) {
         pc.minePooperRemain_ -= dt; pc.minePooperTimer_ -= dt;
@@ -5961,6 +5980,12 @@ void World::tickKillstreakItems(float dt) {
             KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
             m.audioKey = ++projAudioKey_;                  // [Systems M08p]
             mines_.push_back(m);
+            {   // [Gameplay] presentation: spawned with the owner's rotation, the flight trail from spawn
+                ensureAbilityModels();
+                MinePres& mp = minePres_[m.audioKey];
+                mp.yaw = pc.yaw();
+                if (renderer_) { const core::Vec3 ff = f, uu{0, 1, 0}; mp.fx = fxStepSpawn("FX_KamikazeMine_p.FX.Trail_KamikazeMine_FX", m.pos, ff, uu, fxTeamOf(localPlayer_), false); }
+            }
         }
     }
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
@@ -5997,12 +6022,40 @@ void World::tickKillstreakItems(float dt) {
         if (!boom && !gone) setKamikazeMineAudio(m.audioKey, m.pos, core::length(m.vel) > 0.0f);
         else if (boom || m.health <= 0.0f) onKamikazeMineExploded(m.audioKey, m.pos);
         else onKamikazeMineRemoved(m.audioKey);
+        minePresTick(m, boom || gone, boom || m.health <= 0.0f, dt);   // [Gameplay] presentation only
         if (boom || gone) { mines_.erase(mines_.begin() + (long)i); continue; }
         ++i;
     }
 }
 
 // ---- Systems M08d: per-form vehicle audio, weapon identity, projectiles, beams (Gameplay reports; Systems plays) ----
+
+// [Gameplay] Kamikaze mine presentation (see World.h MinePres): no sim state is read back from here.
+// A (forward, up) frame for its effects: up = world up unless the direction is near vertical (as the projectile frame).
+static core::Vec3 mineFrameF(const core::Vec3& d) { const float l = core::length(d); return l > 1e-6f ? d * (1.0f / l) : core::Vec3{1, 0, 0}; }
+static core::Vec3 mineFrameU(const core::Vec3& f) { return std::fabs(f.y) > 0.99f ? core::Vec3{0, 0, -1} : core::Vec3{0, 1, 0}; }
+void World::minePresTick(const KamikazeMine& m, bool removed, bool exploded, float dt) {
+    auto it = minePres_.find(m.audioKey);
+    if (it == minePres_.end()) return;
+    MinePres& p = it->second;
+    const bool tracking = core::length(m.vel) > 0.0f;
+    if (m.t >= 2.0f && !tracking && !removed) p.roll += 50000.0f * (core::PI / 32768.0f) * dt;   // Hovering: SetRotation(+ HoverRotationRate x dt)
+    if (p.fx >= 0 && !removed) {
+        const core::Vec3 f = mineFrameF(tracking ? m.vel : core::forwardFromYawPitch(p.yaw, 0.0f)), u = mineFrameU(f);
+        fxStepMove(p.fx, m.pos, f, u);
+    }
+    if (!removed) return;
+    if (p.fx >= 0) { fxStepStop(p.fx); p.fx = -1; }   // the trail finishes its particles
+    if (exploded) {
+        static const bool testLog = std::getenv("WFC_MINEPRESTEST") != nullptr;
+        if (testLog) LOG_INFO("MINEPRES exploded at (%.1f %.1f %.1f) after %.1f s", m.pos.x, m.pos.y, m.pos.z, m.t);
+        if (renderer_) { const core::Vec3 f{0, 1, 0}, u = mineFrameU(f); fxStepSpawn("FX_Explosives_p.FX.Exp_2500cb_FX", m.pos, f, u, fxTeamOf(localPlayer_), true); }
+    } else {   // FadeOut: FadingOut shrinks the mesh in place
+        MineFade fd; fd.pos = m.pos; fd.yaw = p.yaw; fd.roll = p.roll; fd.animT = m.t;
+        mineFades_.push_back(fd);
+    }
+    minePres_.erase(it);
+}
 
 void World::tickVehicleAudio(float dt, const VehicleFormSignals& s) {
     VehicleAudio::Input in = vehicleForm_.translate(s, &vehicleEvents_);
@@ -6701,6 +6754,48 @@ std::vector<World::QaBotLabel> World::qaBotLabels() const {
         out.push_back(L);
     }
     return out;
+}
+
+// [Gameplay] Kamikaze mines: KMine_Open once from spawn, KMine_Seek looping from HoverTime (2 s), the spin about the mesh's
+// forward axis; FadingOut ghosts at their last pose, scaled 1 -> 0.01 over 1 s (Lerp).
+void World::drawMines(render::IRenderer& r) const {
+    minePresDraws_ = 0;
+    if (!mineModel_.valid()) return;
+    const int open = mineModel_.clipByName("KMine_Open"), seek = mineModel_.clipByName("KMine_Seek");
+    auto pose = [&](float t, render::MeshData& md) {
+        const bool seeking = t >= 2.0f && seek >= 0;
+        const int clip = seeking ? seek : open;
+        if (clip < 0) { if (md.positions.empty()) { assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(mineModel_, 0, 0.0f, false, lp); assets::skinPose(mineModel_, lp, g, md); } return; }
+        assets::LocalPose lp; std::vector<core::Mat4> g;
+        assets::samplePose(mineModel_, clip, seeking ? t - 2.0f : t, seeking, lp);
+        assets::skinPose(mineModel_, lp, g, md);
+    };
+    auto place = [&](const core::Vec3& at, float yaw, float roll, float scale) {
+        return core::Mat4::translate(at) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset) * core::Mat4::rotateX(roll) * core::Mat4::scale(core::Vec3{scale, scale, scale});
+    };
+    for (const KamikazeMine& m : mines_) {
+        auto it = minePres_.find(m.audioKey);
+        if (it == minePres_.end()) continue;
+        const MinePres& p = it->second;
+        // KMine_Open clamps at its end (constant until the seek starts): skinned again only while it plays or loops
+        const float openDur = open >= 0 ? mineModel_.clips[(size_t)open].duration : 0.0f;
+        if (p.mesh.positions.empty() || m.t < openDur + 0.1f || m.t >= 2.0f) { pose(m.t, p.mesh); p.posedAt = m.t; }
+        r.drawDynamicMesh(p.mesh, place(m.pos, p.yaw, p.roll, 1.0f), core::Vec3{1, 1, 1});
+        ++minePresDraws_;
+    }
+    for (const MineFade& fd : mineFades_) {
+        if (!fd.posed) { pose(fd.animT, fd.mesh); fd.posed = true; }
+        const float s = 1.0f + (0.01f - 1.0f) * std::min(1.0f, fd.age / 1.0f);
+        r.drawDynamicMesh(fd.mesh, place(fd.pos, fd.yaw, fd.roll, s), core::Vec3{1, 1, 1});
+        ++minePresDraws_;
+    }
+    static const bool testLog = std::getenv("WFC_MINEPRESTEST") != nullptr;   // diagnostics: one line per second with mines up
+    static int frames = 0;
+    if (testLog && minePresDraws_ > 0 && ++frames % 60 == 1) {
+        int seeking = 0; for (const KamikazeMine& m : mines_) seeking += m.t >= 2.0f;
+        LOG_INFO("MINEPRES drew %d mine mesh(es): %zu live (%d past the hover, %zu trails), %zu fading; explosion effects so far %d", minePresDraws_, mines_.size(), seeking,
+                 (size_t)std::count_if(minePres_.begin(), minePres_.end(), [](const auto& kv) { return kv.second.fx >= 0; }), mineFades_.size(), projectileFxExplosions_);
+    }
 }
 
 void World::drawQaBotOverlay(render::IRenderer& r) const {

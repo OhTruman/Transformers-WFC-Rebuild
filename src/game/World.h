@@ -1227,6 +1227,22 @@ private:
     // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
     struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; int audioKey = 0; };   // [Systems M08p] audioKey
     std::vector<KamikazeMine> mines_;
+    // [Gameplay] Presentation of mines_ (TnProjectileKamikazeMine + HmProjectile, CONF script / authored; no sim state): by audioKey.
+    // MeshA WEP_KamikazeMine_SKEL (WEP_KamikazeMine_MATINST, the owner's TnCharacterApplier colours); spawned with the owner's
+    // rotation (Spawn without a rotation); DormantIdleAnim KMine_Open at spawn (Inactive.BeginState, once); after HoverTime
+    // ActiveIdleAnim KMine_Seek (looping) and the mesh turning at HoverRotationRate (Rotator Roll 50000 UU/s) while it searches
+    // (Hovering), held once it homes (Homing: bRotationFollowsVelocity false). TnProjectileMesh KamikazeMine_PROJMESH: FlightEffect
+    // FX_KamikazeMine_p.FX.Trail_KamikazeMine_FX from spawn (ClientSpawnFlightEffect), ExplosionEffect FX_Explosives_p.FX.Exp_2500cb_FX
+    // on Explode. FadeOut (LifeSpan over, owner dead): FadingOut scales the mesh 1 -> 0.01 over FadeOutTime 1 s, no explosion.
+    struct MinePres { float yaw = 0.0f, roll = 0.0f; int fx = -1; mutable render::MeshData mesh; mutable float posedAt = -1.0f; };
+    struct MineFade { core::Vec3 pos; float yaw = 0.0f, roll = 0.0f, age = 0.0f, animT = 0.0f; mutable render::MeshData mesh; mutable bool posed = false; };
+    std::map<int, MinePres> minePres_;
+    std::vector<MineFade> mineFades_;
+    assets::SkinnedModel mineModel_;
+    bool mineModelTried_ = false;
+    void minePresTick(const KamikazeMine& m, bool removed, bool exploded, float dt);
+    void drawMines(render::IRenderer& r) const;
+    mutable int minePresDraws_ = 0;   // diagnostics: mine meshes drawn last frame (WFC_MINEPRESTEST)
     void tickKillstreakItems(float dt);
     void tickBuffShots(float dt);
     const Character* matchPawn(int matchPlayer) const;
@@ -1314,6 +1330,9 @@ public:
     bool guidedMissileAlive() const { return missile_.alive; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
+    int kamikazeMineDraws() const { return minePresDraws_; }               // presentation diagnostics
+    size_t kamikazeMineFades() const { return mineFades_.size(); }
+    bool kamikazeMineModelLoaded() const { return mineModel_.valid(); }
     void damageRollerMine(float amount, int instigator);
     core::Vec3 guidedMissilePos() const { return missile_.pos; }
     void damageSentry(float amount, int instigator, const std::string& type);
