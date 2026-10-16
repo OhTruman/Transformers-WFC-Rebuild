@@ -1473,3 +1473,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   sentry draws), applies clean; merge after Rendering's verification crop.
   DLSS (M5 D): non-commercial project (user 2026-10-12; licensing revisited before any commercial release); the "NVIDIA DLSS"
   credit goes on the start-up splash, the About screen (if any) and the credits - clean and unobtrusive.
+  2026-10-16 04:11 REBOOT DONE (user, 04:02): driver nonpaged pool 10.6 -> 1.10 GB, 0 TDRs since boot, all exes gone;
+  one-client rule lifted (normal slot rules: Rendering slot A, Experimental untimed rows beside it, timed rows alone).
+  All five lanes resumed on their saved plans: Rendering v3batch1 (identity + rows 2 / 6) then the rows 1 / 8 / 6 / 2 +
+  spot API commit; Experimental FAST rerun of the TDR-window rows on 398b27ef + work/ab prune + client-rect check;
+  Systems promotes package 5 quietly on FAST PASS; Gameplay NOINTERACT client-size patch; AssetTools A1_IAC rerun.
+  C: free 106 -> 54 GB across the reboot: pagefile.sys 52 GB (system-managed, 0 MB in use) - a user call, left alone.
