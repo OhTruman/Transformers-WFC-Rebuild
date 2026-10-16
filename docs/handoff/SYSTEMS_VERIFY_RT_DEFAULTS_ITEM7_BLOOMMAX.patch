@@ -1,0 +1,11 @@
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -91,6 +91,8 @@
+     sunshare = 'on'      # row 2 (WFC_RT_SUNSHARE)
+     probefill = 'on'     # row 5 (WFC_RT_PROBEFILL)
+     origspec = 'on'      # Enhanced: the Modern lobe only where the original had a specular input (WFC_PBR_ORIGSPEC=0 restores it)
++    refltemporal = 'on'  # item 7 temporal reflections (WFC_RT_REFLTEMPORAL; Rendering 8d50190a)
++    bloommax = 16        # X1 soft-bloom input cap (WFC_TONE_BLOOMMAX; item 7 polish, 64 -> 16)
+ }
+ 
+ function Norm([string]$p) {
