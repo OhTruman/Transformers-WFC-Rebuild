@@ -43,6 +43,32 @@ different game (decision rule 2026-10-16). Realistic only; Off / Faithful never 
 - Gates: Off / Faithful identity on the integration export; the eye-pass sheet (contrast ratio, % pixels changed); a
   shafts crop on Streets (between buildings), Gorge (open sky), Molten (lava glow through the haze).
 
+## What the screen-space tries taught (v1-v3, 2026-10-16, uncommitted; out of package 6)
+v1 to v3 ray-marched a quarter-size screen target instead of froxels:
+- v1: sun and haze.
+- v2: halos from the frame's 4 shadow lights.
+- v3: halos from the 4 lamps in view, ranked by brightness x coverage.
+
+All three were judged not showable. They added a grey veil (contrast 0.79-0.95 against no-X3 on the authored views)
+and no visible shafts or halos. Rules for the froxel version:
+- **No ambient in-scatter by default.** A probe-ambient term adds the same grey to every froxel, and that is the veil.
+  In-scatter comes only from directional sources (the sun's visibility per froxel, the lamps, the transient lights),
+  so it varies in space. Probe ambient stays behind a switch at a small share.
+- **Shafts need a dark neighbourhood.** The in-scatter must differ strongly between lit and shadowed froxels along the
+  view. Haze where the sun is blocked contributes only transmittance loss, about 0 in-scatter.
+- **Halos need the lamp's own visibility.** A lamp contributes only where its traced ray to the froxel is clear, so its
+  halo is a cone or sphere cut by geometry, not a smear. The v3 ranking (in-view lamps by brightness x coverage) stays
+  as the pick for the 4 traced lamps.
+- **Acceptance on the eye pass:**
+  - Contrast on the authored views at or above 0.98 of no-X3.
+  - A visible shafts crop on Streets / Gorge.
+  - Molten's lava glow reading through the haze.
+  - Measured with Experimental's frame_compare.py.
+
+  If contrast drops below 0.98, it does not ship.
+- **Reusable worktree code:** the ring slot of 28 float4 (shadowColors + volLights) and the v3 lamp ranking in
+  WfcRt.cpp carry over. rt_volumetric.hlsl and the quarter-size vol_ target are replaced by the froxel passes.
+
 ## Effort
 ~2 days: day 1 the D3D12 inject (rays + phase + probe ambient) and the integration / shared 3D texture; day 2 the
 temporal filter, the GL apply (composite + translucency), the haze floor and the per-map tuning by eye.
