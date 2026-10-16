@@ -121,6 +121,7 @@ struct Program {
           uLCol = -1, uLSpot = -1, uFogOn = -1, uFogMaxH = -1, uFogScale = -1, uFogStart = -1, uFogExt = -1,
           uFogIn = -1;
     GLint uTLN = -1, uTLPos = -1, uTLCol = -1, uTLVisOn = -1, uTLVis = -1, uTLMask = -1, uTLCut = -1, uTLDir = -1, uTLCosI = -1;   // (item 4) cached: no lookups per bind
+    GLint uTLAllN = -1, uTLData = -1, uTLTile = -1, uTLMask2 = -1;   // (tiled transient lights)
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
@@ -374,6 +375,16 @@ private:
     float tlCut_[8] = {};
     float tlDir_[8][4] = {}, tlCosI_[8] = {};   // (v3 row 3) spot axis (xyz), cos(outer) (w; -2 = a point light); cos(inner)   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms
     void selectTransientLights();
+    // (tiled transient lights) every selected light (up to 64 in Realistic; 8 elsewhere, the original's count) in a data
+    // texture (4 texels per light), and a per-32-pixel screen-tile mask of the lights whose cull sphere reaches the tile:
+    // a pixel loops over its tile's lights only. The first 4 are the RT-shadowed ones (the ranking order). WFC_TLTILED=0:
+    // the earlier 8-light uniform path.
+    static constexpr int kTLMax = 64;
+    float tlData_[kTLMax][16] = {}; int tlAllN_ = 0;
+    GLuint tlDataTex_ = 0, tlTileTex_ = 0; int tlTileW_ = 0, tlTileH_ = 0;
+    std::vector<uint32_t> tlTiles_;
+    bool tlTiledOn() const;
+    void tlBuildTiles();
     size_t fallbackUsed_ = 0;
     GLuint fallbackProg_ = 0, fallbackVao_ = 0, fallbackVbo_ = 0, fallbackIbo_ = 0; size_t fallbackIboQuads_ = 0;
     void drawFallbackSprites(const FallbackBatch& b);

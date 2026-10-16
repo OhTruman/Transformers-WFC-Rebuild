@@ -2653,16 +2653,38 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
         const size_t at = fs.find(anchor, mainStart), ma = fs.find("void main() {", mainStart);
         if (at != std::string::npos && ma != std::string::npos && at > ma) {
-            fs.insert(at, "    if (uLit != 0 && uTLN > 0) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
+            fs.insert(at, "    if (uLit != 0 && (uTLN > 0 || uTLAllN > 0)) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
                           "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
                           "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
                           "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
                           "uniform int uTLVisOn; uniform sampler2D uTLVis;   // (Realistic, characters: the RT visibility, LightVis bit 1)\n"
+                          "uniform int uTLAllN; uniform sampler2D uTLData; uniform usampler2D uTLTile; uniform uvec2 uTLMask2;   // (tiled)\n"
                           "vec3 wfcTransientLights(vec3 N, MatOut o) {\n"
                           "    vec4 tv = uTLVisOn != 0 ? floor(mod(floor(texelFetch(uTLVis, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5), 4.0) / 2.0) : vec4(1.0);\n"
                           "    vec3 V = normalize(uCamPos - vPos), Rv = reflect(-V, N), s = vec3(0.0);\n"
                           "    bool spec = max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) > 0.0;   // (most world materials: none)\n"
+                          "    if (uTLAllN > 0) {   // (tiled: the lights whose cull sphere reaches this 32-pixel tile, in the ranking order)\n"
+                          "        uvec2 m = texelFetch(uTLTile, min(ivec2(gl_FragCoord.xy) / 32, textureSize(uTLTile, 0) - 1), 0).rg & uTLMask2;\n"
+                          "        for (int k = 0; k < uTLAllN; ++k) {\n"
+                          "            if (((k < 32 ? m.x >> uint(k) : m.y >> uint(k - 32)) & 1u) == 0u) continue;\n"
+                          "            vec4 P0 = texelFetch(uTLData, ivec2(0, k), 0), C0 = texelFetch(uTLData, ivec2(1, k), 0);\n"
+                          "            vec4 D0 = texelFetch(uTLData, ivec2(2, k), 0), X0 = texelFetch(uTLData, ivec2(3, k), 0);\n"
+                          "            vec3 d = P0.xyz - vPos, dn = d * P0.w;\n"
+                          "            float x2 = dot(dn, dn);\n"
+                          "            if (x2 > X0.y) continue;\n"
+                          "            float att = pow(clamp(1.0 - x2, 0.0, 1.0), C0.w);\n"
+                          "            if (att <= 0.0) continue;\n"
+                          "            vec3 L = d * inversesqrt(max(dot(d, d), 1e-8));\n"
+                          "            if (D0.w > -1.5) { float cn = clamp((dot(-L, D0.xyz) - D0.w) / max(X0.x - D0.w, 1e-4), 0.0, 1.0); att *= cn * cn; if (att <= 0.0) continue; }\n"
+                          "            float ndl = max(dot(N, L), 0.0);\n"
+                          "            if (ndl <= 0.0 && !spec) continue;\n"
+                          "            vec3 lit = o.DiffuseColor * ndl;\n"
+                          "            if (spec) lit += o.SpecularColor * pow(max(clamp(dot(Rv, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));\n"
+                          "            s += lit * C0.rgb * att * (k < 4 ? tv[k] : 1.0);\n"
+                          "        }\n"
+                          "        return s;\n"
+                          "    }\n"
                           "    for (int k = 0; k < 8; ++k) {\n"
                           "        if (k >= uTLN) break;\n"
                           "        if (((uTLMask >> k) & 1) == 0) continue;\n"
@@ -2901,6 +2923,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.uTwoSided = U("uTwoSided"); P.uClip = U("uClip"); P.uMasked = U("uMasked"); P.uLit = U("uLit");
     P.uTLN = U("uTLN"); P.uTLPos = U("uTLPos"); P.uTLCol = U("uTLCol"); P.uTLVisOn = U("uTLVisOn"); P.uTLVis = U("uTLVis");
     P.uTLMask = U("uTLMask"); P.uTLCut = U("uTLCut"); P.uTLDir = U("uTLDir"); P.uTLCosI = U("uTLCosI");
+    P.uTLAllN = U("uTLAllN"); P.uTLData = U("uTLData"); P.uTLTile = U("uTLTile"); P.uTLMask2 = U("uTLMask2");
     P.uLMCoord = U("uLMCoord"); P.uLMScale = U("uLMScale"); P.uAmb = U("uAmb"); P.uNumLights = U("uNumLights");
     P.uLPos = U("uLPos"); P.uLDir = U("uLDir"); P.uLCol = U("uLCol"); P.uLSpot = U("uLSpot");
     P.uFogOn = U("uFogOn"); P.uFogMaxH = U("uFogMaxH"); P.uFogScale = U("uFogScale"); P.uFogStart = U("uFogStart");
@@ -3677,14 +3700,25 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(ULOC(P, "uBoneTex"), 18);
     }
     {   // (item 4) the transient lights
+        const bool tiled = tlAllN_ > 0 && tlDataTex_ && tlTileTex_ && P.uTLAllN >= 0;
+        if (P.uTLAllN >= 0) {
+            Uniform1i(P.uTLAllN, tiled ? tlAllN_ : 0);
+            if (tiled) {
+                ActiveTexture(GL_TEXTURE0 + 30); glBindTexture(GL_TEXTURE_2D, tlDataTex_);
+                ActiveTexture(GL_TEXTURE0 + 31); glBindTexture(GL_TEXTURE_2D, tlTileTex_);
+                ActiveTexture(GL_TEXTURE0 + 10);
+                Uniform1i(P.uTLData, 30); Uniform1i(P.uTLTile, 31);
+                if (P.uTLMask2 >= 0) Uniform2ui(P.uTLMask2, 0xFFFFFFFFu, 0xFFFFFFFFu);
+            }
+        }
         if (P.uTLN >= 0) {
-            Uniform1i(P.uTLN, tlN_);
-            if (tlN_ > 0) {
+            Uniform1i(P.uTLN, tiled ? 0 : tlN_);
+            if (tlN_ > 0 && !tiled) {
                 Uniform4fv(P.uTLPos, 8, &tlPos_[0][0]); Uniform4fv(P.uTLCol, 8, &tlCol_[0][0]); Uniform4fv(P.uTLCut, 2, tlCut_);
                 Uniform4fv(P.uTLDir, 8, &tlDir_[0][0]); Uniform4fv(P.uTLCosI, 2, tlCosI_);
                 Uniform1i(P.uTLMask, 0xFF);                // (per-draw masks narrow it in drawSubs)
             }
-            const bool vis = tlN_ > 0 && inDynamicDraw_ && rtShadowLightsOn() && rtMaskActive_ && rtTargets_.lightVis;
+            const bool vis = (tlN_ > 0 || tiled) && inDynamicDraw_ && rtShadowLightsOn() && rtMaskActive_ && rtTargets_.lightVis;
             Uniform1i(P.uTLVisOn, vis ? 1 : 0);
             if (vis) { ActiveTexture(GL_TEXTURE0 + 29); glBindTexture(GL_TEXTURE_2D, rtTargets_.lightVis); ActiveTexture(GL_TEXTURE0 + 10);
                        Uniform1i(P.uTLVis, 29); }
@@ -4401,7 +4435,18 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (!queued) {
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
                 int tlMask = 0xFF;
-                if (tlN_ > 0 && P.uTLMask >= 0) {          // (item 4) per-draw light cull, as the original's per-primitive light lists
+                bool tlMask2Set = false;
+                if (tlAllN_ > 0 && P.uTLMask2 >= 0 && tlDataTex_ && tlTileTex_) {   // (tiled: the same per-draw cull over every light)
+                    const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
+                    const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;
+                    uint32_t m2[2] = {0u, 0u};
+                    for (int k = 0; k < tlAllN_; ++k) {
+                        const core::Vec3 lp{tlData_[k][0], tlData_[k][1], tlData_[k][2]};
+                        if (core::length(lp - c) < std::sqrt(tlData_[k][13]) / tlData_[k][3] + rr) m2[k >> 5] |= 1u << (k & 31);
+                    }
+                    Uniform2ui(P.uTLMask2, m2[0], m2[1]);
+                    tlMask2Set = true;
+                } else if (tlN_ > 0 && P.uTLMask >= 0) {          // (item 4) per-draw light cull, as the original's per-primitive light lists
                     const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
                     const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;   // (loose: skinned subs move in their bounds)
                     tlMask = 0;
@@ -4413,6 +4458,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 }
                 glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
                 if (tlMask != 0xFF) Uniform1i(P.uTLMask, 0xFF);   // (a later instanced / multi-draw with this program: every light)
+                if (tlMask2Set) Uniform2ui(P.uTLMask2, 0xFFFFFFFFu, 0xFFFFFFFFu);
             }
             if (rtUvAtlas_) {                              // (M7 RT: the program leaves the atlas pass in screen space again -
                 static const float zero[4] = {0, 0, 0, 0};  //  paths that do not set uRtUvSpace must not inherit it)
@@ -7824,15 +7870,26 @@ void Pipeline::addTransientLight(const core::Vec3& pos, const core::Vec3& color,
 void Pipeline::selectTransientLights() {
     static const char* test = std::getenv("WFC_TLTEST");   // (diagnostics) r,g,b,radius,exp: one light 4 m ahead, 1 m up
     if (test) {
-        float v[5] = {1, 1, 1, 6, 2};
-        std::sscanf(test, "%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4]);
+        float v[6] = {1, 1, 1, 6, 2, 1};   // (6th: a count - n lights on a 3 m ring 6 m ahead, hues around the wheel)
+        std::sscanf(test, "%f,%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]);
         const core::Vec3 fwd{-camView_.m[2], -camView_.m[6], -camView_.m[10]};
-        addTransientLight(camPos_ + fwd * 4.0f + core::Vec3{0, 1, 0}, {v[0], v[1], v[2]}, v[3], v[4]);
+        const int n = std::max(1, std::min((int)v[5], 64));
+        if (n == 1) addTransientLight(camPos_ + fwd * 4.0f + core::Vec3{0, 1, 0}, {v[0], v[1], v[2]}, v[3], v[4]);
+        else {
+            const core::Vec3 side = core::normalize(core::Vec3{fwd.z, 0.0f, -fwd.x});
+            const float sc = (v[0] + v[1] + v[2]) / 3.0f;
+            for (int i = 0; i < n; ++i) {
+                const float a = 6.2831853f * (float)i / (float)n;
+                const core::Vec3 p = camPos_ + fwd * (6.0f + 3.0f * std::cos(a)) + side * (3.0f * std::sin(a)) + core::Vec3{0, 0.5f, 0};
+                const core::Vec3 hue{0.5f + 0.5f * std::cos(a), 0.5f + 0.5f * std::cos(a - 2.094f), 0.5f + 0.5f * std::cos(a + 2.094f)};
+                addTransientLight(p, hue * sc, v[3], v[4]);
+            }
+        }
     }
     tlightsDraw_.swap(tlights_);
     tlights_.clear();
     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
-    tlN_ = 0;
+    tlN_ = 0; tlAllN_ = 0;
     if (off || tlightsDraw_.empty()) return;
     std::vector<std::pair<float, size_t>> rank;
     for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
@@ -7852,9 +7909,19 @@ void Pipeline::selectTransientLights() {
         rank.push_back({-(L.color.x + L.color.y + L.color.z) * (0.1f + reach), i});
     }
     std::sort(rank.begin(), rank.end());
+    const int cap = tlTiledOn() ? (rtMode_ == 2 ? kTLMax : 8) : 8;   // (Off / Faithful: the original's 8)
     for (const auto& r : rank) {
-        if (tlN_ >= 8) break;
+        if (tlAllN_ >= cap) break;
         const TransientLight& L = tlightsDraw_[r.second];
+        {
+            float* q = tlData_[tlAllN_];
+            q[0] = L.pos.x; q[1] = L.pos.y; q[2] = L.pos.z; q[3] = 1.0f / L.radius;
+            q[4] = L.color.x; q[5] = L.color.y; q[6] = L.color.z; q[7] = L.falloff;
+            q[8] = L.dir.x; q[9] = L.dir.y; q[10] = L.dir.z; q[11] = L.cosO;
+            q[12] = L.cosI; q[13] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f; q[14] = q[15] = 0.0f;
+            ++tlAllN_;
+        }
+        if (tlN_ >= 8) continue;
         tlPos_[tlN_][0] = L.pos.x; tlPos_[tlN_][1] = L.pos.y; tlPos_[tlN_][2] = L.pos.z; tlPos_[tlN_][3] = 1.0f / L.radius;
         tlCol_[tlN_][0] = L.color.x; tlCol_[tlN_][1] = L.color.y; tlCol_[tlN_][2] = L.color.z; tlCol_[tlN_][3] = L.falloff;
         // (the cull sphere: falloff pow(1 - x^2, e) < 1/512 past x^2 = 1 - (1/512)^(1/e); e = 75 -> 0.28 of the radius)
@@ -7862,6 +7929,74 @@ void Pipeline::selectTransientLights() {
         tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
         tlCosI_[tlN_] = L.cosI;
         ++tlN_;
+    }
+    if (tlTiledOn()) tlBuildTiles();
+    else tlAllN_ = 0;
+}
+
+bool Pipeline::tlTiledOn() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_TLTILED"); return e && e[0] == '0'; }();
+    return !off;
+}
+
+// the per-tile light masks: each light's cull sphere (its axis-aligned box, 8 corners) projected with this frame's
+// view-projection to a pixel rectangle (+1 tile of margin; a corner behind the camera = the whole screen)
+void Pipeline::tlBuildTiles() {
+    const int tw = std::max(1, (vpW_ + 31) / 32), th = std::max(1, (vpH_ + 31) / 32);
+    tlTiles_.assign((size_t)tw * (size_t)th * 2, 0u);
+    const float* m = viewProj_.m;
+    for (int k = 0; k < tlAllN_; ++k) {
+        const float* q = tlData_[k];
+        const float rc = std::sqrt(std::max(q[13], 0.0f)) / q[3];
+        float x0 = 1e30f, y0 = 1e30f, x1 = -1e30f, y1 = -1e30f;
+        bool full = false;
+        for (int c = 0; c < 8 && !full; ++c) {
+            const float px = q[0] + ((c & 1) ? rc : -rc), py = q[1] + ((c & 2) ? rc : -rc), pz = q[2] + ((c & 4) ? rc : -rc);
+            const float cx = m[0] * px + m[4] * py + m[8] * pz + m[12], cy = m[1] * px + m[5] * py + m[9] * pz + m[13];
+            const float cw = m[3] * px + m[7] * py + m[11] * pz + m[15];
+            if (cw <= 1e-3f) { full = true; break; }
+            const float sx = (cx / cw * 0.5f + 0.5f) * (float)vpW_, sy = (cy / cw * 0.5f + 0.5f) * (float)vpH_;
+            x0 = std::min(x0, sx); x1 = std::max(x1, sx); y0 = std::min(y0, sy); y1 = std::max(y1, sy);
+        }
+        int tx0 = 0, ty0 = 0, tx1 = tw - 1, ty1 = th - 1;
+        if (!full) {
+            tx0 = std::max(0, (int)std::floor(x0 / 32.0f) - 1); tx1 = std::min(tw - 1, (int)std::floor(x1 / 32.0f) + 1);
+            ty0 = std::max(0, (int)std::floor(y0 / 32.0f) - 1); ty1 = std::min(th - 1, (int)std::floor(y1 / 32.0f) + 1);
+        }
+        for (int y = ty0; y <= ty1; ++y)
+            for (int x = tx0; x <= tx1; ++x) tlTiles_[((size_t)y * tw + x) * 2 + (k >> 5)] |= 1u << (k & 31);
+    }
+    constexpr GLenum kRGBA32F = 0x8814, kRG32UI = 0x823C, kRGInt = 0x8228;
+    if (!tlDataTex_) {
+        glGenTextures(1, &tlDataTex_);
+        glBindTexture(GL_TEXTURE_2D, tlDataTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, kRGBA32F, 4, kTLMax, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    glBindTexture(GL_TEXTURE_2D, tlDataTex_);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 4, std::max(tlAllN_, 1), GL_RGBA, GL_FLOAT, &tlData_[0][0]);
+    if (!tlTileTex_ || tlTileW_ != tw || tlTileH_ != th) {
+        if (!tlTileTex_) glGenTextures(1, &tlTileTex_);
+        glBindTexture(GL_TEXTURE_2D, tlTileTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, kRG32UI, tw, th, 0, kRGInt, GL_UNSIGNED_INT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        tlTileW_ = tw; tlTileH_ = th;
+    }
+    glBindTexture(GL_TEXTURE_2D, tlTileTex_);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tw, th, kRGInt, GL_UNSIGNED_INT, tlTiles_.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glx::textureCacheInvalidate();
+    static const bool diag = std::getenv("WFC_TLDIAG") != nullptr;
+    static int frames = 0; static double sumN = 0, sumCov = 0;
+    if (diag) {
+        size_t bits = 0;
+        for (uint32_t w : tlTiles_) for (uint32_t b = w; b; b &= b - 1) ++bits;
+        sumN += tlAllN_; sumCov += (double)bits / (double)(tw * th);
+        if (++frames == 600) {
+            LOG_INFO("TLDIAG (600 frames with lights): %.1f lights applied, %.2f lights per tile on average", sumN / 600.0, sumCov / 600.0);
+            frames = 0; sumN = sumCov = 0;
+        }
     }
 }
 
