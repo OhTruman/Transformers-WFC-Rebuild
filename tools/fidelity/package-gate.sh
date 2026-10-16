@@ -13,7 +13,7 @@
 #   bash tools/fidelity/package-gate.sh <final sha> <penultimate sha> [--whatif]      (env: BUILD_ONLY=1, SKIP_BUILD=1, SWITCH_FLIPS=1)
 cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 F=${1:?final sha}; P=${2:?penultimate sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
-f=${F:0:7}; p=${P:0:7}; BASE=work/ab/m9c_398b27e
+f=${F:0:7}; p=${P:0:7}; BASE=${GATE_BASE:-work/ab/fast_398b27e}   # (the package-5 base, built by the same m05 build-target as the heads)
 O=work/package-gate/$f; mkdir -p $O; L=$O/gate.log
 export PYTHONDONTWRITEBYTECODE=1 WFC_GATE_IGNORE_HOLD=1 WFC_GATE_GPU_GRACE_MIN=0 WFC_MUTE=1 WFC_NOINTERACT=1
 st() { echo "$(date +%T) $*" | tee -a $L; }
