@@ -8005,20 +8005,25 @@ void Pipeline::selectTransientLights() {
     }
     std::sort(rank.begin(), rank.end());
     const int cap = tlTiledOn() ? (rtMode_ == 2 ? kTLMax : 8) : 8;   // (Off / Faithful: the original's 8)
+    // (v3 row 4, Realistic) the transient lights on the RT lightmap's energy basis: one gain over every muzzle / death /
+    // effect light (the static lamps went through the RT calibration; these kept the original's raw values).
+    // WFC_RT_TLGAIN=<x>; Off / Faithful always 1 (the original's values).
+    static const float tlGain = [] { const char* e = std::getenv("WFC_RT_TLGAIN"); return e ? std::max(0.0f, (float)std::atof(e)) : 2.0f; }();
+    const float gain = rtMode_ == 2 ? tlGain : 1.0f;
     for (const auto& r : rank) {
         if (tlAllN_ >= cap) break;
         const TransientLight& L = tlightsDraw_[r.second];
         {
             float* q = tlData_[tlAllN_];
             q[0] = L.pos.x; q[1] = L.pos.y; q[2] = L.pos.z; q[3] = 1.0f / L.radius;
-            q[4] = L.color.x; q[5] = L.color.y; q[6] = L.color.z; q[7] = L.falloff;
+            q[4] = L.color.x * gain; q[5] = L.color.y * gain; q[6] = L.color.z * gain; q[7] = L.falloff;
             q[8] = L.dir.x; q[9] = L.dir.y; q[10] = L.dir.z; q[11] = L.cosO;
             q[12] = L.cosI; q[13] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f; q[14] = q[15] = 0.0f;
             ++tlAllN_;
         }
         if (tlN_ >= 8) continue;
         tlPos_[tlN_][0] = L.pos.x; tlPos_[tlN_][1] = L.pos.y; tlPos_[tlN_][2] = L.pos.z; tlPos_[tlN_][3] = 1.0f / L.radius;
-        tlCol_[tlN_][0] = L.color.x; tlCol_[tlN_][1] = L.color.y; tlCol_[tlN_][2] = L.color.z; tlCol_[tlN_][3] = L.falloff;
+        tlCol_[tlN_][0] = L.color.x * gain; tlCol_[tlN_][1] = L.color.y * gain; tlCol_[tlN_][2] = L.color.z * gain; tlCol_[tlN_][3] = L.falloff;
         // (the cull sphere: falloff pow(1 - x^2, e) < 1/512 past x^2 = 1 - (1/512)^(1/e); e = 75 -> 0.28 of the radius)
         tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
         tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
