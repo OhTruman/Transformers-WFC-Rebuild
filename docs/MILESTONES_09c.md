@@ -1412,7 +1412,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   only the component (Brightness 1 / Radius 1024 cm / falloff 2, colour 250,220,120, disabled) - the ramp values and
   on / off points live in script bytecode with no decompiler; DECISION (b): hold, Gameplay checks its RE notes for the
   TnBuffCloak / TnCloakLightService values; a guessed glow could reveal cloaked players (gameplay change), so no
-  approximation. Systems builds the INVENTED-PLACEMENT headlight table. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
+  approximation. Systems builds the INVENTED-PLACEMENT headlight table.
+  2026-10-16 03:45 HEADLIGHT PLACEMENT TABLE (Systems 98ceeff2, merged de85b4a4; docs/handoff/SYSTEMS_VEHICLE_BEAMS.md + .json;
+  tools/systems/vehicle_beams.py; INVENTED PLACEMENT, Realistic-only): per MP vehicle (34), forward-facing emissive
+  lamp triangles in the front third clustered at 0.15 m with mirrored L / R pairs: 25 pairs (19 high confidence), 7
+  singles (jets, Car2, Tank2), 2 without a forward lamp (Tank, Minion3); position in vehicle root space, lamp normal,
+  emissive colour, area; caveats: geometric only, some roof / cab-height picks (the JSON lists every cluster incl.
+  bumper pairs), the emissive is the default skin's blue energon glow so the headlight colour is Rendering's call.
+  Handed to Rendering for plan v3 row 3. D5 blockers: 35 Kismet startup events (~17 custom classes without RE decomp), 40 matinees /
   27 cameras, FaceFX 7 assets / 13 tracks; 46 of 115 materials need a matc pass. APPROVED next: the validator campaign
   mode (Streets byte-identical), per-node sublevel tags + Kismet streaming state, then A1_IAC (50 sublevels).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
