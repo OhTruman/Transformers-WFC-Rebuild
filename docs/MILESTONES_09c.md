@@ -1114,6 +1114,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   / 0 centred samples; F9 / R / Escape / wheel / click posted every 2 s through the frontend and the match: no
   disturbance, dropped at the source; SIMHASH 3002 / 3002 identical across runs, 5 / 5 shots byte-identical; the
   window opened on a secondary monitor's work-area corner. Windowless SIMHASH on / off pair then the patch.
+  2026-10-15 23:32 WFC_NOINTERACT MERGED 4da148bb (Gameplay GAMEPLAY_NOINTERACT.patch 8a18b894): WS_EX_NOACTIVATE +
+  SW_SHOWNOACTIVATE, no SetForegroundWindow / SetFocus, HWND_BOTTOM + SWP_NOACTIVATE (fullscreen requests stay
+  windowed); no ShowCursor / SetCursorPos / WM_SETCURSOR hide; keys, buttons, wheel, text and the real pad dropped at
+  the source in the pump (frontend + loading loops too; scripted inputs still apply); window at the bottom-right of a
+  secondary monitor's work area if present (WFC_WINPOS override); QA panel not topmost; boot line + WFC_NOINTERACTTEST.
+  Window-less NAVQ pair on vs off identical (SIMHASH 18720 / 18720). Env-only. Every lane sets WFC_NOINTERACT=1 on
+  its runners; Rendering applies the patch file uncommitted on rt2; Experimental pins it in tools/fidelity. Windowed
+  runs allowed again under the flag.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
