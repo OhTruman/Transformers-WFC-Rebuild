@@ -1991,3 +1991,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   waits for Systems' REFRESH READY (compile + 27 GB copy) so the timed regress + 1b hour sees no compiles / heavy I/O;
   AssetTools paused at a stage boundary; Gameplay / Rendering: no compiles during the hold. Rendering package 7
   design docs merged 9d42d3b1 (flash limiter for extreme frames; froxel X3 rules). Muter backstop renews ~16:15.
+  2026-10-16 15:31 PACKAGE 6 BUILT on the head: work/playtest_slim_4078e47b 27.53 GB (D 3,506 + M6 498 / 498, overlay 85 /
+  85, vbake 10, failures 0, REFRESH READY; NOPROMOTE). GATE BLOCK GO at 15:31: package-gate 4078e47b 7cd22027 (~3 h;
+  timed regress + 1b first under PERF_HOLD; machine quiet: CPU 4 %). Systems idle under the hold; RT-off verify rows
+  after the hold, RT + HD runtime rows after the block; promote + hand-over on PASS + the user's word.
