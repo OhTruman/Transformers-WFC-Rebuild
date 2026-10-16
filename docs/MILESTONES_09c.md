@@ -1808,3 +1808,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pawns; TnSeqAct_MissionComplete = SeqAct_MoviePlayer for the chapter outro FMV); streaming runtime design note
   (initial state, activation, flush, checkpoint restart, CINE). Grid fix (numpy CSR grid, identical candidate sets)
   in its 10-map byte-identical gate; then m05 + structure audit alone on all 10 chapters (~1.5-2 h).
+  2026-10-16 13:13 FINAL GATE READY with one GO (Experimental c3550990 -> 4a89ff88): base = 398b27ef + yaw + drive-probe +
+  steer + walkable + rise-snap 63368d05 (same match True, control False); dry run (final 63368d05 / penultimate
+  04c51243) sequences builds, 3-arm regress, 1b Realistic perf (hd_dev_full), R4 leak, eyepass (match + views at
+  1440p), full FAST + delta FAST, report; ~3.0 h GPU block + 20 min builds ahead (BUILD_ONLY=1); one more gate-base
+  round (~18 min) per further sim change (Gameplay's ledge guard pending). Item 7 pairing: 8d50190a merges with
+  SYSTEMS_VERIFY_RT_DEFAULTS_ITEM7.patch (refltemporal only); bloommax + X1 tone params fold into rtdef + the line
+  in a later Rendering commit with its own table patch. USER QUESTION (cross-play now?): recommended design docs now
+  (netcode / determinism across platforms, platform feasibility, profile + stats model) with Systems + AssetTools in
+  gaps, code after package 6; awaiting the user's answer + platform order.
