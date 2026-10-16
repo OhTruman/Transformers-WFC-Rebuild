@@ -1,0 +1,79 @@
+diff --git a/src/game/BotBrain.h b/src/game/BotBrain.h
+index cba18fe..64259ef 100644
+--- a/src/game/BotBrain.h
++++ b/src/game/BotBrain.h
+@@ -109,6 +109,7 @@ struct BotBrain {
+     int dbgCands = 0, dbgFov = 0, dbgLos = 0, dbgVis = 0;   // WFC_PLAYERBOTLOG: the last think's perception funnel    // WFC_PLAYERBOT: the burst counts the local weapon's real shots, not frames
+     core::Vec3 watchPos{0, 0, 0}; float watchT = 0.0f; bool watchLogged = false; bool oobLogged = false;   // WFC_STUCKWATCH          // WFC_PLAYERBOT: the brain would fire this step (the local player fires through the controller)
+     core::Vec3 rejoinFrom{0, 0, 0}; float rejoinStall = 0.0f;   // no progress toward the rejoin point (s)
++    float vehYawRate = 0.0f;   // hover vehicle: the AI yaw rate (rad/s) of RotateToTargetOrientation, carried between steps
+     core::Vec3 offMeshFrom{0, 0, 0}; float offMeshStall = 0.0f;   // off the mesh without 0.5 m of movement (s): forces a rejoin search
+     // WFC_STUCKWATCH: when this bot last left the nav mesh, and how (life s, airborne, jump state, speed, the last on-mesh spot).
+     bool watchOnMesh = true; float offMeshAt = -1.0f, offMeshLife = 0.0f, offMeshSpeed = 0.0f; int offMeshAir = 0, offMeshJump = 0;
+diff --git a/src/game/BotSmart.h b/src/game/BotSmart.h
+index 73876b3..f79eb0c 100644
+--- a/src/game/BotSmart.h
++++ b/src/game/BotSmart.h
+@@ -134,6 +134,7 @@ struct SmartBot {
+     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
+     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
+     bool holdStill = false;   // deliberately still last step (cover, a waiting leader): not "stuck"
++    float lookOffset = 0.0f;   // the waiting leader's look-around offset (rad), eased toward its target (no snap when the wait ends)
+     bool leaderSlow = false, regroupFar = false; float leaderWaitSince = -1.0f, leaderWaitCooldown = -1.0f;   // squad leader waits; member far off   // squad leader slowing for its members (smartDecide -> smartSteerPost)
+     float mateBlockedAt = -1e9f; int mateHolds = 0;   // last shot held for a team mate on the line; holds (diagnostics)
+     float squadGoalUntil = -1.0f; int squadGoalKind = -1, squadGoalTgt = -1; core::Vec3 squadGoalPos{0, 0, 0}; float squadGoalRad = 0.0f;   // the squad-given goal, kept until then
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index a0d31d5..b21d05c 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -955,6 +955,20 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+     }
+     // Express the world-space move in the facing frame (MoveIntent is relative to faceYaw).
+     in.faceYaw = vehicle && !visible && core::length(moveDir) > 1e-3f ? yawOf(moveDir) : b.yaw;
++    // [Gameplay] An AI-driven hover vehicle turns toward its DesiredRotation (the move direction, or the focus while fighting) through
++    // HoverPhysics.RotateToTargetOrientation [CONF script: TnCarForm / TnTankForm.Hovering.DoUpdateAi -> UpdateFromLocationAndRotation]:
++    // desired w = ClampLength(delta / dt, min(sqrt(AiMaxAngularAcceleration x |delta|), AiMaxAngularSpeed)); w += ClampLength((desired - w)
++    // / dt, AiMaxAngularAcceleration) x dt (authored per vehicle, rad/s and rad/s^2: car 12 / 12, truck 20 / 20, tank 6 / 6). The rebuild
++    // gave the hover sim the new heading in one step (eye-pass audit: 25-90 deg flicks at path corners). Hover only: in Driving, DoUpdateAi
++    // is a no-op and the steering below still reads the full heading error. Jets keep their own flight path.
++    if (vehicle && !jetForm && !pc.vehicleState().driving) {
++        const VehicleParams& VP = pc.vehicleParams();
++        const float delta = wrapPi(in.faceYaw - pc.yaw());
++        const float wMax = std::min(std::sqrt(VP.aiMaxAngAccel * std::fabs(delta)), VP.aiMaxAngSpeed);
++        const float wDes = core::clampf(delta / dt, -wMax, wMax);
++        b.vehYawRate += core::clampf((wDes - b.vehYawRate) / dt, -VP.aiMaxAngAccel, VP.aiMaxAngAccel) * dt;
++        in.faceYaw = wrapPi(pc.yaw() + b.vehYawRate * dt);
++    } else b.vehYawRate = 0.0f;
+     const core::Vec3 F = core::forwardFromYawPitch(in.faceYaw, 0.0f);
+     const core::Vec3 R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
+     const float ml = core::length(moveDir);
+@@ -2105,6 +2119,7 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
+     // A squad leader slowing for its members (smartDecide): walking pace, robot form, unless in a fight.
+     // squadLeaderStop: the leader stops and looks around for up to 8 s per wait (then 6 s on the move before the next one), so members
+     // close the gap (M2 diagnosis: in 80 % of the samples with a member over 25 m off, the leader was moving faster than 2 m/s).
++    bool lookApplied = false;   // [Gameplay] the look-around offset was applied this step (else it eases back to 0 below)
+     if (s.leaderSlow && !engaged) {
+         const float nowS = match_.matchTime();
+         bool waiting = false;
+@@ -2128,9 +2143,20 @@ void World::smartSteerPost(BotBody o, BotBrain& b, SmartBot& s, float dt, MoveIn
+         if (waiting) s.leadWaitS += dt; else if (!sheltered && nowS >= s.leaderWaitCooldown) s.leadRefusedS += dt; else s.leadSlowS += dt;
+         if (waiting) {
+             in.moveForward = 0.0f; in.moveRight = 0.0f; b.wantVehicle = false;
+-            in.faceYaw = wrapPi(in.faceYaw + 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f));   // look around while waiting
++            const float want = 0.9f * std::sin((nowS - s.leaderWaitSince) * 0.8f);   // look around while waiting
++            s.lookOffset += core::clampf(want - s.lookOffset, -1.5f * dt, 1.5f * dt);
++            in.faceYaw = wrapPi(in.faceYaw + s.lookOffset);
++            lookApplied = true;
+         } else { in.moveForward *= smartTune().squadSlowFactor; in.moveRight *= smartTune().squadSlowFactor; b.wantVehicle = false; }
+     } else if (s.leaderWaitSince >= 0.0f) s.leaderWaitSince = -1.0f;   // the squad closed up: the next wait starts afresh
++    if (!lookApplied && s.lookOffset != 0.0f) {   // the wait ended (or a fight interrupted it): ease the look-around back, the stick kept in world space
++        const core::Vec3 F0 = core::forwardFromYawPitch(in.faceYaw, 0.0f), R0 = core::normalize(core::cross(F0, core::Vec3{0, 1, 0}));
++        const core::Vec3 mv = F0 * in.moveForward + R0 * in.moveRight;
++        s.lookOffset -= core::clampf(s.lookOffset, -1.5f * dt, 1.5f * dt);
++        in.faceYaw = wrapPi(in.faceYaw + s.lookOffset);
++        const core::Vec3 F1 = core::forwardFromYawPitch(in.faceYaw, 0.0f), R1 = core::normalize(core::cross(F1, core::Vec3{0, 1, 0}));
++        in.moveForward = core::dot(mv, F1); in.moveRight = core::dot(mv, R1);
++    }
+     // squadStationKeep: near its wedge slot, hold (leader nearly still) or keep station with the leader (2).
+     s.formHold = false;
+     if (s.formWedge && !engaged && smartTune().squadStationKeep > 0.0f) {
