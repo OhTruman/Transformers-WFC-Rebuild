@@ -109,6 +109,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_AMBLOG = "1"; WFC_BOTLOG = "all"; WFC_BOTPERF = "5"
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_LOBBY_OPTIONS = "$($P.opts);PointsToWin=9999;TimeLimit=$TimeLimit" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
+        if ($Fullscreen) { $e.WFC_NOINTERACT = "" }   # (WFC_NOINTERACT keeps fullscreen windowed: a fullscreen row runs without it)
         if ($H.Contains("WFC_FLOWSEED")) { $e.WFC_FLOWSEED = "1" }   # GameFlow RNG (team pick, rotation, tips) is clock-seeded otherwise (Frontend 2026-10-07)
         # -FixedCam rows (Integration 2026-10-11): no scripted jump - WFC_AUTOJUMP_EVERY counts RENDERED frames, so the human's jumps
         # (and every bot reacting to them) moved with the frame rate and each rep played a different match. Overview numbers from
