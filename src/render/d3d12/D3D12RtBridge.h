@@ -11,7 +11,8 @@ typedef unsigned int GLuint;
 
 namespace render {
 
-struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0, lightVis = 0; };   // render size: depth / mask R32F,
+struct RtTargets { GLuint depth = 0, mask = 0, shadowAo = 0, shadowDn = 0, worldDepth = 0, refl = 0, shadowSoft = 0, lightVis = 0,
+                   prevColor = 0; };   // (item 3) GL writes the finished HDR scene at the frame end; reflections read it at character hits   // render size: depth / mask R32F,
                                                                  // shadowAo RGBA16F (raw sun, AO, dynamic), shadowDn R8
                                                                  // (denoised sun), worldDepth R32F (before the dynamic draws)
 
@@ -47,6 +48,8 @@ struct RtFrame {
     // (item 4) up to 4 transient lights (xyz, w radius), traced against everything (world + characters): LightVis channel k
     // bit 1 (bit 0 = shadow light k) - each channel holds (static visible ? 1 : 0) + (transient visible ? 2 : 0), / 255
     float transLights[4][4] = {}; int transLightN = 0;
+    // (item 3) the previous frame's view-projection (GL column-major) of RtTargets::prevColor; prevValid = it holds a frame
+    float prevVP[16] = {}; bool prevValid = false;
 };
 
 bool rtBridgeAvailable();                                  // a DXR 1.1 device on GL's adapter (a throwaway probe)

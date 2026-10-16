@@ -133,8 +133,19 @@ bool shadeMaterial(HitGeom h, float3 P, float3 rayDir, float coneWidth, out floa
 }
 #endif
 
+// (item 3) a hit off the static world (characters, masked, movers): the previous frame's image at the hit point, when it was
+// on screen there (the characters as they were drawn - no robot-shaped black holes in floors); else a dim constant
+float3 shadeFromPrevFrame(float3 P) {
+    if (Extra2.z < 0.5) return float3(0.05, 0.05, 0.05);
+    const uint b = (uint)Extra2.w;
+    const float4 clip = ShadowLights[b] * P.x + ShadowLights[b + 1] * P.y + ShadowLights[b + 2] * P.z + ShadowLights[b + 3];
+    if (clip.w <= 1e-4) return float3(0.05, 0.05, 0.05);
+    const float2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    if (any(uv < 0.0) || any(uv > 1.0)) return float3(0.05, 0.05, 0.05);
+    return max(PrevColor.Load(int3(int2(uv * Size.xy), 0)).rgb, 0.0);
+}
 float3 shadeHit(uint id, uint prim, float2 bc, float3 P, float3 rayDir, float coneWidth) {
-    if (id < 0x10000u || id >= 0x20000u) return float3(0.05, 0.05, 0.05);   // characters / masked: a dim constant (prototype)
+    if (id < 0x10000u || id >= 0x20000u) return shadeFromPrevFrame(P);
     const HitGeom h = hitGeom(id, prim, bc);
 #ifdef WFC_RT_MATERIALS
     float3 r;

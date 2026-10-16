@@ -65,7 +65,7 @@ typedef void(APIENTRY* PFN_WaitSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLui
 typedef void(APIENTRY* PFN_SignalSemaphoreEXT)(GLuint, GLuint, const GLuint*, GLuint, const GLuint*, const GLenum*);
 constexpr GLenum kHandleD3D12Resource = 0x958A, kHandleD3D12Fence = 0x9594, kDedicated = 0x9581, kFenceValue = 0x9595;
 constexpr GLenum kLayoutShaderRead = 0x958F, kLayoutGeneral = 0x958D;
-constexpr int kSrvN = 15, kTableN = kSrvN + 4;  // descriptor table: t1 .. t15, u0 .. u3
+constexpr int kSrvN = 16, kTableN = kSrvN + 4;  // descriptor table: t1 .. t16, u0 .. u3
 constexpr int kMaxTex2D = 2048, kMaxTexCube = 256;   // reflection-hit material textures (space2 / space3)
 constexpr int kMaxLm = 512;                      // lightmap pages (root table 4: t0 .. space1)
 constexpr int kStatN = 23;   // rt_depthcheck.hlsl's classes (7) + its ratio histogram (16)
@@ -154,14 +154,15 @@ public:
     bool prepare(int w, int h, RtTargets* t) {
         if (w != depth_.w || h != depth_.h) {
             if (!waitIdle()) return false;               // (in flight: the old targets are not freed)
-            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_); free(soft_); free(lvis_);
+            free(depth_); free(mask_); free(ao_); free(dnOut_); free(wdepth_); free(refl_); free(soft_); free(lvis_); free(pcol_);
             rel(hit_); rel(nrm_); rel(vel_);
             hit_ = localTex((w + 7) / 8, (h + 3) / 4, DXGI_FORMAT_R32_UINT);
             nrm_ = localTex(w, h, DXGI_FORMAT_R16G16B16A16_FLOAT);
             vel_ = localTex(w, h, DXGI_FORMAT_R16G16_FLOAT);
             if (!make(depth_, w, h) || !make(mask_, w, h) || !make(ao_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(wdepth_, w, h) ||
                 !make(dnOut_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) || !make(refl_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !make(soft_, w, h, DXGI_FORMAT_R8_UNORM, 0x8229 /*GL_R8*/) ||
-                !make(lvis_, w, h, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) || !hit_ || !nrm_ || !vel_) {
+                !make(lvis_, w, h, DXGI_FORMAT_R8G8B8A8_UNORM, 0x8058 /*GL_RGBA8*/) ||
+                !make(pcol_, w, h, DXGI_FORMAT_R16G16B16A16_FLOAT, 0x881A /*GL_RGBA16F*/) || !hit_ || !nrm_ || !vel_) {
                 LOG_WARN("RT bridge: shared targets failed"); depth_.w = 0; return false;
             }
             if (heap_) writeDescriptors();
@@ -172,7 +173,7 @@ public:
             }
 #endif
         }
-        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex; t->shadowSoft = soft_.tex; t->lightVis = lvis_.tex;
+        t->depth = depth_.tex; t->mask = mask_.tex; t->shadowAo = ao_.tex; t->shadowDn = dnOut_.tex; t->worldDepth = wdepth_.tex; t->refl = refl_.tex; t->shadowSoft = soft_.tex; t->lightVis = lvis_.tex; t->prevColor = pcol_.tex;
         return true;
     }
 
@@ -793,6 +794,7 @@ public:
         std::vector<GLuint> tx = {depth_.tex, mask_.tex, ao_.tex, dnOut_.tex, wdepth_.tex, refl_.tex, soft_.tex, lvis_.tex};
         std::vector<GLenum> ly = {kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral, kLayoutShaderRead, kLayoutGeneral, kLayoutGeneral, kLayoutGeneral};
         if (atlas_.tex) { tx.push_back(atlas_.tex); ly.push_back(kLayoutShaderRead); }
+        if (pcol_.tex) { tx.push_back(pcol_.tex); ly.push_back(kLayoutShaderRead); }   // (item 3: GL wrote it)
         for (GLuint g : giSig_) { tx.push_back(g); ly.push_back(kLayoutGeneral); }   // (R4: the GI pages)
         signalSem_(sem_, (GLuint)sigBufs_.size(), sigBufs_.empty() ? nullptr : sigBufs_.data(), (GLuint)tx.size(), tx.data(), ly.data());
         glFlush();
@@ -980,7 +982,7 @@ private:
         for (auto& r : readback_) r = makeBuffer(dev_, kStatN * 4, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST);
         // (item 2) the shadow-light ring: made here, before the descriptors are written (made lazily at the first frame, its
         // SRV stayed null until the next map's descriptor rewrite - every light read radius 0 and was skipped)
-        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 16 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (2 slots x (4 shadow + 4 transient))
+        if (!lightBuf_) lightBuf_ = makeBuffer(dev_, 24 * 16, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ);   // (2 slots x (4 shadow + 4 transient + 4 prev VP))
         if (!stats_ || !zeros_ || !readback_[0] || !readback_[1]) return false;
         if (depth_.res) writeDescriptors();
         return true;
@@ -1012,6 +1014,7 @@ private:
             sbuf(mUv_, mVerts_, 8); sbuf(mIdx_, mTris_ * 3, 4); sbuf(mTriSub_, mTris_, 4); sbuf(mSubs_, mSubN_ * 2, 16); sbuf(mInst_, mSetN_, 16);
             sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
             sbuf(hMatTex_, hMatTexN_, 48); sbuf(hVtx_, hVerts_ * 2, 16);
+            tex(pcol_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);   // (item 3) t16: the previous frame's HDR scene
             if (table == 3) {                            // D: u0 the soft output, u1 the denoised visibility, u2 the normals
                 uav(soft_.res, DXGI_FORMAT_R8_UNORM); uav(dnOut_.res, DXGI_FORMAT_R8_UNORM);
                 uav(nrm_, DXGI_FORMAT_R16G16B16A16_FLOAT); uav(vel_, DXGI_FORMAT_R16G16_FLOAT);
@@ -1044,7 +1047,7 @@ private:
         for (int k = 0; k < kMaxLm; ++k)                 // R4: the GI pages (UAV space1; null past / between them)
             uav(k < (int)gi_.size() ? gi_[(size_t)k].res : nullptr, k < (int)gi_.size() && gi_[(size_t)k].res ? gi_[(size_t)k].res->GetDesc().Format : DXGI_FORMAT_R16G16B16A16_FLOAT);
         uav(lvis_.res, DXGI_FORMAT_R8G8B8A8_UNORM);      // (item 2) u0 space2: the per-light visibility
-        sbuf(lightBuf_, 16, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 4)
+        sbuf(lightBuf_, 24, 16);                          // (item 2) t0 space4: the shadow lights (2 ring slots x 4)
         for (int table = 0; table < 3; ++table) {        // R4: E (the texel tracer) / F (the gutter) / G (S3 probes): t1 .. t13 as A .. D
             tex(depth_.res, DXGI_FORMAT_R32_FLOAT); tex(wdepth_.res, DXGI_FORMAT_R32_FLOAT);
             tex(atlas_.res, DXGI_FORMAT_R8_UNORM);
@@ -1052,6 +1055,7 @@ private:
             sbuf(hInst_, hBlasN_, 16); sbuf(hIdx_, hTris_ * 3, 4); sbuf(hUv1_, hVerts_, 8); sbuf(hTriSub_, hTris_, 4); sbuf(hSubs_, hSubN_ * 8, 16);
             if (table == 0) sbuf(giTexels_, giTexelN_, 32); else if (table == 1) sbuf(giDilate_, giDilateN_, 16); else sbuf(giProbeCells_, giProbeN_, 4);
             sbuf(giData_, giDataN_, 16);
+            tex(pcol_.res, DXGI_FORMAT_R16G16B16A16_FLOAT);   // (t16, as A .. D)
             if (table == 2) {                            // G: u0 = the probe buffer (structured float4)
                 D3D12_UNORDERED_ACCESS_VIEW_DESC u{}; u.Format = DXGI_FORMAT_UNKNOWN; u.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
                 u.Buffer.NumElements = giProbeBuf_ ? giProbeN_ * 6 : 1; u.Buffer.StructureByteStride = 16;
@@ -1104,14 +1108,15 @@ private:
         std::memcpy(c + 28, fr.ffxReproj, 64);
         c[44] = fr.znear; c[45] = fr.zfar; c[46] = fr.reflectShade ? 1.0f : 0.0f;
         float cE[52] = {};                               // (item 2) Extra2.z = the shadow light count, .w = its ring offset
-        if (lightBuf_ && (fr.shadowLightN > 0 || fr.transLightN > 0)) {   // (Extra2.z = shadow count + 8 x transient count)
+        if (lightBuf_) {                                 // (Extra2.z = shadow count + 8 x transient count, .w = the slot's base)
             void* lp = nullptr; D3D12_RANGE none{0, 0};
             if (SUCCEEDED(lightBuf_->Map(0, &none, &lp))) {
-                std::memcpy((char*)lp + (size_t)slot * 128, fr.shadowLights, 64);
-                std::memcpy((char*)lp + (size_t)slot * 128 + 64, fr.transLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 192, fr.shadowLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 192 + 64, fr.transLights, 64);
+                std::memcpy((char*)lp + (size_t)slot * 192 + 128, fr.prevVP, 64);
                 lightBuf_->Unmap(0, nullptr);
             }
-            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 8);
+            cE[50] = (float)(std::min(fr.shadowLightN, 4) + 8 * std::min(fr.transLightN, 4)); cE[51] = (float)(slot * 12);
         }
         list_->SetComputeRootSignature(rs_);
         list_->SetPipelineState(psoSao_);
@@ -1183,6 +1188,7 @@ private:
             float c2[52] = {};
             std::memcpy(c2, c, sizeof(float) * 48);
             c2[48] = fr.time; c2[49] = fr.pixelSpread;
+            c2[50] = fr.prevValid && pcol_.res ? 1.0f : 0.0f; c2[51] = (float)(slot * 12 + 8);   // (item 3: the previous frame, ring columns)
             list_->SetComputeRoot32BitConstants(0, 52, c2, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();
@@ -1313,7 +1319,7 @@ public:
     void shutdown() {
         if (!waitIdle()) LOG_WARN("RT bridge: shutdown - the D3D12 queue did not go idle within 5 s");
         clearStaticWorld();
-        for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_, &lvis_}) free(*s);
+        for (Shared* s : {&depth_, &mask_, &ao_, &dnOut_, &wdepth_, &atlas_, &refl_, &soft_, &lvis_, &pcol_}) free(*s);
         for (auto& ps : giPool_) free(ps.first);         // (R4: the pooled GI pages)
         giPool_.clear();
         if (sem_ && deleteSem_) deleteSem_(1, &sem_);
@@ -1405,7 +1411,7 @@ private:
     PFN_DeleteSemaphoresEXT_ deleteSem_ = nullptr;
     int rtTier_ = 0;
     UINT64 value_ = 0, frame_ = 0, allocDone_[2] = {};
-    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_, lvis_;
+    Shared depth_, mask_, ao_, dnOut_, wdepth_, atlas_, refl_, soft_, lvis_, pcol_;
     ID3D12Resource* lightBuf_ = nullptr;                 // (item 2) the shadow lights, an upload ring of 2 x 4 float4
     std::vector<ID3D12Resource*> mBlas_;                   // masked world: BLAS per set, lookup buffers
     ID3D12Resource* mUv_ = nullptr; ID3D12Resource* mIdx_ = nullptr; ID3D12Resource* mTriSub_ = nullptr;
