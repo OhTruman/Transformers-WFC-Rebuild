@@ -375,7 +375,7 @@ void Pipeline::giSetup() {
     // per the user's 'colour cast upon one another'). WFC_RT_GISAT=1 the albedo's own colour.
     static const float bounceSat = [] { const char* e = std::getenv("WFC_RT_GISAT"); return e ? std::max(0.0f, (float)std::atof(e)) : 2.5f; }();
     J.bounceSat = bounceSat;
-    static const float emissiveGain = [] { const char* e = std::getenv("WFC_RT_GIEMISSIVE"); return e ? std::max(0.0f, (float)std::atof(e)) : 1.0f; }();
+    static const float emissiveGain = [] { const char* e = std::getenv("WFC_RT_GIEMISSIVE"); return e ? std::max(0.0f, (float)std::atof(e)) : 4.0f; }();
     J.emissiveGain = emissiveGain;   // (Molten plan a: emissive surfaces light their surroundings; per-map tuning pending)
     // the GI arrays (the MDI rows sample arrays): RGBA16F, one level, layer for layer as the lightmap arrays
     constexpr GLenum kArr = 0x8C1A;
