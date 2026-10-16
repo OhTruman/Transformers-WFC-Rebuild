@@ -1537,3 +1537,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   exe; verify_slim HD runtime row added (b02027a2 -> 049e4e49, fails package 5 as intended, passes 66eb7d73+). Doc
   aec84406. Gameplay Smart round closed (no code; 24-seed yardstick); mine presentation capture on slot B. Fidelity
   tooling all synced (package-gate.sh = the one-command final gate). Rendering on the X1 retune batch.
+  2026-10-16 06:08 MERGED: kamikaze mine presentation 050a7796 (Gameplay; SIMHASH identical; detonation effect
+  Exp_2500cb_FX spawns but is visually unverified -> Systems checks the template). Address-dependent draw order:
+  CLOSED, not a defect (control build = base frame-exact; the glow diff was the mines' trails under the truck).
+  Systems eye-pass audit 06110ef4: MED voice starvation (player's idle loop dropped, 96 voices held by distant level
+  loops -> Systems: audible-level priority + virtualised loops), MED homing-rocket embers never fly (undecoded
+  PMI_VelocityOverLife -> AssetTools decode), LOW degenerate-normal impact (Systems); flash / sound sync, LOD, level
+  audio PASS. Systems X5 caster list + fade curves merged bb5ac029. AssetTools A1_IAC: two ray-grid audits skipped
+  "pending", destructibles stage cached (33 min -> seconds, byte-identical); doc pending. Package-gate BUILD_ONLY
+  shakedown clean (11 min); eye-pass proof on 0a9c497f with HD on waits for Rendering's batch boundary (~06:30).
