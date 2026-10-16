@@ -20,3 +20,8 @@ Checks (patched vs 56a9beca base, Release, same tree):
   common hash on every frame; two base runs each had one frame 1 pixel off by 1 (m01200 in one, m02400 in the other) = the
   base exe's own run-to-run noise. No FX LIGHT line in any Off run.
 - Realistic crop: pending an RT slot.
+
+Realistic (RT slot, Streets lockstep 30 s 4 v 5, no WFC_FXLIGHTS / WFC_HEADLIGHTS): patched logs "RT-era lights (first Realistic
+frame): effect lights on, headlights on" and 37 FX LIGHT spawns; base neither; 0 [error] both. Of 12 captures, 5 change
+visibly where effect lights burn (steps 150 / 600 / 1050 / 1200 / 1350: 0.5-20 % of pixels > 2 levels, step 1050 12.6 % > 16),
+the other 7 differ by at most 1 level. Crop: fxlights_default/streets_realistic_ab.png.
