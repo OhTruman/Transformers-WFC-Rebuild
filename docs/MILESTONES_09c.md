@@ -1122,6 +1122,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Window-less NAVQ pair on vs off identical (SIMHASH 18720 / 18720). Env-only. Every lane sets WFC_NOINTERACT=1 on
   its runners; Rendering applies the patch file uncommitted on rt2; Experimental pins it in tools/fidelity. Windowed
   runs allowed again under the flag.
+  2026-10-15 23:33 NOINTERACT rollout complete: Systems 405a909e (verify_slim maps / settings / RT gate, fxstage_ab, pgo_train;
+  merged c934bdc4 with the fxstage kit, the staging captures and the transient-lights audit for item 4); Experimental
+  f3cfadde (lib/Run.ps1 process-wide + per launch, identity-capture.sh with NOINTERACT=0 = env -u since any value
+  counts as on, capacity-stress -Fullscreen deletes it; synced e1659fff); Rendering applies the patch uncommitted on
+  rt2 with WFC_NOINTERACT=1 in all launchers; Gameplay's runners set it. Head e1659fff (code 4da148bb).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
