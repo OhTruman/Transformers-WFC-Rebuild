@@ -186,13 +186,13 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Effect data decode** (AssetTools 7b1908a, switched 07:59): homing-rocket explosion embers fly (they sat still);
   16 Orbit LODs complete; VelocityOverLife modules carry their Absolute flag. 2,007 LODs identical, 0 unexpected
   changes (docs/handoff/fx_regen/).
-
-### Everything else
-
 - **Particle LOD data matches the original's authoring**: per-LOD values were checked against each cooked
   ParticleLODLevel's own PeakActiveParticles (the editor's count). The original's LOD 1 (15-350 m on most death
   effects) is genuinely heavier than LOD 0 (TF_Death_GibsTrail 26 -> 78 peak particles, Exp_Death Sparks 46 -> 92), and
   the runtime picks LODs by camera distance exactly as UE3's Automatic method. No data change.
+
+### Everything else
+
 - **HD textures actually load.** Packages 4 and 5 silently ignored the pack (the loader read a row's byte count as a
   float; 89,478,612 rounded). Fixed 66eb7d73; the exe logs "HD texture pack available: 3505 textures"; verify_slim has
   an HD runtime row that requires that line (dry run on 64771c71: PASS).
