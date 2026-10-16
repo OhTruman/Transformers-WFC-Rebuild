@@ -28,6 +28,11 @@ foreach ($m in $Maps) {
         $hd = if (Test-Path $lg) { @(Select-String -Path $lg -Pattern 'HD texture pack available: \d+ textures' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Value }) } else { @() }
         $rtl = if (Test-Path $lg) { @(Select-String -Path $lg -Pattern 'renderer: Ray Tracing [A-Za-z]+' | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Value }) } else { @() }
         # client size: the last NOINTERACT line must be the requested size (Get-WfcClientRect); else the pixels are not comparable
+        if ($mode -eq "realhd") {   # modern material maps (hd_pbr_index.json) + modern materials on, else UNKNOWN
+            $mm = @(Select-String -Path $lg -Pattern 'HD modern material maps: \d+' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Value })
+            $mo = @(Select-String -Path $lg -Pattern 'Modern materials on for MP_\S+' | Select-Object -First 1 | ForEach-Object { $_.Matches[0].Value })
+            if ($mm.Count -and $mo.Count) { $hd += "; $($mm[0]); $($mo[0])" } else { $hd += "; UNKNOWN: modern materials not confirmed"; Set-Content (Join-Path $d "MODERN_UNKNOWN") "maps: $($mm -join '') on: $($mo -join '')" }
+        }
         $cr = Get-WfcClientRect $lg; $req = $Size -split 'x'
         $crNote = if (-not $cr.known) { "client rect unknown" } elseif ($cr.differs -or $cr.w -ne [int]$req[0] -or $cr.h -ne [int]$req[1]) { "INVALID client $($cr.w)x$($cr.h) vs $Size"; Set-Content (Join-Path $d "INVALID") $cr.line } else { "client $($cr.w)x$($cr.h)" }
         Write-Host ("{0} {1}: {8}; rc {2}, {3}/{4} views ({5:N1} min) {6} {7}" -f $m, $mode, $rc, $got.Count, $kept.Count, ((Get-Date) - $t0).TotalMinutes, ($rtl -join ''), ($hd -join ''), $crNote)
