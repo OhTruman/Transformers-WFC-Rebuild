@@ -1833,3 +1833,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   unstable sorts, a host-endian hash; options A strict-float + shared libm + stable sorts + canonical serialisation +
   cross-build SIMHASH CI (3-6 d; recommended for PC / browser), B fixed-point (weeks), C server-authoritative
   (UE3's model; PowerPC fallback); a sim-change rule from now on. Feeds Systems' netcode design (fill-in only).
+  2026-10-16 13:23 ITEM 7 MERGED ae2b3246 (Rendering 8d50190a: temporal reflections default-on in Realistic, 3x3 clamp;
+  soft-bloom cap 64 -> 16 WFC_TONE_BLOOMMAX; WfcRtDefaults.h one source per default; identity on int_cand5 Off 5 / 5,
+  Faithful 5 / 5) + verify RealisticDefaults refltemporal=on aa38b067 (Systems, paired). Rendering: effect-light
+  calibration running -> X3 v3 verdict -> eye-pass candidate. Package 6 head still projected for this evening.
