@@ -217,6 +217,63 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
 - [PLACEHOLDER: anything the final gate or eye pass adds]
 
+## Runbook: build and verify package 6 (Systems; mechanical once Integration names <HEAD>)
+
+Run from F:\Transformers Rebuild\Rebuild-Systems (agents/systems). Everything lands in this worktree's work\; nothing is written
+to Rebuild\, AssetTools\ or ExtractedAssets\. The package build is CPU / IO only (no exe); it may run beside Experimental's gate
+builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT set by the script); the RT gate waits for a slot.
+
+0. **Pre-flight** (Git Bash):
+   - `df -h /f` - need >= 40 GB free (package ~27.5 GB + build tree ~0.4 GB + verify runs ~1.5 GB).
+   - `git -C "F:/Transformers Rebuild/Rebuild" log --oneline -1` shows <HEAD>; `ls work/playtest_slim_<HEAD>` must NOT exist.
+   - `ls "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack/hd_index.json" "F:/Transformers Rebuild/AssetTools/out/hd/push_m6/pack/hd_pbr_index.json" "F:/Transformers Rebuild/AssetTools/work/gltf_wfcmat/FROZEN.json"`.
+1. **Build + package** (~45 min: Release + PGO build at 2 jobs, then ~3-4 min copy), Git Bash:
+
+       NOPROMOTE=1 JOBS=2 bash work/refresh.sh <HEAD> "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack" D > work/refresh_<HEAD>.log 2>&1; echo rc $?
+
+   (refresh.sh defaults: OVERLAY = AssetTools/work/gltf_wfcmat, HDPBR = AssetTools/out/hd/push_m6/pack, vbake = work/vbake;
+   it waits for nothing, so start it outside a PERF_HOLD.) rc 0 and, in work/refresh_<HEAD>.log / work/refresh_<HEAD>/build_slim.log:
+   - `BUILD OK: .../work/refresh_<HEAD>/build` (the script also refuses a build without `WFC_RT_SHADERS=1` or the PGO profile)
+   - `overlay push_gltf_wfcmat_20261016 (...): 85 of 85 files replace package rows`
+   - `R1 vbake from .../work/vbake: 10 maps: ...`
+   - `HD: pack D (3506 files) chosen over the slim_files.tsv HD rows (...)`
+   - `HD M6 modern material maps: 498 of 498 rows from ...push_m6\pack (FROZEN.json push_m6_20261016: bytes + sha256 checked)`
+   - `slim_files.tsv: ... HD: 4005 files (21.70 GB); M5 runtime: yes`
+   - `wrote ...\work\refresh_<HEAD>\work\playtest_slim: keep ..., xpr 7161, ~27.5 GB, ... failures 0`
+   - `REFRESH READY (not promoted): .../work/playtest_slim_<HEAD> (head <HEAD>, HD D)`
+   - no `PROBLEM` line (build_slim.log); the script exits non-zero on any PROBLEM, a missed overlay or fewer than 498 M6 rows.
+2. **Verify** (~15 min RT-off + ~5 min RT gate), PowerShell, with the RT gate held until Integration's GO:
+
+       New-Item -ItemType File -Force 'F:\Transformers Rebuild\Rebuild-Systems\work\RT_SLOT_HOLD' | Out-Null
+       $T = 'F:\Transformers Rebuild\Rebuild-Systems\work\refresh_<HEAD>'
+       & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\tools\package\verify_slim.ps1" -Package 'F:\Transformers Rebuild\Rebuild-Systems\work\playtest_slim_<HEAD>' -WorkDir 'F:\Transformers Rebuild\Rebuild-Systems\work\verify_<HEAD>' -SubstDrive X: -SkipIntro -SettingsExpected 7 -ForeignCwd -RtBuildDir "$T\build" -HoldFile 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD' -RtHoldFile 'F:\Transformers Rebuild\Rebuild-Systems\work\RT_SLOT_HOLD' *> 'F:\Transformers Rebuild\Rebuild-Systems\work\verify_<HEAD>.log'; "exit $LASTEXITCODE"
+
+   (the head's own verify_slim + rt-build-check come with the refresh tree, tools\fidelity\lib included; X: must be free.)
+   On "RT hold file present" in the log, ask Integration for the RT slot; on GO: `Remove-Item 'F:\...\work\RT_SLOT_HOLD'`.
+   Expected lines (work\verify_<HEAD>.log; any other outcome = report, do not promote):
+   - `HD pack: AssetTools\out\hd (loader default): 3505 rows + 498 M6 modern material rows, 4005 files, 21.7 GB, 0 problems`
+   - `package bin: 20 files vs build_slim.json 20; M5 runtime shipped; 0 problems`
+   - `overlay: PASS overlay.barrier ...` and `overlay: PASS overlay.frozen: 85 of 85 files ... byte-identical`
+   - `render data: materials_pbr.json in 15 map folder(s)`
+   - `[Streets] PASS`, `[Gorge] PASS`, `[Debris] PASS` (0 outside reads, 0 failing opens, 282 localized lines, 0 [error])
+   - `[Settings] PASS: 7 pass, 0 fail (expected 7 checks)`
+   - `[Ray Tracing] PASS: PASS rtcheck.build ... PASS rtcheck.context ... PASS rtcheck.runtime ... PASS rtcheck.r4 ...
+     PASS rtcheck.rtlights: ... effect lights on, headlights on; PASS rtcheck.defaults: <n> of <n> as expected`
+     (the table must be the one paired with the head's defaults line: giemissive 4, refltemporal, and the X1 / bloommax keys if
+     Rendering's later commit is in)
+   - `HD runtime row: re-running 508:Streets with HD forced on (level 2)` ... `HD runtime row: PASS` - its log has
+     `HD texture pack available: 3505 textures`, `HD modern material maps: 498 (hd_pbr_index.json)`, `Modern materials on for MP_IAC_Streets`
+   - `PASS: report ...\work\verify_<HEAD>\REPORT.md`, exit 0; then `Get-Process wfc_rebuild | ? Path -like '*Rebuild-Systems*'` = none.
+3. **Report** to Integration: the verify REPORT.md path, the package size / file counts, any non-PASS row verbatim. Fill this
+   doc's <HEAD>, <SIZE>, <N>, <OVERLAY>, <DATE> from build_slim.json / build_slim.log.
+4. **Promote only on Integration's word after the gate PASS** (the hand-over is the user's), Git Bash, in work/:
+
+       [ -e playtest_slim_398b27ef ] && echo "playtest_slim_398b27ef exists: stop" || mv playtest_slim playtest_slim_398b27ef
+       mv playtest_slim_<HEAD> playtest_slim && grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json
+
+   Play.bat inside the package starts its own exe (verify checks it). Integration copies / announces; never rebuild a package exe
+   or touch build/release while the user plays.
+
 ## Gates (final head <HEAD>)
 
 <!-- package-gate.sh table (rules final 08:37, Experimental 101b3970 / 78854ddd / d3a6e1e1). Base = 398b27ef + yaw 022e5e34 +
