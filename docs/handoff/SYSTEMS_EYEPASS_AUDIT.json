@@ -1,0 +1,199 @@
+{
+ "MP_IAC_Rust": {
+  "match_start_s": 26.135,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 20.015,
+    "first_step": -367,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 7,
+    "first_s": 24.996,
+    "first_step": -68,
+    "example": "GPU frame spike 112.3 ms (cpu 115.1 ms) at frame 1: passes world 110.9, characters+caller 0.0, map FX 0.0, translucency 1.4, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 27.427,
+    "first_step": 77,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   },
+   "effect not drawn": {
+    "count": 1,
+    "first_s": 30.023,
+    "first_step": 233,
+    "example": "weapon fx: impact template FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX is not reconstructed - not drawn (no substitute)"
+   }
+  },
+  "muzzle_shots": 40,
+  "paired_with_fire_cue": 40,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_IAC_Streets": {
+  "match_start_s": 35.241,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 22.134,
+    "first_step": -786,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 34.715,
+    "first_step": -31,
+    "example": "GPU frame spike 229.6 ms (cpu 242.1 ms) at frame 1: passes world 229.5, characters+caller 0.0, map FX 0.0, translucency 0.1, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 35.977,
+    "first_step": 44,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   },
+   "effect not drawn": {
+    "count": 1,
+    "first_s": 36.813,
+    "first_step": 94,
+    "example": "weapon fx: impact template FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX is not reconstructed - not drawn (no substitute)"
+   },
+   "sound dropped (no channel)": {
+    "count": 14,
+    "first_s": 37.473,
+    "first_step": 133,
+    "example": "sound cues: no channel for the local player's BL_FOLY_IDLES.OPTIMUS_IDLE ev2 (all 96 busy with more important sounds)"
+   }
+  },
+  "muzzle_shots": 128,
+  "paired_with_fire_cue": 128,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 5.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_KON_Molten": {
+  "match_start_s": 21.159,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 15.605,
+    "first_step": -333,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 2,
+    "first_s": 20.344,
+    "first_step": -48,
+    "example": "GPU frame spike 76.7 ms (cpu 81.4 ms) at frame 1: passes world 76.3, characters+caller 0.0, map FX 0.0, translucency 0.4, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 22.298,
+    "first_step": 68,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   }
+  },
+  "muzzle_shots": 158,
+  "paired_with_fire_cue": 158,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 16.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_ORB_Debris": {
+  "match_start_s": 18.996,
+  "kinds": {
+   "decals missing": {
+    "count": 1,
+    "first_s": 0.752,
+    "first_step": -1094,
+    "example": "glb: no triangles baked from F:/Transformers Rebuild/Rebuild/work/render/MP_ORB_Debris/decals.glb"
+   },
+   "material fallback": {
+    "count": 4,
+    "first_s": 13.746,
+    "first_step": -314,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 2,
+    "first_s": 18.425,
+    "first_step": -34,
+    "example": "GPU frame spike 71.2 ms (cpu 77.9 ms) at frame 1: passes world 71.1, characters+caller 0.0, map FX 0.0, translucency 0.1, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 19.711,
+    "first_step": 42,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   },
+   "effect not drawn": {
+    "count": 1,
+    "first_s": 21.319,
+    "first_step": 139,
+    "example": "weapon fx: impact template FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX is not reconstructed - not drawn (no substitute)"
+   }
+  },
+  "muzzle_shots": 100,
+  "paired_with_fire_cue": 100,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 0.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ },
+ "MP_UND_Gorge": {
+  "match_start_s": 19.2,
+  "kinds": {
+   "material fallback": {
+    "count": 4,
+    "first_s": 13.583,
+    "first_step": -337,
+    "example": "shader compile failed (PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST|UBER): ERROR: 0:94: 'constructor' : too many arguments "
+   },
+   "GPU frame spike": {
+    "count": 1,
+    "first_s": 18.42,
+    "first_step": -46,
+    "example": "GPU frame spike 72.4 ms (cpu 86.3 ms) at frame 1: passes world 72.0, characters+caller 0.0, map FX 0.0, translucency 0.3, post 0.0 ms; no record"
+   },
+   "particle module not decoded": {
+    "count": 1,
+    "first_s": 20.0,
+    "first_step": 48,
+    "example": "map fx: PMI_VelocityOverLife has no decoded VelOverLife (0 used)"
+   },
+   "sound dropped (no channel)": {
+    "count": 1,
+    "first_s": 20.896,
+    "first_step": 101,
+    "example": "sound cues: no channel for the local player's BL_FOLY_IDLES.OPTIMUS_IDLE ev7 (all 96 busy with more important sounds)"
+   },
+   "effect not drawn": {
+    "count": 1,
+    "first_s": 22.378,
+    "first_step": 190,
+    "example": "weapon fx: impact template FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX is not reconstructed - not drawn (no substitute)"
+   }
+  },
+  "muzzle_shots": 148,
+  "paired_with_fire_cue": 148,
+  "sync_ms": {
+   "median": 0.0,
+   "max": 1.0,
+   "over_33ms": 0
+  },
+  "streamed_cues": 1
+ }
+}
