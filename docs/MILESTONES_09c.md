@@ -1873,3 +1873,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (probe > 1 m off-mesh; drop > max(2.5 m, 0.35 x distance)) re-gating, ETA ~14:30 (their clock), ships only if rare
   and the trench stays at 0, else package 7. AssetTools: structure audit passes at 2 m on A1; m05 still over the cap
   on A1 -> WFC_M05_CELL for the campaign, A1 retry at the chain's end. PACKAGE_6_HEAD.md 15f1ea21 (X3 out resolved).
+  2026-10-16 13:43 EYE PASS (int_eye = 7cd22027): Streets (508) landed, all checks pass; Rendering's read: night-and-day
+  on the views (reflective floor, street); ONE FIX ROW: character sun shadows on the world are pure-black hard blobs
+  where row 2's fitted sun share reaches 1 -> cap 0.75 (WFC_RT_SUNSHAREMAX, sunsharemax=0.75), batched with the
+  other maps' rows + the tone / bloom keys into rtdef (one commit, identity, one confirming sheet; Systems' paired
+  table patch). Realistic + Enhanced level with Realistic on Streets. Gorge / Debris / Rust / Molten landing ~6 min
+  each.
