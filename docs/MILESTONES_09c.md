@@ -1987,3 +1987,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Systems runbook step 1 -> work/playtest_slim_4078e47b (~45 min) + RT-off verify rows; Systems' RT rows after the
   gate block. Rendering's package 7 polish doc merged (RENDERING_PACKAGE7_POLISH.md: exposure adaptation on extreme
   frames, X3 froxel, X6, X7, VelocityOverLife). Rendering's package 6 RT work COMPLETE.
+  2026-10-16 15:30 GATE TIMING GUARD: Experimental READY (final tree fast_4078e47 built; SKIP_BUILD gate on GO); the GO
+  waits for Systems' REFRESH READY (compile + 27 GB copy) so the timed regress + 1b hour sees no compiles / heavy I/O;
+  AssetTools paused at a stage boundary; Gameplay / Rendering: no compiles during the hold. Rendering package 7
+  design docs merged 9d42d3b1 (flash limiter for extreme frames; froxel X3 rules). Muter backstop renews ~16:15.
