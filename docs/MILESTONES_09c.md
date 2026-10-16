@@ -1134,6 +1134,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   death-type selection; (a) a real death-type picker (anims, gibs, lights) = Gameplay in the campaign phase after
   package 5 (docs/handoff/CAMPAIGN_BACKLOG.md). Gates: SIMHASH unaffected, headless ENGAGE / DEATH rows, captures treat
   the new lights as a baseline change.
+  2026-10-15 23:48 USER: background audio while making music -> Rendering's work/base_head launcher ran an exe without WFC_MUTE=1
+  (PID 26216); the session muter was restarted (12 h backstop, until 11:47) and silenced it within a second;
+  Rendering told to put WFC_MUTE=1 + WFC_NOINTERACT=1 on every launcher incl. ad-hoc runs. Rule: muter as a backstop
+  while the user is at the PC, env flags on every launch.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
