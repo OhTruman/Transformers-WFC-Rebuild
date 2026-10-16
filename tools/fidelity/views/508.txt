@@ -1,0 +1,15 @@
+firefight_w1 204.160,-703.038,-450.600,204.160,-705.038,-457.600
+firefight_w2 204.160,-703.038,-450.600,204.160,-705.038,-457.600
+firefight 204.160,-703.038,-450.600,204.160,-705.038,-457.600 busiest fight spot: objective nearest the spawn centroid; target TnKingOfTheHillZone_11438 (TnKingOfTheHillZone); floor -; ceiling 15 m; run 12 m; light sum 14.6; view down 16 deg
+street_w1 255.320,-703.038,-457.440,248.320,-705.038,-457.440
+street_w2 255.320,-703.038,-457.440,248.320,-705.038,-457.440
+street 255.320,-703.038,-457.440,248.320,-705.038,-457.440 street under buildings; target TnDominationPoint_6703 (TnDominationPoint); floor -; ceiling 54 m; run 120 m; light sum 4.9; view down 16 deg
+dark_w1 109.740,-713.300,-636.498,106.240,-715.300,-642.560
+dark_w2 109.740,-713.300,-636.498,106.240,-715.300,-642.560
+dark 109.740,-713.300,-636.498,106.240,-715.300,-642.560 dark interior (ceiling within 12 m, walled on 7+ of 16 sides within 20 m, darkest quarter of the light sum); target TnTeamPlayerStart_2951 (TnTeamPlayerStart); floor HospitalFloor_MAT_INST; ceiling 9 m; run 20 m; light sum 0.0; view down 16 deg
+reflective_w1 257.535,-719.980,-501.366,252.535,-722.980,-510.026
+reflective_w2 257.535,-719.980,-501.366,252.535,-722.980,-510.026
+reflective 257.535,-719.980,-501.366,252.535,-722.980,-510.026 reflective floor; target TnTeamPlayerStart_533 (TnTeamPlayerStart); floor SubwayFloor_Straight_MATINST; ceiling 13 m; run 9 m; light sum 9.0; view down 17 deg
+lane_w1 386.043,-702.670,-323.374,379.980,-704.670,-326.874
+lane_w2 386.043,-702.670,-323.374,379.980,-704.670,-326.874
+lane 386.043,-702.670,-323.374,379.980,-704.670,-326.874 vehicle lane (long flat clear run); target TnTeamPlayerStart_15496 (TnTeamPlayerStart); floor -; ceiling 59 m; run 120 m; light sum 5.3; view down 16 deg

@@ -1,0 +1,15 @@
+firefight_w1 -115.681,21.420,-101.474,-115.681,19.420,-108.474
+firefight_w2 -115.681,21.420,-101.474,-115.681,19.420,-108.474
+firefight -115.681,21.420,-101.474,-115.681,19.420,-108.474 busiest fight spot: objective nearest the spawn centroid; target TnKingOfTheHillZone_8396 (TnKingOfTheHillZone); floor Panel_MATINST_RustMP_Decals_OR; ceiling 17 m; run 39 m; light sum 1.4; view down 16 deg
+street_w1 -126.248,31.177,61.010,-133.248,29.177,61.010
+street_w2 -126.248,31.177,61.010,-133.248,29.177,61.010
+street -126.248,31.177,61.010,-133.248,29.177,61.010 street under buildings; target TnTeamPlayerStart_10108 (TnTeamPlayerStart); floor ENV_F_rubblefloor_dark_CLR_Mat; ceiling inf m; run 120 m; light sum 4.1; view down 16 deg
+dark_w1 -283.364,30.380,86.291,-283.364,28.380,79.291
+dark_w2 -283.364,30.380,86.291,-283.364,28.380,79.291
+dark -283.364,30.380,86.291,-283.364,28.380,79.291 darkest roofed spot (no walled dark interior on this map); target TnOverShieldPickupFactory_10486 (TnOverShieldPickupFactory); floor ENV_F_rubblefloor_dark_CLR_Mat; ceiling 11 m; run 32 m; light sum 0.3; view down 16 deg
+reflective_w1 -353.052,37.780,-118.530,-344.392,34.780,-123.530
+reflective_w2 -353.052,37.780,-118.530,-344.392,34.780,-123.530
+reflective -353.052,37.780,-118.530,-344.392,34.780,-123.530 reflective floor; target TnTeamPlayerStart_3296 (TnTeamPlayerStart); floor Panel_MATINST_RustMP_Decals_OR; ceiling 21 m; run 7 m; light sum 0.1; view down 17 deg
+lane_w1 -119.360,21.420,15.160,-119.360,19.420,8.160
+lane_w2 -119.360,21.420,15.160,-119.360,19.420,8.160
+lane -119.360,21.420,15.160,-119.360,19.420,8.160 vehicle lane (long flat clear run); target TnDominationPoint_1321 (TnDominationPoint); floor ENV_F_rubblefloor_dark_CLR_Mat; ceiling 49 m; run 120 m; light sum 2.3; view down 16 deg

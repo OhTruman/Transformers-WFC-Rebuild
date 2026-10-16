@@ -1,0 +1,15 @@
+firefight_w1 116.480,16.348,-59.560,116.480,14.348,-66.560
+firefight_w2 116.480,16.348,-59.560,116.480,14.348,-66.560
+firefight 116.480,16.348,-59.560,116.480,14.348,-66.560 busiest fight spot: objective nearest the spawn centroid; target TnDominationPoint_12221 (TnDominationPoint); floor -; ceiling inf m; run 93 m; light sum 0.4; view down 16 deg
+street_w1 71.680,4.790,-177.240,71.680,2.790,-170.240
+street_w2 71.680,4.790,-177.240,71.680,2.790,-170.240
+street 71.680,4.790,-177.240,71.680,2.790,-170.240 street under buildings; target TnKingOfTheHillZone_492 (TnKingOfTheHillZone); floor -; ceiling 12 m; run 120 m; light sum 6.6; view down 16 deg
+dark_w1 100.780,4.780,-5.458,97.280,2.780,-11.520
+dark_w2 100.780,4.780,-5.458,97.280,2.780,-11.520
+dark 100.780,4.780,-5.458,97.280,2.780,-11.520 dark interior (ceiling within 12 m, walled on 7+ of 16 sides within 20 m, darkest quarter of the light sum); target TnHealthPickupFactory_12831 (TnHealthPickupFactory); floor ENV_CORE_BSPWall_B_MATINST; ceiling 9 m; run 5 m; light sum 0.3; view down 16 deg
+reflective_w1 262.700,5.780,-80.760,271.360,2.780,-85.760
+reflective_w2 262.700,5.780,-80.760,271.360,2.780,-85.760
+reflective 262.700,5.780,-80.760,271.360,2.780,-85.760 reflective floor; target TnHealthPickupFactory_13766 (TnHealthPickupFactory); floor BackgroundIsland_03_MATINST; ceiling 15 m; run 5 m; light sum 2.0; view down 17 deg
+lane_w1 161.280,4.794,44.120,161.280,2.794,37.120
+lane_w2 161.280,4.794,44.120,161.280,2.794,37.120
+lane 161.280,4.794,44.120,161.280,2.794,37.120 vehicle lane (long flat clear run); target TnKingOfTheHillZone_9548 (TnKingOfTheHillZone); floor BackgroundIsland_03_MATINST; ceiling inf m; run 120 m; light sum 1.5; view down 16 deg
