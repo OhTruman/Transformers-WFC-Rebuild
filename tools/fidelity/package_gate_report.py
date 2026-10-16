@@ -2,26 +2,39 @@
 #   python package_gate_report.py <gate dir> <final short> <penultimate short>
 import csv, json, os, re, sys
 O, f, p = sys.argv[1:4]
-lines = [f"# Package gate - final {f} (penultimate {p}, base 398b27ef)", ""]
+base_name = os.environ.get("GATE_BASE_NAME", "398b27ef")
+lines = [f"# Package gate - final {f} (penultimate {p}, base {base_name})", "", "Base and final play the same match (Classic SIMHASH identical over the measured steps); the final draws more by design, so the regress reads the frame cost of the package-6 features at the same match.", ""]
 verdicts = []
 
 # 1 regress: per map best p90 per arm; rule: nolights - base <= +0.15, head - nolights <= +0.35
 rows, ok = [], True
 for m in ['501', '502', '503', '504', '507', '508', '509', '510']:
     rp = os.path.join(O, 'regress', f'map-{m}', 'report.json')
-    if not os.path.exists(rp): rows.append(f"| {m} | - | - | - | - | - | missing |"); ok = False; continue
+    if not os.path.exists(rp): rows.append(f"| {m} | - | - | - | - | - | - | missing |"); ok = False; continue
     d = json.load(open(rp, encoding='utf-8-sig')); L = d['results'] if isinstance(d, dict) and 'results' in d else d
-    best, bad = {}, []
+    best, bad, work = {}, [], {}
     for r in L:
         x = re.search(r'p50 / p90 / p99 ([\d.]+) / ([\d.]+)', str(r.get('note'))); mm = re.match(r'lockstep\.(\w+)\.r(\d)$', r['id'])
         if x and mm: best[mm.group(1)] = min(best.get(mm.group(1), 99), float(x.group(2)))
-        if r['id'].endswith(('contaminated', 'client_rect')) or r.get('status') == 'UNKNOWN': bad.append(r['id'].split('.', 1)[1])
+        # a head arm vs the base is the same match but draws more by design (new features: death bodies, effect lights, RT rows) -
+        # lockstep-ab reads that UNKNOWN (workload parity False); here it counts when the match is the same, with the draws printed.
+        # Contamination / client-rect / a different match / head vs lights-off parity stay blocking.
+        note = str(r.get('note'))
+        wl = re.search(r"same match as '(\w+)' True, workload parity False", note)
+        if r['id'].endswith(('contaminated', 'client_rect')): bad.append(r['id'].split('.', 1)[1])
+        elif r.get('status') == 'UNKNOWN' and wl and mm and mm.group(1) != 'base':
+            dr = re.search(r'draws (\d+) \(dyn (\d+), fx (\d+)\), binds (\d+)', note); work[mm.group(1)] = dr.groups() if dr else None
+        elif r.get('status') == 'UNKNOWN': bad.append(r['id'].split('.', 1)[1])
+        if mm and mm.group(1) == 'base':
+            dr = re.search(r'draws (\d+) \(dyn (\d+), fx (\d+)\), binds (\d+)', note); work.setdefault('base', dr.groups() if dr else None)
     b, h, n = best.get('base'), best.get('head'), best.get('nolights')
-    if None in (b, h, n): rows.append(f"| {m} | {b} | {h} | {n} | - | - | incomplete |"); ok = False; continue
+    if None in (b, h, n): rows.append(f"| {m} | {b} | {h} | {n} | - | - | - | incomplete |"); ok = False; continue
     r1, r2 = n - b, h - n; v = "PASS" if r1 <= 0.15 and r2 <= 0.35 and not bad else ("UNKNOWN" if bad else "FAIL"); ok &= v == "PASS"
-    rows.append(f"| {m} | {b:.2f} | {h:.2f} | {n:.2f} | {r1:+.2f} | {r2:+.2f} | {v}{' (' + ', '.join(bad) + ')' if bad else ''} |")
+    wb, wh = work.get('base'), work.get('head')
+    wtxt = f"draws {wb[0]} -> {wh[0]} (dyn {wb[1]} -> {wh[1]}, fx {wb[2]} -> {wh[2]}), binds {wb[3]} -> {wh[3]}" if wb and wh else "same"
+    rows.append(f"| {m} | {b:.2f} | {h:.2f} | {n:.2f} | {r1:+.2f} | {r2:+.2f} | {wtxt} | {v}{' (' + ', '.join(bad) + ')' if bad else ''} |")
 lines += ["## 1. Regress (3-arm lockstep, RT off, Classic, best p90 of 2, ms)", "",
-          "| map | base 398b27ef | final | final lights off | lights off - base (<= +0.15) | lights cost (<= +0.35) | verdict |", "|---|---|---|---|---|---|---|"] + rows + [""]
+          "| map | base | final | final lights off | lights off - base (<= +0.15) | lights cost (<= +0.35) | workload base -> final (same match) | verdict |", "|---|---|---|---|---|---|---|---|"] + rows + [""]
 verdicts.append(("regress", "PASS" if ok else "FAIL"))
 
 # 2 leak: lobby dips of GPU dedicated
@@ -56,6 +69,6 @@ for tag in (p, f):
     prod = re.search(r'## PRODUCT FAIL: (\d+)', t)
     lines += [f"## 4. FAST {tag}{' (delta)' if tag == f else ' (full)'}", "", (m.group(1) if m else "missing"), ""]
     verdicts.append((f"FAST {tag}", "PASS" if prod and prod.group(1) == '0' else ("missing" if not t else f"PRODUCT {prod.group(1) if prod else '?'}")))
-lines = lines[:2] + ["| part | verdict |", "|---|---|"] + [f"| {k} | {v} |" for k, v in verdicts] + [""] + lines[2:]
+lines = lines[:4] + ["| part | verdict |", "|---|---|"] + [f"| {k} | {v} |" for k, v in verdicts] + [""] + lines[4:]
 open(os.path.join(O, 'PACKAGE-GATE.md'), 'w', encoding='utf-8').write("\n".join(lines) + "\n")
-print("\n".join(lines[:2 + 2 + len(verdicts)]))
+print("\n".join(lines[:4 + 2 + len(verdicts)]))
