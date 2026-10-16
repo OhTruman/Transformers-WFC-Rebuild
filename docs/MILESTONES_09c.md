@@ -1213,6 +1213,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identity 5 / 5 + SIMHASH. PACKAGE-5 CANDIDATE HEAD = a5f53923 (Experimental patches the delta; base 30b2fa74).
   Rendering next: item 7 polish (temporal reflections, R4 lightmap super-sample on the blurriest pages); item 6 =
   Modern calibration against the D pack + M6 roughness (E dropped).
+  2026-10-16 00:59 TRANSIENT LIGHTS WINDOWED CHECK PASS (Systems, 76b077e8, Molten TDM 4v5 + playerbot lockstep seed 7, 61 shot pairs
+  600-1800, lights on vs WFC_NOTRANSIENTLIGHTS=1 at RT_MODE 2 and 0; submissions identical across the four runs): RT 2
+  lit 22 / 61 frames, up to 23 % of pixels brighter (+60-80 / 255), the robot shadows itself and the floor (dark vs off
+  peaks 1.6 %); RT 0 the same 22 frames, unshadowed (max 26 %); off = no light. Crops docs/handoff/transient_lights/.
+  Experimental's package-5 rows on a5f53923 started (regress 30b2fa74 vs a5f53923 timed; Classic captures Off /
+  Faithful / Realistic vs 30b2fa74 + the NOINTERACT on-arm determinism pair; R4 leak rows; rt-perf-baseline under
+  NOINTERACT as the new reference); ~1 h 45.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
