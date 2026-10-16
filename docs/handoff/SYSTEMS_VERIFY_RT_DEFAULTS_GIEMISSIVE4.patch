@@ -1,0 +1,11 @@
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -81,7 +81,7 @@
+     lmspecgain = 2.5     # X2 specular gain (WFC_RT_LMSPECGAIN)
+     tlgain = 2           # row 4 transient light gain (WFC_RT_TLGAIN)
+     gisat = 2.5          # X4 coloured bounce saturation (WFC_RT_GISAT)
+-    giemissive = 1       # X4 emissive bounce gain (WFC_RT_GIEMISSIVE; Molten pending)
++    giemissive = 4       # X4 emissive bounce gain (WFC_RT_GIEMISSIVE; 4 from Rendering e233a641, the Molten lava)
+     charao = 3           # X5-1 character AO radius, m (WFC_RT_CHARAORADIUS)
+     softparticles = 'on' # WFC_SOFTPARTICLES=0 off
+     tiled = 'on'         # tiled transient lights (WFC_TLTILED=0 off)
