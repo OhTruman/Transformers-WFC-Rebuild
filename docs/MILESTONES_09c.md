@@ -1639,3 +1639,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   within noise of pre-yaw; BOTTEST 48 / 48 with the new DRIVE guard rows, 46 / 48 with the old sign); patch + third
   re-baseline after the grenade item. Rendering: RT-off identity + item 6 recaptures beside the sheet; next sheet exe
   = Release int_cand2. AssetTools: objtree reference-cycle fix (byte-identical), D3B ~1 h, D2_COR next (cache 10).
+  2026-10-16 09:54 MERGED: BOTTEST gate robustness + stranded / KillZ death presentation d817d599 (seed variance, no
+  re-baseline); bot Driving STEER SIGN fix 3de18d73 (bots steered away from their heading error in vehicle form, both
+  AIs; every map better or equal; Debris Smart cost CLOSED; two permanent DRIVE guard rows) = THIRD CLASSIC
+  RE-BASELINE (docs/handoff/drivesteer/); gate base now 398b27ef + yaw + drive-probe + BOTTEST gate + steer.
+  Integration BOTTEST at seeds 1 / 5 reads 47 / 48 until audit item 4 (idle 20 s row) lands; seed 7 passes. Next
+  Gameplay: item 4, items 5 / 6, ride-height model. AssetTools: ALL campaign maps re-parsed up front (1,942 rows);
+  D3B relaunched cache 10.
