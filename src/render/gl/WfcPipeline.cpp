@@ -2655,14 +2655,19 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos && ma != std::string::npos && at > ma) {
             fs.insert(at, "    if (uLit != 0 && uTLN > 0) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
+                          "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
+                          "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
                           "uniform int uTLVisOn; uniform sampler2D uTLVis;   // (Realistic, characters: the RT visibility, LightVis bit 1)\n"
                           "vec3 wfcTransientLights(vec3 N, MatOut o) {\n"
                           "    vec4 tv = uTLVisOn != 0 ? floor(mod(floor(texelFetch(uTLVis, ivec2(gl_FragCoord.xy), 0) * 255.0 + 0.5), 4.0) / 2.0) : vec4(1.0);\n"
                           "    vec3 V = normalize(uCamPos - vPos), Rv = reflect(-V, N), s = vec3(0.0);\n"
                           "    for (int k = 0; k < 8; ++k) {\n"
                           "        if (k >= uTLN) break;\n"
+                          "        if (((uTLMask >> k) & 1) == 0) continue;\n"
                           "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
-                          "        float att = pow(clamp(1.0 - dot(dn, dn), 0.0, 1.0), uTLCol[k].w);\n"
+                          "        float x2 = dot(dn, dn);\n"
+                          "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
+                          "        float att = pow(clamp(1.0 - x2, 0.0, 1.0), uTLCol[k].w);\n"
                           "        if (att <= 0.0) continue;\n"
                           "        vec3 L = normalize(d);\n"
                           "        float sp = pow(max(clamp(dot(Rv, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));\n"
@@ -2888,6 +2893,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     auto U = [&](const char* n) { return GetUniformLocation(id, n); };
     P.uViewProj = U("uViewProj"); P.uModel = U("uModel"); P.uCamPos = U("uCamPos"); P.uTime = U("uTime");
     P.uTwoSided = U("uTwoSided"); P.uClip = U("uClip"); P.uMasked = U("uMasked"); P.uLit = U("uLit");
+    P.uTLN = U("uTLN"); P.uTLPos = U("uTLPos"); P.uTLCol = U("uTLCol"); P.uTLVisOn = U("uTLVisOn"); P.uTLVis = U("uTLVis");
+    P.uTLMask = U("uTLMask"); P.uTLCut = U("uTLCut");
     P.uLMCoord = U("uLMCoord"); P.uLMScale = U("uLMScale"); P.uAmb = U("uAmb"); P.uNumLights = U("uNumLights");
     P.uLPos = U("uLPos"); P.uLDir = U("uLDir"); P.uLCol = U("uLCol"); P.uLSpot = U("uLSpot");
     P.uFogOn = U("uFogOn"); P.uFogMaxH = U("uFogMaxH"); P.uFogScale = U("uFogScale"); P.uFogStart = U("uFogStart");
@@ -3664,14 +3671,16 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(ULOC(P, "uBoneTex"), 18);
     }
     {   // (item 4) the transient lights
-        const GLint tn = ULOC(P, "uTLN");
-        if (tn >= 0) {
-            Uniform1i(tn, tlN_);
-            if (tlN_ > 0) { Uniform4fv(ULOC(P, "uTLPos"), 8, &tlPos_[0][0]); Uniform4fv(ULOC(P, "uTLCol"), 8, &tlCol_[0][0]); }
+        if (P.uTLN >= 0) {
+            Uniform1i(P.uTLN, tlN_);
+            if (tlN_ > 0) {
+                Uniform4fv(P.uTLPos, 8, &tlPos_[0][0]); Uniform4fv(P.uTLCol, 8, &tlCol_[0][0]); Uniform4fv(P.uTLCut, 2, tlCut_);
+                Uniform1i(P.uTLMask, 0xFF);                // (per-draw masks narrow it in drawSubs)
+            }
             const bool vis = tlN_ > 0 && inDynamicDraw_ && rtShadowLightsOn() && rtMaskActive_ && rtTargets_.lightVis;
-            Uniform1i(ULOC(P, "uTLVisOn"), vis ? 1 : 0);
+            Uniform1i(P.uTLVisOn, vis ? 1 : 0);
             if (vis) { ActiveTexture(GL_TEXTURE0 + 29); glBindTexture(GL_TEXTURE_2D, rtTargets_.lightVis); ActiveTexture(GL_TEXTURE0 + 10);
-                       Uniform1i(ULOC(P, "uTLVis"), 29); }
+                       Uniform1i(P.uTLVis, 29); }
         }
     }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
@@ -4368,7 +4377,19 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                                 queueInstance(P, s.first, s.count, g.vao);
             if (!queued) {
                 if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
+                int tlMask = 0xFF;
+                if (tlN_ > 0 && P.uTLMask >= 0) {          // (item 4) per-draw light cull, as the original's per-primitive light lists
+                    const core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
+                    const float rr = core::length(s.bmax - s.bmin) * 0.5f * 1.5f + 1.0f;   // (loose: skinned subs move in their bounds)
+                    tlMask = 0;
+                    for (int k = 0; k < tlN_; ++k) {
+                        const core::Vec3 lp{tlPos_[k][0], tlPos_[k][1], tlPos_[k][2]};
+                        if (core::length(lp - c) < std::sqrt(tlCut_[k]) / tlPos_[k][3] + rr) tlMask |= 1 << k;
+                    }
+                    Uniform1i(P.uTLMask, tlMask);
+                }
                 glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+                if (tlMask != 0xFF) Uniform1i(P.uTLMask, 0xFF);   // (a later instanced / multi-draw with this program: every light)
             }
             if (rtUvAtlas_) {                              // (M7 RT: the program leaves the atlas pass in screen space again -
                 static const float zero[4] = {0, 0, 0, 0};  //  paths that do not set uRtUvSpace must not inherit it)
@@ -7796,6 +7817,8 @@ void Pipeline::selectTransientLights() {
         const TransientLight& L = tlightsDraw_[r.second];
         tlPos_[tlN_][0] = L.pos.x; tlPos_[tlN_][1] = L.pos.y; tlPos_[tlN_][2] = L.pos.z; tlPos_[tlN_][3] = 1.0f / L.radius;
         tlCol_[tlN_][0] = L.color.x; tlCol_[tlN_][1] = L.color.y; tlCol_[tlN_][2] = L.color.z; tlCol_[tlN_][3] = L.falloff;
+        // (the cull sphere: falloff pow(1 - x^2, e) < 1/512 past x^2 = 1 - (1/512)^(1/e); e = 75 -> 0.28 of the radius)
+        tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
         ++tlN_;
     }
 }
