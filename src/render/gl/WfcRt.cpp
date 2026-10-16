@@ -5,6 +5,7 @@
 // WFC_RT_DEPTHCHECK=1 (implies the round trip): the static world as the depth prepass draws it (opaque MDI subs, no
 // vertex-lightmapped runs) goes to D3D12 as BLAS / TLAS at load, and the job is one primary ray per pixel compared with
 // this frame's prepass depth (stage 0's exit check; D3D12RtBridge logs the agreement per 300 frames).
+#include "render/gl/WfcRtDefaults.h"
 #include "render/gl/WfcPipeline.h"
 #include "render/d3d12/D3D12RtBridge.h"
 #include "core/Log.h"
@@ -375,13 +376,91 @@ void Pipeline::rtReflKeep() {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         rtReflPrevW_ = vpW_; rtReflPrevH_ = vpH_;
     }
-    CopyImageSubData(t.refl, GL_TEXTURE_2D, 0, 0, 0, 0, rtReflPrev_, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
+    // item 7 (Realistic): temporal reflections - this frame's traced reflections blended with the previous kept ones,
+    // reprojected through their view-projection and clamped to the current 3 x 3 neighbourhood (no ghost trails): one
+    // ray per pixel's fireflies settle into a stable image. WFC_RT_REFLTEMPORAL=0 off; Faithful keeps the plain copy.
+    const bool reflTemporalOff = !rtdef::reflTemporal();
+    const bool temporal = !reflTemporalOff && rtMode_ == 2 && rtReflValid_ && reflTemporal(t.refl);
+    if (!temporal) CopyImageSubData(t.refl, GL_TEXTURE_2D, 0, 0, 0, 0, rtReflPrev_, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
     glBindTexture(GL_TEXTURE_2D, rtReflPrev_);
     GenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     glx::textureCacheInvalidate();
     std::memcpy(rtReflVP_, viewProj_.m, sizeof rtReflVP_);
     rtReflValid_ = true;
+}
+
+// item 7: the temporal blend into rtReflPrev_ (via a scratch target); false = not available (the caller copies)
+bool Pipeline::reflTemporal(GLuint cur) {
+    static GLuint prog = 0; static bool tried = false;
+    if (!tried) {
+        tried = true;
+        static const char* fs = R"(#version 430
+uniform vec2 uSize;
+uniform sampler2D uCur, uHist, uDepth;
+uniform mat4 uInvVP, uPrevVP;
+uniform vec2 uTexel;
+layout(location=0) out vec4 oColor;
+void main() {
+    vec2 vUV = gl_FragCoord.xy / uSize;
+    vec4 c = texture(uCur, vUV);
+    vec4 mn = c, mx = c;
+    for (int y = -1; y <= 1; ++y) for (int x = -1; x <= 1; ++x) {
+        vec4 s = texture(uCur, vUV + vec2(x, y) * uTexel); mn = min(mn, s); mx = max(mx, s);
+    }
+    float d = texture(uDepth, vUV).r;
+    vec4 w = uInvVP * vec4(vUV * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); w /= w.w;
+    vec4 p = uPrevVP * w; vec2 puv = p.xy / p.w * 0.5 + 0.5;
+    if (p.w <= 0.0 || any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) { oColor = c; return; }
+    vec4 h = clamp(textureLod(uHist, puv, 0.0), mn, mx);
+    oColor = mix(h, c, 0.25);
+}
+)";
+        GLuint pv = compileShader(GL_VERTEX_SHADER, kRtVS, "refl.temporal.vs"), pf = compileShader(GL_FRAGMENT_SHADER, fs, "refl.temporal");
+        prog = (pv && pf) ? linkProgram(pv, pf, "refl.temporal") : 0;
+    }
+    if (!prog || !rtReflPrev_ || !postVao_) return false;
+    float inv[16];
+    if (!invert(viewProj_.m, inv)) return false;
+    static GLuint tmp = 0, fbo = 0; static int tw = 0, th = 0;
+    if (!tmp || tw != vpW_ || th != vpH_) {
+        if (!tmp) { glGenTextures(1, &tmp); GenFramebuffers(1, &fbo); }
+        glBindTexture(GL_TEXTURE_2D, tmp);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, vpW_, vpH_, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        BindFramebuffer(GL_FRAMEBUFFER, fbo);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tmp, 0);
+        tw = vpW_; th = vpH_;
+    }
+    ensureSceneDepth();
+    GLint drawFb = 0; glGetIntegerv(0x8CA6, &drawFb);
+    GLint prevProg = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+    GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
+    const GLboolean depthOn = glIsEnabled(GL_DEPTH_TEST), blendOn = glIsEnabled(GL_BLEND);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glViewport(0, 0, vpW_, vpH_);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND);
+    BindVertexArray(postVao_);
+    UseProgram(prog);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, cur);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, rtReflPrev_);
+    ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    Uniform1i(cachedUniformLocation(prog, "uCur"), 0); Uniform1i(cachedUniformLocation(prog, "uHist"), 1);
+    Uniform1i(cachedUniformLocation(prog, "uDepth"), 2);
+    UniformMatrix4fv(cachedUniformLocation(prog, "uInvVP"), 1, GL_FALSE, inv);
+    UniformMatrix4fv(cachedUniformLocation(prog, "uPrevVP"), 1, GL_FALSE, rtReflVP_);
+    Uniform2f(cachedUniformLocation(prog, "uTexel"), 1.0f / (float)vpW_, 1.0f / (float)vpH_);
+    Uniform2f(cachedUniformLocation(prog, "uSize"), (float)vpW_, (float)vpH_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    for (int u = 2; u >= 0; --u) { ActiveTexture(GL_TEXTURE0 + u); glBindTexture(GL_TEXTURE_2D, 0); }
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)drawFb);
+    UseProgram((GLuint)prevProg);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    if (depthOn) glEnable(GL_DEPTH_TEST);
+    if (blendOn) glEnable(GL_BLEND);
+    CopyImageSubData(tmp, GL_TEXTURE_2D, 0, 0, 0, 0, rtReflPrev_, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
+    glx::uniformCacheForgetCurrent(); glx::textureCacheInvalidate();
+    return true;
 }
 
 // the shared depth -> R32F copy (the scene depth as of now) into tex
@@ -943,7 +1022,7 @@ void Pipeline::rtDynMid() {
         rtLampWorldN_ = nb;
         // (item 4) the transient lights' RT shadows on the world: the same inputs (bound here when 2B did not)
         const bool tlOk = !r1 && tlN_ > 0 && rtMrtWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ && t.lightVis;
-        static const bool sunShareOff = [] { const char* e = std::getenv("WFC_RT_SUNSHARE"); return e && e[0] == '0'; }();
+        const bool sunShareOff = !rtdef::sunShare();
         const bool sunOk = !sunShareOff && !r1 && rtMode_ == 2 && giActive() && rtMrtWorld() && r1SunTex_ && r1ClearedFrame_ == frameNo_ &&
                            r1Fit_[0] > 0.0f && sun;
         Uniform1i(cachedUniformLocation(cp, "uSunShare"), sunOk ? 1 : 0);
@@ -1050,7 +1129,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         fr.mode = 2; fr.instanceMask = 0xFF; fr.frameIndex = frameNo_; fr.aoRays = aoRays; fr.aoRadius = aoRadius;
         // X5 (Realistic): the characters' sky occlusion reaches 3 m - a robot under an overhang, in a doorway, beside a
         // wall darkens as the world around it does (1 m caught only contact). WFC_RT_CHARAORADIUS=<m>; 0 = the 1 m radius.
-        static const float aoDyn = [] { const char* e = std::getenv("WFC_RT_CHARAORADIUS"); return e ? (float)std::atof(e) : 3.0f; }();
+        const float aoDyn = rtdef::charAoRadius();
         fr.aoRadiusDyn = rtMode_ == 2 ? aoDyn : 0.0f;
         std::memcpy(fr.prevVP, rtPrevColVP_, sizeof fr.prevVP); fr.prevValid = rtPrevValid_;   // (item 3: reflection hits off the static world)
         fr.reflect = rtReflPass();                       // (M7 stage 2: Realistic, or WFC_RT_REFLECT)
@@ -1108,16 +1187,13 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             static bool logged = false;
             if (!logged) {
                 logged = true;
-                auto on = [](const char* k) { const char* e = std::getenv(k); return !(e && e[0] == '0'); };
-                auto num = [](const char* k, float d) { const char* e = std::getenv(k); return e ? (float)std::atof(e) : d; };
+                auto oo = [](bool b) { return b ? "on" : "off"; };
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
-                         "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s x3=%s",
-                         on("WFC_RT_TONE") ? "on" : "off", on("WFC_RT_LMSPEC") ? num("WFC_RT_LMSPECGAIN", 2.5f) : 1.0f,
-                         num("WFC_RT_TLGAIN", 2.0f), num("WFC_RT_GISAT", 2.5f), num("WFC_RT_GIEMISSIVE", 4.0f),
-                         num("WFC_RT_CHARAORADIUS", 3.0f), on("WFC_SOFTPARTICLES") ? "on" : "off", on("WFC_TLTILED") ? "on" : "off",
-                         on("WFC_RT_CHARSUN") ? "on" : "off", on("WFC_RT_CHARLAMPCAL") ? "on" : "off", on("WFC_RT_REFLTL") ? "on" : "off",
-                         on("WFC_RT_SUNSHARE") ? "on" : "off", on("WFC_RT_PROBEFILL") ? "on" : "off", on("WFC_PBR_ORIGSPEC") ? "on" : "off",
-                         on("WFC_X3") ? "on" : "off");
+                         "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
+                         "refltemporal=%s",
+                         oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
+                         rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
+                         oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()));
             }
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights

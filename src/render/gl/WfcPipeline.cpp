@@ -1,3 +1,4 @@
+#include "render/gl/WfcRtDefaults.h"
 #include "render/gl/WfcPipeline.h"
 #include "platform/LongPath.h"
 #include "core/LoadYield.h"
@@ -707,6 +708,7 @@ uniform int uDofOn;
 uniform vec2 uNearFar;        // camera near/far (m)
 uniform int uSoftBloom;       // (X1, Realistic) a soft-knee threshold over the exposed HDR scene (0: the original's gate)
 uniform float uBloomExposure;
+uniform float uBloomMax;     // (X1) the soft bloom's HDR input cap
 layout(location=0) out vec4 oColor;
 float linDepthUE(vec2 uv) {
     float d = texture(uDepth, uv).r * 2.0 - 1.0;
@@ -718,7 +720,7 @@ void main() {
     for (int i = 0; i < 4; ++i) {
         vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0);
         vec2 uv = vUV + o * uTexel;
-        vec3 c = clamp(texture(uScene, uv).rgb, 0.0, uSoftBloom != 0 ? 64.0 : 4.0);
+        vec3 c = clamp(texture(uScene, uv).rgb, 0.0, uSoftBloom != 0 ? uBloomMax : 4.0);
         scene += c;
         if (uSoftBloom != 0) {
             vec3 e = c * uBloomExposure;
@@ -2726,10 +2728,10 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         static const std::string specIn = [] { const char* e = std::getenv("WFC_PBR_SPECIN"); return std::string(e ? e : "3.0"); }();
         at = mainLM.find("@SPECIN@");
         if (at != std::string::npos) mainLM.replace(at, 8, specIn);
-        static const bool origSpec = [] { const char* e = std::getenv("WFC_PBR_ORIGSPEC"); return !(e && e[0] == '0'); }();
+        const bool origSpec = rtdef::origSpec();
         if (origSpec) { const size_t ma = mainLM.find("uniform sampler2D uLM0;"); if (ma != std::string::npos) mainLM.insert(ma, "#define WFC_PBR_ORIGSPEC\n"); }
         {   // X2 in Enhanced too: the Realistic programs' extra lightmap specular over the original's term (as the classic main)
-            static const bool lmSpecOffM = [] { const char* e = std::getenv("WFC_RT_LMSPEC"); return e && e[0] == '0'; }();
+            const bool lmSpecOffM = !rtdef::lmSpec();
             const std::string spec = "            c += o.SpecularColor * Ls;\n";
             const size_t s = mainLM.find(spec), ma = mainLM.find("uniform sampler2D uLM0;");
             if (origSpec && rtMode_ == 2 && !lmSpecOffM && s != std::string::npos && ma != std::string::npos) {
@@ -2760,7 +2762,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         // glass and polished floors catch the sun and the lamps clearly. Its text joins only programs built in Realistic:
         // Off / Faithful compile the original text exactly (even an unused uniform branch beside it moved single pixels by
         // one level). A mode switch into / out of Realistic takes it at the next map load. WFC_RT_LMSPEC=0 off.
-        static const bool lmSpecOff = [] { const char* e = std::getenv("WFC_RT_LMSPEC"); return e && e[0] == '0'; }();
+        const bool lmSpecOff = !rtdef::lmSpec();
         if (at != std::string::npos && rtMode_ == 2 && !lmSpecOff) {
             const std::string spec = "        c += o.SpecularColor * Ls;\n";
             const size_t s = mainLM.find(spec, at);
@@ -2775,7 +2777,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     std::string mainUber = kFSMainUber;
     {   // Realistic soft particles: the fade text joins only programs built in Realistic (Off / Faithful compile the original
         // text exactly); the runtime sets uSoftFade > 0 for FX draws (sprites, mesh particles) only
-        static const bool softOff = [] { const char* e = std::getenv("WFC_SOFTPARTICLES"); return e && e[0] == '0'; }();
+        const bool softOff = !rtdef::softParticles();
         const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
         const size_t at = mainUber.find(anchor), ma = mainUber.find("void main() {");
         if (rtMode_ == 2 && !softOff && blend >= 2 && at != std::string::npos && ma != std::string::npos) {
@@ -3853,7 +3855,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(ULOC(P, "uBoneTex"), 18);
     }
     {   // X2: the Realistic programs' extra lightmap specular (gain - 1 over the original term; 0 outside Realistic)
-        static const float lmSpecGain = [] { const char* e = std::getenv("WFC_RT_LMSPECGAIN"); return e ? (float)std::atof(e) : 2.5f; }();
+        const float lmSpecGain = rtdef::lmSpecGain();
         const GLint loc = ULOC(P, "uRtLMSpec");
         if (loc >= 0) Uniform1f(loc, rtMode_ == 2 ? lmSpecGain - 1.0f : 0.0f);
         static int binds = 0, withSpec = 0;   // (diagnostics, WFC_LMSPECDIAG: how many lightmapped binds carry the X2 term)
@@ -3938,8 +3940,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     {   // Realistic: every particle (sprites, mesh particles) fades against the scene over 0.5 m - the hard depth cut showed
         // as stair-steps where explosions / smoke met geometry (option B covered only the material-less particles).
         // WFC_SOFTPARTICLES=0 off; WFC_SOFTPARTICLES_M=<metres>. Off / Faithful: 0 (the original's hard cut).
-        static const bool softOff = [] { const char* e = std::getenv("WFC_SOFTPARTICLES"); return e && e[0] == '0'; }();
-        static const float softM = [] { const char* e = std::getenv("WFC_SOFTPARTICLES_M"); return e ? std::max(0.01f, (float)std::atof(e)) : 0.5f; }();
+        const bool softOff = !rtdef::softParticles();
+        const float softM = rtdef::softParticlesM();
         const GLint loc = ULOC(P, "uSoftFade");
         const bool soft = !softOff && frameFx_ && rtMode_ == 2 && loc >= 0;
         if (soft) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
@@ -8088,7 +8090,7 @@ void Pipeline::selectTransientLights() {
     // (v3 row 4, Realistic) the transient lights on the RT lightmap's energy basis: one gain over every muzzle / death /
     // effect light (the static lamps went through the RT calibration; these kept the original's raw values).
     // WFC_RT_TLGAIN=<x>; Off / Faithful always 1 (the original's values).
-    static const float tlGain = [] { const char* e = std::getenv("WFC_RT_TLGAIN"); return e ? std::max(0.0f, (float)std::atof(e)) : 2.0f; }();
+    const float tlGain = rtdef::tlGain();
     const float gain = rtMode_ == 2 ? tlGain : 1.0f;
     for (const auto& r : rank) {
         if (tlAllN_ >= cap) break;
@@ -8115,7 +8117,7 @@ void Pipeline::selectTransientLights() {
 }
 
 bool Pipeline::tlTiledOn() const {
-    static const bool off = [] { const char* e = std::getenv("WFC_TLTILED"); return e && e[0] == '0'; }();
+    const bool off = !rtdef::tiled();
     return !off;
 }
 
@@ -8736,6 +8738,10 @@ void Pipeline::endFrame() {
         Uniform1f(G("uBloomThreshold"), filmic ? 1.0f : post_.bloomThreshold);
         Uniform1i(G("uSoftBloom"), filmic ? 1 : 0);
         Uniform1f(G("uBloomExposure"), 1.0f);
+        // (item 7) the soft bloom's input cap: 64 let a point-blank flash over bright lava flood the frame yellow; 16 keeps
+        // explosions white-hot with a contained halo. WFC_TONE_BLOOMMAX=<x>
+        static const float bloomMax = [] { const char* e = std::getenv("WFC_TONE_BLOOMMAX"); return e ? std::max(1.0f, (float)std::atof(e)) : 16.0f; }();
+        Uniform1f(G("uBloomMax"), bloomMax);
         Uniform4f(G("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
         Uniform2f(G("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
         Uniform1i(G("uDofOn"), dof ? 1 : 0);
