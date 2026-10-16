@@ -26,6 +26,7 @@ busy() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | ? { (
 mine() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process -Filter \"Name='wfc_rebuild.exe'\" | ? { \$_.ExecutablePath -like '*Rebuild-Experimental*' }).Count" | tr -d '\r'; }
 st "PACKAGE GATE final $F, penultimate $P, base $GATE_BASE_NAME$( [ $WHATIF = 1 ] && echo ' (WHATIF: commands printed, nothing run)')"
 [ -d "$BASE/build-release/bin" ] || { st "missing base $BASE"; [ $WHATIF = 1 ] || exit 1; }
+GATE_HD_ROOT=${GATE_HD_ROOT:-"F:/Transformers Rebuild/Rebuild-Systems/work/hd_dev_full"}   # (Systems shared dev root; the package 6 root once it exists)
 # the Realistic perf row (1b) needs an HD root with BOTH indexes (hd_index.json + hd_pbr_index.json: the M6 modern material maps) - checked up front
 [ -f "$GATE_HD_ROOT/hd_index.json" ] && [ -f "$GATE_HD_ROOT/hd_pbr_index.json" ] || { st "GATE_HD_ROOT=$GATE_HD_ROOT lacks hd_index.json or hd_pbr_index.json (use hd_dev_full until the package 6 build has its own root)"; [ $WHATIF = 1 ] || exit 1; }
 
