@@ -1,4 +1,4 @@
-﻿# RT perf baseline - m9c_30b2fa7, 2560x1440 windowed, 31 v 32 bots + player bot, lockstep steps 2400-6000
+﻿# [PRE-NOINTERACT series: window focus normal, WFC_MUTE=1, WFC_NOMOUSE pinned; do not diff NOINTERACT rows against this] RT perf baseline - m9c_30b2fa7, 2560x1440 windowed, 31 v 32 bots + player bot, lockstep steps 2400-6000
 
 GPU ms per RT pass = the product's RT summary averages over the run; frame p50 / p90 over the measured steps (ms).
 
