@@ -1793,3 +1793,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (WFC_TONE_BLOOMMAX; the point-blank flash keeps the robot behind it readable), WfcRtDefaults.h (one source per
   default; defaults line + refltemporal, - x3). Sequence: Systems rtcheck row (running) -> Rendering identity on
   int_cand5 -> push -> merge paired with Systems' table patch -> RESUME: effect-light calibration, X3 v3, eye pass.
+  2026-10-16 13:06 THIRD STREETS POCKET root cause (Gameplay replays): a bot VEHICLE carries its corridor corner at 14-15
+  m/s off the mesh where the outside of the corner is a 10 m drop into a trench, transforms, and walks the trench dead
+  end under an unreachable waypoint (2-5 s each; 132 s over 4 of 24 Classic seeds). APPROVED: ledge guard for bot
+  ground vehicles (both AIs, bot steering only; probe position + v x 0.6 s; off-mesh + no floor within 2.5 m below ->
+  brake / no boost, steer to the waypoint; drop / jump links exempt; the original's vehicle AI nav is unrecovered),
+  Classic re-baseline, gate + activation counts per map / seed. Systems' rtcheck row rerunning (setup slip, no GPU use).
