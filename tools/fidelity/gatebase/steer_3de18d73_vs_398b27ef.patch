@@ -1,0 +1,5 @@
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -1020 +1020 @@
+-    if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
++    if (vehicle) { in.steer = core::clampf(wrapPi(pc.yaw() - in.faceYaw) * 1.5f, -1.0f, 1.0f); }   // 3de18d73's botDriveSteer, inlined
