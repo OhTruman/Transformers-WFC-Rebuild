@@ -1906,3 +1906,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the confirming sheet. LEDGE GUARD -> PACKAGE 7 (v2 rare and blocks the trench, but ~half its episodes fire over
   collision holes / mesh edges, not real drops; v3 = downward segment cast); nothing from it in package 6. SIM FREEZE
   in effect: gate base = rise-snap 63368d05 final. Head = 18483783 merge + Systems' table.
+  2026-10-16 14:11 Ledge-guard findings doc merged c8d4ad0c (package 7 design: downward segment cast). DISK ROUND before
+  the gate + package build (F: ~81 GB free, 96 % used): every lane prunes superseded trees (Rendering int_cand..5 /
+  int_eye / int_base2; Systems package 3 tree + scratch builds; Experimental old archives / eyepass runs;
+  AssetTools proof trees; Gameplay old int_* trees); hd_dev_full, push_m6, b0-31, packages 4 + 5 untouched.
+  int_cand6 staged for the confirming sheet (GO on Rendering's identity pass); eyepass saves rt_defaults.txt.
