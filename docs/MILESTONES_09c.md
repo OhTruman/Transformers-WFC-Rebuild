@@ -1275,6 +1275,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   dielectric roughness only until a metal review. Enhanced row data complete; ships in package 5 only if Rendering's
   item 6 calibration lands before the cut. Machine 01:42: 0 TDRs, pool 9.4 GB, F: 151 GB; Experimental's untimed rows
   running on a5f53923.
+  2026-10-16 01:47 OVERLAY TOOLING MERGED 62f941c3 (Systems ac5be728): the package ships glTFs as .gltf.xpr compressed twins, so
+  build_slim --overlay DIR replaces the source of the 85 rows before packing (FROZEN.json bytes + sha256, exactly one
+  shipped row each, recorded in build_slim.json; a wrong sha256 stops the build); refresh.sh OVERLAY defaults to
+  AssetTools/work/gltf_wfcmat and stops unless 85 of 85 rows are replaced; verify_slim static row check_overlay.py
+  (the shipped barrier glTF carries the Barrier_Defrag MATINST extras; all 85 byte-identical to FROZEN; package 4 fails
+  it by design). Systems ready for 'build package 5' once the cull-fix head passes regress.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
