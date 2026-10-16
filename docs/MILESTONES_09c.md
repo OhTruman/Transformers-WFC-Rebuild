@@ -1981,3 +1981,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   bloom on a point-blank full-screen explosion). Gorge 1.33 | 1.38. DECISION: ship int_cand8 (clearly better than
   int_cand7; no third retune); residual = package 7 polish (adaptation on extreme frames). Rendering pushes 0a299fe9
   + a833c984 -> merge + WHITEROLL table = package 6 head.
+  2026-10-16 15:25 PACKAGE 6 HEAD = integration 4078e47b (code head 54105396: Rendering white roll 0a299fe9 + warm-white
+  retune a833c984 on 7f3cf732; 4078e47b = + Systems' paired WHITEROLL table). Built clean (whitemix in the exe),
+  pushed. Started: Experimental BUILD_ONLY 4078e47b / 7cd22027 (final tree) -> READY -> the one-GO gate block (~3 h);
+  Systems runbook step 1 -> work/playtest_slim_4078e47b (~45 min) + RT-off verify rows; Systems' RT rows after the
+  gate block. Rendering's package 7 polish doc merged (RENDERING_PACKAGE7_POLISH.md: exposure adaptation on extreme
+  frames, X3 froxel, X6, X7, VelocityOverLife). Rendering's package 6 RT work COMPLETE.
