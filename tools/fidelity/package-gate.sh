@@ -26,6 +26,8 @@ busy() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | ? { (
 mine() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process -Filter \"Name='wfc_rebuild.exe'\" | ? { \$_.ExecutablePath -like '*Rebuild-Experimental*' }).Count" | tr -d '\r'; }
 st "PACKAGE GATE final $F, penultimate $P, base $GATE_BASE_NAME$( [ $WHATIF = 1 ] && echo ' (WHATIF: commands printed, nothing run)')"
 [ -d "$BASE/build-release/bin" ] || { st "missing base $BASE"; [ $WHATIF = 1 ] || exit 1; }
+# the Realistic perf row (1b) needs an HD root with BOTH indexes (hd_index.json + hd_pbr_index.json: the M6 modern material maps) - checked up front
+[ -f "$GATE_HD_ROOT/hd_index.json" ] && [ -f "$GATE_HD_ROOT/hd_pbr_index.json" ] || { st "GATE_HD_ROOT=$GATE_HD_ROOT lacks hd_index.json or hd_pbr_index.json (use hd_dev_full until the package 6 build has its own root)"; [ $WHATIF = 1 ] || exit 1; }
 
 # ---- 0 builds (CPU)
 if [ -z "$SKIP_BUILD" ]; then for sha in $P $F; do s=${sha:0:7}
@@ -43,7 +45,7 @@ for m in 501 502 503 504 507 508 509 510; do
 done
 # ---- 1b Realistic perf row (Integration 2026-10-16; still under the hold): the final head with the package 6 defaults + HD Enhanced,
 #      2560x1440 window (NOINTERACT exact client size), 31 v 32 lockstep, 1 rep, the 5 user maps; report-only, flag p50 > 16.7 ms
-HDR=${GATE_HD_ROOT:-"F:\Transformers Rebuild\AssetTools\out\hd\push_full_snap_20261016_b0-31\pack"}
+HDR=$(cygpath -w "$GATE_HD_ROOT" 2>/dev/null)
 st "1b Realistic perf row START"
 for m in 508 510 507 504 509; do
   run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/rtperf/map-$m -Map $m -Arms 'realistic|work/ab/fast_$f|WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR' -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/rtperf/map-$m.out 2>&1"
