@@ -1175,6 +1175,20 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   presentations / cues synchronously around each scripted applyMatchDamage call, so natural deaths in the window no
   longer count; 44 / 44 both AIs at the default seed and at seed 7 on non-PGO; Systems reruns the PGO env on
   24c89769 with the lights patches rebased).
+  2026-10-16 00:32 RT PLAN V2 ITEMS 3 + 4 MERGED 2873a071 (rt2 bea87923; Renderer.h / GLRenderer.cpp conflicts resolved
+  additively). Item 3: reflections on every physically reflective surface with a roughness-aware Fresnel (perceptual
+  roughness, not the GGX alpha) replacing the hard SpecularPower gate: the Molten platform seam and the grazing black
+  rim bands are gone (refl3_closeup.png: off | old gate | new; the near-mirror pillar reflection is now blurred / faint
+  on the stone floor); reflection hits read the RT lightmap. Item 4: transient lights (Systems spawns the original's
+  muzzle / death lights) light the lightmapped world and characters per pixel in all modes, Realistic RT-shadows the 4
+  strongest (tl4.png). Gates: Off + Faithful 5 / 5 identical, SIMHASH unchanged; rt-perf-baseline (the 75-min window
+  took 13 min) Realistic p50 / p90 ms 30b2fa74 -> items 1 / 2 -> items 3 / 4: Rust 7.77 / 8.61 -> 8.04 / 9.11 -> 8.74 /
+  10.84, Debris 6.99 / 7.83 -> 7.10 / 8.00 -> 7.51 / 9.45, Streets 8.28 / 9.38 -> 8.66 / 9.92 -> 9.38 / 11.39, Molten
+  8.68 / 9.88 -> 9.09 / 10.55 -> 9.79 / 12.01, Gorge 7.96 / 9.04 -> 8.48 / 9.84 -> 9.21 / 11.58 (reflections 1.3-1.9 and
+  shadow + AO 2.7-3.6 unchanged, denoiser +0.05-0.1; all far under the 14 ms flag). Caveat: Faithful +0-0.3 p50 / +1
+  p90 vs the items 1 / 2 run with Faithful's RT passes unchanged -> a 15-min same-flags A/B granted. Images sent to
+  the user. Rendering next: robots in reflections (hits on characters take the previous frame's image). Systems
+  rebases the lights patches onto 2873a071.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
