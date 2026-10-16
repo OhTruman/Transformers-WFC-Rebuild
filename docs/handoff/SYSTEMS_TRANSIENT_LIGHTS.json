@@ -1,0 +1,3255 @@
+{
+ "defaults": {
+  "TransGame.Default__TnWeaponMesh": {
+   "LightEnvironment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+   "EnableMuzzleLight": true,
+   "MuzzleFlashDuration": 0.10000000149011612,
+   "MuzzleFlashLight": "TransGame.Default__TnWeaponMesh.MuzzleFlashLightA"
+  },
+  "HM_Engine.Default__HmWeaponMesh": {
+   "LightEnvironment": "HM_Engine.Default__HmWeaponMesh.MyLightEnvironment",
+   "EnableMuzzleLight": true,
+   "MuzzleFlashDuration": 0.10000000149011612
+  },
+  "TransGame.Default__TnWeaponMesh.MuzzleFlashLightA": {
+   "Radius": 512.0,
+   "FalloffExponent": 10.0,
+   "RadiusOfInfluence": 404.926513671875,
+   "Brightness": 25.0,
+   "LightColor": {
+    "B": 120,
+    "G": 220,
+    "R": 250,
+    "A": 0
+   },
+   "bEnabled": false,
+   "CastShadows": false,
+   "CastStaticShadows": false,
+   "CastDynamicShadows": false,
+   "bForceDynamicLight": true
+  },
+  "TransGame.Default__TnPawn": {
+   "DeathLight": "TransGame.Default__TnPawn.DeathLight0",
+   "_DeathLightManager": "TransGame.Default__TnPawn.DeathLightManager0",
+   "CloakLight": "TransGame.Default__TnPawn.CloakLight0",
+   "_CloakLightManager": "TransGame.Default__TnPawn.CloakLightManager0"
+  },
+  "TnPawn.CloakLight (TransGame.Default__TnAiJetSoldierPawn.CloakLight0)": {
+   "RadiusOfInfluence": 1013.760009765625,
+   "LightColor": {
+    "B": 120,
+    "G": 220,
+    "R": 250,
+    "A": 0
+   },
+   "bEnabled": false,
+   "CastShadows": false,
+   "CastStaticShadows": false,
+   "CastDynamicShadows": false,
+   "bForceDynamicLight": true
+  },
+  "TnPawn.DeathLight (TransGame.Default__TnAiJetSoldierPawn.DeathLight0)": {
+   "RadiusOfInfluence": 1013.760009765625,
+   "LightColor": {
+    "B": 120,
+    "G": 220,
+    "R": 250,
+    "A": 0
+   },
+   "bEnabled": false,
+   "CastShadows": false,
+   "CastStaticShadows": false,
+   "CastDynamicShadows": false,
+   "bForceDynamicLight": true
+  }
+ },
+ "muzzle_lights": {
+  "WEP_AssaultRifle_p.AssaultRifle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 143,
+     "R": 140,
+     "A": 255
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 3.0,
+     "G": 0.05112199857831001,
+     "B": 0.04145200178027153,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Axe_p.Axe_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": true,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_Bazooka_p.Bazooka_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_FusionCannon_p.FX.Muzzleflash_FusionCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 800.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 569.16796875,
+    "Brightness": 5.0,
+    "LightColor": {
+     "B": 255,
+     "G": 128,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.21952000260353088,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_BeatDownClub_p.BeatDownClub_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_BroadSword_p.BroadSword_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_BurstRifle_p.BurstRifle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_BurstRifle_p.FX.MuzzleFlash_BurstRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 128,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_ButterflyAxe_p.ButterflyAxe_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_CeremonialStaff_p.CeremonialStaff_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_EMPShotgun_p.EMPShotgun_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_EMPShotgun_p.FX.MuzzleFlash_EMPShotgun_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 128,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.21952000260353088,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_FightingStaff_p.FightingStaff_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_FlashBangs_p.FlashBangs_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_LoopingTail",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Grenade_p.FlakGrenades_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_LoopingTail",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_GrenadeLauncher_p.GrenadeLauncher_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": 1.0,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_GrenadeLauncher_p.FX.MuzzleFlash_GrenadeLauncher_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_HalberdAxe_p.HalberdAxe_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 133,
+     "R": 171,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_Hammer_p.Hammer_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_HealGrenades_p.HealGrenades_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_LoopingTail",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_HeavyMG_p.HeavyMG_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_HeavyMG_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 128,
+     "G": 128,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.21952000260353088,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_HeavyPistol_p.HeavyPistol_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": 0.30000001192092896,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 187,
+     "G": 187,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 0.04145200178027153,
+     "G": 0.0962660014629364,
+     "B": 0.07382799685001373,
+     "A": 1.0
+    },
+    "MinShadowResolution": 3
+   }
+  },
+  "WEP_HuntingDagger_p.HuntingDagger_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_IonBlaster_p.IonBlaster_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 143,
+     "R": 140,
+     "A": 255
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 3.0,
+     "G": 0.05112199857831001,
+     "B": 0.04145200178027153,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_KamikazeMine_p.KamikazeMines_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_LoopingTail",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_LancingSpear_p.LancingSpear_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_LongSword_p.LongSword_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 214,
+     "G": 75,
+     "R": 203,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_Maul_p.Maul_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 133,
+     "R": 171,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_PlaneMachineGun_p.PlaneMachineGun_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 128,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.21952000260353088,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_PlasmaCannon_p.PlasmaCannon_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_PlasmaCannon_p.FX.PowerUp_PlasmaCannon_FX",
+     "loops": true,
+     "DisableLight": false
+    },
+    {
+     "event": "WP_LoopingTail",
+     "ps": "FX_PlasmaCannon_p.FX.MuzzleFlash_PlasmaCannon_FX",
+     "loops": false,
+     "DisableLight": true
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 564.9407958984375,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Poke_p.Poke_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_ProngDagger_p.ProngDagger_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_RepairBeam_p.RepairBeam_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 498.0220031738281,
+    "Brightness": 5.0,
+    "LightColor": {
+     "B": 128,
+     "G": 0,
+     "R": 0,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Rocket_p.Rocket_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 220,
+     "R": 150,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_RocketLauncher_p.RocketLauncher_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 498.0220031738281,
+    "Brightness": 5.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SerratedBlade_p.SerratedBlade_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_ShortSword_p.ShortSword_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_Shotgun_p.Shotgun_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_EMPShotgun_p.FX.MuzzleFlash_EMPShotgun_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 128,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.21952000260353088,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SniperRifle_p.SniperRifle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Sniper_p.FX.MuzzleFlash_Sniper_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SpikedBat_p.SpikedBat_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 133,
+     "R": 171,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SpikedMace_p.SpikedMace_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 133,
+     "R": 171,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_TortureSword_p.TortureSword_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 235,
+     "G": 54,
+     "R": 231,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_TurretIonGun_p.TurretIonBase_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TurretIonBlaster_p.FX.MuzzleFlash_TurretIon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TurretIonGun_p.TurretIonGun_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TurretIonBlaster_p.FX.MuzzleFlash_TurretIon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TurretRepairRay_p.TurretRepairRay_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 0,
+     "R": 0,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TurretRocket_p.Turret_Rocket_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TurretIonBlaster_p.FX.MuzzleFlash_TurretIon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TurretRocket_p.TurretRocketBase_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TurretIonBlaster_p.FX.MuzzleFlash_TurretIon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_ViciousAxe_p.ViciousAxe_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.MeleeEquip_Purple_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 133,
+     "R": 171,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_WarHammer_p.WarHammer_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 128,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.21952000260353088,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 220,
+     "R": 150,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_TankCannon_p.TankCannon_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TankCannon_p.FX.D_MuzzleFlash_TankCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2000.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1635.88720703125,
+    "Brightness": 50.0,
+    "LightColor": {
+     "B": 150,
+     "G": 100,
+     "R": 150,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SoldierTank_p.TankRobotAutHeavyCannon_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TankCannon_p.FX.MuzzleFlash_TankCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SoldierTank_p.TankRobotDecHeavyCannon_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TankCannon_p.FX.MuzzleFlash_TankCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Starscream_AI_p.Starscream_EMPShotgun_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_EMPShotgun_p.FX.MuzzleFlash_EMPShotgun_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 3000.0,
+    "FalloffExponent": 75.0,
+    "RadiusOfInfluence": 504.7087707519531,
+    "Brightness": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 128,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": true,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ShadowFalloffExponent": 0.3499999940395355,
+    "bCastCompositeShadow": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.21952000260353088,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Laser_Vehicle_AI_p.Laser_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_NullRay_p.FX.MuzzleFlash_NullRay_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 0,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SentryBlaster01_p.RepairSentry_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 0,
+     "R": 0,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Shield_p.Decepticon.ShieldBrute_D_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Shield_p.FX.ShieldD_01_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_Rocket_p.Rocket_Vehicle_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 250,
+     "G": 220,
+     "R": 150,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SentryBlaster01_p.WarshipHomingRocketSentry_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 5,
+     "G": 49,
+     "R": 122,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.19046300649642944,
+     "G": 0.06772500276565552,
+     "B": 0.00036700000055134296,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Shield_p.Autobot.ShieldBrute_A_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SentryBlaster01_p.RocketSentry_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 128,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.9913930296897888,
+     "G": 0.21952000260353088,
+     "B": 4.999999873689376e-06,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SentryBlaster01_p.LightSentry_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_IonBlaster_p.FX.MuzzleFlash_IonBlaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 196,
+     "G": 215,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.5668100118637085,
+     "B": 0.3992930054664612,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_AudioBlast_p.AudioBlast_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_SoundWave_p.FX.AudioBeam_MuzzleFlash_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_BombingRunLaser_p.BombingRunLaser_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SentryBlaster01_p.HomingRocketSentry_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 77,
+     "R": 128,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.21952000260353088,
+     "G": 0.09151799976825714,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Shield_p.Decepticon.ShieldHeavy_D_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Shield_p.FX.ShieldD_01_FX",
+     "loops": true,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SoldierTank_p.SoldierTankDecGatling_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SoldierTank_p.TankVehicleMG_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 1000.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 790.8720703125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TankCannon_AI_p.TankVehicleCannonHeavy_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TankCannon_p.FX.MuzzleFlash_TankCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 4000.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 3366.042724609375,
+    "Brightness": 100.0,
+    "LightColor": {
+     "B": 150,
+     "G": 100,
+     "R": 150,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_TrypticonShoulderCannon_p.TrypticonShoulderCannon_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Trypticon_p.FX.Plasma_Orb_MuzzleFlash_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2000.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1581.744140625,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 200,
+     "G": 50,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_TrypticonTailSentry_p.TrypticonTailRocketSentry_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 5,
+     "G": 49,
+     "R": 122,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.19046300649642944,
+     "G": 0.06772500276565552,
+     "B": 0.00036700000055134296,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Shield_p.Neutral.ShieldBrute_N_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": null,
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SoldierTank_p.SoldierTankAutGatling_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SentryBlaster01_p.DeathBeamSentry_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_DeathBeam_p.FX.MuzzleFlash_DeathBeam_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 64,
+     "G": 128,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.21952000260353088,
+     "B": 0.047775998711586,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_CeremonialStaff_p.CeremonialStaffHolo_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Sword_p.FX.SwordEquip_Red_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 40,
+     "G": 45,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_OmegaShip_p.OmegaMGSentry_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_Weapons_p.Blaster.MuzzleFlash_Blaster_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_OmegaShip_p.OmegaRocketSentry_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TankCannon_p.FX.A_MuzzleFlash_TankCannon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 2048.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 1619.7060546875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": true,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_Omega_AI_p.OMEGA_ShootingFrenzy_AI_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_OS_Turret_p.FX.MuzzleFlash_Turret_A_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 50,
+     "G": 50,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_OmegaTurret_p.OmegaSupremeTurret_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_OS_Turret_p.FX.MuzzleFlash_Turret_A_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 50,
+     "G": 50,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_CodeOfPower_p.CodeOfPower1H_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Multiplayer_p.FX.Code_of_Power_FX",
+     "loops": true,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 223,
+     "R": 157,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_CodeOfPower_p.CodeOfPower2H_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Looping",
+     "ps": "FX_Multiplayer_p.FX.Code_of_Power_FX",
+     "loops": true,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 255,
+     "G": 223,
+     "R": 157,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_MPBomb_p.MPBomb_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_TurretIonBlaster_p.FX.MuzzleFlash_TurretIon_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  },
+  "TransGame.Default__TnWeaponMesh": {
+   "EnableMuzzleLight": true,
+   "MuzzleFlashDuration": 0.10000000149011612,
+   "flashes": [],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "TransGame.Default__TnWeaponMeshVehicle": {
+   "EnableMuzzleLight": true,
+   "MuzzleFlashDuration": 0.10000000149011612,
+   "flashes": [],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "TransGame.Default__TnWeaponEmpty.EmptyWeaponMesh": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 120,
+     "G": 220,
+     "R": 250,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SentryAbility_p.Default_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_OS_Turret_p.FX.MuzzleFlash_Turret_A_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 404.926513671875,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 50,
+     "G": 50,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true
+   }
+  },
+  "WEP_SentryAbility_p.Repair_WEPMESH": {
+   "EnableMuzzleLight": false,
+   "MuzzleFlashDuration": null,
+   "flashes": [],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 128,
+     "G": 0,
+     "R": 0,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.21952000260353088,
+     "A": 1.0
+    }
+   }
+  },
+  "WEP_SentryAbility_p.Rocket_WEPMESH": {
+   "EnableMuzzleLight": null,
+   "MuzzleFlashDuration": null,
+   "flashes": [
+    {
+     "event": "WP_Fire",
+     "ps": "FX_HomingRocket_p.FX.MuzzleFlash_HomRocket_FX",
+     "loops": false,
+     "DisableLight": false
+    }
+   ],
+   "light": {
+    "Radius": 700.0,
+    "FalloffExponent": 10.0,
+    "RadiusOfInfluence": 553.6104736328125,
+    "Brightness": 25.0,
+    "LightColor": {
+     "B": 0,
+     "G": 0,
+     "R": 255,
+     "A": 0
+    },
+    "bEnabled": false,
+    "CastShadows": false,
+    "CastStaticShadows": false,
+    "CastDynamicShadows": false,
+    "bForceDynamicLight": true,
+    "ModShadowColor": {
+     "R": 1.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 1.0
+    }
+   }
+  }
+ },
+ "ramp_lights": {
+  "TR_Deaths_p.SharedCarDeaths.TnDeathModifierTriggerLight_5223": {
+   "object": "TR_Deaths_p.SharedCarDeaths.TnDeathModifierTriggerLight_5223",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "LightColor": {
+     "B": 213,
+     "G": 123,
+     "R": 202,
+     "A": 0
+    },
+    "RampInTime": 0.20000000298023224,
+    "LightTime": 8.0
+   }
+  },
+  "TR_Deaths_p.SharedRobotDeaths.TnDeathModifierTriggerLight_9386": {
+   "object": "TR_Deaths_p.SharedRobotDeaths.TnDeathModifierTriggerLight_9386",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "Brightness": 10.0,
+    "Radius": 2048.0,
+    "LightColor": {
+     "B": 255,
+     "G": 230,
+     "R": 230,
+     "A": 1
+    },
+    "RampInTime": 2.0,
+    "LightTime": 2.0
+   }
+  },
+  "TR_SpiderDec_ANM_p.SpiderDeaths.TnDeathModifierTriggerLight_9386": {
+   "object": "TR_SpiderDec_ANM_p.SpiderDeaths.TnDeathModifierTriggerLight_9386",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "Brightness": 10.0,
+    "Radius": 2048.0,
+    "LightColor": {
+     "B": 255,
+     "G": 230,
+     "R": 230,
+     "A": 1
+    },
+    "RampInTime": 2.0,
+    "LightTime": 2.0
+   }
+  },
+  "TR_Deaths_p.SharedTankDeaths.TnDeathModifierTriggerLight_5223": {
+   "object": "TR_Deaths_p.SharedTankDeaths.TnDeathModifierTriggerLight_5223",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "LightColor": {
+     "B": 213,
+     "G": 123,
+     "R": 202,
+     "A": 0
+    },
+    "RampInTime": 0.20000000298023224,
+    "LightTime": 8.0
+   }
+  },
+  "TR_SecurityDrone_VEHDEF_p.SecurityDroneDeaths.TnDeathModifierTriggerLight_9386": {
+   "object": "TR_SecurityDrone_VEHDEF_p.SecurityDroneDeaths.TnDeathModifierTriggerLight_9386",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "Brightness": 10.0,
+    "Radius": 2048.0,
+    "LightColor": {
+     "B": 255,
+     "G": 230,
+     "R": 230,
+     "A": 1
+    },
+    "RampInTime": 2.0,
+    "LightTime": 2.0
+   }
+  },
+  "TR_Deaths_p.HoloBruteRobotDeaths.TnDeathModifierTriggerLight_9386": {
+   "object": "TR_Deaths_p.HoloBruteRobotDeaths.TnDeathModifierTriggerLight_9386",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "Brightness": 10.0,
+    "Radius": 2048.0,
+    "LightColor": {
+     "B": 255,
+     "G": 230,
+     "R": 230,
+     "A": 1
+    },
+    "RampInTime": 2.0,
+    "LightTime": 2.0
+   }
+  },
+  "TransGame.Default__TnDeathModifierTriggerLight": {
+   "object": "TransGame.Default__TnDeathModifierTriggerLight",
+   "class": "TnDeathModifierTriggerLight",
+   "props": {
+    "Brightness": 25.0,
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "RampInTime": 0.5,
+    "RampOutTime": 0.0,
+    "LightTime": 10.0,
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   }
+  },
+  "TransGame.Default__TnAnimNotify_TriggerDeathLight": {
+   "object": "TransGame.Default__TnAnimNotify_TriggerDeathLight",
+   "class": "TnAnimNotify_TriggerDeathLight",
+   "props": {
+    "Brightness": 25.0,
+    "Radius": 512.0,
+    "FalloffExponent": 10.0,
+    "LightColor": {
+     "B": 255,
+     "G": 255,
+     "R": 255,
+     "A": 0
+    },
+    "RampInTime": 0.5,
+    "RampOutTime": 0.0,
+    "LightTime": 10.0,
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   }
+  }
+ },
+ "other_light_components": {
+  "TnWeaponMesh": {
+   "n": 78,
+   "examples": [
+    {
+     "object": "WEP_AssaultRifle_p.AssaultRifle_WEPMESH.PointLightComponent_14276",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_Axe_p.Axe_WEPMESH.PointLightComponent_11436",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_Bazooka_p.Bazooka_WEPMESH.PointLightComponent_14276",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_BeatDownClub_p.BeatDownClub_WEPMESH.PointLightComponent_11436",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_BroadSword_p.BroadSword_WEPMESH.PointLightComponent_11436",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_BurstRifle_p.BurstRifle_WEPMESH.PointLightComponent_14276",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    }
+   ]
+  },
+  "TnWeaponMeshVehicle": {
+   "n": 8,
+   "examples": [
+    {
+     "object": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH.PointLightComponent_12975",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPMESH.PointLightComponent_843",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH.PointLightComponent_1490",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_TankCannon_p.TankCannon_Vehicle_WEPMESH.PointLightComponent_13762",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_Base_m"
+    },
+    {
+     "object": "WEP_Laser_Vehicle_AI_p.Laser_Vehicle_WEPMESH.PointLightComponent_1490",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_DecoEnd_Art_m"
+    },
+    {
+     "object": "WEP_Rocket_p.Rocket_Vehicle_WEPMESH.PointLightComponent_1490",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_DecoFoyer_Design_m"
+    }
+   ]
+  },
+  "TnAiJetSoldierPawnContent": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnAiJetSoldierPawnContent.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_DecoFoyer_Design_m"
+    },
+    {
+     "object": "TransContent.Default__TnAiJetSoldierPawnContent.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "A1_IAC_DecoFoyer_Design_m"
+    }
+   ]
+  },
+  "TnTankAiPawnContent": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnTankAiPawnContent.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "A3_COR_Caves_Split_Design_m"
+    },
+    {
+     "object": "TransContent.Default__TnTankAiPawnContent.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "A3_COR_Caves_Split_Design_m"
+    }
+   ]
+  },
+  "TnTrypticonPawnContent": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnTrypticonPawnContent.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "A5_TRY_BASE_m"
+    },
+    {
+     "object": "TransContent.Default__TnTrypticonPawnContent.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "A5_TRY_BASE_m"
+    }
+   ]
+  },
+  "?": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "Engine.Default__PointLightComponent",
+     "class": "PointLightComponent",
+     "package": "Engine"
+    },
+    {
+     "object": "Engine.Default__SpotLightComponent",
+     "class": "SpotLightComponent",
+     "package": "Engine"
+    }
+   ]
+  },
+  "TnPlayerPawnMultiplayer": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnPlayerPawnMultiplayer.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "MP_ESC_BrokenHope_Base_m"
+    },
+    {
+     "object": "TransContent.Default__TnPlayerPawnMultiplayer.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "MP_ESC_BrokenHope_Base_m"
+    }
+   ]
+  },
+  "TnPlayerPawnSurvival": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnPlayerPawnSurvival.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "MP_ESC_BrokenHope_Base_m"
+    },
+    {
+     "object": "TransContent.Default__TnPlayerPawnSurvival.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "MP_ESC_BrokenHope_Base_m"
+    }
+   ]
+  },
+  "TnPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnAiPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnAiPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnAiPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnAiJetSoldierPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnAiJetSoldierPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnAiJetSoldierPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnMinionAiPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnMinionAiPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnMinionAiPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnOmegaSupremePawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnOmegaSupremePawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnOmegaSupremePawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnPlayerPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnPlayerPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnPlayerPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnTankAiPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnTankAiPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnTankAiPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnTrypticonPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransGame.Default__TnTrypticonPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    },
+    {
+     "object": "TransGame.Default__TnTrypticonPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "TransGame"
+    }
+   ]
+  },
+  "TnCustomizationPawn": {
+   "n": 2,
+   "examples": [
+    {
+     "object": "TransContent.Default__TnCustomizationPawn.CloakLight0",
+     "class": "PointLightComponent",
+     "package": "UI_CharacterCustomization_m"
+    },
+    {
+     "object": "TransContent.Default__TnCustomizationPawn.DeathLight0",
+     "class": "PointLightComponent",
+     "package": "UI_CharacterCustomization_m"
+    }
+   ]
+  }
+ }
+}
