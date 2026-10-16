@@ -1189,6 +1189,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   p90 vs the items 1 / 2 run with Faithful's RT passes unchanged -> a 15-min same-flags A/B granted. Images sent to
   the user. Rendering next: robots in reflections (hits on characters take the previous frame's image). Systems
   rebases the lights patches onto 2873a071.
+  2026-10-16 00:50 SAME-FLAGS A/B 848b147b vs bea87923 (Rendering, release, muted + NOINTERACT, 1440p, 63 bots; found and fixed
+  first: its baseline scratch exe lacked the mute / NOINTERACT code because git apply in an untracked tree is a silent
+  no-op - the cause of tonight's unmuted run; files copied in, exes verified by grep): items 3 + 4 cost nothing
+  measurable (Molten Faithful 5.42 / 7.21 -> 5.44 / 7.15, Realistic 9.72 / 11.96 -> 9.83 / 11.96; Streets Faithful 4.95
+  / 6.76 -> 4.94 / 6.80, Realistic 9.34 / 11.26 -> 9.27 / 11.19; RT pass ms within 0.03). The earlier Faithful +1 ms p90
+  is option B / 3b, the mute + NOINTERACT window conditions (a never-foreground window plausibly gets background
+  scheduling), or both - unseparated; the clean one-build on / off A/B needs the OFF arm to take the mouse, so it waits
+  for the user's OK. RULES: perf rows under NOINTERACT form a new reference series (tables carry a run-conditions line,
+  Experimental b1851612); the 30b2fa74 RT baseline is labelled pre-NOINTERACT; package 5's rows end with a re-recorded
+  rt-perf-baseline under NOINTERACT as the new reference; A/Bs always run both arms under identical flags.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
