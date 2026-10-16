@@ -1562,3 +1562,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   colour, effect lights + headlights ON by default in Realistic after calibration, X5 contact shadows. Every row
   check from now = an eye-pass sheet. Merged: voice virtual voices + impact normal 9711d354; eyepass fix 98ae68ae;
   A1_IAC doc 48ad24fc; AssetTools VelocityOverLife decode (Systems regenerates the FX runtime data).
+  2026-10-16 07:32 VEHICLE YAW RATE MERGED 022e5e34 (Gameplay: faithful AiMaxAngularSpeed; robot facing snaps 133 -> 0,
+  vehicle heading snaps 1,016 -> 173). CLASSIC RE-BASELINED on this commit (96 / 96 runs diverge from the old
+  reference from step ~602 by design; new reference docs/handoff/vehyaw/); Experimental + Rendering told (package-gate
+  regress vs 398b27ef = perf only). Debris Smart cost -> next Smart item: vehicle corner anticipation. Corpse build
+  (death bodies) passes BOTTEST 46 / 46 both AIs; crops on slot B now. Systems paced 63-bot audit 5e256a57: no fx
+  guards, sync max 1 ms, local player never refused; DECISION: 128-voice pool when ExtendedPlayers=1 (5v5 stays 96).
+  AssetTools tag-parser fix moved up (package 6; ~2 h; recovers 2 Gorge audio triggers + Berth blocking volume /
+  decal; ships via the package overlay, ExtractedAssets untouched); A5_TRY ran clean (4.5 min). Rendering keeps an
+  integration-head export for identity (no rebase, per CLAUDE.md).
