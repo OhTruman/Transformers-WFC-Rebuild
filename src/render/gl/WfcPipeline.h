@@ -120,7 +120,7 @@ struct Program {
           uLit = -1, uLMCoord = -1, uLMScale = -1, uAmb = -1, uNumLights = -1, uLPos = -1, uLDir = -1,
           uLCol = -1, uLSpot = -1, uFogOn = -1, uFogMaxH = -1, uFogScale = -1, uFogStart = -1, uFogExt = -1,
           uFogIn = -1;
-    GLint uTLN = -1, uTLPos = -1, uTLCol = -1, uTLVisOn = -1, uTLVis = -1, uTLMask = -1, uTLCut = -1;   // (item 4) cached: no lookups per bind
+    GLint uTLN = -1, uTLPos = -1, uTLCol = -1, uTLVisOn = -1, uTLVis = -1, uTLMask = -1, uTLCut = -1, uTLDir = -1, uTLCosI = -1;   // (item 4) cached: no lookups per bind
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
@@ -282,7 +282,8 @@ public:
     // item 4: the original's transient point lights (muzzle flashes, death / cloak ramps; IRenderer::addTransientLight):
     // collected during a frame, applied from the next frame start (the 8 strongest at the camera), per pixel on the lit
     // world and characters in every mode (bForceDynamicLight: the original lit the lightmapped world with them too)
-    void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent);
+    void addTransientLight(const core::Vec3& pos, const core::Vec3& color, float radius, float falloffExponent,
+                           const core::Vec3* spotDir = nullptr, float cosInner = 1.0f, float cosOuter = -2.0f);   // (spot: v3 row 3)
 
 private:
     struct Sub {
@@ -364,10 +365,11 @@ private:
     // kind 2: a material-less particle batch (queueFallbackSprites)
     struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
     std::vector<FallbackBatch> fallbackPool_;
-    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; };
+    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; };
     std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
-    float tlCut_[8] = {};   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms
+    float tlCut_[8] = {};
+    float tlDir_[8][4] = {}, tlCosI_[8] = {};   // (v3 row 3) spot axis (xyz), cos(outer) (w; -2 = a point light); cos(inner)   // (item 4) per light: (d / radius)^2 beyond which its falloff is < 1/512 (the cull sphere)   // (item 4) the applied lights as uniforms
     void selectTransientLights();
     size_t fallbackUsed_ = 0;
     GLuint fallbackProg_ = 0, fallbackVao_ = 0, fallbackVbo_ = 0, fallbackIbo_ = 0; size_t fallbackIboQuads_ = 0;
