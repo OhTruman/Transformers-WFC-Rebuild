@@ -2086,3 +2086,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   are GPU-skinned. Fits CPU-bound frames + dyn draws. Fix plan (keeps the look): corpses through the pawns' GPU-
   skinned pose path, else skin once when the pose goes static. Gameplay assesses after the int_cap checks; Rendering
   names the API; the corpse arms set the priority.
+  2026-10-16 17:53 CAP TREE CHECKED (Gameplay int_cap: SIMHASH identical cap / cap 0 / NOCORPSE over 25,858 steps,
+  BOTTEST 48/48, 8-player corpses 17 either way) and the CAP NEVER ENGAGES (max 9 presentations alive at 63 bots,
+  80 deaths) -> cap DROPPED from the respin (documented for package 7); per-body cost confirmed as the question:
+  CPU skin + drawDynamicMesh re-upload every frame even after the pose goes static. GO plan 1 (pose serial +
+  drawDynamicMeshPosed; skip sample / skin once static; ~30 min; look unchanged by construction); plan 2 (GPU
+  skinned path for the animating phase) only if the arms still call for it. Corpse arms (default / NOCORPSE /
+  NOMINEPRES) on int_cap in a ~15 min hold after the mapswitch reruns.
