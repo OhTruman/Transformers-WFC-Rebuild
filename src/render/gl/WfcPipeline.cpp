@@ -679,6 +679,8 @@ uniform vec4 uDofPacked;      // FocusDistance, 1/NearFalloff, FalloffExponent, 
 uniform vec2 uDofMaxBlur;     // MaxNearBlurAmount, MaxFarBlurAmount
 uniform int uDofOn;
 uniform vec2 uNearFar;        // camera near/far (m)
+uniform int uSoftBloom;       // (X1, Realistic) a soft-knee threshold over the exposed HDR scene (0: the original's gate)
+uniform float uBloomExposure;
 layout(location=0) out vec4 oColor;
 float linDepthUE(vec2 uv) {
     float d = texture(uDepth, uv).r * 2.0 - 1.0;
@@ -690,9 +692,13 @@ void main() {
     for (int i = 0; i < 4; ++i) {
         vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0);
         vec2 uv = vUV + o * uTexel;
-        vec3 c = clamp(texture(uScene, uv).rgb, 0.0, 4.0);
+        vec3 c = clamp(texture(uScene, uv).rgb, 0.0, uSoftBloom != 0 ? 64.0 : 4.0);
         scene += c;
-        if (any(greaterThan(c, vec3(uBloomThreshold)))) bloom += c;
+        if (uSoftBloom != 0) {
+            vec3 e = c * uBloomExposure;
+            float m = max(e.r, max(e.g, e.b)), k = clamp(m - uBloomThreshold * 0.5, 0.0, uBloomThreshold);
+            bloom += e * max(k * k / (2.0 * uBloomThreshold + 1e-4), m - uBloomThreshold) / max(m, 1e-4);
+        } else if (any(greaterThan(c, vec3(uBloomThreshold)))) bloom += c;
         dsum += linDepthUE(uv);
     }
     float a = 0.0;
@@ -744,7 +750,24 @@ uniform vec2 uClutScaleBias;
 uniform vec3 uShadows, uInvHighLights, uMidTones;
 uniform float uDesat;
 uniform float uInvGamma;
+// (X1, Realistic) exposure from the adapted mean log luminance (uAdapt, 1 x 1) and a filmic shoulder (the ACES fit) in
+// place of the hard clip, then a saturation / contrast grade; the original's grade + CLUT follow unchanged
+uniform int uFilmic;
+uniform sampler2D uAdapt;
+uniform vec4 uExpo;      // key, adaptation strength, min, max
+uniform vec3 uToneGrade; // pre-gain, saturation, contrast
+uniform float uBloomMix;
 layout(location=0) out vec4 oColor;
+// the shoulder: identity below s (the original's authored toe and midtones untouched), an exponential roll-off to 1
+// above it; half per channel (the brightest highlights drift to white, as film does), half on the luminance (hue kept)
+float wfcShoulder(float x, float s) { return x <= s ? x : s + (1.0 - s) * (1.0 - exp(-(x - s) / (1.0 - s))); }
+vec3 wfcFilmShoulder(vec3 c, float s) {
+    vec3 pc = vec3(wfcShoulder(c.r, s), wfcShoulder(c.g, s), wfcShoulder(c.b, s));
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 lc = l > 1e-5 ? c * (wfcShoulder(l, s) / l) : c;
+    lc = lc / max(1.0, max(lc.r, max(lc.g, lc.b)));
+    return clamp(mix(pc, lc, 0.5), 0.0, 1.0);
+}
 void main() {
     vec3 scene = texture(uScene, vUV).rgb;
     float a = 0.0;
@@ -758,6 +781,15 @@ void main() {
     }
     vec4 blur = uBloomOn != 0 ? texture(uBloom, vUV) : vec4(0.0);
     vec3 c = ((1.0 - a) * scene + blur.rgb) / max((1.0 - a) + blur.a, 0.0001);
+    if (uFilmic != 0) {
+        float avg = exp(texture(uAdapt, vec2(0.5)).r);
+        float e = uToneGrade.x * clamp(pow(uExpo.x / max(avg, 1e-4), uExpo.y), uExpo.z, uExpo.w);
+        c = ((1.0 - a) * scene * e + blur.rgb * uBloomMix) / max((1.0 - a) + blur.a, 0.0001);
+        c = 0.18 * pow(max(c, vec3(1e-6)) / 0.18, vec3(uToneGrade.z));   // (contrast around 18 % grey: lit and shadowed sides part)
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
+        c = wfcFilmShoulder(c, 0.6);
+    }
     c = clamp(c - uShadows, 0.0, 1.0) * uInvHighLights;
     c = pow(max(c, vec3(0.0001)), uMidTones);
     c = c * (1.0 - uDesat) + vec3(dot(c, vec3(0.3, 0.59, 0.11)) * uDesat);
@@ -765,6 +797,39 @@ void main() {
     c = pow(max(c, vec3(0.0001)), vec3(uInvGamma));
     if (uClutOn != 0) c = texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb;
     oColor = vec4(c, 1.0);
+}
+)";
+
+// (X1) the scene's log luminance at 128 x 128 (mipmapped to its mean), and its temporal adaptation into a 1 x 1 target
+const char* kToneLumFS = R"(#version 330 compatibility
+in vec2 vUV;
+uniform sampler2D uScene;
+uniform vec2 uTexel;
+layout(location=0) out vec4 oColor;
+void main() {
+    float s = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0) * uTexel;
+        vec3 c = texture(uScene, vUV + o).rgb;
+        s += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
+    }
+    // (centre-weighted: the middle of the view counts double, the HUD-free corners half)
+    vec2 d = vUV - 0.5;
+    float w = mix(2.0, 0.5, clamp(dot(d, d) * 4.0, 0.0, 1.0));
+    oColor = vec4(s * 0.25 * w, w, 0.0, 1.0);
+}
+)";
+const char* kToneAdaptFS = R"(#version 330 compatibility
+in vec2 vUV;
+uniform sampler2D uLum, uPrev;
+uniform float uLevel, uRate;
+uniform int uReset;
+layout(location=0) out vec4 oColor;
+void main() {
+    vec2 m = textureLod(uLum, vec2(0.5), uLevel).rg;
+    float cur = m.x / max(m.y, 1e-4);
+    float prev = texture(uPrev, vec2(0.5)).r;
+    oColor = vec4(uReset != 0 ? cur : prev + (cur - prev) * uRate, 0.0, 0.0, 1.0);
 }
 )";
 
@@ -1053,10 +1118,11 @@ void Pipeline::release() {
     }
     for (GLuint* t : {&clutTex_, &neutralMaskTex_, &testMaskTex_, &whiteTex_, &blackTex_, &flatNormalTex_, &blackCube_,
                       &colorTex_, &depthTex_, &depthCopyTex_, &distTex_, &sceneCopyTex_, &shadowDepthTex_,
-                      &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1], &fogTex_})
+                      &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1], &fogTex_,
+                      &toneLumTex_, &toneAdaptTex_[0], &toneAdaptTex_[1], &tlDataTex_, &tlTileTex_})
         tex(*t);
     for (GLuint* f : {&fbo_, &depthCopyFbo_, &distFbo_, &sceneCopyFbo_, &shadowFbo_, &maskFbo_, &maskTmpFbo_,
-                      &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1], &fogFbo_})
+                      &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1], &fogFbo_, &toneLumFbo_, &toneAdaptFbo_[0], &toneAdaptFbo_[1]})
         fbo(*f);
     fogW_ = fogH_ = 0;
     if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
@@ -1067,7 +1133,7 @@ void Pipeline::release() {
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
     for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
-    for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
+    for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
         prog(*p);
     buf(distRectBuf_);
@@ -1536,6 +1602,12 @@ bool Pipeline::load(const std::string& mapName) {
     GLuint bg = compile(GL_FRAGMENT_SHADER, kBloomGatherFS, "bloom.gather");
     GLuint bb = compile(GL_FRAGMENT_SHADER, kBlurFS, "bloom.blur");
     bloomGatherProg_ = (pv && bg) ? link(pv, bg, "bloom.gather") : 0;
+    {
+        GLuint tl = compile(GL_FRAGMENT_SHADER, kToneLumFS, "tone.lum"), ta = compile(GL_FRAGMENT_SHADER, kToneAdaptFS, "tone.adapt");
+        toneLumProg_ = (pv && tl) ? link(pv, tl, "tone.lum") : 0;
+        toneAdaptProg_ = (pv && ta) ? link(pv, ta, "tone.adapt") : 0;
+        toneReset_ = true;
+    }
     blurProg_ = (pv && bb) ? link(pv, bb, "bloom.blur") : 0;
     GenVertexArrays(1, &postVao_);
     GenVertexArrays(1, &dynVao_);
@@ -8536,7 +8608,11 @@ void Pipeline::endFrame() {
     // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
     // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
     bool dof = post_.dof && !WFC_ENV("WFC_NODOF");
-    bool bloom = bloomGatherProg_ && blurProg_ && ((post_.bloom && !WFC_ENV("WFC_NOBLOOM")) || dof);
+    const bool filmic = toneFilmicOn();                 // (X1, Realistic: the tone curve + the soft HDR bloom)
+    if (filmic) toneAdapt();
+    static const float toneBloom = [] { const char* e = std::getenv("WFC_TONE_BLOOM"); return e ? (float)std::atof(e) : 0.8f; }();
+    const bool bloomOn = (post_.bloom || filmic) && !WFC_ENV("WFC_NOBLOOM");
+    bool bloom = bloomGatherProg_ && blurProg_ && (bloomOn || dof);
     glx::gpuStamp("post: bloom / DOF gather + blur");
     if (bloom) {
         BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[0]);
@@ -8548,8 +8624,10 @@ void Pipeline::endFrame() {
         Uniform1i(G("uScene"), 0);
         Uniform1i(G("uDepth"), 1);
         Uniform2f(G("uTexel"), 1.0f / (float)fbW_, 1.0f / (float)fbH_);
-        Uniform1f(G("uBloomScale"), (post_.bloom && !WFC_ENV("WFC_NOBLOOM")) ? post_.bloomScale : 0.0f);
-        Uniform1f(G("uBloomThreshold"), post_.bloomThreshold);
+        Uniform1f(G("uBloomScale"), bloomOn ? (filmic ? toneBloom * (post_.bloom ? post_.bloomScale : 1.0f) : post_.bloomScale) : 0.0f);
+        Uniform1f(G("uBloomThreshold"), filmic ? 1.0f : post_.bloomThreshold);
+        Uniform1i(G("uSoftBloom"), filmic ? 1 : 0);
+        Uniform1f(G("uBloomExposure"), 1.0f);
         Uniform4f(G("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
         Uniform2f(G("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
         Uniform1i(G("uDofOn"), dof ? 1 : 0);
@@ -8557,11 +8635,12 @@ void Pipeline::endFrame() {
         glDrawArrays(GL_TRIANGLES, 0, 3);
         UseProgram(blurProg_);
         Uniform1i(cachedUniformLocation(blurProg_, "uSrc"), 0);
-        for (int pass = 0; pass < 2; ++pass) {
-            BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[1 - pass]);
-            glBindTexture(GL_TEXTURE_2D, bloomTex_[pass]);
-            Uniform2f(cachedUniformLocation(blurProg_, "uStep"), pass == 0 ? 1.0f / (float)bloomW_ : 0.0f,
-                      pass == 0 ? 0.0f : 1.0f / (float)bloomH_);
+        for (int pass = 0; pass < (filmic ? 6 : 2); ++pass) {   // (X1: two more, wider pairs - a broad glow under the core)
+            const float w = pass < 2 ? 1.0f : pass < 4 ? 2.5f : 6.0f;
+            BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[1 - (pass & 1)]);
+            glBindTexture(GL_TEXTURE_2D, bloomTex_[pass & 1]);
+            Uniform2f(cachedUniformLocation(blurProg_, "uStep"), (pass & 1) == 0 ? w / (float)bloomW_ : 0.0f,
+                      (pass & 1) == 0 ? 0.0f : w / (float)bloomH_);
             glDrawArrays(GL_TRIANGLES, 0, 3);
         }
     }
@@ -8598,6 +8677,29 @@ void Pipeline::endFrame() {
     Uniform3f(U("uMidTones"), post_.midtones.x, post_.midtones.y, post_.midtones.z);
     Uniform1f(U("uDesat"), post_.desat);
     Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
+    Uniform1i(U("uFilmic"), filmic ? 1 : 0);
+    if (filmic) {
+        // (the key: the maps' measured log-average luminance, 0.020 on Streets and Molten - a typical view keeps its exposure,
+        // a dark interior opens up to 1.8x, a bright exterior comes down to 0.7x)
+        static const float key = [] { const char* e = std::getenv("WFC_TONE_KEY"); return e ? (float)std::atof(e) : 0.02f; }();
+        static const float str = [] { const char* e = std::getenv("WFC_TONE_ADAPT"); return e ? (float)std::atof(e) : 0.65f; }();
+        static const float gain = [] { const char* e = std::getenv("WFC_TONE_GAIN"); return e ? (float)std::atof(e) : 1.3f; }();
+        static const float sat = [] { const char* e = std::getenv("WFC_TONE_SAT"); return e ? (float)std::atof(e) : 1.1f; }();
+        static const float con = [] { const char* e = std::getenv("WFC_TONE_CONTRAST"); return e ? (float)std::atof(e) : 1.15f; }();
+        ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
+        ActiveTexture(GL_TEXTURE0);
+        Uniform1i(U("uAdapt"), 4);
+        // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
+        // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
+        float mapKey = key;
+        if (!std::getenv("WFC_TONE_KEY")) {
+            static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
+            for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) mapKey = mk.second;
+        }
+        Uniform4f(U("uExpo"), mapKey, str, 0.7f, 1.8f);
+        Uniform3f(U("uToneGrade"), gain, sat, con);
+        Uniform1f(U("uBloomMix"), 1.0f);
+    }
     glDrawArrays(GL_TRIANGLES, 0, 3);
     if (fsr) { glx::gpuStamp("post: FSR"); runFsr(vpW_, vpH_, outW, outH); }           // EASU (+ RCAS) into the window
     motionDebugView(outW, outH);                       // WFC_MOTIONVIEW (diagnostics)
@@ -8608,12 +8710,82 @@ void Pipeline::endFrame() {
     framegenCapture(outW, outH);                       // FSR 3 FG (optional): HUD-less frame + depth / motion inputs
     glx::gpuStamp("canvas tiles");
     drawCanvasTiles();
+    if (filmic) { ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, 0); }
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
+}
+
+// X1 (Realistic): a modern tone curve over the original's grade - exposure that adapts to the view (interiors open up,
+// sunlit exteriors stop clipping), a filmic shoulder (the ACES fit) instead of the hard clip at 1 (the RT sun no longer
+// bleaches character highlights), a saturation / contrast grade, a soft-knee HDR bloom; the map's own grade and CLUT
+// follow unchanged. Off / Faithful keep the original's post exactly. WFC_RT_TONE=0 off.
+bool Pipeline::toneFilmicOn() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_RT_TONE"); return e && e[0] == '0'; }();
+    return !off && rtMode_ == 2 && toneLumProg_ && toneAdaptProg_;
+}
+
+void Pipeline::toneAdapt() {
+    constexpr GLenum kR16F = 0x822D, kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
+    if (!toneLumTex_) {
+        glGenTextures(1, &toneLumTex_); GenFramebuffers(1, &toneLumFbo_);
+        glBindTexture(GL_TEXTURE_2D, toneLumTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 128, 128, 0, kRG, kHalf, nullptr);
+        GenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
+        FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, toneLumTex_, 0);
+        for (int i = 0; i < 2; ++i) {
+            glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
+            glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, kR16F, 1, 1, 0, kRed, kHalf, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[i]);
+            FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, toneAdaptTex_[i], 0);
+        }
+        glBindTexture(GL_TEXTURE_2D, 0);
+        toneReset_ = true;
+    }
+    static auto last = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    const float dt = std::min(std::chrono::duration<float>(now - last).count(), 0.25f);
+    last = now;
+    BindVertexArray(postVao_);
+    BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
+    glViewport(0, 0, 128, 128);
+    UseProgram(toneLumProg_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
+    Uniform1i(cachedUniformLocation(toneLumProg_, "uScene"), 0);
+    Uniform2f(cachedUniformLocation(toneLumProg_, "uTexel"), 0.25f / 128.0f, 0.25f / 128.0f);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindTexture(GL_TEXTURE_2D, toneLumTex_);
+    GenerateMipmap(GL_TEXTURE_2D);
+    const int next = 1 - toneIdx_;
+    BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[next]);
+    glViewport(0, 0, 1, 1);
+    UseProgram(toneAdaptProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
+    ActiveTexture(GL_TEXTURE0);
+    Uniform1i(cachedUniformLocation(toneAdaptProg_, "uLum"), 0);
+    Uniform1i(cachedUniformLocation(toneAdaptProg_, "uPrev"), 1);
+    Uniform1f(cachedUniformLocation(toneAdaptProg_, "uLevel"), 7.0f);
+    Uniform1f(cachedUniformLocation(toneAdaptProg_, "uRate"), 1.0f - std::exp(-dt * 1.5f));
+    Uniform1i(cachedUniformLocation(toneAdaptProg_, "uReset"), toneReset_ || warmup_ ? 1 : 0);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+    toneIdx_ = next; toneReset_ = false;
+    static const bool diag = std::getenv("WFC_TONEDIAG") != nullptr;
+    if (diag && frameNo_ % 300 == 0) {
+        float v = 0.0f;
+        glReadPixels(0, 0, 1, 1, kRed, GL_FLOAT, &v);
+        LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f)", frameNo_, std::exp(v), v);
+    }
 }
 
 
