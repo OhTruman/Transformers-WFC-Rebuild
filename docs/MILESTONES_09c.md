@@ -1103,6 +1103,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   e5182075 rows complete. WFC_NOMOUSE today only zeroes deltas; Win32Window still SetForegroundWindow + SetFocus at
   boot and SetCursorPos(centre) every focused frame (the real 'takes my mouse'); no ClipCursor / SetCapture anywhere.
   Interim told to the user: click back into their own window; the run re-grabs focus only at its next boot.
+  2026-10-15 23:21 The user was interrupted again (Rendering's item-3 windowed test, PID 17468, booted 23:20:31): killed by PID
+  by Integration. Standing rule until WFC_NOINTERACT is merged: no windowed exe from any lane (null render / code
+  only); Gameplay's NOINTERACT self-test run is the exception (it must not grab: that is the test; the windowed
+  control run is skipped, SIMHASH identity proven under null render instead). Experimental pinned WFC_NOMOUSE=1 in
+  tools/fidelity (b4f419d9 -> integration 72201064) as the interim (deltas only).
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
