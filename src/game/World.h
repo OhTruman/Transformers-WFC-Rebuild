@@ -1367,9 +1367,13 @@ private:
     // A live gameplay light: muzzle (rampIn 0, lightTime = MuzzleFlashDuration) or death ramp (RampLightProperties: brightness
     // ramps 0 -> 1 over rampIn, holds until lightTime from the start, then ramps out over rampOut). key: shooter / 1000 + victim.
     struct LiveTransientLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, rampIn = 0.0f, lightTime = 0.0f,
-                                rampOut = 0.0f, age = 0.0f; int key = 0; };
+                                rampOut = 0.0f, age = 0.0f; int key = 0; bool rtOnly = false; };   // rtOnly: RT-era effect light (Realistic only)
     std::vector<LiveTransientLight> transientLights_;
     int unkeyedDeaths_ = 0;
+    int fxLightSerial_ = 0;
+    // RT-era effect light (WFC_FXLIGHTS=1; Realistic only at submit): the light of an effect template the game just spawned
+    // at pos (kFxLights, from SYSTEMS_RT_LIGHT_HOOKS: explosions, impact squibs). Not an original light.
+    void fxLight(const std::string& tmpl, const core::Vec3& pos);
     void addTransientLight(const LiveTransientLight& l);
     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
 

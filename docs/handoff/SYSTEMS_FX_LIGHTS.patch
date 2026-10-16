@@ -1,0 +1,293 @@
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1367,9 +1367,13 @@
+     // A live gameplay light: muzzle (rampIn 0, lightTime = MuzzleFlashDuration) or death ramp (RampLightProperties: brightness
+     // ramps 0 -> 1 over rampIn, holds until lightTime from the start, then ramps out over rampOut). key: shooter / 1000 + victim.
+     struct LiveTransientLight { core::Vec3 pos; core::Vec3 color; float radius = 0.0f, falloff = 0.0f, rampIn = 0.0f, lightTime = 0.0f,
+-                                rampOut = 0.0f, age = 0.0f; int key = 0; };
++                                rampOut = 0.0f, age = 0.0f; int key = 0; bool rtOnly = false; };   // rtOnly: RT-era effect light (Realistic only)
+     std::vector<LiveTransientLight> transientLights_;
+     int unkeyedDeaths_ = 0;
++    int fxLightSerial_ = 0;
++    // RT-era effect light (WFC_FXLIGHTS=1; Realistic only at submit): the light of an effect template the game just spawned
++    // at pos (kFxLights, from SYSTEMS_RT_LIGHT_HOOKS: explosions, impact squibs). Not an original light.
++    void fxLight(const std::string& tmpl, const core::Vec3& pos);
+     void addTransientLight(const LiveTransientLight& l);
+     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
+ 
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -39,6 +39,16 @@
+ #include "game/MuzzleLights.inc"
+ struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
+ #include "game/DeathLights.inc"
++// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering
++// calibrates. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
++struct FxLightDef { const char* tmpl; float color[3]; float radius, falloff, duration; };
++struct BoostLightDef { const char* chassis; const char* bone; float pos[3]; float color[3]; float radius, falloff; };
++#include "game/FxLights.inc"
++bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return e && std::string(e) == "1"; }(); return on; }
++const FxLightDef* fxLightFor(const std::string& tmpl) {
++    for (const FxLightDef& d : kFxLights) if (tmpl == d.tmpl) return &d;
++    return nullptr;
++}
+ const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
+     for (const MuzzleLightDef& d : kMuzzleLights)
+         if (cls == d.cls) return &d;
+@@ -234,6 +244,7 @@
+                 fxSpawnPooled_ = true;   // impact squibs: pooled
+                 fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
+                 fxSpawnPooled_ = false;
++                fxLight(wfx->squib, shot.to + core::normalize(shot.from - shot.to) * 0.2f);   // RT-era impact light, off the surface
+             }
+         }
+     };
+@@ -825,8 +836,10 @@
+     if (!vehShot && weaponSocketWorld("MuzzleFlash", ms)) spawnMuzzleLight(fxClass, ms, localPlayer_);
+     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
+     }
+-    if (wfx && dist < range - 0.01f)
++    if (wfx && dist < range - 0.01f) {
+         fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
++        fxLight(wfx->squib, hitPoint - dir * 0.2f);   // RT-era impact light, off the surface
++    }
+     static const bool muzzleLog = std::getenv("WFC_MUZZLELOG") != nullptr;
+     if (muzzleLog && player_.pawn().hasWeapon()) {
+         const core::Mat4& wm = player_.pawn().weaponWorld();
+@@ -1500,6 +1513,26 @@
+     addTransientLight(l);
+ }
+ 
++void World::fxLight(const std::string& tmpl, const core::Vec3& pos) {
++    if (!fxLightsOn()) return;
++    const FxLightDef* d = fxLightFor(tmpl);
++    if (!d || d->duration <= 0.0f) return;   // continuous rows (boost, pickups) are submitted per frame in draw
++    LiveTransientLight l;
++    l.pos = pos;
++    l.color = {d->color[0], d->color[1], d->color[2]};
++    l.radius = d->radius; l.falloff = d->falloff;
++    l.lightTime = 0.5f * d->duration; l.rampOut = 0.5f * d->duration;   // full, then fades out over the second half
++    l.key = 200000 + (fxLightSerial_++ & 0xffff); l.rtOnly = true;
++    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
++    static int logged = 0;
++    if (log && logged < 40) {
++        ++logged;
++        LOG_INFO("FX LIGHT %s at %.2f,%.2f,%.2f r %.1f m colour %.2f,%.2f,%.2f for %.2f s (Realistic only)", tmpl.c_str(), pos.x, pos.y, pos.z,
++                 l.radius, l.color.x, l.color.y, l.color.z, d->duration);
++    }
++    addTransientLight(l);
++}
++
+ void World::addTransientLight(const LiveTransientLight& l) {
+     for (LiveTransientLight& o : transientLights_)
+         if (o.key == l.key) { o = l; return; }
+@@ -3762,14 +3795,63 @@
+                 if (axis * cosA - along * sinA > l.radius) continue;   // signed distance to the cone surface beyond the radius
+             }
+             if (kScale <= 0.0f) continue;
++            if (l.rtOnly && r.rayTracingMode() != 2) continue;   // RT-era effect lights: Realistic only
+             r.addTransientLight(l.pos, l.color * (k * kScale), l.radius, l.falloff);
+             ++tlSubmitted;
+         }
+     }
++    // RT-era continuous effect lights (WFC_FXLIGHTS=1, Realistic only; not original lights): vehicle boost at the chassis'
++    // BoostFx sockets while the boost FX run (car / truck driving, tank boost, jet flying), and the pickup factories' FX while
++    // available (Pickup_FX on every factory, HealthPickup_FX / OvershieldPickup_FX on those kinds). Same view cull.
++    unsigned fxContinuous = 0;
++    if (fxLightsOn() && r.rayTracingMode() == 2) {
++        const core::Vec3 eye = player_.controller().cameraPos();
++        const core::Vec3 vf = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
++        const float half = std::min(std::atan(std::tan(0.5f * player_.controller().fovXDeg() * core::PI / 180.0f) * 1.41421356f) +
++                                    5.0f * core::PI / 180.0f, 1.55f);
++        const float sinA = std::sin(half), cosA = std::cos(half);
++        auto submit = [&](const core::Vec3& p, const float* col, float radius, float falloff) {
++            const core::Vec3 v = p - eye;
++            const float dist = core::length(v);
++            if (dist > radius) {
++                if (dist - radius > 150.0f) return;
++                const float along = core::dot(v, vf);
++                if (std::sqrt(std::max(0.0f, dist * dist - along * along)) * cosA - along * sinA > radius) return;
++            }
++            r.addTransientLight(p, core::Vec3{col[0], col[1], col[2]}, radius, falloff);
++            ++fxContinuous;
++        };
++        auto boostFor = [&](const Character& pc) {
++            if (pc.moveForm() != Form::Vehicle || pc.isTransforming()) return;
++            const auto& vs = pc.vehicleState();
++            const VehicleFormType vt = pc.chassis().vehicle.form;
++            const bool on = vt == VehicleFormType::Tank ? vs.tankBoost : vt == VehicleFormType::Jet ? vs.flying : vs.driving;
++            if (!on) return;
++            for (const BoostLightDef& b : kBoostLights) {
++                if (pc.chassis().id != b.chassis) continue;
++                core::Mat4 bw;
++                if (!pc.boneWorld(b.bone, bw)) continue;
++                submit(core::transformPoint(bw, core::Vec3{b.pos[0], b.pos[1], b.pos[2]}), b.color, b.radius, b.falloff);
++            }
++        };
++        if (!localDead_) boostFor(player_.pawn());
++        for (const MatchOpponent* o : opponents_) if (o->spawned()) boostFor(o->pawn());
++        static const FxLightDef* const kPick = fxLightFor("FX_Pickups_p.FX.Pickup_FX");
++        static const FxLightDef* const kHealth = fxLightFor("FX_Pickups_p.FX.HealthPickup_FX");
++        static const FxLightDef* const kShield = fxLightFor("FX_Pickups_p.FX.OvershieldPickup_FX");
++        for (const PickupFactory* f : pickupFactories_) {
++            if (!f->available()) continue;
++            const core::Vec3 p = f->position() + core::Vec3{0, 0.5f, 0};
++            const FxLightDef* d = f->customEffectActive() ? (f->kind() == PickupFactory::Kind::Health ? kHealth : kShield) : kPick;
++            if (d) submit(p, d->color, d->radius, d->falloff);
++        }
++    }
+     if (std::getenv("WFC_MUZZLELOG")) {   // live / submitted lights per 600 draws (diagnostic)
+         static unsigned frames = 0, lit = 0, live = 0, sub = 0;
+         live += (unsigned)transientLights_.size(); sub += tlSubmitted; lit += transientLights_.empty() ? 0u : 1u;
+-        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u live, %u submitted after the view cull", lit, live, sub); lit = live = sub = 0; }
++        static unsigned cont = 0;
++        cont += fxContinuous;
++        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u live, %u submitted after the view cull; %u continuous effect lights (WFC_FXLIGHTS, Realistic)", lit, live, sub, cont); lit = live = sub = cont = 0; }
+     }
+     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
+@@ -6722,6 +6804,7 @@
+ int World::fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion) {
+     if (!renderer_ || !fxApi<render::IRenderer>(0)) return -1;
+     FxOp op; op.kind = 0; op.vid = fxNextVid_++; op.tmpl = tmpl; op.p = p; op.f = f; op.u = u; op.team = team; op.explosion = explosion;
++    if (explosion) fxLight(tmpl, p);   // RT-era explosion light (WFC_FXLIGHTS, Realistic only)
+     if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
+     return op.vid;
+ }
+--- /dev/null
++++ b/src/game/FxLights.inc
+@@ -0,0 +1,134 @@
++// GENERATED by tools/systems/gen_fxlights.py from docs/handoff/SYSTEMS_RT_LIGHT_HOOKS.json + character.json BoostFx; do not edit.
++// RT-era effect lights (NOT original lights): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering calibrates.
++// Effect template, linear colour x brightness, radius (m), falloff exponent, duration (s; 0 = continuous while active).
++static const FxLightDef kFxLights[] = {
++    {"FX_AssaultRifle_p.FX.Impact_AssaultRifle_FX", {5.65f, 10.7f, 3.552f}, 2.5f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_AssaultRifle_p.FX.Impact_HeavyMG_FX", {5.874f, 10.7f, 3.745f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_EMPShotgun_p.FX.Squib_EMPShotgun_FX", {5.778f, 10.7f, 3.67f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_Explosives_p.FX.Exp_2500cb_FX", {11.9f, 11.9f, 4.796f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_Explosives_p.FX.Exp_Energy_MED_FX", {2.477f, 1.88f, 12.7f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_Explosives_p.FX.Martyrdom_Grenade_FX", {9.9f, 9.573f, 5.108f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_FusionCannon_p.FX.Exp_FusionCannon_FX", {9.4f, 9.4f, 9.4f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_GrenadeLauncher_p.FX.Explosion_GrenadeLauncher_01_FX", {13.8f, 12.517f, 2.111f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_HeavyPistol_p.FX.Squib_HeavyPistol_FX", {11.085f, 11.085f, 11.3f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_HomingRocket_p.FX.Squib_HomRocket_01_FX", {13.3f, 13.167f, 12.369f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_IonBlaster_p.FX.Impact_IonBlaster_FX", {6.3f, 6.3f, 6.3f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_Navigation_p.Afterburner_A_FX", {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Navigation_p.Afterburner_D_FX", {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Navigation_p.Booster_1_FX", {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Navigation_p.FX.Trails_Jet_A_FX", {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Navigation_p.FX.Trails_Jet_D_FX", {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Navigation_p.bumble_boost_small1_FX", {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f, 0.0f},   // vehicle boost (BoostFx socket)
++    {"FX_Pickups_p.FX.HealthPickup_FX", {0.147f, 4.238f, 11.3f}, 4.0f, 2.0f, 0.0f},   // pickup factory
++    {"FX_Pickups_p.FX.OvershieldPickup_FX", {0.188f, 2.952f, 9.4f}, 4.0f, 2.0f, 0.0f},   // pickup factory
++    {"FX_Pickups_p.FX.Pickup_FX", {1.2f, 0.96f, 0.36f}, 1.0f, 2.0f, 0.0f},   // pickup factory
++    {"FX_PlasmaCannon_p.FX.Squib_HealGrenade_FX", {0.0f, 0.106f, 13.3f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Lrg_FX", {5.2f, 5.002f, 4.878f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_PlasmaCannon_p.FX.Squib_PlasmaCannon_Sm_FX", {5.617f, 6.9f, 6.521f}, 12.0f, 2.0f, 1.0f},   // explosion (radiusDamage / projectile impact)
++    {"FX_RepairBeam_p.FX.Squib_RepairEnemy_FX", {1.686f, 1.827f, 3.2f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_RepairBeam_p.FX.Squib_TurretRepairEnemy_FX", {1.686f, 1.827f, 3.2f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_TurretIonBlaster_p.FX.Impact_IonTurret_FX", {5.65f, 10.7f, 3.552f}, 2.8f, 2.0f, 0.25f},   // impact (spawnImpact)
++    {"FX_TurretIonBlaster_p.FX.Impact_TurretIon_OLD", {4.415f, 3.775f, 5.2f}, 4.0f, 2.0f, 0.25f},   // impact (spawnImpact)
++};
++// Per vehicle chassis: BoostFx socket bone + position in the bone's space (m, glTF), and the boost template's light.
++static const BoostLightDef kBoostLights[] = {
++    {"Car2", "C_Robo02_XT", {0.0f, 0.0f, 0.0f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_C
++    {"Car2", "R_Robo29_XT", {0.07f, -0.14f, 0.75f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R
++    {"Car2", "L_Robo29_XT", {-0.07f, 0.14f, -0.75f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L
++    {"Car3", "L_Robo06_XT", {0.0f, 0.0f, -0.35f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L
++    {"Car3", "R_Robo06_XT", {0.0f, 0.0f, 0.35f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R
++    {"Car3", "L_Robo07_XT", {0.0f, 0.0f, -0.35f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L2
++    {"Car3", "R_Robo07_XT", {0.0f, 0.0f, 0.3f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R2
++    {"Car3", "L_Robo08_XT", {0.0f, 0.0f, -0.3f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L3
++    {"Car3", "R_Robo08_XT", {0.0f, 0.0f, 0.3f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R3
++    {"Car4", "C_Body_XB", {-1.7923f, 0.67f, -0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Car5", "C_Body_XB", {-1.08f, 0.7f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_C
++    {"Car6", "R_Robo19_XT", {0.0f, 0.3f, 0.1f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Car6", "L_Robo19_XT", {0.0f, -0.3f, -0.1f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Car7", "C_Body_XB", {-1.3281f, 0.6366f, -0.489f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L
++    {"Car7", "C_Body_XB", {-1.345f, 0.6412f, 0.4663f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R
++    {"Car7", "C_Body_XB", {-1.3278f, 0.6273f, -0.4368f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_L3
++    {"Car7", "C_Body_XB", {-1.3191f, 0.6349f, 0.52f}, {1.1f, 1.3f, 2.0f}, 2.5f, 2.0f},   // Booster_1_FX BoostSocket_R3
++    {"Car9", "C_Body_XB", {-0.3f, 1.1f, -0.35f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Car9", "C_Body_XB", {-0.3f, 1.1f, 0.35f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Car", "L_Robo17_XT", {0.1759f, -0.0529f, 0.3638f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_L
++    {"Car", "R_Robo17_XT", {-0.1759f, 0.0529f, -0.3638f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_R
++    {"Jet2", "L_Robo26_XT", {0.0f, 0.0f, -0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Jet2", "R_Robo26_XT", {0.0f, 0.0f, 0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Jet2", "C_Body_XB", {-0.5f, 0.0f, -1.89f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_L
++    {"Jet2", "C_Body_XB", {-0.5f, 0.0f, 1.89f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_R
++    {"Jet2", "C_Body_XB", {-2.8f, -0.64f, -1.04f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_L
++    {"Jet2", "C_Body_XB", {-2.8f, -0.64f, 1.04f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_R
++    {"Jet3", "L_Robo26_XT", {0.0f, 0.0f, -0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Jet3", "R_Robo26_XT", {0.0f, 0.0f, 0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Jet3", "C_Body_XB", {-0.43f, 0.0f, -2.32f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_L
++    {"Jet3", "C_Body_XB", {-0.43f, 0.0f, 2.32f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_R
++    {"Jet3", "C_Body_XB", {-0.9f, 0.04f, -1.88f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_L
++    {"Jet3", "C_Body_XB", {-0.9f, 0.04f, 1.88f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_R
++    {"Jet4", "C_Body_XB", {-2.6115f, 0.2725f, -1.0368f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Jet4", "C_Body_XB", {-2.6286f, 0.2725f, 0.9863f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Jet4", "C_Body_XB", {-0.78f, 0.145f, -3.2f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_L
++    {"Jet4", "C_Body_XB", {-0.78f, 0.145f, 3.2f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_R
++    {"Jet4", "C_Body_XB", {-2.58f, -1.055f, -0.623f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_L
++    {"Jet4", "C_Body_XB", {-2.58f, -1.0775f, 0.6891f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_R
++    {"Jet5", "C_Body_XB", {-3.28f, 0.1f, -0.7f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Jet5", "C_Body_XB", {-3.28f, 0.1f, 0.7f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Jet5", "C_Body_XB", {-3.71f, 0.33f, -3.59f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_L
++    {"Jet5", "C_Body_XB", {-3.71f, 0.33f, 3.59f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_R
++    {"Jet5", "C_Body_XB", {-2.62f, -0.58f, -1.62f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_L
++    {"Jet5", "C_Body_XB", {-2.62f, -0.58f, 1.62f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_R
++    {"Jet6", "L_Robo03_XT", {0.2f, -0.46f, 0.16f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Jet6", "R_Robo03_XT", {-0.2f, 0.46f, -0.16f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Jet6", "L_Robo28_XT", {0.45f, 1.52f, -0.71f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_L
++    {"Jet6", "R_Robo28_XT", {-0.45f, -1.52f, 0.71f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX WingTipSocket_R
++    {"Jet6", "C_Body_XB", {-3.17f, -0.71f, -0.6f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_L
++    {"Jet6", "C_Body_XB", {-3.17f, -0.71f, 0.6f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_A_FX VaporTrailSocket_R
++    {"Jet7", "C_Robo07_XT", {0.1436f, 0.04f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_C
++    {"Jet7", "C_Body_XB", {-0.57f, -0.62f, -2.63f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_L
++    {"Jet7", "C_Body_XB", {-0.57f, -0.62f, 2.63f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_R
++    {"Jet7", "C_Body_XB", {-1.61f, -0.75f, -0.98f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_L
++    {"Jet7", "C_Body_XB", {-1.61f, -0.75f, 0.98f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_R
++    {"Jet8", "L_Robo07_XT", {-0.2089f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Jet8", "R_Robo07_XT", {0.345f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Jet8", "C_Body_XB", {-2.48f, 1.02f, -3.45f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_L
++    {"Jet8", "C_Body_XB", {-2.48f, 1.02f, 3.45f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_R
++    {"Jet8", "C_Body_XB", {-2.01f, -0.92f, -2.28f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_L
++    {"Jet8", "C_Body_XB", {-2.01f, -0.92f, 2.28f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_R
++    {"Jet", "L_Robo26_XT", {0.0f, 0.0f, -0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Jet", "R_Robo26_XT", {0.0f, 0.0f, 0.25f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Jet", "C_Body_XB", {-0.39f, 0.09f, -2.53f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_L
++    {"Jet", "C_Body_XB", {-0.39f, 0.09f, 2.53f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX WingTipSocket_R
++    {"Jet", "C_Body_XB", {-1.06f, -0.5f, -1.78f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_L
++    {"Jet", "C_Body_XB", {-1.06f, -0.5f, 1.78f}, {3.2f, 3.2f, 3.2f}, 1.0f, 2.0f},   // Trails_Jet_D_FX VaporTrailSocket_R
++    {"Minion1", "C_Body_XB", {-2.1514f, 0.8414f, -0.5828f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Minion1", "C_Body_XB", {-2.1514f, 0.8414f, 0.5828f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Minion2", "C_Body_XB", {-2.1514f, 0.8414f, -0.5828f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Minion2", "C_Body_XB", {-2.1514f, 0.8414f, 0.5828f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Tank2", "R_Robo20_XT", {-0.03f, 0.18f, 0.85f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Tank2", "L_Robo20_XT", {0.03f, -0.18f, -0.85f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Tank2", "C_Robo12_XT", {0.0001f, 0.0645f, -1.3335f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_B
++    {"Tank3", "R_Robo20_XT", {0.0f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Tank3", "L_Robo20_XT", {0.0f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Tank4", "C_Body_XB", {-3.0363f, 0.0875f, 0.3f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Tank4", "C_Body_XB", {-3.0363f, 0.0875f, -0.3f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Tank5", "C_Body_XB", {-2.632f, 0.0425f, 1.6186f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Tank5", "C_Body_XB", {-2.632f, 0.0425f, -1.6186f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Tank5", "C_Body_XB", {-2.2037f, -0.538f, -0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_B
++    {"Tank", "R_Robo10_XT", {0.0f, 0.1f, 0.85f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Tank", "L_Robo10_XT", {0.0f, -0.1f, -0.85f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Truck2", "L_Robo11_XT", {0.0f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Truck2", "R_Robo11_XT", {0.0f, 0.0f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Truck3", "L_Robo08_XT", {-0.05f, -0.07f, 0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_L
++    {"Truck3", "R_Robo08_XT", {0.05f, 0.07f, -0.0f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_A_FX BoostSocket_R
++    {"Truck4", "L_Robo09_XT", {0.2f, 0.05f, 0.04f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Truck4", "R_Robo09_XT", {-0.2f, -0.05f, -0.04f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_R
++    {"Truck5", "L_Robo20_XT", {0.18f, 0.4975f, -0.0195f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_L
++    {"Truck5", "L_Robo18_XT", {-0.88f, 0.05f, 0.0f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_L2
++    {"Truck5", "R_Robo20_XT", {-0.18f, -0.4743f, 0.0195f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_R
++    {"Truck5", "R_Robo18_XT", {0.88f, -0.05f, 0.0f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_R2
++    {"Truck6", "C_Body_XB", {-2.9266f, 1.076f, 0.0221f}, {8.0f, 5.776f, 4.888f}, 6.0f, 2.0f},   // Afterburner_D_FX BoostSocket_L
++    {"Truck7", "L_Robo23_XT", {0.0f, 0.0f, -0.35f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_L
++    {"Truck7", "R_Robo23_XT", {0.0f, 0.0f, 0.35f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_R
++    {"Truck", "L_Robo23_XT", {0.0f, 0.0f, -0.35f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_L
++    {"Truck", "R_Robo23_XT", {0.0f, 0.0f, 0.35f}, {8.0f, 2.656f, 0.192f}, 6.0f, 2.0f},   // bumble_boost_small1_FX BoostSocket_R
++};

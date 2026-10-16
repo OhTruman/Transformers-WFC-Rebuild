@@ -39,6 +39,19 @@ struct MuzzleLightDef { const char* cls; float radius; float color[3]; float fal
 #include "game/MuzzleLights.inc"
 struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
 #include "game/DeathLights.inc"
+// Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
+struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
+#include "game/VehicleHeadlights.inc"
+// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering
+// calibrates. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
+struct FxLightDef { const char* tmpl; float color[3]; float radius, falloff, duration; };
+struct BoostLightDef { const char* chassis; const char* bone; float pos[3]; float color[3]; float radius, falloff; };
+#include "game/FxLights.inc"
+bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return e && std::string(e) == "1"; }(); return on; }
+const FxLightDef* fxLightFor(const std::string& tmpl) {
+    for (const FxLightDef& d : kFxLights) if (tmpl == d.tmpl) return &d;
+    return nullptr;
+}
 const MuzzleLightDef* muzzleLightFor(const std::string& cls) {
     for (const MuzzleLightDef& d : kMuzzleLights)
         if (cls == d.cls) return &d;
@@ -234,6 +247,7 @@ void World::load(render::IRenderer& renderer) {
                 fxSpawnPooled_ = true;   // impact squibs: pooled
                 fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
                 fxSpawnPooled_ = false;
+                fxLight(wfx->squib, shot.to + core::normalize(shot.from - shot.to) * 0.2f);   // RT-era impact light, off the surface
             }
         }
     };
@@ -825,8 +839,10 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     if (!vehShot && weaponSocketWorld("MuzzleFlash", ms)) spawnMuzzleLight(fxClass, ms, localPlayer_);
     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
     }
-    if (wfx && dist < range - 0.01f)
+    if (wfx && dist < range - 0.01f) {
         fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
+        fxLight(wfx->squib, hitPoint - dir * 0.2f);   // RT-era impact light, off the surface
+    }
     static const bool muzzleLog = std::getenv("WFC_MUZZLELOG") != nullptr;
     if (muzzleLog && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
@@ -1497,6 +1513,26 @@ void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, cons
     l.color = {d->color[0], d->color[1], d->color[2]};
     l.radius = d->radius; l.falloff = d->falloff; l.rampIn = d->rampIn; l.lightTime = d->lightTime; l.rampOut = d->rampOut;
     l.key = player >= 0 ? 1000 + player : 100000 + (unkeyedDeaths_++ & 1023);   // the victim pawn's DeathLight component
+    addTransientLight(l);
+}
+
+void World::fxLight(const std::string& tmpl, const core::Vec3& pos) {
+    if (!fxLightsOn()) return;
+    const FxLightDef* d = fxLightFor(tmpl);
+    if (!d || d->duration <= 0.0f) return;   // continuous rows (boost, pickups) are submitted per frame in draw
+    LiveTransientLight l;
+    l.pos = pos;
+    l.color = {d->color[0], d->color[1], d->color[2]};
+    l.radius = d->radius; l.falloff = d->falloff;
+    l.lightTime = 0.5f * d->duration; l.rampOut = 0.5f * d->duration;   // full, then fades out over the second half
+    l.key = 200000 + (fxLightSerial_++ & 0xffff); l.rtOnly = true;
+    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+    static int logged = 0;
+    if (log && logged < 40) {
+        ++logged;
+        LOG_INFO("FX LIGHT %s at %.2f,%.2f,%.2f r %.1f m colour %.2f,%.2f,%.2f for %.2f s (Realistic only)", tmpl.c_str(), pos.x, pos.y, pos.z,
+                 l.radius, l.color.x, l.color.y, l.color.z, d->duration);
+    }
     addTransientLight(l);
 }
 
@@ -3762,14 +3798,108 @@ void World::draw(render::IRenderer& r) const {
                 if (axis * cosA - along * sinA > l.radius) continue;   // signed distance to the cone surface beyond the radius
             }
             if (kScale <= 0.0f) continue;
+            if (l.rtOnly && r.rayTracingMode() != 2) continue;   // RT-era effect lights: Realistic only
             r.addTransientLight(l.pos, l.color * (k * kScale), l.radius, l.falloff);
             ++tlSubmitted;
         }
     }
+    // RT-era continuous effect lights (WFC_FXLIGHTS=1, Realistic only; not original lights): vehicle boost at the chassis'
+    // BoostFx sockets while the boost FX run (car / truck driving, tank boost, jet flying), and the pickup factories' FX while
+    // available (Pickup_FX on every factory, HealthPickup_FX / OvershieldPickup_FX on those kinds). Same view cull.
+    unsigned fxContinuous = 0;
+    if (fxLightsOn() && r.rayTracingMode() == 2) {
+        const core::Vec3 eye = player_.controller().cameraPos();
+        const core::Vec3 vf = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
+        const float half = std::min(std::atan(std::tan(0.5f * player_.controller().fovXDeg() * core::PI / 180.0f) * 1.41421356f) +
+                                    5.0f * core::PI / 180.0f, 1.55f);
+        const float sinA = std::sin(half), cosA = std::cos(half);
+        auto submit = [&](const core::Vec3& p, const float* col, float radius, float falloff) {
+            const core::Vec3 v = p - eye;
+            const float dist = core::length(v);
+            if (dist > radius) {
+                if (dist - radius > 150.0f) return;
+                const float along = core::dot(v, vf);
+                if (std::sqrt(std::max(0.0f, dist * dist - along * along)) * cosA - along * sinA > radius) return;
+            }
+            r.addTransientLight(p, core::Vec3{col[0], col[1], col[2]}, radius, falloff);
+            ++fxContinuous;
+        };
+        auto boostFor = [&](const Character& pc) {
+            if (pc.moveForm() != Form::Vehicle || pc.isTransforming()) return;
+            const auto& vs = pc.vehicleState();
+            const VehicleFormType vt = pc.chassis().vehicle.form;
+            const bool on = vt == VehicleFormType::Tank ? vs.tankBoost : vt == VehicleFormType::Jet ? vs.flying : vs.driving;
+            if (!on) return;
+            for (const BoostLightDef& b : kBoostLights) {
+                if (pc.chassis().id != b.chassis) continue;
+                core::Mat4 bw;
+                if (!pc.boneWorld(b.bone, bw)) continue;
+                submit(core::transformPoint(bw, core::Vec3{b.pos[0], b.pos[1], b.pos[2]}), b.color, b.radius, b.falloff);
+            }
+        };
+        if (!localDead_) boostFor(player_.pawn());
+        for (const MatchOpponent* o : opponents_) if (o->spawned()) boostFor(o->pawn());
+        static const FxLightDef* const kPick = fxLightFor("FX_Pickups_p.FX.Pickup_FX");
+        static const FxLightDef* const kHealth = fxLightFor("FX_Pickups_p.FX.HealthPickup_FX");
+        static const FxLightDef* const kShield = fxLightFor("FX_Pickups_p.FX.OvershieldPickup_FX");
+        for (const PickupFactory* f : pickupFactories_) {
+            if (!f->available()) continue;
+            const core::Vec3 p = f->position() + core::Vec3{0, 0.5f, 0};
+            const FxLightDef* d = f->customEffectActive() ? (f->kind() == PickupFactory::Kind::Health ? kHealth : kShield) : kPick;
+            if (d) submit(p, d->color, d->radius, d->falloff);
+        }
+    }
+    // Vehicle headlights (Rendering plan v3 row 3; INVENTED PLACEMENT, no original equivalent): Realistic only (RT mode 2), every
+    // pawn in vehicle form (not mid-transform), one spot per lamp of kHeadlights following the body bone, behind the same view
+    // cull as the transient lights. WFC_HEADLIGHTS=0 off. Spot shape: Rendering's first pass (18 / 32 deg, 25 m, falloff 2).
+    unsigned hlSubmitted = 0;
+    static const bool kHeadlightsOn = [] { const char* e = std::getenv("WFC_HEADLIGHTS"); return !e || std::string(e) != "0"; }();
+    if (kHeadlightsOn && r.rayTracingMode() == 2) {
+        constexpr float kRadius = 25.0f, kFalloff = 2.0f, kMaxDist = 150.0f;
+        static const float kCosIn = std::cos(18.0f * core::PI / 180.0f), kCosOut = std::cos(32.0f * core::PI / 180.0f);
+        const core::Vec3 eye = player_.controller().cameraPos();
+        const core::Vec3 vf = core::forwardFromYawPitch(player_.controller().viewYaw(), player_.controller().camPitch());
+        const float half = std::min(std::atan(std::tan(0.5f * player_.controller().fovXDeg() * core::PI / 180.0f) * 1.41421356f) +
+                                    5.0f * core::PI / 180.0f, 1.55f);
+        const float sinA = std::sin(half), cosA = std::cos(half);
+        auto lampsFor = [&](const Character& pc) {
+            if (pc.moveForm() != Form::Vehicle || pc.isTransforming()) return;
+            const std::string& id = pc.chassis().id;
+            for (const HeadlightDef& h : kHeadlights) {
+                if (id != h.chassis) continue;
+                core::Mat4 bw;
+                if (!pc.boneWorld(h.bone, bw)) return;
+                const core::Vec3 p = core::transformPoint(bw, core::Vec3{h.pos[0], h.pos[1], h.pos[2]});
+                core::Vec3 d{bw.m[0] * h.dir[0] + bw.m[4] * h.dir[1] + bw.m[8] * h.dir[2],
+                             bw.m[1] * h.dir[0] + bw.m[5] * h.dir[1] + bw.m[9] * h.dir[2],
+                             bw.m[2] * h.dir[0] + bw.m[6] * h.dir[1] + bw.m[10] * h.dir[2]};
+                if (core::length(d) < 1e-6f) continue;
+                d = core::normalize(d);
+                const core::Vec3 v = p - eye;
+                const float dist = core::length(v);
+                if (dist > kRadius) {
+                    if (dist - kRadius > kMaxDist) continue;
+                    const float along = core::dot(v, vf);
+                    if (std::sqrt(std::max(0.0f, dist * dist - along * along)) * cosA - along * sinA > kRadius) continue;
+                }
+                r.addTransientSpot(p, d, core::Vec3{h.color[0], h.color[1], h.color[2]}, kRadius, kFalloff, kCosIn, kCosOut);
+                ++hlSubmitted;
+            }
+        };
+        if (!localDead_) lampsFor(player_.pawn());
+        for (const MatchOpponent* o : opponents_) if (o->spawned()) lampsFor(o->pawn());
+    }
+    if (std::getenv("WFC_MUZZLELOG")) {   // headlight spots per 600 draws (diagnostic)
+        static unsigned hf = 0, hs = 0;
+        hs += hlSubmitted;
+        if (++hf % 600 == 0) { LOG_INFO("HEADLIGHTS %u spots submitted in the last 600 draws (RT mode %d)", hs, r.rayTracingMode()); hs = 0; }
+    }
     if (std::getenv("WFC_MUZZLELOG")) {   // live / submitted lights per 600 draws (diagnostic)
         static unsigned frames = 0, lit = 0, live = 0, sub = 0;
         live += (unsigned)transientLights_.size(); sub += tlSubmitted; lit += transientLights_.empty() ? 0u : 1u;
-        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u live, %u submitted after the view cull", lit, live, sub); lit = live = sub = 0; }
+        static unsigned cont = 0;
+        cont += fxContinuous;
+        if (++frames % 600 == 0) { LOG_INFO("MUZZLE LIGHTS %u of the last 600 draws had lights, %u live, %u submitted after the view cull; %u continuous effect lights (WFC_FXLIGHTS, Realistic)", lit, live, sub, cont); lit = live = sub = cont = 0; }
     }
     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
@@ -6722,6 +6852,7 @@ int World::fxTeamOf(int player) const {
 int World::fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion) {
     if (!renderer_ || !fxApi<render::IRenderer>(0)) return -1;
     FxOp op; op.kind = 0; op.vid = fxNextVid_++; op.tmpl = tmpl; op.p = p; op.f = f; op.u = u; op.team = team; op.explosion = explosion;
+    if (explosion) fxLight(tmpl, p);   // RT-era explosion light (WFC_FXLIGHTS, Realistic only)
     if (remainderRunning_ && !onMainThread()) fxOps_.push_back(op); else runFxOp(op);
     return op.vid;
 }
