@@ -1,0 +1,42 @@
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index db93883c..95a3c244 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3639,7 +3639,9 @@ void World::draw(render::IRenderer& r) const {
+         if (se.alive && !se.mesh.positions.empty())
+             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene): after the barrier / sentry meshes,
+-    // so the particle fallback's character flush (GLRenderer::drawParticles) has every dynamic mesh queued before it.
++    // and after the queued characters are drawn (one flush, every dynamic mesh queued before it: the frame's RT pass sees
++    // them all), so WeaponFx meshes (muzzle flashes, drawn immediately) and particle fallbacks depth-test against them.
++    r.flushQueuedCharacters();
+     { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
+     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
+diff --git a/src/render/Renderer.h b/src/render/Renderer.h
+index 6e630395..9b41d758 100644
+--- a/src/render/Renderer.h
++++ b/src/render/Renderer.h
+@@ -564,6 +564,9 @@ public:
+ 
+     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
+     virtual void drawParticles(const ParticleBatch& batch) = 0;
++    // Draw the characters queued so far now (a renderer that queues dynamic meshes; others: nothing). The game calls it
++    // once before its own effects (meshes and particle fallbacks drawn immediately), so effects depth-test against them.
++    virtual void flushQueuedCharacters() {}
+ 
+     // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
+     // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
+diff --git a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+index 15242269..4a8d0f00 100644
+--- a/src/render/gl/GLRenderer.cpp
++++ b/src/render/gl/GLRenderer.cpp
+@@ -1778,6 +1778,8 @@ public:
+         glEnd();
+     }
+ 
++    void flushQueuedCharacters() override { if (wfc_.active()) { wfc_.flushQueuedCharacters(); glLoadMatrixf(view_.m); } }
++
+     void drawParticles(const ParticleBatch& b) override {
+         if (wfc_.active()) wfc_.flushPendingDraws();   // (queued weapons first: draw order)
+         watchdog::phase("drawParticles");
