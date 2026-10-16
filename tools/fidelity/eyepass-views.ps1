@@ -3,7 +3,7 @@
 # WFC_HDTEXTURES + WFC_HD_ROOT. Keeps <OutDir>\<map>-<mode>\<view>.bmp for the kept views only (warm-up captures deleted).
 #   .\tools\fidelity\eyepass-views.ps1 -Exe <wfc_rebuild.exe> -OutDir <dir> [-Maps 508,510,507,504,509] [-Modes off,real,realhd] [-Size 2560x1440]
 param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "510", "507", "504", "509"),
-      [string[]]$Modes = @("off", "real", "realhd"), [string]$Size = "2560x1440",
+      [string[]]$Modes = @("off", "real"), [string]$Size = "1280x720",
       [string]$HdRoot = "F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full", [string]$RenderData = "", [string]$RtEnv = "")
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ }); $Modes = @($Modes | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })   # (-File passes '508,510' as one string)
@@ -13,6 +13,11 @@ foreach ($m in $Maps) {
     $list = Join-Path $PSScriptRoot "views\$m.txt"; if (-not (Test-Path $list)) { Write-Host "${m}: no views file"; continue }
     $lines = @(Get-Content $list | Where-Object { $_.Trim() }); $kept = @($lines | ForEach-Object { ($_ -split ' ')[0] } | Where-Object { $_ -notmatch '_w\d$' })
     foreach ($mode in $Modes) {
+        # LIMIT (2026-10-16, verified on int_cand3): WFC_SHOTLIST needs the direct boot (its frames count from boot), and the direct
+        # boot never applies the profile's display / HD rows (Application_Frontend: only the frontend boot does) - the window stays
+        # 1280x720 and HD / Modern materials stay off (RT applies: WFC_RT_MODE is read by the renderer). So the views are Off |
+        # Realistic at 1280x720; an Enhanced column needs a product-side env hook for the direct boot.
+        if ($mode -eq "realhd") { Write-Host "${m} realhd: skipped - the direct boot cannot apply HD / Modern materials (see the note above)"; continue }
         $d = Join-Path $OutDir "$m-$mode"; if (Test-Path $d) { Remove-Item -Recurse -Force $d }; New-Item -ItemType Directory -Force $d | Out-Null
         $rt = @{ off = "0"; real = "2"; realhd = "2" }[$mode]
         $e = @{ WFC_MAP = $names[$m]; WFC_SHOTLIST = $list; WFC_SHOTDIR = $d; WFC_SMOKE_FRAMES = "$(8 * $lines.Count + 24)"; WFC_LOCKSTEP = "1";
