@@ -220,6 +220,16 @@ bool Pipeline::rtShadowLightsOn() const {
 
 bool Pipeline::rtLampShadowsWorld() const { return rtShadowLightsOn() && giActive() && r1Map_ && !giLightCal_.empty(); }
 
+// v3 row 1 (Realistic): the characters' light environments take the RT sun as a direct light at full visibility - the
+// per-pixel RT sun ray (dynamic pixels: world + characters) shadows it, so a robot under a building darkens where the
+// building covers it. The original's per-object light visibility (the baked volume) ranked the sun out on most of
+// Streets (0-7 % of character draws had it), leaving robots lit by the ambient only, the same in sun and under cover.
+// Faithful / Off keep the original's visibility. WFC_RT_CHARSUN=0 off.
+bool Pipeline::rtCharSun() const {
+    static const bool off = [] { const char* e = std::getenv("WFC_RT_CHARSUN"); return e && e[0] == '0'; }();
+    return !off && rtMode_ == 2 && rtShadowAoOn() && !rtFailed_ && rtSunLight_ >= 0;
+}
+
 bool Pipeline::giActive() const { return giSetupDone_ && !giGlTex_.empty() && rtMode_ == 2 && giOn(); }
 
 namespace {
