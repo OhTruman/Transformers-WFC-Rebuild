@@ -1508,3 +1508,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   4-map existing-material byte check), RT-era effect lights + vehicle headlights 709df0f5 (Systems, game-side only;
   WFC_FXLIGHTS / WFC_HEADLIGHTS opt-in until Rendering calibrates; SIMHASH identical; Streets 3-arm A/B lit 50 / 91
   and 39 / 91 frames). Approved X rows in build order: row 5, X1, row 4, tiled fix, X2, X4, effect-light calibration.
+  2026-10-16 05:07 USER (going to bed): option C for package 6; standing rule = quality / fidelity wins every
+  cheaper-vs-better choice without asking (60 fps floor at 1440p); playable build only when everything is done.
+  ITEM 6 DATA SHIPPED into Rebuild/work/render for the 5 user maps (Systems handoff; existing entries byte-identical
+  on all 5 maps: Streets 534 / Rust 598 / Molten 543 / Gorge 506 / Debris 518 identical, 0 changed, 56 new each, 0
+  compile errors; +6 FluidRed cubemap textures per map; backup work/render_backup_pre_item6_*). Sentry turret draws
+  its authored hologram (package 5 known issue closed). Other 5 MP maps regenerating. New gap for Gameplay: kamikaze
+  mines have no presentation (World never draws mines_). Experimental resumed 05:00 (FAST table ~40 min; combined
+  final gate sized ~3.5 h GPU block). AssetTools A1_IAC running (10 GB chapter cap); validator campaign mode DONE.
