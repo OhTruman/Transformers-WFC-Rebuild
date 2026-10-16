@@ -1758,3 +1758,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pickup factories, 1,112 unique matc materials. Recommended order: streaming-state runtime, core Kismet + 4 classes,
   pickup discovery, pawn factories / AI, matinee, matc, dialog; first level D5_OME, then A5_TRY. AssetTools now: grid
   fix, then Kismet class RE + streaming runtime design notes. PACKAGE_6_HEAD.md: how-to-play section 04198d4d.
+  2026-10-16 12:52 MERGED: RT hit-data back-face cull fix f670f8ba (Rendering a81f7291), "RT Realistic defaults" boot
+  line 04c51243 (264fdf97), verify_slim rtcheck.defaults row 59b96d4d (Systems patch; NOTE: 59b96d4d's commit message
+  is garbled by a shell heredoc slip, content correct: tools/package/verify_slim.ps1 +39). Identity on int_cand4: Off
+  5 / 5, Faithful 5 / 5. Rendering: lava test on the 509 authored views (gain 1 / 4 / 8, tone off diagnostic), then
+  item 7 temporal reflections (WFC_RT_REFLTEMPORAL). Experimental: walkable gate base same-match check running.
+  Systems: rtcheck.defaults run against a Release build of this head at Rendering's boundary.
