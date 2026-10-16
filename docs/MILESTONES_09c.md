@@ -2030,3 +2030,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   LOD-order / percentage check. Runtime lacks UE3's SecondsBeforeInactive / MaxDrawDistance culling -> Systems
   prepares it (WFC_FXCULL=0 off), compile after the block; decision after the bisect. Rendering int_cand9 (+5bce52bb)
   staged as a bisect arm; FX-data arm dropped.
+  2026-10-16 16:37 FX LOD UPPER BOUND (Systems, diagnostic WFC_FXLOD0 exe, never a patch; RT off, lockstep 31v32 seed 7,
+  60 s): all-LOD-0 vs as-is: Gorge sprites 6,154 -> 2,174 (-65 %; peak 18,401 -> 5,360), draws 102.5 -> 69.9, FX
+  CPU 0.90 -> 0.58 ms; Berth sprites 2,310 -> 895 (-61 %), draws 36.6 -> 27.0. Most particle load at gameplay
+  distance = LOD 1+ data heavier than LOD 0 (suspected x3.33 decode inversion) -> AssetTools' TOP item: pstream LOD
+  order / percentage check + regen of the 10 MP maps if a decode bug (package 6 candidate: look + cost). This bug is
+  in base AND head (same data), so it is not the regress delta; the delta = tiled gate + gib trails (+ missing UE3 FX
+  culling, Systems coding it). Systems' RT-off verify rehearsal on 4078e47b: PASS; c85cc2ad package deleted (F: 140 GB).
