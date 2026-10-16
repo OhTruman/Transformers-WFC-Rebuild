@@ -1962,3 +1962,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (Off 5 / 5, Faithful 5 / 5, SIMHASH equal vs int_base6). Gorge-only eyepass on int_cand7 RUNNING (Experimental);
   then Rendering pushes 0a299fe9 -> merge paired with the WHITEROLL table = package 6 head -> Systems' package
   rebuild + Experimental's final gate tree -> Systems' RT verify row -> the one-GO gate block.
+  2026-10-16 15:07 Gorge recheck on int_cand7: hue FIXED (neutral white, no yellow-green; Gorge Realistic 1.33, Enhanced
+  1.37) but it clips more than Off (near-white 79 % vs Off 58 %): the warm tint + foreground robot detail wash out
+  (work/eyepass/int_cand7/step1080_before_after.png). Quality rule: ONE retune to keep warmth (int_cand8), identity,
+  6 min Gorge recheck; else ship int_cand7 as is. Systems holds the WHITEROLL table for the final values. Head ~40
+  min later.
