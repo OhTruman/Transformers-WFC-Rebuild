@@ -1239,6 +1239,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   draws + per-sub mask bits for the world if the lights-off arm removes the cost, or the transient term in its own
   program variant if the cost is static. Gate: regress vs 30b2fa74 within +0.15 on every map at RT off, Faithful
   identity, SIMHASH unchanged, the lights still show.
+  2026-10-16 01:25 Rendering's transient-light cost fixes coded + built (unrun until the bisect's hold ends): cached uniform
+  locations in Program; a per-draw light mask for non-MDI draws (lights whose cull sphere meets the sub's bounds,
+  loose x1.5 + 1 m for skinned subs; zero lights = every loop iteration masked); a per-light CULL RADIUS from the
+  falloff exponent (x^2_cut = 1 - (1 / 512)^(1 / e): a 30 m exponent-75 MP gun light really reaches ~8.5 m), with the
+  shader early-out before the pow and the masks using the cut sphere, giving world pixels the early-out without MDI
+  row-data changes; the 1 / 512 floor is a documented visual change invisible after tonemap. Sequence: Experimental's
+  3-arm bisect (after rows 2-3) -> Rendering's Faithful identity + lights check + commit -> merge -> Experimental's
+  regress-8map on the merged head decides package 5.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
