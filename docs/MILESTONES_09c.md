@@ -1253,6 +1253,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   final fix keys eye caps by each texture's own path (a shared EditorTextureSet name had leaked a cap onto CanyonFloor_A
   / CellBlocks, rebuilt). = package 5's HD pack; Systems runs the static check now. AssetTools next: M6 roughness
   (490), then the exporter wfc_material item.
+  2026-10-16 01:39 b0-31 static checks PASS (Systems: 3,505 rows = 3,505 files, 21,779.5 MB; missing / mismatch / bad format /
+  unindexed / over MAX_PATH all 0; 5 / 5 A8R8G8B8 rows valid). M6 ROUGHNESS DONE (AssetTools, ~8 min, provisional until
+  Systems' family review): out/hd/push_m6, pack/hd_pbr_index.json, 498 BC4_UNORM rows, 441 MB, half the HD colour
+  resolution, from the artists' gloss channels in the frozen D pack with each map's mean remapped to its row's
+  target_mean_roughness; no ORM / metal maps (18 orm_candidate rows flagged); sheets m6_001..063. Forwarded to Systems
+  (review) and Rendering (matc pbr, item 6); the Enhanced row ships in package 5 only if calibrated before the cut,
+  else package 6. AssetTools next: the exporter wfc_material item + the missing-MATINST audit.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
