@@ -82,6 +82,22 @@ float hspeed(const Character& c) { return std::sqrt(c.velocity().x * c.velocity(
 
 } // namespace
 
+float driveSteerHalfTime(float errRad, float (*steer)(float, float)) {
+    CollisionWorld w = makeWorld(0, 0, 0);
+    Sim s(&w, 1.3f);
+    MoveIntent b; b.wantBoost = true;
+    s.step(b, 60);
+    if (!s.c.vehicleState().driving) return -1.0f;
+    s.c.velocity() = core::forwardFromYawPitch(s.c.yaw(), 0.0f) * 25.0f;
+    const float target = s.c.yaw() + errRad;
+    for (int k = 1; k <= 120; ++k) {
+        MoveIntent in = b; in.faceYaw = target; in.steer = steer(s.c.yaw(), target);
+        s.step(in);
+        if (std::fabs(std::remainder(s.c.yaw() - target, 6.2831853f)) <= 0.5f * std::fabs(errRad)) return k * s.dt;
+    }
+    return -1.0f;
+}
+
 void runVehicleTests() {
     namespace cfg = core::config;
     MoveIntent idle;

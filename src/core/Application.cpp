@@ -5372,6 +5372,14 @@ void Application::runBotTest() {
     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
     int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
+    // DRIVE rows: the bot Driving steer law turns a boosting vehicle toward its target (a sign inversion anywhere between the steer law
+    // and the Driving integrator steered every Driving bot away from its heading error until 2026-10-16).
+    for (float deg : {30.0f, -30.0f}) {
+        const float t = game::driveSteerHalfTime(deg * 0.0174533f, &game::World::botDriveSteer);
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "DRIVE a Driving bot halves a %+.0f deg heading error within 1 s (%.2f s)", deg, t);
+        check(t > 0.0f && t <= 1.0f, buf);
+    }
     // Behaviour-exists rows (grenades, killstreak rewards) count over the phases: a single 120 s phase-2 match ranges 1-16 grenades and
     // 0-7 rewards by seed (WFC_SEED sweep 2026-10-16), so a per-phase count failed by match luck.
     int grenadesAll = 0, streaksAll = 0;

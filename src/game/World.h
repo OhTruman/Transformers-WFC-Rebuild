@@ -1132,6 +1132,7 @@ public:
     // Kills by AI (bots; [0] Smart, [1] Classic) and how many of them hit a victim facing away (> 90 degrees) - WFC_AIDUEL metrics.
     long aiKills_[2] = {0, 0}, aiBackKills_[2] = {0, 0};
     void resetAiKillStats() { aiKills_[0] = aiKills_[1] = aiBackKills_[0] = aiBackKills_[1] = 0; }
+    static float botDriveSteer(float yaw, float faceYaw);   // bot Driving steer law (+ = right turn)
     bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
     // Smart squads: a participant's squad id (fixed by player order, or the squad joined at its last respawn with squadDynamic), the
     // squad's leader (its first live member by player order, -1 when none), and the squadDynamic re-assignment at a respawn.

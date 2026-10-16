@@ -1017,7 +1017,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
     in.wantJump = jump && !vehicle;
     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
     if (b.pendingHover) { in.hoverRequest = true; b.pendingHover = false; }
-    if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
+    if (vehicle) in.steer = botDriveSteer(pc.yaw(), in.faceYaw);
 }
 
 // The victim's death presentation for a bot death that despawns at once (KillZ fall, the stranded suicide): tickMatch's PlayerKilled
@@ -1027,6 +1027,11 @@ void World::presentBotDeathNow(MatchOpponent& o, const char* damageType) {
     requestCorpse(o.pawn(), o.matchPlayer(), 100 + o.matchPlayer(), true, damageType);
     onPawnDeath(o.pawn().chassis().id, o.pawn().moveForm() == Form::Vehicle, damageType, o.pawn().actorLocation());
 }
+
+// Driving steer: + = right turn = rebuild yaw decreasing (CharacterMovement: UE +z turn right), so the error is yaw - faceYaw. (It was
+// faceYaw - yaw until 2026-10-16: every Driving bot steered away from its heading error until the boost-stop angle dropped it to
+// Hovering.) BOTTEST "DRIVE" rows guard the sign through the vehicle sim.
+float World::botDriveSteer(float yaw, float faceYaw) { return core::clampf(wrapPi(yaw - faceYaw) * 1.5f, -1.0f, 1.0f); }
 
 void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     Character& pc = o.pawn();
