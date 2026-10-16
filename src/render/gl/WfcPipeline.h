@@ -1085,6 +1085,7 @@ private:
         int owner = 0; bool hasParams = false; std::vector<std::pair<std::string, std::array<float, 4>>> params;
         float fxColor[4] = {1, 1, 1, 1}, dynParam[4] = {1, 1, 1, 1};
         bool occluded = false;
+        bool unposed = false;                            // (kind 3) no skin: skinDraw_ stays null at the replay
         // (weapon queue) the owner's light environment + colours as of the call
         bool hasEnv = false, envInit = false; LightEnv env; bool hasCc = false; CharacterColors cc{};
     };
@@ -1092,6 +1093,13 @@ private:
     bool flushingDyn_ = false;
     // skinned weapon draws, replayed in order before the next other GPU / queue work (flushWeaponQueue)
     std::vector<DynDraw> weaponQueue_;
+    // kind 3 of the translucency queue: a dynamic draw whose subs are all translucent (the barrier's force field, shields),
+    // replayed in the sorted pass after the characters as the weapon queue replays (its skin / env state as of the call)
+    std::vector<DynDraw> dynTrans_;
+    // (an unposed dynamic mesh - drawDynamicMesh, e.g. the barrier - drawn from the shared dynVao_: its vertices copied into
+    // a per-frame pooled buffer so the deferred draw still has them)
+    struct DynTransBuf { GLuint vao = 0, vbo = 0, ibo = 0; };
+    std::vector<DynTransBuf> dynTransBufs_; size_t dynTransBufUsed_ = 0;
     bool flushingWeapons_ = false;
     void flushWeaponQueue();
     int shadowPhase_ = 0;                                 // 0 cast fully, 1 receiver depth only, 2 shadow depth + projection
