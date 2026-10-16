@@ -2,7 +2,7 @@
 # the per-step hashes must match; (2) per map a 70 s lockstep TDM 4 v 5 + playerbot, RT off, windowed, muted, NOINTERACT, with
 # WFC_AMBLOG (voices / max / dropped / stolen / virtual every 0.5 s) + WFC_CUELOG; reported: peak real voices, final dropped /
 # stolen counts, the local "no channel" warnings. One exe at a time, killed by PID on timeout, waits for PERF_HOLD.
-param([switch]$NoSimhash, [Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\voice_ab',
+param([switch]$NoSimhash, [switch]$Realtime, [switch]$Paced, [Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$NewBin, [string]$Out = 'F:\Transformers Rebuild\Rebuild-Systems\work\voice_ab',
       [string]$MapList = 'MP_IAC_Streets,MP_UND_Gorge', [string]$Bots = 'BotsFriendly=4?BotsEnemy=5', [int]$Seconds = 70)
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
 function Run([string]$bin, [string]$dir, [hashtable]$envs) {
@@ -13,7 +13,7 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     $base = @{ WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_NOMOUSE = '1'; WFC_AUTODETECT = '0'; WFC_SEED = '7'; WFC_FLOWSEED = '7';
                WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0' }
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
-    foreach ($k in $envs.Keys) { Set-Item "env:$k" $envs[$k] }
+    foreach ($k in $envs.Keys) { if ($envs[$k] -ne '') { Set-Item "env:$k" $envs[$k] } }
     $p = Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -RedirectStandardOutput "$dir\out.txt" -RedirectStandardError "$dir\err.txt" -NoNewWindow -PassThru
     $null = $p.Handle
     if (-not $p.WaitForExit(600000)) { & taskkill.exe /T /F /PID $p.Id | Out-Null; Write-Host "  TIMEOUT (killed PID $($p.Id))" }
@@ -28,7 +28,7 @@ foreach ($arm in $arms.Keys) { Select-String -LiteralPath (Join-Path $Out "simha
 foreach ($map in ($MapList -split ',')) {
     foreach ($arm in $arms.Keys) {
         $dir = Join-Path $Out "$map`_$arm"
-        Run $arms[$arm] $dir @{ WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = '1'; WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0'; WFC_LOGTIME = '1'; WFC_CUELOG = '1'; WFC_AMBLOG = '1';
+        Run $arms[$arm] $dir @{ WFC_SKIPINTRO = '1'; WFC_LOCKSTEP = $(if ($Realtime) { '' } else { '1' }); WFC_FRAMELIMIT = $(if ($Paced) { '60' } else { '' }); WFC_PLAYERBOT = '1'; WFC_RT_MODE = '0'; WFC_LOGTIME = '1'; WFC_CUELOG = '1'; WFC_AMBLOG = '1';
                                  WFC_BOOT = 'match'; WFC_MATCH_SECONDS = "$Seconds"; WFC_SMOKE_FRAMES = '2000000'; WFC_MATCH_URL = "$($map)?GameModeTag=TDM?$($Bots)?PointsToWin=1000" }
         $log = Join-Path $dir 'wfc.log'
         $amb = @(Select-String -LiteralPath $log -Pattern 'voices=(\d+) \(max (\d+), dropped (\d+), stolen (\d+), virtual (\d+)\)' | ForEach-Object { $_.Matches[0] })

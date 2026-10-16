@@ -1,0 +1,4 @@
+MP_IAC_Streets_base    80 s, local shots 117 | real peak 96 median 33 at-96 3/160 | dropped 3 stolen 116 | virtual max 70 | local no-channel 0
+MP_IAC_Streets_new     80 s, local shots 117 | real peak 96 median 30 at-96 1/160 | dropped 0 stolen 76 | virtual max 70 | local no-channel 0
+MP_UND_Gorge_base      80 s, local shots 142 | real peak 96 median 43 at-96 3/160 | dropped 7 stolen 39 | virtual max 33 | local no-channel 0
+MP_UND_Gorge_new       80 s, local shots 142 | real peak 96 median 40 at-96 3/160 | dropped 3 stolen 27 | virtual max 37 | local no-channel 0

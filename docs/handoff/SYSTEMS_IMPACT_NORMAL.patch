@@ -1,0 +1,32 @@
+--- a/src/game/WeaponFx.cpp
++++ b/src/game/WeaponFx.cpp
+@@ -361,7 +361,8 @@
+ bool WeaponFx::unreconstructed(const char* kind, const std::string& t) {
+     if (t.empty()) return false;                                   // the weapon authors none: nothing to draw
+     if (missing_.insert(t).second)
+-        LOG_WARN("weapon fx: %s template %s is not reconstructed - not drawn (no substitute)", kind, t.c_str());
++        LOG_WARN("weapon fx: %s template %s was not spawned by the particle runtime (not in this map's effect data, over the effect "
++                 "budget, or a degenerate frame) - not drawn, no substitute (logged once per template)", kind, t.c_str());
+     return false;
+ }
+ 
+@@ -425,11 +426,17 @@
+ }
+ 
+ bool WeaponFx::spawnImpact(const std::string& t, const Vec3& pos, const Vec3& normal, const Vec3& viewPos) {
++    // A zero-length normal (a shot whose hit point is its own origin) gave the effect a degenerate frame, so the particle
++    // runtime refused it and that impact was not drawn: face the squib back toward the shooter instead (up if that is
++    // degenerate too). Presentation only.
++    Vec3 dirOut = normal;
++    if (core::length(dirOut) < 1e-6f) dirOut = viewPos - pos;
++    if (core::length(dirOut) < 1e-6f) dirOut = Vec3{0, 1, 0};
+     if (t != kImpactTemplate) {
+-        const Vec3 n = core::normalize(normal);                       // the squib's +X faces out of the surface
++        const Vec3 n = core::normalize(dirOut);                       // the squib's +X faces out of the surface
+         return spawnGenericAt("impact", t, pos, n, anyUp(n), false);
+     }
+-    return spawnImpact(pos, normal, viewPos);
++    return spawnImpact(pos, dirOut, viewPos);
+ }
+ 
+ void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld, int owner) {
