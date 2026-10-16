@@ -2104,3 +2104,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   vertex build (~0.5 MB / character) + 2 STREAM_DRAW uploads into one shared dyn VBO / IBO; frustum cull only.
   GPU path for corpses = IRenderer::drawSkinnedMesh (GpuSkin.h helpers; stable key per corpse, 512 shared rows,
   <= 128 bones, serial bump on pose change) = plan 2; plan 1 (drawDynamicMeshPosed + serial) = the respin.
+  2026-10-16 17:58 CORPSE ARMS GO (Experimental hold ~20 min): int_cap default / NOCORPSE / NOMINEPRES + int_csn (head
+  + static-pose patch) + int_csb (head rebuilt, control); Berth RT off, 2 reps, frame + GPU p90. Gameplay's CPU-
+  heavy headless checks (BOTTEST 12 seeds, SIMHASH) held until the hold clears, then slot B crops (10 / 40 m).
