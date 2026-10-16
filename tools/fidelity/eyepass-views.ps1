@@ -4,7 +4,7 @@
 #   .\tools\fidelity\eyepass-views.ps1 -Exe <wfc_rebuild.exe> -OutDir <dir> [-Maps 508,510,507,504,509] [-Modes off,real,realhd] [-Size 2560x1440]
 param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "510", "507", "504", "509"),
       [string[]]$Modes = @("off", "real", "realhd"), [string]$Size = "2560x1440",
-      [string]$HdRoot = "F:\Transformers Rebuild\AssetTools\out\hd\push_full_snap_20261016_b0-31\pack")
+      [string]$HdRoot = "F:\Transformers Rebuild\AssetTools\out\hd\push_full_snap_20261016_b0-31\pack", [string]$RenderData = "", [string]$RtEnv = "")
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $names = @{ "508" = "MP_IAC_Streets"; "510" = "MP_UND_Gorge"; "507" = "MP_ORB_Debris"; "504" = "MP_IAC_Rust"; "509" = "MP_KON_Molten" }
 $Exe = (Resolve-Path $Exe).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
@@ -17,6 +17,8 @@ foreach ($m in $Maps) {
         $e = @{ WFC_MAP = $names[$m]; WFC_SHOTLIST = $list; WFC_SHOTDIR = $d; WFC_SMOKE_FRAMES = "$(8 * $lines.Count + 24)"; WFC_LOCKSTEP = "1";
                 WFC_RT_MODE = $rt; WFC_RENDERSIZE = $Size; WFC_MUTE = "1"; WFC_NOINTERACT = "1"; WFC_LOGEVERY = "0" }
         if ($mode -eq "realhd") { $e.WFC_HDTEXTURES = "2"; $e.WFC_HD_ROOT = $HdRoot }
+        if ($RenderData) { $e.WFC_RENDER_DATA = $RenderData }
+        if ($rt -ne "0" -and $RtEnv) { foreach ($kv in ($RtEnv -split '\s+' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $e[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } }
         $t0 = Get-Date
         $rc = Invoke-WfcExe $Exe $d $e "run.log" 900
         Get-ChildItem $d -Filter "*_w?.bmp" | Remove-Item
