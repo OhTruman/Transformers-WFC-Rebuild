@@ -1842,3 +1842,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   M6 498 / 498 FROZEN, HD 4,005 / 21.70 GB), verify_slim -SubstDrive X: with the RT hold (M6 static, 3 maps,
   settings 7, RT gate incl. rtlights + defaults, HD runtime level 2), report, promote only on Integration's word.
   F: 91 GB free. Systems on the netcode design as fill-in.
+  2026-10-16 13:27 CROSS-PLAY PHASE 0 DOCS merged 29ad2e36 (Systems, fill-in work): CROSSPLAY_NETCODE_DESIGN.md
+  (deterministic input lockstep on option A for PC-PC / PC-browser; option C PC-hosted snapshots = the original's UE3
+  model as the console fallback; the original's Xe-TransEngine.ini net settings: 30 / 35 tick, 10 KB/s client rate,
+  8 s timeout; ~10 B / human / tick, adaptive input delay 2-8 ticks, WebRTC data-channel star relay, join codes /
+  direct IP first; leave -> bot swap; late join + desync recovery by canonical state transfer; prerequisite: N
+  humans in World; 11 open questions) and CROSSPLAY_PROFILE_STATS.md (original profile / TnXpManager / challenges /
+  Live leaderboards; per-platform storage; account-free identity = local key pair + fingerprint + name; friend
+  standings via signed summaries, global needs an optional server; 8 open questions). Feasibility doc (AssetTools)
+  pending behind the grid work. No code before package 6.
