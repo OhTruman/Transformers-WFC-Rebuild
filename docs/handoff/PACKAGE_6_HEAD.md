@@ -226,7 +226,7 @@ Off / Faithful stay byte-identical to the original (identity rows).
   p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay [PLACEHOLDER: commit]: a body
   whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; the rest
   is the faithful body presentation at 63 bots. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
-  original's player count) is barely affected. The gib trails' particle load is the original's own LOD authoring (see the
+  original's player count): [PLACEHOLDER: measured cost with its few live bodies]. The gib trails' particle load is the original's own LOD authoring (see the
   particle LOD note).
 - **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
   5 / 6) come after package 6 [PLACEHOLDER: what landed].
