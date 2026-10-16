@@ -1,0 +1,17 @@
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -92,6 +92,14 @@
+     probefill = 'on'     # row 5 (WFC_RT_PROBEFILL)
+     origspec = 'on'      # Enhanced: the Modern lobe only where the original had a specular input (WFC_PBR_ORIGSPEC=0 restores it)
+     refltemporal = 'on'  # item 7 temporal reflections (WFC_RT_REFLTEMPORAL; Rendering 8d50190a)
++    sunsharemax = 0.75   # row 2 character sun-shadow cap (WFC_RT_SUNSHAREMAX; Rendering 18483783)
++    tonekey = 0.02       # X1 default key (WFC_TONE_KEY; Molten applies its own 0.03 at runtime, the line prints the default)
++    toneadapt = 0.65     # X1 eye adaptation (WFC_TONE_ADAPT)
++    tonegain = 1.3       # X1 gain (WFC_TONE_GAIN)
++    tonesat = 1.1        # X1 saturation (WFC_TONE_SAT)
++    tonecontrast = 1.15  # X1 contrast (WFC_TONE_CONTRAST)
++    tonebloom = 0.8      # X1 bloom (WFC_TONE_BLOOM)
++    bloommax = 16        # X1 soft-bloom input cap (WFC_TONE_BLOOMMAX)
+ }
+ 
+ function Norm([string]$p) {
