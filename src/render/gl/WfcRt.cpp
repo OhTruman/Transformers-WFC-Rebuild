@@ -1191,12 +1191,12 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 auto oo = [](bool b) { return b ? "on" : "off"; };
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
-                         "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f",
+                         "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f whiteroll=%s whitelo=%.1f whitehi=%.1f",
                          oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
                          rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
                          oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()), rtdef::sunShareMax(),
                          rtdef::toneKey(), rtdef::toneAdapt(), rtdef::toneGain(), rtdef::toneSat(), rtdef::toneContrast(), rtdef::toneBloom(),
-                         rtdef::bloomMax());
+                         rtdef::bloomMax(), oo(rtdef::whiteRoll()), rtdef::whiteLo(), rtdef::whiteHi());
             }
         }
         // (item 2, Realistic) this frame's shadow lights: the point / spot lights the characters used most as direct lights
