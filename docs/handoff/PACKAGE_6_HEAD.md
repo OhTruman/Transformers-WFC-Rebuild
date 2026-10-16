@@ -4,8 +4,29 @@
      <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
      PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
 
+## How to play this build
+
+1. **Reboot first.** The AMD driver's memory pool grows under GPU load and only a reboot clears it.
+2. **Start with Play.bat** (not the exe directly).
+3. **Settings > Graphics:** resolution 2560x1440; **Ray Tracing = Realistic**; **HD Textures = Enhanced** (HD textures +
+   modern materials). Both apply from the next map, so set them in the menus before you start a match. **FPS Counter = On**
+   shows the cost in the top-right corner. Expected at 1440p with 31 v 32: Realistic [PLACEHOLDER: p50 / p90 fps],
+   Realistic + Enhanced [PLACEHOLDER: p50 / p90 fps] (the gate's step 1b row; the floor is ~60 fps).
+4. **Where the difference shows best:** reflective floors (robots and gun flashes in them), streets under the tall
+   buildings (sun and shadow, coloured bounce light), firefights (explosions, impacts and boost now light the scene),
+   Gorge's interiors (dark corners lit by the lamps and bounce), Molten's lava halls [PLACEHOLDER: if the lava fix ships].
+5. **Side by side with the original:** press **F9** in a match to cycle Ray Tracing Off -> Faithful -> Realistic in the same
+   view (works on a map that loaded with ray tracing on). For the full original look also set HD Textures = Off (from the
+   next map). Off / Faithful are the original's image, byte for byte.
+
+**Already known (no need to report):** vehicle muzzle flashes saturate a nearby wall (authored values, as the original);
+several explosions right at the camera fill the screen flat yellow (authored colours); Molten's lava does not light the
+scene yet [PLACEHOLDER: if still open]; no volumetric light shafts yet (package 7) [PLACEHOLDER: if X3 misses]; dead
+robots do not leave decals / skeletal gibs yet and the death animation choice is approximate; Smart bots' squads can
+reverse direction around a walking leader. Anything else is news.
+
 Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (<SIZE> GB: <N> files kept +
-<N> .xpr twins; HD pack D b0-31 3,506 files / 21.27 GB; glTF overlay <OVERLAY>, <N> files; promoted <DATE>). This is the
+<N> .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay <OVERLAY>, <N> files; promoted <DATE>). This is the
 hand-over build the user playtests. Fallbacks: work/playtest_slim_398b27ef (package 5, internal checkpoint),
 work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package6-<HEAD>.
 
