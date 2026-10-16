@@ -48,12 +48,12 @@ struct ChassisDeathDef { const char* chassis; const char* robotDeaths; const cha
 // Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
 struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
 #include "game/VehicleHeadlights.inc"
-// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering
-// calibrates. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
+// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, on by default there (Integration
+// 2026-10-16, after Rendering's calibration); WFC_FXLIGHTS=0 turns them off. Off / Faithful never add or submit one. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
 struct FxLightDef { const char* tmpl; float color[3]; float radius, falloff, duration; };
 struct BoostLightDef { const char* chassis; const char* bone; float pos[3]; float color[3]; float radius, falloff; };
 #include "game/FxLights.inc"
-bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return e && std::string(e) == "1"; }(); return on; }
+bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return !e || std::string(e) != "0"; }(); return on; }
 const FxLightDef* fxLightFor(const std::string& tmpl) {
     for (const FxLightDef& d : kFxLights) if (tmpl == d.tmpl) return &d;
     return nullptr;
@@ -1525,7 +1525,9 @@ void World::spawnDeathLight(const std::string& chassisId, bool vehicleForm, cons
 }
 
 void World::fxLight(const std::string& tmpl, const core::Vec3& pos) {
-    if (!fxLightsOn()) return;
+    // Realistic only, decided at spawn from the last drawn frame's mode: in Off / Faithful no effect light even enters the live
+    // list (its expiry would reorder the original muzzle / death lights there).
+    if (!fxLightsOn() || fxRtMode_ != 2) return;
     const FxLightDef* d = fxLightFor(tmpl);
     if (!d || d->duration <= 0.0f) return;   // continuous rows (boost, pickups) are submitted per frame in draw
     LiveTransientLight l;
@@ -3876,7 +3878,13 @@ void World::draw(render::IRenderer& r) const {
     // pawn in vehicle form (not mid-transform), one spot per lamp of kHeadlights following the body bone, behind the same view
     // cull as the transient lights. WFC_HEADLIGHTS=0 off. Spot shape: Rendering's first pass (18 / 32 deg, 25 m, falloff 2).
     unsigned hlSubmitted = 0;
+    fxRtMode_ = r.rayTracingMode();   // effect lights spawned before the next draw follow this frame's mode
     static const bool kHeadlightsOn = [] { const char* e = std::getenv("WFC_HEADLIGHTS"); return !e || std::string(e) != "0"; }();
+    if (fxRtMode_ == 2) {             // verify_slim's RT gate requires both on in a default Realistic run (package 6 default flip)
+        static bool said = false;
+        if (!said) { said = true; LOG_INFO("RT-era lights (first Realistic frame): effect lights %s, headlights %s", fxLightsOn() ? "on" : "off",
+                                           kHeadlightsOn ? "on" : "off"); }
+    }
     if (kHeadlightsOn && r.rayTracingMode() == 2) {
         constexpr float kRadius = 25.0f, kFalloff = 2.0f, kMaxDist = 150.0f;
         static const float kCosIn = std::cos(18.0f * core::PI / 180.0f), kCosOut = std::cos(32.0f * core::PI / 180.0f);

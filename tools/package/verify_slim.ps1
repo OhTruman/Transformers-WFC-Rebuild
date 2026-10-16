@@ -527,6 +527,14 @@ try {
                 }
                 if (-not $ok) { $rtGate.Status = 'FAIL' }
             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
+            # Package 6 default flip (Systems SYSTEMS_FXLIGHTS_DEFAULT_ON): Realistic turns the RT-era effect lights and the vehicle
+            # headlights on by default (WFC_FXLIGHTS=0 / WFC_HEADLIGHTS=0 turn them off; Off / Faithful never have them). The gate's
+            # Realistic run (no WFC_FXLIGHTS / WFC_HEADLIGHTS set) must log both on at its first Realistic frame.
+            $rl2 = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
+            $rtl = $rl2 | Select-String -Pattern 'RT-era lights \(first Realistic frame\): effect lights (on|off), headlights (on|off)' | Select-Object -First 1
+            $rtlOk = $rtl -and $rtl.Matches[0].Groups[1].Value -eq 'on' -and $rtl.Matches[0].Groups[2].Value -eq 'on'
+            $rtGate.Lines += "$(if ($rtlOk) { 'PASS' } else { 'FAIL' }) rtcheck.rtlights: $(if ($rtl) { $rtl.Line.Trim() } else { 'no RT-era lights line in the Realistic run (an exe before the package 6 default flip)' })"
+            if (-not $rtlOk) { $rtGate.Status = 'FAIL' }
             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
         }
     }

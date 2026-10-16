@@ -1432,6 +1432,7 @@ private:
     std::vector<LiveTransientLight> transientLights_;
     int unkeyedDeaths_ = 0;
     int fxLightSerial_ = 0;
+    mutable int fxRtMode_ = 0;      // (set in the const draw) the last drawn frame's ray-tracing mode (2 = Realistic): effect lights are added only then
     // RT-era effect light (WFC_FXLIGHTS=1; Realistic only at submit): the light of an effect template the game just spawned
     // at pos (kFxLights, from SYSTEMS_RT_LIGHT_HOOKS: explosions, impact squibs). Not an original light.
     void fxLight(const std::string& tmpl, const core::Vec3& pos);
