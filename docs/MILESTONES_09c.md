@@ -1771,3 +1771,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   views; the step-1200 yellow washout = X1 soft bloom on very bright emissive + muzzle flash -> cap the bloom input
   on emissive-heavy frames in item 7 polish. Next: item 7 temporal reflections test, effect-light calibration, X3
   v3, eye pass; next RT boundary ~14:15 (Rendering's clock) -> Systems' rtcheck.defaults run (giemissive=4.00).
+  2026-10-16 12:55 Package-gate base = 398b27ef + yaw + drive-probe + steer + walkable f19e0052 (Experimental ff28578b:
+  same match True vs f19e0052, control False). verify_slim RealisticDefaults giemissive 4 paired with 584c873b
+  (a981db7f). Systems' rtcheck.defaults RT row runs at Rendering's next boundary (04c51243 exe, 1.00 table = row
+  mechanics check); the 4.00 pairing is verified in the final package gate.
