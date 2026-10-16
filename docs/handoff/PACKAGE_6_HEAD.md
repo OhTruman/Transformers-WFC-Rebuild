@@ -221,12 +221,13 @@ Off / Faithful stay byte-identical to the original (identity rows).
   Rendering RE item [PLACEHOLDER: shipped or not].
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original) - carried from
   package 5; WFC_TLIGHTSCALE is the lever.
-- (FIXED in the respin) **Off-path cost in extended (> 10-player) matches**: +1.7..+3.8 ms p90 at 4K RT off vs package 5
-  on 63-bot matches, from two causes: the tiled-light path running in Off / Faithful (gated to Realistic, above) and the
-  death bodies being re-skinned on the CPU and re-uploaded every frame even once their pose was static (Gameplay
-  [PLACEHOLDER: commit]: a static corpse keeps its last skinned mesh). The planned presentation cap is dropped (it never
-  engaged). The gib trails' particle load is the original's own LOD authoring (see the particle LOD note). [PLACEHOLDER:
-  the respun head's regress numbers]
+- **Off-path cost in extended (> 10-player) matches - reduced in the respin, the rest is package 7**: at 63 bots RT off,
+  the death bodies are the whole regression vs package 5 (about 0.2 ms per live body; the mines cost nothing): 1.87 ms
+  p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay [PLACEHOLDER: commit]: a body
+  whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; the rest
+  is the faithful body presentation at 63 bots. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
+  original's player count) is barely affected. The gib trails' particle load is the original's own LOD authoring (see the
+  particle LOD note).
 - **Smart ride height / hover**: the remaining Smart vehicle items (hover / jet slow, the ride-height model, audit items
   5 / 6) come after package 6 [PLACEHOLDER: what landed].
 - **Squad follow reversals** (Smart) - carried from package 5.
