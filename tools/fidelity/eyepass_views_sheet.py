@@ -42,6 +42,7 @@ for m in maps:
             dr.text((x + 8, y + 4), f"{NAMES.get(m, m)} ({m}) - {LAB.get(mo, mo)} - {v}", fill="white", font=F1)
             dr.text((x + 8, y + 36), why.get(v, "")[:150], fill=(255, 200, 80), font=F2)
             if not os.path.exists(f): dr.text((x + 8, y + 80), "missing", fill="red", font=F1); continue
+            if os.path.exists(os.path.join(O, f"{m}-{mo}", "INVALID")): dr.text((x + W - 260, y + 4), "INVALID SIZE", fill="red", font=F1)
             im = Image.open(f).convert("RGB"); sheet.paste(im.resize((W, H), Image.BOX), (x, y + 64))
             a = np.asarray(im.resize((im.width // 4, im.height // 4), Image.BOX), dtype=np.float32)
             if j == 0: ref = a; continue
