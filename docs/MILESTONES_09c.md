@@ -1916,3 +1916,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   sunsharemax, tonekey, toneadapt, tonegain, tonesat, tonecontrast, tonebloom, bloommax). Identity on int_cand6 Off 5
   / 5, Faithful 5 / 5, SIMHASH equal. Confirming sheet RUNNING on int_cand6 (Experimental). Systems' paired table
   patch requested against 7f3cf732; then the final head is named and BUILD_ONLY + the gate + the package build start.
+  2026-10-16 14:15 PAIRED TABLE MERGED c85cc2ad (Systems: sunsharemax 0.75, tonekey 0.02, toneadapt 0.65, tonegain 1.3,
+  tonesat 1.1, tonecontrast 1.15, tonebloom 0.8, bloommax 16; standalone 23 / 23). HEAD CANDIDATE = c85cc2ad
+  (penultimate 7cd22027), pending the confirming sheet on int_cand6 + Rendering's per-map go. Started in parallel:
+  Experimental BUILD_ONLY package-gate c85cc2ad 7cd22027; Systems runbook step 1 (NOPROMOTE refresh + build_slim
+  --hd-pbr into work/playtest_slim_c85cc2ad). Disk: Rendering freed 13.7 GB, Systems 29 GB (package 3 tree removed;
+  packages 4 + 5 kept); F: 112 GB free.
