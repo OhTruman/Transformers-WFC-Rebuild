@@ -1781,3 +1781,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   "AI cost per step" row to be gated on average + p99 (wall-clock flake). Next Gameplay: the third Streets pocket.
   Systems: the dry-run map-row FAIL = the missing HD folder's pack/hd_index.json probe (not a regression; package 6
   ships HD at the root; verify backlog: optional probe). 584c873b Release build for the final gate in progress.
+  2026-10-16 13:00 verify_slim: <hd>/pack/hd_*index.json is an optional probe (HD-less packages pass; Systems b22a2912 ->
+  200f8047). PACKAGE_6_HEAD.md refreshed 45fe5514 (28 placeholders; lava closed pending the eye pass; new known issue:
+  bloom washout on bright emissive + muzzle flash until item 7's cap). Waiting: Rendering item 7 (temporal reflections
+  WFC_RT_REFLTEMPORAL; Systems' table patch f3c56f1b pairs with it), boundary -> Systems rtcheck row -> RESUME.
