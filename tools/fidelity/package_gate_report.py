@@ -40,6 +40,20 @@ lines += ["## 1. Regress (3-arm lockstep, RT off, Classic, best p90 of 2, ms)", 
           "| map | base | final | final lights off | lights off - base (report, <= +0.35) | lights cost (report, <= +0.35) | workload base -> final (same match) | verdict |", "|---|---|---|---|---|---|---|---|"] + rows + [""]
 verdicts.append(("regress", ("UNKNOWN (blocking row)" if not ok else (f"REPORT - {nbis} map(s) above +0.35: per-switch bisect before the hand-over" if nbis else "PASS"))))
 
+# 1b Realistic perf row: report-only; flag p50 > 16.7 ms (the user's 60 fps floor at 1440p). Contamination / client rect / HD not on -> UNKNOWN
+rrows, flags, rbad = [], 0, 0
+for m in ['508', '510', '507', '504', '509']:
+    rp = os.path.join(O, 'rtperf', f'map-{m}', 'report.json')
+    if not os.path.exists(rp): rrows.append(f"| {m} | - | - | missing |"); rbad += 1; continue
+    d = json.load(open(rp, encoding='utf-8-sig')); L = d['results'] if isinstance(d, dict) and 'results' in d else d
+    row = next((r for r in L if r['id'] == 'lockstep.realistic.r1'), None); x = re.search(r'p50 / p90 / p99 ([\d.]+) / ([\d.]+)', str(row and row.get('note')))
+    blk = [r['id'].split('.', 1)[1] for r in L if r['id'].endswith(('contaminated', 'client_rect'))] + (["HD not on"] if row and 'HD requested but not on' in str(row.get('note')) else [])
+    if not x: rrows.append(f"| {m} | - | - | incomplete |"); rbad += 1; continue
+    p50, p90 = float(x.group(1)), float(x.group(2)); fl = p50 > 16.7; flags += fl
+    rrows.append(f"| {m} | {p50:.2f} | {p90:.2f} | {'UNKNOWN (' + ', '.join(blk) + ')' if blk else ('FLAG: p50 > 16.7 ms (below 60 fps)' if fl else 'ok')} |"); rbad += bool(blk)
+lines += ["## 1b. Realistic perf (package 6 defaults + HD Enhanced, 2560x1440, 31 v 32, 1 rep, report-only)", "", "| map | p50 ms | p90 ms | note |", "|---|---|---|---|"] + rrows + [""]
+verdicts.append(("Realistic perf", "UNKNOWN (blocking row)" if rbad else (f"REPORT - FLAG {flags} map(s) p50 > 16.7 ms" if flags else "REPORT - all maps >= 60 fps (p50)")))
+
 # 2 leak: lobby dips of GPU dedicated
 lk = os.path.join(O, 'leak', 'sampler.csv')
 if os.path.exists(lk):
