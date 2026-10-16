@@ -1622,3 +1622,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Debris Driving slow back to base; the remaining Smart Debris cost = hover / jet slow (next trace), then the
   ride-height model, then audit items 4 / 5 / 6. Vending matfix data live in work/render (08:50); dry-run map rows +
   HD runtime PASS; RT gate row at Rendering's boundary.
+  2026-10-16 09:12 BATCH 4 (Rendering, Streets 13 shots vs Off; eyepass_score method): Realistic flat 19.3 / +13.7 /
+  contrast 1.04 / 64 %; all in (X1 round 3 + X2 2.5 + X4 2.5 + X5-1 + effect lights) 30.5 / +27.5 / 1.38 / 77 %;
+  specular 4: 1.47; effect gain 2: 1.40. Streets now reads as a lit world with real contrast (b4_m01100.png). Molten
+  stays at 1.00 (lava-lit: emissive surfaces as RT light sources + per-map exposure = next). Defaults picked:
+  specular gain 2.5, transient gain 2, effect lights + headlights default-on in Realistic after the sheet. Sequence
+  now: Systems RT gate row -> Experimental eyepass on int_cand (X3 go / no-go) -> RESUME. Gameplay: bot Driving steer
+  sign INVERTED for both AIs (bots steer away from the heading error until the boost drops them to hover); one-line
+  fix in test + permanent BOTTEST row + third Classic re-baseline. gate-base.sh scripted (c34c177a).
