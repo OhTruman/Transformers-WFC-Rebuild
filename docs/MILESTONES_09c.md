@@ -1886,3 +1886,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 13:58 EYE PASS: Debris (507) read = strong upgrade (street, reflective, lane; Enhanced adds crisp floor
   detail), no new fix row (shadow blobs covered by the sun-share cap). Rust (504) landed, all checks pass; Molten
   last, then Experimental's score tables, then Rendering's batched fix commit + identity + one confirming sheet.
+  2026-10-16 13:58 EYE PASS: Rust (504) read = clear upgrade (reflective, lane, street; Enhanced adds floor detail); one
+  calibration row on Systems' side: explosion rows colour x0.7 (a nearby explosion blew Rust's bright floor to
+  white; the yellow cast is the shoulder row) -> patch requested against 77a7b0f7; merges before Rendering's fix
+  candidate. Molten last.
