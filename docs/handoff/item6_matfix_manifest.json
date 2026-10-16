@@ -1,0 +1,211 @@
+{
+ "generated_by": "tools/systems/matfix_handoff.py",
+ "source": "mat_fix/out",
+ "target_root": "F:/Transformers Rebuild/Rebuild/work/render",
+ "materials": [
+  "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+  "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+ ],
+ "maps": {
+  "MP_IAC_Streets": {
+   "current_entries": 605,
+   "non_named_identical": 603,
+   "non_named_total": 603,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_IAC_Rust": {
+   "current_entries": 669,
+   "non_named_identical": 667,
+   "non_named_total": 667,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_KON_Molten": {
+   "current_entries": 613,
+   "non_named_identical": 611,
+   "non_named_total": 611,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_UND_Gorge": {
+   "current_entries": 577,
+   "non_named_identical": 575,
+   "non_named_total": 575,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_ORB_Debris": {
+   "current_entries": 589,
+   "non_named_identical": 587,
+   "non_named_total": 587,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_IAC_Berth": {
+   "current_entries": 586,
+   "non_named_identical": 584,
+   "non_named_total": 584,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_IAC_Seed": {
+   "current_entries": 637,
+   "non_named_identical": 635,
+   "non_named_total": 635,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_ESC_BrokenHope": {
+   "current_entries": 625,
+   "non_named_identical": 623,
+   "non_named_total": 623,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_ESC_Remnant": {
+   "current_entries": 640,
+   "non_named_identical": 638,
+   "non_named_total": 638,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  },
+  "MP_UND_Complex": {
+   "current_entries": 574,
+   "non_named_identical": 572,
+   "non_named_total": 572,
+   "replaced": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "named_errors": {
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": null,
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": null
+   },
+   "fresh_vs_current_differ": [
+    "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+    "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST"
+   ],
+   "fresh_only": [],
+   "current_only": [],
+   "stale_path": false
+  }
+ }
+}
