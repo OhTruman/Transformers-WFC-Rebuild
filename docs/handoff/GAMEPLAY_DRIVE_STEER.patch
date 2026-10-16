@@ -1,0 +1,95 @@
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index f8edf92..9941388 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -1017,7 +1017,7 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
+     in.wantJump = jump && !vehicle;
+     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
+     if (b.pendingHover) { in.hoverRequest = true; b.pendingHover = false; }
+-    if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
++    if (vehicle) in.steer = botDriveSteer(pc.yaw(), in.faceYaw);
+ }
+ 
+ // The victim's death presentation for a bot death that despawns at once (KillZ fall, the stranded suicide): tickMatch's PlayerKilled
+@@ -1028,6 +1028,11 @@ void World::presentBotDeathNow(MatchOpponent& o, const char* damageType) {
+     onPawnDeath(o.pawn().chassis().id, o.pawn().moveForm() == Form::Vehicle, damageType, o.pawn().actorLocation());
+ }
+ 
++// Driving steer: + = right turn = rebuild yaw decreasing (CharacterMovement: UE +z turn right), so the error is yaw - faceYaw. (It was
++// faceYaw - yaw until 2026-10-16: every Driving bot steered away from its heading error until the boost-stop angle dropped it to
++// Hovering.) BOTTEST "DRIVE" rows guard the sign through the vehicle sim.
++float World::botDriveSteer(float yaw, float faceYaw) { return core::clampf(wrapPi(yaw - faceYaw) * 1.5f, -1.0f, 1.0f); }
++
+ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
+     Character& pc = o.pawn();
+     const BotSkill& sk = botSkill(b.difficulty);
+diff --git a/src/game/World.h b/src/game/World.h
+index c8bd251..f838597 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1132,6 +1132,7 @@ public:
+     // Kills by AI (bots; [0] Smart, [1] Classic) and how many of them hit a victim facing away (> 90 degrees) - WFC_AIDUEL metrics.
+     long aiKills_[2] = {0, 0}, aiBackKills_[2] = {0, 0};
+     void resetAiKillStats() { aiKills_[0] = aiKills_[1] = aiBackKills_[0] = aiBackKills_[1] = 0; }
++    static float botDriveSteer(float yaw, float faceYaw);   // bot Driving steer law (+ = right turn)
+     bool botIsSmart(int player) const { return player >= 0 && (size_t)player < smart_.size() && smart_[(size_t)player].active; }
+     // Smart squads: a participant's squad id (fixed by player order, or the squad joined at its last respawn with squadDynamic), the
+     // squad's leader (its first live member by player order, -1 when none), and the squadDynamic re-assignment at a respawn.
+diff --git a/src/game/VehicleTests.h b/src/game/VehicleTests.h
+index 24309fc..faca456 100644
+--- a/src/game/VehicleTests.h
++++ b/src/game/VehicleTests.h
+@@ -5,4 +5,7 @@
+ namespace game {
+ void runVehicleTests();
+ int runChassisTests(const std::string& verticalSliceRoot);
++// A boosting (Driving) vehicle on a flat floor at 25 m/s, steered every step by steer(yaw, targetYaw) toward a target errRad off its
++// heading: seconds until the error is halved, or -1 if not within 2 s (BOTTEST guards the bot steer sign with it).
++float driveSteerHalfTime(float errRad, float (*steer)(float yaw, float targetYaw));
+ } // namespace game
+diff --git a/src/game/VehicleTests.cpp b/src/game/VehicleTests.cpp
+index e354aa8..cd62a0c 100644
+--- a/src/game/VehicleTests.cpp
++++ b/src/game/VehicleTests.cpp
+@@ -82,6 +82,22 @@ float hspeed(const Character& c) { return std::sqrt(c.velocity().x * c.velocity(
+ 
+ } // namespace
+ 
++float driveSteerHalfTime(float errRad, float (*steer)(float, float)) {
++    CollisionWorld w = makeWorld(0, 0, 0);
++    Sim s(&w, 1.3f);
++    MoveIntent b; b.wantBoost = true;
++    s.step(b, 60);
++    if (!s.c.vehicleState().driving) return -1.0f;
++    s.c.velocity() = core::forwardFromYawPitch(s.c.yaw(), 0.0f) * 25.0f;
++    const float target = s.c.yaw() + errRad;
++    for (int k = 1; k <= 120; ++k) {
++        MoveIntent in = b; in.faceYaw = target; in.steer = steer(s.c.yaw(), target);
++        s.step(in);
++        if (std::fabs(std::remainder(s.c.yaw() - target, 6.2831853f)) <= 0.5f * std::fabs(errRad)) return k * s.dt;
++    }
++    return -1.0f;
++}
++
+ void runVehicleTests() {
+     namespace cfg = core::config;
+     MoveIntent idle;
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 0bf308a..e38198c 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5372,6 +5372,14 @@ void Application::runBotTest() {
+     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
+     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
+     int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
++    // DRIVE rows: the bot Driving steer law turns a boosting vehicle toward its target (a sign inversion anywhere between the steer law
++    // and the Driving integrator steered every Driving bot away from its heading error until 2026-10-16).
++    for (float deg : {30.0f, -30.0f}) {
++        const float t = game::driveSteerHalfTime(deg * 0.0174533f, &game::World::botDriveSteer);
++        char buf[160];
++        std::snprintf(buf, sizeof buf, "DRIVE a Driving bot halves a %+.0f deg heading error within 1 s (%.2f s)", deg, t);
++        check(t > 0.0f && t <= 1.0f, buf);
++    }
+     // Behaviour-exists rows (grenades, killstreak rewards) count over the phases: a single 120 s phase-2 match ranges 1-16 grenades and
+     // 0-7 rewards by seed (WFC_SEED sweep 2026-10-16), so a per-phase count failed by match luck.
+     int grenadesAll = 0, streaksAll = 0;
