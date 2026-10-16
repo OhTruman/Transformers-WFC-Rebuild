@@ -1,0 +1,12 @@
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -394,6 +394,9 @@
+                     $twin = RealTwin $n
+                     if (Test-Path -LiteralPath ($raw + '.xpr')) { $note = 'compressed twin shipped (.xpr)' }
+                     elseif ($raw -match '\.wav$' -and (Test-Path -LiteralPath ($raw.Substring(0, $raw.Length - 4) + '.fsb'))) { $note = 'FSB bank shipped (.fsb)' }
++                    # the HD loader's dev-layout fallback (WfcPipeline: <root>/pack/hd_index.json, opened only when <root> has no
++                    # hd_index.json): a package without the HD pack (--no-hd) makes this probe; the dev tree has the file
++                    elseif ($n -match '/assettools/out/hd/pack/hd_(pbr_|modern_)?index\.json$') { $note = 'optional probe (the HD loader''s dev-layout fallback; the package ships no HD root index)' }
+                     elseif ($twin -and (Test-Path -LiteralPath $twin)) { $fail = $true; $note = 'omission: the full tree has it' }
+                     else { $note = 'optional probe (in neither tree)' }
+                 }
