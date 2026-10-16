@@ -1587,3 +1587,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (robots darker under cover); effect-light calibration batch (gain 1 / 2 / 3) next, then default-on in Realistic.
   DECISION RULE: if the next sheet still reads "same game", X3 volumetrics move INTO package 6 (quality over date) and
   X7 is reconsidered; X3 design written in the gaps. Death bodies a6e9ea67 (archive-build fix); mines closed dc5f5a61.
+  2026-10-16 07:59 FX RUNTIME DATA SWITCHED (all 10 MP maps; Systems regen from AssetTools' decode fix): 2,007 LODs
+  identical, 1,076 Absolute=false, 13 Orbit completed, 3 VelOverLife (homing-rocket embers now fly; crop
+  docs/handoff/fx_regen/); backup work/render_backup_pre_fxregen_*. 128-voice ExtendedPlayers merged b9e6f3d8.
+  Rendering: X3 design 6c703b6a (~2 d, ~1 ms, 30 MB), ability_render_assets loud-fail ee921d14; batch 4 (effect lights
+  on, specular gain, grade round 3, bounce 2.5, X5-1) on the a6e9ea67 export; sheet + score decide X3. Mine detonation
+  colour = authored HDR yellow (data), not a bug; renderer items for Rendering: HDR scene-target clamp point, soft
+  particles for all translucent particles. Gameplay: corner-anticipation arm 1 null; diagnostic NAVQ split running.
+  AssetTools: D5 + A5 reruns recover all meshes; A5_TRY doc b9e6f3d8; A1 rerun in progress, then D3B_IAC.
