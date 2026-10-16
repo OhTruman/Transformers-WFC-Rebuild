@@ -1803,3 +1803,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   headlights on) and rtcheck.defaults 14 / 14 (tone on, lmspecgain 2.5, tlgain 2.0, gisat 2.5, giemissive 1.0 at that
   head, charao 3.0, softparticles, tiled, rows 1 / 8 / 6 / 2 / 5, origspec); the run's exit 1 = the HD-less dry-run
   probe (verify predates the probe patch). Rendering: identity on int_cand5 -> push 8d50190a (item 7) -> RESUME.
+  2026-10-16 13:12 CAMPAIGN PREP DOCS merged 97e53598 (AssetTools): the 15 "no decomp" Kismet classes are data-only
+  nodes (behaviour in decompiled handlers: TnAiController.On*, TnInteractBase, TnTogethernessVolume, boss / tank
+  pawns; TnSeqAct_MissionComplete = SeqAct_MoviePlayer for the chapter outro FMV); streaming runtime design note
+  (initial state, activation, flush, checkpoint restart, CINE). Grid fix (numpy CSR grid, identical candidate sets)
+  in its 10-map byte-identical gate; then m05 + structure audit alone on all 10 chapters (~1.5-2 h).
