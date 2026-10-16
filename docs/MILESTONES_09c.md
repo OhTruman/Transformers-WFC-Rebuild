@@ -2158,3 +2158,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cost ~0.7-0.9 ms p50 at 1440p, ~15 MB. Eye bar: shafts / depth, contrast >= 1.28 / 1.30 or it does not ship.
   REBOOT PLANNED ~21:30 (after the gate + verify; pool 6.9 GB) so the overnight exe runs start clean; all sessions
   restart; lanes commit WIP + resume notes by 21:15. Clocks: lanes = mine now.
+  2026-10-16 18:40 CONTAMINATION (Integration's error): I told Rendering 'compiles are fine now' at ~18:33 while the
+  respin regress hold was on; their X3 build ran ~18:33-18:39. Experimental reruns the overlapped maps inside the
+  hold. Rendering's gate now stops on PERF_HOLD. X3 CODE COMPLETE + building (one D3D12 shader, inject + temporal /
+  integrate modes; 8x8 slice atlas through the existing u0 share, private history ping-pong; GL apply at each
+  pixel's depth; rtdef env statics survive release()); first runs after the reboot.
