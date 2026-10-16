@@ -1290,6 +1290,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a5f53923: captures vs 30b2fa74 Off 14 / 25, Faithful 14 / 25, Realistic 25 / 25 (expected sets), NOINTERACT
   determinism pair 0 / 25, SIMHASH identical; R4 leak rows done. Target for the cull fix: within +0.05 ms p90 of base;
   Experimental reruns the same 3-arm A/B on the merged head; Systems adds a game-side view-cone cull as a small patch.
+  2026-10-16 02:02 a5f53923 rows 2-3 PASS (Experimental, Rust, Classic, SIMHASH identical throughout): captures vs 30b2fa74 - Off
+  14 / 25 and Faithful 14 / 25 (the same shots: the smoke / flash order, soft fade and barrier changes, then from 900
+  the transient lights lighting nearby surfaces and vehicles, up to 585 k px), Realistic 25 / 25 (items 1-4 + the
+  lights); NOINTERACT on-arm determinism 25 / 25 identical; R4 leak rows PASS (GPU dedicated plateau ~2.7 GB from
+  change 2, +82 MB over the last 3; handles flat). NOTE: at shot 1140 a muzzle light turns a dark pillar next to the
+  camera almost fully bright beige (frame mean luminance 38.3 -> 53.1), possibly overbright: Systems verifies the
+  authored brightness / radius / exponent vs the original, Rendering verifies linear-before-tonemap and no double
+  brightness scale; a correction rides with the cull fix. Row 4 (perf baseline) waits for the fix head.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
