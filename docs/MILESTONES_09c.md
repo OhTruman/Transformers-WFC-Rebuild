@@ -2037,3 +2037,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   order / percentage check + regen of the 10 MP maps if a decode bug (package 6 candidate: look + cost). This bug is
   in base AND head (same data), so it is not the regress delta; the delta = tiled gate + gib trails (+ missing UE3 FX
   culling, Systems coding it). Systems' RT-off verify rehearsal on 4078e47b: PASS; c85cc2ad package deleted (F: 140 GB).
+  2026-10-16 16:38 FX CULLING CLOSED for package 6 (Systems): the original authors no MaxDrawDistance (CullDistance 3 km
+  on 23 PSCs = never) and SecondsBeforeInactive = the 1.0 s engine default; our runtime already frustum-culls FX
+  draws (WfcMapFx.cpp:1940-1960, WFC_FXCULL), so SecondsBeforeInactive saves only sim CPU (< 0.1 ms of 0.25) ->
+  package 7 polish (WFC_FXINACTIVE=0). The respin's FX lever = the LOD data. LOD DECODE CHECK REASSIGNED to Systems
+  (AssetTools' session blocked on a permission prompt): original ParticleLODLevel bytes via ue3obj vs decoded, bug
+  hunt in a copy of pstream.py, regen into their work/, before / after pair counts + sprite A/B.
