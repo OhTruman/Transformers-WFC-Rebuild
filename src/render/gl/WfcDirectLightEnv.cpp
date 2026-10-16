@@ -243,6 +243,16 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
             I = intensityAt(l, origin); visTarget = 1.0f;
         }
         core::Vec3 color = l.colorByte * I;   // LightColor / 255 * IntensityAt
+        {   // (v3 row 8, Realistic with the RT lightmap) a lamp lights the characters with the scale it lights the world with
+            // (Systems' fit_lights scale per light class, giLightCal_): one energy basis, no robot brighter or dimmer than
+            // the wall beside it. WFC_RT_CHARLAMPCAL=0 off.
+            static const bool calOff = [] { const char* e = std::getenv("WFC_RT_CHARLAMPCAL"); return e && e[0] == '0'; }();
+            if (!calOff && l.type != 2 && rtMode_ == 2 && giActive()) {
+                auto cal = giLightCal_.find(li);
+                const float base = l.color.x + l.color.y + l.color.z;
+                if (cal != giLightCal_.end() && base > 1e-6f) color = color * ((cal->second[0] + cal->second[1] + cal->second[2]) / base);
+            }
+        }
         auto& ls = st.lights[li];             // SmoothAndRank: linear, no overshoot, inside updates only
         float vis = visTarget;
         if (ls.hasVis) {
