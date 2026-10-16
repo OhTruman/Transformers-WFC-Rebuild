@@ -1669,3 +1669,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cube term and adds back only the un-matched env; item 6's regen restores it; test first), then Faithful identity,
   push of the 7 commits, Molten arms, x3pair. Gorge vbake PNGs fail to decode at runtime (R1 sun share falls back):
   Systems / AssetTools check format vs truncation. User sent pick_510 (Gorge sheet).
+  2026-10-16 11:22 RENDERING ROWS MERGED (Faithful identity 5 / 5 + SIMHASH on the 56a9beca exports): X1 tone curve
+  f486c10a, X2 specular gain a6f5c878, X4 coloured bounce + emissive hook 6acb65ad, X5-1 character AO cabb416b, row 4
+  transient gain 2 03aa1294, soft particles 70315129, item 6 + RENDERING_MOLTEN_PLAN 02c743cc; built clean (RT
+  shaders, wfcPbrEnvEnergy in the exe). materials_pbr regen (Systems, energy-matched, 10 maps, oracle 0) switched into
+  work/render with it (backup kept). ENHANCED DARKNESS IS NOT DATA (Gorge: Enhanced old data +8.8 / 1.04, new data
+  +8.1 / 1.04 vs Realistic +12.6 / 1.23): Rendering isolates HD textures / Modern shading / RT with 3 arms (top item).
+  Gameplay ground-snap: both traps fixed but Classic Streets / Molten stucks up (z ~2) -> split (1) / (2); (2) refined
+  to "land while rising only on a surface the previous bottom was above"; underside test by enclosure proposed.
+  PACKAGE_6_HEAD.md refreshed b85227e7 (30 placeholders); m6pbr manifest ca6b94ed.
