@@ -1,0 +1,70 @@
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -48,12 +48,12 @@
+ // Vehicle headlights: INVENTED PLACEMENT (the original authors none; Realistic-only addition, Integration 2026-10-16).
+ struct HeadlightDef { const char* chassis; const char* bone; float pos[3]; float dir[3]; float color[3]; };
+ #include "game/VehicleHeadlights.inc"
+-// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, WFC_FXLIGHTS=1 opt-in until Rendering
+-// calibrates. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
++// RT-era effect lights (NOT original lights; SYSTEMS_RT_LIGHT_HOOKS.md): Realistic only, on by default there (Integration
++// 2026-10-16, after Rendering's calibration); WFC_FXLIGHTS=0 turns them off. Off / Faithful never add or submit one. Effect templates (explosions, impact squibs, boost, pickup FX) and per-chassis boost sockets.
+ struct FxLightDef { const char* tmpl; float color[3]; float radius, falloff, duration; };
+ struct BoostLightDef { const char* chassis; const char* bone; float pos[3]; float color[3]; float radius, falloff; };
+ #include "game/FxLights.inc"
+-bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return e && std::string(e) == "1"; }(); return on; }
++bool fxLightsOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXLIGHTS"); return !e || std::string(e) != "0"; }(); return on; }
+ const FxLightDef* fxLightFor(const std::string& tmpl) {
+     for (const FxLightDef& d : kFxLights) if (tmpl == d.tmpl) return &d;
+     return nullptr;
+@@ -1525,7 +1525,9 @@
+ }
+ 
+ void World::fxLight(const std::string& tmpl, const core::Vec3& pos) {
+-    if (!fxLightsOn()) return;
++    // Realistic only, decided at spawn from the last drawn frame's mode: in Off / Faithful no effect light even enters the live
++    // list (its expiry would reorder the original muzzle / death lights there).
++    if (!fxLightsOn() || fxRtMode_ != 2) return;
+     const FxLightDef* d = fxLightFor(tmpl);
+     if (!d || d->duration <= 0.0f) return;   // continuous rows (boost, pickups) are submitted per frame in draw
+     LiveTransientLight l;
+@@ -3876,7 +3878,13 @@
+     // pawn in vehicle form (not mid-transform), one spot per lamp of kHeadlights following the body bone, behind the same view
+     // cull as the transient lights. WFC_HEADLIGHTS=0 off. Spot shape: Rendering's first pass (18 / 32 deg, 25 m, falloff 2).
+     unsigned hlSubmitted = 0;
++    fxRtMode_ = r.rayTracingMode();   // effect lights spawned before the next draw follow this frame's mode
+     static const bool kHeadlightsOn = [] { const char* e = std::getenv("WFC_HEADLIGHTS"); return !e || std::string(e) != "0"; }();
++    if (fxRtMode_ == 2) {             // verify_slim's RT gate requires both on in a default Realistic run (package 6 default flip)
++        static bool said = false;
++        if (!said) { said = true; LOG_INFO("RT-era lights (first Realistic frame): effect lights %s, headlights %s", fxLightsOn() ? "on" : "off",
++                                           kHeadlightsOn ? "on" : "off"); }
++    }
+     if (kHeadlightsOn && r.rayTracingMode() == 2) {
+         constexpr float kRadius = 25.0f, kFalloff = 2.0f, kMaxDist = 150.0f;
+         static const float kCosIn = std::cos(18.0f * core::PI / 180.0f), kCosOut = std::cos(32.0f * core::PI / 180.0f);
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1430,6 +1430,7 @@
+     std::vector<LiveTransientLight> transientLights_;
+     int unkeyedDeaths_ = 0;
+     int fxLightSerial_ = 0;
++    mutable int fxRtMode_ = 0;      // (set in the const draw) the last drawn frame's ray-tracing mode (2 = Realistic): effect lights are added only then
+     // RT-era effect light (WFC_FXLIGHTS=1; Realistic only at submit): the light of an effect template the game just spawned
+     // at pos (kFxLights, from SYSTEMS_RT_LIGHT_HOOKS: explosions, impact squibs). Not an original light.
+     void fxLight(const std::string& tmpl, const core::Vec3& pos);
+--- a/tools/package/verify_slim.ps1
++++ b/tools/package/verify_slim.ps1
+@@ -527,6 +527,14 @@
+                 }
+                 if (-not $ok) { $rtGate.Status = 'FAIL' }
+             } else { $rtGate.Lines += 'INFO rtcheck.r1: the package ships no MP_IAC_Streets\vbake (Realistic has no sun swap)' }
++            # Package 6 default flip (Systems SYSTEMS_FXLIGHTS_DEFAULT_ON): Realistic turns the RT-era effect lights and the vehicle
++            # headlights on by default (WFC_FXLIGHTS=0 / WFC_HEADLIGHTS=0 turn them off; Off / Faithful never have them). The gate's
++            # Realistic run (no WFC_FXLIGHTS / WFC_HEADLIGHTS set) must log both on at its first Realistic frame.
++            $rl2 = if (Test-Path -LiteralPath $rtLogPath) { Get-Content -LiteralPath $rtLogPath } else { @() }
++            $rtl = $rl2 | Select-String -Pattern 'RT-era lights \(first Realistic frame\): effect lights (on|off), headlights (on|off)' | Select-Object -First 1
++            $rtlOk = $rtl -and $rtl.Matches[0].Groups[1].Value -eq 'on' -and $rtl.Matches[0].Groups[2].Value -eq 'on'
++            $rtGate.Lines += "$(if ($rtlOk) { 'PASS' } else { 'FAIL' }) rtcheck.rtlights: $(if ($rtl) { $rtl.Line.Trim() } else { 'no RT-era lights line in the Realistic run (an exe before the package 6 default flip)' })"
++            if (-not $rtlOk) { $rtGate.Status = 'FAIL' }
+             Write-Host "[Ray Tracing] $($rtGate.Status): $(($rtGate.Lines + $rtGate.Note | Where-Object { $_ }) -join '; ')"
+         }
+     }
