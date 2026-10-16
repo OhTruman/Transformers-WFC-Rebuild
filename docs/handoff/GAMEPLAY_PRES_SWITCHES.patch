@@ -1,5 +1,17 @@
+diff --git a/src/game/World.h b/src/game/World.h
+index b759835..55c1cf9 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -676,6 +676,7 @@ public:
+         const render::MeshData* hull = nullptr; core::Vec3 hullPos{}, hullVel{}; float hullAge = 0.0f, hullLife = 0.0f;
+         float hullDefragDelay = 0.0f, hullDefragTime = 4.5f; bool hullRest = false;
+         unsigned rng = 1u;
++        bool retired = false;                             // dissolving early under the presentation cap (not counted)
+         float frand() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xffffffu) / 16777216.0f; }
+     };
+     struct CorpseRequest {
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index a748401..4af3e85 100644
+index a748401..d52af87 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -6008,7 +6008,8 @@ void World::tickKillstreakItems(float dt) {
@@ -21,3 +33,26 @@ index a748401..4af3e85 100644
      if (!mdl || !mdl->valid()) { spawnDeathLight(pawn.chassis().id, pawn.moveForm() == Form::Vehicle, damageType, pawn.actorLocation()); return; }   // no body: the light alone
      CorpseRequest q;
      q.player = player; q.owner = owner; q.model = mdl; q.world = pawn.meshMatrix(pawn.form()); q.pose = pawn.displayPose();
+@@ -6866,6 +6869,22 @@ void World::requestCorpse(const Character& pawn, int player, int owner, bool ai,
+ 
+ void World::spawnCorpse(const CorpseRequest& q) {
+     if (corpses_.size() >= 32) corpses_.erase(corpses_.begin());   // a cap for very large matches (oldest first)
++    {   // Presentation cap: 10 simultaneous death presentations in matches over 10 players (the original's maximum), oldest retiring first.
++        static const char* capEnv = std::getenv("WFC_CORPSECAP");
++        const int cap = capEnv ? std::max(0, std::atoi(capEnv)) : (match_.players().size() > 10 ? 10 : 0);
++        if (cap > 0) {
++            int active = 0;
++            for (const Corpse& o : corpses_) active += !o.retired;
++            for (Corpse& o : corpses_) {
++                if (active < cap) break;
++                if (o.retired) continue;
++                o.retired = true; --active;
++                o.gibbed = true;                                                    // the body hides (no gib burst)
++                for (CorpseChunk& k : o.chunks) { if (k.fx >= 0) { fxStepStop(k.fx); k.fx = -1; } k.age = std::max(k.age, 4.5f); }
++                if (o.hull) { o.hullDefragDelay = std::min(o.hullDefragDelay, o.hullAge); o.hullLife = std::min(o.hullLife, o.hullAge + 0.5f); }
++            }
++        }
++    }
+     Corpse c;
+     c.player = q.player; c.owner = q.owner; c.model = q.model; c.world = q.world; c.start = q.pose; c.vehicle = q.vehicle; c.jet = q.jet;
+     c.pos = q.pos; c.vel = q.vel; c.chassis = q.chassis;
