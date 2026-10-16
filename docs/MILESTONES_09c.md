@@ -1720,3 +1720,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   on the export. Batch 8 (Molten emissive 1 / 4 with the fix, X3 v2 pairs) after the sheet; X4 re-scored after.
   Gameplay ground-snap: combined refined version (slope filter + rise rule + 2.5 m clearance underside test, floors
   >= 3.94 m clear) in its ~3 h gate.
+  2026-10-16 12:11 SHEET on int_cand3 (Release, Enhanced fix; Experimental; all checks pass incl. 498 modern maps):
+  Realistic | Realistic + Enhanced vs Off (mean / brighter / contrast / %): Streets 27.4 / +18.2 / 1.17 / 43 % | 1.15;
+  Gorge 22.8 / +17.6 / 1.44 | 1.47; Debris 25.6 / +8.2 / 1.15 | 1.13; Rust 26.5 / +19.5 / 1.29 | 1.29; Molten 23.8 /
+  +20.1 / 1.50 | 1.48; ALL 1.31 | 1.30 (batch 4: 1.27 | 1.05; proof 0.99). ENHANCED FIXED. User sent pick_509 (Molten).
+  Authored views INVALID again (direct-boot runs took size / RT / HD from env only; fixed to write the profile):
+  rerun on Rendering's post-cull-fix candidate at their boundary. Rendering RESUMED for batch 8. A4_ORB doc 6c2a9548.
