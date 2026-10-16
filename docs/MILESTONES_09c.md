@@ -1911,3 +1911,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   int_eye / int_base2; Systems package 3 tree + scratch builds; Experimental old archives / eyepass runs;
   AssetTools proof trees; Gameplay old int_* trees); hd_dev_full, push_m6, b0-31, packages 4 + 5 untouched.
   int_cand6 staged for the confirming sheet (GO on Rendering's identity pass); eyepass saves rt_defaults.txt.
+  2026-10-16 14:14 EYE-PASS FIX ROWS MERGED 7f3cf732 (Rendering 18483783: sun-share cap 0.75 WFC_RT_SUNSHAREMAX, bright-
+  highlight hue fade (very bright light goes to white), tone / bloom keys in WfcRtDefaults.h + on the defaults line:
+  sunsharemax, tonekey, toneadapt, tonegain, tonesat, tonecontrast, tonebloom, bloommax). Identity on int_cand6 Off 5
+  / 5, Faithful 5 / 5, SIMHASH equal. Confirming sheet RUNNING on int_cand6 (Experimental). Systems' paired table
+  patch requested against 7f3cf732; then the final head is named and BUILD_ONLY + the gate + the package build start.
