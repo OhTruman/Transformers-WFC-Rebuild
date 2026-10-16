@@ -1995,3 +1995,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   85, vbake 10, failures 0, REFRESH READY; NOPROMOTE). GATE BLOCK GO at 15:31: package-gate 4078e47b 7cd22027 (~3 h;
   timed regress + 1b first under PERF_HOLD; machine quiet: CPU 4 %). Systems idle under the hold; RT-off verify rows
   after the hold, RT + HD runtime rows after the block; promote + hand-over on PASS + the user's word.
+  2026-10-16 15:39 GATE REPORT ROW (Berth, RT off, Classic, same match): p90 base 2.16 -> head 3.99 ms (lights-off arm
+  3.99; effect lights +0.05); draws +4 % (dyn 122 -> 176, fx 69 -> 122), slow-frame GPU 2.97 ms (world 1.11) = a per-
+  pixel cost on the OFF path (package 5's regress was 3.08 vs 3.12 here) -> BISECT after the block: WFC_TLTILED=0,
+  WFC_SOFTPARTICLES=0, WFC_RT_TONE=0, death bodies / mines off (switch from Gameplay), DATA arms (pre-FX-regen
+  map_fx_runtime, pre-item-6 materials). Rendering asked to rank causes during the hold. Hand-over may slip if a code
+  fix + re-gate is needed.
