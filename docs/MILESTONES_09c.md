@@ -1199,6 +1199,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   for the user's OK. RULES: perf rows under NOINTERACT form a new reference series (tables carry a run-conditions line,
   Experimental b1851612); the 30b2fa74 RT baseline is labelled pre-NOINTERACT; package 5's rows end with a re-recorded
   rt-perf-baseline under NOINTERACT as the new reference; A/Bs always run both arms under identical flags.
+  2026-10-16 00:54 TRANSIENT LIGHTS MERGED 76b077e8 (Systems c1c968e8: SYSTEMS_MUZZLE_LIGHTS + SYSTEMS_DEATH_LIGHTS rebased to
+  2873a071): muzzle-flash lights with the original values; death lights from one hook in World::onPawnDeath (the
+  killing damage type's DamageDeathType, 34 lit types, no headshots; robot death 2 s white ramp; car / truck / tank
+  death 8 s purple; jets none; an approximation documented in SYSTEMS_DEATH_LIGHTS.md, the real picker in
+  CAMPAIGN_BACKLOG.md); WFC_NOTRANSIENTLIGHTS=1 off. Headless (Release + PGO, seed 7): BOTTEST 44 / 44, ENGAGE 3 / 3, 89
+  death lights (32 / 24 / 33); SIMHASH untouched. 76b077e8 = PACKAGE-5 CANDIDATE HEAD: Systems' windowed lights check
+  (slot B, Rendering paused) -> Experimental's rows (regress vs 30b2fa74, captures, leak, rt-perf-baseline under
+  NOINTERACT) -> after the D complete freeze: Systems builds package 5 -> verify -> FAST -> reboot reminder -> promote.
+  Rendering's robots-in-reflections joins if it lands before the build.
   15:31 BARRIER SPLIT (Systems): 56290b7d Debug = Release (the same opaque wall: not build type, not UB); rt2 12bda047
   Release + the kit = a flat pink panel; Rendering's own scene (work/barrier_seq.png, a different local character) = a
   proper see-through grid with the scene behind it. Likely a STAGING artefact: the hook forces requestBarrier on a
