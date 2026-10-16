@@ -8239,6 +8239,12 @@ void Pipeline::endFrame() {
     flushDynQueue();
     shadowGpuReport();                                     // WFC_SHADOWGPU (diagnostics)
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
+    rtPrevValid_ = false;                                // (item 3) the finished HDR scene for the next frame's reflection hits
+    if (rtMode_ == 2 && rtShadowAoOn() && rtTargets_.prevColor && colorTex_ && CopyImageSubData && !warmup_) {
+        CopyImageSubData(colorTex_, GL_TEXTURE_2D, 0, 0, 0, 0, rtTargets_.prevColor, GL_TEXTURE_2D, 0, 0, 0, 0, vpW_, vpH_, 1);
+        std::memcpy(rtPrevColVP_, viewProj_.m, sizeof rtPrevColVP_);
+        rtPrevValid_ = true;
+    }
     {
         counts_.materials = frameMatCount_;
         counts_.noProgramMats.assign(frameNoProg_.begin(), frameNoProg_.end());

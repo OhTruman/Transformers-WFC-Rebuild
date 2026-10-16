@@ -607,6 +607,7 @@ private:
     // item 2B: the characters' lamp shadows on the world - the world pass writes its decoded lightmap irradiance to R1's
     // second target (uRtLumOn), the composite darkens a world pixel by each shadow light's share where a character blocks it
     bool rtLampShadowsWorld() const;
+    float rtPrevColVP_[16] = {}; bool rtPrevValid_ = false;   // (item 3) the view-projection of RtTargets::prevColor
     int rtLampWorldN_ = 0;                              // (diagnostics) item 2B's lights in the last composite
     bool rtMrtWorld() const { return rtShadowLightsOn() && r1Map_; }   // (the world pass keeps the second target bound in Realistic)
     std::unordered_map<int, std::array<float, 4>> giLightCal_;   // light index -> its calibrated colour (rgb), w: 1 = linear falloff

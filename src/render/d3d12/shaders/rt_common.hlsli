@@ -22,6 +22,7 @@ StructuredBuffer<float2> HitUv1 : register(t11);
 StructuredBuffer<uint> HitTriSub : register(t12);
 StructuredBuffer<float4> HitSub : register(t13);      // 8 per sub: pages, lightmap UV transform, 3 scales, albedo, emissive, 0
 Texture2D<float4> Lightmaps[512] : register(t0, space1);
+Texture2D<float4> PrevColor : register(t16);         // (item 3) the previous frame's HDR scene (GL rows = these rows)
 StructuredBuffer<float4> ShadowLights : register(t0, space4);   // (item 2) per ring slot 4 lights: xyz position, w radius
 
 #ifndef RT_NO_FRAME_CB                               // (rt_gi.hlsl declares its own constants)
