@@ -491,7 +491,7 @@ void main() {
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
         vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
-        o.DiffuseColor = min(o.DiffuseColor, vec3(1.0));                  // (a base colour is a reflectance: <= 1)
+        o.DiffuseColor = min(o.DiffuseColor, vec3(@DIFFMAX@));                  // (a base colour is a reflectance: <= 1)
         c += o.DiffuseColor * (1.0 - metal) * L;
         float rough = wfcPbrRoughness(o.SpecularPower), a = rough * rough;
         float aL = clamp(a + kPbrLmLobe, 0.0, 1.0), a2L = aL * aL;
@@ -500,8 +500,22 @@ void main() {
         // (item 6) the lightmap lobes' specular only where the original material had a specular input: a material authored
         // matte (SpecularColor 0: 275 of Streets' 605) stays matte - on Rust the Fresnel sheen on such floors was +19 %
         float specIn = clamp(max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) * @SPECIN@, 0.0, 1.0);
+#ifdef WFC_PBR_ORIGSPEC
+        // the original's directional-lightmap specular (UE3's formula and the material's own SpecularColor / Power, as
+        // Faithful draws it): a fixed-F0 GGX lobe threw away most of the authored specular energy - spec-heavy metal and
+        // rock went dark in Enhanced in every mode
+        {
+            vec3 R = -m.cameraVector + n * (dot(n, m.cameraVector) * 2.0);
+            float SP = o.SpecularPower;
+            vec3 Ls = pow(max(clamp(dot(normalize(n + LMB0), R), 0.0, 1.0), 0.0001), SP) * l0 * uLMScale[0]
+                    + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SP) * l1 * uLMScale[1]
+                    + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SP) * l2 * uLMScale[2];
+            c += o.SpecularColor * Ls;
+        }
+#else
         c += specIn * (wfcPbrSpec(n, V, LMB0, a2L, NoV, F0) * l0 * uLMScale[0] + wfcPbrSpec(n, V, LMB1, a2L, NoV, F0) * l1 * uLMScale[1]
            + wfcPbrSpec(n, V, LMB2, a2L, NoV, F0) * l2 * uLMScale[2]);
+#endif
         vec2 ab = wfcEnvBrdf(rough, NoV);
         // (item 6) wfcPbrEnv = what the original added into its diffuse (its weighted cube term; 0 where it added none),
         // lit by the lightmap as the original's diffuse was; the split-sum BRDF divided by its mean over the view only
@@ -562,7 +576,7 @@ void main() {
         float S = (1.0 - mask) * (1.0 - uDSLS);
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
         vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);
-        o.DiffuseColor = min(o.DiffuseColor, vec3(1.0));
+        o.DiffuseColor = min(o.DiffuseColor, vec3(@DIFFMAX@));
         vec3 ambient = o.DiffuseColor * amb;
         ambient *= 1.0 - metal;
         vec3 direct = vec3(0.0);
@@ -2712,6 +2726,20 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         static const std::string specIn = [] { const char* e = std::getenv("WFC_PBR_SPECIN"); return std::string(e ? e : "3.0"); }();
         at = mainLM.find("@SPECIN@");
         if (at != std::string::npos) mainLM.replace(at, 8, specIn);
+        static const bool origSpec = [] { const char* e = std::getenv("WFC_PBR_ORIGSPEC"); return !(e && e[0] == '0'); }();
+        if (origSpec) { const size_t ma = mainLM.find("uniform sampler2D uLM0;"); if (ma != std::string::npos) mainLM.insert(ma, "#define WFC_PBR_ORIGSPEC\n"); }
+        {   // X2 in Enhanced too: the Realistic programs' extra lightmap specular over the original's term (as the classic main)
+            static const bool lmSpecOffM = [] { const char* e = std::getenv("WFC_RT_LMSPEC"); return e && e[0] == '0'; }();
+            const std::string spec = "            c += o.SpecularColor * Ls;\n";
+            const size_t s = mainLM.find(spec), ma = mainLM.find("uniform sampler2D uLM0;");
+            if (origSpec && rtMode_ == 2 && !lmSpecOffM && s != std::string::npos && ma != std::string::npos) {
+                mainLM.insert(s + spec.size(), "            c += o.SpecularColor * Ls * uRtLMSpec;   // (X2)\n");
+                mainLM.insert(ma, "uniform float uRtLMSpec;   // (X2) the Realistic lightmap specular's extra gain\n");
+            }
+        }
+        static const std::string diffMax = [] { const char* e = std::getenv("WFC_PBR_DIFFMAX"); return std::string(e ? e : "1.0"); }();
+        at = mainLM.find("@DIFFMAX@");
+        if (at != std::string::npos) mainLM.replace(at, 9, diffMax);
     }
     else if (lightmapped && !mainOverride_ && lmSpecBuild_ && !noLmSpec && lit && blend <= 2 &&
         code.find("o.SpecularColor = vec3(0.0);") == std::string::npos) {
@@ -2765,6 +2793,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         static const std::string specInU = [] { const char* e = std::getenv("WFC_PBR_SPECIN"); return std::string(e ? e : "3.0"); }();
         const size_t si = mainUber.find("@SPECIN@");
         if (si != std::string::npos) mainUber.replace(si, 8, specInU);
+        static const std::string diffMaxU = [] { const char* e = std::getenv("WFC_PBR_DIFFMAX"); return std::string(e ? e : "1.0"); }();
+        const size_t dm = mainUber.find("@DIFFMAX@");
+        if (dm != std::string::npos) mainUber.replace(dm, 9, diffMaxU);
     }
     const size_t mainStart = fs.size();
     fs += mainOverride_ ? mainOverride_ : (lightmapped ? (mainLM.empty() ? kFSMainLM : mainLM.c_str()) : mainUber.c_str());
