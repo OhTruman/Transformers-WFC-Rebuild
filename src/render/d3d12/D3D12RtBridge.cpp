@@ -12,6 +12,7 @@
 #include <dxgi1_4.h>
 #include <GL/gl.h>
 
+#include "render/gl/WfcRtDefaults.h"
 #include "render/d3d12/D3D12RtBridge.h"
 #include "render/d3d12/D3D12RtDynamic.h"
 #include "core/Log.h"
@@ -1190,9 +1191,9 @@ private:
             float c2[52] = {};
             std::memcpy(c2, c, sizeof(float) * 48);
             c2[48] = fr.time; c2[49] = fr.pixelSpread;
-            static const bool reflTlOff = [] { const char* e = std::getenv("WFC_RT_REFLTL"); return e && e[0] == '0'; }();   // (v3 row 6 off)
+            const bool reflTlOff = !render::wfc::rtdef::reflTl();   // (v3 row 6 off)
             c2[50] = (fr.prevValid && pcol_.res ? 1.0f : 0.0f) + (reflTlOff ? 0.0f : 2.0f * (float)std::min(fr.transLightN, 4));   // (item 3: the previous frame; v3 row 6: the transient lights)
-            c2[51] = (float)(slot * 16 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
+            c2[51] = (float)(slot * 20 + 8);           // (ring: the slot's prev VP columns; transient lights at -4, their colours at +4)
             list_->SetComputeRoot32BitConstants(0, 52, c2, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             D3D12_GPU_DESCRIPTOR_HANDLE t3 = heap_->GetGPUDescriptorHandleForHeapStart();

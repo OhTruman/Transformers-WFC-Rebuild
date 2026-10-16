@@ -1410,6 +1410,7 @@ private:
     // (X1, Realistic) the tone curve: log-luminance target (128 x 128, mipmapped), the adapted value (1 x 1 ping-pong)
     GLuint toneLumProg_ = 0, toneAdaptProg_ = 0, toneLumTex_ = 0, toneLumFbo_ = 0, toneAdaptTex_[2] = {0, 0}, toneAdaptFbo_[2] = {0, 0};
     int toneIdx_ = 0; bool toneReset_ = true;
+    bool reflTemporal(GLuint cur);       // (item 7) the temporal reflection blend into rtReflPrev_
     bool toneFilmicOn() const;
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;

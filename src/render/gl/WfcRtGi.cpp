@@ -5,6 +5,7 @@
 // tex.rgb x scale), so every lightmapped shader path applies unchanged: sun (soft, R2's cone) + sky + the map's
 // static lights (Systems' fit_lights.json calibration) + bounce (the previous result read at the hit). Vertex-lit
 // (LMT_1D) meshes: one texel per vertex. Realistic's default; WFC_RT_GI=0: the bake.
+#include "render/gl/WfcRtDefaults.h"
 #include "render/gl/WfcPipeline.h"
 #include "render/d3d12/D3D12RtBridge.h"
 #include "assets/Json.h"
@@ -226,7 +227,7 @@ bool Pipeline::rtLampShadowsWorld() const { return rtShadowLightsOn() && giActiv
 // Streets (0-7 % of character draws had it), leaving robots lit by the ambient only, the same in sun and under cover.
 // Faithful / Off keep the original's visibility. WFC_RT_CHARSUN=0 off.
 bool Pipeline::rtCharSun() const {
-    static const bool off = [] { const char* e = std::getenv("WFC_RT_CHARSUN"); return e && e[0] == '0'; }();
+    const bool off = !rtdef::charSun();
     return !off && rtMode_ == 2 && rtShadowAoOn() && !rtFailed_ && rtSunLight_ >= 0;
 }
 
@@ -373,9 +374,9 @@ void Pipeline::giSetup() {
     J.lightSize = lightSize;                              // (item 5: soft lamp shadows; 0 = hard)
     // X4: the bounce saturation (2.5: the albedos are greyish and the bounce a small share of the light - 1.6 changed 0.4 % of pixels; quality over the bake's flat bounce,
     // per the user's 'colour cast upon one another'). WFC_RT_GISAT=1 the albedo's own colour.
-    static const float bounceSat = [] { const char* e = std::getenv("WFC_RT_GISAT"); return e ? std::max(0.0f, (float)std::atof(e)) : 2.5f; }();
+    const float bounceSat = rtdef::giSat();
     J.bounceSat = bounceSat;
-    static const float emissiveGain = [] { const char* e = std::getenv("WFC_RT_GIEMISSIVE"); return e ? std::max(0.0f, (float)std::atof(e)) : 4.0f; }();
+    const float emissiveGain = rtdef::giEmissive();
     J.emissiveGain = emissiveGain;   // (Molten plan a: emissive surfaces light their surroundings; per-map tuning pending)
     // the GI arrays (the MDI rows sample arrays): RGBA16F, one level, layer for layer as the lightmap arrays
     constexpr GLenum kArr = 0x8C1A;
@@ -641,7 +642,7 @@ bool Pipeline::giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const {
     // (v3 row 5) no usable corner (a character beside a wall / in a doorway, where the corners sit inside geometry): the
     // usable probes within 2 cells, inverse-distance weighted, so the character still takes the traced coloured bounce
     // instead of falling back to the bake's ambient. WFC_RT_PROBEFILL=0 off.
-    static const bool fillOff = [] { const char* e = std::getenv("WFC_RT_PROBEFILL"); return e && e[0] == '0'; }();
+    const bool fillOff = !rtdef::probeFill();
     static long long calls = 0, corner = 0, filled = 0;
     ++calls;
     if (wsum >= 1e-4f) ++corner;

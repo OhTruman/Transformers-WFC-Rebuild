@@ -17,6 +17,7 @@
 // shadow factor (DynamicShadowLuminanceScale shader math UNKNOWN) -> direct lights keep the CONFIRMED
 // per-pixel UberLight shading scaled by visibility x crossfade; the ambient term is the renderer's ambient
 // cube (the original builds SH; Streets has no BeastLightEnvironmentVolume probes).
+#include "render/gl/WfcRtDefaults.h"
 #include "render/gl/WfcPipeline.h"
 #include "core/Log.h"
 
@@ -246,7 +247,7 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         {   // (v3 row 8, Realistic with the RT lightmap) a lamp lights the characters with the scale it lights the world with
             // (Systems' fit_lights scale per light class, giLightCal_): one energy basis, no robot brighter or dimmer than
             // the wall beside it. WFC_RT_CHARLAMPCAL=0 off.
-            static const bool calOff = [] { const char* e = std::getenv("WFC_RT_CHARLAMPCAL"); return e && e[0] == '0'; }();
+            const bool calOff = !rtdef::charLampCal();
             if (!calOff && l.type != 2 && rtMode_ == 2 && giActive()) {
                 auto cal = giLightCal_.find(li);
                 const float base = l.color.x + l.color.y + l.color.z;
