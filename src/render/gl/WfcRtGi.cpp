@@ -632,6 +632,34 @@ bool Pipeline::giProbeAt(const core::Vec3& p, core::Vec3 cube[6]) const {
                 for (int k = 0; k < 6; ++k) cube[k] = cube[k] + core::Vec3{v[k * 4], v[k * 4 + 1], v[k * 4 + 2]} * w;
                 wsum += w;
             }
+    // (v3 row 5) no usable corner (a character beside a wall / in a doorway, where the corners sit inside geometry): the
+    // usable probes within 2 cells, inverse-distance weighted, so the character still takes the traced coloured bounce
+    // instead of falling back to the bake's ambient. WFC_RT_PROBEFILL=0 off.
+    static const bool fillOff = [] { const char* e = std::getenv("WFC_RT_PROBEFILL"); return e && e[0] == '0'; }();
+    static long long calls = 0, corner = 0, filled = 0;
+    ++calls;
+    if (wsum >= 1e-4f) ++corner;
+    else if (!fillOff) {
+        for (int r = 1; r <= 2 && wsum < 1e-4f; ++r)
+            for (int dz = -r; dz <= r + 1; ++dz)
+                for (int dy = -r; dy <= r + 1; ++dy)
+                    for (int dx = -r; dx <= r + 1; ++dx) {
+                        const int x = i0[0] + dx, y = i0[1] + dy, z = i0[2] + dz;
+                        if (x < 0 || y < 0 || z < 0 || x >= giProbeDims_[0] || y >= giProbeDims_[1] || z >= giProbeDims_[2]) continue;
+                        const auto it = giProbeCell_.find(((uint32_t)z * (uint32_t)giProbeDims_[1] + (uint32_t)y) * (uint32_t)giProbeDims_[0] + (uint32_t)x);
+                        if (it == giProbeCell_.end() || !giProbeOk_[it->second]) continue;
+                        const float ex = (float)x - q[0], ey = (float)y - q[1], ez = (float)z - q[2];
+                        const float w = 1.0f / (0.25f + ex * ex + ey * ey + ez * ez);
+                        const float* v = &giProbes_[(size_t)it->second * 24];
+                        for (int k = 0; k < 6; ++k) cube[k] = cube[k] + core::Vec3{v[k * 4], v[k * 4 + 1], v[k * 4 + 2]} * w;
+                        wsum += w;
+                    }
+        if (wsum >= 1e-4f) ++filled;
+    }
+    static const bool diag = std::getenv("WFC_PROBEDIAG") != nullptr;
+    if (diag && calls % 5000 == 0)
+        LOG_INFO("PROBEDIAG: %lld lookups, %.1f %% from the corners, %.1f %% filled from neighbours, %.1f %% the bake's ambient",
+                 calls, 100.0 * corner / calls, 100.0 * filled / calls, 100.0 * (calls - corner - filled) / calls);
     if (wsum < 1e-4f) return false;
     for (int k = 0; k < 6; ++k) cube[k] = cube[k] * (1.0f / wsum);
     return true;
