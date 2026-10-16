@@ -1020,6 +1020,14 @@ void World::botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in) {
     if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
 }
 
+// The victim's death presentation for a bot death that despawns at once (KillZ fall, the stranded suicide): tickMatch's PlayerKilled
+// event presents only a still-spawned pawn (applyMatchDamage presents its deaths the same way). Presentation only.
+void World::presentBotDeathNow(MatchOpponent& o, const char* damageType) {
+    if (!o.spawned()) return;
+    requestCorpse(o.pawn(), o.matchPlayer(), 100 + o.matchPlayer(), true, damageType);
+    onPawnDeath(o.pawn().chassis().id, o.pawn().moveForm() == Form::Vehicle, damageType, o.pawn().actorLocation());
+}
+
 void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     Character& pc = o.pawn();
     const BotSkill& sk = botSkill(b.difficulty);
@@ -2268,6 +2276,7 @@ void World::tickBots(float dt) {
         if (pc.position().y < killZ_) {
             const Match::KillContext kc = killContext(-1, b.player, "Engine.DmgType_Fell");
             match_.killed(-1, b.player, false, "Engine.DmgType_Fell", &kc);
+            presentBotDeathNow(*o, "Engine.DmgType_Fell");
             o->despawn();
             continue;
         }
@@ -2319,6 +2328,7 @@ void World::tickBots(float dt) {
             b.suicideWish = false; b.offMeshRun = 0.0f;
             const Match::KillContext kc = killContext(b.player, b.player, "Engine.DmgType_Suicided");
             match_.killed(b.player, b.player, true, "Engine.DmgType_Suicided", &kc);
+            presentBotDeathNow(*o, "Engine.DmgType_Suicided");
             o->despawn();
             LOG_INFO("bots: p%d stranded 30 s with no way back at t %.2f: suicide", b.player, match_.matchTime());
             continue;

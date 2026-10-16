@@ -688,6 +688,7 @@ public:
     std::vector<render::MeshHandle> gibMeshes_; bool gibMeshesTried_ = false; // TR_Death_Gibs_p RB_Gib_01..11
     int corpsesMade_ = 0;                                  // diagnostics (BOTTEST / WFC_CORPSETEST)
     void requestCorpse(const Character& pawn, int player, int owner, bool ai, const std::string& damageType);
+    void presentBotDeathNow(MatchOpponent& o, const char* damageType);   // a bot death that despawns before tickMatch's event
     void spawnCorpse(const CorpseRequest& q);
     void tickCorpses(float dt);
     void gibCorpse(Corpse& c);

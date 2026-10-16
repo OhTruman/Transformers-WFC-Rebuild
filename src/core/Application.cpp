@@ -5372,6 +5372,9 @@ void Application::runBotTest() {
     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
     int scriptedDeaths = 0;   // DEATH rows: scripted melee kills over all phases
+    // Behaviour-exists rows (grenades, killstreak rewards) count over the phases: a single 120 s phase-2 match ranges 1-16 grenades and
+    // 0-7 rewards by seed (WFC_SEED sweep 2026-10-16), so a per-phase count failed by match luck.
+    int grenadesAll = 0, streaksAll = 0;
     for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 4 ? "DM" : "TDM") + "?TimeLimit=" + std::to_string((int)secs + 15) +   // phase 5: FFA 64
                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
@@ -5489,7 +5492,8 @@ void Application::runBotTest() {
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
-        if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
+        grenadesAll += grenades; streaksAll += streaks;
+        if (phase >= 1) check(streaksAll > 0, "bots trigger killstreak rewards (" + std::to_string(streaksAll) + " over the phases)");
         {   // kill damage types (the frontend's kill line): every kill should carry its weapon's DamageType class
             std::map<std::string, int> byType; int emptyKills = 0;
             for (const game::KillFeedEntry& k : world_.match().killHistory()) {
@@ -5510,7 +5514,7 @@ void Application::runBotTest() {
         if (phase >= 1) check(driveSamples > 0, "ground vehicle bots boost by the VEHDEF AI rule (" + std::to_string(driveSamples) + " boost-steps, max nitro starts per bot " + std::to_string(nitroStarts) + ")");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
-        if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
+        if (phase >= 1) check(grenadesAll >= 2, "bots toss grenades (" + std::to_string(grenadesAll) + " over the phases; melee strikes " + std::to_string(melees) + ")");
         {   // DEATH: every death (kill, suicide, environment) gets the victim's death presentation once - bots die through
             // applyMatchDamage, which despawns before tickMatch's PlayerKilled event (the sound was skipped for all of them)
             int deaths = 0;
