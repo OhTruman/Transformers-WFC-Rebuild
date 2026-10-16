@@ -1731,3 +1731,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (WFC_SHOTLIST / WFC_BOOT_PROFILE=1 applies setDisplayMode + HD / Modern like the frontend path) requested from
   Gameplay as a harness-only patch. PACKAGE_6_HEAD.md updated d1b03903 (25 placeholders). D3A_IAC doc a30c2c64;
   A2_KON running, D1_ORB last. Rendering batch 8 (Molten with the cull fix, X3 v2 pairs) running since ~13:20.
+  2026-10-16 12:23 DIRECT-BOOT PROFILE HOOK MERGED e22321e8 (Gameplay WFC_BOOT_PROFILE=1: direct map boots apply the
+  profile's display / HD / Modern rows like the frontend; + WFC_HDTEXTURES=2 for Enhanced; SIMHASH identical); the
+  eye-pass authored views now run at 2560x1440 with the Enhanced column on exes from this head (Experimental f60cad43
+  / b41e0e5c). Gameplay walkable-floor (slope-only) gate finished, under analysis.
