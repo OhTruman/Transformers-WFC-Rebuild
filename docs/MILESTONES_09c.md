@@ -2081,3 +2081,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1280x720 client, head 'NOINTERACT: client 1280x720'; same pixels. The bisect's base 2.14 / final 4.07 equal the
   720p regress numbers -> likely CPU-bound (slow-frame GPU 2.97 < frame 4.07): gib chunk rigid bodies + skinning
   per corpse are the suspects; corpse arms on int_cap decide.
+  2026-10-16 17:52 CPU SUSPECT (my read of World.cpp:6989-7090): every un-gibbed corpse runs samplePose + blendPose +
+  skinPose on the CPU every frame for TotalTime and is drawn via drawDynamicMesh (an upload per frame); live pawns
+  are GPU-skinned. Fits CPU-bound frames + dyn draws. Fix plan (keeps the look): corpses through the pawns' GPU-
+  skinned pose path, else skin once when the pose goes static. Gameplay assesses after the int_cap checks; Rendering
+  names the API; the corpse arms set the priority.
