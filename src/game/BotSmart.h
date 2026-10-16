@@ -134,6 +134,7 @@ struct SmartBot {
     float waitSince = -1.0f, waitCooldownUntil = -1e9f;
     core::Vec3 skipPickup{0, 0, 0}; float skipPickupUntil = -1e9f;   // a health pickup this bot could not reach / use: skipped for 30 s   // squad leader waiting for its members (at most 6 s, then 10 s without waiting)
     bool holdStill = false;   // deliberately still last step (cover, a waiting leader): not "stuck"
+    float lookOffset = 0.0f;   // the waiting leader's look-around offset (rad), eased toward its target (no snap when the wait ends)
     bool leaderSlow = false, regroupFar = false; float leaderWaitSince = -1.0f, leaderWaitCooldown = -1.0f;   // squad leader waits; member far off   // squad leader slowing for its members (smartDecide -> smartSteerPost)
     float mateBlockedAt = -1e9f; int mateHolds = 0;   // last shot held for a team mate on the line; holds (diagnostics)
     float squadGoalUntil = -1.0f; int squadGoalKind = -1, squadGoalTgt = -1; core::Vec3 squadGoalPos{0, 0, 0}; float squadGoalRad = 0.0f;   // the squad-given goal, kept until then
