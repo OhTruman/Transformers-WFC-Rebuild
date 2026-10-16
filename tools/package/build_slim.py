@@ -12,6 +12,10 @@ optional HD texture pack. Extends Integration's assemble_slim.py (same keep / xp
   --hd    the HD pack source (default AssetTools/out/hd/pack): hd_index.json + ONLY the indexed files are copied to
           <out>/Transformers Rebuild/AssetTools/out/hd (the loader's default location; the source dir also holds non-PASS
           textures that must not ship); every row's byte count is checked. --no-hd: no HD folder.
+  --overlay  a FROZEN AssetTools overlay folder (FROZEN.json: files[] = path relative to the folder, bytes, sha256), e.g.
+          AssetTools/work/gltf_wfcmat (the skeletal glTFs with extras.wfc_material): each file replaces the source of the package
+          row ExtractedAssets/<path> (packed as that row always was); every file is byte- and sha256-checked against FROZEN.json and
+          must name exactly one package row, else the build stops. ExtractedAssets itself is never modified.
   --hd-label  a name for the HD pack shipped (e.g. "D"), recorded in build_slim.json; --hd points at that pack's folder
           (any pack in the loader's index layout: hd_index.json + the DDS it names).
   --m5    ship the M5 runtime the exe was built with, taken from --bin (CMake copies it there only when the SDKs were fetched,
@@ -161,6 +165,33 @@ def main():
         for h in ('rt_shadow_ao.h', 'rt_reflect.h', 'ffx_dn_filter0.h'):
             if not os.path.isfile(os.path.join(build_dir, 'generated', 'rt', h)):
                 problems.append('--bin: the RT shader header generated/rt/%s is missing in %s' % (h, build_dir))
+    overlay_src, overlay_info = {}, None   # package row source (ROOT-relative) -> the overlay file that replaces it
+    if arg('--overlay', None):
+        import hashlib
+        ov = os.path.normpath(arg('--overlay', None))
+        fz_path = os.path.join(ov, 'FROZEN.json')
+        if not os.path.isfile(fz_path):
+            problems.append('--overlay %s has no FROZEN.json (only frozen overlays ship)' % ov)
+        else:
+            fz = json.load(open(fz_path, encoding='utf-8'))
+            by_source = {}
+            for r in rows:
+                by_source.setdefault(r['source'], []).append(r)
+            for f in fz.get('files', []):
+                fp = os.path.join(ov, f['path'])
+                if not os.path.isfile(fp):
+                    problems.append('overlay file missing: %s' % fp); continue
+                data = open(fp, 'rb').read()
+                if len(data) != int(f['bytes']) or hashlib.sha256(data).hexdigest() != f['sha256'].lower():
+                    problems.append('overlay file differs from FROZEN.json (bytes / sha256): %s' % fp); continue
+                srow = 'ExtractedAssets/' + f['path']
+                hits = [r for r in by_source.get(srow, []) if r['action'] in ('keep', 'xpr')]
+                if len(hits) != 1:
+                    problems.append('overlay file %s names %d shipped package rows (want 1: %s)' % (f['path'], len(hits), srow)); continue
+                overlay_src[srow] = fp
+                hits[0]['bytes'] = str(len(data))
+            overlay_info = {'dir': ov, 'name': fz.get('name', ''), 'commit': fz.get('commit', ''), 'files': len(overlay_src)}
+            print('overlay %s (%s): %d of %d files replace package rows' % (fz.get('name', ''), ov, len(overlay_src), len(fz.get('files', []))))
     m5 = '--m5' in sys.argv
     if m5:
         for src_rel, dst_rel in M5_FROM_BIN:
@@ -227,7 +258,7 @@ def main():
     bin_files = sorted(d[len(BIN_DEST) + 1:] for _, d in bin_rows)
     manifest = {'generator': 'tools/package/build_slim.py', 'head': head, 'version': arg('--version', '09c %s, Release + PGO' % head),
                 'm5_runtime': m5, 'vbake': vbake_dir or '', 'hd': bool(hd_src), 'hd_label': arg('--hd-label', ''), 'hd_source': hd_src or '',
-                'bin_dest': BIN_DEST, 'bin_files': bin_files}
+                'bin_dest': BIN_DEST, 'bin_files': bin_files, 'overlay': overlay_info}
     if plan:
         print('bin files (%d):' % len(bin_files))
         for b in bin_files: print('  ' + b)
@@ -248,7 +279,7 @@ def main():
     cab = pl._api()
 
     def do(r):
-        src = os.path.join(ROOT, r['source'])
+        src = overlay_src.get(r['source']) or os.path.join(ROOT, r['source'])
         if r['action'] == 'xpr':
             dest = os.path.join(out, xpr_dest[r['source']])
             os.makedirs(os.path.dirname(dest), exist_ok=True)

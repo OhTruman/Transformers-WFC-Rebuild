@@ -211,6 +211,14 @@ if (Test-Path -LiteralPath $manPath) {
     Write-Host "package bin: $($pk.Note)"
 }
 
+# ---- glTF overlay (Integration 2026-10-16): the barrier glTF carries extras.wfc_material = WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST
+# (decompressed from its .xpr twin) and every file of the FROZEN overlay recorded in build_slim.json ships byte-identical
+# (tools/package/check_overlay.py; AssetTools' python). A FAIL line is a package problem.
+$ovPy = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
+$ovLines = @(& $ovPy (Join-Path $PSScriptRoot 'check_overlay.py') $pkgTop 2>&1 | ForEach-Object { "$_" })
+foreach ($l in $ovLines) { Write-Host "overlay: $l"; if ($l -notlike 'PASS *') { $pk.Problems += "glTF overlay: $l" } }
+if (-not $ovLines.Count) { $pk.Problems += 'glTF overlay: check_overlay.py printed nothing' }
+
 # ---- render data: every map folder with materials_glsl.json also ships materials_pbr.json (the M6 Modern mode, HD Enhanced;
 # Rendering's matc_pbr.py output). Missing: a package problem (the loader keeps HD Faithful working without it).
 $renderDir = Join-Path $pkg 'Rebuild\work\render'
