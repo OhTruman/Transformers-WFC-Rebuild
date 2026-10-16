@@ -1092,6 +1092,7 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
             fr.shadowLightN = n;
             for (int k = 0; k < tlN_ && k < 4; ++k) { std::memcpy(fr.transLights[k], tlPos_[k], 16); fr.transLights[k][3] = 1.0f / std::max(tlPos_[k][3], 1e-6f); }
             fr.transLightN = std::min(tlN_, 4);
+            for (int k = 0; k < fr.transLightN; ++k) std::memcpy(fr.transColors[k], tlCol_[k], 16);   // (v3 row 6: reflections)
             static int frames = 0; static double sumUsed = 0, sumN = 0, sumWorld = 0;   // (diagnostics, every 600 frames)
             sumUsed += (double)use.size(); sumN += n; sumWorld += rtLampWorldN_;
             if (++frames == 600) {
