@@ -1504,3 +1504,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   0.3-0.8 ms), X7 2x RT lightmap (1.5 d, +0.5-1.4 GB VRAM); effect-light calibration 0.5 d. Approved now: row 5, X1,
   row 4, tiled fix, X2, X4, explosion + impact calibration (every option includes them). X3 / X5 / X6 / X7 = user
   scope-vs-date decision (A: X1+X2+X4 -> ~19 Oct; C: +X5 + effect lights -> ~20-21 Oct; B: all seven -> ~24-25 Oct).
+  2026-10-16 04:51 MERGED: item 6 materials tooling d0a3f988 (Systems patch, Rendering review as-is; data ships after the
+  4-map existing-material byte check), RT-era effect lights + vehicle headlights 709df0f5 (Systems, game-side only;
+  WFC_FXLIGHTS / WFC_HEADLIGHTS opt-in until Rendering calibrates; SIMHASH identical; Streets 3-arm A/B lit 50 / 91
+  and 39 / 91 frames). Approved X rows in build order: row 5, X1, row 4, tiled fix, X2, X4, effect-light calibration.
