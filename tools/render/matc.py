@@ -248,6 +248,13 @@ class MatCompiler:
         a = self.req(c, n, 'A', p); b = self.req(c, n, 'B', p)
         if a[1] + b[1] > 4:              # UE3: "Cannot append" compile error
             self.type_violations = getattr(self, 'type_violations', 0) + 1
+            # (a MIC whose parent appends two VectorParameters, e.g. the vending machines' scroll / tiling pair: GLSL rejects
+            # an 8-component vec4 constructor, so the whole material failed at runtime) - A, then B's leading components up
+            # to 4; A already 4 wide stands alone
+            need = 4 - a[1]
+            if need <= 0:
+                return cast(a[0], a[1], 4), 4
+            return 'vec4(%s, (%s).%s)' % (a[0], cast(b[0], b[1], 4), 'xyzw'[:need]), 4
         t = min(4, a[1] + b[1])
         return '%s(%s, %s)' % (GLSL_T[t], a[0], b[0]), t
 
