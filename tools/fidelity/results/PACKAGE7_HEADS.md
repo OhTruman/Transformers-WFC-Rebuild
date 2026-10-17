@@ -93,6 +93,7 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | (rows) f1ce1c84 physmat pair | Systems Streets physmat pair PASS: SIMHASH equal 4201 steps; 16 / 24 captures = force-field squibs | - | - | - | closes the stack's rows |
 | 0d5399f4 | Frontend GfxPresenter popup mouse-focus fix (popup buttons now clickable with the mouse on PC) | frontend only | no sim or renderer change | not needed | no run |
 | 19fbf3ca | docs | - | - | - | no run |
+| c306878a | Systems transforming-door sounds (anim sound notifies for the 4 door AnimSets via the body-notify table; LevelAudio.inc gains each map's played door cues; AnimNotifies.inc / MeshSockets.inc regenerated, WEP / TR rows byte-identical) | audio only | SIMHASH identical over 1801 steps (Integration); expected change = cues only (Rust level-start DOOR_TUBE + DOOR_INTERIOR; Remnant / BrokenHope door cues on transform), no frame change | not needed | a paced windowed cue-count row confirms the cues if wanted |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
