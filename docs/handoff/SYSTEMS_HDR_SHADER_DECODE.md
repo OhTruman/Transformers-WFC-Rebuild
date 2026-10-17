@@ -73,3 +73,11 @@ the visible image (the uber clips at 1 first) and changes only bloom by < 0.4 %.
 Realistic (Rendering's flash term) is free of this: the original's clip is per channel at 1, so the yellow-green flat
 frame is what Realistic's tone curve replaces; the 3.984 ceiling is the original's own HDR range if Realistic wants a
 faithful upper bound for the bloom input (today's soft-bloom cap 16).
+
+## Follow-up (2026-10-17): the blend-time rule (WFC RE, RE-Workspace/work/handoff/HDR_BLEND_CLAMP_RULE_RE.md, 8394f38)
+RE scanned 4,272 scene-colour pixel shaders (every PS declaring SceneColorBiasFactor in the Streets / A5_TRY / D5_OME BASE and
+Engine ShaderCaches): none saturates its oC0.rgb write; all end with oC0.xyz = rN x bias.x. With the 7e3 store clamp per
+channel per draw (no pre-blend source clamp for float targets), the original's rule is clamp(blend(src unclamped, dst), 0,
+3.984375) per channel at every scene-colour draw - the residual this doc lists (our FP16 target does not saturate during
+blending). The uber post's sat(c - Shadows) at 1 (above) is a separate, later clip and stays as decoded. Rendering owns the
+Faithful blend clamp decision (RENDERING_PACKAGE7_POLISH.md section 4).
