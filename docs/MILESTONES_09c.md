@@ -2635,3 +2635,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   presenter event 9015c4e9, X3 GPU timer): the D3D12 presenter exit hang known issue CLOSES. Also merged 5cb9886f campaign
   objectives loader; 186c1a84 particle audit batch 2 (8 missing modules' semantics). Experimental's base check running; then
   the (A) data switch -> Gameplay follow-up merge -> Frontend 10 -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) eye pass.
+2026-10-17 09:09 Rendering particle fixes on rt2 (a538f71f batch 1 fields + sphere rule + gravity where GravityMultiplier exists; dea7c8fd
+  AccelerationOverLife 118 LOD records + VelocityInheritParent 1,143; dba92e6c Lifetime stacking): all-mode fidelity changes ->
+  identity as an expected-change list with before / after crops in Rendering's next particle slot; HOLD on the guessed -2940
+  gravity scalar until the RE lane sources it (inst[+0x94] setter + the maps' authored world gravity). Gameplay queue set: camera
+  crops -> weapon + melee batch (re-baseline) -> Systems' anim-notify + physmat hooks -> session hooks (SESSIONTEST) -> perf
+  levers -> transforming actors + dying-vehicle collision -> FaceFX -> dithering. Base check running (verify base vs cfca1717).
