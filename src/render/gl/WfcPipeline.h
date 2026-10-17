@@ -995,6 +995,7 @@ private:
     float fogL_[3][4] = {}, fogC_[3][3] = {};        // layers 2-4: (max height, scale, start, extinction), in-scattering
     float fogMinH_[4] = {-262144.0f, -262144.0f, -262144.0f, -262144.0f};   // each layer's min height (the next layer's)
     bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
+    core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
 
     std::map<std::string, GLuint> texCache_;
     std::map<std::string, int> progIndex_;

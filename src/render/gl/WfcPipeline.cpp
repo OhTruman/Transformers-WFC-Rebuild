@@ -1604,6 +1604,13 @@ bool Pipeline::load(const std::string& mapName) {
         x3FogOn_ = F0.isObject() && F0["bEnabled"].asBool(true);
         x3FogMaxH_ = F0["Height"].asFloat(0.0f);
         x3FogScale_ = -F0["Density"].asFloat(5e-5f) / std::log(2.0f);
+        clearFogIn_ = {0, 0, 0};                       // (the frame clear: this component's in-scattering, as before)
+        if (x3FogOn_) {
+            const assets::Json& c0 = F0["LightColor"];
+            const float b0 = F0["LightBrightness"].asFloat(0.1f);
+            clearFogIn_ = {srgbToLinear(c0[0].asFloat(255) / 255.0f) * b0, srgbToLinear(c0[1].asFloat(255) / 255.0f) * b0,
+                           srgbToLinear(c0[2].asFloat(255) / 255.0f) * b0};
+        }
     }
     for (int k = 1; k < fogN_; ++k) {
         const assets::Json& Fk = FL[(size_t)k];
@@ -3983,7 +3990,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                            dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
                            maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
                            P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
-                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, 0, 0, 0};
+                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, 0, 0};   // (fogN_: the layer uniforms ride in the same block)
     if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
     CommonKey& ck = commonKeyById_[P.id];
     const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
@@ -8740,7 +8747,9 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, w, h);
     // Clear to the fog in-scatter colour: what an infinitely distant ray converges to.
-    glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
+    // (with several height fog layers the clear keeps the data's single first component, as before the layers - the
+    // sorted first layer is the highest one, e.g. Rust's light-blue haze instead of its zero-brightness ground layer)
+    glClearColor(clearFogIn_.x, clearFogIn_.y, clearFogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glx::gpuStamp("world: before the MDI");
     depthDirty_ = true;
