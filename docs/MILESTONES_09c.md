@@ -3308,3 +3308,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   23d3c36c) PASS by eye (TF_Death_MED_FX death streaks now drawn; moving-source trails as particle chains); lens flares WORK
   (Debris sun flare, Rust occluded) -> one open-sky pass + RE's read before merging. Card: Frontend gap2 15:03 -> Rendering
   open-sky ~15:10 -> head candidate. Patches cut against efa19b6b.
+2026-10-17 15:05 RE fresh eyes: all four sheets PASS vs authored data; t3's streak persistence is authored (EmitterDuration x loops). Checks to
+  Rendering before the flare merge: Reflection_01's constant OcclusionScaling 1 (must survive occlusion unless the material
+  multiplies by TEXCOORD3), Base_SUN's warm tint (2.45, 0.5, 0.5) x DistMap_Color vs our neutral glow; doors2: shot interval
+  needed (if 30 Hz frames, the tube door opens ~5x too fast vs the 1.70 s TransOut).
