@@ -2,6 +2,13 @@
 
 ## Current state (update at every stable point)
 
+- **Tomorrow, 2026-10-17, after the user's reboot** (Integration's order):
+  1. **Lever 1 of `GAMEPLAY_CORPSE_ONEDRAW.md` (merged 51b64874): instanced gib chunks.**
+     - First read the renderer's instance / `instRejected` counters on a gib-heavy 63-bot frame (Berth / Gorge, `WFC_PERFSTATS`).
+     - If the chunks are rejected, make them qualify (neutral colour, owner 0) or ask Rendering for an instanced call.
+     - Compiles and headless runs are free then; the crops and the corpse arm need a slot.
+     - It joins package 6 **only** if it passes before Systems' package build on the final head starts; otherwise package 7.
+  2. **Remove the Defrag CPU latch** (`edit_gpu_defrag.js`) once Rendering's energy-death fix for queued skinned draws is in, then re-run the 4 crops.
 - **About 21:30: the GPU-corpse patch is MERGED** by Integration.
   - Corpse arm on Berth at 63 bots: p90 3.10 ms, against 3.50 for the head and 2.17 for the NOCORPSE floor. That's −0.41 ms; the 0.1 ms target was missed, with about 0.9 ms left. Dynamic draws are unchanged (176 vs 126 without bodies).
   - **Next (package 7 lever, the user's look bar):** fewer draws per settled body: merge the gib chunks and body parts into one draw, and instanced gibs (check `gStats.instRejected` first). Not a shorter life, a cap or shadow removal.
