@@ -213,7 +213,7 @@ peer and dropped afterwards (the peer's address is then the key).
 | join timeout | Systems emits `JoinFailed{Timeout}` at 50 s; the frontend's own timer is a 55 s backstop |
 | pumping | one socket; whichever pump runs first (`ISession::poll`, every frontend update incl. the match, or the LockstepLayer's per-tick poll) drains it and dispatches by channel into two queues (lockstep / session+voice); each consumer reads only its queue |
 | slots / teams | the host's GameFlow decides (PickTeam: smaller team; humans take bot slots) and publishes `SessionLobby.slots`; SessionLayer owns membership / connectivity; in-match slot changes go through `SessionSlotSwap` at a tick the host's LockstepLayer picks |
-| idle kick | the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
+| idle kick | OFF by default (10.2: the original never kicks in private matches); as a host option: the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
 | desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
 
 - **Addition (agents/frontend 1c2dbd11):** `SessionMemberInfo::iconicCharacter` (std::string) - in iconic mode the member's claimed
@@ -230,14 +230,23 @@ peer and dropped afterwards (the peer's address is then the key).
 ### 10.2 Remote command contract (with Gameplay, 2026-10-17; their docs/handoff/REMOTE_COMMAND_CONTRACT.md, agents/gameplay b46a2565)
 - `bool World::applyRemoteCommand(int matchPlayer, const RemoteCommand& c)`, with
   `RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; }`. The floats are
-  the DECODED wire values (yaw u16 over 0..2pi, pitch i16 over +-pi/2), so every peer applies identical numbers.
+  the DECODED wire values on the original's rotator grid (RE MP_INPUT_CONTRACT_RE 4a1f8fb: View = (Yaw & 65535) << 16 | (Pitch & 65535),
+  65536 = 360 deg): yaw u16 and pitch i16 in rotator units, bit-exact with the original; every peer applies identical numbers.
+  The int8 axes keep the analog magnitude (the original sends Acceleration x 1000: analog walk speed). FineAim and Hover (the
+  original's move flags 512 / 1024) are held bits in `buttons`, applied in the same step.
 - **When:** inside the lockstep step for tick N, once all of N's commands have arrived, before World::tick runs step N, in ascending
   match-player order on every peer.
 - **The local human too:** in an online match the local human goes through the same call, decoded from the bytes sent. The camera
   turns locally every frame; the sim side waits for N.
-- **World builds the MoveIntent** from the axes, aim and buttons, and judges idle itself. Any held / pressed bit, a non-zero axis, or
-  an aim change > 0.5 deg against that player's previously APPLIED command counts as non-idle; World then calls noteRemoteCommand.
-  The transport never calls it.
+- **World builds the MoveIntent** from the axes, aim and buttons, and judges idle itself, on the original's INPUT rule
+  (PlayerInput.UserInputDetectedThisFrame, RE 4a1f8fb): any held / pressed button, a non-zero move axis, or the command's `active`
+  bit counts as non-idle. The sender sets `active` (one bit in `buttons`) when its look axis is non-zero this tick (this catches a
+  stick held at the pitch clamp and very slow turns, which an aim-delta threshold misses) or it sent team chat since its last command
+  (ServerTeamSay refreshes LastActiveTime). The 0.5 deg aim test is dropped. World then calls noteRemoteCommand; the transport never
+  calls it.
+- **Idle kick is a host option, default OFF** (fidelity): the original never kicks in private matches (TnGame.InitGame clears
+  bKickLiveIdlers when IsPrivateMatch(); MaxIdleTime 180 / bKickLiveIdlers apply only to public Live matches, RE 4a1f8fb), and every
+  match of ours is LAN / direct / offline. When the host turns it on: 180 s, the host's own local player is never kicked [H].
 - **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
 - **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
