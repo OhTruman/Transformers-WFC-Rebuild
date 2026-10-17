@@ -2656,3 +2656,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   slot becomes 35 min (notifyfx check + the three throttle rows) before the (B) eye pass; both patches dry-run clean on
   integration and merge on their rows. Frontend capture gap running since ~09:13. RE lane: time-driven materials + dynamic
   lights audit started (~3.5-4 h).
+2026-10-17 09:19 AssetTools' independent review of Systems' (B) candidate (AssetTools work/matB_review): 116 changed + 2 added = 118 vs the pre-switch
+  live tree, 0 removed; 464 / 484 entry-map pairs confined to the vector-channel pattern; the mid-review live change was my (A)
+  switch; 2 entries change outside the pattern on all 10 maps (PROP_VendingMachine Ammo / EnergonCube MATINST: UV constants
+  built from separate channels, type_violations 5 -> 1): Systems to justify in the (B) doc; review.py reruns on the frozen live
+  tree before the (B) switch. Rendering cand27 = cand26 + particle commits (option-B fields via WFC_MAPFX_DIR; gravity -2940
+  sourced); its slot ~22 min with a particle before / after pair.
