@@ -55,10 +55,28 @@ OnlineFriendsMenu_GFX); texts = ExtractedAssets config Coalesced_int (UIText.int
   ("Transformers: WFC" / "Join my game") [texts]. UI events 16 GameInviteAccepted / 17 JoinInviteFailed (phase 1 doc).
 - Privacy row: `$UIText.Lobby.PrivacySettingsInviteOnly` ("Invite Only") [texts].
 
-### 1.3 Unknown (open questions; not guessed)
-- **R8** Party leader loss: promotion to another member, or disband? (Beacon code; no text names it.)
-- **R9** Whether party members returned to the party lobby with the leader after a match, or stayed in the game lobby.
-- **R2** (phase 1) per-mode party size limits.
+### 1.3 Answered by RE (RE-Workspace/work/handoff/ONLINE_PARTY_RE.md, 9a297ad) [CONFIRMED script]
+- **Model:** the party lobby is the leader's listen server and the members are its clients; every player also has their own
+  local party lobby.
+- **Follow:** leader hosts -> the members are carried into the game lobby by the leader's server travel. Leader joins a game ->
+  TellPartyToJoinSession: each member reserves, joins and travels itself; the leader travels 1.0 s later.
+  JoinFriendGameAndDisband is the "join a friend's game while in a party" prompt and accepting really leaves the party; an
+  accepted invite leaves the party too.
+- **Waiting for party leader...:** shown on a party client sitting in its own local party lobby (on entry, or after a match)
+  while it asks the leader's party to take it back: retried every 1 s, up to 30 tries, then it leaves. On success it travels
+  into the leader's lobby and the popup closes. B "Leave party" = a new party of one, staying on the party lobby screen.
+- **Quit prompts:** a member gets LeaveParty / LeavePartyConfirm; the leader or a solo player LeavePartyLobby / Confirm.
+- **R2 (size limits):** private sessions -> NumPrivateConnections (versus 10, Escalation 4, co-op 3); public -> NumPublic /
+  (AllowPartyToFillPublicGame ? 1 : 2): DM 10, TDM / CTF / KOTH / DOM / EXT 5, SV 4, CP 3. The check runs on both host and
+  matchmaking starts.
+- **R8 (leader loss): DISBAND, no promotion.** The leader sends ClientPartyDisbanded to every member, 1 s grace, then
+  disconnects; a member in the party lobby becomes the leader of its own new party with **no** message box; a member in a game
+  the leader hosted is sent to its party lobby (QuitToPartyLobby).
+- **R9 (after a match):** everyone, party members included, returns to the game host's game lobby. The host quitting that
+  lobby sends every client to its own party lobby, where party members reattach through the waiting popup; a client quitting
+  goes alone and keeps its party.
+- **Friends:** the platform friends list only (Live). Recent players were collected (ring of 100) but only visible through the
+  Xbox guide: no WFC screen showed them.
 
 ---
 
@@ -94,25 +112,30 @@ PSN overlay. Ours opens when the leader asks for a code. Why: no overlay, no pre
 **Simplified:** none beyond the code. Why: as P1.
 
 ### 3.3 P3 - Party member waits
-- The party lobby on a member shows the leader's mode choice read-only (as the phase 1 member's game lobby does) and the
-  popup `PartyLobbyWaitingForPartyLeader` with the button `PartyLobbyWaitingForPartyLeaderLeaveParty` while the leader is
-  choosing. No mode / Private Match rows are actionable (`Online.IsHost` false for party members: same rule as phase 1).
+- A member in the leader's party lobby sees the leader's mode choice read-only (as the phase 1 member's game lobby does); no
+  mode / Private Match rows are actionable (`Online.IsHost` false for party members: same rule as phase 1).
+- **Reattach (the original's waiting popup, 1.3):** a member back in its own local party lobby (on entry, or after the host
+  closed the game lobby) shows `PartyLobbyWaitingForPartyLeader` with B `PartyLobbyWaitingForPartyLeaderLeaveParty` while
+  the party session asks the leader to take it back: every 1 s, up to 30 tries, then it leaves the party. Success: into the
+  leader's party lobby, popup closed. Leave party: a party of one, on the same screen.
 
 ### 3.4 P4 - The leader starts: the party follows
 1. The leader hosts (Private Match -> Create Game) or joins a game by code.
 2. Before that, the size check: party size > the mode's limit -> `PartyTooLargeToPlayGameTypeTitle` / `...Message`
-   (`g = the mode's friendly name, `i = the limit, `n = the party size). Limits until R2: the mode's human capacity
-   (5 v 5 team modes: 10; FFA 10; while a browser member is present D10 applies).
-3. The party session sends `PartyFollow{code}` to every member; each member runs the phase 1 join with that code
-   (the same popup, failures and texts). A member whose follow fails stays in the party lobby with the phase 1 failure
-   popup and can rejoin by code.
+   (`g = the mode's friendly name, `i = the limit, `n = the party size). Limits (R2, 1.3): private sessions
+   NumPrivateConnections - versus 10, Escalation 4, co-op 3 (while a browser member is present D10 applies).
+3. Leader hosts: the members are carried into the game lobby (the original: the leader's server travel; ours: the party
+   session sends `PartyFollow{code}` and each member runs the phase 1 join). Leader joins a game: each member joins first, the
+   leader 1.0 s later (the original's TellPartyToJoinSession order). A member whose follow fails stays in its party lobby
+   with the phase 1 failure popup and reattaches through P3.
 4. The leader's game lobby treats the party members as ordinary members (phase 1 flows). The leader is the game host
    when it hosted, otherwise an ordinary member.
 
 **Simplified:** the original's follow went through the beacon; ours is a session event. Same visible flow.
 
 ### 3.5 P5 - Leaving and leader loss
-- Leave: `LeaveParty` / `LeavePartyConfirm`; the member returns to its own (offline) party lobby.
+- Leave: a member gets `LeaveParty` / `LeavePartyConfirm`, the leader or a solo player `LeavePartyLobby` /
+  `LeavePartyLobbyConfirm` (1.3); the member returns to its own party lobby as a party of one.
 - Leader quits or drops (D12): the party session **promotes the next member** (the oldest join) to leader and sends
   `PartyLeaderChanged{member, code}`. A browser member is skipped (B3: it cannot host). The new leader's party lobby
   becomes actionable (mode / Private Match rows, the code panel: the same code through a relay room, the new leader's
@@ -121,12 +144,16 @@ PSN overlay. Ours opens when the leader asks for a code. Why: no overlay, no pre
   R8 may supply one). Members keep their current game if one is running.
 - If the leader was the last member, the party simply closes.
 
-**Simplified:** none known (R8 open: if the original disbanded instead, promotion is a PC adaptation kept by D12).
-Why promote: one re-invite less for everyone; the party code survives.
+**Original vs ours (R8 answered: the original DISBANDED):** the original's leader loss ended the party - members became
+parties of one with no message, and members in the leader's game were sent to their party lobbies. Promotion (D12 default)
+is therefore a **PC adaptation**, as is its "is now the party leader" line. D12 is flagged back to Integration / the user
+with this answer; if it returns to the original, P5 becomes: `PartyClosed{leaderLeft}`, members become parties of one
+silently, members in the leader's game go to their party lobby.
 
 ### 3.6 P6 - After the match
-- The game ends as in phase 1 (back to the game host's lobby). Leaving that lobby returns each party member to the party
-  lobby, still in the party (until R9).
+- The game ends as in phase 1: everyone, party members included, back to the game host's game lobby (R9, 1.3).
+- The host closing that lobby sends every client to its own party lobby, where party members reattach to their leader
+  through P3's waiting popup; a client that quits on its own goes alone and keeps its party.
 
 ### 3.7 I1-I3 - Friends and invites without a service
 - **I1 Friends List (OnlineFriendsMenu_GFX)** stays the original movie. `<OnlinePlayerData:Friends>` is filled with
@@ -212,13 +239,12 @@ B2 browser join through a signalling code; B3 browser cannot host (text); B6 tab
 
 Decided by default 2026-10-17 by Integration (rebuild-07); the user can override (Integration lists them to the user).
 
-- **D12 decided (default):** party leader loss PROMOTES the next member (the oldest join); the party survives. The
-  original's text is used where one fits (3.5).
+- **D12 decided (default), REOPENED by R8:** party leader loss PROMOTES the next member (the oldest join); the party survives.
+  RE (1.3): the original disbanded with no promotion, so promotion is a PC adaptation; sent back to Integration / the user.
 - **D13 decided (default):** invites always copy the code (this path works with no relay); when both sides are online
   through the relay, its per-fingerprint mailbox also delivers the invite (3.7).
 - **D14 decided (default):** browser signalling goes through the relay; no copy-paste offer / answer (3.9 B2).
 - **D15 decided (default):** the Friends List shows recent players, the last 50 by last seen; it is empty only on a
-  fresh profile (3.7 I1).
-- **R8** Party leader loss in the original (promotion or disband).
-- **R9** Where party members went after a match (party lobby or game lobby).
-- **R2** (phase 1) per-mode party size limits, used by P4's check.
+  fresh profile (3.7 I1). RE: the original collected recent players but showed them only in the Xbox guide, so this list
+  is a PC addition.
+- **R2 / R8 / R9:** answered by RE (1.3).
