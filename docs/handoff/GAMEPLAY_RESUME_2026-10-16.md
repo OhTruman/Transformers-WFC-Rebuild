@@ -5,9 +5,10 @@
 ### QUEUE (Integration, 2026-10-17 midday)
 
 1. DONE 2026-10-17: the camera recoil crops ran (verdict sent: as authored; sheets work/pass29/cam/sheet_fire_*.png); the death follow-up confirmed on the switched data (sheet_death_old_vs_new.png). The camera patch 0c0a5665 merges on Integration's side.
-2. The weapon + melee authored-values batch + its Classic re-baseline (GAMEPLAY_WEAPON_MELEE_BATCH.md; generator docs/handoff/weaponbatch/gen_weapon_recoil.py).
-3. Systems' anim-notify window + hit-surface physmat (AssetTools 2c1d9ba).
+2. Weapon + melee batch: GAMEPLAY_WEAPON_MELEE.patch 12cbc5bf against 1d0bdd48 (recoil per weapon, LightMedium melee impulse / carrier lunge, DOM NodeID; PlaneRocket burst dropped: Versus data has none). 48/48; SIMHASH divergence attributed. NAVQ re-baseline rerunning in work/pass29/wb/navq2 (steps_navq2.txt, WITH WFC_SIMHASH; the first navq/ pass lacked it and is void). Tables: cd work/pass29/wb; SEEDS=12 node simhash_table_n.js navq2:classic_base navq2:classic_new ... Then the recoil eye check (card).
+3. DONE: anim notify hook GAMEPLAY_ANIM_NOTIFY_HOOK.patch 22f9a52b (merge-ready, Systems builds on it); hit physmat GAMEPLAY_HIT_PHYSMAT.patch 7fc7437d (both against 1d0bdd48, identity-neutral).
 4. The session hooks for Frontend (MatchPlayer.sessionMember, Remote participants from MatchLaunch.onlineSlots / onlineNames, World::applySlotSwap, the WFC_SESSIONTEST checks per docs/handoff/ONLINE_MP_FRONTEND_TESTS.md section 4). Offline-safe, identity-neutral, ~3-4 h.
+   + Iconic Mode: chassisId empty -> chassisByFaction[faction] fallback; host claim check (one iconic per team, PROVISIONAL per character, refused claim keeps the previous selection) pending Frontend / RE answers.
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
 7. FaceFX.
