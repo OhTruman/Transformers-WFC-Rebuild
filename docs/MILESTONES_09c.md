@@ -3002,3 +3002,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   allow-list v3 (same materials, corrected VF names); static-decal PSs add the decal tangent frame.
 2026-10-17 11:43 AssetTools 6bea9e8: the 32 door actors' interpolated light maps extracted (64 captures, 0 problems; all 192 coefficient refs
   already in the live lightmaps/ atlases, 64 x 64 rects; RE's worked example matches exactly) -> Rendering's stage (b) has its data.
+2026-10-17 11:44 Lens flares: NOT drawn by our renderer today (only a mover attachment type) -> a missing authored element on 6 MP maps, queued
+  after the doors. Door lighting stage (b) code complete (rt2 b8e00119: both captures lerped per coefficient before the basis
+  decode, rects composed into one texture, TEXCOORD_1; cand33; data matches AssetTools' export 18 / 18): x16 (~10 min) granted
+  directly after x15 on the same relay; one CARD FREE after x13-x16.
