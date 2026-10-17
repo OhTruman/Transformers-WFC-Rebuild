@@ -252,3 +252,70 @@ tagged objects survive the cook):
   inside the box (bKillInside) or outside it (default). Corners are in emitter-local space unless absolute.
 - **Note:** the attractors appear in 33 + 2 systems, KillBox in 2. A binary check of these three is a follow-up if Rendering
   wants CONFIRMED.
+
+**Batch 2 follow-up (AssetTools census + naming):**
+- AssetTools' census over all 2,736 MP LODs: SIZE = Σ blocks with 0 mismatches. The leading int is the count of a fourth
+  module-order list (non-empty only in the Orbit LODs).
+- Named from the runners:
+  - MeshRotation: int **bInheritParent** (≠ 0 adds the component rotation at spawn);
+  - VelocityOverLife: int **Absolute** (spawn ≠ 0 sets Velocity = BaseVelocity = VelOverLife(t); update 0 multiplies, ≠ 0 sets);
+  - SizeMultiplyVelocity: int MultiplyX / Y / Z;
+  - SizeScale: int EnableX / Y / Z.
+- **Gravity scalar `inst[+0x94]`: setter not found.** Ruled out: GetGravityZ, the instance constructor `0x830398E0`, the instance
+  motion tick `0x8300BF18`, the PSC tick. The MP maps author no gravity, so `DefaultGravityZ = −2940` UU/s² (Xe-TransGame.ini;
+  RBPhysicsGravityScaling 0.66). **Use −2940 (H).**
+
+## (d) TypeData and the PSC tick: LOD selection, SecondsBeforeInactive, detail mode
+
+### TypeData (already decoded in pass 5; status vs ours)
+
+| TypeData | LODs / systems | Native | RE source | Ours |
+|---|---|---|---|---|
+| Beam2 | 107 / 25 | fill `0x830298E8` (replay +0xD8…+0x13C) | `notes/TARGETED_PASS5_2026-10-05.md` §9, §9h–§9j: base path = CubicInterp source → target; **BeamSineWave formula decoded** (Σ Direction·Amp·sin(2π((Speed·t + d)/Period + Phase)), +Z along the beam, endpoint fade min(6r, 1)·min(6(1 − r), 1)); noise smoothing / lock radius / NoiseRangeScale in component space; Hermite sub-steps; **NoiseTension irrelevant, NoiseTangentStrength unused**; taper × size | C. **Our header still says "render formula UNKNOWN": stale, implementable from §9i / §9j** |
+| Trail2 | 170 / 50 | spawn `0x83048E40`, tick `0x83048218`, fill `0x8301A700` | §13 / §14 (+ addenda): one chain per emitter (no per-source filter, zig-zags between sources); head placed by LocationEmitter at spawn only; tessellation and U from the head by cumulative distance; spawn clamp 1 per tick; cap MaxTrailCount × MaxParticleInTrailCount | C, marked PARTIAL ("follows the source's recent path"). The §14 rules make it exact |
+| Mesh | 325 / 106 | sprite / mesh fill | mesh rotation modules (bInheritParent above) | C |
+| TextureTile / TextureTileDistance | beams | **not applied in the fill (C)**, MP default 1 | §9 | no action needed |
+
+### PSC tick (`UParticleSystemComponent::Tick` = `0x83055528`; activation `0x83053088`). CONFIRMED.
+
+**Per tick, in order:**
+1. **Skip** unless active (flag bit 0x2000 or 0x80000000) with a template and emitter instances; also skip when the world query
+   `0x82D3CEE0` returns 1 (H: dedicated server).
+2. **Unrendered throttle** (skipped entirely if PSC flag 0x400000 is set). This is **not a full stop**:
+   - `SBI = max(PSC.SecondsBeforeInactive (+0x21C), Template.SecondsBeforeInactive (+0x78))`;
+   - `interval = 1.0 s` if `SBI > 0` **and** `PSC.SecondsBeforeInactive < AccumTickTime (+0x220)` **and** `LastRenderTime (+0x18C)
+     + SBI < WorldTime`; **else `interval = 0.1 s`**;
+   - if `LastRenderTime + 0.3 < WorldTime` (unrendered for more than 0.3 s): `skipped (+0x224) += dt`; **return** while
+     `skipped < interval`.
+   - So an unrendered component ticks at **10 Hz** after 0.3 s off-screen, and at **1 Hz** once it has been unrendered longer than
+     SecondsBeforeInactive (and alive longer than its own SBI). **When it does tick, the accumulated time is used as one large
+     step.**
+3. `dt_eff = (dt + skipped) × Owner.CustomTimeDilation` (Owner +0x60); `skipped = 0`; `AccumTickTime += dt_eff`.
+4. Parameter / owner bookkeeping (component attach checks).
+5. **LOD distance** `0x83028C28`: `d = |Bounds.Origin (+0x80) − view location| × the view's LOD factor` (first local player view,
+   view +0x2C → +0x320). It is **recomputed every executed tick; there is no LODDistanceCheckTime interval.**
+6. **LOD choice** `0x83051B58`:
+   - If PSC flag 0x4000000 is set, use the template's fixed LOD (+0x54).
+   - Else LODMethod = `bOverrideLODMethod (flag 0x80000) ? PSC.LODMethod (+0x228) : Template.LODMethod (+0x29)`.
+   - **Automatic (0):** level = the largest i ≥ 1 with `d ≥ LODDistances[i]`, else 0.
+   - Any other method leaves the computed level at 0 here (H: DirectSet levels come only from `SetLODLevelIndex`).
+7. **SetLODLevel** `0x83051A90`:
+   - `level = clamp(level + GParticleLODBias, 0, LODCount − 1)`, where GParticleLODBias = SystemSettings ParticleLODBias = **0**
+     (Xe-TransEngine.ini);
+   - on change, every emitter instance gets `SetCurrentLODIndex` (vtable +0x10).
+8. If `Template.SystemUpdateMode == 1` (FixedTime), `dt_eff = Template.UpdateTime_Delta` (+0x2C).
+9. Emitter ticks, bounds, and the deactivate / complete checks.
+
+**Activation detail mode** (`0x83053088`): emitter instances are created only if **PSC.DetailMode (+0xE6) ≤ the system DetailMode
+(SystemSettings DetailMode = 2**, i.e. all). The initial LOD is chosen at activation by the same rule.
+
+**Findings vs ours:**
+1. **SecondsBeforeInactive** (Systems' FxInactive, default on) **stops** ticking after SBI unrendered. **The original throttles** to
+   10 Hz after 0.3 s unrendered and 1 Hz after SBI, and **catches up the skipped time in one step**. So effects resume mid-life,
+   not frozen. A loop that is off-screen keeps evolving. **Recommend changing FxInactive to the throttle rule above.** It is
+   cheaper than ticking and closer than freezing.
+2. **LOD selection** matches ours (`dist ≥ lodDistances[i]` → i). The original also scales the distance by the view LOD factor
+   and adds the global bias (0). LOD is evaluated only on executed ticks, so throttled components switch LOD at 10 Hz / 1 Hz.
+3. **DetailMode gate:** with the shipped DetailMode 2, every component spawns. No action.
+
+**(d) complete. The particle module audit is complete.**
