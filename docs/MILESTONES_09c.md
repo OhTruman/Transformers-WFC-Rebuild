@@ -2594,3 +2594,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   notifies for every visible pawn, body notifies on Gameplay's onAnimNotifyWindow hook, physmat impact overrides on AssetTools'
   triangle -> physmat index, R-only muzzles, flight loops, no-hit ability sounds; CUELOG run first). Package 7 date now ~Oct 21.
   Card after the loop (45 / 64 at 08:45): base check 6 min -> (A) switch -> Frontend 10 -> Gameplay 4 -> Rendering 20 -> (B) ~100.
+2026-10-17 08:52 RE lane audit 3 COMPLETE (8147b6d5: versus HUD, end of match, UI sounds; gaps = 4 HUD callbacks for the Frontend; UI sound
+  set 5 / 5 present); next: the Cascade particle-module coverage audit (gap list first, semantics in usage order, TypeData +
+  SBI / LOD; ~4-5.5 h). AssetTools: triangle -> PhysicalMaterial runs as a sibling file collision_weapon_physmat.json (~3 h,
+  shape with Systems); movies 21 / 54 encoded, frame-exact. Systems: wiring step 1 built (SYSTEMS_NOTIFY_FX.patch d4a887d8:
+  every gun's authored shell / magazine / reload notifies at the weapon sockets for the local pawn and participants within
+  40 m; SIMHASH identical, EVENTTEST 16 / 16; dry-runs clean on integration); its 10-min check slot (counts, crops, the CUELOG
+  list that is the E-class test) goes before the (B) eye pass. Card order after PRESENTER DONE: base check 6 -> (A) switch ->
+  Frontend 10 -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) ~100.
