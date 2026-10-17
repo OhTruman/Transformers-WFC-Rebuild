@@ -8,7 +8,7 @@
 2. Weapon + melee batch: GAMEPLAY_WEAPON_MELEE.patch eb08b8b1 against 8a080210 (RE verified the values; turret pickup recoil added). NAVQ re-baseline on 8a080210: work/pass29/wb/navq3 (steps_navq3.txt, base int_ssb vs new int_wb2, WITH SIMHASH). Tables: cd work/pass29/wb; SEEDS=12 node simhash_table_n.js navq3:classic_base navq3:classic_new CLASSIC_SIMHASH_old_vs_new.txt CLASSIC_NAVQ_REFERENCE_new.txt (same for smart). Eye check: work/pass29/wbeye/steps_eye.txt (12 windowed runs, ~4 min) on Integration's gap. Merges after: RE OK (done), Classic re-baseline, eye check.
 3. DONE: anim notify hook GAMEPLAY_ANIM_NOTIFY_HOOK.patch 22f9a52b (merge-ready, Systems builds on it); hit physmat GAMEPLAY_HIT_PHYSMAT.patch 7fc7437d (both against 1d0bdd48, identity-neutral).
 4. DONE: GAMEPLAY_SESSION_HOOKS.patch 178a7bef against 8a080210 (Remote participants, applySlotSwap, idle kick, Iconic one-holder-per-match), WFC_SESSIONTEST 16/16; in Frontend's review. Also done: GAMEPLAY_PHYSMAT_NODE_OVERRIDES.patch e7354355.
-4b. NEXT: Decoy Trap (Scout class-pool ability; RE spec RE-Workspace/work/handoff/MP_DECOY_TRAP_RE.md 3f0271f); bots never pick it; Systems wants deploy / trigger / explode events with the victim.
+4b. DONE: Decoy Trap GAMEPLAY_DECOY_TRAP.patch 41e38e4e against 8a080210 (WFC_DECOYTEST 10/10, bot matches identical); hooks decoyTraps() (Rendering) / onDecoyTrapEvent (Systems). Session hooks now 1ca85612 (+ MatchEvent RemoteIdle, SESSIONTEST 17/17).
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
 7. FaceFX.
