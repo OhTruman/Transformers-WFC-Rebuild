@@ -2832,3 +2832,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   allow-list from the cooked maps: RE exports distortion_allowlist.json, Rendering's accumulate pass draws only listed materials
   (all modes; changes only distortion frames; death crops = evidence), after the exposure slot; RE then decodes the real PS
   scale / kill literals.
+2026-10-17 10:40 MERGED Frontend 51b76b46 voice UI (Mic Test, PTT "Custom..." capture, V4-V7), 07ad4246 onlineIdleKick, a4638f2d session hooks glue
+  (online slots -> RemoteSeat, slot swaps at the agreed tick, RemoteIdle -> kick); frontend tests pass; headless SESSIONTEST on the
+  merged head 17 / 17 -> online phase 1's frontend + match side COMPLETE on FakeSession; Systems' transport is the remaining piece.
+  Trail2 dump merged (no source / spawn-per-unit / taper modules exist in this build: trails = SpawnRate particles following the
+  socket, tessellated 1-10) -> Rendering's item reshaped. AssetTools next: CAMPAIGN_A1_ASSETS manifest (campaign data prep).
