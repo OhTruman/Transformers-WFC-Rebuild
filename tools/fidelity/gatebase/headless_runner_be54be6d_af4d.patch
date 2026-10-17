@@ -1,0 +1,80 @@
+commit be54be6d03faad9af222e32dc95f6095b715510f
+Author: Integration-Agent <truman@trumanproductions.shop>
+Date:   Sat Oct 17 12:36:54 2026 -0500
+
+    Headless match runner (Systems SYSTEMS_HEADLESS_MATCH.patch 743d7326, against 1c5de2d8): WFC_NULLRENDER + a direct match boot runs the sim with no window (replaces the "interactive loop needs a window" refusal when a match is active): per step playerBotInput -> handleInput -> World::tick -> game mode -> frontend lifecycle, one fixed step per iteration, honours the simHeld load gate; ends on WFC_MATCH_SECONDS, the match leaving InProgress, WFC_SMOKE_FRAMES or a 600 s guard; verified on integration: Streets TDM + playerbot 20 s = 1801 steps in 1.8 s wall, two runs with identical SIMHASH streams (1202 distinct hashes); the transport harness's foundation
+    
+    Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+    Claude-Session: https://claude.ai/code/session_01Xa4ER7SuYUwdRHvHVyB5dX
+
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index e7abc639..3e5af0a0 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -284,7 +284,11 @@ bool Application::init() {
+     }
+     gameMode_.begin(world_);
+ 
+-    if (!window_) { LOG_ERROR("WFC_NULLRENDER: no harness ran; the interactive loop needs a window"); return false; }
++    if (!window_) {
++        if (world_.matchActive()) { runHeadlessMatch(); return false; }   // [Systems] WFC_NULLRENDER + a direct match boot
++        LOG_ERROR("WFC_NULLRENDER: no harness ran; the interactive loop needs a window");
++        return false;
++    }
+     window_->setMouseCaptured(true);
+     mouseCaptured_ = true;
+ 
+@@ -507,6 +511,41 @@ void Application::run() {
+     runMatch();
+ }
+ 
++// [Systems] Headless match (WFC_NULLRENDER + a direct match boot, no window; the netcode harness and CPU-only match rows): the
++// interactive loop's simulation order per step - player bot input -> handleInput -> World::tick -> the game mode - one fixed step per
++// iteration as WFC_LOCKSTEP runs it, with no window, draw, pacing or audio. The online load gate (ISession::simHeld) holds steps as
++// in runMatch. Ends: WFC_MATCH_SECONDS of InProgress match time, the match leaving InProgress after it started, WFC_SMOKE_FRAMES
++// iterations, or 600 s of simulated time (guard).
++void Application::runHeadlessMatch() {
++    const float step = clock_.stepSeconds();
++    const float matchSeconds = std::getenv("WFC_MATCH_SECONDS") ? (float)std::atof(std::getenv("WFC_MATCH_SECONDS")) : 0.0f;
++    const long maxIters = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 0;
++    bool started = false;
++    long iters = 0, steps = 0;
++    const auto t0 = std::chrono::steady_clock::now();
++    LOG_INFO("HEADLESS match: step %.4f s, match seconds %.0f, iteration cap %ld", step, matchSeconds, maxIters);
++    for (;; ++iters) {
++        if (maxIters > 0 && iters >= maxIters) { LOG_INFO("HEADLESS end: %ld iterations", iters); break; }
++        if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }
++        const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
++        if (inProgress) started = true;
++        if (started && !inProgress) { LOG_INFO("HEADLESS end: the match left InProgress"); break; }
++        if (matchSeconds > 0.0f && inProgress && world_.match().elapsedTime() >= matchSeconds) {
++            LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at step %ld (step-identical end point)", (int)world_.match().elapsedTime(), steps);
++            break;
++        }
++        platform::InputFrame input;
++        world_.playerBotInput(input, step);
++        world_.handleInput(input, step);
++        world_.tick(step);
++        gameMode_.tick(world_, step);
++        if (frontend_) { driveLifecycleTest(step); routeMatchToFrontend(step); }
++        ++steps;
++    }
++    const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
++    LOG_INFO("HEADLESS done: %ld steps (%.1f s simulated) in %.1f s wall", steps, steps * step, s);
++}
++
+ Application::MatchExit Application::runMatch() {
+     double last = nowSeconds();
+     platform::InputFrame input;
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 63bd35d6..2b1295e7 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -31,6 +31,7 @@ private:
+     void runFrontend();
+     enum class MatchExit { Quit, ReturnToFrontend };
+     MatchExit runMatch();
++    void runHeadlessMatch();   // [Systems] WFC_NULLRENDER + direct match boot: the sim loop without a window
+     bool loadMatch(const frontend::MatchLaunch& m);
+     void unloadMatch();
+     void drawFrontendFrame();
