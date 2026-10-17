@@ -187,6 +187,11 @@ public:
     // CAMPAIGN_HUD_PLAN.md E5): once per profile, text Localize("TutorialMessages", type, "TransGame") with commands
     // translated, sound WHSH_TUTORIAL_BOX. False (nothing shown) in versus, for a type already shown, or an unknown type.
     bool showTutorialMessage(const std::string& type);
+    // SeqAct_ToggleCinematicMode, HUD side (CAMPAIGN_HUD_PLAN.md E7): enable with bHideHUD raises UI event 12 (the HUD and
+    // its prompt stack hide); disable raises UI event 13 once no full-screen movie plays (the original's condition). The
+    // move / look / button gates and the downed revive are Gameplay's. Campaign only.
+    void setCinematicMode(bool on, bool hideHud = true);
+    bool cinematicHudHidden() const { return cinematicHudHidden_; }
     const CharacterRoster& roster() const { return roster_; }
     // The selected-character contract for a custom slot (GameFlow::SelectedCharacter), as Customize.SelectCharacter
     // records it; automation uses it too, so every path hands Gameplay the same data.
@@ -280,6 +285,8 @@ private:
     HardwareFacts hardware_;
     bool hardwareKnown_ = false;
     std::function<bool()> rtLoadedQuery_;
+    bool cinematicHudHidden_ = false, cinematicShowPending_ = false;
+    void updateCinematicHud();
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu
     void updateHdPackHint();
     GraphicsPresetTable presets_;

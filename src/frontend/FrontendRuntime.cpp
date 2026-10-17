@@ -1279,6 +1279,7 @@ static void hideRealPointer(platform::InputFrame& in) {
 }
 
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
+    updateCinematicHud();   // E7: UI event 13 once the cinematic ended and no full-screen movie plays (every frame, any level)
     platform::InputFrame in = input;
     hideRealPointer(in);
     script_.applySynthetic(in);
@@ -1329,7 +1330,7 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
     bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
     UIState st = flow_.ui().state();
-    bool hudShown = inMatch && (st == UIState::InGame || st == UIState::Spectating);
+    bool hudShown = inMatch && (st == UIState::InGame || st == UIState::Spectating) && !flow_.ui().hudHiddenByEvent();
     // TnHudDataObserverOnAttackingTeam: attached by TnGameRules_SingleFlagCTF only (CTF here, Code of Power) - 1 when the
     // local team is GRI.AttackingTeam, 2 when defending [CONFIRMED script].
     {
@@ -1395,6 +1396,31 @@ void FrontendRuntime::draw(int w, int h) {
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);
     presenter_->draw(flow_, w, h);
+}
+
+void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {
+    if (!flow_.campaign()) return;
+    if (on) {
+        cinematicShowPending_ = false;
+        if (hideHud && !cinematicHudHidden_) {
+            cinematicHudHidden_ = true;
+            flow_.onUIEvent(12);              // ShowHudFalse
+            hud_.setPromptsSuppressed(true);
+        }
+    } else if (cinematicHudHidden_) {
+        cinematicShowPending_ = true;       // UI event 13 once no full-screen movie plays (updateCinematicHud)
+    }
+    FlowTrace::emit("campaign.cinematicMode", {{"on", FlowTrace::boolean(on)}, {"hideHud", FlowTrace::boolean(hideHud)},
+                                               {"hudHidden", FlowTrace::boolean(cinematicHudHidden_)}});
+}
+
+void FrontendRuntime::updateCinematicHud() {
+    if (!cinematicShowPending_ || fullScreenMovie_) return;
+    cinematicShowPending_ = false;
+    cinematicHudHidden_ = false;
+    flow_.onUIEvent(13);                    // ShowHudTrue
+    hud_.setPromptsSuppressed(false);
+    FlowTrace::emit("campaign.cinematicMode", {{"on", "false"}, {"hudShown", "true"}});
 }
 
 bool FrontendRuntime::showTutorialMessage(const std::string& type) {

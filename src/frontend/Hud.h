@@ -96,6 +96,9 @@ public:
     // Campaign objective text (CAMPAIGN_HUD_PLAN.md E1): _global.AddObjective when it changes to a non-empty text, and
     // once more on a fresh movie (a reopened HUD shows the current objective); "" (versus, no objective) sends nothing.
     void setObjective(const std::string& text) { objective_ = text; }
+    // Cinematic mode (CAMPAIGN_HUD_PLAN.md E7): while suppressed, the prompt stack is empty on the movie (each prompt
+    // removed); lifting it re-adds the prompts still active.
+    void setPromptsSuppressed(bool on) { promptsSuppressed_ = on; }
     void addKill(const HudKill& k, int localTeam) { kills_.push_back({k, localTeam}); }
     void announce(const std::string& text) { announcements_.push_back(text); }   // _global.GameAnnouncement
     void reward(const std::string& text) { rewards_.push_back(text); }           // _global.RewardAnnouncement
@@ -134,6 +137,7 @@ private:
     HudFrame frame_, sent_;
     std::optional<int> attacking_;
     std::string objective_, sentObjective_;
+    bool promptsSuppressed_ = false;
     std::function<std::string(const std::string&)> translate_;
     bool promptsDirty_ = false;
     std::string progressLabel_;   // the bar's last label: kept while it fades out (the observer keeps its own label)

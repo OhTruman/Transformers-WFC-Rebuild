@@ -53,6 +53,7 @@ void HudController::reset() {
     progressLabel_.clear();
     objective_.clear();
     sentObjective_.clear();
+    promptsSuppressed_ = false;
 }
 
 std::string HudController::killMessage(const Catalog& cat, const HudKill& k, int localTeam) {
@@ -109,6 +110,7 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
     }
     auto call = [&](const char* fn, std::vector<BridgeValue> args) { p->hudCall(std::string("_global.") + fn, args); };
     if (attacking_) frame_.attackingTeamStatus = attacking_;
+    if (promptsSuppressed_ && frame_.contextualPrompts) frame_.contextualPrompts->clear();   // E7: cinematic mode
     const HudFrame& f = frame_;
     if (f.valid) {
         if (!sentValid_) {

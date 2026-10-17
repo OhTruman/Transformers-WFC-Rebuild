@@ -62,6 +62,10 @@ private:
     OpenFn open_; CloseFn close_; HudFn hud_; StateFn onState_;
     std::string openMovie_;
     bool inGameLobby_ = false, griAvailable_ = false, hudVisible_ = false, hideHud_ = false;
+public:
+    // UI event 12 (ShowHudFalse) hides the HUD until event 13 (ShowHudTrue), whatever the state (cinematic mode).
+    bool hudHiddenByEvent() const { return hideHud_; }
+private:
 };
 
 } // namespace frontend
