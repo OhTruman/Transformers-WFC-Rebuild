@@ -1225,7 +1225,8 @@ static void testOnlineStartLoadLeave() {
     const bool requested = r.fake->count("requestStart") == 1;
     const bool launched = runUntil(*r.rt, [&] { return r.f().hasPendingMatch(); }, 60 * 30);
     r.f().matchLoaded();
-    const bool gate = r.f().inLoadGate() && r.f().loading().active && r.fake->count("reportLoaded") == 1 &&
+    const bool held = r.f().simHeld();   // the World does not step during the load gate (ARCHITECTURE 10.4)
+    const bool gate = held && r.f().inLoadGate() && r.f().loading().active && r.fake->count("reportLoaded") == 1 &&
                       r.f().loading().message == "Waiting for 2 players";
     SessionEvent pl = ev(T::PeerLoaded); pl.member.fingerprint = "WFC-AAAA-AAAA-1";
     r.fake->inject(pl);
@@ -1243,7 +1244,7 @@ static void testOnlineStartLoadLeave() {
     SessionEvent all = ev(T::AllLoaded); all.value = 600;
     r.fake->inject(all);
     r.frames(2);
-    check(dropped && !r.f().inLoadGate() && !r.f().loading().active, "online.S15_load_timeout_drop");
+    check(dropped && !r.f().inLoadGate() && !r.f().loading().active && !r.f().simHeld(), "online.S15_load_timeout_drop");
     // S16: a human leaves mid-match: the original kill-feed line and a slot swap to a bot
     SessionEvent left = ev(T::PeerDropped); left.member.fingerprint = "WFC-AAAA-AAAA-1"; left.leaveReason = SessionLeaveReason::Left;
     r.fake->inject(left);

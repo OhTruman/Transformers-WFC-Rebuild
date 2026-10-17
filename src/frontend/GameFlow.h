@@ -323,6 +323,7 @@ public:
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
     float micLevel() const { return session_ ? session_->micLevel() : 0.0f; }
+    bool simHeld() const { return session_ && session_->simHeld(); }   // the online load gate holds the World (ARCHITECTURE 10.4)
     static std::string micMeterText(float level);      // the Mic Test row's value: ten marks, "|||||....." at 0.5
     // Push-to-Talk Key "Custom..." (PC EXTENSION): a prompt; the runtime captures the next key (Esc / Cancel: unchanged).
     void beginPttCapture();

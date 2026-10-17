@@ -57,7 +57,9 @@ public:
     void setLaunch(const std::string& url, uint32_t seed, const SessionLobby&) override { Call c = mk("setLaunch"); c.arg = url + "|" + std::to_string(seed); calls_.push_back(c); }
     void reportLoaded(uint64_t simId, uint64_t loadHash) override {
         Call c = mk("reportLoaded"); c.arg = std::to_string(simId) + "," + std::to_string(loadHash); calls_.push_back(c);
+        held_ = true;   // the World waits for AllLoaded (as the LockstepLayer's start tick)
     }
+    bool simHeld() const override { return held_; }
     void kick(const SessionMemberId& m, SessionKickReason) override { Call c = mk("kick"); c.arg = m.fingerprint; calls_.push_back(c); }
     void setVoiceSettings(const SessionVoiceSettings& v) override {
         Call c = mk("setVoiceSettings"); c.arg = std::to_string((int)v.mode) + "," + std::to_string((int)v.audience) + "," + v.device + "," + std::to_string(v.volume);
@@ -84,6 +86,7 @@ public:
             e.time = now;
             out.push_back(std::move(e));
         }
+        for (const SessionEvent& e : out) if (e.type == SessionEvent::Type::AllLoaded) held_ = false;
         return out;
     }
     bool scriptDone() const { for (const Step& s : script_) if (!s.fired) return false; return injected_.empty(); }
@@ -93,6 +96,7 @@ private:
     std::vector<Step> script_;
     std::vector<SessionEvent> injected_;
     std::vector<Call> calls_;
+    bool held_ = false;
     double now_ = 0.0;
 };
 
