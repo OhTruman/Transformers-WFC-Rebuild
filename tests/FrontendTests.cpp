@@ -1671,6 +1671,15 @@ static void testMemberSeatOrder() {
           "online.L3_member_seat_order", std::to_string(humans) + " seat " + std::to_string(seat));
 }
 
+static void testLobbyWaitingOne() {
+    // "Finding `p more player" (singular) for exactly one missing, the plural otherwise (RE ONLINE_RULES_CHECK_RE)
+    FrontendRuntime rt;
+    rt.init();
+    const std::string one = rt.catalog().localize("TransGame", "TnGameReplicationInfoGameLobby", "WaitingForOnePlayerStatus");
+    const std::string many = rt.catalog().localize("TransGame", "TnGameReplicationInfoGameLobby", "WaitingForPlayersStatus");
+    check(!one.empty() && one != many && one.find("`p") != std::string::npos, "lobby.waiting_one_player_text", one);
+}
+
 static void testForfeitEnd() {
     // A team with no players left forfeits (Gameplay's 1.5 s check, Systems 10.5): the winners' end screen shows the
     // original "Enemy team forfeits"; any other end keeps Gameplay's line; the flow returns to the game lobby as usual.
@@ -1817,6 +1826,7 @@ int main() {
     testLocalizeCaseInsensitive();
     testForfeitEnd();
     testMemberSeatOrder();
+    testLobbyWaitingOne();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

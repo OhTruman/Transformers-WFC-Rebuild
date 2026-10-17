@@ -126,10 +126,13 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
         if (flow_.matchInProgressForMember()) return cat_.localizeKey("$WfcPC.Online.MatchInProgressStatus");   // D6
+        // waiting for players: the original's singular line for exactly one missing (WaitingForOnePlayerStatus, RE
+        // ONLINE_RULES_CHECK_RE), else the plural one
+        const int missing = std::max(0, L.numRequiredPlayers - L.numPlayers);
         const char* key = L.lobbyStatus == 3 ? "WaitingForHostToStartStatus" : L.lobbyStatus == 4 ? "WaitingForBalancedTeamsStatus"
-                        : L.lobbyStatus == 6 ? "WaitingForCharacterChoiceStatus" : "WaitingForPlayersStatus";
+                        : L.lobbyStatus == 6 ? "WaitingForCharacterChoiceStatus" : missing == 1 ? "WaitingForOnePlayerStatus" : "WaitingForPlayersStatus";
         std::string s = cat_.localize("TransGame", "TnGameReplicationInfoGameLobby", key);
-        return replaceAll(s, "`p", std::to_string(std::max(0, L.numRequiredPlayers - L.numPlayers)));
+        return replaceAll(s, "`p", std::to_string(missing));
     }
     if (markup == "<CurrentGame:NumOnlinePlayers>") return "0";   // no online service
     if (markup == "<CurrentGame:AutobalanceTeams>") return "1";   // setting 0x40000012 default Autobalanced [RE 5.1]
