@@ -1317,6 +1317,7 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
         float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
         long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
+        float prevT[3] = {0, 0, 0}, vel[3] = {0, 0, 0}; bool havePrevT = false;   // the instance's velocity (UU/s, VelocityInheritParent)
     };
     int nextFxId_ = 1;
     size_t statLiveParticles_ = 0;    // live map-FX particles at the start of the tick (global budget guard)

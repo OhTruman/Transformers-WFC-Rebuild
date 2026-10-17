@@ -587,6 +587,10 @@ void Pipeline::tickMapFx(float dt) {
                 for (int c = 0; c < 3; ++c) in.T[c] = L1[c] + o[c];
             }
         }
+        if (dt > 0.0f) {                                  // the instance's velocity (VelocityInheritParent), UU/s
+            for (int c = 0; c < 3; ++c) in.vel[c] = in.havePrevT ? (in.T[c] - in.prevT[c]) / dt : 0.0f;
+            std::copy(in.T, in.T + 3, in.prevT); in.havePrevT = true;
+        }
         // LOD: Automatic = by distance to the camera; DirectSet = level 0 (no code sets it)
         float dx = in.T[0] - camUE[0], dy = in.T[1] - camUE[1], dz = in.T[2] - camUE[2];
         float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
@@ -643,7 +647,16 @@ void Pipeline::tickMapFx(float dt) {
                 for (int c = 0; c < 4; ++c) q.color[c] = q.baseColor[c];
                 for (const FxModule& m : L.modules) {
                     if (m.flagA == 0) continue;               // disabled module (RE: flagA = bEnabled, HIGH)
-                    if (m.name == "PMI_VelocityOverLife") {   // bAbsolute = false (multiplier) [PARTIAL: flag]
+                    if (m.name == "PMI_AccelerationOverLife") {   // RE audit (c) batch 2: Velocity and BaseVelocity +=
+                        float a[3]; evalDist(m, "AccelOverLife", q.relTime, in.rng, a);   // AccelOverLife(RelativeTime) x dt
+                        if (!L.localSpace) {                      // (bAlwaysInWorldSpace false: through the component)
+                            const float w[3] = {a[0] * in.R[0][0] + a[1] * in.R[1][0] + a[2] * in.R[2][0],
+                                                a[0] * in.R[0][1] + a[1] * in.R[1][1] + a[2] * in.R[2][1],
+                                                a[0] * in.R[0][2] + a[1] * in.R[1][2] + a[2] * in.R[2][2]};
+                            std::copy(w, w + 3, a);
+                        }
+                        for (int c = 0; c < 3; ++c) { q.baseVel[c] += a[c] * dt; q.vel[c] += a[c] * dt; }
+                    } else if (m.name == "PMI_VelocityOverLife") {   // bAbsolute = false (multiplier) [PARTIAL: flag]
                         float s[3]; evalDist(m, "VelOverLife", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.vel[c] *= s[c];
                     } else if (m.name == "PMI_SizeScale") {   // Size = BaseSize * SizeScale(RelativeTime)
@@ -934,6 +947,11 @@ void Pipeline::tickMapFx(float dt) {
                         if (kVelocity) {
                             toWorldDir(u3, w3);
                             for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
+                        }
+                    } else if (m.name == "PMI_VelocityInheritParent") {   // RE audit (c) batch 2: Velocity and BaseVelocity
+                        if (!L.localSpace) {                              // += Scale(EmitterTime) x the emitter's velocity (0 local)
+                            evalDist(m, "Scale", efrac, in.rng, v3);
+                            for (int c = 0; c < 3; ++c) q.baseVel[c] += v3[c] * in.vel[c];
                         }
                     } else if (m.name == "PMI_Velocity") {
                         evalDist(m, "StartVelocity", efrac, in.rng, v3);
