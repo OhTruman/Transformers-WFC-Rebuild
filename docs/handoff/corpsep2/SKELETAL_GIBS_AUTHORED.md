@@ -13,7 +13,8 @@ Gameplay, 2026-10-17. Read only from `AssetTools/manifests/authored.db`; meshes 
 - **SpiderDeaths:** LifeSpan only, no templates (no skeletal gibs).
 - **Class defaults** (`Default__TnSkeletalGibSpawner`): ChanceToSpawn 1.0, ImpulseConeHalfAngle 45. There's **no default
   RadialForceStrength**, so robots get no radial push; only the car / tank / jet spawners author one.
-- **Behaviour, then:** both gibs appear at the gib moment and **collapse under gravity as ragdolls**. They don't fly; the chunks
+- **Behaviour, then (corrected by the RE answer below):** **one** of the two gibs (50 / 50) appears at the gib moment and
+  **collapses under gravity as a ragdoll**. They don't fly; the chunks
   and the explosion FX carry the violence.
 
 ## Physics assets
@@ -39,7 +40,46 @@ Gameplay, 2026-10-17. Read only from `AssetTools/manifests/authored.db`; meshes 
 So the gibs collide with the **world only**: not with vehicles, and not with each other or the RB_Gib chunks (both are effect
 physics). There is no gib-vs-gib collision to model.
 
-## Starting points for the RE lane (the open question: the initial pose)
+## RE answer (the RE lane via Integration, 2026-10-17, script bytecode; CONFIRMED unless marked)
+
+1. **One gib per death, not two.** `TnSkeletalGibSpawner.Spawn` does one `Owner.Spawn(TnSkeletalRigidBody, , , Location)`, then
+   `Templates[Rand(Templates.Length)]`: GIB_Body or GIB_LowBody2 at 50 / 50. It's called once, from `TnDeathPlayer.Deactivate`.
+2. **The gate:**
+   - `IsSpawnDisabled` = `GetGameThrottle() >= 3`, or Templates empty, or `FRand() > ChanceToSpawn`;
+   - ChanceToSpawn is 1.0, so it passes, but the FRand is still drawn.
+3. **The chain:**
+   - `TnPawn.Dying.Gib` → `_CurrentForm.PlayGib()` → `TnRobotForm` / `TnVehicleForm.OnPlayGib` → `_DeathPlayer.Deactivate`;
+   - Location = `Owner.Mesh.GetSocketWorldLocation('PositionSocket')`;
+   - then the gibs DSYS, then `SkeletalGibs.Spawn(Owner, Location)`, then the decal.
+4. **Rotation** (HIGH, native check pending): none is passed, so the UE3 default, the dying pawn's Rotation.
+5. **Initial pose = the gib mesh's REFERENCE pose** at PositionSocket with the pawn's Rotation.
+   - InitializeMesh: `SetSkeletalMesh(MeshTemplate)`, `SetPhysicsAsset(PhysicsTemplate, bForceReInit = true)`,
+     `SetHasPhysicsAssetInstance(true)`, `WakeRigidBody()`.
+   - Nothing copies bones: no AnimTree / AnimSets, `bUpdateKinematicBonesFromAnimation` false, PhysicsWeight 1.0.
+   - The ref skeletons have GIB_Body 8 joints and GIB_LowBody2 11.
+6. **Velocity: robots start at REST** and fall.
+   - `RandomVectorInCone(Z, ImpulseConeHalfAngle)` is always computed (two FRand) but is used only in the Impulses loop, which is
+     empty.
+   - TransferOwnerVelocityToMesh runs only if the multiplier ≠ 0 (robots 0); RadialForceStrength only if ≠ 0 (robots none).
+7. **Vehicles:**
+   - `CreateDefaultDeath` → `AddDefaultSkeletalGibTemplates` adds the form's DefaultSkeletalGibTemplate (the hull; 39 blueprints).
+   - TransferVelocityMultiplier 0.75 (StarscreamBoss 0.7): every bone gets `AddLinearVelocity(Owner.Mesh.GetRBLinearVelocity() ×
+     mult)`.
+   - Then `AddRadialForce(Bounds.Origin, Bounds.SphereRadius, U(300, 700), falloff 0)` (jets {700, 400}), then ApplyColorsToMesh.
+8. **Modifiers:**
+   - car / tank: SetEnergyDeathMaterial, Delay U(0.5, 1), TransitionTime 4.5;
+   - jet: no delay, 6;
+   - cloned per gib, ramping 'Defrag' 1 → 0.
+   - **Robots: no modifiers**; the gib's own material + ApplyColorsToMesh (the owner's colours).
+9. **Lifetime:** SetLifeSpan → LifeSpanExpired: hide, collision off, DestroyedEffect if any, Destroy (no fade).
+
+**Rand sequence:** our gib uses the body's own `frand()`. Mirroring the original's draw order (the ChanceToSpawn FRand, the template
+Rand, the cone's two FRand, the LifeSpan) only matters for parity with the original's RNG, which we don't reproduce. So the gib takes
+**its own hashed stream**, like the decal, and the existing chunk / hull draws stay identical.
+
+**Matches the existing vehicle hull** (implemented in patch 1): transfer × velocity + a radial kick (PROV rigid) + the Defrag ramp.
+
+## Starting points for the RE lane (the original question, now answered above)
 
 **Question:** when `TnSkeletalGibSpawner` spawns GIB_Body_SKEL / GIB_LowBody2_SKEL for a dying robot, what is each ragdoll's initial
 pose?
@@ -84,4 +124,5 @@ Also wanted:
 - **Open (RE needed):** the initial pose. Either the ref pose at the pawn's PositionSocket, or bone transforms copied from the
   dying pawn by name (the bone names match the robot skeleton: C_Spine*, R_Arm*). The ReVa Ghidra bridge is down, so this is to be
   read via a headless export into work/, or decided by comparison with the original's footage.
-- **Estimate:** 8-12 h (was 4-6 h, which assumed rigid gibs).
+- **Estimate:** 8-12 h before the RE answer. Now **6-9 h**: one ragdoll per death, from rest in the ref pose, so no bone copy, no
+  initial velocity and no gib-vs-gib collision. The solver, capsule-vs-world collision and GPU-skinned draw remain.
