@@ -325,3 +325,85 @@ stock UE3 crowd system; deferred unless a level needs it.
 - **Game:** objective markers (TnObjectiveManager), score tracker events, achievements (client unlock / bit), co-op spawn-point
   set, special-spawn interception (native caller), music stingers (HmMusicPlayer), IK look-at interface, latent-action
   framework (ForceIntoForm).
+
+---
+
+## 1a. SeqAct_Conversation native sequencer — CONFIRMED (2026-10-18, Ghidra)
+
+Supersedes the H part of §1. **Natives** (table 0x83707500): execPlay 0x827AAD58 → **Play 0x8276EE00**; execStop → **Stop
+0x82769E58**; execOnEnded → **OnEnded 0x82764048**; execOnDialogEnded → **0x82769F18**; execDialogEventCallback → **0x8276ED30**;
+execOnDialogPlayed sets the "line started" flag.
+**Op hooks:** Activated **0x827782F0** (input 0 Play → Play; input 1 Stop → Stop); **Update 0x82787588**; line start
+**0x82784688 / 0x827845B8**.
+
+**Fields:**
+
+| Offset | Field |
+|---|---|
+| +0x90 / +0x94 | Lines data / count (stride 0xA0; +4 = PostDelayTime) |
+| +0x9C | DuckingMixerPreset |
+| +0xA4 | CurrentLineIndex |
+| +0xA8 | flags: bit 31 = current line issued, bit 30 = speaker reported "started" |
+| +0xAC | PostDelayTimer |
+
+OutputLinks: 0 Played, 1 Stopped, 2 Finished, **3 + i = "line i ended"** (optional per-line outputs; fired only if the instance has
+that many outputs).
+
+**Play:**
+- `Stop()` (ends any current line);
+- CurrentLineIndex = 0, clear "issued";
+- **enable DuckingMixerPreset** (AudioDevice vfunc 0x130);
+- fire **Played**.
+- The first line starts on the next Update.
+
+**Update(dt), every tick while active:**
+1. If PostDelayTimer ≥ 0: `timer −= dt`. While it's still ≥ 0, return (waiting). When it drops below 0: clear "issued",
+   **CurrentLineIndex++**. The timer starts at −1, so there is no wait before line 0.
+2. If CurrentLineIndex ≥ count → **OnEnded(Finished)**: **release the duck** (vfunc 0x134), fire **Finished**. The op completes.
+3. Else, if the line isn't issued yet, **start line i**:
+   - **Speaker** = variable link **2i** (object var; a Controller resolves to its Pawn).
+   - **DialogType = ConversationStart if this speaker has not spoken in an earlier line of this conversation, else
+     Conversation** (0x82764208 walks back over lines i−1…0 comparing speakers).
+   - Calls script `PlayDialog(speaker, Lines[i].SoundCue, type)` → `HmDialogInterface.PlayDialog(cue, true, type, false,
+     DialogEventCallback)`.
+   - **The line counts as started only if the speaker's "started" event (0) arrived synchronously.** Then the **Face** variable
+     (2i+1) is resolved (no gameplay use in this path) and a debug on-screen line is printed when the global debug flag is set.
+   - **If there is no speaker, no cue (script PlayDialog returns early), or the speaker didn't start → Stop() → the conversation
+     ends as Stopped.**
+4. If CurrentLineIndex < 0 (Stop happened) → **OnEnded(Stopped)**: release the duck, fire **Stopped**. The op completes.
+
+**Speaker callbacks (DialogEventCallback):**
+
+| Event | Effect |
+|---|---|
+| **0** started | set "started" |
+| **2** ended | clear "started", **PostDelayTimer = Lines[i].PostDelayTime**, fire output **3+i** if present. The next line starts when the timer runs out (0 → the next tick). |
+| **1 / 3 / 4** (stopped / interrupted / failed) | `OnDialogEnded(false)` → **Stop()** → the conversation ends as **Stopped** on the next Update |
+
+**Stop (input 1, or any abort):** if a line is issued and started → `StopDialog(speaker)` for that cue; CurrentLineIndex = −1,
+PostDelayTimer = −1 → the next Update fires **Stopped** and releases the duck.
+
+**Not present:** no skip-on-button input in the conversation op (no input polling; any skip must come from elsewhere, e.g. cinematic
+skip stopping the dialog → event 1 → Stopped). No per-line timeout: a line lasts as long as the speaker's dialog component says.
+
+## 25a. TnSeqAct_SpecialSpawnLogic caller — CONFIRMED (script in TransContent, not native)
+
+The caller is **TransContent `TnCoopGame`** (map-embedded script: work/script/decomp_tc), which my earlier search missed:
+
+```
+CheckSpecialSpawnLogic(C, CharacterName):
+    WorldInfo.GetGameSequence().FindSeqObjectsByClass(TnSeqAct_SpecialSpawnLogic, recursive=true, Actions)
+    for each action: if action.UseThisLogicForPlayer(CharacterName) { action.NotifySpawned(C); return true }   // first match wins
+    return false
+```
+
+**Triggers:**
+1. **Player join / respawn:** `TnCoopGame.InProgress.NotifyPlayerAdded(PC)`:
+   - if **no** special logic claims the PC's selected character → `SendUIEventToControllers(5, PC)` immediately (the normal
+     "player spawned" UI event);
+   - otherwise the UI event waits until Kismet fires **Handled** → `TnSeqAct_SpecialSpawnLogic.OnSpawnHandled` →
+     `TnGame.NotifySpecialSpawnHandled(PC)` → `TnCoopGame.InProgress.NotifySpecialSpawnHandled` → `SendUIEventToControllers(5, PC)`.
+2. **AI buddy spawn:** `TnAiSquad.SpawnAiCharacter` → `Game.CheckForSpecialSpawn(AC, CharacterName)` → the same check. Here
+   *SpawnIsAI* = true; Handled has no UI event (not a PlayerController).
+
+The action must be **armed** (Start input) and its `Character` must match the spawning character's name.
