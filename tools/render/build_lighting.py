@@ -240,6 +240,10 @@ def fogs(repo):
             f['LightColor'] = fcolor_rgb(f.get('LightColor'))
             f['object'] = p.object_path(i + 1)
             out.append(f)
+    # stock UE3 FScene::AddHeightFog keeps the list SORTED BY HEIGHT, highest first; the view takes the first 4 and each
+    # layer spans [the next layer's Height, its own Height], the last down to -HALF_WORLD_MAX (RE: the 360 VS constants
+    # FogMinHeight / FogMaxHeight c20 / c21, one float4 each = 4 layers; the order H)
+    out.sort(key=lambda f: -f['Height'])
     return out[:4]
 
 

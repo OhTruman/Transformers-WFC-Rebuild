@@ -1226,8 +1226,8 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                     }
                 const core::Vec3 sc = sun ? sun->color * rtdef::x3Sun() : core::Vec3{0, 0, 0};
                 fr.volSun[0] = sc.x; fr.volSun[1] = sc.y; fr.volSun[2] = sc.z; fr.volSun[3] = rtdef::x3G();
-                const float fogPerM = fogOn_ ? -fogScale_ * 0.69314718f * 100.0f * dens : 0.0f;   // (fogScale_ = -Density / ln 2, per UE unit)
-                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = fogMaxH_ / 100.0f; fr.volFog[3] = haze;
+                const float fogPerM = x3FogOn_ && !std::getenv("WFC_NOFOG") ? -x3FogScale_ * 0.69314718f * 100.0f * dens : 0.0f;   // (X3: the data's first fog component, as tuned; -Density / ln 2 per UE unit)
+                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = x3FogMaxH_ / 100.0f; fr.volFog[3] = haze;
                 fr.volMisc[0] = rtdef::x3Dist(); fr.volMisc[1] = 64.0f;
                 fr.volLampK = lampK; fr.volTransK = rtdef::x3Trans(); fr.volHistory = rtdef::x3History(); fr.volLampCore = rtdef::x3LampCore(); fr.volCap = rtdef::x3Cap();
                 // (v3) the halo lamps: the point / spot lights in view (cull sphere vs the frustum, within 60 m) ranked by

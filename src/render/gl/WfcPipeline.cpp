@@ -121,6 +121,7 @@ uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
 uniform int uFogN;                           // authored height fog layers (1 = the first only)
 uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
+uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
 uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
 uniform int uVLMBase;
 uniform sampler2D uVLM;
@@ -134,7 +135,7 @@ out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vU
 vec4 heightFog(vec3 p) {
     if (uFogOn == 0) return vec4(0.0, 0.0, 0.0, 1.0);
     float camZ = uCamPos.y * 100.0, z = p.y * 100.0, dz = z - camZ;
-    float minH = -262144.0, maxH = uFogMaxH;
+    float minH = uFogN > 1 ? uFogMinH.x : -262144.0, maxH = uFogMaxH;   // (layers stack as slabs: min = the next layer's height)
     float frac;
     if (abs(dz) < 1e-3) frac = (camZ > minH && camZ < maxH) ? 1.0 : 0.0;
     else {
@@ -151,9 +152,9 @@ vec4 heightFog(vec3 p) {
     // already there and adds its own in-scattering - rgb = rgb x s + in x (1 - s), a *= s
     for (int i = 0; i < 3; ++i) {
         if (i + 1 >= uFogN) break;
-        float mx = uFogL[i].x, fr2;
-        if (abs(dz) < 1e-3) fr2 = (camZ > minH && camZ < mx) ? 1.0 : 0.0;
-        else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((minH - camZ) / dz, 0.0, 1.0));
+        float mx = uFogL[i].x, mn = i == 0 ? uFogMinH.y : i == 1 ? uFogMinH.z : uFogMinH.w, fr2;
+        if (abs(dz) < 1e-3) fr2 = (camZ > mn && camZ < mx) ? 1.0 : 0.0;
+        else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((mn - camZ) / dz, 0.0, 1.0));
         float ld2 = max(d - uFogL[i].z, 0.0) * fr2;
         float s2 = ld2 > uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
         r = vec4(r.rgb * s2 + uFogC[i] * (1.0 - s2), r.a * s2);
@@ -1596,6 +1597,14 @@ bool Pipeline::load(const std::string& mapName) {
     const bool haveFogs = FL.isArray();
     const assets::Json& F = haveFogs ? FL[0] : L["fog"];
     fogN_ = haveFogs ? (int)std::min<size_t>(FL.size(), 4) : 1;
+    for (int k = 0; k < 4; ++k)                      // (sorted by height, highest first: each layer above the next one)
+        fogMinH_[k] = k + 1 < fogN_ ? FL[(size_t)k + 1]["Height"].asFloat(-262144.0f) : -262144.0f;
+    {   // X3 keeps the medium it was tuned on: the single 'fog' (first component) of the data, whatever the layer order
+        const assets::Json& F0 = L["fog"];
+        x3FogOn_ = F0.isObject() && F0["bEnabled"].asBool(true);
+        x3FogMaxH_ = F0["Height"].asFloat(0.0f);
+        x3FogScale_ = -F0["Density"].asFloat(5e-5f) / std::log(2.0f);
+    }
     for (int k = 1; k < fogN_; ++k) {
         const assets::Json& Fk = FL[(size_t)k];
         float* l = fogL_[k - 1]; float* cc = fogC_[k - 1];
@@ -4002,7 +4011,10 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
         Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
-        if (fogN_ > 1) { Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]); }
+        if (fogN_ > 1) {
+            Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
+            Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
+        }
     }
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
