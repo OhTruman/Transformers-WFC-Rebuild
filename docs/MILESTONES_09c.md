@@ -3417,3 +3417,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:51 RE: Escalation §7 (horde AI / revive / loot) + §7.4 weapon data (SV rows for 6 weapons, PlayerData fallback) merged;
   ONLINE_PUBLIC_MATCH_RE merged (no server browser in the original: Browse Games = labelled PC addition; public join in progress
   spawns at once). Frontend lobby v2 steps 1-4 written (compile at the eye-pass end). Omega Ddx resolved (light-pass PS).
+2026-10-17 15:57 Escalation data DONE (AssetTools): A geometry per generator (35 / 35, 0 unresolved on BrokenHope, 2 matinee objects on Remnant),
+  B the ORIGINAL navmesh in bot_nav schema (primary; Remnant start state CONFIRMED by NavigationCell.bBlocked; BrokenHope: 30
+  generator-enabled cells not cooked blocked -> RE), C closed-doors cross-check, D survival_weapon_data (6 SV, 72 PlayerData,
+  47 neither). Gameplay has the inputs for E1.
