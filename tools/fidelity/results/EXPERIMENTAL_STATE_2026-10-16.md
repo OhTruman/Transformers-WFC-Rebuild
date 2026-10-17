@@ -13,7 +13,9 @@
   then package-respin.sh <candidate> 9350f19b (regress + delta FAST + report).
 - GPU curfew: no exes 00:00 until the user's morning reboot (non-paged pool ~6.9 GB at 19:30, +0.43 GB/h).
 - After the reboot: restart the TDR ledger (work/sweep/tdrwatch.ps1 -Minutes 720 -Out work/sweep/tdrledger_day6.csv).
-- Follow-up: watchdog disk / CPU busy signal (verify_slim 19:10 burst was not flagged).
+- Watchdog busy signal DONE (908f9ee2, lib/Run.ps1). X3 candidate gate: tools/fidelity/x3-gate.sh <name> <exe> [CAND_SHA=...]
+  (WFC_X3=0 = off; keys WFC_X3_DENSITY / HAZE / G).
+- A reboot may come any time tonight (user, no warning); after a relaunch the pool is clean and the 00:00 curfew lifts.
 
 ## Trees in work/ab
 fast_398b27e_rise (gate base), fast_7cd2202, fast_4078e47, fast_9350f19, _third_party; int_* / m9c_int_* = read-only junctions to
