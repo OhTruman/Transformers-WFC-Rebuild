@@ -28,6 +28,9 @@ P=$(sed -n 's/.*penultimate \([0-9a-f]*\),.*/\1/p' $GD/../../package-gate-$g.out
 [ -n "$P" ] || P=$(sed -n '1s/.*(penultimate \([0-9a-f]*\),.*/\1/p' $GD/PACKAGE-GATE.md 2>/dev/null)   # (a gated head that was itself a respin)
 p=${P:0:7}
 export PYTHONDONTWRITEBYTECODE=1 WFC_GATE_IGNORE_HOLD=1 WFC_GATE_GPU_GRACE_MIN=0 WFC_MUTE=1 WFC_NOINTERACT=1
+# package 7 (Integration 2026-10-17): 1f1d4e17's camera recoil steps the local orbit pitch = the PlayerBot's aim, so base and head would
+# play different matches; WFC_NORECOIL=1 on every arm (the base ignores it) keeps one match - the kick is camera-only in cost
+export WFC_NORECOIL=1
 st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
 # pool guard (Integration 2026-10-17, driver nonpaged-pool leak): at every step boundary, above GATE_POOL_MAX_GB (9.5) nonpaged
 # pool the respin stops cleanly (hold removed; per-step results stay on disk) - rerun with SKIP_BUILD=1 after the reboot

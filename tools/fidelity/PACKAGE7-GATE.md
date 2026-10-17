@@ -59,6 +59,16 @@ First sim change: cfca1717 (2026-10-17).
     are already treated that way.
   - **SIMHASH is always checked.** The sim side stays provable, because the windowed lockstep and eye-pass runs log SIMHASH every
     step: lockstep-ab's "same match" and the eye pass's simhash.txt (6,001 lines per run). Any identity row checks it first.
+- **WFC_NORECOIL=1 on every gate arm** (package 7 note, Integration 2026-10-17).
+  - 1f1d4e17's camera recoil steps the local orbit pitch on each local shot, and for the local PlayerBot that pitch is its aim. With
+    the recoil, the bot's burst lands on a different pawn (p61 vs p44) than on the base, so base and head split at step 5215 (31 v
+    32).
+  - There is no port into the base. Both arms run with WFC_NORECOIL=1, the diagnostic switch 1f1d4e17 added in onLocalShot. The base
+    ignores it, so both arms play one match.
+  - The kick is camera-only in cost, so it stays out of the measurement.
+  - package-respin.sh and p7-gate.sh export it, and p7-gate.sh stops if the head exe lacks the string.
+  - The same mechanism means a player's recoil really does move their aim in play. That is the authored feel, and it isn't a gate
+    finding.
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
