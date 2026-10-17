@@ -2,6 +2,10 @@
 
 ## Current state (update at every stable point)
 
+- **Update (late 2026-10-16):** the package 6 candidate head is **af4d0731**, with the X3 volumetrics **and Rendering's Defrag draw-list cache fix**. Base both items below on af4d0731.
+  - They may run **in parallel**.
+  - They join package 6 **only** if they pass before Systems' package build starts, about 1.5 h after the relaunch.
+  - The latch removal: `node docs/handoff/corpsegpu/remove_gpu_defrag.js` in an af4d0731 tree, then the 4 crops (`mkgc.js crops`, retargeted to af4d0731 trees), especially frames 300-360 (the Defrag body).
 - **Tomorrow, 2026-10-17, after the user's reboot** (Integration's order):
   1. **Lever 1 of `GAMEPLAY_CORPSE_ONEDRAW.md` (merged 51b64874): instanced gib chunks.**
      - First read the renderer's instance / `instRejected` counters on a gib-heavy 63-bot frame (Berth / Gorge, `WFC_PERFSTATS`).
