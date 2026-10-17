@@ -225,6 +225,7 @@ bool Application::init() {
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
+    if (std::getenv("WFC_DECOYTEST")) { runDecoyTest(); return false; }            // Decoy Trap ability (deploy, team rule, stun, cooldown)
     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
@@ -5422,6 +5423,70 @@ void Application::runSessionTest() {
               "Iconic Mode: one holder per match (a second claim is refused, the previous selection stays)");
     }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DECOYTEST: the Decoy Trap (RE MP_DECOY_TRAP_RE.md) over a scripted TDM match: the local Scout deploys it; a teammate cannot
+// trigger it, an enemy pressing pickup inside the touch cylinder is stunned 2 s (input locked) and the trap goes; the 60 s cooldown
+// starts only once the trap is gone; an untouched trap expires after 30 s.
+void Application::runDecoyTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("DECOYTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle, ability;
+    ability.pressed[(int)platform::Button::Ability1] = true; ability.down[(int)platform::Button::Ability1] = true;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    L.localTeam = 0;
+    world_.launchMatch(L);
+    const int me = world_.localMatchPlayer();
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Scout;
+    cs.weapons = {"Shotgun", "HeavyPistol", "FlashBangs"}; cs.abilities = {"Hover", "DecoyTrap"};
+    world_.match().selectCharacter(me, cs);
+    std::vector<game::MatchOpponent*> ops;
+    for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("DT" + std::to_string(i), false));
+    run(11.0f);
+    game::MatchOpponent* E = nullptr; game::MatchOpponent* F = nullptr;
+    for (auto* o : ops) { if (!o->spawned()) continue; if (world_.match().sameTeam(o->matchPlayer(), me)) { if (!F) F = o; } else if (!E) E = o; }
+    if (!E || !F || world_.localPlayerDead()) { check(false, "both teams spawned"); LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    auto liveTrap = [&]() -> const game::World::DecoyTrap* { for (const auto& d : world_.decoyTraps()) if (d.alive && d.owner == me) return &d; return nullptr; };
+    const core::Vec3 away = world_.player().pawn().actorLocation() + core::Vec3{0, 0, 40.0f};
+    E->setPosition(away + core::Vec3{30.0f, 0, 0}); F->setPosition(away + core::Vec3{-30.0f, 0, 0});
+    // Deploy: Skill_Barrier, SpawnDelay 0.5 s, then the toss.
+    step(ability);
+    run(0.3f);
+    check(!liveTrap(), "no trap before SpawnDelay 0.5 s");
+    run(2.7f);
+    const game::World::DecoyTrap* t = liveTrap();
+    const game::Weapon& myW = world_.player().pawn().weapon();
+    check(t && t->landed && t->weaponId == (myW.def ? myW.def->id : ""), "the trap lands, posing as my current weapon");
+    const auto& slot = world_.player().pawn().abilities_[1];
+    check(slot.id == "DecoyTrap" && slot.pendingCooldown, "the cooldown waits while the trap exists");
+    if (!t) { LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    const core::Vec3 at = t->pos;
+    // A teammate standing on it, pressing pickup: nothing.
+    F->setPosition(at + core::Vec3{0, 0.1f, 0});
+    run(0.5f);
+    check(liveTrap() && !F->pawn().inputLocked(), "a teammate cannot trigger it");
+    F->setPosition(away + core::Vec3{-30.0f, 0, 0});
+    // An enemy pressing pickup inside the touch cylinder: stunned 2 s, the trap goes.
+    E->setPosition(at + core::Vec3{1.5f, 0.1f, 0});
+    run(0.1f);
+    check(!liveTrap() && E->pawn().inputLocked() && E->pawn().decoyStunBy_ == me, "an enemy picking it up is stunned by me; the trap is gone");
+    run(1.6f);
+    check(E->pawn().inputLocked(), "still stunned at 1.7 s");
+    run(0.5f);
+    check(!E->pawn().inputLocked(), "the stun ends after 2 s");
+    check(!slot.pendingCooldown && slot.cooldown > 55.0f, "the 60 s cooldown started once the trap was gone");
+    // An untouched trap expires after 30 s.
+    run(60.0f);
+    E->setPosition(away + core::Vec3{30.0f, 0, 0});
+    step(ability);
+    run(3.0f);
+    check(liveTrap() != nullptr, "a second trap after the cooldown");
+    run(28.5f);
+    check(!liveTrap(), "the trap expires (30 s lifespan)");
+    LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 // WFC_PACINGTEST: presented camera / pawn positions per rendered frame at 60 / 144 / 240 Hz with a 60 Hz fixed-step sim, strafing

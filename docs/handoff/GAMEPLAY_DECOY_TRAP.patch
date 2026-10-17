@@ -1,0 +1,419 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index f5a9bd19..8fc2542c 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -225,6 +225,7 @@ bool Application::init() {
+     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
+     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
+     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
++    if (std::getenv("WFC_DECOYTEST")) { runDecoyTest(); return false; }            // Decoy Trap ability (deploy, team rule, stun, cooldown)
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+@@ -5327,6 +5328,70 @@ void Application::runEventTest() {
+     LOG_INFO("EVENTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+ }
+ 
++// WFC_DECOYTEST: the Decoy Trap (RE MP_DECOY_TRAP_RE.md) over a scripted TDM match: the local Scout deploys it; a teammate cannot
++// trigger it, an enemy pressing pickup inside the touch cylinder is stunned 2 s (input locked) and the trap goes; the 60 s cooldown
++// starts only once the trap is gone; an untouched trap expires after 30 s.
++void Application::runDecoyTest() {
++    int checks = 0, fails = 0;
++    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("DECOYTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
++    const float dt = 1.0f / 60.0f;
++    platform::InputFrame idle, ability;
++    ability.pressed[(int)platform::Button::Ability1] = true; ability.down[(int)platform::Button::Ability1] = true;
++    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
++    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
++    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
++    L.localTeam = 0;
++    world_.launchMatch(L);
++    const int me = world_.localMatchPlayer();
++    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Scout;
++    cs.weapons = {"Shotgun", "HeavyPistol", "FlashBangs"}; cs.abilities = {"Hover", "DecoyTrap"};
++    world_.match().selectCharacter(me, cs);
++    std::vector<game::MatchOpponent*> ops;
++    for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("DT" + std::to_string(i), false));
++    run(11.0f);
++    game::MatchOpponent* E = nullptr; game::MatchOpponent* F = nullptr;
++    for (auto* o : ops) { if (!o->spawned()) continue; if (world_.match().sameTeam(o->matchPlayer(), me)) { if (!F) F = o; } else if (!E) E = o; }
++    if (!E || !F || world_.localPlayerDead()) { check(false, "both teams spawned"); LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
++    auto liveTrap = [&]() -> const game::World::DecoyTrap* { for (const auto& d : world_.decoyTraps()) if (d.alive && d.owner == me) return &d; return nullptr; };
++    const core::Vec3 away = world_.player().pawn().actorLocation() + core::Vec3{0, 0, 40.0f};
++    E->setPosition(away + core::Vec3{30.0f, 0, 0}); F->setPosition(away + core::Vec3{-30.0f, 0, 0});
++    // Deploy: Skill_Barrier, SpawnDelay 0.5 s, then the toss.
++    step(ability);
++    run(0.3f);
++    check(!liveTrap(), "no trap before SpawnDelay 0.5 s");
++    run(2.7f);
++    const game::World::DecoyTrap* t = liveTrap();
++    const game::Weapon& myW = world_.player().pawn().weapon();
++    check(t && t->landed && t->weaponId == (myW.def ? myW.def->id : ""), "the trap lands, posing as my current weapon");
++    const auto& slot = world_.player().pawn().abilities_[1];
++    check(slot.id == "DecoyTrap" && slot.pendingCooldown, "the cooldown waits while the trap exists");
++    if (!t) { LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
++    const core::Vec3 at = t->pos;
++    // A teammate standing on it, pressing pickup: nothing.
++    F->setPosition(at + core::Vec3{0, 0.1f, 0});
++    run(0.5f);
++    check(liveTrap() && !F->pawn().inputLocked(), "a teammate cannot trigger it");
++    F->setPosition(away + core::Vec3{-30.0f, 0, 0});
++    // An enemy pressing pickup inside the touch cylinder: stunned 2 s, the trap goes.
++    E->setPosition(at + core::Vec3{1.5f, 0.1f, 0});
++    run(0.1f);
++    check(!liveTrap() && E->pawn().inputLocked() && E->pawn().decoyStunBy_ == me, "an enemy picking it up is stunned by me; the trap is gone");
++    run(1.6f);
++    check(E->pawn().inputLocked(), "still stunned at 1.7 s");
++    run(0.5f);
++    check(!E->pawn().inputLocked(), "the stun ends after 2 s");
++    check(!slot.pendingCooldown && slot.cooldown > 55.0f, "the 60 s cooldown started once the trap was gone");
++    // An untouched trap expires after 30 s.
++    run(60.0f);
++    E->setPosition(away + core::Vec3{30.0f, 0, 0});
++    step(ability);
++    run(3.0f);
++    check(liveTrap() != nullptr, "a second trap after the cooldown");
++    run(28.5f);
++    check(!liveTrap(), "the trap expires (30 s lifespan)");
++    LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
++}
++
+ // WFC_PACINGTEST: presented camera / pawn positions per rendered frame at 60 / 144 / 240 Hz with a 60 Hz fixed-step sim, strafing
+ // and strafing + turning, with and without presentation interpolation. A smooth presentation moves every frame by about
+ // speed / Hz: report the share of frames that repeat the previous position and the coefficient of variation of the per-frame
+diff --git a/src/core/Application.h b/src/core/Application.h
+index 7f132dbf..4c6e4002 100644
+--- a/src/core/Application.h
++++ b/src/core/Application.h
+@@ -112,6 +112,7 @@ private:
+     void runPreloadTest();
+     void runClassChangeTest();
+     void runEventTest();
++    void runDecoyTest();
+     void runPacingTest();
+     void runBotTest();
+     void runBotNavTest();
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 5767a4c3..00a8e7fe 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -544,7 +544,7 @@ bool Application::wantsFrontendBoot() {
+                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
++                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_FXOWNERTEST", "WFC_NAVQTEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_DECOYTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_TIPTEST", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST",
+                           "WFC_SPAWNFILLTEST", "WFC_EXTRABODYTEST", "WFC_DOUBLEJUMPTEST",
+                           "WFC_DETERMINISMTEST", "WFC_WEAPONAUDIT", "WFC_VEHFRAMETEST", "WFC_VEHICLEAUDIT", "WFC_QABOTTEST", "WFC_MARKERSTEST", "WFC_STUCKSPOT_BOT", "WFC_ASYNCSTEPTEST", "WFC_ENGAGETEST", "WFC_EVICTTEST", "WFC_BARRIERWALKTEST"})   // [integration 09c] Gameplay 26d / 26h / 26k harnesses
+         if (std::getenv(v)) return false;
+diff --git a/src/game/Character.h b/src/game/Character.h
+index 9c6a106d..c2370d79 100644
+--- a/src/game/Character.h
++++ b/src/game/Character.h
+@@ -38,7 +38,7 @@ public:
+         regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
+         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
+         cloakRemain_ = 0.0f; hoverState_ = 0; hoverRemain_ = 0.0f;
+-        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
++        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; decoyStunRemain_ = 0.0f; decoyStunBy_ = -1; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
+         health_ = Health{}; overShield_ = false;
+         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
+         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
+@@ -239,6 +239,11 @@ public:
+     bool meleeCarrier_ = false;
+     bool barrierAlive_ = false;
+     bool beaconAlive_ = false;
++    bool decoyAlive_ = false;          // the owner's decoy trap (or its spawn) exists: the cooldown waits
++    float decoyStunRemain_ = 0.0f;     // TnBuffDecoyTrap on this pawn: input locked while > 0
++    int decoyStunBy_ = -1;             // the trap's creator (match player)
++    bool inputLocked() const { return decoyStunRemain_ > 0.0f; }   // SetCinematicMode (movement, turning, buttons)
++    void zeroVelocity() { velocity_ = core::Vec3{0, 0, 0}; }      // TnBuffDecoyTrap.Apply: Velocity and Acceleration zeroed
+     // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
+     // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
+     // 30 s (TnAbilityManager CooldownMultiplier 0).
+@@ -302,10 +307,10 @@ public:
+             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
+             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
+                             a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
+-                            a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor";
++                            a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor" || a.id == "DecoyTrap";
+             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
+             a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : a.id == "GuidedMissile" ? 45.0f : a.id == "RollerSphere" ? 60.0f :
+-                             (a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") ? 60.0f : 0.0f;
++                             (a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") ? 60.0f : a.id == "DecoyTrap" ? 60.0f : 0.0f;
+             abilities_[i] = a;
+         }
+     }
+@@ -322,7 +327,8 @@ public:
+                 !(a.id == "Drain" && drainRemain_ > 0.0f) &&
+                 !(a.id == "SpawnSentry" && (sentryAlive_ || pendingAbilityEffect_ == "SpawnSentry")) &&
+                 !(a.id == "GuidedMissile" && (missileAlive_ || pendingAbilityEffect_ == "GuidedMissile")) &&
+-                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere"))) {
++                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere")) &&
++                !(a.id == "DecoyTrap" && (decoyAlive_ || pendingAbilityEffect_ == "DecoyTrap"))) {
+                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
+             }
+             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index 9e417a3a..a629d7e4 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -46,7 +46,10 @@ float C2Smoother::smooth(float from, float to, float smoothTime, float dt) {
+     return to + (change + temp) * e;
+ }
+ 
+-void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
++void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) {
++    // TnBuffDecoyTrap: SetCinematicMode (movement, turning, buttons; not the HUD): the frame is ignored while stunned [CONF RE].
++    static const platform::InputFrame kNoInput{};
++    const platform::InputFrame& in = (pawn_ && pawn_->inputLocked()) ? kNoInput : inRaw;
+     sinceStep_ += dt;   // render time since the last simulation step (presentation yaw)
+     using platform::Button;
+     namespace cfg = core::config;
+@@ -758,7 +761,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
+                 }
+                 if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
+-                    a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") pawn_->pendingAbilityEffect_ = a.id;   // World
++                    a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor" || a.id == "DecoyTrap") pawn_->pendingAbilityEffect_ = a.id;   // World
+                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
+                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
+                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 4e9c3d9b..e22c02c9 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3165,6 +3165,7 @@ void World::clearMatchActors() {
+     sentries_.clear();
+     rollers_.clear();
+     beacons_.clear();
++    decoys_.clear();
+     buffShots_.clear();
+     for (Corpse& c : corpses_) for (CorpseChunk& k : c.chunks) if (k.fx >= 0) fxStepStop(k.fx);
+     corpses_.clear();
+@@ -3468,6 +3469,7 @@ void World::tickMatch(float dt) {
+             if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
+         auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming() && !c.isMeleeing(); };
+         const bool localPickup = player_.controller().consumePickupRequest();
++        localPickupLatch_ = localPickup;   // the decoy trap's pickup path reads it (next ability-actor tick)
+         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc), localPickup});
+         for (MatchOpponent* o : opponents_)
+             if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn()), o->pressesPickup});
+@@ -4592,6 +4594,10 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
+         float dd = std::max(0.0f, core::length(sc - at) - 2.0f);
+         if (dd < radius && radiusVisible(at, sc)) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
+     }
++    for (DecoyTrap& d : decoys_)   // TnDroppedPickupDefrag.TakeDamage: any non-team damage destroys it (H: Health 0)
++        if (d.alive && instigator >= 0 && instigator != d.owner && !(matchActive_ && match_.settings().teamGame && match_.sameTeam(instigator, d.owner)) &&
++            core::length(d.pos - at) < radius && radiusVisible(at, d.pos))
++            destroyDecoyTrap(d);
+     for (size_t bi = 0; bi < beacons_.size(); ++bi)
+         if (beacons_[bi].alive && core::length(beacons_[bi].pos - at) < radius && radiusVisible(at, beacons_[bi].pos))
+             damageAmmoBeaconAt(bi, damage * (1.0f - core::length(beacons_[bi].pos - at) / std::max(radius, 1e-3f)), instigator);
+@@ -4861,7 +4867,7 @@ void World::applyShockwave(Character& pc, int self) {
+ // thread (WFC_SCALETEST: ~0.13 ms / step at 64 participants). Their meshes are loaded by the local part (ensureAbilityModels).
+ void World::tickAbilityActors(float dt) {
+     { TickTimer tt(15); tickBarrier(dt); }
+-    { TickTimer tt(16); tickAmmoBeacon(dt); }
++    { TickTimer tt(16); tickAmmoBeacon(dt); tickDecoyTraps(dt); }
+     { TickTimer tt(17); tickSentry(dt); }
+     { TickTimer tt(18); tickRollerMine(dt); }
+     tickBuffShots(dt);
+@@ -4917,6 +4923,9 @@ void World::tickAbilityEffects(float dt) {
+         startGuidedMissile();
+     } else if (fx == "SpawnSentry") {
+         requestSentry(localPlayer_);                      // ActiveSentry.Kill(); SpawnDelay 0.2 (OnTriggerAnim additive: not played)
++    } else if (fx == "DecoyTrap") {
++        pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
++        requestDecoyTrap(localPlayer_);                   // SpawnDelay 0.5 -> SpawnInventory (TnDecoyTrap)
+     } else if (fx == "SpawnAmmoCrate") {
+         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
+         requestAmmoBeacon(localPlayer_);                  // SpawnDelay 0.5 -> SpawnInventory
+@@ -5179,6 +5188,10 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
+                 pc.meleeHitRoller_ = true;
+             }
+         }
++        for (DecoyTrap& d : decoys_)   // melee kills an enemy decoy trap instantly
++            if (d.alive && self != d.owner && !(matchActive_ && match_.settings().teamGame && match_.sameTeam(self, d.owner)) &&
++                std::fabs(d.pos.x - at.x) <= ex.x + 0.5f && std::fabs(d.pos.z - at.z) <= ex.z + 0.5f && std::fabs(d.pos.y - at.y) <= ex.y + 0.5f)
++                destroyDecoyTrap(d);
+         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : pc.meleePoke_ ? "TransGame.TnDamageTypePoke" : "TransGame.TnDamageTypeMelee";
+         for (size_t vpi = 0; vpi < match_.players().size(); ++vpi) {
+             const int vp = (int)vpi;
+@@ -5571,6 +5584,116 @@ void World::damageBarrierAt(size_t idx, float amount, const std::string& type) {
+ // reset while in range). Health 100: damage from the owner or the owner's team is ignored. TnAmmoBeacon.PickupAllowed false.
+ // Cooldown[0] 60 s once the beacon is gone (ServerCanStartCooldown). Skill gifts / grenades not applied (no skills in MP).
+ // FadeOut duration not applied: removal is immediate [PARTIAL].
++// ---- Decoy Trap [CONF RE MP_DECOY_TRAP_RE.md: TnAbilityDecoyTrap / TnDecoyTrap / TnDroppedPickupDecoyTrap / TnBuffDecoyTrap] ----
++void World::onDecoyTrapEvent(DecoyEvent e, int owner, int victim, const core::Vec3& pos) {
++    (void)e; (void)owner; (void)victim; (void)pos;   // [Systems] fills (sounds / FX); Gameplay's stub
++}
++
++void World::requestDecoyTrap(int owner) {
++    // ServerTriggerAbility: DECOY_TRAP_DEPLOY now; SpawnDelay 0.5 -> SpawnInventory; one trap per owner (the cooldown waits for it).
++    DecoyTrap d; d.owner = owner; d.delay = 0.5f;
++    d.team = matchActive_ && owner >= 0 && (size_t)owner < match_.players().size() ? match_.players()[(size_t)owner].team : 255;
++    Character* pc = participantPawnMutable(owner);
++    decoys_.push_back(d);
++    if (pc) pc->decoyAlive_ = true;
++    onDecoyTrapEvent(DecoyEvent::Deploy, owner, -1, pc ? pc->actorLocation() : core::Vec3{0, 0, 0});
++}
++
++void World::destroyDecoyTrap(DecoyTrap& d) {
++    if (!d.alive) return;
++    d.alive = false;
++    onDecoyTrapEvent(DecoyEvent::Destroyed, d.owner, -1, d.pos);
++}
++
++void World::tickDecoyTraps(float dt) {
++    // The stun on every pawn: TnBuffDecoyTrap BuffTime 2.0; Unapply -> React_DecoyTrap_Out (robot form), input restored.
++    auto tickStun = [&](Character& c) {
++        if (c.decoyStunRemain_ <= 0.0f) return;
++        c.decoyStunRemain_ -= dt;
++        if (c.decoyStunRemain_ > 0.0f) return;
++        c.decoyStunRemain_ = 0.0f;
++        if (c.form() == Form::Robot && !c.isTransforming()) c.playAction("HitReactions_React_DecoyTrap_Out", false);
++        onDecoyTrapEvent(DecoyEvent::StunEnd, c.decoyStunBy_, -1, c.actorLocation());
++        c.decoyStunBy_ = -1;
++    };
++    if (!localDead_) tickStun(player_.pawn());
++    for (MatchOpponent* o : opponents_) if (o->spawned()) tickStun(o->pawn());
++    const bool teamGame = matchActive_ && match_.settings().teamGame;
++    for (DecoyTrap& d : decoys_) {
++        const Character* owner = participantPawn(d.owner);
++        if (d.delay >= 0.0f) {
++            d.delay -= dt;
++            if (d.delay < 0.0f && owner) {   // DropFrom(owner location, TossVelocity (2000, 1200, 0) >> owner rotation)
++                const core::Vec3 f = core::forwardFromYawPitch(owner->yaw(), 0.0f), r{-f.z, 0.0f, f.x};
++                d.alive = true; d.landed = false; d.pos = owner->actorLocation(); d.vel = f * 20.0f + r * 12.0f;
++                d.life = 30.0f; d.yaw = owner->yaw(); d.alpha = 0.0f; d.armT = 0.0f; d.glitchT = 0.0f;
++                d.weaponId = owner->weapon().def ? owner->weapon().def->id : "";   // SetDecoyWeapon(the owner's current weapon)
++                LOG_INFO("ability DecoyTrap (p%d): trap dropped as %s", d.owner, d.weaponId.c_str());
++            }
++        }
++        if (d.alive) {
++            d.life -= dt;
++            if (d.life <= 0.0f || !owner) destroyDecoyTrap(d);   // lifespan (H: 30 s) / the owner dead -> FadeOut
++        }
++        if (d.alive && !d.landed) {   // PHYS_Falling until it lands (the beacon's drop physics)
++            d.vel.y -= core::config::kGravity * dt;
++            core::Vec3 next = d.pos + d.vel * dt;
++            float t; core::Vec3 n;
++            if (collision_.valid() && collision_.segmentHit(d.pos, next, t, n)) {
++                next = d.pos + (next - d.pos) * std::max(0.0f, t - 1e-3f);
++                if (n.y > 0.7f) { d.landed = true; d.vel = {0, 0, 0}; } else { d.vel.x = 0.0f; d.vel.z = 0.0f; }
++            }
++            d.pos = next;
++            if (d.pos.y < killZ_) destroyDecoyTrap(d);
++        }
++        if (!d.alive) continue;
++        // Tells: spins the opposite way to a real drop (yaw rate negated; Rendering applies the rate); defrags in over ArmDelay 3 s after
++        // landing, then every GlitchDelay 5 s fades out over 1 s and back in [CONF; the fade-in rate H: 1 s].
++        if (d.landed) {
++            d.armT += dt;
++            if (d.armT < 3.0f) d.alpha = d.armT / 3.0f;
++            else {
++                d.glitchT += dt;
++                const float g = std::fmod(d.glitchT, 7.0f);   // 5 s shown, 1 s out, 1 s back in
++                d.alpha = g < 5.0f ? 1.0f : (g < 6.0f ? 1.0f - (g - 5.0f) : g - 6.0f);
++            }
++        }
++        // Pickup: an enemy robot pressing pickup inside the touch cylinder (r 200 UU, h 100 UU about +100 Z).
++        const core::Vec3 cyl = d.pos + core::Vec3{0, 1.0f, 0};
++        for (size_t i = 0; i < match_.players().size() && d.alive; ++i) {
++            const int p = (int)i;
++            if (p == d.owner || (teamGame && match_.sameTeam(p, d.owner))) continue;   // TnDecoyTrap.PickupAllowed
++            Character* c = participantPawnMutable(p);
++            if (!c || c->form() != Form::Robot || c->isTransforming() || c->inputLocked()) continue;
++            bool presses = false;
++            if (p == localPlayer_) presses = localPickupLatch_;
++            else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) { presses = o->pressesPickup; break; }
++            if (!presses) continue;
++            const core::Vec3 q = c->actorLocation();
++            const float dx = q.x - cyl.x, dz = q.z - cyl.z;
++            const float reach = 2.0f + c->cylinderRadius(c->moveForm());   // the touch cylinder overlaps the pawn's cylinder
++            if (dx * dx + dz * dz > reach * reach || std::fabs(q.y - cyl.y) > 1.0f + c->cylinderHalfHeight(c->moveForm())) continue;
++            // TnBuffPickup.GivenTo -> AddBuff(TnBuffDecoyTrap, applier = the creator); the trap is destroyed; DECOY_TRAP_EXPLODE.
++            d.alive = false;
++            c->decoyStunRemain_ = 2.0f;
++            c->decoyStunBy_ = d.owner;
++            c->zeroVelocity();                    // Velocity and Acceleration zeroed
++            c->exposeSelf();                      // removes Cloak / Disguise
++            c->playAction("HitReactions_React_DecoyTrap_In", false);   // robot form (2.17 s: covers the 2 s stun)
++            LOG_INFO("ability DecoyTrap (p%d): p%d trapped", d.owner, p);
++            onDecoyTrapEvent(DecoyEvent::Trigger, d.owner, p, d.pos);
++        }
++    }
++    for (DecoyTrap& d : decoys_) if (!d.alive && d.delay < 0.0f) ++d.deadTicks;
++    decoys_.erase(std::remove_if(decoys_.begin(), decoys_.end(), [](const DecoyTrap& d) { return d.deadTicks >= 2; }), decoys_.end());
++    for (size_t i = 0; i < match_.players().size(); ++i)
++        if (Character* pc = participantPawnMutable((int)i)) {
++            bool any = false;
++            for (const DecoyTrap& d : decoys_) any |= d.owner == (int)i && (d.alive || d.delay >= 0.0f);
++            pc->decoyAlive_ = any;
++        }
++}
++
+ void World::requestAmmoBeacon(int owner) {
+     // TnAbilitySpawnAmmoCrate for any participant: SpawnDelay 0.5 -> SpawnInventory; one beacon per owner (cooldown waits for it).
+     AmmoBeacon b; b.owner = owner; b.delay = 0.5f;
+diff --git a/src/game/World.h b/src/game/World.h
+index e72b54b8..aa770de9 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -734,6 +734,16 @@ public:
+                         int owner = -1; float delay = -1.0f; int deadTicks = 0; };
+     std::vector<AmmoBeacon> beacons_;           // one per owner (TnAbilitySpawnAmmoCrate for any participant)
+     void requestAmmoBeacon(int owner);
++    // TnDroppedPickupDecoyTrap (TnAbilityDecoyTrap, any participant) [CONF RE MP_DECOY_TRAP_RE.md]. Rendering draws the pickup mesh
++    // of weaponId (the owner's weapon at the toss) at pos with yaw (spinning the opposite way to a real drop) and alpha (defrag in
++    // 3 s, glitch out / in every 5 s); alive && !landed = in flight. Read through decoyTraps().
++    struct DecoyTrap { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, delay = -1.0f;
++                       float yaw = 0.0f, alpha = 0.0f, armT = 0.0f, glitchT = 0.0f; int owner = -1, team = 255; std::string weaponId; int deadTicks = 0; };
++    std::vector<DecoyTrap> decoys_;
++    bool localPickupLatch_ = false;            // this step's local pickup press (the objectives consume the controller's)
++    void requestDecoyTrap(int owner);
++    void tickDecoyTraps(float dt);
++    void destroyDecoyTrap(DecoyTrap& d);
+     void generateExtraStarts();
+     void separatePawns();
+     void botPathUpkeep(BotBody o, BotBrain& b, float dt);
+@@ -1397,6 +1407,11 @@ public:
+     const BarrierState& barrier() const;   // the local player's live barrier (an empty one when none)
+     bool ammoBeaconAlive() const { return localBeacon().alive; }
+     core::Vec3 ammoBeaconPos() const { return localBeacon().pos; }
++    const std::vector<DecoyTrap>& decoyTraps() const { return decoys_; }   // every participant's decoy traps (see DecoyTrap)
++    // [Systems] Decoy Trap moments: Deploy (ability trigger: DECOY_TRAP_DEPLOY), Trigger (an enemy picked it up: DECOY_TRAP_EXPLODE;
++    // DecoyTrap_FX on the victim's TargetingSocket until StunEnd), StunEnd, Destroyed (shot / meleed / expired / owner dead: fades).
++    enum class DecoyEvent { Deploy, Trigger, StunEnd, Destroyed };
++    void onDecoyTrapEvent(DecoyEvent e, int owner, int victim, const core::Vec3& pos);
+     const std::vector<AmmoBeacon>& ammoBeacons() const { return beacons_; }   // every participant's (Rendering draws each)
+     void damageAmmoBeacon(float amount, int instigator);
+     const Sentry& sentry() const;   // the local player's sentry (an empty one when none)
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index b65acd4c..16c78f2c 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -604,6 +604,7 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
+         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
+         else if (a.id == "SpawnSentry") requestSentry(o.matchPlayer());   // TnAbilitySpawnSentry (one per owner, SpawnDelay 0.2)
+         else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(o.matchPlayer()); }   // SpawnDelay 0.5, in front of the pawn
++        else if (a.id == "DecoyTrap") { pc.playAction("Skill_Barrier", false); requestDecoyTrap(o.matchPlayer()); }   // (no bot picks it)
+         else if (a.id == "SpawnAmmoCrate") { pc.playAction("Skill_Barrier", false); requestAmmoBeacon(o.matchPlayer()); }   // OnTriggerAnim Skill_Barrier
+         else if (a.id == "RollerSphere") { pc.playAction("Skill_AbilityJammer", false); requestRoller(o.matchPlayer()); }   // OnTriggerAnimParams, SpawnDelay 0.5
+         else return false;
+@@ -2339,6 +2340,14 @@ void World::tickBots(float dt) {
+         Character& pc = o->pawn();
+         MoveIntent& in = pb.in;
+         if (!o->spawned()) continue;   // killed earlier in this pass
++        if (pc.inputLocked()) {        // TnBuffDecoyTrap: SetCinematicMode -> no movement, turning or buttons this step [CONF RE]
++            pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);
++            pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
++            pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
++            pc.tickAbilities(dt);
++            o->setIntent(MoveIntent{});
++            continue;
++        }
+         if (anySmart_ && botIsSmart(b.player)) {   // deliberately still this step (the stuck check skips it next step)
+             SmartBot& hs = smart_[(size_t)b.player];
+             hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f || hs.formHold) &&

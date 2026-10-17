@@ -741,6 +741,16 @@ public:
                         int owner = -1; float delay = -1.0f; int deadTicks = 0; };
     std::vector<AmmoBeacon> beacons_;           // one per owner (TnAbilitySpawnAmmoCrate for any participant)
     void requestAmmoBeacon(int owner);
+    // TnDroppedPickupDecoyTrap (TnAbilityDecoyTrap, any participant) [CONF RE MP_DECOY_TRAP_RE.md]. Rendering draws the pickup mesh
+    // of weaponId (the owner's weapon at the toss) at pos with yaw (spinning the opposite way to a real drop) and alpha (defrag in
+    // 3 s, glitch out / in every 5 s); alive && !landed = in flight. Read through decoyTraps().
+    struct DecoyTrap { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, delay = -1.0f;
+                       float yaw = 0.0f, alpha = 0.0f, armT = 0.0f, glitchT = 0.0f; int owner = -1, team = 255; std::string weaponId; int deadTicks = 0; };
+    std::vector<DecoyTrap> decoys_;
+    bool localPickupLatch_ = false;            // this step's local pickup press (the objectives consume the controller's)
+    void requestDecoyTrap(int owner);
+    void tickDecoyTraps(float dt);
+    void destroyDecoyTrap(DecoyTrap& d);
     void generateExtraStarts();
     void separatePawns();
     void botPathUpkeep(BotBody o, BotBrain& b, float dt);
@@ -1418,6 +1428,11 @@ public:
     const BarrierState& barrier() const;   // the local player's live barrier (an empty one when none)
     bool ammoBeaconAlive() const { return localBeacon().alive; }
     core::Vec3 ammoBeaconPos() const { return localBeacon().pos; }
+    const std::vector<DecoyTrap>& decoyTraps() const { return decoys_; }   // every participant's decoy traps (see DecoyTrap)
+    // [Systems] Decoy Trap moments: Deploy (ability trigger: DECOY_TRAP_DEPLOY), Trigger (an enemy picked it up: DECOY_TRAP_EXPLODE;
+    // DecoyTrap_FX on the victim's TargetingSocket until StunEnd), StunEnd, Destroyed (shot / meleed / expired / owner dead: fades).
+    enum class DecoyEvent { Deploy, Trigger, StunEnd, Destroyed };
+    void onDecoyTrapEvent(DecoyEvent e, int owner, int victim, const core::Vec3& pos);
     const std::vector<AmmoBeacon>& ammoBeacons() const { return beacons_; }   // every participant's (Rendering draws each)
     void damageAmmoBeacon(float amount, int instigator);
     const Sentry& sentry() const;   // the local player's sentry (an empty one when none)

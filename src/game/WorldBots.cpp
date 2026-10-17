@@ -604,6 +604,7 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
         else if (a.id == "SpawnSentry") requestSentry(o.matchPlayer());   // TnAbilitySpawnSentry (one per owner, SpawnDelay 0.2)
         else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(o.matchPlayer()); }   // SpawnDelay 0.5, in front of the pawn
+        else if (a.id == "DecoyTrap") { pc.playAction("Skill_Barrier", false); requestDecoyTrap(o.matchPlayer()); }   // (no bot picks it)
         else if (a.id == "SpawnAmmoCrate") { pc.playAction("Skill_Barrier", false); requestAmmoBeacon(o.matchPlayer()); }   // OnTriggerAnim Skill_Barrier
         else if (a.id == "RollerSphere") { pc.playAction("Skill_AbilityJammer", false); requestRoller(o.matchPlayer()); }   // OnTriggerAnimParams, SpawnDelay 0.5
         else return false;
@@ -2339,6 +2340,14 @@ void World::tickBots(float dt) {
         Character& pc = o->pawn();
         MoveIntent& in = pb.in;
         if (!o->spawned()) continue;   // killed earlier in this pass
+        if (pc.inputLocked()) {        // TnBuffDecoyTrap: SetCinematicMode -> no movement, turning or buttons this step [CONF RE]
+            pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);
+            pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
+            pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
+            pc.tickAbilities(dt);
+            o->setIntent(MoveIntent{});
+            continue;
+        }
         if (anySmart_ && botIsSmart(b.player)) {   // deliberately still this step (the stuck check skips it next step)
             SmartBot& hs = smart_[(size_t)b.player];
             hs.holdStill = (hs.action == SmartBot::HoldCover || hs.action == SmartBot::TakeCover || hs.leaderWaitSince >= 0.0f || hs.formHold) &&

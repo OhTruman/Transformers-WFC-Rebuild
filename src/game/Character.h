@@ -38,7 +38,7 @@ public:
         regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
         cloakRemain_ = 0.0f; hoverState_ = 0; hoverRemain_ = 0.0f;
-        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
+        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; decoyStunRemain_ = 0.0f; decoyStunBy_ = -1; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
@@ -239,6 +239,11 @@ public:
     bool meleeCarrier_ = false;
     bool barrierAlive_ = false;
     bool beaconAlive_ = false;
+    bool decoyAlive_ = false;          // the owner's decoy trap (or its spawn) exists: the cooldown waits
+    float decoyStunRemain_ = 0.0f;     // TnBuffDecoyTrap on this pawn: input locked while > 0
+    int decoyStunBy_ = -1;             // the trap's creator (match player)
+    bool inputLocked() const { return decoyStunRemain_ > 0.0f; }   // SetCinematicMode (movement, turning, buttons)
+    void zeroVelocity() { velocity_ = core::Vec3{0, 0, 0}; }      // TnBuffDecoyTrap.Apply: Velocity and Acceleration zeroed
     // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
     // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
     // 30 s (TnAbilityManager CooldownMultiplier 0).
@@ -302,10 +307,10 @@ public:
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
                             a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
-                            a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor";
+                            a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor" || a.id == "DecoyTrap";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
             a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : a.id == "GuidedMissile" ? 45.0f : a.id == "RollerSphere" ? 60.0f :
-                             (a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") ? 60.0f : 0.0f;
+                             (a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") ? 60.0f : a.id == "DecoyTrap" ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -322,7 +327,8 @@ public:
                 !(a.id == "Drain" && drainRemain_ > 0.0f) &&
                 !(a.id == "SpawnSentry" && (sentryAlive_ || pendingAbilityEffect_ == "SpawnSentry")) &&
                 !(a.id == "GuidedMissile" && (missileAlive_ || pendingAbilityEffect_ == "GuidedMissile")) &&
-                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere"))) {
+                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere")) &&
+                !(a.id == "DecoyTrap" && (decoyAlive_ || pendingAbilityEffect_ == "DecoyTrap"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

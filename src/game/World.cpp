@@ -3169,6 +3169,7 @@ void World::clearMatchActors() {
     sentries_.clear();
     rollers_.clear();
     beacons_.clear();
+    decoys_.clear();
     buffShots_.clear();
     for (Corpse& c : corpses_) for (CorpseChunk& k : c.chunks) if (k.fx >= 0) fxStepStop(k.fx);
     corpses_.clear();
@@ -3579,6 +3580,7 @@ void World::tickMatch(float dt) {
             if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
         auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming() && !c.isMeleeing(); };
         const bool localPickup = player_.controller().consumePickupRequest();
+        localPickupLatch_ = localPickup;   // the decoy trap's pickup path reads it (next ability-actor tick)
         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc), localPickup});
         for (MatchOpponent* o : opponents_)
             if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn()), o->pressesPickup});
@@ -4703,6 +4705,10 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
         float dd = std::max(0.0f, core::length(sc - at) - 2.0f);
         if (dd < radius && radiusVisible(at, sc)) damageSentryAt(si, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
     }
+    for (DecoyTrap& d : decoys_)   // TnDroppedPickupDefrag.TakeDamage: any non-team damage destroys it (H: Health 0)
+        if (d.alive && instigator >= 0 && instigator != d.owner && !(matchActive_ && match_.settings().teamGame && match_.sameTeam(instigator, d.owner)) &&
+            core::length(d.pos - at) < radius && radiusVisible(at, d.pos))
+            destroyDecoyTrap(d);
     for (size_t bi = 0; bi < beacons_.size(); ++bi)
         if (beacons_[bi].alive && core::length(beacons_[bi].pos - at) < radius && radiusVisible(at, beacons_[bi].pos))
             damageAmmoBeaconAt(bi, damage * (1.0f - core::length(beacons_[bi].pos - at) / std::max(radius, 1e-3f)), instigator);
@@ -4972,7 +4978,7 @@ void World::applyShockwave(Character& pc, int self) {
 // thread (WFC_SCALETEST: ~0.13 ms / step at 64 participants). Their meshes are loaded by the local part (ensureAbilityModels).
 void World::tickAbilityActors(float dt) {
     { TickTimer tt(15); tickBarrier(dt); }
-    { TickTimer tt(16); tickAmmoBeacon(dt); }
+    { TickTimer tt(16); tickAmmoBeacon(dt); tickDecoyTraps(dt); }
     { TickTimer tt(17); tickSentry(dt); }
     { TickTimer tt(18); tickRollerMine(dt); }
     tickBuffShots(dt);
@@ -5028,6 +5034,9 @@ void World::tickAbilityEffects(float dt) {
         startGuidedMissile();
     } else if (fx == "SpawnSentry") {
         requestSentry(localPlayer_);                      // ActiveSentry.Kill(); SpawnDelay 0.2 (OnTriggerAnim additive: not played)
+    } else if (fx == "DecoyTrap") {
+        pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
+        requestDecoyTrap(localPlayer_);                   // SpawnDelay 0.5 -> SpawnInventory (TnDecoyTrap)
     } else if (fx == "SpawnAmmoCrate") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         requestAmmoBeacon(localPlayer_);                  // SpawnDelay 0.5 -> SpawnInventory
@@ -5290,6 +5299,10 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
                 pc.meleeHitRoller_ = true;
             }
         }
+        for (DecoyTrap& d : decoys_)   // melee kills an enemy decoy trap instantly
+            if (d.alive && self != d.owner && !(matchActive_ && match_.settings().teamGame && match_.sameTeam(self, d.owner)) &&
+                std::fabs(d.pos.x - at.x) <= ex.x + 0.5f && std::fabs(d.pos.z - at.z) <= ex.z + 0.5f && std::fabs(d.pos.y - at.y) <= ex.y + 0.5f)
+                destroyDecoyTrap(d);
         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : pc.meleePoke_ ? "TransGame.TnDamageTypePoke" : "TransGame.TnDamageTypeMelee";
         for (size_t vpi = 0; vpi < match_.players().size(); ++vpi) {
             const int vp = (int)vpi;
@@ -5682,6 +5695,116 @@ void World::damageBarrierAt(size_t idx, float amount, const std::string& type) {
 // reset while in range). Health 100: damage from the owner or the owner's team is ignored. TnAmmoBeacon.PickupAllowed false.
 // Cooldown[0] 60 s once the beacon is gone (ServerCanStartCooldown). Skill gifts / grenades not applied (no skills in MP).
 // FadeOut duration not applied: removal is immediate [PARTIAL].
+// ---- Decoy Trap [CONF RE MP_DECOY_TRAP_RE.md: TnAbilityDecoyTrap / TnDecoyTrap / TnDroppedPickupDecoyTrap / TnBuffDecoyTrap] ----
+void World::onDecoyTrapEvent(DecoyEvent e, int owner, int victim, const core::Vec3& pos) {
+    (void)e; (void)owner; (void)victim; (void)pos;   // [Systems] fills (sounds / FX); Gameplay's stub
+}
+
+void World::requestDecoyTrap(int owner) {
+    // ServerTriggerAbility: DECOY_TRAP_DEPLOY now; SpawnDelay 0.5 -> SpawnInventory; one trap per owner (the cooldown waits for it).
+    DecoyTrap d; d.owner = owner; d.delay = 0.5f;
+    d.team = matchActive_ && owner >= 0 && (size_t)owner < match_.players().size() ? match_.players()[(size_t)owner].team : 255;
+    Character* pc = participantPawnMutable(owner);
+    decoys_.push_back(d);
+    if (pc) pc->decoyAlive_ = true;
+    onDecoyTrapEvent(DecoyEvent::Deploy, owner, -1, pc ? pc->actorLocation() : core::Vec3{0, 0, 0});
+}
+
+void World::destroyDecoyTrap(DecoyTrap& d) {
+    if (!d.alive) return;
+    d.alive = false;
+    onDecoyTrapEvent(DecoyEvent::Destroyed, d.owner, -1, d.pos);
+}
+
+void World::tickDecoyTraps(float dt) {
+    // The stun on every pawn: TnBuffDecoyTrap BuffTime 2.0; Unapply -> React_DecoyTrap_Out (robot form), input restored.
+    auto tickStun = [&](Character& c) {
+        if (c.decoyStunRemain_ <= 0.0f) return;
+        c.decoyStunRemain_ -= dt;
+        if (c.decoyStunRemain_ > 0.0f) return;
+        c.decoyStunRemain_ = 0.0f;
+        if (c.form() == Form::Robot && !c.isTransforming()) c.playAction("HitReactions_React_DecoyTrap_Out", false);
+        onDecoyTrapEvent(DecoyEvent::StunEnd, c.decoyStunBy_, -1, c.actorLocation());
+        c.decoyStunBy_ = -1;
+    };
+    if (!localDead_) tickStun(player_.pawn());
+    for (MatchOpponent* o : opponents_) if (o->spawned()) tickStun(o->pawn());
+    const bool teamGame = matchActive_ && match_.settings().teamGame;
+    for (DecoyTrap& d : decoys_) {
+        const Character* owner = participantPawn(d.owner);
+        if (d.delay >= 0.0f) {
+            d.delay -= dt;
+            if (d.delay < 0.0f && owner) {   // DropFrom(owner location, TossVelocity (2000, 1200, 0) >> owner rotation)
+                const core::Vec3 f = core::forwardFromYawPitch(owner->yaw(), 0.0f), r{-f.z, 0.0f, f.x};
+                d.alive = true; d.landed = false; d.pos = owner->actorLocation(); d.vel = f * 20.0f + r * 12.0f;
+                d.life = 30.0f; d.yaw = owner->yaw(); d.alpha = 0.0f; d.armT = 0.0f; d.glitchT = 0.0f;
+                d.weaponId = owner->weapon().def ? owner->weapon().def->id : "";   // SetDecoyWeapon(the owner's current weapon)
+                LOG_INFO("ability DecoyTrap (p%d): trap dropped as %s", d.owner, d.weaponId.c_str());
+            }
+        }
+        if (d.alive) {
+            d.life -= dt;
+            if (d.life <= 0.0f || !owner) destroyDecoyTrap(d);   // lifespan (H: 30 s) / the owner dead -> FadeOut
+        }
+        if (d.alive && !d.landed) {   // PHYS_Falling until it lands (the beacon's drop physics)
+            d.vel.y -= core::config::kGravity * dt;
+            core::Vec3 next = d.pos + d.vel * dt;
+            float t; core::Vec3 n;
+            if (collision_.valid() && collision_.segmentHit(d.pos, next, t, n)) {
+                next = d.pos + (next - d.pos) * std::max(0.0f, t - 1e-3f);
+                if (n.y > 0.7f) { d.landed = true; d.vel = {0, 0, 0}; } else { d.vel.x = 0.0f; d.vel.z = 0.0f; }
+            }
+            d.pos = next;
+            if (d.pos.y < killZ_) destroyDecoyTrap(d);
+        }
+        if (!d.alive) continue;
+        // Tells: spins the opposite way to a real drop (yaw rate negated; Rendering applies the rate); defrags in over ArmDelay 3 s after
+        // landing, then every GlitchDelay 5 s fades out over 1 s and back in [CONF; the fade-in rate H: 1 s].
+        if (d.landed) {
+            d.armT += dt;
+            if (d.armT < 3.0f) d.alpha = d.armT / 3.0f;
+            else {
+                d.glitchT += dt;
+                const float g = std::fmod(d.glitchT, 7.0f);   // 5 s shown, 1 s out, 1 s back in
+                d.alpha = g < 5.0f ? 1.0f : (g < 6.0f ? 1.0f - (g - 5.0f) : g - 6.0f);
+            }
+        }
+        // Pickup: an enemy robot pressing pickup inside the touch cylinder (r 200 UU, h 100 UU about +100 Z).
+        const core::Vec3 cyl = d.pos + core::Vec3{0, 1.0f, 0};
+        for (size_t i = 0; i < match_.players().size() && d.alive; ++i) {
+            const int p = (int)i;
+            if (p == d.owner || (teamGame && match_.sameTeam(p, d.owner))) continue;   // TnDecoyTrap.PickupAllowed
+            Character* c = participantPawnMutable(p);
+            if (!c || c->form() != Form::Robot || c->isTransforming() || c->inputLocked()) continue;
+            bool presses = false;
+            if (p == localPlayer_) presses = localPickupLatch_;
+            else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) { presses = o->pressesPickup; break; }
+            if (!presses) continue;
+            const core::Vec3 q = c->actorLocation();
+            const float dx = q.x - cyl.x, dz = q.z - cyl.z;
+            const float reach = 2.0f + c->cylinderRadius(c->moveForm());   // the touch cylinder overlaps the pawn's cylinder
+            if (dx * dx + dz * dz > reach * reach || std::fabs(q.y - cyl.y) > 1.0f + c->cylinderHalfHeight(c->moveForm())) continue;
+            // TnBuffPickup.GivenTo -> AddBuff(TnBuffDecoyTrap, applier = the creator); the trap is destroyed; DECOY_TRAP_EXPLODE.
+            d.alive = false;
+            c->decoyStunRemain_ = 2.0f;
+            c->decoyStunBy_ = d.owner;
+            c->zeroVelocity();                    // Velocity and Acceleration zeroed
+            c->exposeSelf();                      // removes Cloak / Disguise
+            c->playAction("HitReactions_React_DecoyTrap_In", false);   // robot form (2.17 s: covers the 2 s stun)
+            LOG_INFO("ability DecoyTrap (p%d): p%d trapped", d.owner, p);
+            onDecoyTrapEvent(DecoyEvent::Trigger, d.owner, p, d.pos);
+        }
+    }
+    for (DecoyTrap& d : decoys_) if (!d.alive && d.delay < 0.0f) ++d.deadTicks;
+    decoys_.erase(std::remove_if(decoys_.begin(), decoys_.end(), [](const DecoyTrap& d) { return d.deadTicks >= 2; }), decoys_.end());
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (Character* pc = participantPawnMutable((int)i)) {
+            bool any = false;
+            for (const DecoyTrap& d : decoys_) any |= d.owner == (int)i && (d.alive || d.delay >= 0.0f);
+            pc->decoyAlive_ = any;
+        }
+}
+
 void World::requestAmmoBeacon(int owner) {
     // TnAbilitySpawnAmmoCrate for any participant: SpawnDelay 0.5 -> SpawnInventory; one beacon per owner (cooldown waits for it).
     AmmoBeacon b; b.owner = owner; b.delay = 0.5f;

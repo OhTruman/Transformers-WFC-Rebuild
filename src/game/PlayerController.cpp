@@ -46,7 +46,10 @@ float C2Smoother::smooth(float from, float to, float smoothTime, float dt) {
     return to + (change + temp) * e;
 }
 
-void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
+void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) {
+    // TnBuffDecoyTrap: SetCinematicMode (movement, turning, buttons; not the HUD): the frame is ignored while stunned [CONF RE].
+    static const platform::InputFrame kNoInput{};
+    const platform::InputFrame& in = (pawn_ && pawn_->inputLocked()) ? kNoInput : inRaw;
     sinceStep_ += dt;   // render time since the last simulation step (presentation yaw)
     using platform::Button;
     namespace cfg = core::config;
@@ -758,7 +761,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
                 if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
-                    a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") pawn_->pendingAbilityEffect_ = a.id;   // World
+                    a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor" || a.id == "DecoyTrap") pawn_->pendingAbilityEffect_ = a.id;   // World
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover

@@ -112,6 +112,7 @@ private:
     void runPreloadTest();
     void runClassChangeTest();
     void runEventTest();
+    void runDecoyTest();
     void runSessionTest();
     void runPacingTest();
     void runBotTest();
