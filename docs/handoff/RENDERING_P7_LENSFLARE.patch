@@ -1,6 +1,6 @@
 diff -ruN base/src/render/gl/WfcLensFlare.cpp flares/src/render/gl/WfcLensFlare.cpp
 --- base/src/render/gl/WfcLensFlare.cpp	1969-12-31 18:00:00.000000000 -0600
-+++ flares/src/render/gl/WfcLensFlare.cpp	2026-10-17 15:04:16.540583300 -0500
++++ flares/src/render/gl/WfcLensFlare.cpp	2026-10-17 15:10:05.903444300 -0500
 @@ -0,0 +1,206 @@
 +// Lens flares (RE LENS_FLARE_RE.md s1-s4a; data <map>/lens_flares.json from tools/render/build_lens_flares.py): the map's
 +// LensFlareSources (one sun on six MP maps) drawn as the original's FLensFlareSceneProxy does -
@@ -11,7 +11,7 @@ diff -ruN base/src/render/gl/WfcLensFlare.cpp flares/src/render/gl/WfcLensFlare.
 +//    rotation = Rotation(r), material = LFMaterials[LFMaterialIndex(r)]; D = camera -> source distance in UU [C];
 +//  - the material's LensFlare* nodes read (r, 0.5 |S - E|, RayDistance, Occlusion) and the intensity [C];
 +//  - Occlusion = ScreenPercentageMap(coverage), coverage = the previous frame's visible samples of the FixedRelativeBoundingBox
-+//    over its projected pixel area (stock UE3 [HIGH]); intensity = that coverage [HIGH: proxy+0xE4 not traced];
++//    over its projected pixel area (stock UE3 [HIGH]); intensity = 1 (proxy+0xE4: no MP flare authors a cone / radius, RE C);
 +//  - additive, after the translucency pass, no depth test (SDPG_Foreground) [C]; the VS applies the height fog as any draw.
 +#include "render/gl/WfcPipeline.h"
 +
@@ -197,7 +197,7 @@ diff -ruN base/src/render/gl/WfcLensFlare.cpp flares/src/render/gl/WfcLensFlare.
 +            for (int k = 0; k < 3; ++k) q.color[k] = col[k] * dmc[k] * (el.modSource ? f.srcColor[k] : 1.0f);
 +            q.color[3] = al[0] * dma[0] * (el.modSource ? f.srcColor[3] : 1.0f);
 +            lensFlareU_[0] = r; lensFlareU_[1] = srcD; lensFlareU_[2] = el.ray; lensFlareU_[3] = vis;
-+            lensFlareI_ = f.coverage;
++            lensFlareI_ = 1.0f;                          // (proxy+0xE4: 1 without a cone / radius - RE C, 0x82FB6C40)
 +            drawSprites(el.mats[m].c_str(), &q, 1, back);
 +        }
 +        glEnable(GL_DEPTH_TEST);
@@ -209,8 +209,8 @@ diff -ruN base/src/render/gl/WfcLensFlare.cpp flares/src/render/gl/WfcLensFlare.
 +}  // namespace wfc
 +}  // namespace render
 diff -ruN base/src/render/gl/WfcMapFx.cpp flares/src/render/gl/WfcMapFx.cpp
---- base/src/render/gl/WfcMapFx.cpp	2026-10-17 15:04:15.643007300 -0500
-+++ flares/src/render/gl/WfcMapFx.cpp	2026-10-17 15:04:16.541586500 -0500
+--- base/src/render/gl/WfcMapFx.cpp	2026-10-17 15:10:04.953689000 -0500
++++ flares/src/render/gl/WfcMapFx.cpp	2026-10-17 15:10:05.901437400 -0500
 @@ -1597,7 +1597,7 @@
          pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
          if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;
@@ -229,8 +229,8 @@ diff -ruN base/src/render/gl/WfcMapFx.cpp flares/src/render/gl/WfcMapFx.cpp
      temporalDump();                                    // WFC_TEMPORALDUMP (diagnostics; motion vectors on only)
      glx::gpuMark(glx::kPassTranslucent);
 diff -ruN base/src/render/gl/WfcPipeline.cpp flares/src/render/gl/WfcPipeline.cpp
---- base/src/render/gl/WfcPipeline.cpp	2026-10-17 15:04:15.645014100 -0500
-+++ flares/src/render/gl/WfcPipeline.cpp	2026-10-17 15:04:16.542590100 -0500
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 15:10:04.956197600 -0500
++++ flares/src/render/gl/WfcPipeline.cpp	2026-10-17 15:10:05.902441200 -0500
 @@ -235,6 +235,7 @@
  uniform vec2 uNearFar;       // metres
  uniform vec2 uViewport;      // pixels
@@ -281,8 +281,8 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp flares/src/render/gl/WfcPipeline.cp
      Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
      if (skinMode_) {
 diff -ruN base/src/render/gl/WfcPipeline.h flares/src/render/gl/WfcPipeline.h
---- base/src/render/gl/WfcPipeline.h	2026-10-17 15:04:15.645515700 -0500
-+++ flares/src/render/gl/WfcPipeline.h	2026-10-17 15:04:16.543092000 -0500
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 15:10:04.956699600 -0500
++++ flares/src/render/gl/WfcPipeline.h	2026-10-17 15:10:05.903945900 -0500
 @@ -123,6 +123,7 @@
            uFogIn = -1;
      GLint uTLN = -1, uTLPos = -1, uTLCol = -1, uTLVisOn = -1, uTLVis = -1, uTLMask = -1, uTLCut = -1, uTLDir = -1, uTLCosI = -1;   // (item 4) cached: no lookups per bind
@@ -314,7 +314,7 @@ diff -ruN base/src/render/gl/WfcPipeline.h flares/src/render/gl/WfcPipeline.h
      struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
 diff -ruN base/tools/render/build_lens_flares.py flares/tools/render/build_lens_flares.py
 --- base/tools/render/build_lens_flares.py	1969-12-31 18:00:00.000000000 -0600
-+++ flares/tools/render/build_lens_flares.py	2026-10-17 15:04:17.181279600 -0500
++++ flares/tools/render/build_lens_flares.py	2026-10-17 15:10:06.579762400 -0500
 @@ -0,0 +1,68 @@
 +"""Lens flares (RE LENS_FLARE_RE.md; AssetTools manifests/maps/lens_flares/<map>_lens_flares.json): the map's LensFlareSources ->
 +<out>/lens_flares.json for the runtime: per source its world position (glTF metres), source colour, template fields (the
@@ -385,8 +385,8 @@ diff -ruN base/tools/render/build_lens_flares.py flares/tools/render/build_lens_
 +if __name__ == '__main__':
 +    main()
 diff -ruN base/tools/render/build_materials_only.py flares/tools/render/build_materials_only.py
---- base/tools/render/build_materials_only.py	2026-10-17 15:04:16.253599800 -0500
-+++ flares/tools/render/build_materials_only.py	2026-10-17 15:04:17.181780800 -0500
+--- base/tools/render/build_materials_only.py	2026-10-17 15:10:05.582845700 -0500
++++ flares/tools/render/build_materials_only.py	2026-10-17 15:10:06.580263900 -0500
 @@ -38,9 +38,10 @@
                  if os.path.exists(s): shutil.copyfile(s, os.path.join(out, g))
          scene = lines([os.path.join(H, 'scene_materials.py'), m])
@@ -400,8 +400,8 @@ diff -ruN base/tools/render/build_materials_only.py flares/tools/render/build_ma
          subprocess.run([PY] + args, check=True)
  
 diff -ruN base/tools/render/build_render_data.ps1 flares/tools/render/build_render_data.ps1
---- base/tools/render/build_render_data.ps1	2026-10-17 15:04:16.255104900 -0500
-+++ flares/tools/render/build_render_data.ps1	2026-10-17 15:04:17.182282700 -0500
+--- base/tools/render/build_render_data.ps1	2026-10-17 15:10:05.583849100 -0500
++++ flares/tools/render/build_render_data.ps1	2026-10-17 15:10:06.581267700 -0500
 @@ -56,12 +56,17 @@
  $abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --materials) | Where-Object { $_ -match '\S' })
  # Transforming world actors (the MP doors / bridges: AssetTools mp_transforming_actors.json slot materials)
@@ -422,8 +422,8 @@ diff -ruN base/tools/render/build_render_data.ps1 flares/tools/render/build_rend
  & $py (Join-Path $PSScriptRoot "beast_probes.py") $Map $out
  if ($LASTEXITCODE -ne 0) { throw "beast_probes failed" }
 diff -ruN base/tools/render/matc.py flares/tools/render/matc.py
---- base/tools/render/matc.py	2026-10-17 15:04:16.268149700 -0500
-+++ flares/tools/render/matc.py	2026-10-17 15:04:17.143650200 -0500
+--- base/tools/render/matc.py	2026-10-17 15:10:05.598900800 -0500
++++ flares/tools/render/matc.py	2026-10-17 15:10:06.541631400 -0500
 @@ -456,7 +456,8 @@
          exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
          return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
