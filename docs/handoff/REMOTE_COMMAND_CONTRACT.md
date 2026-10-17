@@ -41,3 +41,18 @@ bool World::applyRemoteCommand(int matchPlayer, const RemoteCommand& c);   // fa
 - Gameplay implements `applyRemoteCommand` after Systems confirms the shape (the session hooks give the participant and its pawn
   already).
 - The button set maps onto what PlayerController reads for the local player, so a Remote pawn behaves like a local one.
+
+## AGREED (Systems, 2026-10-17; recorded as ONLINE_MP_ARCHITECTURE.md section 10.2): the proposal with four amendments
+
+1. **Local too:** in an online match the local human's command also goes through `applyRemoteCommand` at tick N, decoded from the same
+   wire bytes that were sent, never from the live input, so every peer's sim sees identical numbers. The camera may still turn locally
+   every frame; only the sim waits for N.
+2. **Wire-exact fields:** `struct RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; }`.
+   - aimYaw is decoded from a u16 (0..2pi) and aimPitch from an i16 (+-pi/2). They are ABSOLUTE values, so nothing drifts after a missed
+     bundle.
+   - World builds the MoveIntent from the axes + aim + buttons deterministically, as for local input. Anything MoveIntent needs beyond
+     that (e.g. an analog vehicle throttle) gets a byte added by Systems on request.
+3. **Buttons:** held + pressed as two u32. `pressed` stays explicit: a tap can start and end inside one tick.
+   `static_assert((int)platform::Button::Count <= 32)`.
+4. **Idle rule:** compare against the previously APPLIED command of that player (decoded values).
+   - Non-idle = any held / pressed bit, a non-zero axis, or an aim change > 0.5 deg.
