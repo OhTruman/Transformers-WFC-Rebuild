@@ -2247,3 +2247,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 20:59 X3 GATE cost step did NOT run (x3-gate missed mkdir of cost/; fixed): timed cost hold granted
   21:15-21:40 after the FAST delta on e224ebf2 (running). Rendering compiles round 3 during the untimed FAST;
   cand12 captures + eye-pass-only after 21:40; Rendering's Faithful identity (Defrag fix f5e2d8dd) ~22:20.
+  2026-10-16 21:01 X3 ROUND 3 (Rendering, compiled 21:00, WIP 10305b39): the veil = the TRANSIENT lights' in-scatter
+  (muzzle / impact / explosion / effect lights scattered unshadowed, isotropic, no core: a firefight filled the
+  air; the quiet views never showed it). Fixes: transients get the inverse-square core at strength 0.3; the haze
+  follows the authored fog's height falloff (floor 0.0015); the integrated in-scatter is capped per channel
+  (x3cap 0.25, new defaults key -> Systems re-pairs the table); shafts only from the shadow-tested sun / lamps.
+  After 21:40: Streets match frames X3 on / off (steps 300 / 1560 / 1740), then Gorge / Molten, then int_cand12.
