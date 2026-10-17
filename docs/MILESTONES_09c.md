@@ -3006,3 +3006,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   after the doors. Door lighting stage (b) code complete (rt2 b8e00119: both captures lerped per coefficient before the basis
   decode, rects composed into one texture, TEXCOORD_1; cand33; data matches AssetTools' export 18 / 18): x16 (~10 min) granted
   directly after x15 on the same relay; one CARD FREE after x13-x16.
+2026-10-17 11:45 MERGED f9ee2ca0 Frontend case-insensitive $Key localisation fallback (iconic wheel "WEAPON 2"). Frontend shot read: first-run
+  prompt + name path (D1) verified, iconic lobby (no Escalation row) + wheel verified, "AVAILABLE" claim text verified; the in-match
+  HUD set + fr_voice_settings re-run at ~12:35 (script deadlock fixed: AllLoaded now sent on WaitingOnGameStart). Transport
+  requirement to Systems: the lockstep layer holds the World until every peer's AllLoaded.
