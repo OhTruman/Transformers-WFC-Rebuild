@@ -2319,3 +2319,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   authored.db row: f384c7b the 4 MP rows + 1,442 campaign rows, f626805 the remaining 1,942 rows, every chapter; MP runtime files
   byte-identical, vs_validate 0 FAIL on all 10; tag_parse_audit.py is a permanent vs_validate check reading 0 everywhere;
   A1's 1,211 mesh-less components -> 0). AssetTools started item 1 (campaign pickup factories, D5_OME first).
+2026-10-17 01:20 AssetTools item 1 DONE: campaign pickup factories 377 / 377 exported (assettools/checkpoint f8fd22c; chapter docs,
+  summary, CAMPAIGN_BACKLOG copied by file). Cause: vs_gameplay searched only the persistent BASE level and knew only ammo /
+  health / overshield; campaign pickups live in the design sublevels and are mostly TnWeaponPickupFactory (206) + TnPickupFactory
+  (34). Fix is campaign-only (is_campaign): all sublevels + both classes; records carry InventoryType, pickup mesh, effect template,
+  sublevel. D5 13 / 13, every chapter matches its placed count, pickups check COMPLETE everywhere. MP gate: vs_pickups +
+  vs_gameplay old vs new identical on all 10 MP maps (AssetTools work/pickupfix/proof.json); ExtractedAssets untouched.
+  MP finding (data left unchanged by rule): Escalation maps BrokenHope (17) and Remnant (16) also place TnWeaponPickupFactory
+  that MP gameplay.json omits. Integration decision: PACKAGE 7 queue item (MP fidelity, data regen + Gameplay consumption;
+  not a package 6 change, MP data is frozen for the gate). AssetTools -> item 2 (D2 bsp_alignment, A2 collision gap).
