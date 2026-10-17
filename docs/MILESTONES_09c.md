@@ -3115,3 +3115,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   anything with a window needs a relayed slot. Rendering to note the overlap in the x14 report and re-run a rep if a frame differs.
 2026-10-17 12:55 CORRECTION: the two Systems exes were WFC_NULLRENDER netshim peers (no GL / GPU); the hwnd was each process's CONSOLE window
   (Start-Process without -WindowStyle Hidden), now started hidden. No contamination. Census caveat: hwnd != 0 can be a console.
+2026-10-17 12:58 MERGED dae0338f auto input delay (sender-side production horizon over absolute target ticks: no agreement step needed, my concern
+  withdrawn; typical total wait 20.8 s -> 451 ms, bad on schedule at D 14); the HASH_EVERY assignment bug fixed. Next: bandwidth
+  trim, voice capture; NET.identity + the burst-with-hash row after Gameplay's seat fix.
