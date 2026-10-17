@@ -58,6 +58,16 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
     // PC ADAPTATION: the frame-rate limit entry the frontend adds to the PC graphics menu (Hz, 0 = unlimited).
+    // <Strings:File.Section.Key>: a localized string by its INT path (Hud_GFX's downed screen reads
+    // <Strings:TransGame.ContextualCommands.DownedSuicide>; CharacterSelect_GFX / CustomTransformers_GFX read UIText
+    // ones). Campaign only for now (CAMPAIGN_HUD_PLAN.md E4): versus keeps answering "" (byte-identical).
+    if (markup.rfind("<Strings:", 0) == 0 && markup.size() > 10 && markup.back() == '>' && flow_.campaign()) {
+        const std::string path = markup.substr(9, markup.size() - 10);
+        const size_t a = path.find('.'), b = path.rfind('.');
+        if (a != std::string::npos && b != std::string::npos && b > a)
+            return cat_.localize(path.substr(0, a), path.substr(a + 1, b - a - 1), path.substr(b + 1));
+        return "";
+    }
     if (markup == "<PCSettings:FrameLimit>") return std::to_string(flow_.profile().display.frameLimit);
     if (markup == "<PCSettings:Upscaling>") return std::to_string(flow_.profile().display.upscaling);    // PC EXTENSION
     if (markup == "<PCSettings:HDTextures>") return std::to_string(flow_.profile().display.hdTextures);   // PC EXTENSION

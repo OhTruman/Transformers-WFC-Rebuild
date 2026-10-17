@@ -177,6 +177,24 @@ static void testVolumetricSetting() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignStrings() {
+    // <Strings:File.Section.Key> (CAMPAIGN_HUD_PLAN.md E4): the INT text in a campaign match, "" in versus (unchanged).
+    // Hud_GFX's <Strings:TransGame.ContextualCommands.DownedSuicide> has no entry in the shipped TransGame.int (the text
+    // is UIText [Hud] DownedSuicide, which the movie also names): it answers "" as the data has nothing there.
+    FrontendRuntime rt;
+    check(rt.init(), "campaign.init");
+    DataStores& ds = rt.dataStores();
+    const std::string m = "<Strings:UIText.Customization.NameTrans>";
+    const bool versusEmpty = ds.call("ReadValue", {m}).s.empty() && !rt.flow().campaign();
+    rt.flow().setCampaignForTest(true);
+    const std::string t = ds.call("ReadValue", {m}).s;
+    const std::string u = ds.call("ReadValue", {"<Strings:UIText.CharacterSelect.Claimed>"}).s;
+    const std::string d = ds.call("ReadValue", {"<Strings:TransGame.ContextualCommands.DownedSuicide>"}).s;
+    rt.flow().setCampaignForTest(false);
+    check(versusEmpty && t == "Name Character" && u == "Selected" && d.empty() &&
+          frontend::GameFlow::isCampaignTag("CP") && !frontend::GameFlow::isCampaignTag("TDM"), "datastores.strings_store_campaign_only", t + " / " + u);
+}
+
 static void testFakeSession() {
     // The session boundary's test double (S0): script entries fire by time or after a recorded call; calls are recorded.
     using E = SessionEvent::Type;
@@ -757,6 +775,7 @@ int main() {
     testPackageCredits();
     testFpsCounter();
     testFakeSession();
+    testCampaignStrings();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
