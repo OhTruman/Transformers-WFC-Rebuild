@@ -62,6 +62,11 @@
   1. camera recoil (pitch / FOV kick) + per-shot camera shake from weapons_mp.json RecoilCameraParams / CameraShakeParams, presentation only;
   2. per-weapon spine / hand recoil (Character.h uses IonBlaster for all): changes SIMHASH via the hand sockets. DECIDED (Integration (a)): its own mechanical Classic re-baseline right AFTER the hover + squad merge, recorded as a deliberate fidelity change (the authored values are the evidence). The transforming-actor + dying-vehicle collision batch stays separate, later.
   - Eye check: fire each gun class before / after. Keep the 2026-10-13 strafing-wobble fix intact.
+  - **RE correction:** MP uses MultiplayerData, not PlayerData (e.g. HeavyPistol camera pitch 1.5, Bazooka 1.5, RocketVehicle RecoilTime 0.35); the regenerated audit json has the values. Check that data/gameplay/weapons_mp.json carries the MultiplayerData values before using it.
+  - **RE part 4, vehicle weapons** (PRESENTATION_AUDIT_2_RE.md 7b6735d):
+    - muzzle sockets alternate per shot (ChangeSocket mod N), and the weapon meshes alternate too;
+    - PlaneRocket bursts of 4 at 0.15 s, then a 0.75 s BurstDelay (sim-side firing: goes with the per-weapon recoil re-baseline);
+    - projectile flight loops (*.TRAIL_LP / *_FLIGHT_LP) are not played: Systems (audio).
   - Systems takes the shell / reload notify FX.
 - **Queued (proposed, after the perf levers, batched with transforming actors):** the dying vehicle keeps collision until the gib (blocks pawns / projectiles / traces; car / tank 0.2-0.75 s, jet 4-5 s), and the hull gib blocks the world + hitscan (RE VEHICLE_DEATH_PRESENTATION_RE.md 2babd61). Sim-side, so an identity change.
 - **Added to the queue (after hover):** the 32 TnTransformingWorldActor doors / bridges have no collision
