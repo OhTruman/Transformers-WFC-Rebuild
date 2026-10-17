@@ -1,4 +1,11 @@
-# Gameplay resume note (written 2026-10-16 18:40, before the 21:30 reboot)
+# Gameplay resume note (2026-10-16; updated about 20:05: a reboot may come at any time)
+
+## Current state (update at every stable point)
+
+- **About 20:05:** both check trees are prepared from integration **1c60a8ba**, which doesn't touch World.cpp / World.h since the patch base, by  (run from work/).
+  - Full builds of  and  are running, then the headless checks (; results go to ).
+  - **After a reboot:** rerun  only if the trees are missing, then  / , then the runner with the steps from .
+- **Crops:** need a slot from Integration, after Rendering's X3 capture round and before the 00:00 GPU curfew; otherwise in the morning. Steps:  (distances 10 and -40, the look-back).
 
 ## In progress: GPU-skinned death bodies (moved into package 6 by the user's decision; package 6 is held 2-3 days for volumetric lighting)
 
