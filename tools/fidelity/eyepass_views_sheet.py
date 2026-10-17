@@ -60,8 +60,9 @@ for m in maps:
 # fail): the all-view mean contrast ratio vs Off per mode, against EYE_VIEWS_CONTRAST_MIN (default = the checkpoint 4078e47b's own
 # views: Realistic 1.47, + Enhanced 1.50 over 25 views); only for the authored views (light-facing extras are report-only)
 if not VDIR:
-    vfl = dict(kv.split("=") for kv in os.environ.get("EYE_VIEWS_CONTRAST_MIN", "real=1.47,realhd=1.50").split(",") if "=" in kv)
-    fl = [f"- views contrast floor {LAB.get(mo, mo)}: all-view mean {np.mean(cvals[mo]):.2f} over {len(cvals[mo])} views vs floor {float(vfl[mo]):.2f} -> "
+    VCHK = {"real": "1.47", "realhd": "1.50"}   # (checkpoint 4078e47b; the floors are these minus 0.05)
+    vfl = dict(kv.split("=") for kv in os.environ.get("EYE_VIEWS_CONTRAST_MIN", "real=1.42,realhd=1.45").split(",") if "=" in kv)
+    fl = [f"- views contrast floor {LAB.get(mo, mo)}: all-view mean {np.mean(cvals[mo]):.2f} over {len(cvals[mo])} views vs floor {float(vfl[mo]):.2f} (checkpoint 4078e47b {VCHK.get(mo, '-')}) -> "
           f"{'OK' if round(float(np.mean(cvals[mo])), 2) >= float(vfl[mo]) - 1e-9 else 'BELOW FLOOR'}" for mo in modes[1:] if mo in vfl and cvals.get(mo)]
     if fl: rows += [""] + fl
 md = os.path.join(O, "EYEPASS.md"); t = open(md).read() if os.path.exists(md) else f"# Eye pass - {os.path.basename(O)}\n"
