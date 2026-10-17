@@ -1268,6 +1268,106 @@ static void testOnlineMemberCountdown() {
     check(r.ok && before && r.f().lobby().countingDown && r.fake->count("requestStart") == 0, "online.member_countdown_follows_host");
 }
 
+// A member in its game lobby (TDM 508), optionally carried into the loaded match.
+static bool memberIn(OnlineRig& r, bool match) {
+    using T = SessionEvent::Type;
+    SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.mapSelectionMethod = 1;
+    SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
+    r.fake->add(after("join", j));
+    r.f().call("Online.JoinGame", {"WFC-7QK2-M9TD-4H"});
+    if (!runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; })) return false;
+    r.frames(2);
+    if (!match) return true;
+    r.fake->inject(ev(T::CountdownStarted));
+    if (!runUntil(*r.rt, [&] { return r.f().hasPendingMatch(); }, 60 * 30)) return false;
+    r.f().matchLoaded();
+    r.fake->inject(ev(T::AllLoaded));
+    r.frames(2);
+    return r.f().level() == LevelKind::Match && !r.f().inLoadGate();
+}
+// Let the travel out of a match finish (the application normally releases the world).
+static void landTravel(OnlineRig& r, LevelKind want) {
+    runUntil(*r.rt, [&] { if (r.f().wantsWorldUnload()) r.f().worldUnloaded(); return r.f().level() == want && !r.f().loading().active; }, 60 * 20);
+    r.frames(3);
+}
+
+static void testOnlineSessionEnd() {
+    using T = SessionEvent::Type;
+    {   // S17 host lost in the game lobby, then in a match: the party lobby with the original text; no leave()
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, false);
+        r.fake->inject(ev(T::HostLost));
+        landTravel(r, LevelKind::PartyLobby);
+        const bool lobbyCase = in && r.f().level() == LevelKind::PartyLobby &&
+                               r.popupIs("$Engine.Errors.ConnectionFailed_Title", "$Engine.Errors.ConnectionFailedHostQuit") &&
+                               r.f().sessionRole() == GameFlow::SessionRole::Offline && r.fake->count("leave") == 0;
+        OnlineRig m;
+        const bool inMatch = m.ok && memberIn(m, true);
+        m.fake->inject(ev(T::HostLost));
+        landTravel(m, LevelKind::PartyLobby);
+        check(lobbyCase && inMatch && m.f().level() == LevelKind::PartyLobby && m.f().ui().state() == UIState::InLobby &&
+              m.popupIs("$Engine.Errors.ConnectionFailed_Title", "$Engine.Errors.ConnectionFailedHostQuit") && m.fake->count("leave") == 0,
+              "online.S17_host_lost", std::to_string(lobbyCase) + std::to_string(inMatch) + " " + levelKindName(m.f().level()));
+    }
+    {   // S18 connection timed out (member, in a match)
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, true);
+        SessionEvent c = ev(T::ConnectionLost); c.timedOut = true;
+        r.fake->inject(c);
+        landTravel(r, LevelKind::PartyLobby);
+        check(in && r.popupIs("$Engine.Errors.ConnectionFailed_Title", "$Engine.Errors.ConnectionTimeout") &&
+              r.f().sessionRole() == GameFlow::SessionRole::Offline, "online.S18_connection_lost");
+    }
+    {   // S19 desync: back to the game lobby (still a member) with the out-of-sync text, no tick in it
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, true);
+        SessionEvent d = ev(T::Desync); d.value = 4321;
+        r.fake->inject(d);
+        landTravel(r, LevelKind::GameLobby);
+        check(in && r.popupIs("$Engine.Errors.ConnectionFailed_Title", "$WfcPC.Online.Desync") &&
+              r.f().popup().message.find("4321") == std::string::npos && r.f().sessionRole() == GameFlow::SessionRole::Member, "online.S19_desync");
+    }
+    {   // S20 idle kick
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, true);
+        SessionEvent k = ev(T::Kicked); k.kickReason = SessionKickReason::Idle;
+        r.fake->inject(k);
+        landTravel(r, LevelKind::PartyLobby);
+        check(in && r.popupIs("$UIText.MessagePrompts.GenericErrorTitle", "$Engine.Errors.KickedForIdling"), "online.S20_idle_kick");
+    }
+    {   // S21 after the match: back to the host's lobby, still a member, following the host's map
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, true);
+        r.f().returnToGameLobby();
+        landTravel(r, LevelKind::GameLobby);
+        SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 502; l.mapSelectionMethod = 1;
+        SessionEvent ls = ev(T::LobbyState); ls.lobby = l;
+        r.fake->inject(ls);
+        r.frames(3);
+        check(in && r.f().sessionRole() == GameFlow::SessionRole::Member && r.f().lobby().mapId == 502 && !r.f().popup().open, "online.S21_match_end_return");
+    }
+    {   // S22 a member quits mid-match: leave() once, the party lobby, no popup; S23 the display name (D1) on join
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, true);
+        const bool name = r.fake->last("setMemberInfo") && r.fake->last("setMemberInfo")->info.displayName == r.f().profile().playerName() &&
+                          !r.f().profile().playerName().empty();
+        r.f().call("Game.QuitToMainMenu");
+        const bool memberText = r.f().popup().message == "$UIText.MessagePrompts.LeaveLobbyConfirm";
+        r.f().call("MessageBox.OnA");
+        landTravel(r, LevelKind::PartyLobby);
+        check(in && memberText && r.fake->count("leave") == 1 && r.f().level() == LevelKind::PartyLobby && !r.f().popup().open &&
+              r.f().sessionRole() == GameFlow::SessionRole::Offline, "online.S22_member_quits");
+        check(in && name, "online.S23_display_name");
+    }
+    {   // the host's quit warning (PC EXTENSION): leaving ends the game for everyone
+        SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+        OnlineRig r({after("host", o)});
+        const bool host = r.ok && hostLobby(r);
+        r.f().call("Game.QuitToMainMenu");
+        check(host && r.f().popup().message == "$WfcPC.Online.HostLeaveConfirm", "online.host_leave_warning");
+    }
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1292,6 +1392,7 @@ int main() {
     testHudJamBuffs();
     testOnlineStartLoadLeave();
     testOnlineMemberCountdown();
+    testOnlineSessionEnd();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

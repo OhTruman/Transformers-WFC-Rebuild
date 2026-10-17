@@ -14,8 +14,39 @@ namespace frontend {
 
 std::string GameFlow::txt(const char* dollarKey) const { return cat_ ? cat_->localizeKey(dollarKey) : std::string(); }
 
+void GameFlow::endSession(const char* titleKey, const char* messageKey, const char* why) {
+    const bool wasOnline = role_ != SessionRole::Offline || onlinePending_ != OnlinePending::None;
+    role_ = SessionRole::Offline;
+    onlinePending_ = OnlinePending::None;
+    onlineMembers_.clear();
+    loadGate_ = false;
+    joinCode_.clear();
+    joinAddress_.clear();
+    pendingEndTitle_ = txt(titleKey);
+    pendingEndMessage_ = txt(messageKey);
+    FlowTrace::emit("online.sessionEnd", {{"why", why}, {"wasOnline", FlowTrace::boolean(wasOnline)}, {"from", levelKindName(level_)}});
+    if (level_ == LevelKind::PartyLobby && !travelPending_) { showMessage(pendingEndTitle_, pendingEndMessage_); pendingEndTitle_.clear(); return; }
+    returnToPartyLobby();   // the party lobby, as the original's QuitToPartyLobby (TnPlayerController.QuitGame)
+}
+
+void GameFlow::sendMemberInfo(int teamRequest) {
+    SessionMemberInfo info;
+    info.id = selfId_;
+    info.displayName = profile_.playerName();   // D1: the account name
+    info.platform = SessionPlatform::PC;
+    info.hasCharacter = true;                   // the profile's custom characters (Create a Character) are always there
+    info.characterSlot = selected_.valid ? selected_.specialty : std::string();
+    info.level = progression::playerLevel(profile_.progression);
+    info.teamRequest = teamRequest;
+    session_->setMemberInfo(info);
+}
+
 void GameFlow::onlineTick() {
     for (const SessionEvent& e : session_->poll(clock_)) onSessionEvent(e);
+    if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel
+        showMessage(pendingEndTitle_, pendingEndMessage_);
+        pendingEndTitle_.clear();
+    }
     // Join timeout: the session layer sends JoinFailed{Timeout} at the original InitialConnectTimeout (50 s); this is the
     // frontend's backstop should it never answer.
     if (onlinePending_ == OnlinePending::Joining && clock_ - joinStartedAt_ >= kJoinBackstop) {
@@ -204,6 +235,7 @@ void GameFlow::enterMemberLobby(const SessionLobby& lobby) {
     closePopup();
     role_ = SessionRole::Member;
     memberLobby_ = lobby;
+    sendMemberInfo();
     const GameSettings* gs = settingsByConfigName(lobby.gameModeTag, true);
     if (!gs) gs = cat_->settingsForTag(lobby.gameModeTag, true);
     if (!gs) { onlineJoinFailed(SessionJoinFailure::Version); role_ = SessionRole::Offline; return; }
@@ -277,6 +309,30 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         break;
     case T::JoinFailed:
         if (onlinePending_ == OnlinePending::Joining) onlineJoinFailed(e.joinFailure);
+        else if (role_ != SessionRole::Offline && e.joinFailure == SessionJoinFailure::Version)   // a sim id / load hash mismatch
+            endSession("$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$Engine.Errors.ClientOutdated", "version");
+        break;
+    case T::HostLost:   // D9: the original's end of session
+        if (role_ != SessionRole::Offline) endSession("$Engine.Errors.ConnectionFailed_Title", "$Engine.Errors.ConnectionFailedHostQuit", "host quit");
+        break;
+    case T::ConnectionLost:
+        if (role_ != SessionRole::Offline)
+            endSession("$Engine.Errors.ConnectionFailed_Title", e.timedOut ? "$Engine.Errors.ConnectionTimeout" : "$Engine.Errors.ConnectionFailed",
+                       e.timedOut ? "connection timed out" : "connection lost");
+        break;
+    case T::Kicked:
+        if (role_ != SessionRole::Offline)
+            endSession("$UIText.MessagePrompts.GenericErrorTitle",
+                       e.kickReason == SessionKickReason::Idle ? "$Engine.Errors.KickedForIdling" : "$Engine.AccessControl.KickedMsg",
+                       e.kickReason == SessionKickReason::Idle ? "kicked (idle)" : "kicked");
+        break;
+    case T::Desync:   // everyone back to the game lobby (architecture section 5); the tick goes to the log, not the popup
+        if (role_ == SessionRole::Offline) break;
+        FlowTrace::emit("online.desync", {{"tick", std::to_string(e.value)}});
+        pendingEndTitle_ = txt("$Engine.Errors.ConnectionFailed_Title");
+        pendingEndMessage_ = txt("$WfcPC.Online.Desync");
+        loadGate_ = false;
+        if (level_ == LevelKind::Match) returnToGameLobby();
         break;
     case T::LobbyState:
         if (role_ == SessionRole::Member) memberLobby_ = e.lobby;
