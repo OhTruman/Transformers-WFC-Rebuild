@@ -101,3 +101,33 @@ TnCameraStrategyManager.VehicleForm.Died → WatchingVehicleDeath → `Death_Veh
 - **Other behaviours:** TnOrbitRotateToTarget, TnScreenSpaceOffsetByPitch (default curve empty; FineAim-only values), TnRecoil,
   TnShake, TnDutchRoll −1°.
 - The orbit distance is again inherited from the driving strategy.
+
+## Addendum: gibbed camera shake (CONFIRMED, script)
+
+**Trigger** (`TnPawn.Dying.Gib`):
+- For each local TnPlayerController whose **`PC.Pawn` is not none and VSize(PC.Pawn − gibbed pawn) < 1000**, the game calls
+  `PC.StartCameraShake(GibbedCameraShake)`.
+- **All-or-nothing:** there is no distance scaling.
+- The victim's own PC is in `Dead` with Pawn = none, so it **does not feel its own gib**.
+
+**Plumbing:**
+1. `TnCamera.StartShake` is ignored if Intensity == 0. Otherwise it sets bShakeStarted for one frame (cleared in UpdateViewTarget).
+2. `TnShakeCameraBehavior.Update`, on start, stores Intensity and calls `Shaker.Shake(Yaw/PitchSpectrum, ShakeFalloffDuration)` and
+   `Shaker.Roll(Roll, RollFalloffDuration)`.
+3. Every frame: `RotationAdjustment += Shaker.Update(dt) × Intensity`.
+
+**`TnCameraShaker.UpdateRotation`:**
+- `f = max(0, f − dt) / ShakeFalloffDuration`, a **linear** falloff over a duration in seconds.
+- Yaw = `Σ A·sin(2π·F·t)` from the **YawSpectrum generator** × 182.044 × f. Pitch is the same with PitchSpectrum.
+- **Amplitude is in degrees.**
+- Roll = `Roll(deg) × 182.044 × r²`, with `r` = the linear roll falloff. **Roll is a one-sided offset with no oscillation**, fading
+  **quadratically** over RollFalloffDuration.
+- The whole rotator is then × Intensity.
+- **Phase:** the generator's `t` accumulates from when it was created and is never reset by Shake, so the phase is arbitrary. There
+  is no random phase and no per-wave phase.
+- A new shake restarts the falloffs and replaces Intensity; shakes don't add up.
+- A strategy change (`Activate` → `Shaker.Reset`) cuts a running shake.
+
+**Gibbed values** (TnPawn CDO: Intensity 0.55, Roll 0.75, falloffs 0.89 s) with the spectra (Yaw 5 Hz × 3°, Pitch 4 Hz × 5°):
+- **yaw ±1.65°** and **pitch ±2.75°** peak, fading linearly to 0 over 0.89 s;
+- **roll +0.41°** (0.75 × 0.55), fading as (1 − t/0.89)².
