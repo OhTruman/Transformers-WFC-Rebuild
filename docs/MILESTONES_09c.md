@@ -3346,3 +3346,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:16 Frontend CARD FREE 15:16 (read to follow); killer cam: no hud.spectateTarget during the whole spectate window (death 1444,
   Spectating 1502-1552) -> Gameplay checks World's target timing, Frontend checks the glue's field detection; next head. Card ->
   Rendering x20 (6 min: the flare box fix (authored min..max, not centred) + WFC_LFLOG coverage log) -> Experimental's eye pass.
+2026-10-17 15:16 Frontend read: killer cam = Gameplay item (camera follows the killer, HUD target condition at World.cpp ~4050 stays false);
+  options help line + lobby footer under Voice Settings still not fixed by 39b0169f (needs a clip dump, ~1 min gap after the
+  gate); Voice Settings page + every PC options row verified on screen. All next head. Frontend acked the freeze.
