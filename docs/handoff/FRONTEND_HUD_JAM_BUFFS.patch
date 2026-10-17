@@ -1,0 +1,33 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 9063e787..2ed4ea46 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -266,6 +266,20 @@ template <class R> void setRtLoadedQuery(frontend::FrontendRuntime& fr, R* r) {
+     if constexpr (HasRendererRtLoaded<R>::value) { if (r) fr.setRayTracingLoadedQuery([r] { return r->rayTracingLoadedThisMap(); }); }
+     (void)fr; (void)r;
+ }
++// Gameplay (agents/gameplay, with the camera patch): the HUD state's buffs - struct HudBuff { std::string id; float remain; };
++// std::vector<HudBuff> buffs; - the local pawn's jam / disrupt buffs while active. Into HudFrame::jamBuffs, which the HUD
++// diffs into Hud_GFX's ApplyBuff / UnapplyBuff (the jammed slots, transform disrupted). Detected.
++template <class O, class = void> struct HasHudBuffs : std::false_type {};
++template <class O> struct HasHudBuffs<O, std::void_t<decltype(std::declval<const O&>().buffs.front().id),
++                                                     decltype(std::declval<const O&>().buffs.front().remain)>> : std::true_type {};
++template <class O> void fillJamBuffs(frontend::HudFrame& hf, const O& o) {
++    if constexpr (HasHudBuffs<O>::value) {
++        std::vector<frontend::HudFrame::Buff> v;
++        for (const auto& b : o.buffs) v.push_back({b.id, (double)b.remain});
++        hf.jamBuffs = std::move(v);
++    }
++    (void)hf; (void)o;
++}
+ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
+     frontend::HardwareFacts f;
+     if constexpr (HasRendererGpuFacts<R>::value) {
+@@ -1602,6 +1616,7 @@ void Application::routeMatchToFrontend(float dt) {
+         hf.targetName = o.target.name;           // only on a direct crosshair hit of a pawn with a PRI
+         if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
+         hf.weaponJammed = o.weapon.jammed;
++        fillJamBuffs(hf, o);
+         hf.weaponSpread = o.weapon.spread;
+         hf.weaponMessage = o.weapon.message;
+         hf.contextualPrompts = o.contextual;

@@ -1165,6 +1165,36 @@ static void testOnlineMemberSlots() {
     check(r.ok && r.f().lobby().localTeam == 1 && r.f().onlineMembers().size() == 1 && row1 == "Hosty  PC", "online.member_slots_from_host", row1);
 }
 
+static void testHudJamBuffs() {
+    // ApplyBuff / UnapplyBuff for the jam / disrupt buffs only, on change; all active again on a fresh movie.
+    RecordingPresenter p;
+    HudController hud;
+    frontend::Catalog cat;
+    HudFrame f; f.valid = true;
+    f.jamBuffs = std::vector<HudFrame::Buff>{};
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    p.calls.clear();
+    f.jamBuffs = std::vector<HudFrame::Buff>{{"TnBuffAbilityJammedKillstreak", 15}, {"TnBuffSeeEnemies", 30}};
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    const bool applied = p.has("_global.ApplyBuff(TnBuffAbilityJammedKillstreak,0,15)") && p.calls.size() == 1;
+    p.calls.clear();
+    f.jamBuffs->front().remain = 14;
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    const bool quiet = p.calls.empty();
+    f.jamBuffs->push_back({"TnBuffTransformDisruptor", 3});
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    const bool disrupted = p.has("_global.ApplyBuff(TnBuffTransformDisruptor,0,3)");
+    p.calls.clear();
+    f.jamBuffs = std::vector<HudFrame::Buff>{{"TnBuffTransformDisruptor", 2}};
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    const bool unapplied = p.has("_global.UnapplyBuff(TnBuffAbilityJammedKillstreak)") && p.calls.size() == 1;
+    hud.update(&p, cat, false, false);   // the movie closes and reopens: the active one again
+    p.calls.clear();
+    hud.setFrame(f); hud.update(&p, cat, true, true);
+    check(applied && quiet && disrupted && unapplied && p.has("_global.ApplyBuff(TnBuffTransformDisruptor,0,2)") &&
+          HudController::isJamBuff("TnBuffDifficultyJamAbilitiesRevived") && !HudController::isJamBuff("TnBuffSeeEnemies"), "hud.jam_buffs_apply_unapply");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1186,6 +1216,7 @@ int main() {
     testOnlineHostJoin();
     testOnlineLobbyGate();
     testOnlineMemberSlots();
+    testHudJamBuffs();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

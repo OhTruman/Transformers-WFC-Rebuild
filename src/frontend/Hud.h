@@ -72,6 +72,12 @@ struct HudFrame {
     // Diffed into events here: the prompts on screen (a new one -> NotifyContextualCommand(0, 0, text), a gone one ->
     // (0, 1, text)), and the refused-transform counter (each increment -> NotifyCantTransform).
     std::optional<std::vector<std::string>> contextualPrompts;
+    // The local pawn's jam / disrupt buffs (class name, seconds left): diffed into Hud_GFX's own _global.ApplyBuff(BuffId, 0,
+    // BuffTime) / UnapplyBuff(BuffId), which drive AbilityType0/1Jammed (red 0xFF3333 + jammed_mc) for TnBuffAbilityJammed /
+    // TnBuffAbilityJammedKillstreak / TnBuffDifficultyJamAbilitiesRevived and TransformDisrupted for TnBuffTransformDisruptor
+    // [CONFIRMED Hud_GFX AS; RE GAMEPLAY_PRESENTATION_AUDIT_2 part 1]. Other buffs are not sent here.
+    struct Buff { std::string id; double remain = 0; };
+    std::optional<std::vector<Buff>> jamBuffs;
     std::optional<int> cantTransformCount;
 };
 
@@ -118,6 +124,10 @@ public:
     // mc_grenadeIcon GrenadeType: 1 Frag, 2 Flashbang, 3 KMine, 4 Heal (0 none) [CONFIRMED Hud_GFX sprite 376]; from the
     // grenade weapon id [PROV name match; versus bags are frag].
     static int grenadeTypeFor(const std::string& id);
+    static bool isJamBuff(const std::string& id) {
+        return id == "TnBuffAbilityJammed" || id == "TnBuffAbilityJammedKillstreak" || id == "TnBuffDifficultyJamAbilitiesRevived" ||
+               id == "TnBuffTransformDisruptor";
+    }
     // SetAbilityIcon loads the bitmap export named by the ability class (TnAbilityBarrier, ...; 'None' empty): the
     // rebuild's short ids ("Barrier") get the TnAbility prefix [CONFIRMED Hud_GFX exports].
     static std::string abilityIconId(const std::string& id);
