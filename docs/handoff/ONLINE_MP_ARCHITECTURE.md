@@ -162,7 +162,7 @@ peer and dropped afterwards (the peer's address is then the key).
 | **mismatch 4: load hash** | `reportLoaded(simId, loadHash)`: the host compares both; a mismatch becomes `JoinFailed{Version}` (before the match) - no new event needed |
 | **mismatch 5: platform** | `SessionPlatform::Web` is phase 4; phases 1-3 report PC only |
 
-### 10.1 Resolved with the Frontend (2026-10-17; landed in Session.h, agents/frontend e0421fc3; shared record: docs/handoff/ONLINE_MP_MISMATCHES.md)
+### 10.1 Resolved with the Frontend (2026-10-17; landed in Session.h, agents/frontend e0421fc3 = integration 202cef15; shared record: docs/handoff/ONLINE_MP_MISMATCHES.md)
 
 | point | resolution |
 |---|---|
