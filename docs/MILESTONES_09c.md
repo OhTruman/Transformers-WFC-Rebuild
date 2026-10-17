@@ -3331,3 +3331,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:12 MERGED b2c790d0 Frontend UI polish (bot-row help line via the lobby footer hint; lobby footer hidden under the Voice Settings
   page) + 9d4e9138 spectateTarget trace (the 15:03 death showed no SetSpectateTarget in the ~2 s spectate window: Gameplay's
   killer-cam target or its delivery; the trace decides). Frontend tests pass. Frontend's ~2.5-min capture after Rendering's pass.
+2026-10-17 15:13 Rendering CARD FREE (x19): lens flares with intensity 1 on Rust outdoor views = large disc + ring + rays + a frame-wide lavender
+  veil (+45-63 levels mean); follows the decoded math but no original reference. HELD: RE compares with the original's Rust images
+  + re-checks the native scale semantics by 15:45; merge only on an authored-look PASS, else next head. Card -> Frontend 15:16.
