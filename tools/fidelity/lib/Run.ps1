@@ -131,9 +131,34 @@ function Invoke-WfcExe([string]$Exe, [string]$Dir, [hashtable]$Env, [string]$Log
         # process outside this worktree; the first sighting is written to <Dir>\CONTAMINATED.txt - harnesses report such a row
         # as UNKNOWN (rerun). WFC_NO_WATCHDOG=1 disables it (e.g. for runs that are themselves shared by design).
         $watch = -not $env:WFC_NO_WATCHDOG; $mark = Join-Path $Dir "CONTAMINATED.txt"; $t0 = Get-Date
+        # busy watchdog (2026-10-16, Integration: a compile and a disk burst ran inside timed holds unseen - only exes / python were
+        # watched): once a second, the machine's CPU minus this exe's own share, and PhysicalDisk % idle; another load above the
+        # threshold for more than 2 s in a row writes CONTAMINATED.txt like a foreign process. CPU: WFC_WATCH_CPU (default 25 % of
+        # all logical CPUs); disk: WFC_WATCH_DISKIDLE (default 50 % idle), checked from 60 s on (the exe's own map load reads hard).
+        $cpuMax = if ($env:WFC_WATCH_CPU) { [double]$env:WFC_WATCH_CPU } else { 25.0 }; $idleMin = if ($env:WFC_WATCH_DISKIDLE) { [double]$env:WFC_WATCH_DISKIDLE } else { 50.0 }
+        $pcCpu = $null; $pcDisk = $null
+        try { $pcCpu = New-Object System.Diagnostics.PerformanceCounter "Processor", "% Processor Time", "_Total"; [void]$pcCpu.NextValue()
+              $pcDisk = New-Object System.Diagnostics.PerformanceCounter "PhysicalDisk", "% Idle Time", "_Total"; [void]$pcDisk.NextValue() } catch { }
+        $ncpu = [Environment]::ProcessorCount; $lastCpuT = $null; $lastWall = Get-Date; $busyCpu = 0; $busyDisk = 0
         while (-not $p.HasExited) {
             if ($TimeoutSec -gt 0 -and ((Get-Date) - $t0).TotalSeconds -gt $TimeoutSec) { $p.Kill(); $p.WaitForExit(); return -999 }
-            if ($watch -and -not (Test-Path $mark)) {
+            if ($watch -and $pcCpu -and -not (Test-Path $mark)) {
+                try {
+                    $now = Get-Date; $p.Refresh(); $ct = $p.TotalProcessorTime
+                    $sys = [double]$pcCpu.NextValue(); $idle = if ($pcDisk) { [double]$pcDisk.NextValue() } else { 100.0 }
+                    $own = if ($lastCpuT) { 100.0 * ($ct - $lastCpuT).TotalSeconds / [Math]::Max(0.2, ($now - $lastWall).TotalSeconds) / $ncpu } else { 0.0 }
+                    $lastCpuT = $ct; $lastWall = $now
+                    $otherCpu = $sys - $own
+                    $busyCpu = if ($otherCpu -gt $cpuMax) { $busyCpu + 1 } else { 0 }
+                    $busyDisk = if ((($now - $t0).TotalSeconds -gt 60) -and $idle -lt $idleMin) { $busyDisk + 1 } else { 0 }
+                    if ($busyCpu -gt 2 -or $busyDisk -gt 2) {
+                        $top = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $p.Id -and $_.Id -ne $PID } | Sort-Object CPU -Descending | Select-Object -First 5 | ForEach-Object { "$($_.ProcessName)($($_.Id))" }) -join ", "
+                        "{0:HH:mm:ss} machine busy for 3 s: other CPU {1:N0} % (limit {2:N0} %), disk idle {3:N0} % (limit {4:N0} %); top CPU processes by total time: {5}" -f $now, $otherCpu, $cpuMax, $idle, $idleMin, $top |
+                            Set-Content -Encoding UTF8 $mark
+                    }
+                } catch { }
+            }
+            if ($watch -and -not $env:WFC_WATCH_NOPROC -and -not (Test-Path $mark)) {   # (WFC_WATCH_NOPROC: tests of the busy signal only)
                 $other = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'wfc_rebuild%.exe' OR Name = 'python.exe'" -ErrorAction SilentlyContinue | Where-Object {
                     $_.ProcessId -ne $p.Id -and ($_.Name -ne 'python.exe' -or (Test-WfcLanePython $_)) })
                 # (2026-10-11: a python.exe nobody claimed - the line also names its command line and parent, so the owner can be found)
