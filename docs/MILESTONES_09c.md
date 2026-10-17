@@ -3263,3 +3263,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:34 MP_ESCALATION_RE.md complete for both maps (BrokenHope's script byte-identical to Remnant's; 17 waves, boss Tank from displayed
   wave 15, 30 spawn zones, 12 door events opening 13 doors + 5 bridges, 23 item generators): the mode is fully specified for
   whenever the user schedules it. RE stands by for the 15:15 sheets look.
+2026-10-17 14:34 Experimental CARD FREE 14:35: 1e11edc2 Berth pair captured (26 / 26 both modes, same match); 21 / 26 frames change (~27 % of
+  pixels in them), larger than death frames alone at first sight: sorting against the death-frame list (verdict ~14:45). Card ->
+  Rendering x17 + x18 (14:35, ~50 min) -> Frontend gap2 4 min -> head candidate.
