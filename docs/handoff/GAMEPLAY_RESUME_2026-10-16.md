@@ -60,7 +60,7 @@
   - The faithful gate removes Classic's long stuck tips but makes short tips more frequent: decide with Integration.
 - **NEXT after the hover + squad merge (Integration, look-first, ahead of the perf levers):** weapon presentation (RE GAMEPLAY_WEAPON_PRESENTATION_AUDIT_RE.md + campaign_data/weapon_presentation_audit.json):
   1. camera recoil (pitch / FOV kick) + per-shot camera shake from weapons_mp.json RecoilCameraParams / CameraShakeParams, presentation only;
-  2. per-weapon spine / hand recoil (Character.h uses IonBlaster for all): changes SIMHASH via the hand sockets; the re-baseline timing was asked of Integration.
+  2. per-weapon spine / hand recoil (Character.h uses IonBlaster for all): changes SIMHASH via the hand sockets. DECIDED (Integration (a)): its own mechanical Classic re-baseline right AFTER the hover + squad merge, recorded as a deliberate fidelity change (the authored values are the evidence). The transforming-actor + dying-vehicle collision batch stays separate, later.
   - Eye check: fire each gun class before / after. Keep the 2026-10-13 strafing-wobble fix intact.
   - Systems takes the shell / reload notify FX.
 - **Queued (proposed, after the perf levers, batched with transforming actors):** the dying vehicle keeps collision until the gib (blocks pawns / projectiles / traces; car / tank 0.2-0.75 s, jet 4-5 s), and the hull gib blocks the world + hitscan (RE VEHICLE_DEATH_PRESENTATION_RE.md 2babd61). Sim-side, so an identity change.
