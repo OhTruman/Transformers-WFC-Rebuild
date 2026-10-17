@@ -96,6 +96,41 @@ template <class P> void fillParticipant(const P& mp, frontend::MatchValues::Play
     if constexpr (HasParticipantInfo<P>::value) { using Kind = decltype(mp.kind); p.bot = mp.kind == Kind::Bot; p.level = mp.level; p.specialty = mp.specialty; }
     else { (void)mp; (void)p; }
 }
+// Online match side (ONLINE_MP_FRONTEND_TESTS.md section 4; Gameplay item 4, agreed 2026-10-17): MatchPlayer kind Remote +
+// sessionMember -> the roster's remote / member (the scoreboard's platform tag and voice columns); game::MatchLaunch's
+// onlineSlots / self / onlineNames from the frontend's launch; World::applySlotSwap for GameFlow::takeSlotSwaps(). Detected:
+// before Gameplay's hooks land, offline is unchanged and an online swap is traced as not applied.
+template <class P, class = void> struct HasSessionMember : std::false_type {};
+template <class P> struct HasSessionMember<P, std::void_t<decltype(std::string(std::declval<const P&>().sessionMember))>> : std::true_type {};
+template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p) {
+    if constexpr (HasParticipantInfo<P>::value) { using Kind = decltype(mp.kind); p.remote = mp.kind == Kind::Remote; }
+    if constexpr (HasSessionMember<P>::value) p.member = mp.sessionMember;
+    (void)mp; (void)p;
+}
+template <class L, class = void> struct HasOnlineLaunch : std::false_type {};
+template <class L>
+struct HasOnlineLaunch<L, std::void_t<decltype(std::declval<L&>().onlineSlots = std::vector<frontend::SessionSlot>{}),
+                                      decltype(std::declval<L&>().self = frontend::SessionMemberId{}),
+                                      decltype(std::declval<L&>().onlineNames = std::vector<std::pair<frontend::SessionMemberId, std::string>>{})>>
+    : std::true_type {};
+template <class L> void fillOnlineLaunch(L& gl, const frontend::MatchLaunch& m) {
+    if constexpr (HasOnlineLaunch<L>::value) { gl.onlineSlots = m.onlineSlots; gl.self = m.self; gl.onlineNames = m.onlineNames; }
+    else if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchSlots", {{"applied", "false"}, {"why", "no Gameplay hook"}});
+    (void)gl;
+}
+template <class W, class = void> struct HasSlotSwap : std::false_type {};
+template <class W> struct HasSlotSwap<W, std::void_t<decltype(bool(std::declval<W&>().applySlotSwap(std::declval<const frontend::SessionSlotSwap&>())))>>
+    : std::true_type {};
+template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+    for (const frontend::SessionSlotSwap& s : flow.takeSlotSwaps()) {
+        bool ok = false;
+        if constexpr (HasSlotSwap<W>::value) ok = w.applySlotSwap(s);
+        frontend::FlowTrace::emit("online.slotSwap", {{"member", s.member.fingerprint}, {"matchPlayer", std::to_string(s.matchPlayer)},
+                                                      {"to", s.to == frontend::SessionSlotSwap::To::Bot ? "bot" : "remote"},
+                                                      {"applied", frontend::FlowTrace::boolean(ok)}});
+    }
+    (void)w;
+}
 template <class S, class = void> struct HasMatchCapacity : std::false_type {};
 template <class S>
 struct HasMatchCapacity<S, std::void_t<decltype(std::declval<const S&>().maxPerTeam), decltype(std::declval<const S&>().maxPlayers)>>
@@ -1262,6 +1297,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // [integration M08b] The team the lobby assigned (random PickTeam or the player's Switch Team) is the team the player
     // spawns on; Gameplay's own PickTeam used to override it (always Autobots offline). Experimental audit P1-1.
     gl.localTeam = m.teamIndex;
+    fillOnlineLaunch(gl, m);   // online: the host's slots -> Remote participants (empty offline)
     // TEST / VALIDATION ONLY (explicit opt-in): WFC_LIFECYCLE=<goal score> shortens the match to that score and adds
     // one Gameplay diagnostic opponent (MatchOpponent); driveLifecycleTest() then produces kills and deaths through
     // World::applyMatchDamage, so the real rules run scoring, death, respawn wave, score-limit end and the return.
@@ -1380,6 +1416,7 @@ void Application::routeMatchToFrontend(float dt) {
     // snapshot, every write goes through submit(); the queues are consumed at the end. Safe per step today and per frame
     // once the step runs on a worker.
     const game::World::PresentedFrame& pf = world_.presented();
+    applySlotSwaps(world_, flow);   // online: a human who left -> a bot in the same slot (Gameplay picks the agreed tick)
     forwardAwards(world_, *frontend_, me);
     applyHudScreenEffect(renderer_, frontend_->hudPostProcessChain());
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
@@ -1560,6 +1597,7 @@ void Application::routeMatchToFrontend(float dt) {
         p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
         p.dead = !mp.alive; p.local = (int)i == me;
         fillParticipant(mp, p);
+        fillRemote(mp, p);
         v.players.push_back(p);
     }
     flow.setMatchValues(std::move(v));   // [integration 09c] no roster copy per step (Frontend MatchValues&& overload)
