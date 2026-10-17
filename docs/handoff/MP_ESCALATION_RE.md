@@ -404,3 +404,16 @@ The Escalation buffs (§2) are layered on top at spawn: damage taken × 0.9 → 
   weapons have MultiplayerData).
 - Note: an "unset" SurvivalData on a cooked class default means it's inherited from the parent class. It's none unless a parent
   sets it.
+
+### 7.5 BrokenHope nav-cell start state (C, level Kismet; for AssetTools' navmesh export)
+- The 30 cells that the generators turn on but that are cooked unblocked (escalation_navmesh.json
+  `start_state.turned_on_but_not_blocked`) are **turned off at match setup by the level script**:
+  - 9 `SeqEvent_PreGameplaySetup` events fire `SeqAct_Toggle` **Turn Off** on the same Toggle ops whose **Turn On** input the door
+    generators drive: Toggle 8301, 2189, 5486 (×2 events), 7257, 11121, 406, 2049, 11075;
+  - **all 30 cells are covered.**
+- So at runtime every door / bridge cell starts **blocked** until its generator is bought, as on Remnant. Remnant cooked them blocked
+  instead.
+- **Bridge cells also have remote events:** TransformBridge1 / 2 / 3 → Turn On, UntransformBridge1 / 2 / 3 → Turn Off, on cells
+  13225 + 8719, 6269 + 9351, 3237 + 9411. TransformBridgeN is fired by the bridge generators (13439 / 15252, 11466, 637). The
+  Untransform events have no in-match sender (the bridges never close).
+- **Rule for the export:** start state = cooked bBlocked **OR turned off by a PreGameplaySetup chain**.
