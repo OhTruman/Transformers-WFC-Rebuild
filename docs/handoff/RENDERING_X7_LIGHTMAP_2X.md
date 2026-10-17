@@ -77,3 +77,50 @@ normalised, so nothing needs a remap. The calibration reads the bake at its own 
 
 The chart packing stays a later lossless-memory item. Next: Gorge / Streets views X7 off vs on, the RT GI load / VRAM
 lines, eye sheet, identity.
+
+## Next-head plan (2026-10-17 evening, for Integration)
+
+### What X7 is now (rt2: 822dcc5d, 02c9ceb4, 9d6ac5b5, 00998378)
+
+- Realistic only: the RT GI pages (D3D12 bridge + the GL arrays) at 2x their lightmap page, same UVs, 4x texels. Off and Faithful never
+  build it. WFC_X7=0 gives 1x.
+- No data recipe: the 2x pages are baked at map load from the existing lightmap / lighting data. Nothing in work/render changes.
+- Bounce gain: the map's 1x fit is reused (Gorge 0.414, Streets 7.668, Molten 8.336, Rust 2.765, Debris 11.683); the calibration rounds are
+  skipped at 2x. A 2x fit is ill-conditioned (Gorge landed at 0.527, ~11 % brighter). At the fixed 1x gain, X7 matches the bake 0.99 on
+  the measured pages, so the look stays the 1x look, only sharper.
+- The bake yields to the loading screen per page (02c9ceb4 / 9d6ac5b5), so no single no-frame gap holds the bake.
+
+### Measured (1280 x 720 runs, today)
+
+| Map | GI pages | 1x D3D12 GI | 2x D3D12 GI | device VRAM after load, 1x -> 2x | GI load passes 1x -> 2x |
+|---|---|---|---|---|---|
+| Streets | 82 | 69.2 MB | 269.7-273.7 MB | 3265 -> 4250 MB (+~985 MB) | 1.3-2.1 s -> 1.9-7.5 s (run to run) |
+| Gorge | 40 | 84.5 MB | 171.4-175.5 MB | 2922 -> 4000 MB (+~1080 MB) | 1.3 s -> 0.8-2.4 s |
+
+- The device VRAM delta (~1 GB) is much larger than the D3D12 GI delta (+100-200 MB). The rest is the GL array copies plus the bake's
+  scratch memory. That gap is the main memory question; it needs the R4 leak / VRAM lines on a 2x run to split it.
+- Load-pass time varies 4x run to run at 2x (Streets 1.9 vs 7.5 s): GPU contention from other lanes is the likely cause. Measure on a quiet card.
+
+### Not measured yet: Molten, Rust, Debris
+
+Lightmap pages used: Molten 54, Rust 141, Debris 102 (Streets 81, Gorge 39). Scaling from Streets per page: 2x D3D12 GI roughly Molten
+~180 MB, Rust ~470 MB, Debris ~340 MB; device delta possibly ~1-2 GB on Rust. This is an estimate only. Gorge's per-page size differs from
+Streets' by 2.5x, so per-map runs are needed.
+
+### Views that show it
+
+X7 sharpens the RT lightmap: contact shadows, light pools and their edges on floors and walls at close range. The existing sheets are
+work/wobble/x7v_508.png, x7v_510.png, x7cv_510.png (authored views, X7 off / on). The best views are the authored 'lane' / 'firefight'
+floors on Streets and Gorge, and the dark interiors on Rust (lamp pools). Far views and the sky are unchanged.
+
+### Open before a merge
+
+1. VRAM: split the ~1 GB device delta (D3D12 GI vs GL arrays vs bake scratch) on all five maps. If the GL array copy is the bulk, the
+   lossless lever is to have the MDI rows sample the shared pages directly (design §6).
+2. Load: per-map load-pass time on a quiet card. The watchdog's 5 s no-frame limit is already safe (per-page yields).
+3. Eye sheet: X7 off / on on the five maps (authored views + match frames), plus identity Off / Faithful (byte-identical by construction).
+
+### Patch
+
+When Integration names the next head: one patch of the four commits above against it (WfcRtGi.cpp, WfcRt.cpp, WfcRtDefaults.h,
+D3D12 bridge), plus a card slot of ~25 min for items 1-3 above.
