@@ -2,6 +2,10 @@
 
 ## Current state (update at every stable point)
 
+- **About 21:30: the GPU-corpse patch is MERGED** by Integration.
+  - Corpse arm on Berth at 63 bots: p90 3.10 ms, against 3.50 for the head and 2.17 for the NOCORPSE floor. That's −0.41 ms; the 0.1 ms target was missed, with about 0.9 ms left. Dynamic draws are unchanged (176 vs 126 without bodies).
+  - **Next (package 7 lever, the user's look bar):** fewer draws per settled body: merge the gib chunks and body parts into one draw, and instanced gibs (check `gStats.instRejected` first). Not a shorter life, a cap or shadow removal.
+  - **Tomorrow:** remove the Defrag CPU latch once Rendering's fix lands (the queued skinned draw honouring setDrawEnergyDeath), then re-run the 4 crops.
 - **About 21:05**, at agents/gameplay 252e6426: the GPU-corpse crops **PASS** under Integration's decisions (Defrag CPU latch; GPU/CPU rounding accepted; f920 for Rendering's eye). The exes have gone to Experimental for the corpse arm. Waiting for the timing result and the merge.
 - **About 20:45**, at c0938c76: the GPU-corpse patch builds.
   - Headless checks pass: BOTTEST 48/48 on 12 seeds; seed-7 SIMHASH identical (null render never draws, so these are sim only).
