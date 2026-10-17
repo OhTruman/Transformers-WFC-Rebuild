@@ -218,6 +218,10 @@ public:
     void setDrawInterpolatedLightmap(const char* actor, float lerp);
     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
     bool volumetricLighting() const { return volUser_; }
+    // the Lens Flares row (user 2026-10-17): 0 Off (no flare pass), 1 Subtle (the DistMap_* curves at their first point, the
+    // artists' 0..1 ramps), 2 Original (the shipped evaluation at the raw camera distance: their last point); restart-free
+    void setLensFlareMode(int m) { lensFlareMode_ = std::min(std::max(m, 0), 2); }
+    int lensFlareMode() const;
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
@@ -968,6 +972,7 @@ private:
     std::vector<LensFlareRT> lensFlares_;
     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
+    int lensFlareMode_ = 2;                          // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (WFC_LENSFLARE overrides)
     void loadLensFlares();
     void drawLensFlares();
     static void lfEval(const LfDist& d, float x, float* out);

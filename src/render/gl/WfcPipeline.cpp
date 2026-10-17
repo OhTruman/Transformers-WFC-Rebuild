@@ -1281,8 +1281,14 @@ void Pipeline::release() {
                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
     const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
+    const int keepLf = lensFlareMode_;                 // (the Lens Flares row)
+    for (LensFlareRT& lf : lensFlares_) if (lf.query) DeleteQueries(1, &lf.query);
+    if (lfBoxProg_) DeleteProgram(lfBoxProg_);
+    if (lfBoxVbo_) DeleteBuffers(1, &lfBoxVbo_);
+    if (lfBoxVao_) DeleteVertexArrays(1, &lfBoxVao_);
     *this = Pipeline();
     volUser_ = keepVol;
+    lensFlareMode_ = keepLf;
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
@@ -1303,12 +1309,14 @@ void Pipeline::runSettingsSelfTest() {
     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
     const int rm = rtMode_;
     const bool vo = volUser_;
+    const int lf = lensFlareMode_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
-    rtMode_ = 2; volUser_ = false;
+    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
     check(!volUser_, "Volumetric Lighting");
-    rtMode_ = rm; volUser_ = vo;
+    check(lensFlareMode_ == 1, "Lens Flares");
+    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
