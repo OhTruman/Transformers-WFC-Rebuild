@@ -8,6 +8,14 @@
     - Edits in `docs/handoff/corpsep2/`, in order: `edit_scorch.js`, the DeathDecal_MAT scorch under gibbed robots via
       `renderer_->spawnDecal`. It's Rendering's documented recipe: 300 UU trace down from actorLocation, |n.y| ≥ 0.5, 800-950 UU,
       random roll, 30 s, with random numbers hashed from the body seed so `frand()` is untouched.
+    - `edit_momentum_picker.js` (applied after edit_scorch.js): the full momentum picker.
+      - A per-victim TearOffMomentum direction is noted at the 8 real hit sites: hit-scan local / bots, HurtRadius, explosions,
+        shockwave, melee.
+      - It's consumed by applyMatchDamage and read by requestCorpse; it falls back to the interim. Presentation only.
+      - **Not built yet.**
+    - **The RE answer on gibs:** one ragdoll per death, the ref pose at PositionSocket, from rest; 6-9 h.
+    - **The Death camera:** authored values in `DEATH_CAMERA_AUTHORED.md`; the view rotation while dead is asked of the RE lane, and
+      the interim camera stays until then.
     - **Skeletal gibs are ragdolls** (`corpsep2/SKELETAL_GIBS_AUTHORED.md`, 49714373): a PBD ragdoll, 8-12 h. The initial pose
       needs RE (ReVa is down: headless export into work/).
     - **Next:** the Death camera values and the momentum picker (small), then the ragdoll. Then, after FREEZE LIFTED, build, run headless
