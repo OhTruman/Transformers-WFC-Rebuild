@@ -3325,3 +3325,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   rows present; bot-row help line missing (page has no hint widget: Frontend writes the lobby footer hint), settings page overlay
   flaw (lobby footer shows through: fix in progress); spectate not shown because a 1 s respawn beats the 3 s corpse view
   (correct; needs a longer-respawn mode). One more ~2-min capture later.
+2026-10-17 15:10 Lens-flare decode resolved natively (RE §4b): Reflection_01 survives occlusion (ours gated it by coverage: Rendering fixes
+  TEXCOORD3.y to the constant intensity); Base_SUN is blue as ours draws it. Open-sky + Rust occluded pass next in Rendering's
+  card window; flare deadline for the candidate 16:15.
