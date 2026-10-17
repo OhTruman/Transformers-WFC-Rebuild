@@ -41,8 +41,59 @@ void GameFlow::sendMemberInfo(int teamRequest) {
     session_->setMemberInfo(info);
 }
 
+GameFlow::VoiceState GameFlow::voiceStateOf(const SessionMemberId& m) const {
+    auto it = voiceStates_.find(m.fingerprint);
+    return it == voiceStates_.end() ? VoiceState{} : it->second;
+}
+
+bool GameFlow::isMuted(const SessionMemberId& m) const {
+    const auto& v = profile_.voice.muted;
+    return !m.fingerprint.empty() && std::find(v.begin(), v.end(), m.fingerprint) != v.end();
+}
+
+bool GameFlow::toggleMute(const std::string& displayNameIn) {
+    // the row's name carries the platform tag (D11): match the member by the name before it
+    std::string name = displayNameIn;
+    const size_t tag = name.find("  ");
+    if (tag != std::string::npos) name.resize(tag);
+    for (const OnlineMember& m : onlineMembers_) {
+        if (m.info.displayName != name || m.info.id.fingerprint.empty()) continue;
+        auto& v = profile_.voice.muted;
+        auto it = std::find(v.begin(), v.end(), m.info.id.fingerprint);
+        const bool mute = it == v.end();
+        if (mute) v.push_back(m.info.id.fingerprint); else v.erase(it);
+        profile_.save();
+        if (session_) session_->setMuted(m.info.id, mute);
+        FlowTrace::emit("online.mute", {{"member", m.info.id.fingerprint}, {"name", name}, {"muted", FlowTrace::boolean(mute)}});
+        return true;
+    }
+    return false;
+}
+
+void GameFlow::setPushToTalkHeld(bool held) {
+    if (!session_ || role_ == SessionRole::Offline || profile_.voice.mode != 1 || held == pttHeld_) return;
+    pttHeld_ = held;
+    session_->setPushToTalk(held);
+}
+
+void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
+    const LocalProfile::Voice& v = profile_.voice;
+    const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume);
+    if (key == voiceSent_) return;
+    voiceSent_ = key;
+    SessionVoiceSettings s;
+    s.mode = (SessionVoiceMode)std::clamp(v.mode, 0, 2);
+    s.audience = (SessionVoiceAudience)std::clamp(v.audience, 0, 3);
+    s.device = v.device;
+    s.volume = v.volume;
+    session_->setVoiceSettings(s);
+    FlowTrace::emit("online.voiceSettings", {{"mode", std::to_string(v.mode)}, {"audience", std::to_string(v.audience)}});
+}
+
 void GameFlow::onlineTick() {
     for (const SessionEvent& e : session_->poll(clock_)) onSessionEvent(e);
+    if (role_ != SessionRole::Offline) syncVoiceSettings();
+    else voiceSent_.clear();
     if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel
         showMessage(pendingEndTitle_, pendingEndMessage_);
         pendingEndTitle_.clear();
@@ -347,6 +398,7 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             m.team = botRows() == BotRows::Teams ? pickOnlineTeam() : 255;
             m.connecting = !e.info.hasCharacter && e.info.characterSlot.empty();
             onlineMembers_.push_back(m);
+            if (isMuted(e.member)) session_->setMuted(e.member, true);   // a remembered mute (profile)
             FlowTrace::emit("online.memberJoined", {{"member", e.member.fingerprint}, {"name", e.info.displayName}, {"team", std::to_string(m.team)},
                                                     {"platform", e.info.platform == SessionPlatform::Web ? "Web" : "PC"}});
             applyBrowserCap("member joined");
@@ -360,6 +412,9 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         }
         break;
     }
+    case T::MemberVoice:
+        voiceStates_[e.member.fingerprint] = VoiceState{e.headsetState, e.voiceVia};
+        break;
     case T::CountdownStarted:   // member: the host started the game - the same lobby exit countdown here
         if (role_ == SessionRole::Member && level_ == LevelKind::GameLobby && !lobby_.countingDown) hostRequestsGameStart();
         break;

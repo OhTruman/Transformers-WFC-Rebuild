@@ -1052,6 +1052,48 @@ void volumetricChoices(gfx::avm1::VM& vm, std::vector<gfx::avm1::Value>& out, bo
     else add(stored ? 1 : 0, "$WfcPC.Settings.VolumetricRealisticOnly");
 }
 
+// Settings > Audio voice rows (PC EXTENSION, online only; ONLINE_MP_FLOWS.md 3.12, ONLINE_MP_UI_STRINGS.md 9b): appended to
+// the original audio page (identified by its FX Volume row), in the page's own lateral-selector item form.
+bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init) {
+    if (linkage != "mc_subMenu" || !init) return false;
+    gfx::avm1::VM& vm = p.vm();
+    gfx::avm1::Value a = vm.get(init, "buildArray");
+    if (!a.isObject() || a.o->kind != gfx::avm1::ObjKind::Array || a.o->elems.empty()) return false;
+    const gfx::avm1::Value first = a.o->elems.front();
+    if (!first.isObject() || vm.toString(vm.get(first.o, "dataStore")) != "<OnlinePlayerData:ProfileData.FX Volume>") return false;
+    using V = gfx::avm1::Value;
+    auto choice = [&](std::vector<V>& v, const V& value, const std::string& label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", value);
+        vm.set(c, "FriendlyName", V(label));
+        v.push_back(V(c));
+    };
+    auto row = [&](const std::vector<V>& ch, const char* store, const char* hint, const char* label) {
+        gfx::avm1::Object* item = vm.newPlain();
+        vm.set(item, "choiceArray", V(vm.newArray(ch)));
+        vm.set(item, "dataStore", V(std::string(store)));
+        vm.set(item, "hintText", V(std::string(hint)));
+        vm.set(item, "panelWidth", V(413.0));
+        vm.set(item, "text", V(std::string(label)));
+        a.o->elems.push_back(V(item));
+    };
+    std::vector<V> mode, aud, dev, ptt, vol, pvol;
+    choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
+    choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
+    choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
+    choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");   // the capture devices by name come from Systems' audio layer
+    for (const char* k : {"V", "T", "B", "Caps Lock", "Mouse 4", "Mouse 5"}) choice(ptt, V(std::string(k)), k);
+    for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }
+    row(mode, "<PCSettings:VoiceMode>", "$WfcPC.Voice.VoiceChatDesc", "$WfcPC.Voice.VoiceChat");
+    row(aud, "<PCSettings:VoiceAudience>", "$WfcPC.Voice.VoiceChannelDesc", "$WfcPC.Voice.VoiceChannel");
+    row(dev, "<PCSettings:VoiceDevice>", "$WfcPC.Voice.InputDeviceDesc", "$WfcPC.Voice.InputDevice");
+    row(ptt, "<PCSettings:VoicePushToTalkKey>", "$WfcPC.Voice.PushToTalkKeyDesc", "$WfcPC.Voice.PushToTalkKey");
+    row(vol, "<PCSettings:VoiceVolume>", "$WfcPC.Voice.VoiceVolumeDesc", "$WfcPC.Voice.VoiceVolume");
+    row(pvol, "<PCSettings:ProximityVolume>", "$WfcPC.Voice.ProximityVolumeDesc", "$WfcPC.Voice.ProximityVolume");
+    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "6"}, {"provenance", "PC EXTENSION"}});
+    return true;
+}
+
 bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
                        bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent,
@@ -1472,6 +1514,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                                       rt_.rayTracingOnAppliesNextMap(), rt_.flow().profile().display.rayTracing,
                                       rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable()))
                     graphicsPagePlayer_ = &p;
+                else if (rt_.flow().online()) addVoiceRows(p, linkage, init);   // online only: offline Audio page unchanged
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

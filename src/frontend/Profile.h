@@ -78,6 +78,20 @@ public:
     // each type once per profile; CAMPAIGN_HUD_PLAN.md E5, C4 decided: profile-scoped). [Tutorials] Shown=, only written
     // when not empty, so versus profiles are unchanged.
     std::vector<std::string> tutorialsShown;
+    // Voice chat (PC EXTENSION, decision D7 + proximity; ONLINE_MP_FLOWS.md 3.12): the Settings > Audio voice rows and the
+    // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
+    struct Voice {
+        int mode = 1;                 // 0 Off, 1 Push to Talk (the user's default), 2 Open Mic
+        int audience = 3;             // 0 Team Radio, 1 All Radio, 2 Proximity, 3 Radio + Proximity (the proposed default)
+        std::string device;           // "" = System Default
+        std::string pttKey = "V";
+        int volume = 70, proximityVolume = 70;
+        std::vector<std::string> muted;
+        bool isDefault() const {
+            return mode == 1 && audience == 3 && device.empty() && pttKey == "V" && volume == 70 && proximityVolume == 70 && muted.empty();
+        }
+    };
+    Voice voice;
     // Original chassis locks ([PCSettings] OriginalChassisLocks): the authored LockedChassis (Car5 / Jet8 via campaign
     // completion, 16 more with no known unlock path) apply only when set; default off = every chassis available
     // (PC ADAPTATION, pending the user's decision).
