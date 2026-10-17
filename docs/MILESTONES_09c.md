@@ -2341,3 +2341,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   tolerance 1e-4 pos / 1e-3 quat). Escalation weapon-pickup regen line added to CAMPAIGN_BACKLOG (package 7).
   Next for AssetTools: backlog 5 (campaign player starts / walk graph seeding; the audit's walk-graph checks are empty in the
   campaign because they seed from MP player-start classes).
+2026-10-17 02:12 PACKAGE 6 GATE STARTED (user: "Can you continue?"; no reboot yet, boot 10-16 04:02, nonpaged pool 6.93 GB,
+  card clear, no hold file). Final head = af4d0731 as is (no Streets step; Rendering's haze step, Gameplay's Defrag latch
+  removal and instanced gibs = package 7). Experimental: RERUN_1B=1 EYE_FROM=x3_cand13 package-respin.sh af4d0731 9350f19b
+  with a 9.5 GB pool guard; Rendering / Gameplay / Systems frozen (no compiles, no exes) until the timed regress reports
+  DONE; Systems prepares the refresh.sh / promote / PACKAGE_6_af4d0731.md pass and gets GO BUILD after DONE.
