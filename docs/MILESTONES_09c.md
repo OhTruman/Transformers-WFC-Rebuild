@@ -3249,3 +3249,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:24 Lens flares code complete as WIP (Rendering 87941774, on RE's native math: screen-space elements, curves, occlusion-query
   visibility, no depth test; matc reads the LensFlare* nodes); x18slot (~10 min first look, Rust / Debris) granted after x17 on the
   same relay; merges as its own set on the eye check.
+2026-10-17 14:27 Frontend CARD FREE 14:27: the in-match HUD set captured (lobby, talker, scoreboard with Remote rows, the kicked line + slot swap
+  at tick 1031, forced jam), the first-run set incl. fr_voice_settings; spectate and the options page missed on the scripts (fixed
+  next; a ~4-min gap after Rendering). Card -> Experimental's 1e11edc2 pair (14:27) -> Rendering x17 + x18.
