@@ -1194,6 +1194,7 @@ public:
     int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
+    long statFxFrozen_ = 0, statFxTicked_ = 0;   // [Systems] SecondsBeforeInactive: frozen / ticked instance-ticks (600-frame window)
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
@@ -1308,6 +1309,10 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
         float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
         long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
+        // [Systems] ParticleSystemComponent.SecondsBeforeInactive (FxInactive.inc; 0 = never): unrendered longer than this
+        // and ticked longer than this, the component stops ticking - frozen, resumed when rendered again (UE3 PSC Tick).
+        float sbi = 0.0f, sbiAccum = 0.0f, lastRenderTime = 0.0f, sbiFrozenAt = -1.0f;   // sbiFrozenAt >= 0: frozen since then
+        bool sbiHasBox = false; float sbiBox[6] = {0, 0, 0, 0, 0, 0};   // the template's fixed relative bounding box (UE, component space)
     };
     int nextFxId_ = 1;
     size_t statLiveParticles_ = 0;    // live map-FX particles at the start of the tick (global budget guard)

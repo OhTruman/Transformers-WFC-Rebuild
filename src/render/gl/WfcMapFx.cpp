@@ -33,6 +33,17 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include "render/gl/FxInactive.inc"
+
+namespace {
+// [Systems] WFC_FXINACTIVE (default on; =0 off): map-FX components stop ticking after their authored SecondsBeforeInactive unrendered (UE3);
+// default ON since 2026-10-17: the card checks (counters, Off / Faithful expected-change list, eye crops) agreed; WFC_FXINACTIVE=0 restores the always-tick behaviour.
+bool fxInactiveOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXINACTIVE"); return !(e && e[0] == '0'); }(); return on; } // default ON (Systems rows i-iii agree, 2026-10-17); WFC_FXINACTIVE=0 turns it off
+const FxInactiveRow* fxInactiveRow(const std::string& component) {
+    for (const FxInactiveRow& r : kFxInactive) if (component == r.component) return &r;
+    return nullptr;
+}
+}
 
 namespace render {
 namespace wfc {
@@ -402,6 +413,11 @@ bool Pipeline::loadMapFx(const std::string& path) {
             }
         }
         in.ownerClass = I[i]["owner_class"].asString();
+        if (const FxInactiveRow* fr = fxInactiveOn() ? fxInactiveRow(in.component) : nullptr) {
+            in.sbi = fr->seconds; in.sbiHasBox = fr->hasBox;
+            std::copy(fr->box, fr->box + 6, in.sbiBox);
+        }
+        in.lastRenderTime = time_;
         in.attached = I[i]["attached"].asBool(true);
         in.requiredRule = I[i]["required_game_rule"].asString();
         in.active = allActive || I[i]["auto_activate"].asBool(true);
@@ -419,6 +435,7 @@ bool Pipeline::loadMapFx(const std::string& path) {
         fxInstances_.push_back(std::move(in));
     }
     size_t act = std::count_if(fxInstances_.begin(), fxInstances_.end(), [](const FxInstance& x) { return x.active; });
+    if (fxInactiveOn()) { int n = 0; for (const FxInstance& fi : fxInstances_) n += fi.sbi > 0.0f; LOG_INFO("wfc fx inactive: %d of %zu map-FX components have SecondsBeforeInactive (FxInactive.inc)", n, fxInstances_.size()); }
     LOG_INFO("wfc: map FX: %zu components (%zu active), %zu systems", fxInstances_.size(), act, fxSystems_.size());
     if (const char* dump = std::getenv("WFC_AUDIT_DUMP")) {     // tools/render/audit_map.py: FX presentation state
         if (FILE* f = std::fopen((std::string(dump) + ".fx.jsonl").c_str(), "w")) {
@@ -512,6 +529,9 @@ void Pipeline::tickMapFx(float dt) {
                          statPoolPeak_, statPoolOver_, statPoolReclaimed_,
                          (std::getenv("WFC_EMITTERPOOLCAP") ? std::getenv("WFC_EMITTERPOOLCAP")[0] == '1' : poolCapOn_) ? "on" : "off");
             statPoolPeak_ = statPoolOver_ = statPoolReclaimed_ = statPoolFrames_ = 0;
+            if (fxInactiveOn() && (statFxFrozen_ || statFxTicked_))
+                LOG_INFO("wfc fx inactive: %ld of %ld SecondsBeforeInactive instance-ticks frozen (600 frames)", statFxFrozen_, statFxFrozen_ + statFxTicked_);
+            statFxFrozen_ = statFxTicked_ = 0;
         }
     }
     statLiveParticles_ = 0;
@@ -580,6 +600,19 @@ void Pipeline::tickMapFx(float dt) {
                 apply(d, o);
                 for (int c = 0; c < 3; ++c) in.T[c] = L1[c] + o[c];
             }
+        }
+        if (in.sbi > 0.0f) {   // [Systems] UE3 PSC Tick: AccumTickTime > SecondsBeforeInactive and unrendered as long -> no tick
+            in.sbiAccum += dt;
+            if (in.sbiAccum > in.sbi && time_ - in.lastRenderTime > in.sbi) {
+                if (in.sbiFrozenAt < 0.0f) in.sbiFrozenAt = time_;
+                ++statFxFrozen_; continue;
+            }
+            if (in.sbiFrozenAt >= 0.0f) {   // rendered again: resumes where it froze (no catch-up)
+                static const bool log = std::getenv("WFC_FXINACTIVELOG") != nullptr;
+                if (log) LOG_INFO("FXINACTIVE resume %s (%s) after %.2f s frozen, t=%.2f", in.component.c_str(), in.system.c_str(), time_ - in.sbiFrozenAt, time_);
+                in.sbiFrozenAt = -1.0f;
+            }
+            ++statFxTicked_;
         }
         // LOD: Automatic = by distance to the camera; DirectSet = level 0 (no code sets it)
         float dx = in.T[0] - camUE[0], dy = in.T[1] - camUE[1], dz = in.T[2] - camUE[2];
@@ -2102,8 +2135,35 @@ void Pipeline::drawMapPresentation() {
         static std::vector<std::pair<uint32_t, uint32_t>> items;
         items.clear();
         for (size_t i = 0; i < fxInstances_.size(); ++i) {
-            const FxInstance& in = fxInstances_[i];
+            FxInstance& in = fxInstances_[i];
             if (in.hidden) continue;
+            if (in.sbi > 0.0f) {   // [Systems] an instance with no particles counts as rendered while its origin is in view
+                bool any = false;
+                for (const FxEmitterRT& er : in.emitters) any = any || !er.parts.empty();
+                if (!any) {   // the template's fixed relative box (component space) where authored, else the origin within 1 m
+                    core::Vec3 pts[8]; int np = 1;
+                    if (in.sbiHasBox) {
+                        np = 8;
+                        for (int k = 0; k < 8; ++k) {
+                            const float l[3] = {in.sbiBox[(k & 1) ? 3 : 0], in.sbiBox[(k & 2) ? 4 : 1], in.sbiBox[(k & 4) ? 5 : 2]};
+                            float w[3];
+                            for (int a = 0; a < 3; ++a) w[a] = in.T[a] + l[0] * in.R[0][a] + l[1] * in.R[1][a] + l[2] * in.R[2][a];
+                            pts[k] = ueToGltf(w);
+                        }
+                    } else pts[0] = ueToGltf(in.T);
+                    bool outside = false;
+                    for (int f = 0; f < 6 && !outside; ++f) {
+                        const float* pl = frustum_[f];
+                        const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+                        if (len <= 0.0f) continue;
+                        bool allOut = true;
+                        for (int k = 0; k < np && allOut; ++k)
+                            allOut = (pl[0] * pts[k].x + pl[1] * pts[k].y + pl[2] * pts[k].z + pl[3]) / len < (in.sbiHasBox ? 0.0f : -1.0f);
+                        outside = allOut;
+                    }
+                    if (!outside) in.lastRenderTime = time_;
+                }
+            }
             for (size_t e = 0; e < in.emitters.size(); ++e)
                 if (!in.emitters[e].parts.empty()) items.push_back({(uint32_t)i, (uint32_t)e});
         }
@@ -2119,6 +2179,7 @@ void Pipeline::drawMapPresentation() {
         for (size_t i = 0; i < n; ++i) {                 // replay in instance order: the serial loop's call sequence
             FxOut& o = fxOut[i];
             sprites += o.sprites; meshes += o.meshes;
+            if (o.sprites + o.meshes > 0) fxInstances_[items[i].first].lastRenderTime = time_;   // [Systems] drawn this frame
             for (size_t k = 0; k < o.used; ++k) {
                 FxCmd& c = o.cmds[k];
                 if (c.kind == 0) {
