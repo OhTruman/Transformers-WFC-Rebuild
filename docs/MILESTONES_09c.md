@@ -2726,3 +2726,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   only for StaticMeshActor; SMCA members fall to Metal) -> AssetTools splits the first_material triangles by owner class; matinee
   empty-object groups: 125 no-ops, 23 stay live (Event / Sound tracks) -> AssetTools' binding state. The resolver order also goes
   to Systems' impact rule. Part 2 (items 6-12) next. Systems' slot running (~10:23).
+2026-10-17 09:56 Systems' 09:42-10:01 slot: all three PASS and MERGED: f27f94f5 authored weapon notify FX for every visible pawn (154 notify FX, 92
+  local / 62 participant; casing / exhaust streaks only) + the muzzle light in the owner's EnergonColor (4 / 36 frames, same
+  brightness); 5c68f60e the FX throttle (replaces the freeze; Streets 29 % / Molten 26 % of instance-ticks throttled, no cost
+  change; switch 0 = base within the same-exe floor: 4 / 28 frames at max 1-3 levels vs 2-4 / 28 run-to-run; expected-change
+  on: 10 / 28 + 15 / 28 frames, emitters at another phase, nothing frozen). CUELOG: 173 cues start in base (the E-class check).
+  Gate rule: windowed identity is judged against the same-exe floor; the lockstep harness should print SIMHASH. Card ->
+  Rendering x10slot ~10 min (10:02) -> Experimental's (B) eye pass. Systems next: body-notify dispatch on Gameplay's hook.
