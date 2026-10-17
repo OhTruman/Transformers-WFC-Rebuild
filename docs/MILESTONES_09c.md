@@ -2848,3 +2848,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay's weapon + melee batch: RE OK + Classic re-baseline DONE (4e0aa552: 12 seeds x 4 maps x both AIs with SIMHASH; nav
   health unchanged); only the 4-min recoil eye check remains (gap after Systems). Rendering: distortion allow-list loader stays
   inert (bUsesDistortion is the rule); Remnant PointLightToggleable_1918 extracted by data (lighting2), world-draw question to RE.
+2026-10-17 10:45 Distortion CLOSED: validated rescan (0 false pairs over 233 packages) + apply pass decoded (uv' = uv + (acc.xy - acc.zw) x (0.25,
+  -0.25), no clamp, RGBA8 additive): our pipeline matches end to end; no renderer change. Decoy Trap RE section 8 (Color never set;
+  EXPLODE one-shot at pickup) -> Systems' SYSTEMS_DECOY_CUES. Remnant light: starts on, no toggles, per-pixel on the world, no
+  static shadowing (LVV culling UNKNOWN) -> Rendering builds it after the exposure slot. c15678e9 Frontend dev parser merged;
+  Frontend gap = onlinehud.sh + iconic.sh (~4.5 min) after Gameplay. RE next: original exposure / eye adaptation; LVV culling.
