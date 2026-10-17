@@ -51,6 +51,14 @@ First sim change: cfca1717 (2026-10-17).
   identity and eye passes from 1f1d4e17 on use a base cut from integration at or after 1f1d4e17. Rendering's base11 pairs
   (cand26 / cand27) predate it and stay valid (Integration). The combined regress / 1b don't need it: both arms run the head, and
   the regress base only needs the sim.
+- **Windowed identity is judged against the same-exe floor** (Integration 2026-10-17, from Systems' FX throttle 5c68f60e).
+  - **The floor.** Two windowed lockstep runs of one exe with identical switches already differ: Streets 2 / 28 and Molten 4 / 28
+    frames, at max 1-3 levels, GPU-side.
+  - **The bar.** A windowed identity row passes when its differing frames and levels stay within that floor, except for the
+    listed expected changes. Byte identity is the bar only for headless SIMHASH and for the Off / Faithful eye-pass shots, which
+    are already treated that way.
+  - **SIMHASH is always checked.** The sim side stays provable, because the windowed lockstep and eye-pass runs log SIMHASH every
+    step: lockstep-ab's "same match" and the eye pass's simhash.txt (6,001 lines per run). Any identity row checks it first.
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
