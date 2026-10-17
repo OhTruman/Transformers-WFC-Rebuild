@@ -2216,3 +2216,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identical, the rest rounding (max 2) plus f920's single edge pixel at 91 = accepted by my eye (f920_detail.png);
   40 m 64 / 65, 1 px at 1); 16v16 0 refusals. Corpse arm GO (int_gcb / int_gcn / + NOCORPSE, Berth RT off 4K,
   target within 0.1 ms of NOCORPSE); merge GAMEPLAY_CORPSE_GPU.patch on its PASS. Pool 7.0 GB at 20:09.
+  2026-10-16 20:12 MERGE SLIP (mine, fixed): a cherry-pick loop over HEAD..agents/gameplay re-applied ~60 historical
+  commits (docs only; GAMEPLAY_BOTS.md regressed); reset to 77dfcced, the four GPU-corpse doc commits re-applied
+  (c0938c76, 3ab95dbc, 252e6426, 6fec17b0) -> 7e952312, force-with-lease push. src untouched.
