@@ -2701,3 +2701,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   83.9 -> 82.3 %, bar 55-62): threshold ~1.5 + TONEDIAG next; particle pair void (sphere / cylinder field order was swapped until
   AssetTools' fix), re-run on a candidate cut at / after 1f1d4e17. Card -> Frontend 4-min re-slot (09:40) -> Systems 40 ->
   Rendering 10 if ready -> (B) eye pass.
+2026-10-17 09:42 Frontend re-slot done 09:42 (online_b2r/ r_party_joinrow, r_joining, r_member_lobby, r_host_talker; str_before / str_after *_list /
+  _overview / _rename): the join now works through Accept (joining -> joined -> member lobby); the rename click still found no clip
+  at the scripted path (the Customize movie was dumped to take the right path). Card -> Systems 40 min (09:43): notifyfx check,
+  FX throttle rows, muzzle energon pair; then Rendering 10 if ready, then the (B) eye pass. RE lane: PROVISIONALs sweep started
+  (~6-7 h, two commits).
