@@ -2168,3 +2168,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   then Rendering's X3 captures + one tuning round until 00:00; Gameplay CPU checks after the block, crops by slot;
   AssetTools stays blocked on its prompt -> CROSSPLAY_PLATFORM_FEASIBILITY.md reassigned to Systems (docs,
   overnight). Morning: the user reboots, AssetTools' prompt gets approved, X3 tuning resumes.
+  2026-10-16 19:09 CROSS-PLAY PHASE 0 DOCS COMPLETE: CROSSPLAY_PLATFORM_FEASIBILITY.md merged (Systems 794957d9):
+  player-supplied data everywhere (nothing original hosted or bundled); PC feasible now; browser = WASM + WebGL2
+  Off / Faithful 5v5 (wasm32 4 GB pass, OPFS, COOP/COEP, GLSL ES 3.00); 360 / PS3 = option C snapshot clients
+  (Xenos / RSX renderers, modified hardware = a legal question); mobile side-load only; 8 open questions. With the
+  determinism audit, the netcode design and the profile / stats design the phase 0 set is done; code after package 6.
