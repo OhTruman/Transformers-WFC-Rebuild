@@ -3238,3 +3238,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:17 MERGED 87315966 Frontend singular lobby status (rules check divergence 2). Experimental's NET.identity on df4d62aa: live peers
   still split at 1299 (lan; bundles identical; replay == recorder now) -> Gameplay: presentation-only state read by sim queries for
   the live local pawn (drawYawOffset_ lead) + WFC_NET_STATEDUMP; CTF Rounds URL fix (divergence 1) folded in.
+2026-10-17 14:22 MERGED 9864b4cd the weapon + melee authored-values batch (all four conditions met: RE row check, Classic + Smart re-baseline, recoil
+  eye check incl. RE's measured look, strafe wobble rerun no regression). Systems' Streets physmat pair PASS (SIMHASH equal 4201
+  steps, 16 / 24 captures = force-field squibs; Drain look from the 13:56 run; Warcry needs its own pair if wanted). Card -> Frontend
+  5 (14:22) -> Experimental 10 -> Rendering x17 ~40.
