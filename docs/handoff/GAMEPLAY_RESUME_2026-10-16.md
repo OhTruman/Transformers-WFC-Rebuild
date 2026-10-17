@@ -2,6 +2,17 @@
 
 ## Current state (update at every stable point)
 
+### QUEUE (Integration, 2026-10-17 midday)
+
+1. The camera recoil crops (GAMEPLAY_CAMERA_RECOIL.patch 0c0a5665, against 8f53a200; steps work/pass29/cam/steps_fire.txt; waiting for the card).
+2. The weapon + melee authored-values batch + its Classic re-baseline (GAMEPLAY_WEAPON_MELEE_BATCH.md; generator docs/handoff/weaponbatch/gen_weapon_recoil.py).
+3. Systems' anim-notify window + hit-surface physmat (AssetTools 2c1d9ba).
+4. The session hooks for Frontend (MatchPlayer.sessionMember, Remote participants from MatchLaunch.onlineSlots / onlineNames, World::applySlotSwap, the WFC_SESSIONTEST checks per docs/handoff/ONLINE_MP_FRONTEND_TESTS.md section 4). Offline-safe, identity-neutral, ~3-4 h.
+5. The perf levers (lossless only).
+6. Transforming actors + dying-vehicle collision (one identity change).
+7. FaceFX.
+8. The near-slot dithering (a bounded 2-round item).
+
 ### RELAUNCH: START HERE (2026-10-17 morning, before the user's reboot; agents/gameplay)
 
 - **The card is HELD until Integration messages after the reboot** (Experimental's stuck GPU exe, the TDR pattern). No windowed exe
