@@ -526,7 +526,10 @@ Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defi
   check comes with public matches.
 - **D4 decided:** the original gate - every player has a character, teams balanced (when Team Balancing is on), the
   host starts. No Ready toggle.
-- **D5 decided:** the idle kick is on at the original 180 s in every session (public and private).
+- **D5 decided (revised 2026-10-17 by Integration, RE MP_INPUT_CONTRACT_RE 4a1f8fb):** the original kicked idlers only in
+  public sessions, never in private ones. The 180 s idle kick applies to public sessions only (Gameplay's isPublic flag);
+  phase 1's code-joined sessions are all private, so nobody is kicked and there is no lobby option. Kicked{Idle} stays
+  defined for a later public mode.
 - **D6 decided:** in phase 1, a player joining during a match waits in the host's game lobby ("Match in progress") and
   enters with everyone for the next match; faithful join in progress (state transfer, bot slot) comes in phase 1b.
 - **D7 decided (user):** voice chat is in scope - push-to-talk by default, an open-mic option, per-player mute, Team /

@@ -90,7 +90,7 @@ The party lobby menu, as captured (r_party_joinrow):
 | host quit | $Engine.Errors.ConnectionFailed_Title "Connection Error" | $Engine.Errors.ConnectionFailedHostQuit | original |
 | connection lost / timed out | ConnectionFailed_Title | ConnectionFailed / ConnectionTimeout | original |
 | out of sync | ConnectionFailed_Title | $WfcPC.Online.Desync | PC |
-| idle 180 s | GenericErrorTitle | $Engine.Errors.KickedForIdling | original |
+| idle 180 s (public sessions only, D5; not in phase 1) | GenericErrorTitle | $Engine.Errors.KickedForIdling | original |
 | account name refused (step 2) | CreateAccountTitle | CreateAccountInvalidUsernameMessage | original |
 
 All of them return to the party lobby (the game lobby for out of sync); none loses the profile or offline progress.
