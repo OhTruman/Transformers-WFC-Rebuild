@@ -3200,3 +3200,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Regress base decision (a): Gameplay supplies minimal sim-only diffs of 814e7cf5 (and the weapon / melee batch) against
   af4d0731 + hover + runner, verified by the headless same-match check, so the regress stays "package 7 renderer vs package 6
   renderer at the same sim".
+2026-10-17 13:55 Gameplay CARD FREE 13:55 (gap batch done; verdicts pending). Gameplay: the ~1772 split found and fixed (an opportunistic reload
+  in the player bot's brain); the 1299 damage split next. Card -> Systems' 16-min slot (13:55) -> Frontend 5 -> Experimental 10.
