@@ -3369,3 +3369,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the scratchpad lf_backup_live). PACKAGE 7 HEAD CANDIDATE RE-NAMED = deed7f1a (= 057aded3 + flares + lead-based auto-D + verify
   package 7 row + the weapon base diff doc). Offline SIMHASH identical through every merge. Frozen. Experimental: head build +
   eye pass (Rust dark = no flare, Rust lane / Debris = the flare) -> hold ~17:00.
+2026-10-17 15:25 Campaign Kismet batch 2 merged (64 / 176; generic On<Name> dispatcher found; kismet_native.py tool). RE continues with 65+.
