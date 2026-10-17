@@ -54,8 +54,10 @@ $fxlib = @((& $py (Join-Path $PSScriptRoot "build_map_fx.py") --list-materials $
 $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list) | Where-Object { $_ -match '\S' })
 # Ability / killstreak mesh materials (AssetTools ability_assets.json; Milestone E)
 $abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --materials) | Where-Object { $_ -match '\S' })
+# Transforming world actors (the MP doors / bridges: AssetTools mp_transforming_actors.json slot materials)
+$trans = @((& $py (Join-Path $PSScriptRoot "transforming_materials.py") $Map) | Where-Object { $_ -match '\S' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil @trans
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 # UE3 fog volumes (density infos + their linked shape components) for the runtime fog-volume rendering
 & $py (Join-Path $PSScriptRoot "build_fog_volumes.py") $Map $out
