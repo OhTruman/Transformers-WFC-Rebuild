@@ -2617,3 +2617,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   tests 205 / 0, offline byte-identical); Systems' transport + voice lane implement under ISession next (after its package 7
   items). 56d5e2dc particle module audit batch 1 (the four PARTIAL modules' semantics; Rendering has them). Presenter loop:
   64 / 64 runs, 0 hangs, 0 no-drain; FG / resize / map switch running.
+2026-10-17 09:02 Merged aa5a30ea campaign movies manifest + subtitles (AssetTools: 54 / 54 WebM VP9 + Opus frame-exact in AssetTools out/movies, 609 MB
+  untracked; 12 subtitle JSONs with the ticks header applied). Rendering: Lifetime stacking fix dba92e6c (all modes, exact) joins the
+  next merge set; the four PARTIAL particle modules wait for AssetTools' pstream fields (gravity multiplier / world gravity source,
+  sphere axis / SurfaceOnly / Velocity flags, ColorByParameter name / default, DynamicParameter bUseEmitterTime), ~3-4 h after,
+  interleaved with X7 as CPU allows. AssetTools next: campaign physmat, then the pstream decode fields. Presenter verification:
+  64 / 64 clean, FG run (latency max 281 ms, FG resets 1: Experimental reads it), resize done, map switch running.
