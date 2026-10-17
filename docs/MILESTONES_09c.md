@@ -2767,3 +2767,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (4196ccfb) + physmat impacts (135eba9d: 34 physmats' ImpactEffect / ImpactSound up the Parent chain; force fields, coolant,
   Metal_dest change on the MP maps) build clean on 5fc2e552; merge on their 12-min slot after (B). AssetTools 83b669d: the 30
   physmat json carry the owner-class split with unchanged glb_sha256; node_overrides (53 MP nodes) must be applied by Gameplay.
+2026-10-17 10:13 Rendering height-fog layers A/B (cand29, Gorge 4 layers / Rust 2): HELD unmerged. Realistic reads as canyon haze; in Off the
+  firefight / lane far openings go nearly flat white (+9-20 % mean), Rust's in-layer floor fills grey-blue on Realistic. Faithful by
+  construction (stock UE3 per-layer formula, RE-confirmed VS constants) but no strength reference -> RE lane checks the layers'
+  values + the original shader's in-scattering math + which layers are active (GORGE_RUST_HEIGHTFOG_RE.md, ~30 min); merge
+  all-mode if they hold. Experimental's (B) pass: option (c): both arms on a fresh integration 5fc2e552 Release exe
+  (work/ab/fast_5fc2e55, building now), snapshot after my REGEN DONE. MP_ABILITY_CUES_RE.md merged (trigger sound replicated,
+  trigger FX via RepNotify, buff cues local per BuffReplicationType; Whirlwind / Dash / Hover routed to melee / dodge / hover).
