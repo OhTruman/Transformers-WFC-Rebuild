@@ -1,7 +1,7 @@
 diff -ruN a/src/game/World.cpp b/src/game/World.cpp
---- a/src/game/World.cpp	2026-10-17 09:59:25.249224100 -0500
-+++ b/src/game/World.cpp	2026-10-17 10:03:17.972844700 -0500
-@@ -38,6 +38,8 @@
+--- a/src/game/World.cpp	2026-10-17 10:08:38.000000000 -0500
++++ b/src/game/World.cpp	2026-10-17 10:10:16.975404700 -0500
+@@ -39,6 +39,8 @@
  namespace {
  struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; float brightness; };
  #include "game/MuzzleLights.inc"
@@ -10,7 +10,7 @@ diff -ruN a/src/game/World.cpp b/src/game/World.cpp
  struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
  #include "game/DeathLights.inc"
  // [Gameplay] The original's death entries / pickers' data (tools/gameplay/death_entries.py, authored.db).
-@@ -2357,6 +2359,7 @@
+@@ -2363,6 +2365,7 @@
          player_.pawn().setAimPitch((float)std::atof(ap));
      { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }
      drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
@@ -18,7 +18,7 @@ diff -ruN a/src/game/World.cpp b/src/game/World.cpp
      { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
      { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
      static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
-@@ -5004,8 +5007,96 @@
+@@ -5010,8 +5013,96 @@
  }
  
  // [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
@@ -115,11 +115,11 @@ diff -ruN a/src/game/World.cpp b/src/game/World.cpp
 +    }
  }
  
- void World::startLocalMelee(bool whirlwind) {
+ // collision_weapon_physmat.json (AssetTools) -> the static weapon collision's per-triangle physical materials (see Collision.h).
 diff -ruN a/src/game/World.h b/src/game/World.h
---- a/src/game/World.h	2026-10-17 09:59:25.255746700 -0500
-+++ b/src/game/World.h	2026-10-17 10:03:17.979367100 -0500
-@@ -1337,6 +1337,11 @@
+--- a/src/game/World.h	2026-10-17 10:08:38.000000000 -0500
++++ b/src/game/World.h	2026-10-17 10:10:16.986442700 -0500
+@@ -1339,6 +1339,11 @@
      void drainAnimNotifies();
      // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
      void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
