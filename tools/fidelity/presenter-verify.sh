@@ -36,7 +36,7 @@ one() {
       [ -z "$pid" ] && [ $(( $(date +%s) - t0 )) -ge 900 ] && { st "GATE: $(basename $d) never started an exe in 15 min (card busy?)"; return 3; }
       continue
     fi
-    if [ -n "$rs" ] && [ $resized = 0 ] && [ $(( $(date +%s) - ts )) -ge 40 ]; then
+    if [ -n "$rs" ] && [ $resized = 0 ] && [ $(( $(date +%s) - ts )) -ge ${RESIZE_AT:-12} ]; then   # (12 s after the exe appears: a run lasts ~45 s)
       powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lib/resize-window.ps1 -ProcessId $pid >> $L 2>&1; resized=1
     fi
     if [ $(( $(date +%s) - ts )) -ge $HANG_S ] && powershell -NoProfile -Command "exit [int](-not (Get-Process -Id $pid -ErrorAction SilentlyContinue))"; then
