@@ -1,5 +1,5 @@
 diff --git a/src/core/Application.cpp b/src/core/Application.cpp
-index f5a9bd19..feee26bf 100644
+index f5a9bd19..b534d586 100644
 --- a/src/core/Application.cpp
 +++ b/src/core/Application.cpp
 @@ -225,6 +225,7 @@ bool Application::init() {
@@ -10,7 +10,7 @@ index f5a9bd19..feee26bf 100644
      if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
      if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
      if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
-@@ -5327,6 +5328,101 @@ void Application::runEventTest() {
+@@ -5327,6 +5328,102 @@ void Application::runEventTest() {
      LOG_INFO("EVENTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
  }
  
@@ -86,6 +86,7 @@ index f5a9bd19..feee26bf 100644
 +    // 4) idle: r3 never sent a command -> kicked at 180 s of play, its slot a Bot; the fed ones stay Remote.
 +    run(185.0f);
 +    check(P(r3).kind == game::ParticipantKind::Bot && world_.botBrain(r3) != nullptr, "idle 180 s: the Remote slot becomes a Bot");
++    check(world_.remoteIdleKicks() == 1, "the idle rule fired once (MatchEvent RemoteIdle for the session kick)");
 +    check(P(r1).kind == game::ParticipantKind::Remote && P(r2).kind == game::ParticipantKind::Remote, "participants that send commands stay Remote");
 +    bool serialsOk = true; uint32_t prev = 0;
 +    for (const auto& e : world_.match().gameplayEvents()) { if (e.serial <= prev) serialsOk = false; prev = e.serial; }
@@ -151,7 +152,7 @@ index 541c0564..631360a5 100644
      if (!sel.chassisByFaction[f].empty()) return sel.chassisByFaction[f];
      return defaultChassis(sel.specialty, faction);          // custom: the specialty's body for the resolved faction
 diff --git a/src/game/Match.h b/src/game/Match.h
-index cd1ea5de..d13569bd 100644
+index cd1ea5de..5c5a15c4 100644
 --- a/src/game/Match.h
 +++ b/src/game/Match.h
 @@ -23,6 +23,7 @@ namespace game {
@@ -162,7 +163,15 @@ index cd1ea5de..d13569bd 100644
      int goalScore = 40;                // ?PointsToWin (TDM default 40 of 20/30/40/50; DM 20 of 10/20/30)
      int timeLimit = 900;               // ?TimeLimit seconds (TimeLimits[1] of 600/900/1200)
      int teamScoreAmount = 1;           // ScoreKills.TeamScoreAmount: TDM / DM 1; ScoreKillsMP (DOM, KOTH, CTF, EXT) unset = 0
-@@ -112,6 +113,7 @@ struct MatchPlayer {
+@@ -67,6 +68,7 @@ struct MatchEvent {
+         PointsLeftAnnouncement,// ReportGameProgressPoints switch 4 / 3 (50 / 25 left; DOM / KOTH)
+         MatchEnded,           // EndGame -> MatchOver: winner (team index / player index / -1 tie), reason
+         ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
++        RemoteIdle,           // online host rule: Remote participant `player` idle for World::kRemoteIdleKickSeconds; the session kicks that peer
+     };
+     Type type;
+     int player = -1, other = -1;       // victim / killer, spawned player, winning player (FFA)
+@@ -112,6 +114,7 @@ struct MatchPlayer {
      int level = 0;                     // displayed level (progression; HigherLevel kill award), 0 until supplied
      std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
      std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
@@ -170,7 +179,7 @@ index cd1ea5de..d13569bd 100644
      // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
      // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
      int currentKillStreak = 0;
-@@ -143,11 +145,19 @@ public:
+@@ -143,11 +146,19 @@ public:
          players_.resize(n); locs_.resize(n); spawnAt_.resize(n); damageHistory_.resize(n); deathTime_.resize(n);
      }
      // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
@@ -192,8 +201,16 @@ index cd1ea5de..d13569bd 100644
      }
      // ---- Authoritative gameplay events (GameplayEvents.h): recorded once, in order; consumers track the last serial. ----
      const std::vector<GameplayEvent>& gameplayEvents() const { return gevents_; }
+@@ -232,6 +243,7 @@ public:
+     int countdown() const { return countdown_; }              // <CurrentGame:CurrentCountdown>
+     int gameStatus() const { return gameStatus_; }            // GRI.SetGameStatus: 2 pending, 3 in progress, 5 over
+     int winnerTeam() const { return winnerTeam_; }            // GRI.Winner (-1 = none / tie)
++    void notifyRemoteIdle(int p) { emit(MatchEvent::Type::RemoteIdle, p); }   // the host idle rule fired for that Remote participant
+     const std::vector<MatchEvent>& events() const { return events_; }   // pending until the host consumes them (clearEvents)
+     void clearEvents() { events_.clear(); }
+     // Spawn choice for player p (FindPlayerStart): start index or -1. Exposed for the host to place the pawn.
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index 4e9c3d9b..8c8aae10 100644
+index 4e9c3d9b..d0eb0706 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -2101,6 +2101,7 @@ void World::preloadHeldWeaponsOfPawns() {
@@ -216,7 +233,7 @@ index 4e9c3d9b..8c8aae10 100644
      // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
      if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
      if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
-+    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear();
++    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0;
 +    for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
      const int nb = addBots(l.bots);
      if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
@@ -230,7 +247,7 @@ index 4e9c3d9b..8c8aae10 100644
      if (first == match_.players().size()) { bots_.clear(); return; }
      for (size_t i = 0; i < opponents_.size();) {
          if ((size_t)opponents_[i]->matchPlayer() >= first) { opponents_[i]->destroy(); opponents_.erase(opponents_.begin() + (long)i); rebuildOppIndex(); } else ++i;
-@@ -3266,6 +3270,111 @@ int World::addBots(const BotLaunch& launch) {
+@@ -3266,6 +3270,113 @@ int World::addBots(const BotLaunch& launch) {
      return (int)ids.size();
  }
  
@@ -286,6 +303,8 @@ index 4e9c3d9b..8c8aae10 100644
 +            remoteIdle_[i] = -1e9f;   // queued once
 +            SlotSwap s; s.matchPlayer = (int)i; s.toBot = true; s.atTick = simTick_;
 +            pendingSwaps_.push_back(s);
++            match_.notifyRemoteIdle((int)i);   // MatchEvent RemoteIdle: the host's session glue kicks that peer ("Kicked for idling")
++            ++remoteIdleKicks_;
 +            LOG_INFO("session: p%zu idle %.0f s: kicked, the slot becomes a bot", i, kRemoteIdleKickSeconds);
 +        }
 +    for (size_t k = 0; k < pendingSwaps_.size();) {
@@ -343,7 +362,7 @@ index 4e9c3d9b..8c8aae10 100644
      int p = match_.addPlayer(name);
      auto o = std::make_unique<MatchOpponent>(p, match_.players()[(size_t)p].team, drawn);
 diff --git a/src/game/World.h b/src/game/World.h
-index e72b54b8..ad1e6dad 100644
+index e72b54b8..99e6a15a 100644
 --- a/src/game/World.h
 +++ b/src/game/World.h
 @@ -57,6 +57,12 @@ namespace game {
@@ -367,7 +386,7 @@ index e72b54b8..ad1e6dad 100644
      static bool fromURL(const std::string& url, MatchLaunch& out);
  };
  
-@@ -825,6 +832,12 @@ public:
+@@ -825,6 +832,13 @@ public:
      core::Vec3 lastDamageFrom_{0, 0, 0};
      // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
      MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
@@ -376,17 +395,19 @@ index e72b54b8..ad1e6dad 100644
 +    bool applySlotSwap(const SlotSwap& s);
 +    void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
 +    int64_t simTick() const { return simTick_; }
++    int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
 +    static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
      // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
      // their class selection, clamped to MatchSettings::maxPerTeam / maxPlayers. Returns the number added.
      int addBots(const BotLaunch& b);
-@@ -1142,6 +1155,12 @@ private:
+@@ -1142,6 +1156,13 @@ private:
      AwardProducer awards_;
      size_t xpLogged_ = 0;
      std::vector<BotBrain> bots_;
 +    std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick
 +    std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
 +    int64_t simTick_ = 0;
++    int remoteIdleKicks_ = 0;
 +    void tickSlotSwaps(float dt);
 +    void swapSlotToBot(int p);
 +    void swapSlotToRemote(int p, const std::string& member);

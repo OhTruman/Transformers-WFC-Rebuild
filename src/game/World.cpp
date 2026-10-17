@@ -3038,7 +3038,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
-    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear();
+    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0;
     for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
@@ -3322,6 +3322,8 @@ void World::tickSlotSwaps(float dt) {
             remoteIdle_[i] = -1e9f;   // queued once
             SlotSwap s; s.matchPlayer = (int)i; s.toBot = true; s.atTick = simTick_;
             pendingSwaps_.push_back(s);
+            match_.notifyRemoteIdle((int)i);   // MatchEvent RemoteIdle: the host's session glue kicks that peer ("Kicked for idling")
+            ++remoteIdleKicks_;
             LOG_INFO("session: p%zu idle %.0f s: kicked, the slot becomes a bot", i, kRemoteIdleKickSeconds);
         }
     for (size_t k = 0; k < pendingSwaps_.size();) {
@@ -5166,18 +5168,9 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
     const std::vector<std::string> movers = mapState_.moverActorNames();
     const bool keepForcedDir = std::getenv("WFC_NOFORCEDDIR") != nullptr;
     std::vector<uint16_t> perTri;
-    const assets::Json& overrides = root["node_overrides"];   // a listed node takes this physmat for all its triangles
-    int overridden = 0;
     for (const render::SubMesh& sm : glbMesh.subs) {
         if (std::find(movers.begin(), movers.end(), sm.nodeName) != movers.end()) continue;
         if (!keepForcedDir && sm.nodeName.rfind("TnForcedDirVolume", 0) == 0) continue;
-        const std::string nodeKey = std::to_string(sm.gltfNode);
-        if (sm.gltfNode >= 0 && overrides.has(nodeKey)) {
-            const uint16_t o = (uint16_t)overrides[nodeKey].asInt(0);
-            for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(o);
-            ++overridden;
-            continue;
-        }
         const std::vector<uint16_t>* v = sm.gltfMesh >= 0 && perMesh.count(sm.gltfMesh) ? &perMesh[sm.gltfMesh] : nullptr;
         for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(v && sm.meshTriOffset + t < v->size() ? (*v)[sm.meshTriOffset + t] : 0);
     }
@@ -5185,8 +5178,8 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
     if (!weaponCollision_.setPhysmats(std::move(perTri), std::move(names), root["engine_default_physmat"].asString()))
         LOG_WARN("physmat: %zu triangles vs %zu built: skipped", n, weaponCollision_.triangleCount());
     else {
-        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked, %d node-override submeshes",
-                 mapName_.c_str(), n, mismatched, nameChecked, overridden);
+        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked",
+                 mapName_.c_str(), n, mismatched, nameChecked);
         if (std::getenv("WFC_PHYSMATLOG")) {
             int tested = 0; const int ok = weaponCollision_.physmatSelfTest(2000, tested);
             LOG_INFO("physmat self-test: %d of %d centroid rays report their triangle's material", ok, tested);

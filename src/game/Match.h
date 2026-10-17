@@ -68,6 +68,7 @@ struct MatchEvent {
         PointsLeftAnnouncement,// ReportGameProgressPoints switch 4 / 3 (50 / 25 left; DOM / KOTH)
         MatchEnded,           // EndGame -> MatchOver: winner (team index / player index / -1 tie), reason
         ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
+        RemoteIdle,           // online host rule: Remote participant `player` idle for World::kRemoteIdleKickSeconds; the session kicks that peer
     };
     Type type;
     int player = -1, other = -1;       // victim / killer, spawned player, winning player (FFA)
@@ -242,6 +243,7 @@ public:
     int countdown() const { return countdown_; }              // <CurrentGame:CurrentCountdown>
     int gameStatus() const { return gameStatus_; }            // GRI.SetGameStatus: 2 pending, 3 in progress, 5 over
     int winnerTeam() const { return winnerTeam_; }            // GRI.Winner (-1 = none / tie)
+    void notifyRemoteIdle(int p) { emit(MatchEvent::Type::RemoteIdle, p); }   // the host idle rule fired for that Remote participant
     const std::vector<MatchEvent>& events() const { return events_; }   // pending until the host consumes them (clearEvents)
     void clearEvents() { events_.clear(); }
     // Spawn choice for player p (FindPlayerStart): start index or -1. Exposed for the host to place the pawn.

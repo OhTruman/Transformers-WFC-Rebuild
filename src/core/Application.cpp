@@ -5400,6 +5400,7 @@ void Application::runSessionTest() {
     // 4) idle: r3 never sent a command -> kicked at 180 s of play, its slot a Bot; the fed ones stay Remote.
     run(185.0f);
     check(P(r3).kind == game::ParticipantKind::Bot && world_.botBrain(r3) != nullptr, "idle 180 s: the Remote slot becomes a Bot");
+    check(world_.remoteIdleKicks() == 1, "the idle rule fired once (MatchEvent RemoteIdle for the session kick)");
     check(P(r1).kind == game::ParticipantKind::Remote && P(r2).kind == game::ParticipantKind::Remote, "participants that send commands stay Remote");
     bool serialsOk = true; uint32_t prev = 0;
     for (const auto& e : world_.match().gameplayEvents()) { if (e.serial <= prev) serialsOk = false; prev = e.serial; }

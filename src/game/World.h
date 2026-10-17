@@ -837,6 +837,7 @@ public:
     bool applySlotSwap(const SlotSwap& s);
     void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
     int64_t simTick() const { return simTick_; }
+    int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
     static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
     // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
     // their class selection, clamped to MatchSettings::maxPerTeam / maxPlayers. Returns the number added.
@@ -1158,6 +1159,7 @@ private:
     std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick
     std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
     int64_t simTick_ = 0;
+    int remoteIdleKicks_ = 0;
     void tickSlotSwaps(float dt);
     void swapSlotToBot(int p);
     void swapSlotToRemote(int p, const std::string& member);
