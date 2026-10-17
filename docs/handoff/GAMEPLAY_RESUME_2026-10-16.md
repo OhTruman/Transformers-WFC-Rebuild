@@ -2,6 +2,19 @@
 
 ## Current state (update at every stable point)
 
+- **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
+  - **Order and estimates sent to Integration:**
+
+    | # | Item | Estimate |
+    |---|---|---|
+    | 1 | The Defrag latch removal + crops | 0.5 h + a slot |
+    | 2 | Body perf levers: a. instanced gibs; b. hull on the GPU path; c. merge after rest, if still needed | 1-2 h / 2 h / 3 h, a corpse-arm slot each |
+    | 3 | Ride height (the design doc's model, Optimus faithful) | 5-10 h |
+    | 4 | Squad follow reversals | about 6 h |
+    | 5 | Death-body patch 2 (scorch decal, skeletal gibs, authored Death camera, full momentum picker) | 10-13 h, then re-time |
+    | 6 | FaceFX hook | 5-7 h |
+
+  - **Target:** the RT-off cost at 63 bots back toward the WFC_NOCORPSE floor, with 5v5 unchanged. WFC_NOCORPSE / WFC_NOMINEPRES stay.
 - **2026-10-17: the package 6 gate is running on af4d0731. FREEZE** (Integration): no compiles and no exes until Integration lifts
   it by message; code edits and docs only.
   - **Both items below move to package 7:** the Defrag latch removal, and lever 1, the instanced gibs. They can't be measured during
