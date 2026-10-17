@@ -36,6 +36,7 @@
   2.08 per travel-min: noise). The mechanism is something else. Next: trace a squad member (WFC_NAVQTRACE) to see which goal flips.
   - The edit stays applied in work/int_hv for now; drop it or replace it before the hover + squad patch.
 - **Campaign boss / set-piece mechanics** from RE: RE-Workspace/work/handoff/CAMPAIGN_SETPIECES_RE.md (dd8ed0d): Omega sentries / battery / HeartShell, Trypticon stages 1A / 1B / 2 + tail volumes, the soldier tank fuel cell; section 5 splits code from data. For the campaign phase.
+- **Campaign content deltas** from RE: RE-Workspace/work/handoff/CAMPAIGN_CONTENT_DELTAS_RE.md (38fb9c7): destructible damage / state links, turrets (0.5x damage, exit, rip), downed / revive (2+ humans, -400 HP, 40/s, 500 UU, 115 HP), game over rule, difficulty buff levels, loot tables. For the campaign phase.
 - **Campaign AI layer spec** from RE: `RE-Workspace/work/handoff/CAMPAIGN_AI_LAYER_RE.md` (6ce8158), for the campaign phase (buddies never
   downed / instant respawn, tactical volumes, the downed fire penalties).
 - **2026-10-17 ~07:30, the crop slot was RUN** (shots in `work/pass29/p2/crop_*`; sheets in work/pass29/p2). The behaviour all passes.
