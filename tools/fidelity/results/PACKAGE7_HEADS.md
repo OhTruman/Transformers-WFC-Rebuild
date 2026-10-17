@@ -13,4 +13,7 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | eebe15b2 | campaign flag + <Strings:> data store | answers "" in versus as before | versus unchanged by construction (behind GameFlow::campaign()); headless tests 165 / 0 (Integration) | not needed | no run |
 | b79692b6 | campaign objective path | behind GameFlow::campaign() | versus unchanged by construction | not needed | no run |
 | fedf83ee | campaign tutorial messages (once per profile) | behind GameFlow::campaign() | versus unchanged by construction | not needed | no run |
+| 0cf760f4 | <Strings:> store answers in versus (rename prompt, Claimed / Unclaimed texts in two menu screens) | menu text only | match frames unaffected (Integration); the Frontend's before / after menu shots are the evidence | menu shots (Frontend) | no run |
+| 37fa6376 | campaign E7 cinematic hide | behind the campaign flag | versus unchanged by construction | not needed | no run |
+| f2c285f3 + 61905a60 | online phase 1 groups A / B | online flag unset = offline | byte-identical offline (Integration); tests 180 / 0 | not needed | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
