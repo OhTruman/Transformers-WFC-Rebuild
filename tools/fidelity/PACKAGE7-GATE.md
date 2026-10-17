@@ -198,7 +198,14 @@ These are also written into package-respin.sh's header.
    - WFC_MUTE=1 and WFC_NOINTERACT=1 on every exe.
    - Never edit a running gate script: run a copy.
    - Never kill anything by name: kill by PID with the parent chain checked.
-7. **The D3D12 presenter exit hang.** A 1-in-32 exit hang leaves an unkillable exe stuck in the kernel. Until Rendering's fix is
+7. **A new harness switch is checked before its first run** (Integration 2026-10-17, after a 13:04-13:06 slip).
+   - It must already be in Application_Frontend.cpp's direct-boot list (wantsFrontendBoot), and it's tested with only the env a
+     plain user would set.
+   - A switch missing from the list made WFC_NULLRENDER refuse: "WFC_NULLRENDER: only for direct-boot harnesses". The exe booted
+     the frontend windowed for about 2 min during Rendering's x14.
+   - Such a refusal is never retried before the list is fixed. Nothing that can open a window runs while another lane holds the
+     card.
+8. **The D3D12 presenter exit hang.** A 1-in-32 exit hang leaves an unkillable exe stuck in the kernel. Until Rendering's fix is
    verified, no gate arm uses WFC_D3D12PRESENT / FG, except the presenter-fix verification itself.
 
 ## Messages to Integration
