@@ -212,6 +212,8 @@ public:
         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
+    bool volumetricLighting() const { return volUser_; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
@@ -880,6 +882,7 @@ private:
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
+    bool volUser_ = true;                            // X3 Settings row (kept by release())
     int drawOwner_ = 0;                              // character instance of the current dynamic draws
     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
     // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque

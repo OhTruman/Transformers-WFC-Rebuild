@@ -1,0 +1,89 @@
+diff -ru a/src/render/Renderer.h b/src/render/Renderer.h
+--- a/src/render/Renderer.h	2026-10-17 07:22:52.925058100 -0500
++++ b/src/render/Renderer.h	2026-10-17 07:23:05.759545000 -0500
+@@ -193,6 +193,11 @@
+     virtual int rayTracingMode() const { return 0; }
+     // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
+     virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
++    // X3 volumetric lighting (Settings > Graphics, shown with Ray Tracing = Realistic): applies from the next frame, survives
++    // map changes; WFC_X3=0 forces it off over the setting. Available = Realistic is possible on this GPU.
++    virtual void setVolumetricLighting(bool on) { (void)on; }
++    virtual bool volumetricLighting() const { return false; }
++    virtual bool volumetricLightingAvailable() const { return false; }
+     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
+     // effect from the next map load (the row shows "(next map)").
+     virtual bool rayTracingLoadedThisMap() const { return false; }
+diff -ru a/src/render/gl/GLRenderer.cpp b/src/render/gl/GLRenderer.cpp
+--- a/src/render/gl/GLRenderer.cpp	2026-10-17 07:22:53.037442100 -0500
++++ b/src/render/gl/GLRenderer.cpp	2026-10-17 07:23:05.786136200 -0500
+@@ -1619,6 +1619,9 @@
+     bool rayTracingAvailable() const override { return wfc_.rtAvailable(); }
+     int rayTracingMode() const override { return wfc_.rtMode(); }
+     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
++    void setVolumetricLighting(bool on) override { wfc_.setVolumetricLighting(on); }
++    bool volumetricLighting() const override { return wfc_.volumetricLighting(); }
++    bool volumetricLightingAvailable() const override { return wfc_.rtAvailable(); }
+     bool rayTracingLoadedThisMap() const override { return wfc_.rtLoadedThisMap(); }
+     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
+     bool modernMaterialsAvailable() const override { return wfc::Pipeline::hdTexturesAvailable(); }
+diff -ru a/src/render/gl/WfcPipeline.cpp b/src/render/gl/WfcPipeline.cpp
+--- a/src/render/gl/WfcPipeline.cpp	2026-10-17 07:22:53.251676400 -0500
++++ b/src/render/gl/WfcPipeline.cpp	2026-10-17 07:23:05.905044100 -0500
+@@ -1225,7 +1225,9 @@
+     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
+                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
++    const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
+     *this = Pipeline();
++    volUser_ = keepVol;
+     loadYield_ = std::move(keepYield);
+     displayGamma_ = keepGamma;
+     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
+@@ -1245,11 +1247,13 @@
+     const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
+     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+     const int rm = rtMode_;
++    const bool vo = volUser_;
+     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+-    rtMode_ = 2;
++    rtMode_ = 2; volUser_ = false;
+     release();
+     check(rtMode_ == 2, "Ray Tracing mode");
+-    rtMode_ = rm;
++    check(!volUser_, "Volumetric Lighting");
++    rtMode_ = rm; volUser_ = vo;
+     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
+     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
+diff -ru a/src/render/gl/WfcPipeline.h b/src/render/gl/WfcPipeline.h
+--- a/src/render/gl/WfcPipeline.h	2026-10-17 07:22:53.145311900 -0500
++++ b/src/render/gl/WfcPipeline.h	2026-10-17 07:23:05.841827700 -0500
+@@ -212,6 +212,8 @@
+         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
+     }
+     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
++    void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
++    bool volumetricLighting() const { return volUser_; }
+     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
+     void flushPendingDraws() { flushWeaponQueue(); }
+     // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
+@@ -880,6 +882,7 @@
+     int clutSize_ = 32;
+     float znear_ = 0.1f, zfar_ = 20000.0f;
+     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
++    bool volUser_ = true;                            // X3 Settings row (kept by release())
+     int drawOwner_ = 0;                              // character instance of the current dynamic draws
+     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
+     // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque
+diff -ru a/src/render/gl/WfcRt.cpp b/src/render/gl/WfcRt.cpp
+--- a/src/render/gl/WfcRt.cpp	2026-10-17 07:22:53.357037500 -0500
++++ b/src/render/gl/WfcRt.cpp	2026-10-17 07:23:05.731950500 -0500
+@@ -1207,7 +1207,7 @@
+         // haze floor. No ambient in-scatter (a constant term was v1 - v3's grey veil). Mode-gated: Realistic with the RT
+         // pass only. WFC_X3=0 off; WFC_X3_DENSITY / _HAZE / _SUN / _LAMP / _TRANS / _G / _DIST / _HISTORY (WfcRtDefaults.h).
+         {
+-            fr.volumetric = rtdef::x3() && rtMode_ == 2 && rtTargets_.vol != 0;
++            fr.volumetric = rtdef::x3() && volUser_ && rtMode_ == 2 && rtTargets_.vol != 0;   // (volUser_: the Settings row; WFC_X3=0 still forces off)
+             if (fr.volumetric) {
+                 // per-map medium (the eye pass): Gorge's canyon air is almost all sunlit and its authored fog is twice Molten's -
+                 // at the defaults it read as a veil; an env value overrides the table (density, haze, lamp)

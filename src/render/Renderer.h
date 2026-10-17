@@ -193,6 +193,11 @@ public:
     virtual int rayTracingMode() const { return 0; }
     // Applied live (the next frame); false = unavailable or an invalid mode (the mode stays as it was).
     virtual bool setRayTracingMode(int mode) { (void)mode; return false; }
+    // X3 volumetric lighting (Settings > Graphics, shown with Ray Tracing = Realistic): applies from the next frame, survives
+    // map changes; WFC_X3=0 forces it off over the setting. Available = Realistic is possible on this GPU.
+    virtual void setVolumetricLighting(bool on) { (void)on; }
+    virtual bool volumetricLighting() const { return false; }
+    virtual bool volumetricLightingAvailable() const { return false; }
     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
     // effect from the next map load (the row shows "(next map)").
     virtual bool rayTracingLoadedThisMap() const { return false; }

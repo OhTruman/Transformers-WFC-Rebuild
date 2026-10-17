@@ -1225,7 +1225,9 @@ void Pipeline::release() {
     const bool keepModern = modern_;                   // (the HD row's Modern materials: lost here before - Original after the
                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
+    const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
     *this = Pipeline();
+    volUser_ = keepVol;
     loadYield_ = std::move(keepYield);
     displayGamma_ = keepGamma;
     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
@@ -1245,11 +1247,13 @@ void Pipeline::runSettingsSelfTest() {
     const float g = displayGamma_; const float fs = fsrScale_, fsh = fsrSharpness_; const int an = anisotropy_;
     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
     const int rm = rtMode_;
+    const bool vo = volUser_;
     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
-    rtMode_ = 2;
+    rtMode_ = 2; volUser_ = false;
     release();
     check(rtMode_ == 2, "Ray Tracing mode");
-    rtMode_ = rm;
+    check(!volUser_, "Volumetric Lighting");
+    rtMode_ = rm; volUser_ = vo;
     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
