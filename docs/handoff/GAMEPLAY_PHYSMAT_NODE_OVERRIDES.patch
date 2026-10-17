@@ -1,0 +1,58 @@
+diff --git a/src/assets/Gltf.cpp b/src/assets/Gltf.cpp
+index b010d164..05984b6f 100644
+--- a/src/assets/Gltf.cpp
++++ b/src/assets/Gltf.cpp
+@@ -292,6 +292,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
+                 }
+             }
+             sm.gltfMesh = meshIdx; sm.meshTriOffset = meshTri; meshTri += (uint32_t)(idx.size() / 3);
++            sm.gltfNode = nodeIdx;
+             out.subs.push_back(sm);
+         }
+     }
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 4e9c3d9b..8a493cb2 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -5057,9 +5057,18 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
+     const std::vector<std::string> movers = mapState_.moverActorNames();
+     const bool keepForcedDir = std::getenv("WFC_NOFORCEDDIR") != nullptr;
+     std::vector<uint16_t> perTri;
++    const assets::Json& overrides = root["node_overrides"];   // a listed node takes this physmat for all its triangles
++    int overridden = 0;
+     for (const render::SubMesh& sm : glbMesh.subs) {
+         if (std::find(movers.begin(), movers.end(), sm.nodeName) != movers.end()) continue;
+         if (!keepForcedDir && sm.nodeName.rfind("TnForcedDirVolume", 0) == 0) continue;
++        const std::string nodeKey = std::to_string(sm.gltfNode);
++        if (sm.gltfNode >= 0 && overrides.has(nodeKey)) {
++            const uint16_t o = (uint16_t)overrides[nodeKey].asInt(0);
++            for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(o);
++            ++overridden;
++            continue;
++        }
+         const std::vector<uint16_t>* v = sm.gltfMesh >= 0 && perMesh.count(sm.gltfMesh) ? &perMesh[sm.gltfMesh] : nullptr;
+         for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(v && sm.meshTriOffset + t < v->size() ? (*v)[sm.meshTriOffset + t] : 0);
+     }
+@@ -5067,8 +5076,8 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
+     if (!weaponCollision_.setPhysmats(std::move(perTri), std::move(names), root["engine_default_physmat"].asString()))
+         LOG_WARN("physmat: %zu triangles vs %zu built: skipped", n, weaponCollision_.triangleCount());
+     else {
+-        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked",
+-                 mapName_.c_str(), n, mismatched, nameChecked);
++        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked, %d node-override submeshes",
++                 mapName_.c_str(), n, mismatched, nameChecked, overridden);
+         if (std::getenv("WFC_PHYSMATLOG")) {
+             int tested = 0; const int ok = weaponCollision_.physmatSelfTest(2000, tested);
+             LOG_INFO("physmat self-test: %d of %d centroid rays report their triangle's material", ok, tested);
+diff --git a/src/render/Mesh.h b/src/render/Mesh.h
+index db8241a6..89b21973 100644
+--- a/src/render/Mesh.h
++++ b/src/render/Mesh.h
+@@ -31,6 +31,7 @@ struct SubMesh {
+     int sourceSection = -1;           // primitive index within that mesh
+     int gltfMesh = -1;                // glTF mesh index of the node (collision physmat runs are per mesh)
+     uint32_t meshTriOffset = 0;       // first triangle of this primitive within that glTF mesh
++    int gltfNode = -1;                // glTF node index (collision physmat node_overrides)
+     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
+     TextureHandle lightmapTex = kInvalidTexture;
+     float lmScale[2] = {1, 1};
