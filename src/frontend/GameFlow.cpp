@@ -405,7 +405,10 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
     if (fn == "Online.CheckCampaignCompleteMessage") return {};   // no campaign-complete prompt (no campaign progress offline)
-    if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return {}; }
+    if (fn == "Online.SetPartyLobbyType") {   // (GTS, IconicMode): the flag follows from the GTS (2 / 4) - see iconicMode()
+        FlowTrace::emit("partylobby.type", {{"type", arg(0)}, {"iconic", arg(1)}});
+        return {};
+    }
     if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return {}; }
     if (fn == "Online.SwitchTeam" && role_ == SessionRole::Member) {   // online member: a request to the host
         sendMemberInfo(lobby_.localTeam == 1 ? 0 : 1);
@@ -502,7 +505,7 @@ std::string GameFlow::buildLobbyUrl(const GameSettings& gs) const {
     u.setOption("GameModeTag", gs.tag);
     u.setOption("GameTeamStatus", std::to_string(gs.teamTypeValue));
     u.setOption("MaxPlayers", std::to_string(gs.numPublicConnections + gs.numPrivateConnections));
-    u.setOption("IconicMode", "0");
+    u.setOption("IconicMode", iconicMode() ? "1" : "0");
     return u.toString();
 }
 
@@ -513,7 +516,7 @@ GameFlow::BotRows GameFlow::botRows() const {
 
 int GameFlow::botMax(const std::string& field) const {
     if (field == "difficulty") return 3;   // EASY / MEDIUM / HARD / EXPERT (PC EXTENSION: Expert, user decision)
-    if (field == "extended") return 1;
+    if (field == "extended" || field == "iconic") return 1;
     const bool ext = profile_.bots.extended;
     // players per side incl. the human: original 5; extended = Gameplay MatchSettings (applyExtendedSlots) only
     const int perSide = ext ? gpPerTeam_ : 5;
@@ -532,7 +535,19 @@ int GameFlow::botMax(const std::string& field) const {
 int GameFlow::botValue(const std::string& field) const {
     const LocalProfile::Bots& b = profile_.bots;
     return field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy
-         : field == "extended" ? (b.extended ? 1 : 0) : b.difficulty;
+         : field == "extended" ? (b.extended ? 1 : 0) : field == "iconic" ? (b.iconic ? 1 : 0) : b.difficulty;
+}
+
+bool GameFlow::iconicMode() const {
+    if (level_ == LevelKind::Match) return match_.url.intOption("IconicMode", 0) != 0;
+    const int gts = lobby_.settings ? lobby_.settings->teamTypeValue : lobby_.gameTeamStatus;
+    if (gts == 2 || gts == 4) return true;   // Escalation / co-op campaign lobbies (SetPartyLobbyType(GTS, true))
+    if (botRows() != BotRows::Teams || lobby_.playlistId >= 0) return false;
+    if (role_ == SessionRole::Member) {
+        auto it = memberLobby_.settings.find("WfcIconicCharacters");
+        return it != memberLobby_.settings.end() && it->second == botChoiceLabel("iconic", 1);
+    }
+    return profile_.bots.iconic;
 }
 
 namespace {
@@ -542,6 +557,7 @@ const GameFlow::BotOption kBotOptions[] = {
     {"WfcBotsDecepticon", "decepticon", "Decepticon Bots"},
     {"WfcBots", "enemy", "Bots"},
     {"WfcBotDifficulty", "difficulty", "Bot Difficulty"},
+    {"WfcIconicCharacters", "iconic", "Iconic Characters"},   // PC EXTENSION (OnlyAllowIconicCharacters), team modes only
 };
 }
 
@@ -552,7 +568,7 @@ std::vector<GameFlow::BotOption> GameFlow::botOptions() const {
     for (const BotOption& o : kBotOptions) {
         const std::string f = o.field;
         if (rows == BotRows::Teams && f == "enemy") continue;
-        if (rows == BotRows::FreeForAll && (f == "autobot" || f == "decepticon")) continue;
+        if (rows == BotRows::FreeForAll && (f == "autobot" || f == "decepticon" || f == "iconic")) continue;   // claims are per team
         out.push_back(o);
     }
     return out;
@@ -569,6 +585,7 @@ std::string GameFlow::botChoiceLabel(const std::string& field, int v) const {
     const bool teams = botRows() == BotRows::Teams;
     if (field == "difficulty") return kDiff[std::clamp(v, 0, 3)];
     if (field == "extended") return v ? (teams ? "Extended (32 v 32)" : "Extended") : (teams ? "Original (5 v 5)" : "Original (10)");
+    if (field == "iconic") return v ? "On" : "Off";
     return std::to_string(v);
 }
 
@@ -624,6 +641,8 @@ void GameFlow::setBotSetting(const std::string& field, int value) {
     if (field == "extended") {
         b.extended = value != 0;
         if (b.extended && !b.editedSinceMap) applyRecommendedBots("extended");
+    } else if (field == "iconic") {
+        b.iconic = value != 0;
     } else {
         if (field != "difficulty") b.editedSinceMap = true;
         int& v = field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy : b.difficulty;
@@ -662,7 +681,7 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
     u.setOption("MaxPlayers", std::to_string(gs.numPublicConnections + gs.numPrivateConnections));
     u.setOption("StatsWriters", "");
     u.setOption("LobbyGameClassName", gs.lobbyGameClass);
-    u.setOption("IconicMode", "0");
+    u.setOption("IconicMode", iconicMode() ? "1" : "0");
     if (!gs.timeLimits.empty()) {
         int ti = settingIndex(&gs, "TimeLimit");
         size_t idx = std::min((size_t)(ti >= 0 ? ti : gs.timeLimitDefaultIndex), gs.timeLimits.size() - 1);
@@ -703,6 +722,7 @@ void GameFlow::selectCharacter(const SelectedCharacter& c) {
     selected_ = c;
     selected_.valid = true;
     ++selectionSerial_;
+    if (session_ && role_ == SessionRole::Member && level_ == LevelKind::GameLobby) sendMemberInfo(-1);
     auto list = [](const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; };
     auto col = [](const CharacterColorSel& k) {
         char b[48];

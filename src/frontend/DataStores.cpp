@@ -123,7 +123,12 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     }
     if (markup == "<CurrentGame:NumOnlinePlayers>") return "0";   // no online service
     if (markup == "<CurrentGame:AutobalanceTeams>") return "1";   // setting 0x40000012 default Autobalanced [RE 5.1]
-    if (markup == "<CurrentGame:_bIconicMode>") return "0";
+    if (markup == "<CurrentGame:_bIconicMode>") return flow_.iconicMode() ? "1" : "0";   // GRI._bIconicMode
+    if (markup == "<CurrentGame:ClaimedIconicCharacters>") {   // CharacterSelect_GFX UpdateClaimedCharacters (split(','))
+        std::string o;
+        for (const std::string& n : flow_.claimedIconicCharacters()) o += (o.empty() ? "" : ",") + n;
+        return o;
+    }
     if (markup == "<CurrentGame:SelectedCheckpoint>") return "";
     if (markup == "<CurrentGame:Rounds>") return std::to_string(inMatch ? flow_.currentMatch().rounds : 0);
     if (markup == "<CurrentGame:CurrentRound>") return "1";

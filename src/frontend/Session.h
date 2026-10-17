@@ -46,6 +46,7 @@ struct SessionMemberInfo {
     int level = 0;                          // displayed level (self-reported)
     bool hasCharacter = false;              // the original lobby gate (D4): "Waiting for all players to choose a character"
     std::string characterSlot;              // custom character slot / specialty ("Soldier", ...)
+    std::string iconicCharacter;            // iconic mode: the claimed iconic CharacterName ("" none; one per team)
     std::vector<std::string> loadout;       // weapons / abilities as the lobby message carries them
     int teamRequest = -1;                   // Online.SwitchTeam from this member (-1 none); the host decides
 };

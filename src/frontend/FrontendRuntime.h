@@ -324,6 +324,7 @@ private:
     std::map<std::string, int> chassisXpUnlocks_;
     int chassisUnlockLevel(const std::string& id) const;   // 0 = not in the table
     bool chassisUnlocked(const ChassisInfo& ci) const;
+    bool iconicUnlocked(const CharacterPreset& p) const;
     void updateChassisUnlockTexts();
     bool frontEndMusic_ = false;
     std::function<platform::IMoviePlayer*()> movieFactory_;

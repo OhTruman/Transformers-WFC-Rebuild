@@ -262,6 +262,7 @@ bool FrontendRuntime::init() {
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
     roster_.loadAuthored(frontendDataFile("character_presets.json"));
+    roster_.loadIconic(Catalog::defaultManifestRoot() + "/mp_content/mp_characters.json", frontendDataFile("iconic_presets.json"));
     // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->
     // ResetCharacterFromName) and written at once (MarkAsDirty -> the profile save); later runs load them.
     if (!std::filesystem::exists(kCharactersFile)) {
@@ -518,10 +519,12 @@ std::string join2(const std::vector<std::string>& v) { std::string o; for (const
 
 GameFlow::SelectedCharacter FrontendRuntime::selectionFor(const std::string& name) const {
     // TnPlayerController.SelectCharacter(name, 0): the committed custom character, resolved once for Gameplay.
+    // ... or, in iconic mode, TnPlayerController.SelectCharacter(name, 1): the iconic preset (type 1, its chassis per faction).
     GameFlow::SelectedCharacter s;
     s.name = name;
-    s.type = 0;
-    const CharacterPreset* c = roster_.find(name);
+    const CharacterPreset* c = flow_.iconicMode() ? roster_.findIconic(name) : nullptr;
+    s.type = c ? 1 : 0;
+    if (!c) c = roster_.find(name);
     if (!c) return s;   // unknown slot: selection recorded, no chassis (bodyAvailable false)
     s.friendlyName = c->friendlyName;
     s.specialty = c->specialty;
@@ -551,8 +554,23 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     // Custom mode (iconic mode = GameTeamStatus 2 / 4 or OnlyAllowIconicCharacters is not wired yet: PARTIAL).
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
     auto join = [](const std::vector<std::string>& v) { std::string o; for (const auto& s : v) o += (o.empty() ? "" : ",") + s; return o; };
-    const CharacterPreset* c = roster_.find(arg(0));
-    if (fn == "Customize.CheckCustomCharacterDataLoaded") return {};   // loaded (no TnLoadCustomCharactersStatusMessageBox)
+    // Iconic mode (GRI._bIconicMode): the wheel's names are the iconic presets (TnCharacterScriptBinding iconic vs custom).
+    const bool iconic = flow_.iconicMode();
+    const CharacterPreset* c = iconic ? roster_.findIconic(arg(0)) : nullptr;
+    if (!c) c = roster_.find(arg(0));
+    if (fn == "Customize.CheckCustomCharacterDataLoaded") return {};
+    if (iconic && fn == "Customize.GetPlayableCharacters") {   // GetPlayableIconicCharacterNames + FilterLockedIconicCharacters
+        std::vector<std::string> names;
+        for (const CharacterPreset& p : roster_.iconicCharacters()) if (iconicUnlocked(p)) names.push_back(p.name);
+        return BridgeValue(join(names));
+    }
+    if (fn == "Customize.LocalizeUniqueIconicId") {   // the chassis' FriendlyIconicName (localized), else the preset's name
+        const CharacterPreset* ip = roster_.findIconic(arg(0));
+        if (!ip) return BridgeValue(arg(0));
+        for (const Catalog::Provider& p : catalog_.providers("Chassis"))
+            if (p.get("UniqueId") == ip->chassis[0] && !p.get("FriendlyIconicName").empty()) return BridgeValue(p.get("FriendlyIconicName"));
+        return BridgeValue(ip->iconicNames[0].empty() ? ip->name : ip->iconicNames[0]);
+    }   // loaded (no TnLoadCustomCharactersStatusMessageBox)
     if (fn == "Customize.GetCustomCharacters" || fn == "Customize.GetPlayableCharacters") {
         std::vector<std::string> names;
         for (const CharacterPreset& p : roster_.customCharacters()) names.push_back(p.name);
@@ -914,6 +932,18 @@ void FrontendRuntime::updateProgression() {
 int FrontendRuntime::chassisUnlockLevel(const std::string& id) const {
     auto it = chassisXpUnlocks_.find(id);
     return it == chassisXpUnlocks_.end() ? 0 : it->second;
+}
+
+bool FrontendRuntime::iconicUnlocked(const CharacterPreset& p) const {
+    // LockedCharacter gates an iconic character through the same IsChassisUnlocked check as a locked body [AssetTools
+    // locks.meaning]; PC ADAPTATION: the same per-specialty XP levels (chassis_xp_unlocks.json), OriginalChassisLocks=1 off.
+    const ChassisInfo* ci = roster_.chassis(p.chassis[0]);
+    if (!ci) return false;
+    if (!ci->lockedCharacter) return true;
+    if (flow_.profile().originalChassisLocks) return false;
+    const int need = chassisUnlockLevel(ci->id);
+    const int sp = progression::specialtyIndex(ci->specialty);
+    return need > 0 && sp >= 0 && progression::levelForXp(flow_.profile().progression.xp[(size_t)sp]) >= need;
 }
 
 bool FrontendRuntime::chassisUnlocked(const ChassisInfo& ci) const {

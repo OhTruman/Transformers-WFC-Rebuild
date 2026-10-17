@@ -87,6 +87,54 @@ void CharacterRoster::loadAuthored(const std::string& path) {
     characters_ = presets_;
 }
 
+void CharacterRoster::loadIconic(const std::string& mpCharactersPath, const std::string& orderPath) {
+    iconic_.clear();
+    auto read = [](const std::string& p, assets::Json& j) {
+        std::ifstream f(openPath(p), std::ios::binary);
+        if (!f) return false;
+        std::stringstream ss;
+        ss << f.rdbuf();
+        return assets::Json::parse(ss.str(), j);
+    };
+    assets::Json chars, order;
+    if (!read(mpCharactersPath, chars) || !read(orderPath, order)) { LOG_WARN("frontend roster: iconic presets missing"); return; }
+    std::map<std::string, CharacterPreset> byObject;
+    const assets::Json& list = chars["characters"];
+    for (size_t i = 0; i < list.size(); ++i) {
+        const assets::Json& c = list[i];
+        const assets::Json& ip = c["iconic_preset"];
+        if (!ip.isObject()) continue;
+        if (c["mp_status"].asString().rfind("not referenced", 0) == 0) continue;   // the car soldiers: no MP map
+        std::string obj = ip["object"].asString();
+        obj = obj.substr(obj.rfind('.') + 1);
+        CharacterPreset p;
+        p.name = ip["CharacterName"].asString();
+        p.specialty = ip["Specialty"].asString();
+        for (int f = 0; f < 2; ++f) {
+            p.chassis[f] = ip["ChassisTypes"][(size_t)f].asString();
+            p.iconicNames[f] = c["display_name"]["iconic"]["INT"].asString();
+        }
+        auto take = [](const assets::Json& a, std::vector<std::string>& out) { for (size_t k = 0; k < a.size(); ++k) out.push_back(a[k].asString()); };
+        take(ip["WeaponTypes"], p.weapons);
+        take(ip["VehicleWeapons"], p.vehicleWeapons);
+        take(ip["MeleeWeapons"], p.melee);
+        take(ip["Abilities"], p.abilities);
+        take(ip["Skills"], p.skills);
+        byObject[obj] = p;
+    }
+    const assets::Json& o = order["order"];
+    for (size_t i = 0; i < o.size(); ++i) {
+        auto it = byObject.find(o[i].asString());
+        if (it != byObject.end()) iconic_.push_back(it->second);
+    }
+    LOG_INFO("frontend roster: %zu iconic presets", iconic_.size());
+}
+
+const CharacterPreset* CharacterRoster::findIconic(const std::string& name) const {
+    for (const CharacterPreset& p : iconic_) if (p.name == name) return &p;
+    return nullptr;
+}
+
 const CharacterPreset* CharacterRoster::find(const std::string& name) const {
     for (const CharacterPreset& p : characters_) if (p.name == name) return &p;
     return nullptr;

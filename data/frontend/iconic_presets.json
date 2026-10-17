@@ -1,0 +1,11 @@
+{
+  "source": "AssetTools manifests/authored.db: TransGame.Default__TnProfileSettings.PresetIconicCharacters (authored order = the iconic wheel's order). Each preset's data (CharacterName, Specialty, ChassisTypes, weapons, abilities) comes from manifests/mp_content/mp_characters.json characters[].iconic_preset.",
+  "note": "The three car soldiers (Decepticon / Autobot / Neutral) are in the authored list but are never referenced by an MP map (AssetTools mp_status); the frontend leaves them out of the playable set. LockedCharacter presets follow the same unlock check as locked chassis (TnCharacterScriptBinding IsChassisUnlocked).",
+  "order": [
+    "AirRaid_PCD_SP", "Arcee_PCD_SP", "Barricade_PCD_SP", "Brawl_PCD_SP", "Breakdown_PCD_SP", "BumbleBee_PCD_SP", "Deadend_PCD_SP",
+    "Demolishor_PCD_SP", "Ironhide_PCD_SP", "Jazz_PCD_SP", "Jetfire_PCD_SP", "Megatron_PCD_SP", "Onslaught_PCD_SP", "Optimus_PCD_SP",
+    "OptimusPrime_PCD_SP", "Ratchet_PCD_SP", "Scattershot_PCD_SP", "Shockwave_PCD_SP", "Sideswipe_PCD_SP", "SilverBolt_PCD_SP",
+    "Skywarp_PCD_SP", "Slipstream_PCD_SP", "Soundwave_PCD_SP", "Starscream_PCD_SP", "Thunder_PCD_SP", "Warpath_PCD_SP",
+    "ZetaPrime_PCD_SP", "DecepticonCarSoldier_PCD_SP", "AutobotCarSoldier_PCD_SP", "NeutralCarSoldier_PCD_SP"
+  ]
+}

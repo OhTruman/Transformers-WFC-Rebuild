@@ -633,8 +633,8 @@ static void testFlow() {
         // write of an unchanged label is not an edit; a changed one applies.
         DataStores& ds = rt.dataStores();
         const std::string fields = ds.call("GetDataStoreFields", {"TnGameSettings"}).s;
-        const bool rows = fields.find(",WfcPlayerLimit,WfcBotsAutobot,WfcBotsDecepticon,WfcBotDifficulty") != std::string::npos &&
-                          fields.find("WfcBots,") == std::string::npos && fields.rfind("WfcBotDifficulty") + 16 == fields.size();
+        const bool rows = fields.find(",WfcPlayerLimit,WfcBotsAutobot,WfcBotsDecepticon,WfcBotDifficulty,WfcIconicCharacters") != std::string::npos &&
+                          fields.find("WfcBots,") == std::string::npos && fields.rfind("WfcIconicCharacters") + 19 == fields.size();
         const bool header = ds.call("GetCollectionColumnHeader", {"<TnGameSettings:WfcBotDifficulty>", "0"}).s == "Bot Difficulty" &&
                             ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotDifficulty>"}).n == 4 &&
                             ds.call("GetCollectionRowCount", {"<TnGameSettings:WfcBotsAutobot>"}).n == f.botMax("autobot") + 1 &&
@@ -648,8 +648,16 @@ static void testFlow() {
         ds.call("WriteValue", {"<TnGameSettings:WfcBotDifficulty>", "Expert"});
         const bool applied = b.autobot == 2 && b.editedSinceMap && b.difficulty == 3 &&
                              ds.call("ReadValue", {"<TnGameSettings:WfcBotsAutobot>"}).s == "2";
+        // PC EXTENSION "Iconic Characters" (OnlyAllowIconicCharacters; RE: no shipped versus class sets it): Off by default
+        // (GRI _bIconicMode 0, the profile has no key); On -> _bIconicMode 1 and the URLs carry ?IconicMode=1
+        const bool iconicOff = ds.call("ReadValue", {"<TnGameSettings:WfcIconicCharacters>"}).s == "Off" &&
+                               ds.call("ReadValue", {"<CurrentGame:_bIconicMode>"}).s == "0" && !f.iconicMode();
+        ds.call("WriteValue", {"<TnGameSettings:WfcIconicCharacters>", "On"});
+        const bool iconicOn = b.iconic && f.iconicMode() && ds.call("ReadValue", {"<CurrentGame:_bIconicMode>"}).s == "1" &&
+                              f.lobbyUrlForTest().find("?IconicMode=1") != std::string::npos;
         b = saved;
         f.profile().save();
+        check(iconicOff && iconicOn && !f.iconicMode(), "lobby.iconic_characters_row", std::to_string(iconicOff) + std::to_string(iconicOn));
         check(rows && header && unchanged && applied, "lobby.mode_options_bot_rows", fields);
     }
     {   // An Escalation-only map (CompatibleGameTypes=SV) requested for TDM is refused; a TDM map is accepted.
@@ -1492,6 +1500,49 @@ static void testOnlineMatchSide() {
           std::to_string(lines.size()) + " " + cell("PlayerName", 1));
 }
 
+static void testIconicMode() {
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    auto cz = [&](const char* fn, std::vector<std::string> a = {}) { return r.rt->bridge("UI_GFxCharacterSelect_p.CharacterSelect_GFX_1", fn, a).s; };
+    // I1: custom mode (the versus default) is unchanged: the wheel / Customize lists are the custom slots
+    const std::string custom = cz("Customize.GetPlayableCharacters");
+    r.f().profile().bots.iconic = true;   // the PC EXTENSION row (Game Mode Options), On
+    const std::string iconic = cz("Customize.GetPlayableCharacters");
+    // authored PresetIconicCharacters order (AirRaid first); LockedCharacter presets (Arcee, Jazz...) hidden on a fresh
+    // profile; the car soldiers never listed
+    const bool lists = custom == "Scout,Scientist,Soldier,Leader" && iconic.rfind("AirRaid,Barricade,Brawl,Breakdown,Bumblebee", 0) == 0 &&
+                       iconic.find("Optimus Prime") != std::string::npos && iconic.find("Arcee") == std::string::npos &&
+                       iconic.find("CarSoldier") == std::string::npos && cz("Customize.GetCharacterSpecialty", {"Bumblebee"}) == "Scout" &&
+                       cz("Customize.LocalizeUniqueIconicId", {"Optimus Prime"}) == "Optimus Prime";
+    check(host && lists, "iconic.I1_playable_set", custom + " | " + iconic);
+    // I2: selecting an iconic character hands Gameplay type 1 with the preset's chassis per faction
+    cz("Customize.SelectCharacter", {"Bumblebee", "0"});
+    const GameFlow::SelectedCharacter& sel = r.f().selectedCharacter();
+    check(sel.valid && sel.type == 1 && sel.name == "Bumblebee" && sel.chassis[0] == "Car" && sel.chassis[1] == "Car" && sel.specialty == "Scout",
+          "iconic.I2_select_type1", sel.name + " " + std::to_string(sel.type) + " " + sel.chassis[0]);
+    // I3: claims per team (online): a teammate's pick is listed as claimed; the same pick twice holds the gate at
+    // "waiting for character choice" (6) until the later one picks another
+    SessionEvent a = memberEv("WFC-AAAA-AAAA-1", "Alpha", true);
+    a.info.iconicCharacter = "Bumblebee";
+    r.fake->inject(a);
+    r.frames(2);
+    if (!r.f().onlineMembers().empty() && r.f().onlineMembers()[0].team != r.f().lobby().localTeam) r.f().call("Online.SwitchTeam");
+    r.frames(2);
+    DataStores& ds = r.rt->dataStores();
+    ds.poll();
+    const bool claimed = ds.call("ReadValue", {"<CurrentGame:ClaimedIconicCharacters>"}).s == "Bumblebee" &&
+                         ds.call("ReadValue", {"<CurrentGame:_bIconicMode>"}).s == "1";
+    const int dup = r.f().lobby().lobbyStatus;
+    cz("Customize.SelectCharacter", {"Megatron", "0"});
+    r.frames(2);
+    const int ok = r.f().lobby().lobbyStatus;
+    r.f().profile().bots.iconic = false;
+    check(claimed && dup == 6 && ok != 6 && cz("Customize.GetPlayableCharacters") == "Scout,Scientist,Soldier,Leader", "iconic.I3_team_claims",
+          std::to_string(claimed) + " " + std::to_string(dup) + " " + std::to_string(ok));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1519,6 +1570,7 @@ int main() {
     testOnlineSessionEnd();
     testOnlineVoice();
     testOnlineMatchSide();
+    testIconicMode();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
