@@ -2,6 +2,34 @@
 
 ## Current state (update at every stable point)
 
+### RELAUNCH: START HERE (2026-10-17 morning, before the user's reboot; agents/gameplay)
+
+- **The card is HELD until Integration messages after the reboot** (Experimental's stuck GPU exe, the TDR pattern). No windowed exe
+  until then. CPU, compiles, interpreters and null-render headless runs are allowed.
+- **Package 7 order:**
+  1. death presentation (patch 2 + the killer cam), **code COMPLETE, waiting only for the windowed crop slot**;
+  2. hover / ride height + squad follow reversals, with ONE Classic re-baseline that also gives Classic the AI righting path;
+  3. perf levers (visually lossless only);
+  4. FaceFX.
+- **Patch 2 = 11 edit scripts** in `docs/handoff/corpsep2/`, listed in order in `docs/handoff/GAMEPLAY_DEATH_PATCH2.md`, plus
+  `corpsep2/new/*`. Base af4d0731 + Rendering e5fc6d65 (Camera.h roll).
+  - The built tree is `work/int_p2`, with the diagnostic stage hooks. The base tree for compares is `work/int_p2b`.
+  - Headless PASS at a208d3b0: BOTTEST 48 / 48 × 12, seed-7 SIMHASH identical.
+  - Systems' FX-count row PASS (0 mismatches / 230).
+- **After the reboot:**
+  1. Rebuild both trees if needed: `powershell -ExecutionPolicy Bypass -File work/int_build.ps1 -Tag p2` / `p2b`.
+  2. When Integration grants the slot: `node docs/handoff/corpsep2/mkp2.js crops`, then
+     `run_guarded.ps1 -Steps work/pass29/p2/steps_crops.txt -Status work/pass29/p2/status_crops.txt -EnvSep '^^'` (add `-OwnWindow`
+     if the hold is ours).
+  3. **Confirm a wfc_rebuild.exe from the tree appears within 10 s** (the runner needs relative exe paths).
+  4. Compare the shots base vs new. Check: the scorch, both ragdoll templates settling, a melee death without gibs, the KillZ
+     insta-gib, the robot / vehicle death camera, the roll sign, and the killer cam at 3 s.
+  5. Then generate the final patch from a clean af4d0731 archive + e5fc6d65 Camera.h + the 11 scripts + new/* (never from int_p2,
+     which has the hooks), via `work/mkpatch.sh`. Byte-check with patch -p1, commit, and send Integration the hash.
+- **Open with other lanes:** none blocking. AssetTools will regenerate the FaceFX reference CSV with the product rule (for the FaceFX
+  item). Systems adds the local death sound itself.
+- **Hover item notes:** `docs/handoff/GAMEPLAY_RIDE_HEIGHT_DESIGN.md` (RE updates + Integration decisions at the end).
+
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
   - **About 05:10: patch 2 (all six edits + GibRagdoll) BUILDS in `work/int_p2`; headless PASSES.**
     - BOTTEST 48 / 48 on all 12 seeds; seed-7 SIMHASH identical to the base `work/int_p2b` (af4d0731) over 18,007 lines.
