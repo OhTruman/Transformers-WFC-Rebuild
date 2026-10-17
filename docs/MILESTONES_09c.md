@@ -3113,3 +3113,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:54 OVERLAP: at 12:53 two Systems exes WITH windows (work/wire/tree, netshim peers run without WFC_NULLRENDER) ran during Rendering's
   x14 identity row; Systems told to kill by PID; rule restated: netshim peers run with WFC_NULLRENDER=1 on both sides (no window),
   anything with a window needs a relayed slot. Rendering to note the overlap in the x14 report and re-run a rep if a frame differs.
+2026-10-17 12:55 CORRECTION: the two Systems exes were WFC_NULLRENDER netshim peers (no GL / GPU); the hwnd was each process's CONSOLE window
+  (Start-Process without -WindowStyle Hidden), now started hidden. No contamination. Census caveat: hwnd != 0 can be a console.
