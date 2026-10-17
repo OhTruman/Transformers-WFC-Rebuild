@@ -7,6 +7,8 @@ import os, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 O, maps, modes = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
+VDIR = sys.argv[4] if len(sys.argv) > 4 else None   # another views folder (e.g. Rendering's light-facing views)
+TITLE = sys.argv[5] if len(sys.argv) > 5 else "Authored views"
 NAMES = {"508": "Streets", "510": "Gorge", "507": "Debris", "504": "Rust", "509": "Molten"}
 LAB = {"off": "Off (original)", "real": "Realistic", "realhd": "Realistic + Enhanced materials"}
 VIEWS = ["firefight", "street", "dark", "reflective", "lane"]
@@ -22,17 +24,18 @@ def colourful(a):
 def mask(h, w):
     m = np.ones((h, w), bool); m[int(h * 0.46): int(h * 0.54), int(w * 0.47): int(w * 0.53)] = False; return m   # crosshair only (no HUD in views)
 
-rows = ["", "## Authored views (fixed cameras from tools/fidelity/views; difference from " + LAB.get(modes[0], modes[0]) + ")", "",
+rows = ["", f"## {TITLE} (fixed cameras from {VDIR or 'tools/fidelity/views'}; difference from " + LAB.get(modes[0], modes[0]) + ")", "",
         "| map | view | mode | mean luminance change (0-255) | brighter (+) / darker (-) | contrast ratio | colourfulness change | pixels changed % |",
         "|---|---|---|---|---|---|---|---|"]
 for m in maps:
     why = {}
-    vf = os.path.join(HERE, "views", f"{m}.txt")
+    vf = os.path.join(VDIR or os.path.join(HERE, "views"), f"{m}.txt")
     if os.path.exists(vf):
         for l in open(vf):
             p = l.rstrip("\n").split(" ", 2)
             if len(p) >= 2 and not p[0][-3:-1] == "_w": why[p[0]] = p[2] if len(p) > 2 else ""
-    vs = [v for v in VIEWS if any(os.path.exists(os.path.join(O, f"{m}-{mo}", f"{v}.bmp")) for mo in modes)]
+    names = [v for v in why] if VDIR else VIEWS   # (another folder: its own view names, in file order)
+    vs = [v for v in names if any(os.path.exists(os.path.join(O, f"{m}-{mo}", f"{v}.bmp")) for mo in modes)]
     if not vs: continue
     sheet = Image.new("RGB", (W * len(modes), (H + 64) * len(vs)), "black"); dr = ImageDraw.Draw(sheet)
     for i, v in enumerate(vs):
@@ -52,5 +55,5 @@ for m in maps:
                         f"{colourful(a[k]) - colourful(ref[k]):+.1f} | {(np.abs(a - ref).max(-1)[k] > 24).mean() * 100:.1f} |")
     sheet.save(os.path.join(O, f"views_{m}.png")); print(f"{m}: views_{m}.png ({len(vs)} views x {len(modes)} modes)")
 md = os.path.join(O, "EYEPASS.md"); t = open(md).read() if os.path.exists(md) else f"# Eye pass - {os.path.basename(O)}\n"
-t = t.split("\n## Authored views")[0].rstrip("\n") + "\n" + "\n".join(rows) + "\n"
+t = t.split("\n## " + TITLE)[0].rstrip("\n") + "\n" + "\n".join(rows) + "\n"
 open(md, "w").write(t); print("\n".join(rows[-8:]))
