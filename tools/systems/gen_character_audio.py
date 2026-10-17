@@ -324,7 +324,7 @@ for (path,) in c.execute("select path from types where path like 'TransGame.TnBu
 class_sounds = {}
 for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine', 'TransGame.TnRollerMineAbility',
              'TransGame.TnBarrierSpawnable', 'TransGame.TnSentryPawnAbility', 'TransGame.TnAmmoCratePickup',
-             'TransGame.TnPawn', 'TransGame.TnPlayerPawn'):
+             'TransGame.TnPawn', 'TransGame.TnPlayerPawn', 'TransGame.TnDecoyTrap'):
     chain, t = [], path
     while t:
         chain.append(t); t = type_super(t)
