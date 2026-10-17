@@ -2983,3 +2983,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   merges (dry run on the head clean). DECISION (A) for the online local player: simulated through the remote-seat path with the
   command carrying a camera-derived AIM POINT (eye-to-target shots land where the camera line would); vehicle facing from the
   same field; offline unchanged; (B) a sim-side camera rejected. Systems writes the encoding into 10.2 with Gameplay.
+2026-10-17 11:39 RE's recoil second look: magnitude + settle PASS, controls byte-identical; two conditions: (4) the launcher kick drops the barrel
+  down-left toward the camera (probable rotator -> bone-axis sign / axis swap; Gameplay checks offline); (5) a strafe wobble run
+  (the P0 was a strafing artefact; these runs were stationary) on the fixed exe: ~3-min gap after the Frontend if built, else after
+  Rendering. Batch HELD until both. Camera kick / shake absent on both arms (audit gap 1, later item). RE: lens flares DO cook
+  FLensFlareVertexFactory shaders (scanner off-by-one fixed; retracts that UNKNOWN); correction doc follows.
