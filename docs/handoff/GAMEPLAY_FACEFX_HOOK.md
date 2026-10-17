@@ -104,3 +104,16 @@ void applyFaceFx(const SkinnedModel& model, const FaceFxActor& fx, const FaceFxB
 
 The unit test stays (DX_OPRIME_LK002649 at t = 1.0 against AssetTools' CSV). The CSV's blend must match this rule; if AssetTools'
 proof script used the nlerp sum, ask them to regenerate the reference with the product rule first.
+
+## Reference CSVs regenerated (AssetTools e41d3b4, 2026-10-17)
+
+- `AssetTools/work/fxa/proof_DX_OPRIME_LK002649_linear.csv` / `_hermite.csv` now use the RE product rule. They hold **FaceFX-space
+  absolute values** before any additive application or axis flip: P = rest + Σ v·dPos, and the absolute rotation Acc as (w, x, y, z).
+- The old `*_nlerp.csv` held deltas (the position delta, and the rotation delta from identity).
+- **The unit test compares** the hook's FaceFX-space P / Acc before conversion against the new file:
+  - quaternions up to sign (the face bones' rest is (−1, 0, 0, 0), so w < 0);
+  - the "t = 1.0" row is t = 1.0118 (rows are start + k/30).
+- The product rule and the old nlerp differ by up to 0.47° (head) / 0.34° (jaw) on this line, which is above the 1e-3 tolerance, so
+  only the new file is valid.
+- **Node values** are still clamped to the graph node's [min, max] (the graph's own clamp, PROVISIONAL); RE found no clamp in the bone
+  pass itself.
