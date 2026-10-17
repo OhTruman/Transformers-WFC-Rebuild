@@ -7,7 +7,7 @@
 //    rotation = Rotation(r), material = LFMaterials[LFMaterialIndex(r)]; D = camera -> source distance in UU [C];
 //  - the material's LensFlare* nodes read (r, 0.5 |S - E|, RayDistance, Occlusion) and the intensity [C];
 //  - Occlusion = ScreenPercentageMap(coverage), coverage = the previous frame's visible samples of the FixedRelativeBoundingBox
-//    over its projected pixel area (stock UE3 [HIGH]); intensity = that coverage [HIGH: proxy+0xE4 not traced];
+//    over its projected pixel area (stock UE3 [HIGH]); intensity = 1 (proxy+0xE4: no MP flare authors a cone / radius, RE C);
 //  - additive, after the translucency pass, no depth test (SDPG_Foreground) [C]; the VS applies the height fog as any draw.
 #include "render/gl/WfcPipeline.h"
 
@@ -193,7 +193,7 @@ void Pipeline::drawLensFlares() {
             for (int k = 0; k < 3; ++k) q.color[k] = col[k] * dmc[k] * (el.modSource ? f.srcColor[k] : 1.0f);
             q.color[3] = al[0] * dma[0] * (el.modSource ? f.srcColor[3] : 1.0f);
             lensFlareU_[0] = r; lensFlareU_[1] = srcD; lensFlareU_[2] = el.ray; lensFlareU_[3] = vis;
-            lensFlareI_ = f.coverage;
+            lensFlareI_ = 1.0f;                          // (proxy+0xE4: 1 without a cone / radius - RE C, 0x82FB6C40)
             drawSprites(el.mats[m].c_str(), &q, 1, back);
         }
         glEnable(GL_DEPTH_TEST);
