@@ -2936,3 +2936,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   materials_glsl.json (BrokenHope / Remnant / Rust; gate: live + exactly those keys); hook agreed with Gameplay; the original
   lerps several baked captures per actor by the anim position (RE decode ~1.5 h granted). Draw ships DLE-lit PARTIAL with the
   collision in one head; the lightmapped look follows.
+2026-10-17 11:23 (B) VERDICT (Experimental MATB_matB.md): closer on Seed (lamp shafts now visible beams), Rust, Debris, Streets, Molten, Gorge,
+  Complex; every change a +16..28-level brightening; same match in all 24 rows. Two findings, confirmed by Integration's eye:
+  Debris' pool + Gorge's glass floor go milky / opaque (alpha treated as intensity on a glass / liquid material?) and Berth's
+  lilac mid-ground volume flattens contrast. Decision: switch (B) in MINUS the entries behind the two findings; Systems names
+  them (after their slot) and checks each against RE's shipped-PS decode; those follow with their own pair.
