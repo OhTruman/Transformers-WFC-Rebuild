@@ -1426,6 +1426,7 @@ private:
     GLuint volApplyProg_ = 0;             // (X3) composites RtTargets::vol over the scene: scene x a + rgb
     void volApply();
     bool toneFilmicOn() const;
+    float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;

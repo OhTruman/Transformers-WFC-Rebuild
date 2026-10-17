@@ -783,6 +783,7 @@ uniform float uInvGamma;
 uniform int uFilmic;
 uniform sampler2D uAdapt;
 uniform vec4 uExpo;      // key, adaptation strength, min, max
+uniform vec4 uFlash;     // (flash term) exposure factor at full flash, F0, F1, on
 uniform vec3 uToneGrade; // pre-gain, saturation, contrast
 uniform float uBloomMix;
 uniform vec3 uWhiteRoll;   // (X1 white roll) brightest-channel range lo..hi, warm-white mix; hi <= lo = off
@@ -825,7 +826,9 @@ void main() {
     if (uFilmic != 0) {
         float avg = exp(texture(uAdapt, vec2(0.5)).r);
         float e = uToneGrade.x * clamp(pow(uExpo.x / max(avg, 1e-4), uExpo.y), uExpo.z, uExpo.w);
-        c = ((1.0 - a) * scene * e + blur.rgb * uBloomMix) / max((1.0 - a) + blur.a, 0.0001);
+        float fl = uFlash.w > 0.0 ? smoothstep(uFlash.y, uFlash.z, texture(uAdapt, vec2(0.5)).g) : 0.0;   // (flash term)
+        e *= mix(1.0, uFlash.x, fl);
+        c = ((1.0 - a) * scene * e + blur.rgb * (uBloomMix * mix(1.0, 0.5, fl))) / max((1.0 - a) + blur.a, 0.0001);
         c = 0.18 * pow(max(c, vec3(1e-6)) / 0.18, vec3(uToneGrade.z));   // (contrast around 18 % grey: lit and shadowed sides part)
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
         c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
@@ -875,32 +878,45 @@ void main() {
 const char* kToneLumFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uScene;
+uniform sampler2D uPrevAdapt;   // (flash term) the adapted log mean so far
 uniform vec2 uTexel;
+uniform vec4 uFlashExpo;        // key, adaptation strength, gain, threshold (after exposure); threshold 0 = off
 layout(location=0) out vec4 oColor;
 void main() {
-    float s = 0.0;
+    float s = 0.0, f = 0.0;
+    float e = 1.0;
+    if (uFlashExpo.w > 0.0) {   // the previous frame's exposure (as the tone pass, before the flash factor)
+        float avg = exp(texture(uPrevAdapt, vec2(0.5)).r);
+        e = uFlashExpo.z * clamp(pow(uFlashExpo.x / max(avg, 1e-4), uFlashExpo.y), 0.7, 1.8);
+    }
     for (int i = 0; i < 4; ++i) {
         vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0) * uTexel;
         vec3 c = texture(uScene, vUV + o).rgb;
-        s += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        s += log(max(l, 1e-3));
+        f += uFlashExpo.w > 0.0 && l * e > uFlashExpo.w ? 1.0 : 0.0;
     }
     // (centre-weighted: the middle of the view counts double, the HUD-free corners half)
     vec2 d = vUV - 0.5;
     float w = mix(2.0, 0.5, clamp(dot(d, d) * 4.0, 0.0, 1.0));
-    oColor = vec4(s * 0.25 * w, w, 0.0, 1.0);
+    oColor = vec4(s * 0.25 * w, w, f * 0.25 * w, 1.0);   // (b: the weighted share of super-bright samples - the flash)
 }
 )";
 const char* kToneAdaptFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uLum, uPrev;
 uniform float uLevel, uRate;
+uniform vec2 uFlashRate;        // the flash share: attack, release blend (per frame)
 uniform int uReset;
 layout(location=0) out vec4 oColor;
 void main() {
-    vec2 m = textureLod(uLum, vec2(0.5), uLevel).rg;
+    vec3 m = textureLod(uLum, vec2(0.5), uLevel).rgb;
     float cur = m.x / max(m.y, 1e-4);
-    float prev = texture(uPrev, vec2(0.5)).r;
-    oColor = vec4(uReset != 0 ? cur : prev + (cur - prev) * uRate, 0.0, 0.0, 1.0);
+    vec2 prev = texture(uPrev, vec2(0.5)).rg;
+    // (flash term) the frame's flash share F: a fast attack, a slow release - its own channel, the mean untouched
+    float f = m.z / max(m.y, 1e-4);
+    float fr = f > prev.y ? uFlashRate.x : uFlashRate.y;
+    oColor = vec4(uReset != 0 ? cur : prev.x + (cur - prev.x) * uRate, uReset != 0 ? 0.0 : prev.y + (f - prev.y) * fr, 0.0, 1.0);
 }
 )";
 
@@ -8966,12 +8982,12 @@ void Pipeline::endFrame() {
         Uniform1i(U("uAdapt"), 4);
         // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
         // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
-        float mapKey = key;
-        if (!rtdef::toneKeySet()) {
-            static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
-            for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) mapKey = mk.second;
-        }
+        (void)key;
+        const float mapKey = toneMapKey();
         Uniform4f(U("uExpo"), mapKey, str, 0.7f, 1.8f);
+        // flash term (package 7 item 1): exposure x mix(1, flashMin, smoothstep(F0, F1, F)), the bloom mix x mix(1, 0.5, ..)
+        // - F the tracked share of super-bright samples; below F0 the factors are exactly 1 (ordinary frames unchanged)
+        Uniform4f(U("uFlash"), rtdef::flash() ? rtdef::flashMin() : 1.0f, rtdef::flashF0(), rtdef::flashF1(), rtdef::flash() ? 1.0f : 0.0f);
         Uniform3f(U("uToneGrade"), gain, sat, con);
         Uniform1f(U("uBloomMix"), 1.0f);
         Uniform3f(U("uWhiteRoll"), rtdef::whiteRoll() ? rtdef::whiteLo() : 0.0f, rtdef::whiteRoll() ? rtdef::whiteHi() : 0.0f, rtdef::whiteMix());
@@ -9026,17 +9042,26 @@ void Pipeline::volApply() {
     glx::textureCacheInvalidate();
 }
 
+float Pipeline::toneMapKey() const {   // (per-map exposure target, Molten plan b; WFC_TONE_KEY overrides every map)
+    float k = rtdef::toneKey();
+    if (!rtdef::toneKeySet()) {
+        static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
+        for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) k = mk.second;
+    }
+    return k;
+}
+
 bool Pipeline::toneFilmicOn() const {
     const bool off = !rtdef::tone();
     return !off && rtMode_ == 2 && toneLumProg_ && toneAdaptProg_;
 }
 
 void Pipeline::toneAdapt() {
-    constexpr GLenum kR16F = 0x822D, kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
+    constexpr GLenum kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
     if (!toneLumTex_) {
         glGenTextures(1, &toneLumTex_); GenFramebuffers(1, &toneLumFbo_);
         glBindTexture(GL_TEXTURE_2D, toneLumTex_);
-        glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 128, 128, 0, kRG, kHalf, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, 0x881A /*GL_RGBA16F*/, 128, 128, 0, GL_RGBA, kHalf, nullptr);   // (b: the flash share)
         GenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -9045,7 +9070,7 @@ void Pipeline::toneAdapt() {
         for (int i = 0; i < 2; ++i) {
             glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
             glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
-            glTexImage2D(GL_TEXTURE_2D, 0, kR16F, 1, 1, 0, kRed, kHalf, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 1, 1, 0, kRG, kHalf, nullptr);   // (g: the tracked flash share)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[i]);
@@ -9062,9 +9087,14 @@ void Pipeline::toneAdapt() {
     BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
     glViewport(0, 0, 128, 128);
     UseProgram(toneLumProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
     Uniform1i(cachedUniformLocation(toneLumProg_, "uScene"), 0);
+    Uniform1i(cachedUniformLocation(toneLumProg_, "uPrevAdapt"), 1);
     Uniform2f(cachedUniformLocation(toneLumProg_, "uTexel"), 0.25f / 128.0f, 0.25f / 128.0f);
+    // (flash term: samples brighter than flashThresh after the previous frame's exposure count toward F)
+    Uniform4f(cachedUniformLocation(toneLumProg_, "uFlashExpo"), toneMapKey(), rtdef::toneAdapt(), rtdef::toneGain(),
+              rtdef::flash() ? rtdef::flashThresh() : 0.0f);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindTexture(GL_TEXTURE_2D, toneLumTex_);
     GenerateMipmap(GL_TEXTURE_2D);
@@ -9078,6 +9108,7 @@ void Pipeline::toneAdapt() {
     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uPrev"), 1);
     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uLevel"), 7.0f);
     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uRate"), 1.0f - std::exp(-dt * 1.5f));
+    Uniform2f(cachedUniformLocation(toneAdaptProg_, "uFlashRate"), 1.0f - std::exp(-dt / 0.08f), 1.0f - std::exp(-dt / 0.5f));   // (attack ~0.08 s, release ~0.5 s)
     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uReset"), toneReset_ || warmup_ ? 1 : 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
