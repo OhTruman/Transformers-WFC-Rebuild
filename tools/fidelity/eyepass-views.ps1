@@ -21,7 +21,7 @@ foreach ($m in $Maps) {
         # Realistic at 1280x720; an Enhanced column needs a product-side env hook for the direct boot.
         if ($mode -eq "realhd" -and -not $bootProfile) { Write-Host "${m} realhd: skipped - the direct boot cannot apply HD / Modern materials (see the note above)"; continue }
         $d = Join-Path $OutDir "$m-$mode"; if (Test-Path $d) { Remove-Item -Recurse -Force $d }; New-Item -ItemType Directory -Force $d | Out-Null
-        $rt = @{ off = "0"; real = "2"; realhd = "2" }[$mode]
+        $rt = @{ off = "0"; faithful = "1"; real = "2"; realhd = "2" }[$mode]
         $e = @{ WFC_MAP = $names[$m]; WFC_SHOTLIST = $list; WFC_SHOTDIR = $d; WFC_SMOKE_FRAMES = "$(8 * $lines.Count + 24)"; WFC_LOCKSTEP = "1";
                 WFC_RT_MODE = $rt; WFC_RENDERSIZE = $Size; WFC_MUTE = "1"; WFC_NOINTERACT = "1"; WFC_LOGEVERY = "0" }
         if ($mode -eq "realhd") { $e.WFC_HDTEXTURES = "2"; $e.WFC_HD_ROOT = $HdRoot }

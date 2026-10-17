@@ -23,7 +23,7 @@ mine() { powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \
 for map in $MAPS; do for mode in $MODES; do
   d=$O/$map-$mode; [ -f $d/wfc.log ] && [ $(ls $d/shots 2>/dev/null | wc -l) -ge 26 ] && { echo "$d done"; continue; }
   rm -rf $d; mkdir -p $d/shots; cp work/sweep/ident_profile.ini $d/wfc_profile.ini
-  case $mode in off) RT=0; HD=0;; real) RT=2; HD=0;; realhd) RT=2; HD=2;; *) echo "unknown mode $mode"; continue;; esac
+  case $mode in off) RT=0; HD=0;; faithful) RT=1; HD=0;; real) RT=2; HD=0;; realhd) RT=2; HD=2;; *) echo "unknown mode $mode"; continue;; esac
   sed -i "s/^Width=.*/Width=$W/; s/^Height=.*/Height=$H/; s/^RayTracing=.*/RayTracing=$RT/; s/^HDTextures=.*/HDTextures=$HD/" $d/wfc_profile.ini
   HDENV=("WFC_HDTEXTURES=$HD"); [ "$HD" != 0 ] && HDENV+=("WFC_HD_ROOT=$(cygpath -w "$HDROOT")")   # (an array: the root has a space)
   [ "$RT" != 0 ] && [ -n "$EYE_RTENV" ] && HDENV+=($EYE_RTENV)
