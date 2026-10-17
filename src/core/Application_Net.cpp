@@ -181,6 +181,22 @@ void Application::runNetMatch() {
         out = c->position() + core::Vec3{0, 1.8f, 0};   // the head (approx.)
         return true;
     };
+    // Occlusion: the world line check the cue mix uses (World::soundBlocked); the room: the listener's current SeqAct_Reverb preset.
+    auto occludedQ = [this](const core::Vec3& from, const core::Vec3& to) { return world_.soundBlocked(from, to); };
+    auto roomQ = [this]() { return world_.currentReverbPreset(); };
+    // The host's voice fan-out audience (star relay): radio = the talker's team, proximity = the listener seat within earshot of the
+    // talker by the sim's pawn positions (+4 m margin for the frames in flight). Every peer could compute it; the host does.
+    ls.setVoiceAudience([this, &seatMp](int talker, int listener, uint8_t flags) {
+        const auto& ps = world_.match().players();
+        const int a = seatMp[(size_t)talker], b = seatMp[(size_t)listener];
+        if (a < 0 || b < 0 || (size_t)a >= ps.size() || (size_t)b >= ps.size()) return false;
+        if ((flags & 1) && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255) return true;   // radio
+        if (!(flags & 2)) return false;
+        const game::Character* x = world_.participantPawn(a);
+        const game::Character* y = world_.participantPawn(b);
+        static const float maxD = std::getenv("WFC_VOICE_MAXDIST") ? (float)std::atof(std::getenv("WFC_VOICE_MAXDIST")) : 64.0f;
+        return x && y && core::length(x->position() - y->position()) < maxD + 4.0f;
+    });
     auto sameTeam = [this, &seatMp](int seat) {
         const auto& ps = world_.match().players();
         const int a = seatMp[(size_t)seat], b = world_.localMatchPlayer();
@@ -209,7 +225,7 @@ void Application::runNetMatch() {
             const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
             const float yaw = me ? me->yaw() : 0.0f;
             const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
-            voice->update(true, seatPos, sameTeam, lp, right);
+            voice->update(true, seatPos, sameTeam, occludedQ, roomQ, lp, right);
         }
         const uint32_t n = (uint32_t)world_.simTick() + 1;
         // This seat's commands up to N + D (input delay): the PlayerBot / controller input of now, encoded on the wire grid.
@@ -258,6 +274,7 @@ void Application::runNetMatch() {
         if ((float)steps * step > 900.0f) { LOG_INFO("NET end: 900 s simulated (guard)"); break; }
     }
     if (recFile) std::fclose(recFile);
+    if (voice && self == 0) LOG_INFO("NET voice relay: %ld frames forwarded to other seats", ls.voiceRelayed());
     const int st = (int)ls.status();
     if (st == 0) ls.bye((uint32_t)world_.simTick());
     LOG_INFO("NET done: %ld steps in %.1f s wall, status %d %s", steps, secsSince(tRun), st, ls.statusText().c_str());

@@ -776,6 +776,44 @@ public:
         return (int)streams_.size();
     }
 
+    int openPositionalStream(int sampleRate) override {
+        if (sampleRate <= 0) return -1;
+        std::lock_guard<std::mutex> lk(mx_);
+        const int id = ++streamSerial_;
+        PStream& s = pstreams_[id];
+        s.step = (double)sampleRate / kRate;
+        s.cap = (size_t)sampleRate;                   // ~1 s queued at most
+        s.v.positional = true; s.v.inverse = true; s.v.refDist = 4.0f; s.v.maxDist = 64.0f; s.v.rolloff = 1.0f;
+        s.v.wet = true; s.v.spatial = 0; s.v.vol = 1.0f; s.v.active = true;
+        return id;
+    }
+    void setPositionalStream(int id, const core::Vec3& pos, float volume, float minDist, float maxDist, bool wet) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = pstreams_.find(id);
+        if (it == pstreams_.end()) return;
+        Voice& v = it->second.v;
+        v.wpos = pos; v.vol = volume; v.refDist = std::max(0.01f, minDist); v.maxDist = std::max(v.refDist, maxDist); v.wet = wet;
+    }
+    size_t pushPositionalStream(int id, const float* mono, size_t frames) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = pstreams_.find(id);
+        if (it == pstreams_.end() || !mono) return 0;
+        PStream& s = it->second;
+        const size_t queued = s.buf.size() - s.read;
+        const size_t n = queued >= s.cap ? 0 : std::min(frames, s.cap - queued);
+        s.buf.insert(s.buf.end(), mono, mono + n);
+        return n;
+    }
+    size_t positionalStreamQueued(int id) const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = pstreams_.find(id);
+        return it == pstreams_.end() ? 0 : it->second.buf.size() - it->second.read;
+    }
+    void closePositionalStream(int id) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        pstreams_.erase(id);
+    }
+
     ~Win32Audio() override {
         const platform::FsbStats& st = platform::fsbStats();
         if (st.decodes > 0)
@@ -906,6 +944,7 @@ private:
         updatePreferPlayer((float)kBlockFrames / kRate);
         dry_.assign(kBlockSamples, 0.0f);
         wet_.assign(kBlockSamples, 0.0f);
+        mixPositionalStreams();   // [Systems] voice chat's 3D talkers, into the same buses (the zone reverb on MASTER_WET)
         int nv = 0, nw = 0;
         constexpr float k = 1.0f / 32768.0f;
         int nvirt = 0;
@@ -1084,6 +1123,31 @@ private:
     };
     std::map<int, Stream> streams_;
     int streamSerial_ = 0;
+    // [Systems] positional (3D, in the cue mix) mono streams: voice chat's proximity talkers.
+    struct PStream {
+        std::vector<float> buf;        // mono, [read ..) not yet played
+        size_t read = 0, cap = 0;
+        double step = 1.0, frac = 0.0;
+        Voice v;                       // the spatial parameters, resolved like a positional cue voice
+    };
+    std::map<int, PStream> pstreams_;
+    void mixPositionalStreams() {   // under mx_, into dry_ / wet_ before the environment runs
+        for (auto& kv : pstreams_) {
+            PStream& s = kv.second;
+            resolveGains(s.v);
+            float* bus = s.v.wet ? wet_.data() : dry_.data();
+            for (int i = 0; i < kBlockFrames; ++i) {
+                const size_t avail = s.buf.size() - s.read;
+                if (avail < 2) break;   // underrun: silence (the producer's jitter buffer refills)
+                const float a = s.buf[s.read], b = s.buf[s.read + 1];
+                const float x = a + (b - a) * (float)s.frac;
+                if (!s.v.culled) { bus[2 * i] += x * s.v.gL; bus[2 * i + 1] += x * s.v.gR; }
+                s.frac += s.step;
+                while (s.frac >= 1.0) { s.frac -= 1.0; ++s.read; }
+            }
+            if (s.read > 0 && s.read * 2 >= s.buf.size()) { s.buf.erase(s.buf.begin(), s.buf.begin() + (long)s.read); s.read = 0; }
+        }
+    }
 };
 
 // Silent fallback when there is no audio device.

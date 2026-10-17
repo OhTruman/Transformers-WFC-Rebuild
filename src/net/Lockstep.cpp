@@ -169,9 +169,13 @@ void Lockstep::handle(const NetPacket& p) {
         }
         break;
     }
-    case kVoice:
-        if (voiceSink_) voiceSink_(seat, d.data(), d.size());
+    case kVoice: {
+        if (d.size() < 5) return;
+        const int talker = d[1] < cfg_.seats ? d[1] : seat;
+        if (cfg_.self == 0 && seat != 0) fanOutVoice(talker, d.data(), d.size());   // the host relays a client's frame
+        if (voiceSink_) voiceSink_(talker, d.data(), d.size());
         break;
+    }
     case kPing: {
         if (d.size() < 10) return;
         std::vector<uint8_t> b(d.begin(), d.begin() + 10);
@@ -318,7 +322,18 @@ void Lockstep::forget(uint32_t belowTick) {
 }
 
 void Lockstep::sendVoice(const uint8_t* p, size_t n) {
-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendUnreliable(s, p, n);
+    if (cfg_.self != 0) { t_.sendUnreliable(0, p, n); return; }   // a client: to the host, which fans out
+    fanOutVoice(0, p, n);                                         // the host's own voice
+}
+
+void Lockstep::fanOutVoice(int talker, const uint8_t* p, size_t n) {
+    const uint8_t flags = n > 4 ? p[4] : 0;
+    for (int s = 0; s < cfg_.seats; ++s) {
+        if (s == cfg_.self || s == talker) continue;
+        if (voiceAudience_ && !voiceAudience_(talker, s, flags)) continue;
+        t_.sendUnreliable(s, p, n);
+        if (talker != cfg_.self) ++voiceRelayed_;
+    }
 }
 
 void Lockstep::bye(uint32_t lastTick) {

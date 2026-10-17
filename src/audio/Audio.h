@@ -121,6 +121,16 @@ public:
     virtual void setStreamPaused(int /*stream*/, bool /*paused*/) {}
     virtual void closeStream(int /*stream*/) {}
     virtual int openStreams() const { return 0; }
+    // [Systems] Positional PCM streams (proximity voice chat, ONLINE_MP_ARCHITECTURE.md section 7): MONO float frames at `sampleRate`, mixed
+    // INSIDE the cue mix as a 3D voice - the same gain resolution as a positional cue (inverse rolloff refDist..maxDist, 3D pan, the
+    // silent cull), onto the MASTER_WET bus when `wet` (so the listener's current zone reverb / echo applies) else MASTER_DRY, and through
+    // the Master level / compressor. The producer moves it every frame and applies occlusion through `volume`.
+    virtual int openPositionalStream(int /*sampleRate*/) { return -1; }
+    virtual void setPositionalStream(int /*stream*/, const core::Vec3& /*pos*/, float /*volume*/, float /*minDist*/, float /*maxDist*/,
+                                     bool /*wet*/) {}
+    virtual size_t pushPositionalStream(int /*stream*/, const float* /*mono*/, size_t /*frames*/) { return 0; }
+    virtual size_t positionalStreamQueued(int /*stream*/) const { return 0; }
+    virtual void closePositionalStream(int /*stream*/) {}
     // Local player pawn origin (Actor.Location) for kSmartPan_PreferPlayer voices; valid = a local pawn exists.
     virtual void setSmartPanPlayer(const core::Vec3& /*pos*/, bool /*valid*/) {}
 

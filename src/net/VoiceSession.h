@@ -2,8 +2,12 @@
 // [Systems] The voice lane (ONLINE_MP_ARCHITECTURE.md section 7): this seat's captured 20 ms frames -> Opus -> unreliable VOICE packets
 // to every peer (full mesh; the star relay fans out later); each remote talker's packets -> a jitter buffer -> its Opus decoder (loss
 // concealment for a missing frame) -> a stereo PCM stream in the audio backend (IAudio::openStream). Radio frames play 2D at the
-// voice volume; proximity frames play with the original's dialog-cue distance curve (DX: full within 4 m, -6 dB per doubling, silent
-// beyond 64 m) and a stereo pan from the listener's facing [PARTIAL: no occlusion / room reverb yet - the design's 3D emitter path].
+// voice volume (a 2D stream outside the cue mix, as the original's non-positional chat); proximity frames are a 3D voice INSIDE the cue
+// mix (IAudio positional stream at the talker's head): the original's dialog-cue distance curve (DX: full within 4 m, inverse rolloff,
+// silent beyond 64 m), the 3D pan, the MASTER_WET bus - so the LISTENER's current zone reverb / echo (the Kismet SeqAct_Reverb room the
+// local pawn is in) colours it like every world sound - and occlusion as the cue mix does it (a line check every 0.25 s; an occluded
+// talker fades to -6 dB over 0.5 s, SoundCues' AudioOcclusionVolume / TransitionTime). WFC_VOICELOG: per talker every 2 s - mode,
+// distance, occlusion, the listener's room preset.
 // Packet (the transport payload): u8 type 7, u8 seat, u16 seq, u8 flags (1 radio, 2 proximity), Opus bytes.
 #include "core/Math.h"
 #include "net/VoiceCodec.h"
@@ -22,7 +26,7 @@ namespace net {
 
 class Lockstep;
 
-struct VoiceStats { long sent = 0, received = 0, late = 0, played = 0, concealed = 0, underruns = 0; };
+struct VoiceStats { long sent = 0, received = 0, late = 0, played = 0, concealed = 0, underruns = 0, radio = 0, proximity = 0, occluded = 0, unheard = 0; };
 
 class VoiceSession {
 public:
@@ -40,7 +44,10 @@ public:
     // proximity panning.
     using SeatPos = std::function<bool(int, core::Vec3&)>;
     using SameTeam = std::function<bool(int)>;
-    void update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const core::Vec3& listener, const core::Vec3& listenerRight);
+    using Occluded = std::function<bool(const core::Vec3& from, const core::Vec3& to)>;   // a world line check (true = blocked)
+    using Room = std::function<std::string()>;                                         // the listener's current reverb preset (logs)
+    void update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                const core::Vec3& listener, const core::Vec3& listenerRight);
     void receive(int seat, const uint8_t* p, size_t n);   // a VOICE packet (Lockstep hands it over)
     float micLevel() const;
     const VoiceStats& stats() const { return stats_; }
@@ -52,11 +59,15 @@ private:
         bool playing = false;
         uint16_t next = 0;        // next seq to play
         int missesInRow = 0;
-        int stream = -1;
+        int stream = -1;          // radio: 2D stream
+        int pstream = -1;         // proximity: positional stream in the cue mix
         uint8_t lastFlags = 1;
+        bool occluded = false;
+        float occGain = 1.0f;     // fades 1 <-> 0.5 (-6 dB) over 0.5 s
+        double lastOccMs = 0.0, lastLogMs = 0.0;
     };
-    void playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const core::Vec3& listener,
-                    const core::Vec3& right);
+    void playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                    const core::Vec3& listener, const core::Vec3& right);
     Lockstep& ls_;
     audio::IAudio* audio_;
     Config cfg_;

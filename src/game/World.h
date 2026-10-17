@@ -503,6 +503,10 @@ public:
     // (integration/milestone-04 glue calls pickupFx_.onTaken(actorName, ...); kept for that call site)
     PickupPresentation& pickupPresentation() { return pickupFx_; }
     SoundCues& cues() { return cues_; }
+    // [Systems] voice chat's proximity talkers: the cue mix's occlusion line check (listener -> source, the end points trimmed as for
+    // cues) and the listener's current SeqAct_Reverb preset ("" = dry).
+    bool soundBlocked(const core::Vec3& from, const core::Vec3& to) const;
+    std::string currentReverbPreset() { return cues_.mixer().currentReverb(); }
 
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
     // speedScale(), steeringScale() — Gameplay applies the movement effect).

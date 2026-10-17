@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 
 namespace net {
 namespace {
@@ -32,9 +33,13 @@ VoiceSession::VoiceSession(Lockstep& ls, audio::IAudio* audio, const Config& c) 
 VoiceSession::~VoiceSession() {
     ls_.setVoiceSink(nullptr);
     if (mic_) mic_->stop();
-    for (auto& kv : talkers_) if (audio_ && kv.second.stream >= 0) audio_->closeStream(kv.second.stream);
-    LOG_INFO("voice: sent %ld frames, received %ld (late %ld), played %ld, concealed %ld, underruns %ld", stats_.sent, stats_.received,
-             stats_.late, stats_.played, stats_.concealed, stats_.underruns);
+    for (auto& kv : talkers_) {
+        if (audio_ && kv.second.stream >= 0) audio_->closeStream(kv.second.stream);
+        if (audio_ && kv.second.pstream >= 0) audio_->closePositionalStream(kv.second.pstream);
+    }
+    LOG_INFO("voice: sent %ld frames, received %ld (late %ld), played %ld, concealed %ld, underruns %ld; heard as radio %ld, proximity %ld "
+             "(occluded %ld), not for this listener %ld", stats_.sent, stats_.received, stats_.late, stats_.played, stats_.concealed,
+             stats_.underruns, stats_.radio, stats_.proximity, stats_.occluded, stats_.unheard);
 }
 
 void VoiceSession::setSource(std::unique_ptr<IVoiceCapture> mic) { mic_ = std::move(mic); }
@@ -42,8 +47,8 @@ void VoiceSession::setSyntheticTone(float hz) { toneHz_ = hz; }
 
 float VoiceSession::micLevel() const { return mic_ ? mic_->level() : 0.0f; }
 
-void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const core::Vec3& listener,
-                          const core::Vec3& listenerRight) {
+void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded, const Room& room,
+                          const core::Vec3& listener, const core::Vec3& listenerRight) {
     const double now = nowMs();
     // ---- send: this seat's 20 ms frames while talking ----
     if (voiceCodecAvailable() && (cfg_.radio || cfg_.proximity)) {
@@ -71,10 +76,10 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
         for (const VoiceFrame& f : frames) {
             std::vector<uint8_t> opus;
             if (!enc_.encode(f, opus)) continue;
-            std::vector<uint8_t> pkt = {kVoicePacket, 0, (uint8_t)seq_, (uint8_t)(seq_ >> 8),
+            std::vector<uint8_t> pkt = {kVoicePacket, (uint8_t)ls_.self(), (uint8_t)seq_, (uint8_t)(seq_ >> 8),
                                         (uint8_t)((cfg_.radio ? kFlagRadio : 0) | (cfg_.proximity ? kFlagProximity : 0))};
             pkt.insert(pkt.end(), opus.begin(), opus.end());
-            ls_.sendVoice(pkt.data(), pkt.size());   // the transport stamps the sender seat
+            ls_.sendVoice(pkt.data(), pkt.size());   // to the host (a client) or fanned out (the host)
             ++seq_; ++stats_.sent;
         }
     }
@@ -82,7 +87,7 @@ void VoiceSession::update(bool talking, const SeatPos& seatPos, const SameTeam& 
     if (lastPlayMs_ <= 0.0) lastPlayMs_ = now;
     int ticks = 0;
     while (now - lastPlayMs_ >= kFrameMs && ticks < 10) { lastPlayMs_ += kFrameMs; ++ticks;
-        for (auto& kv : talkers_) playTalker(kv.first, kv.second, seatPos, sameTeam, listener, listenerRight);
+        for (auto& kv : talkers_) playTalker(kv.first, kv.second, seatPos, sameTeam, occluded, room, listener, listenerRight);
     }
     if (ticks == 10) lastPlayMs_ = now;   // a long stall: do not burst-play the backlog
 }
@@ -97,8 +102,8 @@ void VoiceSession::receive(int seat, const uint8_t* p, size_t n) {
     if (t.buf.size() < 50) t.buf[seq] = {p[4], std::vector<uint8_t>(p + 5, p + n)};
 }
 
-void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const core::Vec3& listener,
-                              const core::Vec3& right) {
+void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const SameTeam& sameTeam, const Occluded& occluded,
+                              const Room& room, const core::Vec3& listener, const core::Vec3& right) {
     if (!t.playing) {
         if ((int)t.buf.size() < cfg_.jitterFrames) return;   // fill the jitter buffer first
         t.playing = true; t.missesInRow = 0;
@@ -123,21 +128,48 @@ void VoiceSession::playTalker(int seat, Talker& t, const SeatPos& seatPos, const
         return;
     }
     ++t.next;
-    if (!have || !audio_) return;
-    // Who hears it: radio = the talker's team, 2D; proximity = anyone, positioned (falloff + pan); radio wins for teammates.
-    float gainL = cfg_.volume, gainR = cfg_.volume;
+    if (!have) return;
+    (void)right;   // the mixer pans positional streams itself
+    // Who hears it: radio = the talker's team, 2D at the voice volume; proximity = anyone in earshot, as a 3D voice in the cue mix
+    // (falloff, pan, the listener's room reverb, occlusion); radio wins for teammates.
     const bool radio = (t.lastFlags & kFlagRadio) && sameTeam && sameTeam(seat);
     if (!radio) {
         core::Vec3 at;
-        if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) return;   // not for this listener
-        const core::Vec3 d = at - listener;
-        const float dist = core::length(d);
-        if (dist >= kProxMax) return;
-        const float g = cfg_.volume * (dist <= kProxMin ? 1.0f : kProxMin / dist);
-        const float pan = dist > 0.01f ? std::max(-1.0f, std::min(1.0f, core::dot(d * (1.0f / dist), right))) : 0.0f;
-        const float a = (pan + 1.0f) * 0.7853982f;   // equal-power
-        gainL = g * std::cos(a); gainR = g * std::sin(a);
+        if (!(t.lastFlags & kFlagProximity) || !seatPos || !seatPos(seat, at)) { ++stats_.unheard; return; }   // not for this listener
+        const double now = nowMs();
+        const float dist = core::length(at - listener);
+        // TEST ONLY: WFC_VOICE_MAXDIST widens the earshot cut-off so a harness can reach the proximity path when the talkers spawn far
+        // apart (the falloff below stays the original's curve).
+        static const float maxD = std::getenv("WFC_VOICE_MAXDIST") ? (float)std::atof(std::getenv("WFC_VOICE_MAXDIST")) : kProxMax;
+        static const bool vlog0 = std::getenv("WFC_VOICELOG") != nullptr;
+        if (dist >= maxD) {
+            ++stats_.unheard;
+            if (vlog0 && now - t.lastLogMs >= 2000.0) { t.lastLogMs = now; LOG_INFO("VOICE seat %d proximity: %.1f m - out of earshot (%.0f m)", seat, dist, maxD); }
+            return;
+        }
+        if (occluded && now - t.lastOccMs >= 250.0) { t.lastOccMs = now; t.occluded = occluded(listener, at); }   // OcclusionCheckInterval
+        const float target = t.occluded ? 0.5f : 1.0f;   // -6 dB
+        const float stepG = 0.5f * (float)(kFrameMs / 500.0);   // the full 1 -> 0.5 swing over 0.5 s
+        t.occGain = t.occGain < target ? std::min(target, t.occGain + stepG) : std::max(target, t.occGain - stepG);
+        ++stats_.proximity; if (t.occluded) ++stats_.occluded;
+        static const bool vlog = std::getenv("WFC_VOICELOG") != nullptr;
+        if (vlog && now - t.lastLogMs >= 2000.0) {
+            t.lastLogMs = now;
+            LOG_INFO("VOICE seat %d proximity: %.1f m, %s (gain %.2f), listener room %s", seat, dist, t.occluded ? "occluded" : "clear",
+                     t.occGain, room ? room().c_str() : "?");
+        }
+        if (!audio_) return;
+        if (t.pstream < 0) t.pstream = audio_->openPositionalStream(kVoiceRate);
+        if (t.pstream < 0) return;
+        audio_->setPositionalStream(t.pstream, at, cfg_.volume * t.occGain, kProxMin, maxD, true);
+        float mono[kVoiceFrameSamples];
+        for (int i = 0; i < kVoiceFrameSamples; ++i) mono[i] = (float)pcm[(size_t)i] / 32768.0f;
+        audio_->pushPositionalStream(t.pstream, mono, kVoiceFrameSamples);
+        return;
     }
+    ++stats_.radio;
+    if (!audio_) return;
+    const float gainL = cfg_.volume, gainR = cfg_.volume;
     if (t.stream < 0) t.stream = audio_->openStream(kVoiceRate);
     if (t.stream < 0) return;
     float lr[kVoiceFrameSamples * 2];

@@ -8610,6 +8610,16 @@ std::string World::compareRobotShared(const std::string& id, bool& ok) {
 }
 
 // ---- Authoritative gameplay events: participant snapshots / kill context (GameplayEvents.h) ----
+bool World::soundBlocked(const core::Vec3& from, const core::Vec3& to) const {
+    if (!collision_.valid()) return false;
+    const core::Vec3 d = to - from;
+    const float len = core::length(d);
+    if (len < 1.0f) return false;
+    const core::Vec3 n = d * (1.0f / len);
+    float t;
+    return collision_.segmentHit(from + n * 0.25f, to - n * 0.5f, t);   // as the cue occlusion query (World::setAudio)
+}
+
 const Character* World::participantPawn(int player) const {
     if (player < 0) return nullptr;
     if (player == localPlayer_) return localDead_ ? nullptr : &player_.pawn();
