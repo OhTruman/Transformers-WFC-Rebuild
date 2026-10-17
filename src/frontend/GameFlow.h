@@ -308,6 +308,9 @@ public:
     struct VoiceState { int headsetState = 0, via = 0; };
     VoiceState voiceStateOf(const SessionMemberId& m) const;
     const OnlineMember* memberForPlayer(const MatchValues::Player& p) const;   // a Remote roster row's member (id, else name)
+    // The host's 180 s idle rule fired in the match (Gameplay MatchEvent RemoteIdle): the session kicks that peer
+    // (Kicked{Idle} to it, PeerDropped{Kicked} to the others - the kill-feed line; the slot is already a bot).
+    void onlineIdleKick(const std::string& fingerprint);
     int localHeadsetState() const;   // this player's HeadsetState: 0 voice off, 1 on, 2 transmitting (push-to-talk held)
     bool isMuted(const SessionMemberId& m) const;
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)

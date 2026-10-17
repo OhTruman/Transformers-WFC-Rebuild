@@ -1,0 +1,73 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 7be24fee..27580c3f 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -97,9 +97,9 @@ template <class P> void fillParticipant(const P& mp, frontend::MatchValues::Play
+     else { (void)mp; (void)p; }
+ }
+ // Online match side (ONLINE_MP_FRONTEND_TESTS.md section 4; Gameplay item 4, agreed 2026-10-17): MatchPlayer kind Remote +
+-// sessionMember -> the roster's remote / member (the scoreboard's platform tag and voice columns); game::MatchLaunch's
+-// onlineSlots / self / onlineNames from the frontend's launch; World::applySlotSwap for GameFlow::takeSlotSwaps(). Detected:
+-// before Gameplay's hooks land, offline is unchanged and an online swap is traced as not applied.
++// sessionMember -> the roster's remote / member (the scoreboard's platform tag and voice columns); the frontend's online slots
++// -> game::MatchLaunch::remotes (game::RemoteSeat); GameFlow::takeSlotSwaps() -> World::applySlotSwap (game::SlotSwap);
++// MatchEvent RemoteIdle (the host's 180 s rule) -> GameFlow::onlineIdleKick. Gameplay's session hooks (4502b468 / d5372c90).
+ template <class P, class = void> struct HasSessionMember : std::false_type {};
+ template <class P> struct HasSessionMember<P, std::void_t<decltype(std::string(std::declval<const P&>().sessionMember))>> : std::true_type {};
+ template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p) {
+@@ -107,24 +107,27 @@ template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p
+     if constexpr (HasSessionMember<P>::value) p.member = mp.sessionMember;
+     (void)mp; (void)p;
+ }
+-template <class L, class = void> struct HasOnlineLaunch : std::false_type {};
+-template <class L>
+-struct HasOnlineLaunch<L, std::void_t<decltype(std::declval<L&>().onlineSlots = std::vector<frontend::SessionSlot>{}),
+-                                      decltype(std::declval<L&>().self = frontend::SessionMemberId{}),
+-                                      decltype(std::declval<L&>().onlineNames = std::vector<std::pair<frontend::SessionMemberId, std::string>>{})>>
+-    : std::true_type {};
+-template <class L> void fillOnlineLaunch(L& gl, const frontend::MatchLaunch& m) {
+-    if constexpr (HasOnlineLaunch<L>::value) { gl.onlineSlots = m.onlineSlots; gl.self = m.self; gl.onlineNames = m.onlineNames; }
+-    else if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchSlots", {{"applied", "false"}, {"why", "no Gameplay hook"}});
+-    (void)gl;
++// Every human slot except this player's, in the host's order: a Remote participant (its character arrives in the match).
++void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
++    for (const frontend::SessionSlot& sl : m.onlineSlots) {
++        if (sl.kind != frontend::SessionSlot::Kind::Human || sl.member == m.self) continue;
++        game::RemoteSeat r;
++        r.team = sl.team;
++        r.member = sl.member.fingerprint;   // "" = the host, seen from a member (host loss ends the session, D9)
++        for (const auto& n : m.onlineNames) if (n.first == sl.member) r.name = n.second;
++        if (r.name.empty()) r.name = "Player";
++        gl.remotes.push_back(r);
++    }
++    if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
+ }
+-template <class W, class = void> struct HasSlotSwap : std::false_type {};
+-template <class W> struct HasSlotSwap<W, std::void_t<decltype(bool(std::declval<W&>().applySlotSwap(std::declval<const frontend::SessionSlotSwap&>())))>>
+-    : std::true_type {};
+ template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+     for (const frontend::SessionSlotSwap& s : flow.takeSlotSwaps()) {
+-        bool ok = false;
+-        if constexpr (HasSlotSwap<W>::value) ok = w.applySlotSwap(s);
++        game::SlotSwap g;
++        g.matchPlayer = s.matchPlayer;
++        g.toBot = s.to == frontend::SessionSlotSwap::To::Bot;
++        g.member = s.member.fingerprint;
++        g.atTick = s.atTick;   // the session's agreed tick (World::simTick units), 0 = the next tick
++        const bool ok = w.applySlotSwap(g);
+         frontend::FlowTrace::emit("online.slotSwap", {{"member", s.member.fingerprint}, {"matchPlayer", std::to_string(s.matchPlayer)},
+                                                       {"to", s.to == frontend::SessionSlotSwap::To::Bot ? "bot" : "remote"},
+                                                       {"applied", frontend::FlowTrace::boolean(ok)}});
+@@ -1559,6 +1562,12 @@ void Application::routeMatchToFrontend(float dt) {
+             }
+             flow.onUIEvent((int)frontend::UIEvent::EndGame);   // MatchOver: HUD hidden, EndGameStats (RE F4)
+             break;
++        case game::MatchEvent::Type::RemoteIdle: {   // the host's idle rule: the session kicks that peer
++            // the member from the roster the flow holds from the last step (the swap clears sessionMember this tick)
++            const auto& roster = flow.matchValues().players;
++            if (e.player >= 0 && (size_t)e.player < roster.size()) flow.onlineIdleKick(roster[(size_t)e.player].member);
++            break;
++        }
+         case game::MatchEvent::Type::ReturnToLobby:
+             frontend::FlowTrace::emit("match.return", {});
+             flow.returnToGameLobby();                           // MatchOver + 15 s -> ReturnToGameLobby (RE F4 / F6)
