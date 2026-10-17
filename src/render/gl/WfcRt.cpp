@@ -1212,7 +1212,9 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 // per-map medium (the eye pass): Gorge's canyon air is almost all sunlit and its authored fog is twice Molten's -
                 // at the defaults it read as a veil; an env value overrides the table (density, haze, lamp)
                 float dens = rtdef::x3Density(), haze = rtdef::x3Haze(), lampK = rtdef::x3Lamp();
-                static const struct { const char* map; float dens, haze, lamp; } kMapX3[] = {{"MP_UND_Gorge", 0.1f, 0.0015f, 1.0f}};
+                static const struct { const char* map; float dens, haze, lamp; } kMapX3[] = {
+                    {"MP_UND_Gorge", 0.1f, 0.0015f, 1.0f},
+                    {"MP_KON_Molten", 0.3f, 0.001f, 2.0f}};   // (Molten: its sunlit hall went grey at 0.003 - the shafts keep their dark gaps)
                 for (const auto& mx : kMapX3)
                     if (dataDir_.find(mx.map) != std::string::npos) {
                         if (!rtdef::envSet("WFC_X3_DENSITY")) dens = mx.dens;
