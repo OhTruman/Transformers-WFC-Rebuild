@@ -1,0 +1,22 @@
+[Unit]
+Description=WFC Rebuild lobby service (matchmaking help; matches stay peer-to-peer)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wfclobby
+Group=wfclobby
+WorkingDirectory=/opt/wfc-lobby
+ExecStart=/usr/bin/python3 -I /opt/wfc-lobby/lobby_service.py --bind 0.0.0.0:14010 --log /var/log/wfc-lobby/lobby.log
+Restart=always
+RestartSec=2
+# hardening: no shell, no writes outside the log folder, no new privileges
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/wfc-lobby
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
