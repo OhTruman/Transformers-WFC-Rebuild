@@ -2662,3 +2662,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   built from separate channels, type_violations 5 -> 1): Systems to justify in the (B) doc; review.py reruns on the frozen live
   tree before the (B) switch. Rendering cand27 = cand26 + particle commits (option-B fields via WFC_MAPFX_DIR; gravity -2940
   sourced); its slot ~22 min with a particle before / after pair.
+2026-10-17 09:22 Frontend capture gap done 09:21 (shots Rebuild-Frontend work/bins/online_b2/ b2_*.bmp, str_before / str_after *_overview / _rename /
+  _charselect.bmp); two script misses to redo in a 4-min re-slot (member lobby joined while offline; voice rows captured offline).
+  Integration viewed the charselect pair: identical UI, no Claimed / Unclaimed label visible in a 1-human lobby; asked where it
+  appears (2-human state?) before calling 0cf760f4 verified. Systems justified the VendingMachine entries (a packed UV scale /
+  offset VectorParameter read through two AppendVectors' pins; the same output-pin cause; the glyph pattern moves to the authored
+  offset). Card -> Gameplay 4-min firing crops + one death crop (09:22).
