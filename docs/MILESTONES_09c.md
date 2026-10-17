@@ -2502,3 +2502,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Classic re-baseline for hover follows. Frontend volumetric row check PASS (shots Rebuild-Frontend work/bins/volcheck/png).
   User: voice chat in scope; online bar = "make it work with what we have now" (original rules as the starting point).
   Card: Experimental 4 Streets boots -> Rendering 20-min slot (X6 r5 light-driven, X7 gutter fix) -> Experimental presenter loop.
+2026-10-17 07:56 LOAD STALL before numbers (Experimental, 4 Streets frontend boots on af4d0731, SKIPINTRO, 1440p windowed, 1 rep; report
+  tools/fidelity/results/LOAD_STALL_af4d0731.md e117603d): no-frame total / largest gap: Off 1.3 s / 0.69 s ('Render: load step'),
+  Faithful 2.8 / 0.68, Realistic 7.5 / 4.96 s at 'World: map mesh upload' (0.04 s under the 5 s watchdog), Realistic + HD 2
+  6.0 / 4.2. No watchdog line, 0 dumps. The Realistic first-frame hitch sits at the watchdog edge at 1x; Rendering's gutter
+  frontier + loading-screen yield (02c9ceb4 / 9d6ac5b5) is measured against 4.96 s; X7 must come in below it. Card -> Rendering.
