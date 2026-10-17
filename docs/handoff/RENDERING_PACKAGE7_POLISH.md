@@ -92,3 +92,33 @@ pixel pushed far above 4 by additive layers and then darkened by a later translu
 360. The fix would be a per-draw clamp in the Faithful path. Do it only after a measured A/B on explosion frames shows a
 visible difference; no capture has shown one so far. Realistic keeps the bloom input cap at 16 (headroom), not at the
 faithful 3.984.
+
+RE's per-draw rule for that residual (RE-Workspace work/handoff/HDR_BLEND_CLAMP_RULE_RE.md, 8394f38):
+- For every draw into scene colour, out = blend(src unclamped, dst), then clamp rgb per channel to [0, 3.984375] and alpha
+  to [0, 1] on store.
+- No material PS saturates: 4,272 PS were checked.
+- A final min() before post does not reproduce "stack above 4, then darken". That needs per-draw granularity where blended
+  layers overlap (ROV / programmable blend, or a clamp pass between overlapping translucent draws).
+- Scope: the 7e3 scene target only.
+- Still low priority: first a measured A/B on explosion frames that shows a visible Faithful difference.
+
+## 5. X6 (more reflective surfaces + damp sheen): PARKED, unmerged (2026-10-17)
+
+Five rounds, each judged on side-by-side eye sheets (work/wobble/ on rt2's worktree). None read as a damp floor:
+
+| Round | Sheet | Design | What the sheet showed |
+|---|---|---|---|
+| 1 (x6v) | — | damp = amount x noise mask, roughness half-lowered | darker blotches |
+| 2 (x6bv) | — | + sharp directional-lightmap lobe | nothing: the 3 lobes only align with steep views |
+| 3 (x6c_eyesheet) | x6c | whole films, reflection share >= 0.35 (replace) | darker, flatter floors; matte wall fine |
+| 4 (x6d_eyesheet) | x6d | additive only (water Fresnel), transient lobe | no sheen; exposure dims the pickup glow |
+| 5 (x6e_eyesheet) | x6e | patches placed by the lamps in view, the lamps' highlights | visually unchanged |
+
+**Cause:**
+- These interiors' floors reflect little bright content: dark metal halls, lamps above or behind the view.
+- A replacement term pulls a lit floor towards its darker reflection.
+- An additive term adds almost nothing.
+- Lamp highlights on a floor need a lamp in the mirror direction, which the authored views and match frames rarely have.
+
+The code stays on rt2 (b6c1f8f4 ... 80a0cd4b) and out of every merge set. A future attempt would need wet geometry or
+puddle decals with authored reflections, not a shading term.
