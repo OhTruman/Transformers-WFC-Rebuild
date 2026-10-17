@@ -2988,3 +2988,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (the P0 was a strafing artefact; these runs were stationary) on the fixed exe: ~3-min gap after the Frontend if built, else after
   Rendering. Batch HELD until both. Camera kick / shake absent on both arms (audit gap 1, later item). RE: lens flares DO cook
   FLensFlareVertexFactory shaders (scanner off-by-one fixed; retracts that UNKNOWN); correction doc follows.
+2026-10-17 11:39 Frontend CARD FREE 11:40: fr_prompt set (5 shots) + iconic lobby / wheel captured; the in-match HUD steps timed out after the
+  lobby shot (match ran with 2 Remote participants): cause from the log, re-run in the gap after Rendering with Gameplay's wobble
+  run. Card -> Rendering slot_all (x13 + x14 + x15, ~45 min) 11:40.
