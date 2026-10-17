@@ -23,6 +23,7 @@ detail missing.
 | CAMPAIGN_SETPIECES_RE.md | Omega Supreme loop (sentries → battery heal / corruption → critical → heart), Trypticon stages 1A/1B/2 and events, soldier-tank fuel cell, detpacks; all script, no native boss code |
 | FMV_PLAYBACK_RE.md | Bink 1 720p movies, file resolution + language suffix, SeqAct_MoviePlayer Play/Stop natives (Stopped / Begin Playing), skip by the active pad, CINE_MUTE_FOR_BINK mixer, volume rules, the one loading movie + overlay text, movie end |
 | CHECKPOINT_DATA_RE.md | Checkpoint payload header (version, map, package, path), TnCheckpointSaveData fields, CheckPoint0/1.sav per campaign, 460-byte co-op pieces, aux spawn point rotation |
+| CAMPAIGN_CONTENT_DELTAS_RE.md | Campaign vs MP content: iconic loadouts (no new player items), loot drop tables, destructible damage/trigger pipeline + state-notification Kismet, interactives (detpack, buttons, terminals, energon), turrets + rip, downed/revive player side, game over, difficulty buff tables |
 | KILLER_CAM_RE.md, MP_TRANSFORMING_ACTORS_RE.md | MP-side; listed for completeness |
 
 The older pass notes (`notes/TARGETED_PASS5_2026-10-05.md` §12 death pipeline, `notes/MILESTONE_E_OBJECTIVE_MARKERS.md`,

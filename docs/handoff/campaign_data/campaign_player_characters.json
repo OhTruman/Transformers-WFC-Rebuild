@@ -1,0 +1,868 @@
+[
+ {
+  "CharacterName": "AirRaid",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "Shotgun",
+   "BeatDownClub"
+  ],
+  "VehicleWeapons": [
+   "HomingRocketVehicle",
+   "PlaneAssaultRifle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "Cloaking"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet4",
+   "Jet4"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Arcee",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "ShortSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Cloaking"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car5",
+   "Car5"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Barricade",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Barrier"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car4",
+   "Car4"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Brawl",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "Hammer"
+  ],
+  "VehicleWeapons": [
+   "TankCannon"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "Dodge"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Tank2",
+   "Tank2"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Breakdown",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "Shotgun",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Dodge"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car3",
+   "Car3"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Bumblebee",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "HeavyPistol",
+   "ShortSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Dodge"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car",
+   "Car"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Deadend",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "Shotgun",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "SpawnSentry",
+   "Cloaking"
+  ],
+  "Skills": [
+   "RocketSentry",
+   "IncreaseSentryPower",
+   "DecreaseSentryDamageTaken"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car7",
+   "Car7"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Demolishor",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "Hammer"
+  ],
+  "VehicleWeapons": [
+   "TankCannon"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "SpawnAmmoCrate"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Tank5",
+   "Tank5"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Ironhide",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "Shotgun",
+   "Axe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "Dodge"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck3",
+   "Truck3"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Jazz",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "ShortSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "RollerSphere",
+   "Barrier"
+  ],
+  "Skills": [
+   "RollerSphereDot"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car6",
+   "Car6"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Jetfire",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "AssaultRifle",
+   "RepairRay",
+   "BeatDownClub"
+  ],
+  "VehicleWeapons": [
+   "HomingRocketVehicle",
+   "PlaneAssaultRifle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "SpawnSentry",
+   "Hover"
+  ],
+  "Skills": [
+   "RocketSentry",
+   "IncreaseSentryPower",
+   "DecreaseSentryDamageTaken"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet5",
+   "Jet5"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Megatron",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "Bazooka",
+   "SpikedMace"
+  ],
+  "VehicleWeapons": [
+   "TankCannon"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Drain",
+   "Hover"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Tank",
+   "Tank"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Onslaught",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "ViciousAxe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "GuidedMissile",
+   "Dodge"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck6",
+   "Truck6"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Optimus",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "IonBlaster",
+   "ButterflyAxe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Warcry",
+   "Dodge"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck",
+   "Truck"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Optimus Prime",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "IonBlaster",
+   "ButterflyAxe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Warcry",
+   "Dodge"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck",
+   "Truck"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Ratchet",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "RepairRay",
+   "Axe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "SpawnSentry",
+   "Barrier"
+  ],
+  "Skills": [
+   "IncreaseSentryPower",
+   "DecreaseSentryDamageTaken"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck2",
+   "Truck2"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Scattershot",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "Maul"
+  ],
+  "VehicleWeapons": [
+   "TankCannon"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "GuidedMissile",
+   "Barrier"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Tank4",
+   "Tank4"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Shockwave",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "RepairRay",
+   "SpikedBat"
+  ],
+  "VehicleWeapons": [
+   "PlaneAssaultRifle",
+   "HomingRocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Hover"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet7",
+   "Jet7"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Sideswipe",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "ShortSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "Dodge"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car2",
+   "Car2"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "SilverBolt",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "BurstRifle",
+   "BeatDownClub"
+  ],
+  "VehicleWeapons": [
+   "HomingRocketVehicle",
+   "PlaneAssaultRifle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Barrier"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet6",
+   "Jet6"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Skywarp",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "Shotgun",
+   "SpikedBat"
+  ],
+  "VehicleWeapons": [
+   "PlaneAssaultRifle",
+   "HomingRocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Whirlwind",
+   "Cloaking"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet3",
+   "Jet3"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Slipstream",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "SpikedBat"
+  ],
+  "VehicleWeapons": [
+   "PlaneAssaultRifle",
+   "HomingRocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Cloaking"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet8",
+   "Jet8"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Soundwave",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "RepairRay",
+   "ViciousAxe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "SpawnSentry",
+   "Barrier"
+  ],
+  "Skills": [
+   "IncreaseSentryPower",
+   "DecreaseSentryDamageTaken"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck4",
+   "Truck4"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Starscream",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "SniperRifle",
+   "Shotgun",
+   "SpikedBat"
+  ],
+  "VehicleWeapons": [
+   "PlaneAssaultRifle",
+   "HomingRocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Hover"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet",
+   "Jet"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Thundercracker",
+  "FriendlyName": null,
+  "StartingForm": "TF_Vehicle",
+  "WeaponTypes": [
+   "AssaultRifle",
+   "RepairRay",
+   "SpikedBat"
+  ],
+  "VehicleWeapons": [
+   "PlaneAssaultRifle",
+   "HomingRocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "SpawnSentry",
+   "Dodge"
+  ],
+  "Skills": [
+   "RocketSentry",
+   "IncreaseSentryPower",
+   "DecreaseSentryDamageTaken"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Jet2",
+   "Jet2"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Warpath",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "Maul"
+  ],
+  "VehicleWeapons": [
+   "TankCannon"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Barrier"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Tank3",
+   "Tank3"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "Zeta Prime",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "Axe"
+  ],
+  "VehicleWeapons": [
+   "RocketVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Warcry",
+   "SpawnAmmoCrate"
+  ],
+  "Skills": [
+   "IncreaseWhirlwindSpeed"
+  ],
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Truck5",
+   "Truck5"
+  ],
+  "_other": {}
+ },
+ {
+  "CharacterName": "DecepticonCarSoldier",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Cloaking"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car8",
+   "Car8"
+  ],
+  "_other": {
+   "PlayInEditorOnly": true
+  }
+ },
+ {
+  "CharacterName": "AutobotCarSoldier",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Cloaking"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car9",
+   "Car9"
+  ],
+  "_other": {
+   "PlayInEditorOnly": true
+  }
+ },
+ {
+  "CharacterName": "NeutralCarSoldier",
+  "FriendlyName": null,
+  "StartingForm": null,
+  "WeaponTypes": [
+   "AssaultRifle",
+   "TortureSword"
+  ],
+  "VehicleWeapons": [
+   "AssaultRifleVehicle"
+  ],
+  "MeleeWeapons": null,
+  "Abilities": [
+   "Shockwave",
+   "Cloaking"
+  ],
+  "Skills": null,
+  "Factions": [
+   "kFactionAutobot",
+   "kFactionDecepticon"
+  ],
+  "ChassisTypes": [
+   "Car10",
+   "Car10"
+  ],
+  "_other": {
+   "PlayInEditorOnly": true
+  }
+ }
+]
