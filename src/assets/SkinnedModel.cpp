@@ -198,6 +198,7 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
     const Json& prims = meshes[(size_t)meshIdx]["primitives"];
     bool bInit = false;
     bool anyTangent = false;
+    bool anyUv1 = false;                     // (TEXCOORD_1: the light-map UV - transforming world actors; absent elsewhere)
     for (size_t pi = 0; pi < prims.size(); ++pi) {
         const Json& pr = prims[pi];
         const Json& at = pr["attributes"];
@@ -208,6 +209,8 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         std::vector<float> tan = at.has("TANGENT") ? doc.floats(at["TANGENT"].asInt(-1)) : std::vector<float>();
         anyTangent = anyTangent || !tan.empty();
         std::vector<float> uvv = at.has("TEXCOORD_0") ? doc.floats(at["TEXCOORD_0"].asInt(-1)) : std::vector<float>();
+        std::vector<float> uv1v = at.has("TEXCOORD_1") ? doc.floats(at["TEXCOORD_1"].asInt(-1)) : std::vector<float>();
+        anyUv1 = anyUv1 || !uv1v.empty();
         std::vector<uint16_t> jnt = at.has("JOINTS_0") ? doc.joints(at["JOINTS_0"].asInt(-1)) : std::vector<uint16_t>();
         std::vector<float> wgt = at.has("WEIGHTS_0") ? doc.floats(at["WEIGHTS_0"].asInt(-1), true) : std::vector<float>();
         std::vector<uint32_t> idx = pr.has("indices") ? doc.indices(pr["indices"].asInt(-1)) : std::vector<uint32_t>();
@@ -221,6 +224,8 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
             for (int c = 0; c < 4; ++c) m.tangents.push_back(i * 4 + c < tan.size() ? tan[i * 4 + c] : (c == 0 || c == 3 ? 1.0f : 0.0f));
             m.uv.push_back(i * 2 < uvv.size() ? uvv[i * 2] : 0.0f);
             m.uv.push_back(i * 2 + 1 < uvv.size() ? uvv[i * 2 + 1] : 0.0f);
+            m.uv1.push_back(i * 2 < uv1v.size() ? uv1v[i * 2] : 0.0f);
+            m.uv1.push_back(i * 2 + 1 < uv1v.size() ? uv1v[i * 2 + 1] : 0.0f);
             for (int c = 0; c < 4; ++c) m.joints.push_back(i * 4 + c < jnt.size() ? jnt[i * 4 + c] : 0);
             for (int c = 0; c < 4; ++c) m.weights.push_back(i * 4 + c < wgt.size() ? wgt[i * 4 + c] : (c == 0 ? 1.0f : 0.0f));
             core::Vec3 p{pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]};
@@ -237,6 +242,7 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
     }
 
     if (!anyTangent) m.tangents.clear();
+    if (!anyUv1) m.uv1.clear();
     // Materials: base-colour texture URI (resolved vs the glb dir) + tint factor.
     {
         std::string dir;

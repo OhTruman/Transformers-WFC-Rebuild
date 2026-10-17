@@ -214,6 +214,8 @@ public:
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
     void setDrawBody(bool b) { drawBody_ = b; }
+    // (transforming world actors) the next skinned draws use this actor's interpolated light maps (nullptr: off)
+    void setDrawInterpolatedLightmap(const char* actor, float lerp);
     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
     bool volumetricLighting() const { return volUser_; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
@@ -301,6 +303,7 @@ private:
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
+        bool interpLM = false;    // (transforming world actors) drawn with the lightmapped program and drawInterp_'s captures
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
         bool noShadow = false;    // authored: CastShadow false (left out of the RT scene)
@@ -946,6 +949,14 @@ private:
     std::map<std::string, MatSrc> mats_;
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
+    // transforming world actors' two light-map captures (RE INTERPOLATED_LIGHTMAP_RE.md): per coefficient, capture A's and B's
+    // atlas rects side by side in one composite texture (no extra samplers: the lightmap units 13-15), each capture's UV
+    // transform into it, its scale vectors; the base pass lerps the decoded coefficients by the transform's position
+    struct InterpLM { LMRec cap[2]; bool built = false, ok = false; int tex[3] = {-1, -1, -1}; float coord[2][4] = {}; };
+    std::map<std::string, InterpLM> interpLM_;
+    const InterpLM* drawInterp_ = nullptr; float drawInterpLerp_ = 0.0f;
+    void buildInterpLM(InterpLM& r);
+    std::vector<char> interpSetProg_;   // programs whose uLMInterp a door draw left at 1 (reset on their next normal draw)
     std::map<std::string, LMRec> lightmaps_;
     std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };

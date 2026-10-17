@@ -116,6 +116,7 @@ uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, 
 uniform vec4 uShadowZ;       // world -> shadow-space z row
 uniform vec3 uCamPos;
 uniform vec4 uLMCoord;
+uniform vec4 uLMCoordB;   // (transforming world actors) capture B's light-map UV transform (uLMInterp draws)
 uniform int uFogOn;
 uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
@@ -127,6 +128,7 @@ uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex f
 uniform int uVLMBase;
 uniform sampler2D uVLM;
 out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
+out vec2 vUV1B;
 out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
 out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
 
@@ -192,6 +194,7 @@ void main() {
     vUV0 = aUV0;
     vSubUV2 = aSubUV2;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
+    vUV1B = aUV1 * uLMCoordB.xy + uLMCoordB.zw;
     vUV1Mat = aUV1;
     vColor = aColor;
     if (uVertexLM != 0) {
@@ -214,6 +217,7 @@ void main() {
 
 const char* kFSHead = R"(#version 330 compatibility
 in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor; in vec3 vSubUV2;
+in vec2 vUV1B;
 in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
@@ -362,6 +366,7 @@ void main() {
 const char* kFSMainLM = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
 uniform int uVertexLM;
 in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
@@ -381,6 +386,11 @@ void main() {
         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
+            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
+            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
+            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
+        }
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
@@ -464,6 +474,7 @@ float wfcPbrRoughness(float sp) {
 const char* kFSMainLMModern = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
 uniform int uVertexLM;
 in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
@@ -506,6 +517,11 @@ void main() {
         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
+            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
+            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
+            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
+        }
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
         vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
@@ -1450,6 +1466,20 @@ bool Pipeline::load(const std::string& mapName) {
         if (!sj.empty() && assets::Json::parse(sj, S))
             for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
     }
+    interpLM_.clear(); drawInterp_ = nullptr;
+    for (const auto& kv : L["interpolated_lightmaps"].obj) {   // transforming world actors: {actor: [capture 0, capture 1]}
+        if (kv.second.size() < 2) continue;
+        InterpLM& r = interpLM_[kv.first];
+        for (int k = 0; k < 2; ++k) {
+            const assets::Json& c = kv.second[(size_t)k];
+            for (int i = 0; i < 3; ++i) {
+                r.cap[k].coeff[i] = c["coeffs"][(size_t)i].asString();
+                for (int ch = 0; ch < 3; ++ch) r.cap[k].scale[i][ch] = c["scales"][(size_t)i][(size_t)ch].asFloat(1.0f);
+            }
+            r.cap[k].cs[0] = c["coordScale"][0].asFloat(1); r.cap[k].cs[1] = c["coordScale"][1].asFloat(1);
+            r.cap[k].cb[0] = c["coordBias"][0].asFloat(0); r.cap[k].cb[1] = c["coordBias"][1].asFloat(0);
+        }
+    }
     const assets::Json& lp = L["lightmaps"]["props"];
     for (const auto& kv : lp.obj) {
         LMRec r;
@@ -2340,6 +2370,77 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     glTexParameteri(GL_TEXTURE_2D, 0x813C /*GL_TEXTURE_BASE_LEVEL*/, 0);
     glTexParameteri(GL_TEXTURE_2D, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, mips - 1);
     return true;
+}
+
+// (transforming world actors) per coefficient: capture A's atlas rect and capture B's side by side (an 8-texel gutter of
+// replicated edges between them, a 1-texel margin around each rect) in one texture; each capture's lightmap UV transform
+// re-expressed in it. The texels are the atlases' own (the decoded PNG exports).
+void Pipeline::buildInterpLM(InterpLM& r) {
+    r.built = true;
+    std::map<std::string, ImageData> atl;
+    auto atlas = [&](const std::string& name) -> const ImageData* {
+        auto it = atl.find(name);
+        if (it == atl.end()) {
+            ImageData img;
+            if (!platform::decodeImage(dataDir_ + "/lightmaps/" + name + ".png", img) || !img.valid()) return nullptr;
+            it = atl.emplace(name, std::move(img)).first;
+        }
+        return &it->second;
+    };
+    constexpr int kGutter = 8;
+    for (int i = 0; i < 3; ++i) {
+        const ImageData* src[2] = {atlas(r.cap[0].coeff[i]), atlas(r.cap[1].coeff[i])};
+        if (!src[0] || !src[1]) { LOG_WARN("wfc: interpolated light map: atlas %s / %s missing", r.cap[0].coeff[i].c_str(), r.cap[1].coeff[i].c_str()); return; }
+        int x0[2], y0[2], w[2], h[2];
+        for (int k = 0; k < 2; ++k) {
+            const int W = src[k]->w, H = src[k]->h;
+            x0[k] = std::max(0, (int)std::floor(r.cap[k].cb[0] * (float)W) - 1);
+            y0[k] = std::max(0, (int)std::floor(r.cap[k].cb[1] * (float)H) - 1);
+            const int x1 = std::min(W, (int)std::ceil((r.cap[k].cb[0] + r.cap[k].cs[0]) * (float)W) + 1);
+            const int y1 = std::min(H, (int)std::ceil((r.cap[k].cb[1] + r.cap[k].cs[1]) * (float)H) + 1);
+            w[k] = std::max(1, x1 - x0[k]); h[k] = std::max(1, y1 - y0[k]);
+        }
+        ImageData c;
+        c.w = w[0] + kGutter + w[1]; c.h = std::max(h[0], h[1]);
+        c.rgba.assign((size_t)c.w * (size_t)c.h * 4, 0);
+        const int ox[2] = {0, w[0] + kGutter};
+        for (int k = 0; k < 2; ++k)
+            for (int y = 0; y < c.h; ++y)
+                for (int x = (k == 0 ? 0 : w[0] + kGutter / 2); x < (k == 0 ? w[0] + kGutter / 2 : c.w); ++x) {
+                    const int sx = x0[k] + std::min(std::max(x - ox[k], 0), w[k] - 1), sy = y0[k] + std::min(y, h[k] - 1);
+                    std::memcpy(&c.rgba[((size_t)y * (size_t)c.w + (size_t)x) * 4], &src[k]->rgba[((size_t)sy * (size_t)src[k]->w + (size_t)sx) * 4], 4);
+                }
+        GLuint id = 0;
+        glGenTextures(1, &id);
+        glBindTexture(GL_TEXTURE_2D, id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        uploadTex(GL_TEXTURE_2D, c, true);
+        GenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        lmTextures_.push_back(id);
+        r.tex[i] = (int)lmTextures_.size() - 1;
+        if (i == 0)
+            for (int k = 0; k < 2; ++k) {   // uv' = (uv cs + cb) (W, H) - (x0, y0) + (ox, 0), over the composite size
+                const float W = (float)src[k]->w, H = (float)src[k]->h;
+                r.coord[k][0] = r.cap[k].cs[0] * W / (float)c.w; r.coord[k][1] = r.cap[k].cs[1] * H / (float)c.h;
+                r.coord[k][2] = (r.cap[k].cb[0] * W - (float)x0[k] + (float)ox[k]) / (float)c.w;
+                r.coord[k][3] = (r.cap[k].cb[1] * H - (float)y0[k]) / (float)c.h;
+            }
+    }
+    r.ok = true;
+}
+
+void Pipeline::setDrawInterpolatedLightmap(const char* actor, float lerp) {
+    drawInterp_ = nullptr;
+    if (!actor) return;
+    auto it = interpLM_.find(actor);
+    if (it == interpLM_.end()) return;
+    if (!it->second.built) buildInterpLM(it->second);
+    if (it->second.ok) { drawInterp_ = &it->second; drawInterpLerp_ = std::min(std::max(lerp, 0.0f), 1.0f); }
 }
 
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
@@ -4713,10 +4814,31 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 Uniform1i(ULOC(P, "uVertexLM"), 1);
+                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {
+                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
                 Uniform1i(ULOC(P, "uVLMBase"), s.vlmBase);
                 ActiveTexture(GL_TEXTURE0 + 11);
                 glBindTexture(GL_TEXTURE_2D, s.vlmTex);
+            } else if (s.interpLM && drawInterp_) {      // transforming world actor: its two captures, lerped (RE)
+                const InterpLM& r = *drawInterp_;
+                static const float kOne[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+                Uniform4f(P.uLMCoord, r.coord[0][0], r.coord[0][1], r.coord[0][2], r.coord[0][3]);
+                Uniform3fv(P.uLMScale, 3, kOne);           // (the shader applies each capture's own scale before the lerp)
+                Uniform1i(ULOC(P, "uLMInterp"), 1);
+                if ((size_t)s.prog >= interpSetProg_.size()) interpSetProg_.resize((size_t)s.prog + 1, 0);
+                interpSetProg_[(size_t)s.prog] = 1;
+                Uniform4f(ULOC(P, "uLMCoordB"), r.coord[1][0], r.coord[1][1], r.coord[1][2], r.coord[1][3]);
+                Uniform3fv(ULOC(P, "uLMScaleA"), 3, &r.cap[0].scale[0][0]);
+                Uniform3fv(ULOC(P, "uLMScaleB"), 3, &r.cap[1].scale[0][0]);
+                Uniform1f(ULOC(P, "uLMLerp"), drawInterpLerp_);
+                Uniform1i(ULOC(P, "uVertexLM"), 0);
+                for (int i = 0; i < 3; ++i) {
+                    ActiveTexture(GL_TEXTURE0 + 13 + i);
+                    glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)r.tex[i]] ? lmTextures_[(size_t)r.tex[i]] : blackTex_);
+                }
             } else if (s.lmTex[0] >= 0) {
+                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {   // (a program a door drew with)
+                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
@@ -7331,7 +7453,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         static thread_local std::vector<uint64_t> sig;
         sig.clear();
         sig.push_back((uint64_t)m.subs.size() << 32 | (uint64_t)m.mats.size());
-        sig.push_back((uint64_t)m.indices.size() << 1 | (defrag ? 1u : 0u));
+        sig.push_back((uint64_t)m.indices.size() << 2 | (drawInterp_ ? 2u : 0u) | (defrag ? 1u : 0u));   // (+ interpolated light maps)
         for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
         for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
         if (noDynCache || ds.sig != sig) {
@@ -7360,6 +7482,10 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
                 d.first = s.indexOffset; d.count = s.indexCount;
                 d.prog = dynamicProgram(mat);
                 d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
+                if (drawInterp_ && mat) {   // (transforming world actor) its material's light-mapped program
+                    const int p = programFor(d.matName, mat, true);
+                    if (p >= 0 && progs_[(size_t)p].original) { d.prog = p; d.interpLM = true; }
+                }
                 if (defrag && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
                     if (const std::string* ed = energyDeathFor(mat->wfcName)) {
                         Material dm; dm.wfcName = *ed;

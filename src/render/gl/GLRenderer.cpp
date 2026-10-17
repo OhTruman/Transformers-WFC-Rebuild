@@ -1576,6 +1576,7 @@ public:
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
     void setDrawBody(bool b) override { wfc_.setDrawBody(b); }
+    void setDrawInterpolatedLightmap(const char* actor, float lerp) override { wfc_.setDrawInterpolatedLightmap(actor, lerp); }
     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
     void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
     void setUpscaling(int mode) override {

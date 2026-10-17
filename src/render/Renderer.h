@@ -217,6 +217,10 @@ public:
     virtual void setDrawEnergyDeath(float defrag) { (void)defrag; }
     // the following draws are a death body (World::drawCorpses): RT puts its instance under its own TLAS mask bit
     virtual void setDrawBody(bool body) { (void)body; }
+    // Transforming world actors (doors / bridges): the next skinned draws are lit by this actor's two baked light-map captures
+    // (lighting.json 'interpolated_lightmaps', RE INTERPOLATED_LIGHTMAP_RE.md) blended by lerp = the transform's normalized
+    // position, instead of a light environment; nullptr ends it.
+    virtual void setDrawInterpolatedLightmap(const char* actor, float lerp) { (void)actor; (void)lerp; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.

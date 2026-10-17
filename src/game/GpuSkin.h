@@ -53,6 +53,7 @@ inline render::MeshData& bindMeshOf(const assets::SkinnedModel& m) {
     m.gpuBind.mesh = std::make_unique<render::MeshData>();
     render::MeshData& b = *m.gpuBind.mesh;
     b.positions = m.positions; b.normals = m.normals; b.uv = m.uv; b.indices = m.indices; b.subs = m.subs; b.mats = m.mats;
+    b.uv1 = m.uv1;                                   // (the light-map UV: transforming world actors)
     if (!m.tangents.empty()) setBindTangents(b, m.tangents, 0);
     return b;
 }
