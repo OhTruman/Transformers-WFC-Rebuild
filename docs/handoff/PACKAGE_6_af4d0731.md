@@ -1,8 +1,9 @@
-# Package 6: integration <HEAD> (<DATE>)
+# Package 6: integration af4d0731 (built 2026-10-17)
 
-<!-- SKELETON (Systems; refreshed 2026-10-16 13:05 from docs/MILESTONES_09c.md up to the 12:58 entry). Integration fills
-     <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
-     PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
+**Internal checkpoint: the hand-over build is package 7 (user 2026-10-17: more reflective surfaces + damp sheen, 2x RT lightmap, Streets haze, mine saturation, hover + squad polish, death bodies in full).**
+
+<!-- Systems, 2026-10-17: filled from the af4d0731 build (work/refresh_af4d0731), its verify (work/verify_af4d0731) and
+     the package gate (tools/fidelity/results/PACKAGE-GATE_af4d0731.md). Items marked (verify) were read from the log. -->
 
 ## How to play this build
 
@@ -27,9 +28,10 @@ reverse direction around a walking leader. Anything else is news.
 
 Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (27.53 GB: 46,744 files kept +
 7,161 .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay
-push_gltf_wfcmat_20261016, 85 files; promoted <DATE>). This is the
-hand-over build the user playtests. Fallbacks: work/playtest_slim_9350f19b (internal checkpoint), work/playtest_slim_398b27ef (package 5),
-work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package6-<HEAD>.
+push_gltf_wfcmat_20261016, 85 files; promoted 2026-10-17 04:47). The checkpoint the user may play until package 7.
+
+Package: work/playtest_slim; fallback work/playtest_slim_9350f19b; tag playtest/09c-package6-af4d0731. Older fallbacks
+stay: work/playtest_slim_398b27ef (package 5), work/playtest_slim_30b2fa74 (package 4).
 
 Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load and only a reboot clears it.
 
@@ -335,7 +337,7 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
    Play.bat inside the package starts its own exe (verify checks it). Integration copies / announces; never rebuild a package exe
    or touch build/release while the user plays.
 
-## Gates (final head <HEAD>)
+## Gates (final head af4d0731)
 
 <!-- package-gate.sh table (rules final 08:37, Experimental 101b3970 / 78854ddd / d3a6e1e1). Base = 398b27ef + yaw 022e5e34 +
      drive-probe 56a9beca + the one-line steer + walkable f19e0052 + rise snap 63368d05 (all five sim lines; gate-base.sh). Regress bars are report rows at
@@ -349,7 +351,7 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | PASS | p50 Streets 9.26 / Gorge 9.48 / Debris 7.32 / Rust 8.18 / Molten 9.30 ms; p90 10.33 / 11.63 / 8.56 / 10.35 / 10.35 (105-137 fps); Realistic alone p50 7.2-9.4 / p90 8.4-11.4 |
 | R4 leak rows (GPU dedicated over 5 map changes) | PASS | lobby GPU 2180 / 2841 / 2980 / 2974 MB, plateau spread 138 MB |
 | Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | PASS (0 UNKNOWN) | all maps contrast 1.28 / 1.30 (Realistic / + Enhanced); per map 1.14-1.48; authored views 1.25-1.88 |
-| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | PASS | 9350f19b (work/verify_9350f19b/REPORT.md): HD 3,505 + 498 M6 rows, 4,005 files, 0 problems; bin 20 / 20 + M5; overlay barrier + frozen 85 / 85; Streets / Gorge / Debris PASS (0 [error], 0 outside reads, 0 failing opens); Settings 7 / 7; RT gate build / context / runtime / r4 / rtlights / defaults 27 / 27; HD runtime at level 2: 3505 textures, 498 modern maps, Modern on for MP_IAC_Streets |
+| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | PASS | af4d0731 (work/verify_af4d0731/REPORT.md): HD 3,505 + 498 M6 rows, 4,005 files, 21.7 GB, 0 problems; bin 20 / 20 + M5; overlay barrier + frozen 85 / 85; Streets / Gorge / Debris PASS; Settings 7 / 7; RT gate build / context / runtime / r4 / rtlights / defaults 39 / 39; HD runtime row at level 2 PASS (HD texture pack available: 3505 textures, HD modern material maps: 498, Modern materials on for MP_IAC_Streets) |
 | FAST gate | PASS 59 / KNOWN 1 (ribbon / beam FX) / PRODUCT FAIL 0 / HARNESS FAIL 0 | on af4d0731 (delta): PASS, 59 pass, 0 product, 1 known (ribbon / beam), the same 2 unknown / partial rows as 9350f19b; the penultimate head 7cd2202 PASS |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | PASS | BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn); | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
 | Settings survive map change (WFC_SETTINGSTEST) | PASS 7 / 7 | 9350f19b verify (and the 4078e47b rehearsal) |
