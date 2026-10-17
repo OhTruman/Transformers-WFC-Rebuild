@@ -40,5 +40,36 @@ The RE source is `GAMEPLAY_HOVER_RE.md`; the decisions are Integration's, 2026-1
 
 ## Identity
 
-- **Classic SIMHASH changes** (a deliberate fidelity change). One re-baseline, batched with the squad item.
+- **Classic SIMHASH changes** (a deliberate fidelity change). One re-baseline, batched with the squad item. **Done 2026-10-17 on integration cccff627:**
+  - **Classic:** 96 / 96 runs diverge (24 seeds × 4 maps); the first divergent step is 601-602, the first step after the countdown. The cause is bots that spawn in hover vehicle form: their first spring response (Classic AI path: no player pull, RB damping 0.1). Verified on Streets s1: p8 vel.y 0.644 → 0.646 at step 601, everything else equal.
+  - Tables: `hover/CLASSIC_SIMHASH_old_vs_new.txt`, `hover/CLASSIC_NAVQ_REFERENCE_new.txt`.
+  - Smart: 96 / 96 diverge (first at 601-858; the tank force + squad slots): `hover/SMART_SIMHASH_old_vs_new.txt`,
+    `hover/SMART_NAVQ_REFERENCE_new.txt`.
+  - BOTTEST 48 / 48 × 12; VEHTEST unchanged (rest heights at the spring equilibrium, tip-over PASS).
 - Smart changes slightly too (the tank force; the shared springs).
+
+## Squad follow reversals (Smart only; Classic has no squad following, so Classic identity is untouched by this part)
+
+**Diagnosis** (NAVQ trace, `hover/diag_follow_*.js`, diagnostics only):
+- About 80 % of the "follow" reversals are the member turning back alone, while its leader keeps its heading. The rest follow a leader
+  that turned round, which is legitimate.
+- Two mechanisms:
+  - an unwalkable wedge slot fell back onto the leader's own position (radius 2.5 m), so the member walked into it and turned away;
+  - the member flapped between the wedge and the regroup goal at squadRegroupM (the goal jumped 13-270 m).
+
+**Fix** (`hover/edit_squad_slots.js`):
+- an unwalkable slot tries the mirrored side, half depth and straight behind, then the last usable slot; only then the leader, with a
+  5 m radius;
+- 1.5 s wedge hysteresis, out to squadRegroupM + 5 m.
+
+**Measured** (24 seeds, Smart, per travel-min, before → after):
+
+| Map | fidget | follow | stucks / bot-min |
+|---|---|---|---|
+| Streets | 0.48 → 0.34 | 2.26 → 1.98 | 1.31 → 1.03 |
+| Molten | 0.50 → 0.28 | 1.80 → 1.46 | 0.87 → 0.62 |
+| Debris | 0.30 → 0.23 | 0.99 → 1.30 | 0.82 → 0.86 |
+| Gorge | 0.73 → 0.40 | 2.22 → 2.28 | 1.52 → 1.33 |
+
+**Left for later** (a bounded 2-round item at the end of the queue): dithering near a moving slot (a lead point ahead of the slot, or
+per-member slot smoothing).

@@ -376,22 +376,24 @@ void runVehicleTests() {
     {
         const char* root = std::getenv("WFC_ASSETS");
         const std::string vs = root ? root : core::config::kAssetRootDefault;
-        static ChassisDef car, tank, jet;
-        bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet);
+        static ChassisDef car, tank, jet, truck;
+        bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet) &&
+                  loadChassisDef(vs, "Truck", truck);
         LOG_INFO("VEHTEST forms: chassis definitions %s", ok ? "loaded" : "MISSING (skipped)");
         if (ok) {
             CollisionWorld w = makeWorld(0, 0, 0);
-            auto rest = [&](const ChassisDef& d, const char* name) {
+            auto rest = [&](const ChassisDef& d, const char* name, float reOriginUU) {   // reOriginUU: RE hover 1.4 (0: not derived)
                 Sim s(&w, 2.0f); s.c.setChassis(&d);
                 s.step(MoveIntent{}, 240);
                 const VehicleParams& V = d.vehicle;
                 float leq = V.suspRest - core::config::kVehicleGravity * (V.mass * 0.25f) / V.suspStiffness;
-                LOG_INFO("VEHTEST %s rest: root %.3f m above the floor, COM %.3f (spring L_eq %.3f m), contacts %d, pitch %.1f roll %.1f deg",
+                LOG_INFO("VEHTEST %s rest: root %.3f m above the floor, COM %.3f (spring L_eq %.3f m), contacts %d, pitch %.1f roll %.1f deg; RE origin %.2f m",
                          name, s.c.position().y, s.c.position().y + V.comUp, leq, s.c.vehicleState().contacts,
-                         s.c.vehicleState().pitch * 57.2958f, s.c.vehicleState().roll * 57.2958f);
+                         s.c.vehicleState().pitch * 57.2958f, s.c.vehicleState().roll * 57.2958f, reOriginUU * 0.01f);
             };
-            rest(car, "car  ");
-            rest(tank, "tank ");
+            rest(car, "car  ", 125.0f);
+            rest(truck, "truck", 109.0f);
+            rest(tank, "tank ", 0.0f);
             // Car boost continuity: every Driving probe sits at or above the 0.45 m wheel clearance (the car hulls ride 0.32-0.48 m
             // above the ground on their wheels in the original), so sub-clearance lips do not stop a boosting car. Head-on steps,
             // then a 0.35 m riser met at 36 deg (forward . face normal 0.81, under the 0.866 frontal threshold: the Debris lip).

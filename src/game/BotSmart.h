@@ -116,6 +116,7 @@ struct SmartBot {
     int squadId = -1;                    // squadDynamic: the squad joined at the last respawn (-1: the fixed squad by player order)
     core::Vec3 moveHeading{0, 0, 0};
     std::vector<core::Vec3> trail;       // squadTrail: positions this bot walked (newest last, a point every 1.5 m, up to 24) - members follow it
+    float wedgeAt = -1e9f; core::Vec3 lastSlot{0, 0, 0}; bool haveLastSlot = false;   // the wedge's hysteresis and last usable slot
     bool formWedge = false; int formLeader = -1; core::Vec3 formOffset{0, 0, 0}; bool formHold = false;
     float leaderStillSince = -1.0f; core::Vec3 frozenSlot{0, 0, 0}; bool slotFrozen = false;   // squadSlotFreeze   // squadStationKeep: this think's wedge slot (offset from the leader)     // the last horizontal move direction above 1 m/s (squad wedge heading while the leader stands / looks around)
     double fightCohSum = 0.0; long fightCohN = 0, fightCohNear20 = 0;   // member-to-leader distance while the leader is engaged (diagnostics)

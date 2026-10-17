@@ -4761,7 +4761,8 @@ void Application::runNavQualityTest() {
     if (!world_.launchMatch(L)) { LOG_INFO("NAVQ launch failed"); return; }
     game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier;
     world_.match().selectCharacter(world_.localMatchPlayer(), cs);
-    struct Acc { double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, fidget = 0, follow = 0; core::Vec3 last{}, sample{}; bool have = false;
+    struct Acc { double hoverT = 0, tipT = 0, tipRun = 0, tipMax = 0; int tipEp = 0; bool tipped = false;   // NAVQ TIP
+                 double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, fidget = 0, follow = 0; core::Vec3 last{}, sample{}; bool have = false;
                  float sampleT = 0, stillT = 0; core::Vec3 stillAt{}; core::Vec3 prevDir{}; bool havePrev = false; };
     std::map<int, Acc> acc;
     platform::InputFrame idle;
@@ -4777,6 +4778,15 @@ void Application::runNavQualityTest() {
             const game::BotBrain* b = world_.botBrain(o->matchPlayer());
             const core::Vec3 p = pc.position();
             a.aliveT += dt;
+            {   // NAVQ TIP: a hover vehicle (not Driving, not a jet) past the 30 deg IsUnstable gate
+                const bool hover = pc.moveForm() == game::Form::Vehicle && !pc.vehicleState().driving && pc.vehicleParams().form != game::VehicleFormType::Jet;
+                const float lim = 30.0f * 0.0174533f;
+                const bool tip = hover && (std::fabs(pc.vehicleState().pitch) > lim || std::fabs(pc.vehicleState().roll) > lim);
+                if (hover) a.hoverT += dt;
+                if (tip) { a.tipT += dt; a.tipRun += dt; a.tipMax = std::max(a.tipMax, a.tipRun); if (!a.tipped) ++a.tipEp; }
+                else a.tipRun = 0.0;
+                a.tipped = tip;
+            }
             const bool travel = b && !pc.isTransforming() && b->target < 0 && b->wp < b->path.size() && !world_.botHoldingStill(o->matchPlayer());
             static const int traceP = std::getenv("WFC_NAVQTRACE") ? std::atoi(std::getenv("WFC_NAVQTRACE")) : -1;   // one bot's state every 0.5 s
             if (b && o->matchPlayer() == traceP && i % 30 == 0) {
@@ -4847,6 +4857,13 @@ void Application::runNavQualityTest() {
     if (farR[0] > 0)
         LOG_INFO("NAVQ squad far (> 25 m, settled): %ld samples - leader moving %.0f%%, member pathless %.0f%%, vehicle form %.0f%%, leader fighting %.0f%%",
                  farR[0], 100.0 * farR[1] / farR[0], 100.0 * farR[2] / farR[0], 100.0 * farR[3] / farR[0], 100.0 * farR[4] / farR[0]);
+    {
+        double hT = 0, tT = 0, tMax = 0; int ep = 0;
+        for (const auto& kv : acc) { hT += kv.second.hoverT; tT += kv.second.tipT; ep += kv.second.tipEp; tMax = std::max(tMax, kv.second.tipMax); }
+        LOG_INFO("NAVQ TIP map %s ai %s: hover bot-min %.2f, tipped %.2f%% of hover time, episodes %d (%.2f / hover bot-min), longest %.2f s",
+                 world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", hT / 60.0, 100.0 * tT / std::max(1e-6, hT), ep,
+                 ep / std::max(1e-6, hT / 60.0), tMax);
+    }
     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
              "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m), in-fight mean %.1f m (%.0f%% within 20 m)",
              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),

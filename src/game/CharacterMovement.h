@@ -27,6 +27,7 @@ struct MoveIntent {
     // 2 + translation toward aiTarget after 1 s tipped. aiTipRel: "tipped" relative to the spring contact normal [PROV].
     int aiTip = -1;
     bool aiTipRel = false;
+    bool aiFaithful = false;   // the original AI hover path (Classic); false keeps the player-path righting (Smart, Integration (b))
     bool hasAiTarget = false;  // bot: aiTarget = its next path waypoint (on the nav mesh) - the AI path's MoveToTargetLocation target
     core::Vec3 aiTarget{0, 0, 0};
 };

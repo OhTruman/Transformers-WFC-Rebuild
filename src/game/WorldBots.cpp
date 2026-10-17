@@ -1906,7 +1906,8 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                             else squadGoal(BotGoalKind::Roam, L, 8.0f, -1);   // no firing spot: hold close to the leader
                             return;
                         }
-                    } else if (hdist(L, pos) <= smartTune().squadRegroupM) {
+                    } else if (hdist(L, pos) <= smartTune().squadRegroupM + (now - s.wedgeAt < 1.5f ? 5.0f : 0.0f)) {   // hysteresis (fix B)
+                        s.wedgeAt = now;
                         // Wedge behind the leader along its move direction (else its facing): back squadSlotBackM, to the side squadSlotSideM
                         // (slot 0 left, 1 right, 2+ trailing at twice the depth).
                         core::Vec3 hd{lp->velocity().x, 0.0f, lp->velocity().z};
@@ -1919,7 +1920,16 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                         const float back = smartTune().squadSlotBackM * (slot >= 2 ? 1.7f : 1.0f);
                         const float sideOff = slot == 0 ? -smartTune().squadSlotSideM : slot == 1 ? smartTune().squadSlotSideM : 0.0f;
                         const core::Vec3 q = L - hd * back + perp * sideOff;
-                        core::Vec3 slotP = usableSlot(q) ? q : L;
+                        // Fix A: an unwalkable slot tries the mirror side, half depth, straight behind, then the last usable slot, before the leader.
+                        core::Vec3 slotP = q; bool slotOk = usableSlot(q);
+                        if (!slotOk)
+                            for (const core::Vec3& alt : {L - hd * back - perp * sideOff, L - hd * (0.5f * back) + perp * (0.5f * sideOff),
+                                                         L - hd * (0.5f * back) - perp * (0.5f * sideOff), L - hd * back})
+                                if (usableSlot(alt)) { slotP = alt; slotOk = true; break; }
+                        if (!slotOk && s.haveLastSlot && hdist(s.lastSlot, L) < smartTune().squadRegroupM && botNav_.findCell(s.lastSlot, 0.0f) >= 0) {
+                            slotP = s.lastSlot; slotOk = true;
+                        }
+                        if (slotOk) { s.lastSlot = slotP; s.haveLastSlot = true; } else slotP = L;
                         if (smartTune().squadTrail > 0.0f) {   // follow the leader's walked trail: 5 m back + 4 m per slot along it
                             const std::vector<core::Vec3>& tr = smart_[(size_t)leader].trail;
                             const float want = 5.0f + 4.0f * (float)slot;
@@ -1941,7 +1951,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                             }
                         }
                         s.formWedge = true; s.formLeader = leader; s.formOffset = slotP - L;
-                        squadGoal(BotGoalKind::Roam, slotP, 2.5f, -1);
+                        squadGoal(BotGoalKind::Roam, slotP, slotOk ? 2.5f : 5.0f, -1);   // at the leader: a wider radius (no walking into it)
                         return;
                     }
                 }
@@ -1951,7 +1961,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
                     squadGoal(BotGoalKind::Attack, tp, 4.0f, ltgt);
                     return;
                 }
-                if (hdist(lp->position(), pos) > smartTune().squadRegroupM) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
+                if (hdist(lp->position(), pos) > smartTune().squadRegroupM + (now - s.wedgeAt < 1.5f ? 5.0f : 0.0f)) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
                     s.regroupFar = hdist(lp->position(), pos) > smartTune().squadVehicleRegroupM;
                     // Where the leader is going (a Roam trip), not where it is: chasing its position at the same speed kept a constant
                     // gap, and a chase under the 45 m vehicle-travel range walked while the leader drove to its far goal
@@ -2483,8 +2493,14 @@ void World::tickBots(float dt) {
             // gate [PROV]; Classic stays on the player path. WFC_BOTTIP=<-1|0|1|2> (+ WFC_TIPREL=0/1) overrides for every bot (measurement).
             static const char* bt = std::getenv("WFC_BOTTIP");
             static const char* tr = std::getenv("WFC_TIPREL");
+            // Every bot (Smart and Classic: the original AI path; Integration 2026-10-17) rights itself with the absolute IsUnstable gate
+            // [CONF RE hover 3]; WFC_TIPREL=1 opts into the 2026-10-14 contact-relative variant (measurement only).
+            // Classic: the original AI path (absolute gate, aiFaithful). Smart: the steadier righting, contact-relative gate unless WFC_TIPREL=0
+            // (Integration (b): a deliberate Smart improvement).
+            const bool smartBot = botIsSmart(b.player);
+            in.aiFaithful = !smartBot;
             if (bt) { in.aiTip = std::atoi(bt); in.aiTipRel = tr && std::atoi(tr) != 0; }
-            else if (botIsSmart(b.player)) { in.aiTip = 0; in.aiTipRel = !tr || std::atoi(tr) != 0; }
+            else { in.aiTip = 0; in.aiTipRel = smartBot ? (!tr || std::atoi(tr) != 0) : (tr && std::atoi(tr) != 0); }
             if (b.wp < b.path.size()) { in.hasAiTarget = true; in.aiTarget = b.path[b.wp].pos; }   // the AI path's target (on the mesh)
         }
         o->setIntent(in);

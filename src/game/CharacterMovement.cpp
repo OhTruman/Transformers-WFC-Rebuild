@@ -413,7 +413,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             float F = ms * ((vpred - vel) / dt - gs);
             if (!hit) continue;
             if (core::dot(n, B.z) < 0.0f) n = n * -1.0f;
-            float Fa = std::max(0.0f, core::dot(B.z, n) * F);   // ApplyForce(up * FMax(0, Dot(up,N)*Force), mount)
+            // ApplyForce(up * FMax(0, Dot(up,N)*Force), mount); TnHoverTankSimulation: FMax(0, Force), no normal factor [CONF RE hover 2.2]
+            float Fa = tank ? std::max(0.0f, F) : std::max(0.0f, core::dot(B.z, n) * F);
             accel = accel + B.z * (Fa / VP.mass);
             angAx += ry * Fa / VP.inertiaX;                   // body torque r x F (F along body z)
             angAy += -rx * Fa / VP.inertiaY;
@@ -504,7 +505,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         if (!tank) accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
 
         // ---- UpdateRoll: ApplyLocalAngularAcceleration(RightLeftInput - LocalAngularVelocity.Z, 0, 0) ----
-        angAx += core::clampf(in.moveRight, -1.0f, 1.0f) - vs.angVel.z;
+        if (tipMode < 0 || !in.aiFaithful) angAx += core::clampf(in.moveRight, -1.0f, 1.0f) - vs.angVel.z;   // player path (Smart keeps it); not in the AI path
 
         // ---- UpdateTurn: yaw matches the view yaw each tick; pitch/roll are corrected only when there is
         // no contact or the body is upside down (ShouldUpright), by 5% of the error per tick. ----
@@ -524,9 +525,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // k = 1 - 0.95^(dt x 30) (0.0253 at 60 Hz).
         const float k30 = 1.0f - std::pow(0.95f, dt * 30.0f);
         if (tank) {
-            if (!(!unstable && vs.onTheGround)) { vs.angVel.x = k30 * vs.roll / dt; vs.angVel.y = k30 * vs.pitch / dt; }
+            // (player path only: an AI tank rights itself through RotateToTargetOrientation below [CONF RE hover 2.4])
+            if ((tipMode < 0 || !in.aiFaithful) && !(!unstable && vs.onTheGround)) { vs.angVel.x = k30 * vs.roll / dt; vs.angVel.y = k30 * vs.pitch / dt; }
         } else {
-            if (contacts == 0 || B.z.y < 0.01f) {          // ShouldUpright
+            if ((tipMode < 0 || !in.aiFaithful) && (contacts == 0 || B.z.y < 0.01f)) {   // ShouldUpright (player path; Smart keeps it)
                 vs.angVel.x = k30 * vs.roll / dt;
                 vs.angVel.y = k30 * vs.pitch / dt;
             }
@@ -662,6 +664,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // Rigid-body integration (semi-implicit Euler).
     vs.angVel.x += angAx * dt;
     vs.angVel.y += angAy * dt;
+    if (tipMode >= 0 && in.aiFaithful && !vs.driving) {   // the AI path: RB angular damping 0.1 (the player path sets 0) [CONF RE hover 2.4]
+        const float kd = 1.0f / (1.0f + 0.1f * dt);
+        vs.angVel.x *= kd; vs.angVel.y *= kd;
+    }
     vs.roll -= vs.angVel.x * dt;                       // + angular velocity about x lifts the right side
     vs.pitch -= vs.angVel.y * dt;                      // + angular velocity about y drops the nose
     if (vs.rollRemain > 0.0f && vs.driving) vs.roll = std::remainder(vs.roll, 6.2831853f);   // barrel roll: full turn
