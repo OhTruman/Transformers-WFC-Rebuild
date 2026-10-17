@@ -3,7 +3,16 @@
 ## Current state (update at every stable point)
 
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
-  - **Order and estimates sent to Integration:**
+  - **RE-ORDERED 2026-10-17 (the user, via Integration):** "I just want the game to look beautiful. After it looks like a brand new
+    game only then while we optimize for more FPS at no extra cost to the Fidelity."
+    - **New order:**
+      1. Death-body patch 2 (scorch decal, skeletal gibs, authored Death camera, full momentum picker) + the Defrag latch removal;
+      2. ride height + squad follow reversals (one shared Classic re-baseline);
+      3. the perf levers (instanced gibs, hull on the GPU path, merge after rest, taking the skeletal gibs in);
+      4. FaceFX.
+    - **Every perf lever must be visually lossless** (a side-by-side eye check, zero difference) or it doesn't merge.
+    - **No true dependency of the gibs on the merge path:** skeletal gibs ship drawn per piece, and lever 3c takes them in later.
+  - **Original order and estimates sent to Integration** (estimates still valid):
 
     | # | Item | Estimate |
     |---|---|---|
