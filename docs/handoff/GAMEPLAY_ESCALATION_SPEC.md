@@ -73,9 +73,25 @@ class / PowerReward [RE §2, §5a]. Each entry needs a body + weapon + AI templa
 | Soldier Tank (wave-15 boss, Boss zones) | Tank chassis exist; the SV boss class to confirm | RE |
 | HoloBrute (Remnant) | Sentinel_Hologram_SpawnBrutes strings present | RE / AssetTools |
 
-AI: per-enemy behaviour comes from the campaign AICD templates, which RE has not covered yet [RE §6]. Until then (PROV): the Classic bot
-brain with the entry's weapon, `SeeEnemy` on spawn (every human known), no objective layer, Smart off. The horde never respawns; a dead
-enemy frees its cost.
+AI templates (RE §7, c0640fb: each TnAiCharacterDefinition = GOAP sets, chassis health / speed, weapons, pawn class):
+
+| Enemy | Health | Notes |
+|---|---|---|
+| Spider | 20 | 2000 UU/s |
+| Soldier MG / Rocket / Shotgun (SoldierCar) | 150 | AR / Burst / HeavyPistol, RocketLauncher, EmpShotgun; vehicle-form weapons too |
+| CQC | 90 | |
+| Jet | 250 | TnAiJetSoldierPawnContent |
+| Titan | 1250 | GatlingGun |
+| Brute | 100000, HeavyDamageThreshold 300 | HalberdAxe (Autobot Brute: WarHammer); killed through its weak point (RE H) |
+| Boss Tank | 6000 | speed 720, TnTankAiPawn, Tank_AiActionSet |
+| HoloBrute | | opacity 0.9, CeremonialStaffHolo |
+
+AI behaviour: the GOAP sets are not ported. Until they are (PROV): the Classic bot brain with the entry's weapon and health, `SeeEnemy`
+on spawn (every human known), no objective layer, Smart off. The horde never respawns; a dead enemy frees its cost.
+
+Loot (RE §7): kills drop TnAbilityResourcePickup (+3 ability resource each): Soldier 4, Brute / Titan 7, Tank 12 + a 50 % rare
+GatlingGun or HeavyRocketTurret; +1 per kill, +5 headshot, +1 melee, +1 explosion; Spider / Jet / HoloBrute drop nothing. Power comes
+only from PowerReward.
 
 ## 5. Generators, doors, zones
 
@@ -97,9 +113,9 @@ enemy frees its cost.
 - Spawn: Assault Rifle only (SurvivalData values), class abilities as in versus (H: ApplySpecialtyBuffs is off in survival games,
   ChassisDef.h note).
 - Death: no respawn timer; respawn at the wave end at a team start (RE: every TnTeamPlayerStart is attack/defend).
-- Downed / revive: RE gap (stock co-op timings, revive interaction, bleed-out). Design hook: a `downed` pawn state (no movement /
-  fire, revivable by a teammate holding Interact for N s, bleeds out into death after M s) — values PROV until RE delivers them.
-  Loss counts only dead humans.
+- Downed / revive (RE §7): DownedHealth 540 draining 18 / s (30 s to bleed out, faster under fire), 3 s downed invulnerability; a
+  teammate revives for the length of the Revive_Heal (or _VEH) animation (our anim data); the revived player gets 115 HP and 2
+  post-revive difficulty debuffs; the wave end revives everyone. Loss counts only dead humans.
 - Power: per seat, clamped 0..9999, reset at match start; shown on the HUD.
 
 ## 7. Online (after phase 1)
@@ -128,7 +144,7 @@ options).
 
 ## 10. Open questions
 
-- RE: the campaign AI templates per enemy (AICD), the downed / revive values, the loot table contents, the SV soldier / Spider / Titan /
+- RE (delivered 2026-10-17, §7: AI templates, downed / revive, loot). Still open: the GOAP behaviour port, the SV soldier / Spider / Titan /
   boss classes and meshes, the first-round "transform an object variable" target in Setup.
 - AssetTools: per-map volume / nav-cell geometry for the generator effects; a closed-doors bot_nav; SurvivalData weapon rows.
 - User: Escalation with bots filling empty co-op seats (not in the original: 1–4 humans only) — default no, original behaviour.
