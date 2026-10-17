@@ -3181,3 +3181,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   bot; launch-identity SESSIONTEST 35 / 35). Systems' rerun: first split 602 -> 1299 (700 InProgress ticks identical; live ==
   replay); remaining: a 0.003 hp perspective-dependent damage difference at 1299 (+ Gameplay's own ~1772 bot RNG / target split
   with the player bot) -> Gameplay now. Systems drops its extra selectCharacter (one-line follow-up).
+2026-10-17 13:46 MERGED c069952c (the net launch drops its extra local selectCharacter). Head = c069952c: everything of online phase 1 except
+  Gameplay's two late splits (1299 hp perspective, ~1772 player-bot RNG / target).
