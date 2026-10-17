@@ -37,6 +37,11 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 95c199f2 | "Campaign PROVISIONALs part 2" - **also carries Rendering's Set C particle-module code** (WfcMapFx.cpp, WfcPipeline.{h,cpp}, build_map_fx.py; rt2 bd63223e; staging slip, Integration) | renderer: particles | **not frame-identical from here**: Off / Faithful differ on particles by design; expected-change = Rendering's Streets pair (work/wobble/pa2_crops.png); later identity bases need 95c199f2 | Rendering's particle sheets | the map_fx_runtime.json regen lands in Rebuild/work/render separately |
 | d96b21a0 | anim-notify hook (stub) | - | identity-neutral: seed 7 48 / 48, SIMHASH identical (Integration) | not needed | no run |
 | 5fc2e552 | hit physmat lookup | - | identity-neutral: seed 7 48 / 48, SIMHASH identical (Integration) | not needed | no run |
+| 93d67979 | Gameplay physmat node_overrides | - | identity-neutral, SIMHASH identical (Integration) | not needed | no run |
+| c73fd924 | Rendering Set D height-fog layers (code) | renderer: fog | byte-identical until lighting.json 'fogs' data lands in Rebuild/work/render (after Experimental's (B) pass); then Gorge / Berth / Rust / Seed / Complex change by the fog sheets, the rest byte-identical (Integration) | Rendering's fog sheets | data-switched: the identity base for later renderer merges must say whether it has the fogs data |
+| 3d12103d | Frontend objectives whitespace | no-op | identity-neutral | not needed | no run |
+| a745320b | iconic claims across all players (no Escalation row) | Iconic Mode only (default Off) | versus default unchanged | not needed | no run |
+| 686f8314 | docs | - | - | - | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
