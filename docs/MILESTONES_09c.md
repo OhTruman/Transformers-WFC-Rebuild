@@ -3214,3 +3214,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   no visible change (EmpShotgun's id already matched; drive had no kick either way); the camera follow-up stands on the data-side
   check. 1772 split fixed (player bot's direct weapon write); the 1299 + 1772 patch comes together. Card order: Systems (running)
   -> Gameplay 4 -> Frontend 5 -> Experimental 10.
+2026-10-17 14:02 MERGED c1b0afb4 Gameplay's 1772 fix (player-bot reload as a press online; launch identity 35 / 35 over 2400 steps; offline identical).
+  Remaining for NET.identity: the 1299 perspective damage split (Gameplay) + the 'typical' replay-vs-recorder mismatch (Systems).
