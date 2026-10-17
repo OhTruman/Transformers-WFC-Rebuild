@@ -3387,3 +3387,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   human seat) = item 1 of the next head; Systems posts the split + estimates by 19:00.
 2026-10-17 15:31 Campaign Kismet decode COMPLETE (176 / 176; only ScalarValueRamp's ease shape left as H). Campaign RE inputs now: data,
   Kismet, natives, Escalation; remaining RE gaps = 38 materials + the render-data pipeline items.
+2026-10-17 15:32 Playable online match split: the Frontend's ISession contract (Session.h) is complete and consumed; UdpSession implements it;
+  policy: the Application creates the UdpSession at boot in the playable build (listen after host()); Frontend adds a two-runtime
+  loopback test; lens-flare row done on the Frontend branch (0f913411) pending Rendering's setter. Systems' estimates by 19:00.
