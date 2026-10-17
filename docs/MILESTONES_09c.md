@@ -2641,3 +2641,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   gravity scalar until the RE lane sources it (inst[+0x94] setter + the maps' authored world gravity). Gameplay queue set: camera
   crops -> weapon + melee batch (re-baseline) -> Systems' anim-notify + physmat hooks -> session hooks (SESSIONTEST) -> perf
   levers -> transforming actors + dying-vehicle collision -> FaceFX -> dithering. Base check running (verify base vs cfca1717).
+2026-10-17 09:13 BASE CHECK PASS (Experimental P7_REGRESS_BASE.md 006478f1): base af4d0731 + cfca1717 src/game plays the same match as cfca1717
+  (SIMHASH identical on 10,200 steps); negative control af4d0731 vs cfca1717 diverges at step 603. GATE_BASE =
+  work/ab/fast_af4d073_hover; later sim changes join as items. (A) DATA SWITCH IN at 09:12 (10 / 10 after-hashes verified) with
+  9c17be40 Gameplay's follow-up (scorch default on, textured gib materials, DeathFx PlayType). RE lane particle audit COMPLETE
+  (9cc42c1e): SecondsBeforeInactive is a THROTTLE (10 Hz after 0.3 s unrendered, 1 Hz after SBI, catch-up in one step), so
+  the merged FxInactive freeze rule is wrong: Systems reworks it to the throttle ahead of the body-notify dispatch, same three
+  rows; beam / trail formulas exist in pass 5 (Rendering); gravity scalar sourced: DefaultGravityZ -2940 (Xe-TransGame.ini).
+  Card: Frontend 10-min gap running -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) eye pass. RE lane next: time-driven
+  materials + dynamic light behaviour audit.
