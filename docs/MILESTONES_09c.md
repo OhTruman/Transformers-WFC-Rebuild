@@ -2257,3 +2257,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   memory peak 6,071 MB (> 6,000 rule; checkpoints 5,576-5,868; route run 5,594 normal, ends clean) = X3 adds ~200-
   500 MB system memory at the map switch -> Rendering checks froxel / history / staging duplication + release at
   map change for round 3. PASS 59 / KNOWN 1 / HARNESS 0 otherwise. X3 cost hold 21:12-~21:40.
+  2026-10-16 21:41 X3 COST (cand10, Realistic + HD 2, 1440p 31v32, p50 / p90 ms; X3 on vs WFC_X3=0): Streets 9.85 /
+  10.96 vs 9.30 / 10.39 (+0.55); Gorge 10.02 / 12.18 vs 9.52 / 11.69 (+0.50); Debris 7.99 / 9.24 vs 7.36 / 8.64
+  (+0.63); Rust 8.66 / 10.84 vs 8.26 / 10.41 (+0.40); Molten 9.85 / 10.97 vs 9.36 / 10.45 (+0.49): cheap, every
+  map >= ~99 fps p50. Hold cleared 21:40; mapswitch memory A/B (base8 vs cand10) running RT off; Rendering has the
+  card for round-3 captures.
