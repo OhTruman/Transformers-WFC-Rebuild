@@ -9115,10 +9115,12 @@ void Pipeline::toneAdapt() {
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
     toneIdx_ = next; toneReset_ = false;
     static const bool diag = std::getenv("WFC_TONEDIAG") != nullptr;
-    if (diag && frameNo_ % 300 == 0) {
+    if (diag) {                                       // (every 300 frames, and every frame with a flash F > 0.05)
         float v = 0.0f;
-        glReadPixels(0, 0, 1, 1, kRed, GL_FLOAT, &v);
-        LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f)", frameNo_, std::exp(v), v);
+        float rg[2] = {0.0f, 0.0f};
+        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, rg); v = rg[0];
+        if (frameNo_ % 300 == 0 || rg[1] > 0.05f)
+            LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f), flash share F %.3f", frameNo_, std::exp(v), v, rg[1]);
     }
 }
 
