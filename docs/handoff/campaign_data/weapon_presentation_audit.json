@@ -3,7 +3,9 @@
   "id": "PlasmaCannon",
   "class": "TnWeaponPlasmaCannon",
   "mesh": "WEP_PlasmaCannon_p.PlasmaCannon_WEPMESH",
-  "data": "WEP_PlasmaCannon_p.PlasmaCannon_SP_WEPDATA",
+  "data": "WEP_PlasmaCannon_p.PlasmaCannon_WEPDATA",
+  "sp_data": "WEP_PlasmaCannon_p.PlasmaCannon_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -187,7 +189,9 @@
   "id": "SniperRifle",
   "class": "TnWeaponSniperRifle",
   "mesh": "WEP_SniperRifle_p.SniperRifle_WEPMESH",
-  "data": "WEP_SniperRifle_p.SniperRifle_WEPDATA",
+  "data": "WEP_SniperRifle_p.SniperRifle_MP_WEPDATA",
+  "sp_data": "WEP_SniperRifle_p.SniperRifle_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -361,6 +365,8 @@
   "class": "TnWeaponAssaultRifle",
   "mesh": "WEP_AssaultRifle_p.AssaultRifle_WEPMESH",
   "data": "WEP_AssaultRifle_p.AssaultRifle_WEPDATA",
+  "sp_data": "WEP_AssaultRifle_p.AssaultRifle_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -529,7 +535,9 @@
   "id": "IonBlaster",
   "class": "TnWeaponIonBlaster",
   "mesh": "WEP_IonBlaster_p.IonBlaster_WEPMESH",
-  "data": "WEP_IonBlaster_p.IonBlaster_SP_WEPDATA",
+  "data": "WEP_IonBlaster_p.IonBlaster_WEPDATA",
+  "sp_data": "WEP_IonBlaster_p.IonBlaster_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -705,7 +713,38 @@
   "id": "HeavyPistol",
   "class": "TnWeaponHeavyPistol",
   "mesh": "WEP_HeavyPistol_p.HeavyPistol_WEPMESH",
-  "data": "WEP_HeavyPistol_p.HeavyPistol_WEPDATA",
+  "data": "WEP_HeavyPistol_p.HeavyPistol_MP_WEPDATA",
+  "sp_data": "WEP_HeavyPistol_p.HeavyPistol_WEPDATA",
+  "sp_differs": {
+   "RecoilCameraParams": [
+    {
+     "FovAdjustment": -1.0,
+     "PitchAdjustmentDeg": 2.0,
+     "RecoilTime": 0.699999988079071,
+     "RecoilDelay": 0.05000000074505806
+    },
+    {
+     "FovAdjustment": -1.0,
+     "PitchAdjustmentDeg": 1.5,
+     "RecoilTime": 0.699999988079071,
+     "RecoilDelay": 0.05000000074505806
+    }
+   ],
+   "FireIntervalModifier": [
+    {
+     "IntervalRange": {
+      "Min": 0.5,
+      "Max": 0.5
+     }
+    },
+    {
+     "IntervalRange": {
+      "Min": 0.6000000238418579,
+      "Max": 0.6000000238418579
+     }
+    }
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -808,7 +847,7 @@
   },
   "camera_recoil": {
    "FovAdjustment": -1.0,
-   "PitchAdjustmentDeg": 2.0,
+   "PitchAdjustmentDeg": 1.5,
    "RecoilTime": 0.699999988079071,
    "RecoilDelay": 0.05000000074505806
   },
@@ -882,6 +921,8 @@
   "class": "TnWeaponBurstRifle",
   "mesh": "WEP_BurstRifle_p.BurstRifle_WEPMESH",
   "data": "WEP_BurstRifle_p.BurstRifle_WEPDATA",
+  "sp_data": "WEP_BurstRifle_p.BurstRifle_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -1047,6 +1088,8 @@
   "class": "TnWeaponHeavyMG",
   "mesh": "WEP_HeavyMG_p.HeavyMG_WEPMESH",
   "data": "WEP_HeavyMG_p.HeavyMG_WEPDATA",
+  "sp_data": "WEP_HeavyMG_p.HeavyMG_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -1241,7 +1284,9 @@
   "id": "GrenadeLauncher",
   "class": "TnWeaponGrenadeLauncher",
   "mesh": "WEP_GrenadeLauncher_p.GrenadeLauncher_WEPMESH",
-  "data": "WEP_GrenadeLauncher_p.GrenadeLauncher_SP_WEPDATA",
+  "data": "WEP_GrenadeLauncher_p.GrenadeLauncher_WEPDATA",
+  "sp_data": "WEP_GrenadeLauncher_p.GrenadeLauncher_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -1387,7 +1432,40 @@
   "id": "Bazooka",
   "class": "TnWeaponBazooka",
   "mesh": "WEP_Bazooka_p.Bazooka_WEPMESH",
-  "data": "WEP_Bazooka_p.Bazooka_SP_WEPDATA",
+  "data": "WEP_Bazooka_p.Bazooka_WEPDATA",
+  "sp_data": "WEP_Bazooka_p.Bazooka_SP_WEPDATA",
+  "sp_differs": {
+   "RecoilCameraParams": [
+    {
+     "FovAdjustment": -2.0,
+     "PitchAdjustmentDeg": 0.75,
+     "RecoilTime": 0.6000000238418579,
+     "RecoilDelay": 0.25
+    },
+    {
+     "FovAdjustment": -2.0,
+     "PitchAdjustmentDeg": 1.5,
+     "RecoilTime": 0.6000000238418579,
+     "RecoilDelay": 0.25
+    }
+   ],
+   "FireIntervalModifier": [
+    {
+     "IntervalRange": {
+      "Min": 0.800000011920929,
+      "Max": 0.800000011920929
+     },
+     "RampTime": 0.0
+    },
+    {
+     "IntervalRange": {
+      "Min": 0.75,
+      "Max": 0.75
+     },
+     "RampTime": 0.0
+    }
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -1474,7 +1552,7 @@
   },
   "camera_recoil": {
    "FovAdjustment": -2.0,
-   "PitchAdjustmentDeg": 0.75,
+   "PitchAdjustmentDeg": 1.5,
    "RecoilTime": 0.6000000238418579,
    "RecoilDelay": 0.25
   },
@@ -1529,6 +1607,8 @@
   "class": "TnWeaponRepairRay",
   "mesh": "WEP_RepairBeam_p.RepairBeam_WEPMESH",
   "data": "WEP_RepairBeam_p.RepairBeam_WEPDATA",
+  "sp_data": "WEP_RepairBeam_p.RepairBeam_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [],
   "muzzle_sockets": [
@@ -1667,6 +1747,8 @@
   "class": "TnWeaponEmpShotgun",
   "mesh": "WEP_EMPShotgun_p.EMPShotgun_WEPMESH",
   "data": "WEP_EMPShotgun_p.EMPShotgun_WEPDATA",
+  "sp_data": "WEP_EMPShotgun_p.EMPShotgun_WEPDATA",
+  "sp_differs": {},
   "effects_type": "TnWeaponEffectsTypeExplosive",
   "muzzle_flashes": [
    [
@@ -1856,6 +1938,8 @@
   "class": "TnWeaponShotgun",
   "mesh": "WEP_Shotgun_p.Shotgun_WEPMESH",
   "data": "WEP_Shotgun_p.Shotgun_WEPDATA",
+  "sp_data": "WEP_Shotgun_p.Shotgun_WEPDATA",
+  "sp_differs": {},
   "effects_type": "TnWeaponEffectsTypeExplosive",
   "muzzle_flashes": [
    [
@@ -2049,7 +2133,24 @@
   "id": "HomingRocket",
   "class": "TnWeaponRocketLauncher",
   "mesh": "WEP_RocketLauncher_p.RocketLauncher_WEPMESH",
-  "data": "WEP_RocketLauncher_p.RocketLauncher_SP_WEPDATA",
+  "data": "WEP_RocketLauncher_p.RocketLauncher_WEPDATA",
+  "sp_data": "WEP_RocketLauncher_p.RocketLauncher_SP_WEPDATA",
+  "sp_differs": {
+   "FireIntervalModifier": [
+    {
+     "IntervalRange": {
+      "Min": 1.25,
+      "Max": 1.25
+     }
+    },
+    {
+     "IntervalRange": {
+      "Min": 1.2000000476837158,
+      "Max": 1.2000000476837158
+     }
+    }
+   ]
+  },
   "effects_type": "TnWeaponEffectsTypeExplosive",
   "muzzle_flashes": [
    [
@@ -2213,7 +2314,20 @@
   "id": "RocketVehicle",
   "class": "TnWeaponRocketVehicle",
   "mesh": "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH",
-  "data": "WEP_RocketVh_p.Rocket_Vehicle_SP_WEPDATA",
+  "data": "WEP_RocketVh_p.Rocket_Vehicle_WEPDATA",
+  "sp_data": "WEP_RocketVh_p.Rocket_Vehicle_SP_WEPDATA",
+  "sp_differs": {
+   "RecoilCameraParams": [
+    {
+     "RecoilTime": 0.30000001192092896,
+     "RecoilDelay": 0.05000000074505806
+    },
+    {
+     "RecoilTime": 0.3499999940395355,
+     "RecoilDelay": 0.05000000074505806
+    }
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2257,7 +2371,7 @@
   "spine_recoil": null,
   "hand_recoil": null,
   "camera_recoil": {
-   "RecoilTime": 0.30000001192092896,
+   "RecoilTime": 0.3499999940395355,
    "RecoilDelay": 0.05000000074505806
   },
   "camera_shake": {
@@ -2303,7 +2417,9 @@
   "id": "AssaultRifleVehicle",
   "class": "TnWeaponAssaultRifleVehicle",
   "mesh": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH",
-  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_SP_WEPDATA",
+  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPDATA",
+  "sp_data": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2408,7 +2524,9 @@
   "id": "TankCannon",
   "class": "TnWeaponTankCannon",
   "mesh": "WEP_TankCannon_p.TankCannon_Vehicle_WEPMESH",
-  "data": "WEP_TankCannon_p.TankCannon_SP_WEPDATA",
+  "data": "WEP_TankCannon_p.TankCannon_WEPDATA",
+  "sp_data": "WEP_TankCannon_p.TankCannon_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2471,7 +2589,7 @@
   "owner_anims": {
    "FireAmmoAnimations": [
     {
-     "AnimationName": "TankShooting_Reload",
+     "AnimationName": "None",
      "BlendInTime": 0.10000000149011612,
      "BlendOutTime": 0.10000000149011612,
      "AdditiveAnimation": false,
@@ -2516,7 +2634,23 @@
   "id": "HomingRocketVehicle",
   "class": "TnWeaponHomingRocketVehicle",
   "mesh": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPMESH",
-  "data": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_SP_WEPDATA",
+  "data": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPDATA",
+  "sp_data": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_SP_WEPDATA",
+  "sp_differs": {
+   "WeaponReloadAnimTime": [
+    2.0,
+    2.5
+   ],
+   "FireIntervalModifier": [
+    {
+     "IntervalRange": {
+      "Min": 1.25,
+      "Max": 1.25
+     }
+    },
+    null
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2565,7 +2699,7 @@
    "HeatPerShot": null,
    "HeatCooldownTime": null
   },
-  "reload_time": 2.0,
+  "reload_time": 2.5,
   "owner_anims": null,
   "grep": {
    "muzzle": {
@@ -2598,7 +2732,9 @@
   "id": "PlaneAssaultRifle",
   "class": "TnWeaponAssaultRiflePlane",
   "mesh": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH",
-  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Plane_SP_WEPDATA",
+  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Plane_WEPDATA",
+  "sp_data": "WEP_AssaultRifleVH_p.AssaultRifle_Plane_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2703,7 +2839,14 @@
   "id": "PlaneMachineGun",
   "class": "TnWeaponPlaneMachineGun",
   "mesh": "WEP_PlaneMachineGun_p.PlaneMachineGun_WEPMESH",
-  "data": "WEP_PlaneMachineGun_p.PlaneMachineGun_SP_WEPDATA",
+  "data": "WEP_PlaneMachineGun_p.PlaneMachineGun_WEPDATA",
+  "sp_data": "WEP_PlaneMachineGun_p.PlaneMachineGun_SP_WEPDATA",
+  "sp_differs": {
+   "WeaponReloadAnimTime": [
+    2.5,
+    2.0
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2760,7 +2903,7 @@
    "HeatPerShot": null,
    "HeatCooldownTime": null
   },
-  "reload_time": 2.5,
+  "reload_time": 2.0,
   "owner_anims": null,
   "grep": {
    "muzzle": {
@@ -2812,7 +2955,24 @@
   "id": "PlaneRocket",
   "class": "TnWeaponRocketPlane",
   "mesh": "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH",
-  "data": "WEP_RocketVh_p.Rocket_Plane_SP_WEPDATA",
+  "data": "WEP_RocketVh_p.Rocket_Plane_WEPDATA",
+  "sp_data": "WEP_RocketVh_p.Rocket_Plane_SP_WEPDATA",
+  "sp_differs": {
+   "FireIntervalModifier": [
+    {
+     "IntervalRange": {
+      "Min": 0.15000000596046448,
+      "Max": 0.15000000596046448
+     }
+    },
+    {
+     "IntervalRange": {
+      "Min": 0.5,
+      "Max": 0.5
+     }
+    }
+   ]
+  },
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2902,7 +3062,9 @@
   "id": "FlakGrenades",
   "class": "TnWeaponFlakGrenades",
   "mesh": "WEP_Grenade_p.FlakGrenades_WEPMESH",
-  "data": "WEP_Grenade_p.FlakGrenades_SP_WEPDATA",
+  "data": "WEP_Grenade_p.FlakGrenades_WEPDATA",
+  "sp_data": "WEP_Grenade_p.FlakGrenades_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -2981,7 +3143,9 @@
   "id": "KamikazeMines",
   "class": "TnWeaponKamikazeMines",
   "mesh": "WEP_KamikazeMine_p.KamikazeMines_WEPMESH",
-  "data": "WEP_KamikazeMine_p.KamikazeMines_SP_WEPDATA",
+  "data": "WEP_KamikazeMine_p.KamikazeMines_WEPDATA",
+  "sp_data": "WEP_KamikazeMine_p.KamikazeMines_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3060,7 +3224,9 @@
   "id": "HealGrenades",
   "class": "TnWeaponHealGrenades",
   "mesh": "WEP_HealGrenades_p.HealGrenades_WEPMESH",
-  "data": "WEP_HealGrenades_p.HealGrenades_SP_WEPDATA",
+  "data": "WEP_HealGrenades_p.HealGrenades_WEPDATA",
+  "sp_data": "WEP_HealGrenades_p.HealGrenades_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3139,7 +3305,9 @@
   "id": "FlashBangs",
   "class": "TnWeaponFlashBangs",
   "mesh": "WEP_FlashBangs_p.FlashBangs_WEPMESH",
-  "data": "WEP_FlashBangs_p.FlashBangs_SP_WEPDATA",
+  "data": "WEP_FlashBangs_p.FlashBangs_WEPDATA",
+  "sp_data": "WEP_FlashBangs_p.FlashBangs_SP_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3219,6 +3387,8 @@
   "class": "TnWeaponShortSword",
   "mesh": "WEP_ShortSword_p.ShortSword_WEPMESH",
   "data": "WEP_ShortSword_p.ShortSword_WEPDATA",
+  "sp_data": "WEP_ShortSword_p.ShortSword_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3292,6 +3462,8 @@
   "class": "TnWeaponBeatDownClub",
   "mesh": "WEP_BeatDownClub_p.BeatDownClub_WEPMESH",
   "data": "WEP_BeatDownClub_p.BeatDownClub_WEPDATA",
+  "sp_data": "WEP_BeatDownClub_p.BeatDownClub_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3365,6 +3537,8 @@
   "class": "TnWeaponButterflyAxe",
   "mesh": "WEP_ButterflyAxe_p.ButterflyAxe_WEPMESH",
   "data": "WEP_ButterflyAxe_p.ButterflyAxe_WEPDATA",
+  "sp_data": "WEP_ButterflyAxe_p.ButterflyAxe_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3438,6 +3612,8 @@
   "class": "TnWeaponSpikedBat",
   "mesh": "WEP_SpikedBat_p.SpikedBat_WEPMESH",
   "data": "WEP_SpikedBat_p.SpikedBat_WEPDATA",
+  "sp_data": "WEP_SpikedBat_p.SpikedBat_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3511,6 +3687,8 @@
   "class": "TnWeaponSpikedMace",
   "mesh": "WEP_SpikedMace_p.SpikedMace_WEPMESH",
   "data": "WEP_SpikedMace_p.SpikedMace_WEPDATA",
+  "sp_data": "WEP_SpikedMace_p.SpikedMace_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3584,6 +3762,8 @@
   "class": "TnWeaponTortureSword",
   "mesh": "WEP_TortureSword_p.TortureSword_WEPMESH",
   "data": "WEP_TortureSword_p.TortureSword_WEPDATA",
+  "sp_data": "WEP_TortureSword_p.TortureSword_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3657,6 +3837,8 @@
   "class": "TnWeaponViciousAxe",
   "mesh": "WEP_ViciousAxe_p.ViciousAxe_WEPMESH",
   "data": "WEP_ViciousAxe_p.ViciousAxe_WEPDATA",
+  "sp_data": "WEP_ViciousAxe_p.ViciousAxe_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3730,6 +3912,8 @@
   "class": "TnWeaponMaul",
   "mesh": "WEP_Maul_p.Maul_WEPMESH",
   "data": "WEP_Maul_p.Maul_WEPDATA",
+  "sp_data": "WEP_Maul_p.Maul_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3803,6 +3987,8 @@
   "class": "TnWeaponAxe",
   "mesh": "WEP_Axe_p.Axe_WEPMESH",
   "data": "WEP_Axe_p.Axe_WEPDATA",
+  "sp_data": "WEP_Axe_p.Axe_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
@@ -3876,6 +4062,8 @@
   "class": "TnWeaponHammer",
   "mesh": "WEP_Hammer_p.Hammer_WEPMESH",
   "data": "WEP_Hammer_p.Hammer_WEPDATA",
+  "sp_data": "WEP_Hammer_p.Hammer_WEPDATA",
+  "sp_differs": {},
   "effects_type": null,
   "muzzle_flashes": [
    [
