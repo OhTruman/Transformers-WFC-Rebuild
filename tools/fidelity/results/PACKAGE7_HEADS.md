@@ -46,6 +46,10 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 2e9ad1bf | reverts ef34a4f2 (the modulate-distortion rule was wrong per the RE cache check) | renderer | net frame change zero across ef34a4f2 + 2e9ad1bf (Integration) | - | the pair cancels |
 | 7a59316a | docs | - | - | - | no run |
 | 4502b468 | Gameplay session hooks | - | identity-neutral; SESSIONTEST 16 / 16; offline matches unchanged (Integration) | not needed | no run |
+| 51b76b46 | voice UI (Mic Test row, PTT "Custom..." key capture) | frontend only | offline / bot matches byte-identical (Integration) | not needed | no run |
+| 07ad4246 | onlineIdleKick | online only | offline byte-identical | not needed | no run |
+| a4638f2d | session hooks glue (online slots -> RemoteSeat, slot swaps, RemoteIdle -> kick) | online only | offline byte-identical; SESSIONTEST 17 / 17 on the merged head (Integration) | not needed | no run |
+| (docs) | TRAIL2_TEMPLATES, DECOY_TRAP_ASSETS, MODULATE_DISTORTION_CACHE (resolved), REFERENCE_FRAMES | - | - | - | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
