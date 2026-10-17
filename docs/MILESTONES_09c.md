@@ -2262,3 +2262,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (+0.63); Rust 8.66 / 10.84 vs 8.26 / 10.41 (+0.40); Molten 9.85 / 10.97 vs 9.36 / 10.45 (+0.49): cheap, every
   map >= ~99 fps p50. Hold cleared 21:40; mapswitch memory A/B (base8 vs cand10) running RT off; Rendering has the
   card for round-3 captures.
+  2026-10-16 21:47 ASSETTOOLS BACK (the user answered its deletion prompt directly): diagnostic chain done 14:59 (8 / 10
+  chapters OK at 2 m tiles, every peak < 10 GB; A1 / A3 tiled m05 retry rerunning); push_full + full/in* deletion
+  (102 GB) running; feasibility doc dropped (Systems wrote it); next = the FaceFX RE continuation.
