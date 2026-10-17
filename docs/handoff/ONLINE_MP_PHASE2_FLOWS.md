@@ -146,8 +146,8 @@ PSN overlay. Ours opens when the leader asks for a code. Why: no overlay, no pre
 
 **Original vs ours (R8 answered: the original DISBANDED):** the original's leader loss ended the party - members became
 parties of one with no message, and members in the leader's game were sent to their party lobbies. Promotion (D12 default)
-is therefore a **PC adaptation**, as is its "is now the party leader" line. D12 is flagged back to Integration / the user
-with this answer; if it returns to the original, P5 becomes: `PartyClosed{leaderLeft}`, members become parties of one
+is therefore a **PC adaptation**, as is its "is now the party leader" line. Integration kept it (D12); if the user returns
+it to the original, P5 becomes: `PartyClosed{leaderLeft}`, members become parties of one
 silently, members in the leader's game go to their party lobby.
 
 ### 3.6 P6 - After the match
@@ -239,8 +239,9 @@ B2 browser join through a signalling code; B3 browser cannot host (text); B6 tab
 
 Decided by default 2026-10-17 by Integration (rebuild-07); the user can override (Integration lists them to the user).
 
-- **D12 decided (default), REOPENED by R8:** party leader loss PROMOTES the next member (the oldest join); the party survives.
-  RE (1.3): the original disbanded with no promotion, so promotion is a PC adaptation; sent back to Integration / the user.
+- **D12 decided (default), confirmed after R8 as a PC adaptation:** party leader loss PROMOTES the next member (the oldest
+  PC join); the party survives. RE (1.3): the original disbanded with no promotion. Integration keeps promotion (fewer
+  re-invites) as a labelled PC adaptation; it flips to the original only if the user says so (the P5 alternative is written).
 - **D13 decided (default):** invites always copy the code (this path works with no relay); when both sides are online
   through the relay, its per-fingerprint mailbox also delivers the invite (3.7).
 - **D14 decided (default):** browser signalling goes through the relay; no copy-paste offer / answer (3.9 B2).
