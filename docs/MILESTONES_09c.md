@@ -3177,3 +3177,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:43 MERGED 986320f1 WFC_NULLRENDER_AUDIO (audio device in a null-render boot, muted): the proximity-voice ROOM REVERB check passed
   headless (the listener's preset switched through 4 Streets rooms under the talker; routing and occlusion as designed). Systems'
   card slot = family re-run + physmat ForceField pair + reverb-switch check only.
+2026-10-17 13:45 MERGED e1fc0c6c Gameplay's net identity fixes (selection applied; online transform press only via the command; input-only player
+  bot; launch-identity SESSIONTEST 35 / 35). Systems' rerun: first split 602 -> 1299 (700 InProgress ticks identical; live ==
+  replay); remaining: a 0.003 hp perspective-dependent damage difference at 1299 (+ Gameplay's own ~1772 bot RNG / target split
+  with the player bot) -> Gameplay now. Systems drops its extra selectCharacter (one-line follow-up).
