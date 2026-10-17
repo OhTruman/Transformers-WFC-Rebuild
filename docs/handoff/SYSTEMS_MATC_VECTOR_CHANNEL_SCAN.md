@@ -37,3 +37,16 @@ UniformVector_N register is read with, via tools/render/xenos_dis.py). UE3 emits
 the pin-honouring translation (WFC_MATC_VECTOR_CHANNELS=1) emits, and what today's full-vector reading gets wrong (it
 multiplies by the rgb tint where the shader multiplies by the alpha). The spot check does not prove each of the 110
 individually; the per-map eye pass (step 3) is the gate for all of them.
+
+## (B) review finding (AssetTools, 2026-10-17): the two vending-screen MICs change their UV math - justified by the graph
+PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST and PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST
+(MICs of Health_Screen_MATINST -> master PROP_VendingMachine_p.Material.VendingMachine_Screen_MAT) change outside the
+alpha-intensity pattern. authored.db, the master's graph (MaterialExpressionTree_2411):
+- VectorParameter_15751 "UV_ScaleXY_OffsetXY", default (R 1.85, G 1.10, B 0.27, A -0.02) - one parameter carrying two vec2s;
+- AppendVector_13971 = (pin 1 R, pin 2 G) = the UV **scale** (1.85, 1.10) -> Multiply_8674 (x Constant_9596 -0.5) -> Subtract_7344;
+- AppendVector_13310 = (pin 3 B, pin 4 A) = the UV **offset** (0.27, -0.02) -> Add_11512 (Subtract_7344 + offset).
+The shipped translation (full-vector reading) used C.xy for both Appends, so the screen glyphs were offset by (1.85, 1.10)
+instead of (0.27, -0.02) (and matc counted 5 type violations: vec4 + vec4 into a vec2 slot); the candidate builds
+vec2(C.x, C.y) and vec2(C.z, C.w) exactly as the two AppendVectors' pins say (1 violation left, unrelated). This is the same
+root cause (the output pin), applied to an AppendVector instead of a lerp alpha - a fidelity correction, in the expected-change
+list for the vending machines' screens.
