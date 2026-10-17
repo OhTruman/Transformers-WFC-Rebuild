@@ -46,7 +46,9 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | Online session boundary | ISession / FakeSession (src/frontend/Session.h; no behaviour; GameFlow::setSession unset = offline) | Frontend | merged 3a19b47a |
 | Authored FX / sound wiring | every authored weapon / character / vehicle anim notify (tools/systems/gen_anim_notifies.py: 3,554 rows) through one dispatcher: shell / magazine / reload FX for all guns on every visible pawn (distance-gated), melee / ability / transform body trails and hover / jump FX (Gameplay hook World::onAnimNotifyWindow), physmat impact overrides (AssetTools triangle -> physmat in the collision export), R-only muzzles, projectile flight loops, the no-hit ability sounds; data-driven cues checked by a paced CUELOG run first | Systems (+ Gameplay hooks, AssetTools collision field) | in progress (data done) |
 | Vector-channel materials (B) | 110 materials honour their VectorParameter alpha as the shipped PS does (spot check PASS on 3); light shafts, force fields, plasma / lava, rockets, decals, vending, crystals | Systems | candidate ready; eye pass (Experimental) |
-| D3D12 presenter exit hang | 1 in 32 exits stuck in the kernel (known issue below; dump in Experimental work/leak/armB_d3d12present/run-32) | Rendering | open |
+| D3D12 presenter exit hang | 1 in 32 exits stuck in the kernel (dump in Experimental work/leak/armB_d3d12present/run-32) | Rendering | merged 76da5484 (separate GL -> D3D12 fence; 64 / 64 clean exits incl. frame generation, resize, map switch) + the X3 GPU timer line |
+| Online, phase 1 frontend | online group F: the phase-1 frontend flows complete (44b65357) | Frontend | merged |
+| Other merges | audit-3 HUD item (4953261b / a36b2ee1), objectives loader (5cb9886f), movies manifest (aa5a30ea), weapon-collision physmat export (0f3d9b89, AssetTools) | various | merged |
 | Death-body cost | one draw per settled body, TLAS / BLAS per body (package 6 item 1: +0.67..+1.94 ms p90 at 63 bots RT off, +0.17..+0.49 ms p50 RT on) | Gameplay + Rendering | open |
 
 ### Details (filled as items merge)
@@ -93,8 +95,8 @@ Carried from package 6 (open):
   Malwarebytes EDR's FlightRecorder.sys pool tags, +63 MB/h in play and +205 MB/h under builds; no AMD or dxgkrnl tag
   moved. Reboot before a long session, or exclude the game / build folders from the EDR's flight recorder (the user's
   choice).
-- **D3D12 presenter exit hang (Rendering)**: 1 in 32 exits, the process stays stuck in the kernel on the GPU and cannot be
-  killed (it held the card until a reboot on 2026-10-17); dump in Rebuild-Experimental work/leak/armB_d3d12present/run-32.
+- (CLOSED) D3D12 presenter exit hang: fixed by a separate GL -> D3D12 fence (Rendering, integration 76da5484); 64 / 64 clean exits
+  incl. frame generation, resize and map switch.
 - **Faithful blend-time HDR residual** (documented, not changed): the 360 scene target saturates at 3.984 during
   blending, our FP16 target does not; visible only if a later translucent layer darkens an over-bright pixel, not seen in
   any capture (RENDERING_PACKAGE7_POLISH.md section 4).
