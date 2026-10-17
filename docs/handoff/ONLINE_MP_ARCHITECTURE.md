@@ -251,6 +251,17 @@ peer and dropped afterwards (the peer's address is then the key).
 - **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
 - **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
+### 10.3 Identical launch on every peer (with the Frontend, 2026-10-17)
+- **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
+  lockstep the launch must be identical on every peer.
+- **The rule:** the host's start message (CountdownStarted) carries:
+  - `matchUrl`: the host's full launch URL, every option, the bot rows and the mode / idle flags;
+  - `seed`: the match RNG seed, chosen by the host.
+- Members launch from these verbatim. Nothing sim-affecting comes from a member's local profile; presentation settings stay local.
+- **Version check:** the first bundle carries a hash of (matchUrl, seed, the exe's sim build id). A mismatch refuses the match with
+  "different game version" instead of desyncing later.
+- **Field name:** the Frontend's choice (SessionEvent fields or SessionLobby at countdown), recorded here once picked.
+
 ## 11. Phases and exit criteria
 
 | phase | scope | exit criteria |
