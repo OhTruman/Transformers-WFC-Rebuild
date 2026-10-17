@@ -3056,3 +3056,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:12 Campaign Kismet SIZED (RE): 176 classes / ~130k instances; a general sequence VM covers ~75 %; 36 classes decoded in docs; 113
   undecoded = 51 stock natives (engine semantics) + 32 WFC script classes (batch-decompilable) + 0 native-only. Campaign phase
   inputs now complete on data, materials (sized), Kismet (sized); RE batch-decodes the 32 WFC script classes next.
+2026-10-17 12:13 Door-map NAVQ with the versus rule: Remnant back at base (Smart reversals 0.94 vs 0.99), Rust within noise, BrokenHope worse
+  (the 5 extended decks have no nav cells: off-mesh 17 %). Decision (c): BrokenHope versus = doors open, bridges retracted
+  (Escalation start state) in this patch; AssetTools regenerates BrokenHope's nav with the decks baked in later (no versus boot
+  there yet). Gameplay posts the transact patch at base parity.
