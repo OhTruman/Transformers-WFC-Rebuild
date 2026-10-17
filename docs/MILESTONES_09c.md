@@ -2753,3 +2753,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   A4 Checkpoint_14441 by design; FaceFX clamp 0..1 (HIGH). Rendering Set C (particle modules; RENDERING_P7_SET_C_PARTICLES.patch
   bd63223e) applied on integration, Debug build OK; the map_fx_runtime.json regen for the 10 MP maps is running (old files backed
   up; gate = only fields / fields_source keys differ); commit after the gate.
+2026-10-17 10:09 MERGED d96b21a0 Gameplay's anim-notify window hook (empty stub + WFC_ANIMNOTIFYLOG; identity-neutral) and 5fc2e552 the hit-surface
+  PhysicalMaterial lookup (per-map collision_weapon_physmat.json, sha256 + triangle counts checked; one World.h hunk by hand;
+  package: 10 json with the frontend manifests). Systems' body-notify dispatch (SYSTEMS_BODY_NOTIFY_FX.patch 4196ccfb, 130-310
+  effect rows per chassis: limb trails, booster pulses, hits) rebases onto 5fc2e552; its 8-min pair (Trail2 ribbon risk) after
+  (B). Frontend CARD FREE 10:06 (iconic wheel + rename shots). Experimental's (B) pass now builds both arms from one frozen
+  snapshot of integration's render data (only the 118 manifest materials swapped), replacing Systems' matB/render. Kismet
+  handlers 15 / 15 CONFIRMED (RE lane a020383). RE lane next: MP ability cue table for Systems; then Gameplay's value table check.
+  Card: Rendering fog A/B (10:0x, ~15 min) -> (B) ~100 min -> Systems body-notify 8 min -> Gameplay recoil eye check.
