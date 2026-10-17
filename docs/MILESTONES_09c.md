@@ -3019,3 +3019,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   exported the 3 templates (5-6 elements each, all distributions decoded, 4 PNGs); the curves' inputs come from RE's LENS_FLARE_RE.md.
 2026-10-17 11:46 LENS_FLARE_RE.md merged: the lens-flare item is fully specified (6 MP suns; templates, vertex stream, placement / occlusion logic)
   with AssetTools' data; Rendering builds it after the doors. RE next: WEAPON_CAMERA_SHAKE_RE.md.
+2026-10-17 11:47 Recoil (4) RESOLVED by Gameplay's headless probe: the Bazooka muzzle kicks up / right (+24.5 / +26.6 deg at the step-16 peak,
+  settles over 1 s; ≤ 0.1 / 1.1 deg without recoil); the frames showed the tube's rear end; no axis swap. Only (5) the strafe
+  wobble run remains (gap ~12:35), then the weapon + melee batch merges.
