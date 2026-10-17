@@ -376,6 +376,10 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.EditPlaylist") { editPlaylist(argi(0)); return {}; }
     if (fn == "Online.PlayPrivateGame") { playPrivateGame(arg(0)); return {}; }
     if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
+    if (fn == "Online.SetSelectedMapID" && role_ == SessionRole::Member) {   // the host chooses (online member)
+        FlowTrace::emit("online.memberIgnored", {{"fn", fn}, {"mapId", arg(0)}});
+        return {};
+    }
     if (fn == "Online.SetSelectedMapID") {
         // -> TnGameLobbyGame.HostRequestMapID -> GRI.HostRequestMapID (ignored unless MapSelectionMethod 1).
         if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) {
@@ -388,7 +392,13 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         else FlowTrace::emit("lobby.mapRequestIgnored", {{"mapId", arg(0)}, {"method", std::to_string(lobby_.mapSelectionMethod)}});
         return {};
     }
-    if (fn == "Online.BeginLobbyExitCountdown") { hostRequestsGameStart(); return {}; }
+    if (fn == "Online.BeginLobbyExitCountdown") {
+        if (role_ == SessionRole::Member) { FlowTrace::emit("online.memberIgnored", {{"fn", fn}}); return {}; }   // host only
+        hostRequestsGameStart();
+        if (session_ && role_ == SessionRole::Host) session_->requestStart();
+        return {};
+    }
+    if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
     if (fn == "Online.IsHost") return role_ != SessionRole::Member;   // offline: the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
@@ -450,6 +460,7 @@ void GameFlow::playPrivateGame(const std::string& settingsName) {
     if (const GameSettings* gs = settingsByConfigName(settingsName, true)) currentSettings_ = gs;
     if (!currentSettings_) { LOG_WARN("FLOW PlayPrivateGame: no settings for %s", settingsName.c_str()); return; }
     lobby_.playlistId = -1;
+    if (session_ && onlineHost()) return;   // online: the session opens first (HostOpened travels on)
     hostOnlineGame(currentSettings_);
 }
 
@@ -785,6 +796,11 @@ void GameFlow::popupButton(char which) {
         popup_.showDefaultButtons = false;
         if (!popup_.postConfirm.empty()) popup_.message = popup_.postConfirm;
         ++popup_.serial;
+    }
+    if (btn.action == "cancelJoin" && session_ && onlinePending_ == OnlinePending::Joining) {   // online: Cancel while joining
+        onlinePending_ = OnlinePending::None;
+        session_->cancelJoin();
+        FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "quit") quitPending_ = true;
     else if (btn.action == "exit") { quit_ = true; FlowTrace::emit("exit", {}); }

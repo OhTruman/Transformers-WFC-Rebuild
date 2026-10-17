@@ -904,6 +904,143 @@ static void testOnlineBoundary() {
     std::remove("wfc_profile.ini");
 }
 
+// Online phase 1 test rig: a runtime in the party lobby with a FakeSession (ONLINE_MP_FRONTEND_TESTS.md section 3).
+struct OnlineRig {
+    std::unique_ptr<FrontendRuntime> rt = std::make_unique<FrontendRuntime>();
+    FakeSession* fake = nullptr;
+    bool ok = false;
+    explicit OnlineRig(std::vector<FakeSession::Step> script = {}) {
+        setEnv("WFC_FRONTEND_AUTOPLAY", nullptr);
+        std::remove("wfc_profile.ini");
+        if (!rt->init()) return;
+        auto fs = std::make_unique<FakeSession>(std::move(script));
+        fake = fs.get();
+        rt->flow().setSession(std::move(fs));
+        GameFlow& f = rt->flow();
+        if (!runUntil(*rt, [&] { return f.frontEndStarted(); })) return;
+        f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+        ok = runUntil(*rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+    }
+    GameFlow& f() { return rt->flow(); }
+    std::string t(const char* k) { return rt->catalog().localizeKey(k); }
+    bool popupIs(const char* title, const char* msg) { return f().popup().open && f().popup().title == t(title) && f().popup().message == t(msg); }
+    void frames(int n) { platform::InputFrame none; for (int i = 0; i < n; ++i) rt->update(none, 1.0f / 60.0f); }
+    ~OnlineRig() { std::remove("wfc_profile.ini"); }
+};
+
+static SessionEvent ev(SessionEvent::Type t) { SessionEvent e; e.type = t; return e; }
+static FakeSession::Step after(const char* call, SessionEvent e, double delay = 1.0 / 60.0) {
+    FakeSession::Step s; s.afterCall = call; s.delay = delay; s.event = std::move(e); return s;
+}
+
+static void testOnlineHostJoin() {
+    using T = SessionEvent::Type;
+    {   // S1 host succeeds
+        SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD"; o.address = "192.168.1.20:7777";
+        OnlineRig r({after("host", o, 0.5)});
+        r.f().call("Online.EditGameMode", {"TDM"});
+        r.f().call("Online.PlayPrivateGame", {"TDM"});
+        const bool hosting = r.popupIs("$UIText.MessagePrompts.HostGameTitle", "$UIText.MessagePrompts.HostingMessage") && r.fake->count("host") == 1;
+        const bool inLobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+        r.frames(2);
+        const int firstPublishes = r.fake->count("publishLobby");
+        r.f().call("Online.SetSelectedMapID", {"508"});   // (no map runtime data headless: the host picks one, as testFlow does)
+        r.frames(2);
+        check(r.ok && hosting && inLobby && firstPublishes == 1 && r.f().sessionRole() == GameFlow::SessionRole::Host && r.f().call("Online.IsHost").b &&
+              r.f().joinCode() == "WFC-7QK2-M9TD" && r.f().joinAddress() == "192.168.1.20:7777" && !r.f().popup().open &&
+              r.rt->dataStores().call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b && r.fake->count("publishLobby") == 2 &&
+              r.fake->last("publishLobby")->lobby.gameModeTag == "TDM" && r.fake->last("publishLobby")->lobby.mapId == 508, "online.S1_host",
+              std::to_string(r.ok) + std::to_string(hosting) + std::to_string(inLobby) + " role " + GameFlow::sessionRoleName(r.f().sessionRole()) +
+              " code " + r.f().joinCode() + " popup " + std::to_string(r.f().popup().open) + " canStart " +
+              std::to_string(r.rt->dataStores().call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b) + " publishes " +
+              std::to_string(r.fake->count("publishLobby")));
+    }
+    {   // S2 host fails
+        SessionEvent f = ev(T::HostFailed); f.hostFailure = SessionHostFailure::NoPath;
+        OnlineRig r({after("host", f)});
+        r.f().call("Online.EditGameMode", {"TDM"});
+        r.f().call("Online.PlayPrivateGame", {"TDM"});
+        r.frames(5);
+        check(r.ok && r.popupIs("$UIText.MessagePrompts.StrictNATTitle", "$WfcPC.Online.HostNoPath") && r.f().level() == LevelKind::PartyLobby &&
+              r.fake->count("publishLobby") == 0 && r.f().sessionRole() == GameFlow::SessionRole::Offline, "online.S2_host_fails");
+    }
+    SessionLobby hostLobby;
+    hostLobby.gameModeTag = "TDM"; hostLobby.mapId = 508; hostLobby.mapSelectionMethod = 1;
+    {   // S3 join succeeds; S9 the member cannot drive the lobby
+        SessionEvent j = ev(T::Joined); j.lobby = hostLobby;
+        OnlineRig r({after("join", ev(T::JoinProgress)), after("join", j, 0.5)});
+        const bool invalid = !r.f().call("Online.JoinGame", {"not a code"}).b &&
+                             r.popupIs("$UIText.MessagePrompts.GenericErrorTitle", "$WfcPC.Online.JoinInvalid") && r.fake->count("join") == 0;
+        r.f().call("MessageBox.OnA");
+        r.f().call("Online.JoinGame", {" wfc-7qk2-m9td "});
+        const bool joining = r.popupIs("$UIText.MessagePrompts.JoinFriendGameTitle", "$UIText.MessagePrompts.JoiningMessage") &&
+                             r.fake->last("join") && r.fake->last("join")->arg == "wfc-7qk2-m9td";
+        const bool inLobby = runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+        r.frames(2);
+        DataStores& ds = r.rt->dataStores();
+        const bool member = r.f().sessionRole() == GameFlow::SessionRole::Member && !r.f().call("Online.IsHost").b && r.f().lobby().mapId == 508 &&
+                            !ds.call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b &&
+                            ds.call("ReadValue", {"<CurrentGame:LobbyStatus>"}).s == r.rt->catalog().localize("TransGame", "TnGameReplicationInfoGameLobby", "WaitingForHostToStartStatus");
+        check(r.ok && invalid && joining && inLobby && member && !r.f().popup().open, "online.S3_join");
+        // S9
+        r.f().call("Online.SetSelectedMapID", {"502"});
+        r.f().call("Online.BeginLobbyExitCountdown");
+        ds.call("WriteValue", {"<TnGameSettings:TimeLimit>", "5 minutes"});
+        r.frames(3);
+        check(r.f().lobby().mapId == 508 && !r.f().lobby().countingDown && r.fake->count("requestStart") == 0 && r.fake->count("publishLobby") == 0,
+              "online.S9_member_cannot_drive_lobby");
+        // the host changes the map: the member follows
+        SessionEvent ls = ev(T::LobbyState); ls.lobby = hostLobby; ls.lobby.mapId = 502;
+        r.fake->inject(ls);
+        r.frames(3);
+        check(r.f().lobby().mapId == 502, "online.member_follows_host_lobby");
+    }
+    struct Fail { SessionJoinFailure why; const char* title; const char* msg; const char* name; };
+    const Fail fails[] = {
+        {SessionJoinFailure::Full, "$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$UIText.MessagePrompts.JoinGameInviteFailedMessage", "online.S4_join_full"},
+        {SessionJoinFailure::Version, "$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$Engine.Errors.ClientOutdated", "online.S6_join_version"},
+        {SessionJoinFailure::MapMissing, "$UIText.MessagePrompts.LobbyInvalidMapTitle", "$UIText.MessagePrompts.LobbyInvalidMapMessage", "online.S7_join_map_missing"},
+    };
+    for (const Fail& x : fails) {   // S4, S6, S7
+        SessionEvent e = ev(T::JoinFailed); e.joinFailure = x.why;
+        OnlineRig r({after("join", e)});
+        r.f().call("Online.JoinGame", {"WFC-AAAA-BBBB"});
+        r.frames(5);
+        check(r.ok && r.popupIs(x.title, x.msg) && !r.rt->catalog().localizeKey(x.msg).empty() && r.f().level() == LevelKind::PartyLobby &&
+              r.f().sessionRole() == GameFlow::SessionRole::Offline, x.name);
+    }
+    {   // S5 timeout: exactly the original 50 s of frontend time
+        OnlineRig r;
+        r.f().call("Online.JoinGame", {"192.168.1.20:7777"});
+        r.frames(2990);
+        const bool still = r.popupIs("$UIText.MessagePrompts.JoinFriendGameTitle", "$UIText.MessagePrompts.JoiningMessage");
+        r.frames(20);
+        check(r.ok && still && r.popupIs("$UIText.MessagePrompts.JoinGameInviteFailedTitle", "$UIText.MessagePrompts.JoinGameInviteFailedMessage") &&
+              r.fake->count("cancelJoin") == 1, "online.S5_join_timeout");
+    }
+    {   // cancel while joining
+        OnlineRig r;
+        r.f().call("Online.JoinGame", {"WFC-AAAA-BBBB"});
+        r.f().call("MessageBox.OnB");
+        r.frames(3);
+        check(r.ok && r.fake->count("cancelJoin") == 1 && !r.f().popup().open && r.f().sessionRole() == GameFlow::SessionRole::Offline, "online.join_cancel");
+    }
+    {   // S8 join during a match: the member waits in the lobby with "Match in progress"
+        SessionEvent m = ev(T::MatchInProgress); m.lobby = hostLobby; m.lobby.matchRunning = true;
+        OnlineRig r({after("join", m)});
+        r.f().call("Online.JoinGame", {"WFC-AAAA-BBBB"});
+        runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+        r.frames(2);
+        DataStores& ds = r.rt->dataStores();
+        const bool waiting = ds.call("ReadValue", {"<CurrentGame:LobbyStatus>"}).s == "Match in progress" &&
+                             !ds.call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b;
+        SessionEvent back = ev(T::LobbyState); back.lobby = hostLobby;
+        r.fake->inject(back);
+        r.frames(3);
+        check(r.ok && waiting && ds.call("ReadValue", {"<CurrentGame:LobbyStatus>"}).s != "Match in progress", "online.S8_join_during_match");
+    }
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -922,6 +1059,7 @@ int main() {
     testCampaignTutorials();
     testCampaignCinematicHud();
     testOnlineBoundary();
+    testOnlineHostJoin();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
