@@ -2286,3 +2286,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1.15, the only loss), Gorge 1.35, Debris 1.16, Rust 1.28, Molten 1.42; veil gone. ROUND 4 = values only (x3trans
   / x3cap down, Streets-led; target all-map >= 1.28 / 1.30); Rendering's Faithful identity arm on cand12 now (valid
   for value-only changes); cand13 eye pass tonight if ready by 23:05, else tomorrow. FaceFX RE doc + parser merged.
+  2026-10-16 22:41 cand12 FULL EYE PASS: views 1.47 / 1.50 = the checkpoint exactly (OK); match 1.26 OK / 1.27 BELOW
+  by 0.01 (Streets); round 4 values pending. FACEFX RE (AssetTools, merged 17fabf26): node floats (min, 1/min,
+  max, 1/max) 1,145 / 1,145; curves normalised per animation (value = i8 / 127 x b, b = peak); timing vs 728
+  dialog waves (end = duration +0.2 s, start -0.27 s lead-in); interpolation open; visual proof plan (Trypticon
+  LK004350 jaw vs voice envelope) cleared to run CPU-only tonight.
