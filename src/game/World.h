@@ -1450,6 +1450,10 @@ private:
     void drainAnimNotifies();
     // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
     void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
+    // [Systems] the MP transforming actors' HmAnimNotify_Sound rows as their clip time moves (see World.cpp).
+    void tickTransformingActorSounds();
+    void syncTransformingActorSounds();
+    std::vector<float> taSoundT_;   // each actor's clip time at the last dispatch
     // [Systems] body notify effects: attached ones follow their socket (tickBodyNotifyFx, from drainAnimNotifies)
     struct BodyFx { int vid; int player; std::string socket; float age; };
     std::vector<BodyFx> bodyFx_;

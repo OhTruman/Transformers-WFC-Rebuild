@@ -33,6 +33,7 @@ public:
     struct Body { int node = -1; int pawnSet = -1, weaponSet = -1; };
     struct Actor {
         std::string name, mesh, glb, clip;   // glb: absolute path; clip: the transform sequence
+        std::string animSet, sequence, skeletalMesh;   // [Systems] the authored AnimSet / AnimSequence / SkeletalMesh (sound notifies)
         core::Mat4 matrix;                   // actor gltf_matrix
         float length = 1.0f;                 // clip_length_s
         float t = 0.0f;                      // clip time: 0 = Untransformed, length = Transformed
@@ -57,6 +58,8 @@ public:
     // Blocks the nav cells under every colliding actor's boxes at its resting pose (desired end).
     int applyNavBlocks(BotNav& nav) const;
     const std::vector<Actor>& actors() const { return actors_; }
+    // [Systems] World transform of a named bone of actor a at its current clip time (the actor matrix when the bone is unknown).
+    core::Mat4 boneWorldByName(const Actor& a, const std::string& bone) const;
     // World AABB of one box of actor a at clip time t (tests / nav).
     void boxBounds(const Actor& a, const Box& b, float t, core::Vec3& lo, core::Vec3& hi) const;
 

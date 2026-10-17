@@ -49,6 +49,7 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
         Actor a;
         a.name = j["actor"].asString(); a.mesh = meshName;
         a.glb = toolsRoot + "/" + m["glb"].asString(); a.clip = m["clip"].asString();
+        a.animSet = j["animset"].asString(); a.sequence = j["anim_sequence"].asString(); a.skeletalMesh = j["skeletal_mesh"].asString();
         a.length = std::max(0.01f, m["clip_length_s"].asFloat(1.0f));
         a.matrix = matFrom(j["gltf_matrix"]);
         a.bridge = meshName.rfind("NEU_Bridge", 0) == 0;
@@ -125,6 +126,10 @@ core::Mat4 TransformingActors::boneWorld(const Actor& a, int node, float t) cons
     else assets::samplePose(*a.model, -1, 0.0f, false, lp);
     assets::poseGlobals(*a.model, lp, g);
     return (size_t)node < g.size() ? a.matrix * g[(size_t)node] : a.matrix;
+}
+
+core::Mat4 TransformingActors::boneWorldByName(const Actor& a, const std::string& bone) const {
+    return boneWorld(a, a.model ? a.model->nodeByName(bone) : -1, a.t);
 }
 
 void TransformingActors::pose(Actor& a, CollisionWorld& pawn, CollisionWorld* weapon) {

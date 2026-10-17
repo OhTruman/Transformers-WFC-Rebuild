@@ -453,6 +453,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         {   // TnTransformingWorldActors (AssetTools mp_transforming_actors.json; the frontend's manifest root)
             const char* mr = std::getenv("WFC_FRONTEND_MANIFESTS");
             transforming_.load(mapName_, mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+            syncTransformingActorSounds();
         }
         {   // the VehicleDying body pool: unit boxes (+-1), scaled by the pose; disabled until used
             std::vector<core::Vec3> tris;
@@ -2219,6 +2220,7 @@ void World::tickPrefix(float dt) {
     }
     if (collision_.valid()) { TickTimer tt(13); mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
                               transforming_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+                              tickTransformingActorSounds();
                               tickDyingBodies(dt); }
     prefixMark(3);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
@@ -2719,6 +2721,7 @@ void World::resetForNewLevel() {
     mapState_.resetForNewMatch();
     if (collision_.valid()) mapState_.tick(0.0f, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
     if (collision_.valid()) transforming_.resetForNewMatch(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);   // a fresh level
+    syncTransformingActorSounds();   // the reset's snap (e.g. the versus doors start open) plays nothing
     dyingQueue_.clear();
     for (DyingBody& b : dyingBodies_) { b.remain = 0.0f; if (b.pawnSet >= 0) collision_.setDynamicEnabled(b.pawnSet, false); if (b.weaponSet >= 0 && weaponCollision_.valid()) weaponCollision_.setDynamicEnabled(b.weaponSet, false); }
     for (Destructible* d : destructibles_) d->resetForNewMatch();
@@ -5860,6 +5863,50 @@ void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char*
         const int vid = fxStepSpawn(r->what, p, f, u, fxTeamOf(matchPlayer), false);
         if (log) LOG_INFO("BODYNOTIFYFX p%d %s.%s t %.3f %s @%s%s", matchPlayer, animSet, sequence, r->time, r->what, r->socket, (r->flags & 1) ? " attached" : "");
         if ((r->flags & 1) && vid >= 0) bodyFx_.push_back({vid, matchPlayer, r->socket, 0.0f});
+    }
+}
+
+// [Systems] The MP transforming world actors' sounds [RE MP_TRANSFORMING_ACTOR_CUES_RE, C]: only the HmAnimNotify_Sound rows of the
+// actor's transform AnimSequence (no effect / light / shake notify exists on these AnimSets), fired locally on every peer as the clip
+// time moves - forwards on Transform (rows flagged 4: the opening cues), backwards on Untransform (flag 2: the backward-only closing
+// cues) - at the mesh socket a row names (IAC_InteriorDoor: AUDIO_DOOR_CENTER) else the actor location. MinWeight is moot (one node,
+// weight 1). A snap (load, the match reset, the versus doors' open start) re-syncs the times without playing. Rust's level-start
+// Transform plays DOOR_INTERIOR + DOOR_TUBE on each peer. WFC_ACTORNOTIFYSOUND=0 turns them off (harness pairs); WFC_NOTIFYLOG logs.
+void World::syncTransformingActorSounds() {
+    taSoundT_.clear();
+    for (const TransformingActors::Actor& a : transforming_.actors()) taSoundT_.push_back(a.t);
+}
+
+void World::tickTransformingActorSounds() {
+    static const bool off = std::getenv("WFC_ACTORNOTIFYSOUND") && std::getenv("WFC_ACTORNOTIFYSOUND")[0] == '0';
+    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
+    const std::vector<TransformingActors::Actor>& as = transforming_.actors();
+    if (taSoundT_.size() != as.size()) { syncTransformingActorSounds(); return; }
+    for (size_t i = 0; i < as.size(); ++i) {
+        const TransformingActors::Actor& a = as[i];
+        const float t0 = taSoundT_[i], t1 = a.t;
+        taSoundT_[i] = t1;
+        if (off || t1 == t0 || a.animSet.empty()) continue;
+        const bool fwd = t1 > t0;
+        for (const AnimNotifyRow& r : kAnimNotifies) {
+            if (r.effect || a.sequence != r.sequence || a.animSet != r.animSet) continue;
+            if (fwd ? (!(r.flags & 4) || r.time < t0 || r.time >= t1) : (!(r.flags & 2) || r.time <= t1 || r.time > t0)) continue;
+            core::Vec3 at{a.matrix.m[12], a.matrix.m[13], a.matrix.m[14]};
+            if (r.socket[0]) {
+                const BodyNotifyIndex& idx = bodyNotifyIndex();
+                auto it = idx.sockets.find(a.skeletalMesh + "|" + r.socket);
+                if (it != idx.sockets.end()) {
+                    const MeshSocketRow& s = *it->second;
+                    const float loc[3] = {s.x, s.y, s.z};
+                    const int rot[3] = {s.pitch, s.yaw, s.roll};
+                    const core::Mat4 w = transforming_.boneWorldByName(a, s.bone) * ueSocketToGltf(loc, rot);
+                    at = core::Vec3{w.m[12], w.m[13], w.m[14]};
+                }
+            }
+            cues_.play(r.what, at, core::length(at - listenerPos_));
+            if (log) LOG_INFO("ACTORNOTIFY %s %s.%s %s t %.3f %s @%s (%.1f %.1f %.1f)", a.name.c_str(), a.animSet.c_str(), a.sequence.c_str(),
+                              fwd ? "fwd" : "back", r.time, r.what, r.socket[0] ? r.socket : "actor", at.x, at.y, at.z);
+        }
     }
 }
 
