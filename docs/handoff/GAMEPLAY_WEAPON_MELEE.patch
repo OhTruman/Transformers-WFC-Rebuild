@@ -1,5 +1,5 @@
 diff --git a/src/game/Character.h b/src/game/Character.h
-index 5f31c48d..3da10cba 100644
+index 9c6a106d..d986e33c 100644
 --- a/src/game/Character.h
 +++ b/src/game/Character.h
 @@ -210,6 +210,7 @@ public:
@@ -10,7 +10,7 @@ index 5f31c48d..3da10cba 100644
      int meleeSweep_ = -1;                 // index of the active sweep window
      std::vector<int> meleeHit_;           // match players already hit by the active sweep
      int meleeAlternate_ = 0;
-@@ -544,7 +545,9 @@ public:
+@@ -548,7 +549,9 @@ public:
      bool weaponRestored() const;
  
      // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
@@ -102,10 +102,10 @@ index 00000000..45c1e27a
 +    {"Shotgun", {0.8000f, {1500.0f, 2100.0f, 2000.0f}, {15.00f, 10.00f, 5.00f}, {false, false, false}, {-20.00f, 0.00f, 0.00f}, {10.00f, 0.00f, 0.00f}, {false, false, false}}, {0.6000f, {-4000.0f, -4000.0f, 2000.0f}, {15.00f, 5.00f, 10.00f}, {false, false, false}, {-15.00f, 0.00f, 10.00f}, {10.00f, 0.00f, 10.00f}, {false, false, true}}},
 +    {"HomingRocket", {1.0000f, {-4000.0f, 3000.0f, 0.0f}, {10.00f, 10.00f, 0.00f}, {false, false, false}, {-10.00f, 0.00f, 0.00f}, {10.00f, 0.00f, 0.00f}, {false, false, false}}, {0.7000f, {8000.0f, 0.0f, 0.0f}, {10.00f, 0.00f, 0.00f}, {false, true, false}, {-15.00f, 0.00f, 0.00f}, {10.00f, 0.00f, 0.00f}, {false, false, true}}},
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index 3373a1cf..741d72cb 100644
+index 4e9c3d9b..d2c6e526 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
-@@ -2869,6 +2869,7 @@ void World::fillPresented(PresentedFrame& p) {
+@@ -2915,6 +2915,7 @@ void World::fillPresented(PresentedFrame& p) {
                  param(m, "TeamID", (float)id);
                  m.relation = id == 0 ? 0 : (id == 2 ? 2 : 1);
                  m.label = std::to_string(ob.pointNumber);                     // NodeID
@@ -113,8 +113,8 @@ index 3373a1cf..741d72cb 100644
                  if (ob.beingCaptured) param(m, "Flashing", 1.0f);
                  m.action = id == 0 ? "Defend" : "Capture";
              } else if (ob.markerType == "KingOfTheHill") {                     // only the Active zone
-@@ -4944,6 +4945,17 @@ const Sweep kWhirlSweeps[] = {{0.9f, 0.4f, true, {450, 450, 200}}, {1.6f, 0.4f,
-                               {4.54f, 0.4f, true, {450, 450, 200}}, {5.19f, 0.4f, true, {450, 450, 200}}};
+@@ -5076,6 +5077,17 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
+     }
  }
  
 +// The chassis' player TnMeleeSet (CharacterData.MeleeSet): 0 HeavyMedium, 1 HeavySmall, 2 LightMedium, 3 LightSmall, -1 unlisted.
@@ -131,7 +131,7 @@ index 3373a1cf..741d72cb 100644
  void World::startLocalMelee(bool whirlwind) {
      if (localPlayerDead()) return;
      startMeleeFor(player_.pawn(), localPlayer_, whirlwind, player_.controller().viewYaw());
-@@ -4967,8 +4979,8 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
+@@ -5099,8 +5111,8 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
      }
      if (pc.meleeCarrier_) {
          // FindAttack: current weapon MeleeWeaponType MWT_Flag / MWT_Bomb -> Melee_Mace (chooser _01/_02/_03), 9999, AttackDash
@@ -142,7 +142,7 @@ index 3373a1cf..741d72cb 100644
          static const char* kMace[3] = {"Melee_Mace_01", "Melee_Mace_02", "Melee_Mace_03"};
          static const float kMaceLen[3] = {1.033f, 1.233f, 1.167f};
          const int k = pc.meleeAlternate_++ % 3;
-@@ -4976,9 +4988,9 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
+@@ -5108,9 +5120,9 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
          pc.playAction(kMace[k], false);
          pc.meleeLen_ = kMaceLen[k];
          if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(kMace[k]); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
@@ -154,7 +154,7 @@ index 3373a1cf..741d72cb 100644
          // fall through to the assist lunge
      } else if (whirlwind) {
          pc.meleeLen_ = 5.9f;
-@@ -4987,7 +4999,7 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
+@@ -5119,7 +5131,7 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
      }
      // AnimSet chooser: Melee_EnergonSword -> _01 / _03 alternately; clip length (1.0 s authored) from the model when present.
      const char* clip = (pc.meleeAlternate_++ % 2) ? "Melee_EnergonSword_03" : "Melee_EnergonSword_01";
@@ -163,7 +163,7 @@ index 3373a1cf..741d72cb 100644
      pc.playAction(clip, false);
      pc.meleeLen_ = 1.0f;
      if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(clip); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
-@@ -5009,7 +5021,10 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
+@@ -5141,7 +5153,10 @@ void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw
          if (std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f)) > half) continue;
          if (dist < best) { best = dist; pc.lungeDir_ = d * (1.0f / dist); }
      }
@@ -175,7 +175,7 @@ index 3373a1cf..741d72cb 100644
  }
  
  void World::tickLocalMelee(float dt) { tickMeleeFor(player_.pawn(), localPlayer_, dt); }
-@@ -5064,8 +5079,9 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
+@@ -5196,8 +5211,9 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
              noteHitDir(c - pc.actorLocation());
              applyMatchDamage(vp, self, damage, false, type);
              onPawnHitEffect(type, v.chassis().id, vp, c);   // [Systems M08p] the victim's melee hit effect
@@ -188,10 +188,10 @@ index 3373a1cf..741d72cb 100644
              if (core::length(dir) > 1e-4f) applyKnockback(vp, core::normalize(dir) * impulse, type);
          }
 diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
-index 311c8e6f..a61558aa 100644
+index b65acd4c..6e1d9bf9 100644
 --- a/src/game/WorldBots.cpp
 +++ b/src/game/WorldBots.cpp
-@@ -141,7 +141,7 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
+@@ -146,7 +146,7 @@ void World::botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoin
      Character& pc = o.pawn();
      pc.exposeSelf();
      w.onFired();
