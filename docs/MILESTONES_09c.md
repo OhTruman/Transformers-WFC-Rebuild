@@ -3288,3 +3288,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:51 NET.identity PASS on e5bc5a22 (Experimental, independent): lan / typical / bad, two processes, 4,201 ticks each, peers agree
   every tick, replay agrees; no desync, no timeout. Systems' four-profile run on the same head = the second half of the online
   phase 1 milestone (lockstep identity proven on one PC; a two-PC test needs the user).
+2026-10-17 14:52 5215 split FOUND (Gameplay, with Experimental's exes): 1f1d4e17's permanent recoil pitch step steers the local player bot's aim
+  (sim for that bot), so base + transact cannot equal 814e7cf5 at the gate's settings. DECISION: no port; every gate arm runs
+  WFC_NORECOIL=1 (the commit's own diagnostic switch; the base ignores it); Gameplay re-verifies both base diffs with it at the
+  gate's exact settings + delivers the weapon-batch diff (its 4 v 5 check was a stale build).
