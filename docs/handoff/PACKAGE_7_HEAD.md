@@ -41,7 +41,7 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | Mine saturation, Realistic | the point-blank explosion's exposure / flash term (RENDERING_PACKAGE7_POLISH.md item 1); Faithful unchanged by evidence (SYSTEMS_HDR_SHADER_DECODE.md 6b90296c + RE HDR_SCENE_PATH_RE.md 43d7bc1) | Rendering (Systems evidence done) | open |
 | Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | merged cfca1717 |
 | Online multiplayer, design | ONLINE_MP_ARCHITECTURE.md (with proximity voice, 6045a7a9), ISession alignment (202cef15), online B2 (f1ae9baa); code after package 7 | Systems / Frontend / Experimental | design merged |
-| Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | merged 1e11edc2 (+ Camera.h roll be0cac77); scorch gated off until the DeathDecal_MAT regen (Systems); gib materials = Systems' compile (pending) |
+| Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | merged 1e11edc2 (+ Camera.h roll be0cac77); scorch on and gibs textured since the (A) data switch (integration 9c17be40) |
 | Volumetric Lighting setting | the X3 row in Settings > Graphics (pc_strings.int) and its setter | Frontend / Rendering | merged 72eec90c (row); setter merging |
 | Online session boundary | ISession / FakeSession (src/frontend/Session.h; no behaviour; GameFlow::setSession unset = offline) | Frontend | merged 3a19b47a |
 | Authored FX / sound wiring | every authored weapon / character / vehicle anim notify (tools/systems/gen_anim_notifies.py: 3,554 rows) through one dispatcher: shell / magazine / reload FX for all guns on every visible pawn (distance-gated), melee / ability / transform body trails and hover / jump FX (Gameplay hook World::onAnimNotifyWindow), physmat impact overrides (AssetTools triangle -> physmat in the collision export), R-only muzzles, projectile flight loops, the no-hit ability sounds; data-driven cues checked by a paced CUELOG run first | Systems (+ Gameplay hooks, AssetTools collision field) | in progress (data done) |
@@ -64,13 +64,16 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
   original's per-entry death effects at the authored sockets (Systems DeathFx.inc: Poke / Energy / TractorBeam / SingleShot
   differ from package 6; vehicle deaths have no skeletal gib or scorch, as the original) and the gibbed camera shake; the
   death light ends with the pawn. Systems' FX-count row: 0 mismatches over 230 deaths, 209 / 215 effects at the authored
-  socket. Pending: the scorch decal (gated off until DeathDecal_MAT is regenerated with its lerp mask fixed) and the gib
-  materials (untextured until compiled).
-- **Off-screen effects freeze as the original's** (Systems SYSTEMS_FX_INACTIVE, integration 24c6618c, default on;
-  WFC_FXINACTIVE=0 off): placed emitters and pickup highlights stop updating after 1 s unrendered (their authored
-  ParticleSystemComponent.SecondsBeforeInactive) and resume where they froze. Streets 35 / 45 and Molten 62 / 75 effects
-  eligible, frozen 45 % / 38 % of their ticks; switch-off byte-identical (Molten within its own 1-2 level run noise); the
-  switch-on differences are resumed particles at another phase (crops in docs/handoff/fxinactive/). No cost change.
+  socket. Since the (A) material switch (integration 9c17be40; Systems SYSTEMS_MATFIX_DECAL_GIBS, manifest
+  docs/handoff/matfix_decal_gibs/MATFIX_MANIFEST.json, every sha256_after verified) the scorch decal is on (DeathDecal_MAT's lerp
+  weight takes Color.A as the shipped PS: m max 2.24, was 25.7) and the gibs are textured (DeathSkelGib / DeathGib_Mat_INST
+  compiled); Gameplay's follow-up (scorch default on, gib materials, the PET_Random vehicle effect) merged in the same step.
+- **Off-screen effects are throttled as the original's** (Systems SYSTEMS_FX_INACTIVE, integration 24c6618c, default on;
+  WFC_FXINACTIVE=0 off). CORRECTION in progress: the merged rule freezes placed emitters / pickup highlights 1 s after they
+  leave the view; the original throttles instead (RE PARTICLE_MODULE_AUDIT_RE (d), UParticleSystemComponent::Tick decoded):
+  every component unrendered > 0.3 s ticks every 0.1 s, past its SecondsBeforeInactive every 1.0 s, each tick applying the
+  skipped time in one step - nothing freezes. SYSTEMS_FX_THROTTLE.patch (128b4846) replaces the rule; its three card rows
+  (counters, Off / Faithful identity, eye crops) re-run before it merges. [PLACEHOLDER: the throttle rows' result]
 
 - **Hover + squad polish** (Gameplay, integration cfca1717): faithful four-probe springs for every vehicle; Classic bots
   right themselves with the original's AI righting (Streets' longest tipped time 214 -> 9 s); Smart keeps its steadier
