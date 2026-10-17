@@ -14,7 +14,7 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     while (Test-Path $hold) { Start-Sleep 2 }
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     $base = @{ WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_NOMOUSE = '1'; WFC_AUTODETECT = '0'; WFC_SEED = '7'; WFC_FLOWSEED = '7';
-               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0' }
+               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0'; WFC_FXINACTIVE = '0'; WFC_MUZZLEENERGON = '0' }   # isolate from the throttle / muzzle colour patches
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
     foreach ($k in $envs.Keys) { if ($envs[$k] -ne '') { Set-Item "env:$k" $envs[$k] } }
     $p = Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru   # windowed (draws frames)
