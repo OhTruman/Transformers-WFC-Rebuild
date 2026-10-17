@@ -3282,3 +3282,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:42 MERGED e5bc5a22 Gameplay's sim pose + shared pickups + WFC_NET_STATEDUMP + CTF Rounds (the 1299 and 1723 splits; SESSIONTEST 37 / 37;
   offline identical). NET.identity re-runs on e5bc5a22: Systems (lan / typical / bad / burst) + Experimental independent = the phase 1
   milestone if exit 0 on all.
+2026-10-17 14:43 Regress base: the TRANSACT sim-only diff reproduces 814e7cf5 only up to step 5215 at the gate's 31 v 32 bots (the 4 v 5 check
+  passed; the negative control differs from 895) -> Gameplay re-checks at the gate's bot count and diffs the patch against
+  814e7cf5's src/game; needed before the gate. Experimental's NET.identity on e5bc5a22 building.
