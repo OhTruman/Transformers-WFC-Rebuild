@@ -19,6 +19,36 @@ These checks are untimed and run in gaps, with one windowed exe at a time.
     - views 1.47 / 1.50.
 - **No timed rows per head.** A per-head perf number is only a hint. The combined gate is what counts.
 
+## Sim changes inside package 7: identity and the regress base
+
+First sim change: cfca1717 (2026-10-17).
+
+- **What changed.** The hover four-probe springs, Classic on the original's AI righting, Smart's steadier righting, and the squad
+  slot fix. Classic and Smart SIMHASH both diverge from af4d0731 from step 601-602, on 96 / 96 runs. This is a deliberate
+  re-baseline. The new reference tables are in docs/handoff/hover/: CLASSIC_SIMHASH_old_vs_new.txt and
+  *_NAVQ_REFERENCE_new.txt.
+- **Renderer identity is only meaningful on the same sim.**
+  - Merges before cfca1717 keep base11 / af4d0731 as their identity base. Rendering's Set A / B identity stays valid.
+  - For any renderer merge from cfca1717 on, the identity base is the same sim without the renderer change: either the merged
+    head minus that commit, or "cfca1717 vs cfca1717 + the renderer change". Off / Faithful identity against af4d0731 differs
+    everywhere after step 601, because the bots move differently. Such a diff is never a renderer finding.
+  - The identity run checks SIMHASH equality first. A diverging SIMHASH means a wrong base, so the row is UNKNOWN, not FAIL.
+  - Per-head identity runs are built at that head's own sha, not a later one. For example, 1e11edc2's Off / Faithful pair is built
+    at 1e11edc2 vs af4d0731, because 1e11edc2 predates cfca1717.
+- **The combined regress needs the same match on base and head.** The package 6 base (fast_398b27e_rise: 398b27ef plus the
+  Classic sim commits) plays the old match, so against the package 7 head the regress would read "different match", a blocking
+  row.
+  - The package 7 regress base is **af4d0731 + every sim-change commit since** (cfca1717 and any later ones), built with
+    gate-base.sh. Commits are taken as `sha` or `sha@path` items limited to the sim files.
+  - The base is verified by a same-match lockstep check against the head before the timed regress, with a negative control: a
+    base without cfca1717 must diverge at about step 601.
+  - The regress then reads package 7's frame cost against package 6 at the new sim: `GATE_BASE=work/ab/<p7 base>
+    GATE_BASE_NAME="af4d0731 + sim <shas>"`.
+  - The 2b bodies / 5v5 and the 1b arms run the head (plus its own X3 = 0 / NOCORPSE arms), so they are same-match by
+    construction.
+- **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
+  the regress base list, and the head ledger marks it "SIM CHANGE".
+
 ## The package 7 head: one combined gate
 
 Run:
