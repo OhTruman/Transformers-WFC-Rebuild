@@ -4,7 +4,7 @@
 
 ### QUEUE (Integration, 2026-10-17 midday)
 
-1. The camera recoil crops (GAMEPLAY_CAMERA_RECOIL.patch 0c0a5665, against 8f53a200; steps work/pass29/cam/steps_fire.txt; waiting for the card).
+1. DONE 2026-10-17: the camera recoil crops ran (verdict sent: as authored; sheets work/pass29/cam/sheet_fire_*.png); the death follow-up confirmed on the switched data (sheet_death_old_vs_new.png). The camera patch 0c0a5665 merges on Integration's side.
 2. The weapon + melee authored-values batch + its Classic re-baseline (GAMEPLAY_WEAPON_MELEE_BATCH.md; generator docs/handoff/weaponbatch/gen_weapon_recoil.py).
 3. Systems' anim-notify window + hit-surface physmat (AssetTools 2c1d9ba).
 4. The session hooks for Frontend (MatchPlayer.sessionMember, Remote participants from MatchLaunch.onlineSlots / onlineNames, World::applySlotSwap, the WFC_SESSIONTEST checks per docs/handoff/ONLINE_MP_FRONTEND_TESTS.md section 4). Offline-safe, identity-neutral, ~3-4 h.
