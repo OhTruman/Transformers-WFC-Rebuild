@@ -2315,3 +2315,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Still open: bsp_alignment (D2), cinematic slope scale, phonemeId table, bone-blend visual check (needs Gameplay's
   pose hook, after package 6). AssetTools' next queue sent (CPU-only): campaign pickup factories (0 / 377 exported,
   D5_OME first), D2 bsp_alignment, the A2 collision gap, FaceFX desk items; bone-blend visual after package 6.
+2026-10-17 01:10 AssetTools: the A1 component-tag parser bug is CLOSED (authored_reparse.py re-parse of every detector-flagged
+  authored.db row: f384c7b the 4 MP rows + 1,442 campaign rows, f626805 the remaining 1,942 rows, every chapter; MP runtime files
+  byte-identical, vs_validate 0 FAIL on all 10; tag_parse_audit.py is a permanent vs_validate check reading 0 everywhere;
+  A1's 1,211 mesh-less components -> 0). AssetTools started item 1 (campaign pickup factories, D5_OME first).
