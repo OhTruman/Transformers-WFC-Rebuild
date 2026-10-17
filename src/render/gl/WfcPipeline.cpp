@@ -2697,30 +2697,36 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    float gate = " + std::string(std::getenv("WFC_RT_GLOSSLO") || std::getenv("WFC_RT_GLOSSHI")
                     ? "smoothstep(" + std::string(rtGlossLo()) + ", " + std::string(rtGlossHi()) + ", sp)" : std::string("1.0")) +
               " * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n" +
-              // X6: the floor - every lit surface reflects a little; damp patches: darker (before the edge returns below, so a
-              // patch never pops at the frame edge), smooth, fully gated
+              // X6 (round 4): additive only - the authored layer below is unchanged; X6 adds the floor's missing reflectivity
+              // (gate floor x6refl) and a damp film's sharp reflection on top of the lit surface. Rounds 1-3 replaced part of
+              // the lit floor with its reflection, and in dark interiors that reads as darker, flatter floors.
               std::string(x6Build ?
-              "    float wet = wfcX6Wet();\n"
-              "    gate = max(gate, max(uRtX6.x, wet));\n"
-              "    c *= 1.0 - 0.2 * wet;\n" : "") +
-              "    if (gate <= 0.0) return c;\n"
+              "    float wet = wfcX6Wet(), xg = max(uRtX6.x - gate, 0.0);\n"
+              "    if (gate <= 0.0 && xg <= 0.0 && wet <= 0.0) return c;\n" : "    if (gate <= 0.0) return c;\n") +
               "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
               "    if (p.w <= 0.0) return c;\n"
               "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
               "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;\n"
               "    float rough = clamp(pow(2.0 / (max(sp, 0.0) + 2.0), 0.25), 0.02, 1.0);\n"   // (perceptual roughness: Blinn-Phong n -> GGX alpha, its square root)
-              + std::string(x6Build ? "    rough = mix(rough, 0.05, wet);\n" : "") +   // (X6: a damp film is smooth)
               "    ivec2 rs = textureSize(uRtRefl, 0);\n"
               "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))));\n"
               "    if (r.a <= 1e-3) return c;\n"
               "    float NoV = clamp(dot(normalize(n), normalize(V)), 0.0, 1.0);\n"
               "    float k = (0.04 + (max(1.0 - rough, 0.04) - 0.04) * pow(1.0 - NoV, 5.0)) * gate * uRtGloss * clamp(r.a, 0.0, 1.0);\n"
-              // (X6 round 3: a damp film shows its sheen at play angles too - a floor on the reflection's share, x6sheen)
-              + std::string(x6Build ? "    k = max(k, wet * uRtX6.w * uRtGloss * clamp(r.a, 0.0, 1.0));\n" : "") +
               // (item 3) a rough surface keeps most of its own lighting at grazing angles: the layer's share is capped by
               // the roughness (rim bands no longer turn into the dark geometry they reflect)
-              "    k = min(k, 0.25 + 0.75 * (1.0 - rough) * (1.0 - rough));\n"
-              "    return mix(c, r.rgb / r.a, clamp(k, 0.0, 1.0));\n"
+              "    k = min(k, 0.25 + 0.75 * (1.0 - rough) * (1.0 - rough));\n" +
+              std::string(x6Build ?
+              "    vec3 o = mix(c, r.rgb / r.a, clamp(k, 0.0, 1.0));\n"
+              // the floor's extra: the same blurred reflection, Fresnel with its roughness, added
+              "    o += r.rgb / r.a * ((0.04 + (max(1.0 - rough, 0.04) - 0.04) * pow(1.0 - NoV, 5.0)) * xg * uRtGloss * clamp(r.a, 0.0, 1.0));\n"
+              // the damp film: a sharp reflection (roughness 0.05), water's Fresnel (F0 0.02), added x x6sheen
+              "    if (wet > 0.0) {\n"
+              "        vec4 rw = textureLod(uRtRefl, uv, uRtReflLod + 0.05 * log2(float(max(rs.x, rs.y))));\n"
+              "        if (rw.a > 1e-3) o += rw.rgb / rw.a * ((0.02 + 0.98 * pow(1.0 - NoV, 5.0)) * wet * uRtX6.w * clamp(rw.a, 0.0, 1.0));\n"
+              "    }\n"
+              "    return o;\n" :
+              "    return mix(c, r.rgb / r.a, clamp(k, 0.0, 1.0));\n") +
               "}\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
@@ -2928,6 +2934,15 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                           "        s += lit * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n"
                           "    }\n    return s;\n}\n");
         }
+    }
+    if (x6Build && lightmapped && lit && !mainOverride_) {   // X6 round 4: a damp film sharpens the transient lights' highlight
+        // (an added tight lobe, water Fresnel, x x6sheen; the light's colour / falloff / RT visibility as the lit term)
+        auto sub = [&](const std::string& a, const std::string& b) { const size_t at = fs.find(a, mainStart); if (at != std::string::npos) fs.insert(at, b); };
+        const std::string top = "    bool spec = max(o.SpecularColor.r, max(o.SpecularColor.g, o.SpecularColor.b)) > 0.0;";
+        sub(top, "    float x6w = wfcX6Wet(), x6f = (0.02 + 0.98 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0)) * x6w * uRtX6.w * 24.0;\n");
+        const std::string lobe = "if (x6w > 0.0 && ndl > 0.0) lit += vec3(x6f * pow(max(dot(Rv, L), 0.0), 512.0));\n";
+        sub("            s += lit * C0.rgb * att * (k < 4 ? tv[k] : 1.0);\n", "            " + lobe);
+        sub("        s += lit * uTLCol[k].rgb * att * (k < 4 ? tv[k] : 1.0);\n", "        " + lobe);
     }
     if (rtShadowAoOn() && lightmapped && !mainOverride_ && lit) {   // (item 2B: the decoded lightmap irradiance -> target 1)
         const std::string lAnchor = "vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];";
