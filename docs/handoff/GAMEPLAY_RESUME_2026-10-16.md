@@ -9,6 +9,8 @@
 3. DONE: anim notify hook GAMEPLAY_ANIM_NOTIFY_HOOK.patch 22f9a52b (merge-ready, Systems builds on it); hit physmat GAMEPLAY_HIT_PHYSMAT.patch 7fc7437d (both against 1d0bdd48, identity-neutral).
 4. DONE: GAMEPLAY_SESSION_HOOKS.patch 178a7bef against 8a080210 (Remote participants, applySlotSwap, idle kick, Iconic one-holder-per-match), WFC_SESSIONTEST 16/16; in Frontend's review. Also done: GAMEPLAY_PHYSMAT_NODE_OVERRIDES.patch e7354355.
 4b. DONE: Decoy Trap GAMEPLAY_DECOY_TRAP.patch 41e38e4e against 8a080210 (WFC_DECOYTEST 10/10, bot matches identical); hooks decoyTraps() (Rendering) / onDecoyTrapEvent (Systems). Session hooks now 1ca85612 (+ MatchEvent RemoteIdle, SESSIONTEST 17/17).
+4c. DONE: session follow-up GAMEPLAY_SESSION_FOLLOWUP.patch a037ed35 against 6c58c023 (kickIdle gate, applyRemoteCommand per REMOTE_COMMAND_CONTRACT.md, host seed hook; SESSIONTEST 19/19). Weapon batch: merged conditions 2/3 done (RE OK, re-baseline 4e0aa552); only the eye check (work/pass29/wbeye/steps_eye.txt) on Integration's gap.
+4d. IN PROGRESS: transforming actors + dying-vehicle collision (docs/handoff/transact: new/TransformingActors.{h,cpp}, edit_transforming_actors.js, edit_dying_vehicle.js; base 104b31cc; tree work/int_ta, base work/int_tab). TRANSACTTEST passes. NAVQ re-baseline running: work/pass29/ta/steps_navq.txt -> ta/navq (12 seeds x 4 user maps + 6 seeds x Rust / BrokenHope / Remnant, both AIs, WITH SIMHASH). Then tables (simhash_table_n.js handles the 4 user maps; the door maps need their own summary), patch vs 104b31cc, post to Integration.
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
 7. FaceFX.
