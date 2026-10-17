@@ -29,6 +29,14 @@
 - **Open with other lanes:** none blocking. AssetTools will regenerate the FaceFX reference CSV with the product rule (for the FaceFX
   item). Systems adds the local death sound itself.
 - **Hover item notes:** `docs/handoff/GAMEPLAY_RIDE_HEIGHT_DESIGN.md` (RE updates + Integration decisions at the end).
+  - The trees are `work/int_hv` (af4d0731 + hover/edit_hover_faithful + edit_navq_tip + edit_hover_ai_path) and `work/int_hvb` (af4d0731
+    + edit_navq_tip).
+  - NAVQ TIP results: `docs/handoff/hover/tip_summary_6seeds.txt`; the 24-seed run is in `work/pass29/hv` (aggregate with
+    `node docs/handoff/hover/aggtip.js <dir> base,new2`).
+  - The faithful gate removes Classic's long stuck tips but makes short tips more frequent: decide with Integration.
+- **Added to the queue (after hover):** the 32 TnTransformingWorldActor doors / bridges have no collision
+  (`docs/handoff/MP_TRANSFORMING_ACTORS.md` + AssetTools `manifests/maps/mp_transforming_actors.json`). Plan: dynamic sets from the
+  listed boxes; first check whether they change state in MP.
 
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
   - **About 05:10: patch 2 (all six edits + GibRagdoll) BUILDS in `work/int_p2`; headless PASSES.**
