@@ -2519,3 +2519,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   decision: (b) calibrate at 1x density and reuse the gain at 2x; the Streets full-flow frontend gap is 3.97 s at 2x vs 2.02 s at 1x
   (the readback rounds suspected; yields + 1x-mip GI read next). Card -> Experimental presenter loop (~70 min) on int_cand15.
   Non-X6 merge set (fence fix, presenter event, X3 timer; body bit with its lossless sheet) merges on "PRESENTER DONE".
+2026-10-17 08:08 RE lane: RENDERING_HDR_BLEND_CLAMP_RULE_RE.md (b3758131: per-draw per-channel clamp to [0, 3.984375] on every 7e3 scene-colour
+  blend; a final min before post is not equivalent) and GAMEPLAY_VEHICLE_DEATH_RE.md (d99a3e35): patch 2 already matches except
+  the dying vehicle's live collision (0.2-0.75 s car / tank, 4-5 s jets) and the hitscan-only hull body, sim-side -> batched with
+  the transforming-actor collision as one identity change after the perf levers. Rendering merge sets as patches (rt2 0f1bca12):
+  SET_A (presenter event, fence fix, X3 timer) merges on PRESENTER DONE; SET_B (body bit + WFC_RT_BODYBIT=0) after its
+  zero-difference sheet; both dry-run clean on fedf83ee. X7 rule (b) built (00998378, cand25). Frontend: e254ace9 <Strings:>
+  answered in versus (rename prompt, Claimed / Unclaimed), 22c15bc9 E7 cinematic hide; both merge after the before / after
+  shots; Frontend now implements the phase 1 online flows on ISession + FakeSession behind a flag. RE lane -> weapon firing
+  presentation audit. Card: Experimental presenter loop.
