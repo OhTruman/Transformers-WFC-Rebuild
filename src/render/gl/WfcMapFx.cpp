@@ -307,6 +307,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         lod.trailCap = std::max(1, bt["MaxTrailCount"].asInt(1)) * std::max(1, bt["MaxParticleInTrailCount"].asInt(100));
                         lod.tessFactor = std::max(1, bt["TessellationFactor"].asInt(1));   // 0 -> 1 (native)
                         lod.tessStrength = bt["TessellationStrength"].asFloat(1.0f);
+                        lod.connectToSource = bt["bConnectToSource"].asBool(true);
+                        lod.emitOnlyWhenMoving = bt["bEmitOnlyWhenMoving"].asBool(true);
                     }
                     if (L["size_param"].isObject()) {
                         lod.sizeParam = L["size_param"]["name"].asString();
@@ -622,14 +624,14 @@ void Pipeline::tickMapFx(float dt) {
                 while (!rt.trail.empty() && rt.trail.front()[3] > life) rt.trail.erase(rt.trail.begin());
                 if (in.active && in.hasTarget && rt.parts.empty() && rt.loop == 0 && rt.time == 0.0f)
                     rt.forceSpawn = 1;                   // a trail spawned along a segment (tracer): one ribbon
-                if (in.active && !in.hasTarget) {
-                    const auto& last = rt.trail.empty() ? std::array<float, 4>{1e30f, 0, 0, 0} : rt.trail.back();
-                    float dx = in.T[0] - last[0], dy = in.T[1] - last[1], dz = in.T[2] - last[2];
-                    if (dx * dx + dy * dy + dz * dz > 25.0f || rt.trail.empty()) {
-                        rt.trail.push_back({in.T[0], in.T[1], in.T[2], 0.0f});
-                        ++rt.forceSpawn;                 // UE3 trails spawn per distance travelled (not by rate)
-                    }
-                    if (rt.trail.size() > 96) rt.trail.erase(rt.trail.begin());
+                if (in.active && !in.hasTarget && !L.particleTrail) {
+                    // a source-following trail (AssetTools TRAIL2_TEMPLATES, CONFIRMED: no TrailSource / SpawnPerUnit /
+                    // taper modules in this engine): the ribbon's points are the emitter's own particles, spawned at
+                    // SpawnRate where the emitter is (the notify socket, moved every tick); bEmitOnlyWhenMoving holds
+                    // the spawn while the source is still; drawn as one chain with the source joined (bConnectToSource)
+                    float dx = in.T[0] - rt.srcLast[0], dy = in.T[1] - rt.srcLast[1], dz = in.T[2] - rt.srcLast[2];
+                    rt.srcStill = rt.srcLastSet && dx * dx + dy * dy + dz * dz < 1e-4f;
+                    std::copy(in.T, in.T + 3, rt.srcLast); rt.srcLastSet = true;
                 }
             }
             // update / kill
@@ -832,6 +834,7 @@ void Pipeline::tickMapFx(float dt) {
             rt.spawnFrac -= std::floor(rt.spawnFrac);
             spawn += rt.forceSpawn;
             rt.forceSpawn = 0;
+            if (L.typeData == 2 && !L.particleTrail && !in.hasTarget && L.emitOnlyWhenMoving && rt.srcStill) spawn = 0;
             rt.burstFired.resize(L.bursts.size(), false);
             for (size_t b = 0; b < L.bursts.size(); ++b) {
                 if (rt.burstFired[b] || efrac < L.bursts[b].time) continue;
@@ -842,7 +845,7 @@ void Pipeline::tickMapFx(float dt) {
             }
             const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
                              : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
-            if (L.particleTrail) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
+            if (L.typeData == 2) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
             {   // AMD stability: a global live-particle budget across every effect (authored peaks are per emitter)
                 constexpr size_t kMaxLive = 250000;
                 if (statLiveParticles_ >= kMaxLive) {
@@ -1928,13 +1931,22 @@ void Pipeline::drawMapPresentation() {
                         quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
                     }
                   }
-                } else if (L.typeData == 2 && L.particleTrail) {
+                } else if (L.typeData == 2 && (L.particleTrail || !in.hasTarget)) {
                     // M63 Trail2 placed by LocationEmitter (RE pass 5 s14, CONFIRMED): one chain through this emitter's
                     // own particles in spawn order (each new particle becomes the head; no per-source trails; the head
                     // does not follow its source). Per-particle size / colour; U from the head by distance (s13).
+                    // A source-following trail (no LocationEmitter) draws the same chain, its newest point joined to the
+                    // emitter's current location (bConnectToSource, stock UE3 [HIGH]) with that particle's size / colour.
                     std::vector<const FxParticle*> chain;
                     for (const FxParticle& q : rt.parts) chain.push_back(&q);
                     std::sort(chain.begin(), chain.end(), [](const FxParticle* x, const FxParticle* y) { return x->seq < y->seq; });
+                    FxParticle srcPt;
+                    if (!L.particleTrail && L.connectToSource && in.active && !chain.empty()) {
+                        srcPt = *chain.back();
+                        if (L.localSpace) std::fill(srcPt.pos, srcPt.pos + 3, 0.0f);
+                        else std::copy(in.T, in.T + 3, srcPt.pos);
+                        chain.push_back(&srcPt);
+                    }
                     if (chain.size() >= 2) {
                         auto wpos = [&](const FxParticle& q) {
                             if (!L.localSpace) return ueToGltf(q.pos);

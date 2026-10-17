@@ -1259,6 +1259,7 @@ public:
         bool tilePerParticle = false;     // Trail2 bTilePerParticle
         bool particleTrail = false;       // M63 Trail2 placed by LocationEmitter: one chain through its own particles
         int trailCap = 0;                 // Trail2: MaxTrailCount x MaxParticleInTrailCount (spawn cap; RE s14)
+        bool connectToSource = true, emitOnlyWhenMoving = true;   // Trail2 (TypeDataTrail2 CDO true; AssetTools TRAIL2)
         int billboardAxis = -1;           // M65 BillboardSettings.Direction: -1 camera facing, 0..2 local X/Y/Z, 3..5 world
         float sideScale[2] = {1, 1};      // Alignment: V0 / V1 side scales (Centered 1/1, Positive 0/2, Negative 2/0)
         FxDist distance;
@@ -1311,6 +1312,7 @@ private:
         std::vector<FxParticle> parts;
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
         std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
+        float srcLast[3] = {0, 0, 0}; bool srcLastSet = false, srcStill = false;   // Trail2: the source at the last tick
         int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
         int locSequence = 0;                       // LocationEmitter Sequential selection counter
         uint32_t spawnSeq = 0;                     // next particle spawn order
