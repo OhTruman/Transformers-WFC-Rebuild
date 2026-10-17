@@ -2819,3 +2819,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   MERGED 4502b468 Gameplay session hooks (Frontend review OK; 3 follow-ups: idle-kick MatchEvent, noteRemoteCommand from the
   lockstep step, atTick in simTick units). Rendering exposure floor code complete (83ecd6cd: Realistic haze terms x min(1, 1/e));
   cand30 = exposure + flash: one ~20-min slot after (B) -> Systems 15 -> Gameplay 4 -> Frontend 1, incl. the Set D views.
+2026-10-17 10:33 MERGED d5372c90 RemoteIdle MatchEvent (Gameplay 1ca85612 delta; SESSIONTEST 17 / 17; neutral); Frontend cuts the session glue
+  against it. Rendering's x13slot.sh ready (~20 min, cand30 on b22659a3: Rust 504 hazeexp views, Streets 508 corridors, Gorge
+  flash pair, Set D views late in the slot after my 'fogs' copy, identity vs base13). Card: (B) running -> Systems 15 -> Gameplay 4
+  -> Frontend 1 -> Rendering 20.
