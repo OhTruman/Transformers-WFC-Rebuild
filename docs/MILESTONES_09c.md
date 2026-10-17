@@ -2415,3 +2415,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fallback work/playtest_slim_9350f19b; packages 5 / 4 stay. Doc docs/handoff/PACKAGE_6_af4d0731.md (Systems d734f81b, merged
   by file; PACKAGE_6_HEAD.md removed). Tag playtest/09c-package6-af4d0731. Verify PASS (work/verify_af4d0731). Gate: no
   blocking row (PACKAGE-GATE_af4d0731.md). Play.bat launches it; Realistic row = whole-map RT + X3 volumetrics (WFC_X3=0 off).
+2026-10-17 05:24 LEAK ARM B DONE (Experimental; WFC_D3D12PRESENT=1, RT off, Streets 1440p, 31 lockstep runs 04:38-05:08): pool 7,226 -> 7,261 MB
+  clean window (+63 MB/h), tagged growth +129 MB of which FlightRecorder.sys (Malwarebytes EDR) +86 MB (two thirds), fltMgr
+  +12.7, File +10.4, MmCa +5, ntfs +3; NO AMD / dxgkrnl tag moved (< 1.4 MB each). The presenter's throttle event path was
+  never taken (frames wait on the latency-waitable object). Build tail 04:14-04:29: +205 MB/h, FlightRecorder +212 of +306 MB
+  tagged. Verify 04:24-04:59: +47 MB/h. CONCLUSION: the nonpaged-pool growth is the Malwarebytes EDR driver recording
+  process / file activity, not the AMD driver and not our presenter; 9015c4e9 = tidy-up. Arms C / D dropped. Raw data
+  Rebuild-Experimental/work/leak/*/pool.csv + tags.csv; tools/fidelity/leak_report.py.
+  PRODUCT ISSUE: arm B run 32 (pid 19880) hung after endFrame at exit under the D3D12 presenter (watchdog minidump, "no frame
+  completed for 65.5 s"); the process is stuck in the kernel (1 thread, 1,205 handles), Stop-Process cannot end it. Dump
+  work/leak/armB_d3d12present/run-32/arm-r1/wfc_hang_19880_0.dmp. Routed to Rendering as a high-priority package 7 item
+  (user-facing with Frame Generation on). CARD HELD for every lane until the user reboots (TDR-cascade risk); CPU work open.
+  Card queue after the reboot: Rendering Streets match run, Gameplay crops, Systems death-cue runs.
