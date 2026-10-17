@@ -3426,3 +3426,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   maps equal their generator-enabled sets (BrokenHope 32 = 2 + 30, Remnant 28); all CONFIRMED.
 2026-10-17 16:01 Escalation §8 presentation merged (HUD / prompts / downed UI / energon to the killer only / score table / end flow). The
   Escalation spec is now complete on every side (rules, data, nav, weapons, AI, presentation).
+2026-10-17 16:06 Checkpoint eye pass on ab855fe7 done (16:04): match Realistic floor OK; views floors below because Off changed too; FINDING: Rust
+  near-floor fog near opaque in Off + Realistic (Off mean 18 -> 41) from the low height layers x 1 / ln 2 -> Rendering shows
+  authored (then re-base) or fixes the Rust fogs entry. No flare in any camera; flare-aimed views to be added. FREEZE LIFTED;
+  card -> Rendering 16:05 (flare sheet 6 min + X7 25 min).
