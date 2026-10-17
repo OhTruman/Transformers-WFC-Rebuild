@@ -3131,3 +3131,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   match player i = seat i on every peer, sim loops by index online, simStateHash covers bot / Smart RNGs; SESSIONTEST 34 / 34 incl.
   cross-perspective identity; offline identical. Systems switches Application_Net's launch to it and runs NET.identity (two
   processes, hash every tick, 1000 ticks, exit 0) = the phase 1 milestone; Frontend adapts fillOnlineLaunch (self in the list).
+2026-10-17 13:21 NET.identity plan: Systems sends the Application_Net launch switch (humans + localSeat) as its own patch; on that head both
+  Systems and Experimental (independent: net_profiles.ps1 lan / typical / bad, hash every tick, netlog_join on both peers'
+  net.csv) run the identity row headless. Open item for Systems after it: WFC_NET_REPLAY (single process fed the host's bundles
+  reproduces the simStateHash stream) = the gate's replay-equivalence half.
