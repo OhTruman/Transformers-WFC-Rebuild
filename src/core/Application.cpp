@@ -5446,6 +5446,72 @@ void Application::runSessionTest() {
         game::RemoteCommand late; late.tick = (uint32_t)(world_.simTick() + 5);
         check(q >= 0 && world_.applyRemoteCommand(q, c) && !world_.applyRemoteCommand(q, late), "applyRemoteCommand: the step about to run only");
     }
+    // A Remote seat does what a local pawn does: scripted commands fire (a kill + its kill-feed line), switch weapons, use an ability,
+    // melee, throw a grenade and reload.
+    {
+        game::MatchLaunch A; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", A);
+        A.localTeam = 0;
+        game::RemoteSeat rs = seat("Remote1", 1, "WFC-TEST-0001"); rs.selection.abilities = {"Hover", "DecoyTrap"};
+        A.remotes = {rs};
+        world_.launchMatch(A);
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        std::vector<game::MatchOpponent*> tgts;
+        for (int i = 0; i < 3; ++i) tgts.push_back(world_.addMatchOpponent("Target" + std::to_string(i), false));
+        const int q = byMember("WFC-TEST-0001");
+        game::RemoteCommand cmd;
+        auto stepCmd = [&]() { cmd.tick = (uint32_t)(world_.simTick() + 1); world_.applyRemoteCommand(q, cmd); world_.handleInput(idle, dt); world_.tick(dt); cmd.pressed = 0; };
+        for (int i = 0; i < 20 * 60; ++i) { bool all = world_.participantPawn(q) != nullptr; for (auto* t : tgts) all &= t->spawned(); if (all) break; stepCmd(); }
+        game::MatchOpponent* T = nullptr;
+        for (auto* t : tgts) if (t->spawned() && !world_.match().sameTeam(t->matchPlayer(), q)) { T = t; break; }
+        const game::Character* rp = world_.participantPawn(q);
+        if (!T || !rp) check(false, "remote seat and an enemy target spawned");
+        else {
+            const core::Vec3 P = rp->actorLocation();
+            auto aimAt = [&]() {
+                const game::Character* me2 = world_.participantPawn(q); const game::Character* tp = world_.participantPawn(T->matchPlayer());
+                if (!me2 || !tp) return;
+                const core::Vec3 d = tp->actorLocation() - me2->actorLocation();
+                cmd.aimYaw = std::atan2(-d.x, -d.z); cmd.aimPitch = std::asin(core::clampf(d.y / std::max(core::length(d), 0.01f), -1.0f, 1.0f));
+            };
+            const int kills0 = world_.match().players()[(size_t)q].kills;
+            cmd.buttons = 1u << (int)platform::Button::Fire;
+            for (int i = 0; i < 8 * 60 && world_.match().players()[(size_t)q].kills == kills0; ++i) {
+                if (i % 30 == 0 && T->spawned()) world_.setParticipantPosition(T->matchPlayer(), P + core::Vec3{6.0f, 0.0f, 0.0f});
+                aimAt(); stepCmd();
+            }
+            cmd.buttons = 0;
+            bool feed = false;
+            for (const auto& k : world_.match().killHistory()) feed |= k.killer == q && k.victim == T->matchPlayer();
+            check(world_.match().players()[(size_t)q].kills == kills0 + 1 && feed, "remote fire: a scripted command sequence kills the target; the kill feed shows it");
+            for (int i = 0; i < 120; ++i) stepCmd();
+            const game::Character* r2 = world_.participantPawn(q);
+            const std::string w0 = r2 && r2->weapon().def ? r2->weapon().def->id : "";
+            cmd.pressed = 1u << (int)platform::Button::NextWeapon; stepCmd();
+            for (int i = 0; i < 120; ++i) stepCmd();
+            r2 = world_.participantPawn(q);
+            check(r2 && r2->weapon().def && w0 != r2->weapon().def->id, "remote weapon switch (Next)");
+            cmd.pressed = 1u << (int)platform::Button::Ability1; stepCmd();
+            for (int i = 0; i < 60; ++i) stepCmd();
+            bool trap = false; for (const auto& d : world_.decoyTraps()) trap |= d.owner == q && (d.alive || d.delay >= 0.0f);
+            check(trap, "remote ability (Ability1 = Decoy Trap)");
+            for (int i = 0; i < 60; ++i) stepCmd();
+            cmd.pressed = 1u << (int)platform::Button::Melee; stepCmd();
+            r2 = world_.participantPawn(q);
+            check(r2 && r2->isMeleeing(), "remote melee");
+            for (int i = 0; i < 120; ++i) stepCmd();
+            auto bagReserve = [&]() { const game::Character* c3 = world_.participantPawn(q); if (c3) for (const auto& w : c3->inventory()) if (w.grenade()) return w.reserve; return -1; };
+            const int g0 = bagReserve();
+            { const game::Character* c4 = world_.participantPawn(q); if (c4) LOG_INFO("SESSIONTEST remote state: form %d transforming %d meleeing %d heavy %d dead %d", (int)c4->moveForm(), (int)c4->isTransforming(), (int)c4->isMeleeing(), c4->carryingHeavy_, (int)c4->health().isDead()); }
+            cmd.pressed = 1u << (int)platform::Button::Grenade; stepCmd();
+            for (int i = 0; i < 60; ++i) stepCmd();
+            check(g0 > 0 && bagReserve() == g0 - 1, "remote grenade throw (reserve " + std::to_string(g0) + " -> " + std::to_string(bagReserve()) + ")");
+            cmd.buttons = 1u << (int)platform::Button::Fire;
+            for (int i = 0; i < 90; ++i) { aimAt(); if (i % 30 == 0) cmd.pressed = 1u << (int)platform::Button::Fire; stepCmd(); }   // semi-auto weapons fire on the press
+            cmd.buttons = 0; cmd.pressed = 1u << (int)platform::Button::Reload; stepCmd();
+            r2 = world_.participantPawn(q);
+            check(r2 && r2->weapon().reloading(), "remote reload (" + std::string(r2 && r2->weapon().def ? r2->weapon().def->id : "-") + " ammo " + std::to_string(r2 ? r2->weapon().ammo : -1) + " reserve " + std::to_string(r2 ? r2->weapon().reserve : -1) + ")");
+        }
+    }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

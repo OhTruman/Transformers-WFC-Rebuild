@@ -855,6 +855,7 @@ public:
     int64_t simTick() const { return simTick_; }
     // Inside the lockstep step for tick N = simTick() + 1, after all of N's commands arrived, before tick(); ascending match player.
     bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
+    void setParticipantPosition(int matchPlayer, const core::Vec3& pos);   // tests: place a participant pawn (velocity zeroed)
     uint64_t simStateHash() const;   // every pawn's position / velocity / health / yaw + the sim RNG (peer comparisons, tests)
     int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
     static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
@@ -1179,6 +1180,14 @@ private:
     std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
     int64_t simTick_ = 0;
     uint32_t hostSeed_ = 0;   // MatchLaunch.seed of the running match (0: the local source)
+    std::vector<std::pair<int, RemoteCommand>> remoteQueue_;   // commands for the step about to run (applied after joinStep)
+    struct RemoteGrenade { int player = -1; float delay = -1.0f; core::Vec3 target{0, 0, 0}; };
+    std::vector<RemoteGrenade> remoteGrenades_;
+    void applyQueuedRemoteCommands();
+    void applyRemoteNow(MatchOpponent& o, const RemoteCommand& c);
+    bool remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, MoveIntent& in);
+    void remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& dir);
+    void tickRemoteSeats(float dt);
     int remoteIdleKicks_ = 0;
     void tickSlotSwaps(float dt);
     void swapSlotToBot(int p);

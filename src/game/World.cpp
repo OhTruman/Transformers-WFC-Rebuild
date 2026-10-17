@@ -2101,6 +2101,7 @@ void World::preloadHeldWeaponsOfPawns() {
 
 void World::tickPrefix(float dt) {
     joinStep();
+    applyQueuedRemoteCommands();   // the Remote seats' commands for this step (main thread, after the background part joined)
     tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
     auto prefixMark = [&](int i) { if (!secLog) return; const double t = profNowMs(); prefixSecMs_[i] += t - prefixMark_; prefixMark_ = t; };
@@ -2315,6 +2316,7 @@ void World::stepRemainder(float dt) {
     if (anySmart_) smartCollectNoises();   // Smart hearing: the previous step's shots / blasts (before the list is cleared)
     participantShots_.clear();
     { TickTimer tt(1); tickAbilityActors(dt); }
+    tickRemoteSeats(dt);                                                 // the Remote seats' weapon / ability ticks
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
     {   // Participants: movement + animation (every participant animates every step; user decision). Each task touches only its own
         // pawn and reads the static collision, so they run on the worker pool in any order with the same result (deterministic).
@@ -3040,7 +3042,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
-    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0;
+    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0; remoteQueue_.clear(); remoteGrenades_.clear();
     for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
@@ -3314,10 +3316,25 @@ bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
     if ((int64_t)c.tick != simTick_ + 1) return false;   // the step about to run
     // The original's "active": any held / pressed button (the sender's active bit = look axis / team chat) or a non-zero move axis.
     if (c.buttons || c.pressed || c.moveForward || c.moveRight) noteRemoteCommand(p);
+    remoteQueue_.push_back({p, c});   // applied after joinStep (the previous step's background part may still be running now)
+    return true;
+}
+
+void World::applyQueuedRemoteCommands() {
+    std::stable_sort(remoteQueue_.begin(), remoteQueue_.end(), [](const auto& a, const auto& b) { return a.first < b.first; });   // ascending match player
+    for (const auto& q : remoteQueue_)
+        for (MatchOpponent* o : opponents_)
+            if (o->matchPlayer() == q.first && (size_t)q.first < match_.players().size() && match_.players()[(size_t)q.first].kind == ParticipantKind::Remote) applyRemoteNow(*o, q.second);
+    remoteQueue_.clear();
+}
+
+void World::applyRemoteNow(MatchOpponent& oRef, const RemoteCommand& c) {
+    MatchOpponent* o = &oRef;
+    const int p = o->matchPlayer();
     auto held = [&](platform::Button b) { return ((c.buttons >> (int)b) & 1u) != 0; };
     auto down = [&](platform::Button b) { return ((c.pressed >> (int)b) & 1u) != 0; };
-    for (MatchOpponent* o : opponents_) {
-        if (o->matchPlayer() != p) continue;
+    o->pressesPickup = held(platform::Button::Interact) || down(platform::Button::Interact);   // TryPickup
+    {
         MoveIntent in;
         in.moveForward = c.moveForward / 127.0f; in.moveRight = c.moveRight / 127.0f;
         in.faceYaw = c.aimYaw; in.viewPitch = c.aimPitch;
@@ -3326,10 +3343,107 @@ bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
         in.wantDash = down(platform::Button::Dash);
         in.ascend = held(platform::Button::Ascend); in.descend = held(platform::Button::Descend);
         in.hoverRequest = (c.buttons & kRemoteBitHover) != 0;     // the original's move flag 1024
+        if (!o->spawned()) { o->setIntent(MoveIntent{}); return; }
+        Character& pc = o->pawn();
+        if (pc.inputLocked()) { o->setIntent(MoveIntent{}); return; }   // TnBuffDecoyTrap: no movement / buttons
+        const bool robot = pc.moveForm() == Form::Robot && !pc.isTransforming();
+        if (pc.moveForm() == Form::Robot) in.wantDash = false;   // robot form: Dash = Ability0 (the vehicle special move only in vehicle form)
+        // Abilities: Ability0 = Dash in robot form (Shift), Ability1 (Ctrl) [CONF Controls card]; Dodge / Hover go into this step's intent.
+        if (robot && down(platform::Button::Dash)) remoteTriggerAbility(*o, 0, c.aimYaw, in);
+        if (robot && down(platform::Button::Ability1)) remoteTriggerAbility(*o, 1, c.aimYaw, in);
         o->setIntent(in);
-        if (down(platform::Button::Transform) && o->spawned() && !o->pawn().isTransforming()) o->pawn().beginTransform();
+        if (down(platform::Button::Transform) && !pc.isTransforming()) pc.beginTransform();
+        if (robot && down(platform::Button::Melee) && !pc.isMeleeing()) startMeleeFor(pc, p, false, c.aimYaw);
+        if (robot && down(platform::Button::NextWeapon)) pc.requestWeaponSwitch(1);
+        if (robot && down(platform::Button::PrevWeapon)) pc.requestWeaponSwitch(-1);
+        Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : (robot ? &pc.weapon() : nullptr);
+        if (w && down(platform::Button::Reload) && w->canReload()) w->beginReload();
+        // Fire: auto weapons while held, the others on the press (bAutoFire); an empty clip reloads.
+        const bool wantFire = w && !pc.isMeleeing() && (w->autoFire ? held(platform::Button::Fire) : down(platform::Button::Fire));
+        if (wantFire && w->canFire()) remoteFire(*o, *w, core::forwardFromYawPitch(c.aimYaw, c.aimPitch));
+        else if (wantFire && w->ammo == 0 && w->canReload()) w->beginReload();
+        // Grenade: TossGrenade along the aim (the throw anim, released 0.4 s later, as the bots').
+        if (robot && down(platform::Button::Grenade) && !pc.isMeleeing() && pc.carryingHeavy_ == 0) {
+            bool pending = false;
+            for (const RemoteGrenade& g : remoteGrenades_) pending |= g.player == p && g.delay >= 0.0f;
+            for (Weapon& bag : pc.inventoryMutable())
+                if (!pending && bag.grenade() && bag.reserve > 0) {
+                    bag.reserve -= 1;
+                    pc.playAction("GrenadeThrow", true);
+                    pc.exposeSelf();
+                    remoteGrenades_.push_back({p, 0.4f, botEye(pc) + core::forwardFromYawPitch(c.aimYaw, c.aimPitch) * 20.0f});
+                    break;
+                }
+        }
     }
+}
+
+bool World::remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, MoveIntent& in) {
+    Character& pc = o.pawn();
+    if (slot < 0 || slot > 1 || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
+    Character::AbilitySlot& a = pc.abilities_[slot];
+    if (!a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) return false;
+    const int p = o.matchPlayer();
+    if (a.id == "Whirlwind") { if (pc.isMeleeing()) return false; startMeleeFor(pc, p, true, aimYaw); if (!pc.isMeleeing()) return false; }
+    else if (a.id == "Dodge") {   // TnPlayerInput.Dodge: |Up| >= |Right| ? (Up < 0 back : forward) : (Right < 0 left : right)
+        in.dodgeDir = std::fabs(in.moveForward) >= std::fabs(in.moveRight) ? (in.moveForward < 0.0f ? 4 : 3) : (in.moveRight < 0.0f ? 1 : 2);
+    }
+    else if (a.id == "Cloaking") pc.cloakRemain_ = 20.0f;
+    else if (a.id == "Hover") { in.hoverRequest = true; pc.hoverRequested_ = true; }
+    else if (a.id == "Warcry") applyWarcry(pc, p);
+    else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;
+    else if (a.id == "SpawnSentry") requestSentry(p);
+    else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(p); }
+    else if (a.id == "DecoyTrap") { pc.playAction("Skill_Barrier", false); requestDecoyTrap(p); }
+    else if (a.id == "SpawnAmmoCrate") { pc.playAction("Skill_Barrier", false); requestAmmoBeacon(p); }
+    else if (a.id == "RollerSphere") { pc.playAction("Skill_AbilityJammer", false); requestRoller(p); }
+    else if (a.id == "Drain") pc.drainRemain_ = 7.0f;
+    else return false;   // [PARTIAL] the aimed abilities (HardLock / jammer / disruptor / guided missile) for Remote seats come later
+    a.spam = 1.0f; a.pendingCooldown = true;
+    if (participantAbilityHook) presentHook([this, p, id = std::string(a.id), ch = pc.chassis().id, at = pc.actorLocation()] { participantAbilityHook(p, id, ch, at); });
     return true;
+}
+
+void World::remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& dir) {
+    Character& pc = o.pawn();
+    const int p = o.matchPlayer();
+    pc.exposeSelf();
+    w.onFired();
+    pc.notifyFired();
+    const core::Vec3 eye = botEye(pc), d = core::normalize(dir);
+    if (w.projectile()) {
+        const core::Vec3 muzzle = eye + d * 1.5f;   // the bots' muzzle stand-in (no posed held weapon on participants)
+        spawnProjectile(muzzle, d * w.projSpeed, w, p);
+        participantShots_.push_back({p, w.def ? w.def->id : "", muzzle, eye + d * 50.0f, false, -1});
+    } else if (w.simulated() && !w.beam()) {
+        for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(p, pc, w, eye, d); }
+        pellet_ = 0;
+    }
+}
+
+void World::setParticipantPosition(int p, const core::Vec3& pos) {
+    for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p && o->spawned()) o->setPosition(pos);
+}
+
+void World::tickRemoteSeats(float dt) {
+    for (MatchOpponent* o : opponents_) {
+        const int p = o->matchPlayer();
+        if (!o->spawned() || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) continue;
+        Character& pc = o->pawn();
+        pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);
+        pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
+        pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
+        pc.tickAbilities(dt);
+        tickMeleeFor(pc, p, dt);   // the melee sweeps / timer (the bots' pass and the local tick run their own)
+        if (pc.moveForm() == Form::Robot) { pc.tickSpreadModifier(dt); pc.tickWeaponSwitch(dt); pc.weapon().tick(dt); }
+        else if (Weapon* vw = pc.vehicleWeapon()) vw->tick(dt);
+    }
+    for (RemoteGrenade& g : remoteGrenades_) {
+        if (g.delay < 0.0f || (g.delay -= dt) >= 0.0f) continue;
+        Character* pc = participantPawnMutable(g.player);
+        if (pc && pc->moveForm() == Form::Robot) for (Weapon& w : pc->inventoryMutable()) if (w.grenade()) { releaseGrenade(*pc, g.player, w, g.target); break; }
+    }
+    remoteGrenades_.erase(std::remove_if(remoteGrenades_.begin(), remoteGrenades_.end(), [](const RemoteGrenade& g) { return g.delay < 0.0f; }), remoteGrenades_.end());
 }
 
 uint64_t World::simStateHash() const {
