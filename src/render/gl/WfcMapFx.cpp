@@ -657,6 +657,7 @@ void Pipeline::tickMapFx(float frameDt) {
             if (!em.renderable || !in.attached) continue;
             const FxLod& L = em.lods[(size_t)std::min<int>(lodIdx, (int)em.lods.size() - 1)];
             rt.lod = std::min<int>(lodIdx, (int)em.lods.size() - 1);
+            if (in.noTrail2 && L.typeData == 2) { rt.parts.clear(); rt.trail.clear(); continue; }   // [Systems] Trail2 deny-list
             if (L.typeData == 2) {
                 // M44 Trail2 [PARTIAL]: the ribbon follows the source's recent path (UE3 links the trail particles
                 // spawned at the moving source); points live for the longest particle lifetime (min 0.25 s)
@@ -1237,6 +1238,14 @@ int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T
     in.role = "runtime";
     in.transient = true;
     in.lastRenderTime = time_;   // [Systems] a freshly activated component counts as rendered (no throttle before its first draw)
+    {   // [Systems] Trail2 deny-list: the body / ability effects' limb and sword trails need a point every frame from an attached
+        // source; our Trail2 adds one per 5 m of source movement [PARTIAL], so on a limb it draws nothing usable. Their Trail2 emitters
+        // stay off (the template's mesh / sprite / beam emitters still run) until Rendering's trail item; WFC_BODYNOTIFYFX_TRAILS=1 forces them.
+        static const bool force = std::getenv("WFC_BODYNOTIFYFX_TRAILS") && std::getenv("WFC_BODYNOTIFYFX_TRAILS")[0] == '1';
+        static const char* const kDeny[] = {"FX_Transformers_p.FX.Trails_Bumblebee_FX", "FX_Sword_p.FX.SwordTrail_Red_FX",
+                                            "FX_Multiplayer_p.FX.Drain_Blast_FX"};
+        if (!force) for (const char* d : kDeny) if (tpl == d) in.noTrail2 = true;
+    }
     in.id = nextFxId_++;
     std::copy(&R[0][0], &R[0][0] + 9, &in.R[0][0]);
     std::copy(T, T + 3, in.T);

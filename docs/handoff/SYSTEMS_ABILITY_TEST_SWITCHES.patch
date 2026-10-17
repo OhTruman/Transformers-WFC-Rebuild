@@ -1,0 +1,70 @@
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-17 10:23:47.770063700 -0500
++++ b/src/core/Application.cpp	2026-10-17 10:23:47.794647000 -0500
+@@ -616,6 +616,9 @@
+         if (const char* s = WFC_ENV("WFC_AUTOSWITCH_EVERY"))        // repeated NextWeapon press every N frames (soak)
+             if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::NextWeapon] = true;
+         if (const char* s = WFC_ENV("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
++        if (const char* s = WFC_ENV("WFC_AUTOABILITY_EVERY"))       // TEST ONLY: Ability0 (Dash key) / Ability1 alternately every N frames
++            if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0)
++                input.pressed[(int)((frame / n) % 2 ? platform::Button::Dash : platform::Button::Ability1)] = true;
+         if (const char* s = WFC_ENV("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
+         if (const char* s = WFC_ENV("WFC_AUTOWALK_UNTIL"))           // release scripted input
+             if (frame > std::atol(s)) {
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-17 10:23:47.779094500 -0500
++++ b/src/game/World.cpp	2026-10-17 10:23:47.804681600 -0500
+@@ -1809,7 +1809,7 @@
+     }
+     const double t1 = profNowMs();
+     // TnCharacterApplier.ApplyAbilities: CharacterData.Abilities (custom selection, else the iconic preset).
+-    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
++    pc.setAbilities(testAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities));
+     const double t2 = profNowMs();
+     syncShownWeapon();
+     if (spawnProf()) LOG_INFO("SPAWNPROF applyLoadout: setLoadout %.1f ms, setAbilities %.1f ms, syncShownWeapon %.1f ms", t1 - t0, t2 - t1, profNowMs() - t2);
+@@ -4288,7 +4288,7 @@
+             setPlayerVehicleWeaponAudio(vehCls);
+         }
+     }
+-    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
++    pc.setAbilities(testAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities));
+     pc.respawnReset();
+     if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
+     return refused;
+@@ -6707,6 +6707,24 @@
+     weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
+ }
+ 
++// TEST ONLY: WFC_TESTABILITIES="Drain,Warcry" replaces the local loadout's ability slots (harness runs of the ability presentation;
++// logged once). Unset: the selection's / iconic abilities.
++std::vector<std::string> World::testAbilities(const std::vector<std::string>& abilities) {
++    static const char* env = std::getenv("WFC_TESTABILITIES");
++    if (!env || !*env) return abilities;
++    std::vector<std::string> out;
++    for (const char* p = env; *p;) {
++        const char* e = std::strchr(p, ',');
++        const std::string id = e ? std::string(p, e) : std::string(p);
++        if (!id.empty()) out.push_back(id);
++        if (!e) break;
++        p = e + 1;
++    }
++    static bool logged = false;
++    if (!logged) { logged = true; LOG_INFO("TEST ONLY: WFC_TESTABILITIES replaces the local abilities with %s", env); }
++    return out;
++}
++
+ void World::onAbilityTriggered(const std::string& abilityId) {
+     abilityAudio_.abilityTriggered(cues_, abilityId, atPawn(), 0.0f);
+     spawnAbilityTriggerFx(localPlayer_, abilityId);
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-17 10:23:47.787122300 -0500
++++ b/src/game/World.h	2026-10-17 10:23:47.812207800 -0500
+@@ -1351,6 +1351,7 @@
+     bool bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const;
+     void tickBodyNotifyFx(float dt);
+     void spawnAbilityTriggerFx(int player, const std::string& abilityId);   // TnAbility.OnTriggerEffect
++    static std::vector<std::string> testAbilities(const std::vector<std::string>& abilities);   // TEST ONLY WFC_TESTABILITIES
+     std::mutex abilityFxMu_;
+     std::vector<std::pair<int, std::string>> abilityFxPending_;   // bot triggers, spawned on the main thread
+     void tickLocalMelee(float dt);

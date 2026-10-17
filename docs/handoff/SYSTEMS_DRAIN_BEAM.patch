@@ -1,0 +1,61 @@
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-17 10:16:54.968960300 -0500
++++ b/src/game/World.cpp	2026-10-17 10:17:34.640428000 -0500
+@@ -3836,6 +3836,19 @@
+         else if (pb.fx >= 0) { fxStopEffect(r, pb.fx, 0); pb.fx = -1; }
+     }
+ 
++    // [Systems] Drain beams (TnBuffDrainTarget: DrainRay_Beam_FX, Beam2): spawned while a victim is drained, moved every frame,
++    // stopped when the drain ends or the victim leaves it. WFC_BODYNOTIFYFX=0: off (the ability presentation family).
++    {
++        static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
++        for (const auto& kv : drainBeams_) {
++            const DrainBeam& b = kv.second;
++            const bool on = b.live && !off;
++            if (on && b.fx < 0) b.fx = fxSpawnSegment(r, "FX_Multiplayer_p.FX.DrainRay_Beam_FX", b.start, b.end, 0);
++            else if (on) fxSetSegment(r, b.fx, b.start, b.end, 0);
++            else if (b.fx >= 0) { fxStopEffect(r, b.fx, 0); b.fx = -1; }
++        }
++    }
++
+     // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
+     {
+         const bool on = repairBeam_.active && repairBeam_.time > 0.0f;
+@@ -4950,6 +4963,11 @@
+     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
+     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
+     // AddHealthToAll [PROV].
++    // [Systems] DrainRay_Beam_FX: one looping beam per victim drained this step (presented in the draw pass, as the Repair Ray).
++    for (auto it = drainBeams_.begin(); it != drainBeams_.end();) {
++        it->second.live = false;
++        if (it->second.fx < 0) it = drainBeams_.erase(it); else ++it;
++    }
+     if (pc.drainRemain_ > 0.0f) {
+         pc.drainRemain_ = localDead_ ? 0.0f : std::max(0.0f, pc.drainRemain_ - dt);
+         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+@@ -4963,6 +4981,13 @@
+                 ++targets;
+                 applyMatchDamage(o->matchPlayer(), localPlayer_, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
+                 onDrainVictimTick(o->pawn().actorLocation());   // [Systems M08i] TnBuffDrainTarget.DamageSound
++                {   // [Systems] the beam: victim -> the drainer's MeleeSocket_LeftHand (RE MP_ABILITY_CUES_RE efcd305)
++                    DrainBeam& b = drainBeams_[o->matchPlayer()];
++                    core::Mat4 hand;
++                    b.start = o->pawn().actorLocation();
++                    b.end = bodySocketWorld(pc, "MeleeSocket_LeftHand", hand) ? core::Vec3{hand.m[12], hand.m[13], hand.m[14]} : pc.actorLocation();
++                    b.live = true;
++                }
+             }
+         if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
+         if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-17 10:16:54.977488900 -0500
++++ b/src/game/World.h	2026-10-17 10:17:34.647953800 -0500
+@@ -1222,6 +1222,8 @@
+     // 1.5 fire intervals after the last tick; the looping tracer segment is spawned / moved / stopped at draw.
+     struct ParticipantBeam { core::Vec3 start{0, 0, 0}, end{0, 0, 0}; float time = 0.0f; mutable int fx = -1; };
+     std::map<int, ParticipantBeam> partBeams_;
++    struct DrainBeam { core::Vec3 start{0, 0, 0}, end{0, 0, 0}; bool live = false; mutable int fx = -1; };   // [Systems] per drained victim
++    std::map<int, DrainBeam> drainBeams_;
+ public:
+     // Diagnostics: participants with a live Repair Ray beam.
+     int participantBeamsLive() const { int n = 0; for (const auto& kv : partBeams_) n += kv.second.time > 0.0f; return n; }

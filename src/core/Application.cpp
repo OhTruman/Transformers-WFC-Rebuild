@@ -665,6 +665,9 @@ Application::MatchExit Application::runMatch() {
         if (const char* s = WFC_ENV("WFC_AUTOSWITCH_EVERY"))        // repeated NextWeapon press every N frames (soak)
             if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::NextWeapon] = true;
         if (const char* s = WFC_ENV("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
+        if (const char* s = WFC_ENV("WFC_AUTOABILITY_EVERY"))       // TEST ONLY: Ability0 (Dash key) / Ability1 alternately every N frames
+            if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0)
+                input.pressed[(int)((frame / n) % 2 ? platform::Button::Dash : platform::Button::Ability1)] = true;
         if (const char* s = WFC_ENV("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = WFC_ENV("WFC_AUTOWALK_UNTIL"))           // release scripted input
             if (frame > std::atol(s)) {

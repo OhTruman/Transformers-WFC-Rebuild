@@ -351,7 +351,11 @@ public:
     void queueSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
                              const std::vector<std::string>& vehicleWeapons);
     void onParticipantFired(const std::string& weaponClass, const core::Vec3& from);
-    void onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer);
+    void onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer, const std::string& physmat = std::string());
+    // [Systems] the weapon impact rule over the hit surface's PhysicalMaterial path ("" = the engine default): its ImpactEffect /
+    // ImpactSound, else the weapon's DefaultSquib / DefaultImpactSound (PhysmatImpacts.inc).
+    static std::string impactSquibFor(const std::string& physmat, const std::string& weaponSquib);
+    static std::string impactSoundFor(const std::string& physmat, const std::string& weaponSound);
     // [Systems M09d] A non-local participant's (bot's) successful ability trigger: its OnTriggerSound and the notifies of its
     // Skill_<id> animation (Warcry chest hits / WAR_CRY_STATE_START, Shockwave SHIELD_PUSH, ...), resolved through that
     // body's own sound sets, at their authored times, attached to the caster [CONF RE pass 5 s12: notify sounds play for any
@@ -1323,6 +1327,8 @@ private:
     // 1.5 fire intervals after the last tick; the looping tracer segment is spawned / moved / stopped at draw.
     struct ParticipantBeam { core::Vec3 start{0, 0, 0}, end{0, 0, 0}; float time = 0.0f; mutable int fx = -1; };
     std::map<int, ParticipantBeam> partBeams_;
+    struct DrainBeam { core::Vec3 start{0, 0, 0}, end{0, 0, 0}; bool live = false; mutable int fx = -1; };   // [Systems] per drained victim
+    std::map<int, DrainBeam> drainBeams_;
 public:
     // Diagnostics: participants with a live Repair Ray beam.
     int participantBeamsLive() const { int n = 0; for (const auto& kv : partBeams_) n += kv.second.time > 0.0f; return n; }
@@ -1444,6 +1450,15 @@ private:
     void drainAnimNotifies();
     // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
     void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
+    // [Systems] body notify effects: attached ones follow their socket (tickBodyNotifyFx, from drainAnimNotifies)
+    struct BodyFx { int vid; int player; std::string socket; float age; };
+    std::vector<BodyFx> bodyFx_;
+    bool bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const;
+    void tickBodyNotifyFx(float dt);
+    void spawnAbilityTriggerFx(int player, const std::string& abilityId);   // TnAbility.OnTriggerEffect
+    static std::vector<std::string> testAbilities(const std::vector<std::string>& abilities);   // TEST ONLY WFC_TESTABILITIES
+    std::mutex abilityFxMu_;
+    std::vector<std::pair<int, std::string>> abilityFxPending_;   // bot triggers, spawned on the main thread
     void tickLocalMelee(float dt);
     bool deferredKillstreak_ = false;
     int lockedClip_ = 0;

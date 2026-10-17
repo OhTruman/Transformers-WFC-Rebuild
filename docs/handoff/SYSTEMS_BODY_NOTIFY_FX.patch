@@ -1,0 +1,133 @@
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-17 10:08:38.000000000 -0500
++++ b/src/game/World.cpp	2026-10-17 10:10:16.975404700 -0500
+@@ -39,6 +39,8 @@
+ namespace {
+ struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; float brightness; };
+ #include "game/MuzzleLights.inc"
++#include "game/AnimNotifies.inc"   // [Systems] authored body notifies (HmAnimNotify_PlayEffect rows of the TR_* AnimSets)
++#include "game/MeshSockets.inc"    // [Systems] the body meshes' SkeletalMeshSockets
+ struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
+ #include "game/DeathLights.inc"
+ // [Gameplay] The original's death entries / pickers' data (tools/gameplay/death_entries.py, authored.db).
+@@ -2363,6 +2365,7 @@
+         player_.pawn().setAimPitch((float)std::atof(ap));
+     { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }
+     drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
++    tickBodyNotifyFx(dt);   // [Systems] attached body effects follow this step's poses
+     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
+     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
+     static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
+@@ -5010,8 +5013,96 @@
+ }
+ 
+ // [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
++namespace {
++// [Systems] body notify index: "animSet|sequence" -> its HmAnimNotify_PlayEffect rows (the sounds keep their CharacterAudio path), and
++// "mesh|socket" -> the SkeletalMeshSocket row of a body mesh.
++struct BodyNotifyIndex {
++    std::unordered_map<std::string, std::vector<const AnimNotifyRow*>> effects;
++    std::unordered_map<std::string, const MeshSocketRow*> sockets;
++};
++const BodyNotifyIndex& bodyNotifyIndex() {
++    static const BodyNotifyIndex idx = [] {
++        BodyNotifyIndex x;
++        for (const AnimNotifyRow& r : kAnimNotifies)
++            if (r.effect && !std::strncmp(r.animSet, "TR_", 3)) x.effects[std::string(r.animSet) + "|" + r.sequence].push_back(&r);
++        for (const MeshSocketRow& s : kMeshSockets) x.sockets.emplace(std::string(s.mesh) + "|" + s.socket, &s);
++        return x;
++    }();
++    return idx;
++}
++// "content/<pkg>/<mesh>.gltf" -> "<pkg>.<mesh>" (the MeshSockets key; as requestCorpse's death-socket key)
++std::string bodyMeshKey(const std::string& g) {
++    const size_t s1 = g.rfind('/'), s0 = s1 == std::string::npos || s1 == 0 ? std::string::npos : g.rfind('/', s1 - 1), dot = g.rfind('.');
++    if (s0 == std::string::npos || dot == std::string::npos || dot < s1) return "";
++    return g.substr(s0 + 1, s1 - s0 - 1) + "." + g.substr(s1 + 1, dot - s1 - 1);
++}
++}  // namespace
++
++bool World::bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const {
++    const bool veh = c.form() == Form::Vehicle;
++    const std::string key = bodyMeshKey(veh ? c.chassis().vehicleSkelGltf : c.chassis().robotSkelGltf) + "|" + socket;
++    const BodyNotifyIndex& idx = bodyNotifyIndex();
++    auto it = idx.sockets.find(key);
++    if (it == idx.sockets.end()) return false;   // the socket is not on this body (e.g. Bumblebee's trail sockets on another chassis)
++    const MeshSocketRow& r = *it->second;
++    core::Mat4 bone;
++    if (!c.boneWorld(r.bone, bone)) return false;
++    const float loc[3] = {r.x, r.y, r.z};
++    const int rot[3] = {r.pitch, r.yaw, r.roll};
++    out = bone * ueSocketToGltf(loc, rot);
++    return true;
++}
++
++// [Systems] HmAnimNotify_PlayEffect on the body (authored AnimSequence.Notifies of the TR_* AnimSets, AnimNotifies.inc): the effect
++// at the mesh socket, attached (flag 1) = it follows the socket. UE3 AnimNodeSequence issues notifies for a node with weight above
++// its NotifyWeightThreshold (default 0) [HIGH: no per-node thresholds for effects in our trees]. A socket the body does not have
++// spawns nothing (AttachComponentToSocket fails). Participants within 40 m of the local pawn, as the weapon notifies [PROV distance].
++// WFC_BODYNOTIFYFX=0: off. WFC_NOTIFYLOG: one line per effect.
+ void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight) {
+-    (void)matchPlayer; (void)animSet; (void)sequence; (void)t0; (void)t1; (void)backwards; (void)weight;
++    static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
++    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
++    (void)backwards;   // nothing of ours plays backwards (Gameplay's hook)
++    if (off || !renderer_ || weight <= 0.0f || !(t1 > t0)) return;
++    const BodyNotifyIndex& idx = bodyNotifyIndex();
++    auto it = idx.effects.find(std::string(animSet) + "|" + sequence);
++    if (it == idx.effects.end()) return;
++    const bool local = matchPlayer == localPlayer_;
++    const Character* c = local ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(matchPlayer);
++    if (!c) return;
++    if (!local && core::length(c->position() - player_.pawn().position()) > 40.0f) return;
++    for (const AnimNotifyRow* r : it->second) {
++        if (r->time < t0 || r->time >= t1) continue;
++        core::Mat4 sw;
++        if (!bodySocketWorld(*c, r->socket, sw)) {
++            if (log) LOG_INFO("BODYNOTIFYFX p%d %s.%s %s @%s: no socket on this body", matchPlayer, animSet, sequence, r->what, r->socket);
++            continue;
++        }
++        const core::Vec3 p{sw.m[12], sw.m[13], sw.m[14]}, f = core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
++                         u = core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]});
++        const int vid = fxStepSpawn(r->what, p, f, u, fxTeamOf(matchPlayer), false);
++        if (log) LOG_INFO("BODYNOTIFYFX p%d %s.%s t %.3f %s @%s%s", matchPlayer, animSet, sequence, r->time, r->what, r->socket, (r->flags & 1) ? " attached" : "");
++        if ((r->flags & 1) && vid >= 0) bodyFx_.push_back({vid, matchPlayer, r->socket, 0.0f});
++    }
++}
++
++// Attached body effects follow their socket; after 2 s [PROV: the systems' own lifetimes are not modelled] or when the pawn is gone
++// they are deactivated (live particles finish).
++void World::tickBodyNotifyFx(float dt) {
++    for (size_t i = 0; i < bodyFx_.size();) {
++        BodyFx& b = bodyFx_[i];
++        b.age += dt;
++        const Character* c = b.player == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(b.player);
++        core::Mat4 sw;
++        if (b.age <= 2.0f && c && bodySocketWorld(*c, b.socket, sw)) {
++            fxStepMove(b.vid, core::Vec3{sw.m[12], sw.m[13], sw.m[14]}, core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
++                       core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]}));
++            ++i;
++            continue;
++        }
++        fxStepStop(b.vid);
++        bodyFx_[i] = bodyFx_.back();
++        bodyFx_.pop_back();
++    }
+ }
+ 
+ // collision_weapon_physmat.json (AssetTools) -> the static weapon collision's per-triangle physical materials (see Collision.h).
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-17 10:08:38.000000000 -0500
++++ b/src/game/World.h	2026-10-17 10:10:16.986442700 -0500
+@@ -1339,6 +1339,11 @@
+     void drainAnimNotifies();
+     // One body animation layer's playing-time window [t0, t1) this step (Systems: the authored AnimNotifies in it).
+     void onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight);
++    // [Systems] body notify effects: attached ones follow their socket (tickBodyNotifyFx, from drainAnimNotifies)
++    struct BodyFx { int vid; int player; std::string socket; float age; };
++    std::vector<BodyFx> bodyFx_;
++    bool bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const;
++    void tickBodyNotifyFx(float dt);
+     void tickLocalMelee(float dt);
+     bool deferredKillstreak_ = false;
+     int lockedClip_ = 0;

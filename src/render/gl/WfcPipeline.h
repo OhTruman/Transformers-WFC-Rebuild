@@ -1332,6 +1332,7 @@ private:
         std::string component, owner, ownerClass, system, role, requiredRule;
         std::map<std::string, std::array<float, 4>> colorParams;   // InstanceParameters, FLinearColor(FColor)
         bool active = true, hidden = false, attached = true;
+        bool noTrail2 = false;   // [Systems] Trail2 emitters off for this instance (spawnFx deny-list, until per-frame trail points)
         float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
         float R0[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T0[3] = {0, 0, 0}; // authored (before matinee poses)
         std::string ownerShort;                                               // owner actor name (lower case)

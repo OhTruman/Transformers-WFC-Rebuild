@@ -39,6 +39,9 @@
 namespace {
 struct MuzzleLightDef { const char* cls; float radius; float color[3]; float falloff; float duration; float brightness; };
 #include "game/MuzzleLights.inc"
+#include "game/AnimNotifies.inc"   // [Systems] authored body notifies (HmAnimNotify_PlayEffect rows of the TR_* AnimSets)
+#include "game/MeshSockets.inc"    // [Systems] the body meshes' SkeletalMeshSockets
+#include "game/PhysmatImpacts.inc" // [Systems] PhysicalMaterial ImpactEffect / ImpactSound (gen_physmat_impacts.py)
 struct DeathLightDef { float radius; float color[3]; float falloff, rampIn, lightTime, rampOut; };
 #include "game/DeathLights.inc"
 // [Gameplay] The original's death entries / pickers' data (tools/gameplay/death_entries.py, authored.db).
@@ -254,9 +257,10 @@ void World::load(render::IRenderer& renderer) {
             }
             if (shot.impact && relevant) {
                 fxSpawnPooled_ = true;   // impact squibs: pooled
-                fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
+                const std::string squib = impactSquibFor(shot.physmat, wfx->squib);   // [Systems] physmat rule
+                fx_.spawnImpact(squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
                 fxSpawnPooled_ = false;
-                fxLight(wfx->squib, shot.to + core::normalize(shot.from - shot.to) * 0.2f);   // RT-era impact light, off the surface
+                fxLight(squib, shot.to + core::normalize(shot.from - shot.to) * 0.2f);   // RT-era impact light, off the surface
             }
         }
     };
@@ -870,8 +874,9 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
     }
     if (wfx && dist < range - 0.01f) {
-        fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
-        fxLight(wfx->squib, hitPoint - dir * 0.2f);   // RT-era impact light, off the surface
+        const std::string squib = impactSquibFor(hitPhysmat, wfx->squib);   // [Systems] physmat rule
+        fx_.spawnImpact(squib, hitPoint, dir * -1.0f, origin);
+        fxLight(squib, hitPoint - dir * 0.2f);   // RT-era impact light, off the surface
     }
     static const bool muzzleLog = std::getenv("WFC_MUZZLELOG") != nullptr;
     if (muzzleLog && player_.pawn().hasWeapon()) {
@@ -916,7 +921,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
             }
         }
     } else if (dist < range - 0.01f) {
-        const std::string& impact = CharacterAudio::weaponCue(firedCls, "DefaultImpactSound");
+        const std::string impact = impactSoundFor(hitPhysmat, CharacterAudio::weaponCue(firedCls, "DefaultImpactSound"));   // [Systems] physmat rule
         if (!impact.empty()) cues_.play(impact.c_str(), hitPoint, hitDist);
     }
 }
@@ -1829,7 +1834,7 @@ std::vector<std::string> World::applyLoadout(const CharacterSelection* sel) {
     }
     const double t1 = profNowMs();
     // TnCharacterApplier.ApplyAbilities: CharacterData.Abilities (custom selection, else the iconic preset).
-    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
+    pc.setAbilities(testAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities));
     const double t2 = profNowMs();
     syncShownWeapon();
     if (spawnProf()) LOG_INFO("SPAWNPROF applyLoadout: setLoadout %.1f ms, setAbilities %.1f ms, syncShownWeapon %.1f ms", t1 - t0, t2 - t1, profNowMs() - t2);
@@ -2423,6 +2428,7 @@ void World::stepRemainder(float dt) {
         player_.pawn().setAimPitch((float)std::atof(ap));
     if (!onlineSeats_) { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }   // online: in the pool while spawned (as every seat)
     drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
+    tickBodyNotifyFx(dt);   // [Systems] attached body effects follow this step's poses
     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
     static const bool animLog = std::getenv("WFC_ANIMLOG") != nullptr;
@@ -2571,7 +2577,7 @@ void World::stepRemainder(float dt) {
             if (s.weapon.empty()) continue;
             const std::string cls = "TransContent.TnWeapon" + s.weapon;
             if (fired.insert(s.player).second) onParticipantFired(cls, s.from);
-            if (s.impact) onParticipantImpact(cls, s.to, s.hitPlayer);
+            if (s.impact) onParticipantImpact(cls, s.to, s.hitPlayer, s.physmat);
         }
     }
 }
@@ -4537,6 +4543,19 @@ void World::draw(render::IRenderer& r) const {
         else if (pb.fx >= 0) { fxStopEffect(r, pb.fx, 0); pb.fx = -1; }
     }
 
+    // [Systems] Drain beams (TnBuffDrainTarget: DrainRay_Beam_FX, Beam2): spawned while a victim is drained, moved every frame,
+    // stopped when the drain ends or the victim leaves it. WFC_BODYNOTIFYFX=0: off (the ability presentation family).
+    {
+        static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
+        for (const auto& kv : drainBeams_) {
+            const DrainBeam& b = kv.second;
+            const bool on = b.live && !off;
+            if (on && b.fx < 0) b.fx = fxSpawnSegment(r, "FX_Multiplayer_p.FX.DrainRay_Beam_FX", b.start, b.end, 0);
+            else if (on) fxSetSegment(r, b.fx, b.start, b.end, 0);
+            else if (b.fx >= 0) { fxStopEffect(r, b.fx, 0); b.fx = -1; }
+        }
+    }
+
     // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
     {
         const bool on = repairBeam_.active && repairBeam_.time > 0.0f;
@@ -4976,7 +4995,7 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
             setPlayerVehicleWeaponAudio(vehCls);
         }
     }
-    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
+    pc.setAbilities(testAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities));
     pc.respawnReset();
     if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
     return refused;
@@ -5693,6 +5712,11 @@ void World::tickAbilityEffects(float dt) {
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
+    // [Systems] DrainRay_Beam_FX: one looping beam per victim drained this step (presented in the draw pass, as the Repair Ray).
+    for (auto it = drainBeams_.begin(); it != drainBeams_.end();) {
+        it->second.live = false;
+        if (it->second.fx < 0) it = drainBeams_.erase(it); else ++it;
+    }
     if (pc.drainRemain_ > 0.0f && !onlineSeats_) {
         pc.drainRemain_ = localDead_ ? 0.0f : std::max(0.0f, pc.drainRemain_ - dt);
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
@@ -5706,6 +5730,13 @@ void World::tickAbilityEffects(float dt) {
                 ++targets;
                 applyMatchDamage(o->matchPlayer(), localPlayer_, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
                 onDrainVictimTick(o->pawn().actorLocation());   // [Systems M08i] TnBuffDrainTarget.DamageSound
+                {   // [Systems] the beam: victim -> the drainer's MeleeSocket_LeftHand (RE MP_ABILITY_CUES_RE efcd305)
+                    DrainBeam& b = drainBeams_[o->matchPlayer()];
+                    core::Mat4 hand;
+                    b.start = o->pawn().actorLocation();
+                    b.end = bodySocketWorld(pc, "MeleeSocket_LeftHand", hand) ? core::Vec3{hand.m[12], hand.m[13], hand.m[14]} : pc.actorLocation();
+                    b.live = true;
+                }
             }
         if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
         if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
@@ -5759,8 +5790,99 @@ void World::drainAnimNotifies() {
 }
 
 // [Systems] fills: fire the authored notify rows of (animSet, sequence) with time in [t0, t1). Gameplay's stub.
+namespace {
+// [Systems] body notify index: "animSet|sequence" -> its HmAnimNotify_PlayEffect rows (the sounds keep their CharacterAudio path), and
+// "mesh|socket" -> the SkeletalMeshSocket row of a body mesh.
+struct BodyNotifyIndex {
+    std::unordered_map<std::string, std::vector<const AnimNotifyRow*>> effects;
+    std::unordered_map<std::string, const MeshSocketRow*> sockets;
+};
+const BodyNotifyIndex& bodyNotifyIndex() {
+    static const BodyNotifyIndex idx = [] {
+        BodyNotifyIndex x;
+        for (const AnimNotifyRow& r : kAnimNotifies)
+            if (r.effect && !std::strncmp(r.animSet, "TR_", 3)) x.effects[std::string(r.animSet) + "|" + r.sequence].push_back(&r);
+        for (const MeshSocketRow& s : kMeshSockets) x.sockets.emplace(std::string(s.mesh) + "|" + s.socket, &s);
+        return x;
+    }();
+    return idx;
+}
+// "content/<pkg>/<mesh>.gltf" -> "<pkg>.<mesh>" (the MeshSockets key; as requestCorpse's death-socket key)
+std::string bodyMeshKey(const std::string& g) {
+    const size_t s1 = g.rfind('/'), s0 = s1 == std::string::npos || s1 == 0 ? std::string::npos : g.rfind('/', s1 - 1), dot = g.rfind('.');
+    if (s0 == std::string::npos || dot == std::string::npos || dot < s1) return "";
+    return g.substr(s0 + 1, s1 - s0 - 1) + "." + g.substr(s1 + 1, dot - s1 - 1);
+}
+}  // namespace
+
+bool World::bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const {
+    const bool veh = c.form() == Form::Vehicle;
+    const std::string key = bodyMeshKey(veh ? c.chassis().vehicleSkelGltf : c.chassis().robotSkelGltf) + "|" + socket;
+    const BodyNotifyIndex& idx = bodyNotifyIndex();
+    auto it = idx.sockets.find(key);
+    if (it == idx.sockets.end()) return false;   // the socket is not on this body (e.g. Bumblebee's trail sockets on another chassis)
+    const MeshSocketRow& r = *it->second;
+    core::Mat4 bone;
+    if (!c.boneWorld(r.bone, bone)) return false;
+    const float loc[3] = {r.x, r.y, r.z};
+    const int rot[3] = {r.pitch, r.yaw, r.roll};
+    out = bone * ueSocketToGltf(loc, rot);
+    return true;
+}
+
+// [Systems] HmAnimNotify_PlayEffect on the body (authored AnimSequence.Notifies of the TR_* AnimSets, AnimNotifies.inc): the effect
+// at the mesh socket, attached (flag 1) = it follows the socket. UE3 AnimNodeSequence issues notifies for a node with weight above
+// its NotifyWeightThreshold (default 0) [HIGH: no per-node thresholds for effects in our trees]. A socket the body does not have
+// spawns nothing (AttachComponentToSocket fails). Participants within 40 m of the local pawn, as the weapon notifies [PROV distance].
+// WFC_BODYNOTIFYFX=0: off. WFC_NOTIFYLOG: one line per effect.
 void World::onAnimNotifyWindow(int matchPlayer, const char* animSet, const char* sequence, float t0, float t1, bool backwards, float weight) {
-    (void)matchPlayer; (void)animSet; (void)sequence; (void)t0; (void)t1; (void)backwards; (void)weight;
+    static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
+    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
+    (void)backwards;   // nothing of ours plays backwards (Gameplay's hook)
+    if (off || !renderer_ || weight <= 0.0f || !(t1 > t0)) return;
+    const BodyNotifyIndex& idx = bodyNotifyIndex();
+    auto it = idx.effects.find(std::string(animSet) + "|" + sequence);
+    if (it == idx.effects.end()) return;
+    const bool local = matchPlayer == localPlayer_;
+    const Character* c = local ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(matchPlayer);
+    if (!c) return;
+    if (!local && core::length(c->position() - player_.pawn().position()) > 40.0f) return;
+    for (const AnimNotifyRow* r : it->second) {
+        if (r->time < t0 || r->time >= t1) continue;
+        core::Mat4 sw;
+        if (!bodySocketWorld(*c, r->socket, sw)) {
+            if (log) LOG_INFO("BODYNOTIFYFX p%d %s.%s %s @%s: no socket on this body", matchPlayer, animSet, sequence, r->what, r->socket);
+            continue;
+        }
+        const core::Vec3 p{sw.m[12], sw.m[13], sw.m[14]}, f = core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
+                         u = core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]});
+        const int vid = fxStepSpawn(r->what, p, f, u, fxTeamOf(matchPlayer), false);
+        if (log) LOG_INFO("BODYNOTIFYFX p%d %s.%s t %.3f %s @%s%s", matchPlayer, animSet, sequence, r->time, r->what, r->socket, (r->flags & 1) ? " attached" : "");
+        if ((r->flags & 1) && vid >= 0) bodyFx_.push_back({vid, matchPlayer, r->socket, 0.0f});
+    }
+}
+
+// Attached body effects follow their socket; after 2 s [PROV: the systems' own lifetimes are not modelled] or when the pawn is gone
+// they are deactivated (live particles finish).
+void World::tickBodyNotifyFx(float dt) {
+    std::vector<std::pair<int, std::string>> abilities;
+    { std::lock_guard<std::mutex> lk(abilityFxMu_); abilities.swap(abilityFxPending_); }
+    for (const auto& a : abilities) spawnAbilityTriggerFx(a.first, a.second);
+    for (size_t i = 0; i < bodyFx_.size();) {
+        BodyFx& b = bodyFx_[i];
+        b.age += dt;
+        const Character* c = b.player == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(b.player);
+        core::Mat4 sw;
+        if (b.age <= 2.0f && c && bodySocketWorld(*c, b.socket, sw)) {
+            fxStepMove(b.vid, core::Vec3{sw.m[12], sw.m[13], sw.m[14]}, core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
+                       core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]}));
+            ++i;
+            continue;
+        }
+        fxStepStop(b.vid);
+        bodyFx_[i] = bodyFx_.back();
+        bodyFx_.pop_back();
+    }
 }
 
 // collision_weapon_physmat.json (AssetTools) -> the static weapon collision's per-triangle physical materials (see Collision.h).
@@ -7230,6 +7352,10 @@ int World::preloadSelectionAudio(const std::vector<std::string>& chassisKeys, co
 }
 
 void World::onParticipantAbility(int player, const std::string& id, const std::string& chassisKey, const core::Vec3& pos) {
+    {   // [Systems] OnTriggerEffect (every client): queued, spawned by tickBodyNotifyFx (the bot hook may run off the main thread)
+        std::lock_guard<std::mutex> lk(abilityFxMu_);
+        abilityFxPending_.emplace_back(player, id);
+    }
     if (!audio_ || levelAudio_.level().empty()) return;
     const CharacterAudioProfile* prof = CharacterAudio::find(chassisKey);
     const CharacterAudioProfile& p = prof ? *prof : CharacterAudio::defaultProfile();
@@ -7431,7 +7557,39 @@ void World::onParticipantFired(const std::string& weaponClass, const core::Vec3&
     weaponAudio_.fire(cues_, weaponClass, false, e, core::length(from - listenerPos_));
 }
 
-void World::onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer) {
+// [Systems] The weapon impact rule (TnWeaponMesh.CreateImpactEffects / GetImpactSound, RE weapon audit section 1): the surface's
+// weapon-specific entry (none authored [CONF data]) -> its PhysicalMaterial's ImpactEffect / ImpactSound (resolved up the Parent chain,
+// PhysmatImpacts.inc) -> the weapon mesh's DefaultSquib / DefaultImpactSound. physmat = the hit's PhysicalMaterial path, resolved by
+// Gameplay's trace from AssetTools' collision_weapon_physmat.json in the original's order (RE 0x82F1B370: component override -> the
+// check result's -> the hit material's -> the first material slot with one for a StaticMeshActor -> the engine default); "" = the
+// engine default ENV_PHYSMAT_p.Metal_PHYSMAT, which authors neither. On the MP maps this changes ForceField / ForceField_Blue
+// (squib, sound), Water_Coolant (squib), Metal_dest (sound) and Seed's Corruptor squib surface. ImpactThreshold / ImpactReFireDelay
+// are the rigid-body collision fields, not the weapon path. WFC_PHYSMATIMPACT=0: the weapon defaults only.
+namespace {
+const PhysmatImpactRow* physmatImpactRow(const std::string& physmat) {
+    static const bool off = std::getenv("WFC_PHYSMATIMPACT") && std::getenv("WFC_PHYSMATIMPACT")[0] == '0';
+    if (off || physmat.empty()) return nullptr;
+    static const std::unordered_map<std::string, const PhysmatImpactRow*> idx = [] {
+        std::unordered_map<std::string, const PhysmatImpactRow*> m;
+        for (const PhysmatImpactRow& r : kPhysmatImpacts) m.emplace(r.physmat, &r);
+        return m;
+    }();
+    auto it = idx.find(physmat);
+    return it == idx.end() ? nullptr : it->second;
+}
+}  // namespace
+
+std::string World::impactSquibFor(const std::string& physmat, const std::string& weaponSquib) {
+    const PhysmatImpactRow* r = physmatImpactRow(physmat);
+    return r && *r->impactEffect ? std::string(r->impactEffect) : weaponSquib;
+}
+
+std::string World::impactSoundFor(const std::string& physmat, const std::string& weaponSound) {
+    const PhysmatImpactRow* r = physmatImpactRow(physmat);
+    return r && *r->impactSound ? std::string(r->impactSound) : weaponSound;
+}
+
+void World::onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer, const std::string& physmat) {
     const float dist = core::length(at - listenerPos_);
     if (victimPlayer >= 0) {
         // A pawn hit: its TnHitEffectPlayer entry for the damage type, retriggered at most every RetriggerTime (the local
@@ -7446,7 +7604,7 @@ void World::onParticipantImpact(const std::string& weaponClass, const core::Vec3
         if (!cue.empty()) cues_.play(cue.c_str(), at, dist);
         return;
     }
-    const std::string& impact = CharacterAudio::weaponCue(weaponClass, "DefaultImpactSound");
+    const std::string impact = impactSoundFor(physmat, CharacterAudio::weaponCue(weaponClass, "DefaultImpactSound"));
     if (!impact.empty()) cues_.play(impact.c_str(), at, dist);
 }
 
@@ -7460,8 +7618,54 @@ void World::onProjectileHitWall(const std::string& weaponClass, const core::Vec3
     weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
 }
 
+// TEST ONLY: WFC_TESTABILITIES="Drain,Warcry" replaces the local loadout's ability slots (harness runs of the ability presentation;
+// logged once). Unset: the selection's / iconic abilities.
+std::vector<std::string> World::testAbilities(const std::vector<std::string>& abilities) {
+    static const char* env = std::getenv("WFC_TESTABILITIES");
+    if (!env || !*env) return abilities;
+    std::vector<std::string> out;
+    for (const char* p = env; *p;) {
+        const char* e = std::strchr(p, ',');
+        const std::string id = e ? std::string(p, e) : std::string(p);
+        if (!id.empty()) out.push_back(id);
+        if (!e) break;
+        p = e + 1;
+    }
+    static bool logged = false;
+    if (!logged) { logged = true; LOG_INFO("TEST ONLY: WFC_TESTABILITIES replaces the local abilities with %s", env); }
+    return out;
+}
+
 void World::onAbilityTriggered(const std::string& abilityId) {
     abilityAudio_.abilityTriggered(cues_, abilityId, atPawn(), 0.0f);
+    spawnAbilityTriggerFx(localPlayer_, abilityId);
+}
+
+// [Systems] TnAbility.OnTriggerEffect at OnTriggerEffectSocket (default PositionSocket), attached to the caster's mesh; every client
+// plays it (ReplicatedTriggerAbility RepNotify -> ClientOnTriggerAbility; RE MP_ABILITY_CUES_RE efcd305, CONFIRMED CDOs). Only two
+// MP abilities author one. Participants within 40 m, as the notify effects. WFC_BODYNOTIFYFX=0 turns it off with the body effects.
+void World::spawnAbilityTriggerFx(int player, const std::string& abilityId) {
+    struct TriggerFx { const char* ability; const char* effect; const char* socket; };
+    static const TriggerFx kTriggerFx[] = {
+        {"TnAbilityDrain", "FX_Multiplayer_p.FX.Drain_Blast_FX", "PositionSocket"},   // TransGame.Default__TnAbilityDrain
+        {"TnAbilityWarcry", "FX_Multiplayer_p.FX.WarCry_AOE_FX", "Chest_FX"},         // TransGame.Default__TnAbilityWarcry
+    };
+    static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
+    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
+    if (off || !renderer_) return;
+    const std::string cls = AbilityAudio::abilityClass(abilityId);
+    const TriggerFx* t = nullptr;
+    for (const TriggerFx& f : kTriggerFx) if (cls == f.ability) t = &f;
+    if (!t) return;
+    const bool local = player == localPlayer_;
+    const Character* c = local ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(player);
+    if (!c || (!local && core::length(c->position() - player_.pawn().position()) > 40.0f)) return;
+    core::Mat4 sw;
+    if (!bodySocketWorld(*c, t->socket, sw)) return;
+    const int vid = fxStepSpawn(t->effect, core::Vec3{sw.m[12], sw.m[13], sw.m[14]}, core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
+                                core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]}), fxTeamOf(player), false);
+    if (log) LOG_INFO("ABILITYFX p%d %s %s @%s", player, abilityId.c_str(), t->effect, t->socket);
+    if (vid >= 0) bodyFx_.push_back({vid, player, t->socket, 0.0f});
 }
 
 void World::setLocalBuffAudio(const std::string& buffClass, bool active, int team) {
