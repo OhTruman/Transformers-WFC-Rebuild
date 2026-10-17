@@ -13,10 +13,18 @@ index 7de83a6..06025b1 100644
      };
      struct CorpseRequest {
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index 93108f0..ead00c6 100644
+index 93108f0..234ade3 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
-@@ -7003,11 +7003,17 @@ void World::tickCorpses(float dt) {
+@@ -6995,6 +6995,7 @@ void World::tickCorpses(float dt) {
+     for (size_t i = 0; i < corpses_.size();) {
+         Corpse& c = corpses_[i];
+         c.t += dt;
++        if (c.defrag) c.gpuOk = false;   // the Defrag energy-death material is not applied on the queued GPU draw: CPU path
+         if (!c.gibbed && !c.poseStatic) {
+             if (c.clip >= 0) {
+                 assets::LocalPose cp;
+@@ -7003,11 +7004,17 @@ void World::tickCorpses(float dt) {
                  assets::blendPose(c.start, cp, a, c.pose);             // from the pawn's last pose over BlendInTime
              }
              if (c.headNode >= 0 && (size_t)c.headNode < c.pose.s.size()) c.pose.s[(size_t)c.headNode] = core::Vec3{0.1f, 0.1f, 0.1f};   // ControlBone HeadSkelControl 0.1
@@ -35,7 +43,7 @@ index 93108f0..ead00c6 100644
          if (!c.gibbed) {
              if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
                  c.fxAt = -1.0f;
-@@ -7064,12 +7070,21 @@ void World::tickCorpses(float dt) {
+@@ -7064,12 +7071,21 @@ void World::tickCorpses(float dt) {
  
  void World::drawCorpses(render::IRenderer& r) const {
      for (const Corpse& c : corpses_) {
