@@ -2873,3 +2873,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   stock UE3 moving-source trails: SpawnRate points at the socket, per-particle life / size / colour, Hermite chain, newest point
   joined to the source; the 5 UU sampling gone; all modes incl. projectile trails). x14slot (~15 min; + a projectile-trail pair)
   granted directly after the cand30 slot. Card: (B) -> Systems 15 -> Gameplay 4 -> Frontend 4.5 -> Rendering 20 + 15.
+2026-10-17 10:51 RE: LVV affects only light-environment owners (one caller of QueryLightsVisibility), so the Remnant light lights the world
+  unculled through walls in the original -> Rendering draws it unculled on the world, LVV entry on the character path only. RE
+  next: review Systems' remote-command contract (10.2) against the original's input / idle semantics; then eye-check crops.
