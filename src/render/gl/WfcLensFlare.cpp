@@ -63,10 +63,17 @@ void Pipeline::loadLensFlares() {
         LensFlareRT f;
         f.pos = {F["position_m"][0].asFloat(), F["position_m"][1].asFloat(), F["position_m"][2].asFloat()};
         for (int k = 0; k < 4; ++k) f.srcColor[k] = F["source_color"][(size_t)k].asFloat(1.0f);
-        const assets::Json& B = F["fixed_box"];   // [min xyz, max xyz, valid] relative to the source (UU)
-        float h = 0.0f;
-        for (int k = 0; k < 3; ++k) h = std::max(h, std::max(std::fabs(B[(size_t)k].asFloat(0.0f)), std::fabs(B[(size_t)k + 3].asFloat(0.0f))));
-        f.boxHalf = (h > 0.0f ? h : 1000.0f) * 0.01f;
+        // FixedRelativeBoundingBox [min xyz, max xyz, valid], UE units relative to the source (FINAL01: 0 .. 60000 - one corner at
+        // the source, not centred; the stock proxy bounds = the box transformed by LocalToWorld, IsValid not checked [HIGH]);
+        // glTF: (x, z, y) / 100. No box: 1000 UU around the source
+        const assets::Json& B = F["fixed_box"];
+        if (B.size() >= 6) {
+            const core::Vec3 mn{B[0].asFloat(0) * 0.01f, B[2].asFloat(0) * 0.01f, B[1].asFloat(0) * 0.01f};
+            const core::Vec3 mx{B[3].asFloat(0) * 0.01f, B[5].asFloat(0) * 0.01f, B[4].asFloat(0) * 0.01f};
+            f.boxMin = f.pos + core::Vec3{std::min(mn.x, mx.x), std::min(mn.y, mx.y), std::min(mn.z, mx.z)};
+            f.boxMax = f.pos + core::Vec3{std::max(mn.x, mx.x), std::max(mn.y, mx.y), std::max(mn.z, mx.z)};
+        }
+        if (!(f.boxMax.x > f.boxMin.x)) { f.boxMin = f.pos - core::Vec3{10, 10, 10}; f.boxMax = f.pos + core::Vec3{10, 10, 10}; }
         f.spm = dist(F["screen_percentage_map"], 1);
         for (size_t e = 0; e < F["elements"].size(); ++e) {
             const assets::Json& E = F["elements"][e];
@@ -124,9 +131,8 @@ void Pipeline::drawLensFlares() {
         // this frame's query (issued now, read next frame)
         if (lfBoxProg_ && !f.pending) {
             if (!f.query) GenQueries(1, &f.query);
-            const float h = f.boxHalf;
             core::Vec3 c8[8];
-            for (int k = 0; k < 8; ++k) c8[k] = f.pos + core::Vec3{(k & 1) ? h : -h, (k & 2) ? h : -h, (k & 4) ? h : -h};
+            for (int k = 0; k < 8; ++k) c8[k] = {(k & 1) ? f.boxMax.x : f.boxMin.x, (k & 2) ? f.boxMax.y : f.boxMin.y, (k & 4) ? f.boxMax.z : f.boxMin.z};
             float x0 = 1e30f, y0 = 1e30f, x1 = -1e30f, y1 = -1e30f; bool behind = false;
             for (int k = 0; k < 8; ++k) {
                 float c[4]; clip(c8[k], c);
@@ -163,6 +169,8 @@ void Pipeline::drawLensFlares() {
         float occ[1];
         lfEval(f.spm, f.coverage, occ);
         const float vis = occ[0];
+        static const bool lfLog = std::getenv("WFC_LFLOG") != nullptr;   // (diagnostics) per frame: coverage, visibility, box area
+        if (lfLog) LOG_INFO("LFLOG src NDC (%.3f %.3f) coverage %.4f vis %.3f box area %.0f px", sx, sy, f.coverage, vis, f.area);
         const float D = core::length(f.pos - camPos_) * 100.0f;   // (UU: the DistMap_* input)
         const float kDepth = 1.0f;                       // the element plane's view depth (cancels in the NDC size)
         flushingTrans_ = true;                           // (drawn now, not queued)
