@@ -2388,3 +2388,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   tracks process / file activity (multi-exe runs, builds, verify), not GPU frames; tonight's single-exe gate grew ~27 MB/h.
   USER DECISION (security software): a Malwarebytes update or exclusions for F:\Transformers Rebuild and the lanes' tools.
   No lane acts on it. Idle baseline then arm B (D3D12 present) still run, with per-tag diffs, to settle the presenter question.
+2026-10-17 04:20 RE lane tonight (re-workspace-91; docs copied to docs/handoff): GAMEPLAY_DEATH_CAMERA_RE.md (0dee682a: one shared
+  CameraState, death inherits the frozen over-the-shoulder orbit, anchor cancels the shoulder shift, 3.0 s then spectate the
+  killer), GAMEPLAY_SKELETAL_GIB_INIT_RE.md (d7861d11: one ragdoll per robot death, ref pose at PositionSocket, pawn Rotation,
+  zero velocity, native-confirmed), GAMEPLAY_DEATH_PICKER_RE.md (3185f984: first-match picker, no RNG; DeathLight0 shadowless
+  point light at the pawn origin, robot 10 / 2048 / (230,230,255) 2 s ramp then cut, car / tank 25 / 512 / (202,123,213); four
+  corrections to the package 5 death-light rule). Gameplay's patch 2 now carries the faithful picker; death-light values routed
+  to the transient-light owner. RE lane next: the 360 HDR scene path (7e3 resolve bias, exposure) with Systems for the
+  explosion saturation item. Gameplay patch 2 estimate 11-14 h; killer cam queued after it. AssetTools watchdog test PASS
+  (3d1cc87), D1_ORB running. Rendering cand14 identity pair building (X6 + body bit + X3 timer + presenter event).
