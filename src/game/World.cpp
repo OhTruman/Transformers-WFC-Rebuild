@@ -3077,6 +3077,7 @@ bool World::launchMatch(const MatchLaunch& l) {
         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
         if (l.online && l.seed) match_.seedRandom(l.seed * 2246822519u + 3u);   // the Match RNG too (it never restarted between matches)
         onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch; never from the seed)
+        player_.controller().setWireSeat(onlineSeats_);
         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
@@ -3093,6 +3094,7 @@ bool World::launchMatch(const MatchLaunch& l) {
         {
             MatchPlayer& me = match_.playerMutable(localPlayer_);
             me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
+            if (l.humans[(size_t)ls].selected) match_.selectCharacter(localPlayer_, l.humans[(size_t)ls].selection);   // as the remote seats
             if (match_.settings().teamGame) me.team = l.humans[(size_t)ls].team;
         }
         std::vector<int> order(l.humans.size(), -1);
@@ -3435,7 +3437,10 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
         // Killstreak (TriggerKillstreak, B): the newest earned reward, robot form [the same entry the bots use].
         if (robot && down(platform::Button::Killstreak) && !match_.players()[(size_t)p].acquiredKillstreaks.empty()) triggerKillstreakFor(p);
         s.intent = in;
-        if (down(platform::Button::Transform) && !pc.isTransforming()) pc.beginTransform();
+        if (down(platform::Button::Transform) && !pc.isTransforming()) {   // StartTransform with the direct path's checks (every peer)
+            if (p == localPlayer_) player_.controller().tryBeginTransformSeat(pc, collision());
+            else PlayerController::tryBeginTransformOn(pc, collision(), nullptr, nullptr);
+        }
         if (robot && down(platform::Button::Melee) && !pc.isMeleeing()) startMeleeFor(pc, p, false, c.aimYaw);
         if (robot && down(platform::Button::NextWeapon)) pc.requestWeaponSwitch(1);
         if (robot && down(platform::Button::PrevWeapon)) pc.requestWeaponSwitch(-1);

@@ -508,7 +508,9 @@ void World::botThink(BotBody o, BotBrain& b) {
             if (b.switchHold >= 0.5f) {
                 const int n = (int)inv.size();
                 const int dir = ((want - pc.activeWeaponIndex()) % n + n) % n <= n / 2 ? 1 : -1;
-                pc.requestWeaponSwitch(dir); ++b.switches; b.switchHold = 0.0f;
+                if (pbSandbox_) pbPress_ |= 1u << (int)(dir > 0 ? platform::Button::NextWeapon : platform::Button::PrevWeapon);   // online player bot
+                else pc.requestWeaponSwitch(dir);
+                ++b.switches; b.switchHold = 0.0f;
             }
         } else b.switchHold = 0.0f;
         // Grenade toss (TnGrenadeThrower through the shared release): at a visible enemy 8-30 m away now and then, from the bag's
@@ -522,6 +524,8 @@ void World::botThink(BotBody o, BotBrain& b) {
             static const float kChance[4] = {0.05f, 0.09f, 0.14f, 0.18f};   // EXPERT: PC EXTENSION
             if (tp && bag && bag->reserve > 0 && std::string(bag->def->id) != "HealGrenades" && d >= 8.0f && d <= 30.0f &&
                 b.frand() < kChance[std::clamp(b.difficulty, 0, kMaxBotDifficulty)]) {
+                if (pbSandbox_) { pbPress_ |= 1u << (int)platform::Button::Grenade; b.grenadeCooldown = std::max(6.0f, bag->fireInterval); ++b.grenades; }   // online player bot
+                else {
                 bag->reserve -= 1;
                 b.grenadeCooldown = std::max(6.0f, bag->fireInterval);
                 b.grenadeDelay = 0.4f;
@@ -529,6 +533,7 @@ void World::botThink(BotBody o, BotBrain& b) {
                 pc.playAction("GrenadeThrow", true);
                 pc.exposeSelf();
                 ++b.grenades;
+                }
             }
         }
         // Abilities (PC ADAPTATION: when to use them; the effects are the original ones):
@@ -606,6 +611,12 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
     if (pc.moveForm() != Form::Robot || pc.isTransforming() || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
     for (Character::AbilitySlot& a : pc.abilities_) {
         if (a.id != id || !a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) continue;
+        if (pbSandbox_) {   // online player bot: the ability button (the seat path triggers it on every peer)
+            const int slot = (int)(&a - &pc.abilities_[0]);
+            pbPress_ |= 1u << (int)(slot == 0 ? platform::Button::Dash : platform::Button::Ability1);
+            ++b.abilities;
+            return true;
+        }
         if (a.id == "Whirlwind") {
             if (pc.isMeleeing()) return false;
             startMeleeFor(pc, o.matchPlayer(), true, b.yaw);
@@ -650,6 +661,16 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
     const bool trapped = match_.matchTime() < b.trappedUntil;   // Smart dither escape off the mesh (botSteer)
     const bool wants = !trapped && (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
+    if (pbSandbox_) {   // online player bot: a private synchronous search when no time-sliced one is in flight (the bots' state untouched)
+        if (!wants || botNav_.searchActive()) return;
+        b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
+        if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
+        ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;
+        std::vector<BotNav::Waypoint> path;
+        if (botNav_.findPath(pos, b.goal.pos, ag, path) && !path.empty()) { b.path.swap(path); b.wp = 0; b.bestDist = 1e9f; b.progressTimer = 0.0f; }
+        else botPathFailed(b, vehicle);
+        return;
+    }
     if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
     if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
         botSearchQueue_.pop_front();
@@ -1071,10 +1092,11 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
             const float maxStep = sk.turnRateDeg * 0.0174533f * dt;
             b.yaw = wrapPi(b.yaw + core::clampf(wrapPi(yawOf(d) - b.yaw), -maxStep, maxStep));
             b.pitch = core::clampf(b.pitch + core::clampf(pitchOf(d) - b.pitch, -maxStep, maxStep), -1.2f, 1.2f);
-            pc.setAimPitch(b.pitch);
+            if (!pbSandbox_) pc.setAimPitch(b.pitch);   // online player bot: the camera pitch reaches the pawn through the command
             const float range = w->rangeM > 0.0f ? w->rangeM : 35.0f;
-            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
+            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { if (pbSandbox_) pbPress_ |= 1u << (int)platform::Button::Reload; else w->beginReload(); ++b.reloads; }
             if (pc.weaponUsable() && core::length(d) <= range && std::fabs(wrapPi(yawOf(d) - b.yaw)) < 0.15f && w->canFire()) {
+                if (pbSandbox_) { b.fireWish = true; return; }   // online player bot: Fire (the seat path runs the beam)
                 w->onFired();
                 const float tick = w->fireInterval > 0.0f ? w->fireInterval : 0.1f;
                 for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.healTarget && q->spawned()) q->pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tick);
@@ -1117,18 +1139,19 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
     const float dy = wrapPi(wantYaw - b.yaw), dp = wantPitch - b.pitch;
     b.yaw = wrapPi(b.yaw + core::clampf(dy, -maxStep, maxStep));
     b.pitch = core::clampf(b.pitch + core::clampf(dp, -maxStep, maxStep), -1.2f, 1.2f);
-    pc.setAimPitch(b.pitch);
+    if (!pbSandbox_) pc.setAimPitch(b.pitch);
     // Weapon state.
     if (!w) return;
     if (pc.moveForm() == Form::Vehicle && o.matchPlayer() != localPlayer_) w->tick(dt);   // the robot weapon ticks in tickBots (local: the controller)
     const bool usable = pc.moveForm() == Form::Vehicle ? !pc.isTransforming() : (pc.weaponUsable() && !pc.isMeleeing() && pc.carryingHeavy_ == 0);
-    if (usable && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
+    if (usable && w->ammo == 0 && w->canReload()) { if (pbSandbox_) pbPress_ |= 1u << (int)platform::Button::Reload; else w->beginReload(); ++b.reloads; }
     if (!t || pc.isMeleeing()) return;
     // Melee (the shared TnMeleeAttack path, assist lunge included): an enemy within Striking range in front of the robot.
     if (pc.moveForm() == Form::Robot && b.reactionLeft <= 0.0f && b.meleeCooldown <= 0.0f && pc.carryingHeavy_ == 0) {
         const core::Vec3 to = targetable(*t) - pc.actorLocation();
         const float d = std::sqrt(to.x * to.x + to.z * to.z);
         if (d <= 7.0f && std::fabs(wrapPi(yawOf(to) - b.yaw)) < 0.6f) {   // the assist lunge closes the rest
+            if (pbSandbox_) { pbPress_ |= 1u << (int)platform::Button::Melee; ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }   // online player bot
             startMeleeFor(pc, o.matchPlayer(), false, b.yaw);
             if (pc.isMeleeing()) { ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }
         }
@@ -1236,6 +1259,8 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     ensureBotNav();
     Character& pc = player_.pawn();
     BotBrain& b = playerBot_;
+    struct PbScope { bool& f; ~PbScope() { f = false; } } pbScope{pbSandbox_};
+    pbSandbox_ = onlineSeats_; pbPress_ = 0;   // online: input only
     if (!b.wasSpawned) {   // a fresh spawn: a fresh brain facing the camera
         const unsigned rng = b.rng ? b.rng + 17U : 0x51ed270bU;
         b = BotBrain{};
@@ -1247,10 +1272,12 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
     if ((b.thinkTimer -= dt) <= 0.0f) { b.thinkTimer = 0.25f; botThink(body, b); }
     // The bots spend the per-step search budget inside the step; the player bot (between steps) may start one when the shared search is
     // free (it completes in the step, delivered to playerBot_).
-    { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
+    if (pbSandbox_) botPathUpkeep(body, b, dt);   // online: a private search
+    else { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
     MoveIntent mi;
     botSteer(body, b, dt, mi);
     botOffMeshWatch(b, pc, dt);
+    if (b.suicideWish && pbSandbox_) { b.suicideWish = false; b.offMeshRun = 0.0f; }   // online: no direct kill (input only)
     if (b.suicideWish) {   // stranded (botSteer / the off-mesh watch): the bots' suicide (harness only: a human never runs the player bot)
         b.suicideWish = false; b.offMeshRun = 0.0f;
         LOG_INFO("bots: p%d (player bot) stranded 30 s with no way back at t %.2f: suicide", localPlayer_, match_.matchTime());
@@ -1291,6 +1318,8 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
         in.pressed[(int)platform::Button::Transform] = true;
         playerBotTransformCd_ = 2.0f;
     }
+    for (size_t k = 0; k < std::size(in.pressed) && k < 32; ++k) if ((pbPress_ >> k) & 1u) in.pressed[k] = true;   // online: the brain's actions
+    pbPress_ = 0;
     in.mouseDX = 0; in.mouseDY = 0;
     static const bool pblog = std::getenv("WFC_PLAYERBOTLOG") != nullptr;
     if (pblog) { static float acc = 0.0f; if ((acc += dt) >= 1.0f) { acc = 0.0f;

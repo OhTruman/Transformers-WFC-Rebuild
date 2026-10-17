@@ -5747,6 +5747,56 @@ void Application::runSessionTest() {
         check(seatOk == 2, "seat order: match player i = seat i on both perspectives (local at seat 0 / seat 1)");
         check(hs[0] == hs[1] && hs[0] != 0, "cross-perspective identity: local at seat 0 vs seat 1, the same seat streams -> equal state at step 1600");
     }
+    // The cross-perspective identity from the launch (NET.identity's conditions): selections only from the launch record, 2 v 2 bots,
+    // aim-only commands, every step compared from the launch on.
+    {
+        std::vector<std::string> rows[2]; std::vector<uint64_t> hh[2];
+        const bool pbot = game::World::playerBotDifficulty() >= 0;
+        std::vector<game::RemoteCommand> rec;
+        LOG_INFO("SESSIONTEST launch identity: seat 0 input from %s", pbot ? "the player bot (recorded on A, replayed on B)" : "aim-only commands");
+        for (int ls = 0; ls < 2; ++ls) {
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2", S);
+            S.seed = 0x5eedc0deu; S.online = true; S.localTeam = ls == 0 ? 0 : 1;
+            S.humans = {seat("Seat0", 0, "WFC-LA-0"), seat("Seat1", 1, "WFC-LA-1")}; S.localSeat = ls;
+            world_.launchMatch(S);
+            for (int i = 0; i < 2400; ++i) {
+                // With WFC_PLAYERBOT the local seat's input comes from the player bot (as NET.identity's live peers): A sends seat 0's
+                // encoded commands and records them, B replays them as its remote seat 0 (B's own player bot runs too, input only).
+                platform::InputFrame fr = idle;
+                if (pbot) world_.playerBotInput(fr, dt);
+                world_.handleInput(fr, dt);
+                for (int st = 0; st < 2; ++st) {
+                    game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1);
+                    c.aimYaw = st == 0 ? -2.356194f : 0.785398f; c.aimPitch = 0.0f;
+                    if (pbot && st == 0) {
+                        if (ls == 0) { c = world_.encodeLocalCommand(); rec.push_back(c); }
+                        else if ((size_t)i < rec.size()) c = rec[(size_t)i];
+                        c.tick = (uint32_t)(world_.simTick() + 1);
+                    }
+                    world_.applyRemoteCommand(st, c);
+                }
+                world_.tick(dt);
+                hh[ls].push_back(world_.simStateHash());
+                std::string row;
+                for (size_t pp = 0; pp < world_.match().players().size(); ++pp) {
+                    const game::Character* c = world_.participantPawn((int)pp); char b[200];
+                    if (c) std::snprintf(b, sizeof b, " p%zu (%.4f %.4f %.4f) v(%.4f %.4f %.4f) y%.4f h%.1f", pp, c->position().x, c->position().y, c->position().z,
+                                         c->velocity().x, c->velocity().y, c->velocity().z, c->yaw(), c->health().current);
+                    else std::snprintf(b, sizeof b, " p%zu -", pp);
+                    row += b;
+                }
+                rows[ls].push_back(row);
+            }
+        }
+        size_t first = hh[0].size();
+        for (size_t i = 0; i < hh[0].size() && i < hh[1].size(); ++i) if (hh[0][i] != hh[1][i]) { first = i; break; }
+        if (first < hh[0].size()) {
+            LOG_INFO("SESSIONTEST launch identity: first divergent step %zu", first);
+            LOG_INFO("SESSIONTEST   A:%s", rows[0][first].c_str()); LOG_INFO("SESSIONTEST   B:%s", rows[1][first].c_str());
+            if (first > 0) { LOG_INFO("SESSIONTEST   A prev:%s", rows[0][first - 1].c_str()); LOG_INFO("SESSIONTEST   B prev:%s", rows[1][first - 1].c_str()); }
+        }
+        check(first == hh[0].size(), "launch identity: local at seat 0 vs seat 1 from the launch record alone, every step through the first InProgress seconds");
+    }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

@@ -91,6 +91,8 @@ public:
     int transformFailedCount() const { return transformFailedCount_; }
     int forcedVehicleCount() const { return forcedVehicleCount_; }
     bool tryBeginTransform();
+    // StartTransform for any pawn: TransformDisruptor refusal, the robot fit + safe-spot shift out of vehicle form (counters optional).
+    static bool tryBeginTransformOn(Character& pawn, const CollisionWorld* col, int* cantTransform, int* transformFailed);
     // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
     // 30) scales the orbit speed by Lerp(0.03, 0.20, s/100) - applied relative to the default 30 (the absolute mouse rate
     // stays PROV); invert Y per form: InvertY_Robot, InvertY_Car (car AND truck), InvertY_Plane, InvertY_Tank.
@@ -269,6 +271,11 @@ private:
     core::Vec3 specPos_{0, 0, 0};
     float specYaw_ = 0.0f, specPitch_ = 0.0f, specFov_ = 0.0f;
     bool guiding_ = false, detonate_ = false;
+    bool wireSeat_ = false;   // online: the pawn moves only through the seat commands (no direct pawn writes from input)
+public:
+    void setWireSeat(bool w) { wireSeat_ = w; }
+    bool tryBeginTransformSeat(Character& pawn, const CollisionWorld* col) { return tryBeginTransformOn(pawn, col, &cantTransformCount_, &transformFailedCount_); }   // + the HUD pulses
+private:
     float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
     float camSmoothRemain_ = 0.0f;
     int camCollStrategy_ = -1;

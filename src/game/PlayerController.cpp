@@ -163,8 +163,10 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) 
         pawn_->vehicleParams().form == VehicleFormType::Tank && pawn_->vehicleState().dashCooldown <= 0.0f && quickTurnRemain_ <= 0.0f) {
         quickTurnRemain_ = 0.3f; quickTurnFrom_ = camYaw_; quickTurnTo_ = pawn_->yaw() + 3.14159265f;
         quickTurnFrom_ = quickTurnTo_ - 3.14159265f + std::remainder(camYaw_ - pawn_->yaw(), 6.2831853f);   // start from the current view
+        if (!wireSeat_) {   // online the seat path owns the pawn (the camera turn stays)
         pawn_->vehicleState().dashCooldown = 1.2f;
         ++pawn_->vehicleState().quickTurnSerial;   // Systems: Tank 180 sound event
+        }
     }
     if (in.wasPressed(Button::Dash)) {
         wantDashLatched_ = true;
@@ -187,7 +189,7 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) 
     if (transforming && in.wasPressed(Button::Transform) && pawn_) ++transformFailedCount_;   // [Systems M08i] Transform() fails
     if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
         if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
-        tryBeginTransform();
+        if (!wireSeat_) tryBeginTransform();   // online: the press goes in the seat command (applied on every peer)
     }
 
     // Fire: held flag persists across frames (consumed per simulation step while held) [CONF RE].
@@ -663,7 +665,14 @@ bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec
 }
 
 bool PlayerController::tryBeginTransform() {
-    if (!pawn_) return false;
+    return pawn_ && tryBeginTransformOn(*pawn_, col_, &cantTransformCount_, &transformFailedCount_);
+}
+
+bool PlayerController::tryBeginTransformOn(Character& pawnRef, const CollisionWorld* col_, int* cantTransform, int* transformFailed) {
+    Character* pawn_ = &pawnRef;
+    int dummyCant = 0, dummyFailed = 0;
+    int& cantTransformCount_ = cantTransform ? *cantTransform : dummyCant;
+    int& transformFailedCount_ = transformFailed ? *transformFailed : dummyFailed;
     if (pawn_->transformDisruptRemain_ > 0.0f) { ++transformFailedCount_; return false; }   // TnBuffTransformDisruptor: transforming disabled
     if (pawn_->moveForm() == Form::Vehicle && col_) {
         // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).

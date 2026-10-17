@@ -1208,6 +1208,8 @@ private:
     bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
     bool seatOrdered_ = false;          // the running match numbers its humans by the host's seat order (the next launch clears all)
     void clearAllParticipants();
+    bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
+    uint32_t pbPress_ = 0;              // the presses it asked for (platform::Button bits)
     std::vector<char> seatFineAim_;     // online: each seat's last command FineAim bit (the snapshot's fine-aim flag)
     void tickSeatDrain(Character& pc, int p, float dt);   // TnBuffDrainSource for a seat (remote, or the online local seat)
     bool seatHuman(int p) const { return p >= 0 && (size_t)p < match_.players().size() && match_.players()[(size_t)p].kind != ParticipantKind::Bot; }
