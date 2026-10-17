@@ -2710,3 +2710,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   "Waiting for host to start game") and r_host_talker (join code / address / copy hint / privacy line, remote "Alpha  PC  Near" with
   the talker icon, the original gate text): as designed, original style. The rename prompt capture still pending (path fix).
   Systems' 40-min slot running since 09:43.
+2026-10-17 09:45 Correction (Frontend): in r_host_talker Alpha's icon is the IsConnecting spinner (the dev MemberJoined has no character yet, hence the
+  "choose a character" gate text); the proximity cue in that shot is the "Near" tag; the in-match HUD talker list needs Gameplay's
+  Remote participants (item 4). The rename pair capture runs by coordinate in the next small gap. Frontend next: Iconic Mode
+  (estimate first), then the phase 2 online flows doc.
