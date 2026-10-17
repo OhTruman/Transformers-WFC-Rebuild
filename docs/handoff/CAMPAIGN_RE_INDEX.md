@@ -20,6 +20,7 @@ detail missing.
 | SKELETAL_GIB_INIT_RE.md | Skeletal gibs: one per death, ref pose, spawn rotation, velocity |
 | HOVER_RIDE_HEIGHT_RE.md | Hover probe springs, AI vs player righting, robot-form hover |
 | HDR_SCENE_PATH_RE.md | 7e3 scene colour, exponent bias / resolve, bias constant, ceiling 3.984 |
+| CAMPAIGN_SETPIECES_RE.md | Omega Supreme loop (sentries → battery heal / corruption → critical → heart), Trypticon stages 1A/1B/2 and events, soldier-tank fuel cell, detpacks; all script, no native boss code |
 | KILLER_CAM_RE.md, MP_TRANSFORMING_ACTORS_RE.md | MP-side; listed for completeness |
 
 The older pass notes (`notes/TARGETED_PASS5_2026-10-05.md` §12 death pipeline, `notes/MILESTONE_E_OBJECTIVE_MARKERS.md`,
@@ -43,4 +44,3 @@ The older pass notes (`notes/TARGETED_PASS5_2026-10-05.md` §12 death pipeline, 
 | FaceFX | Master-bone quaternion M = ref⁻¹ | HIGH |
 | FaceFX | Face-graph node value clamping upstream of the bone pass | PARTIAL |
 
-**Next (in progress):** CAMPAIGN_SETPIECES_RE.md: Omega Supreme (D5), Trypticon (A5), tank / flight / rail sections, detpacks.
