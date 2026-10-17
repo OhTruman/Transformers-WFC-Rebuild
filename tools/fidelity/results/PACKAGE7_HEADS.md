@@ -91,6 +91,8 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | (data) door / Remnant-light data | 3 lighting.json keys + 6 materials_glsl entries, live 14:13 | render data | dd28a723's expected change (doors / bridges, Remnant light) now active | Rendering's re-shoots | identity bases state it |
 | 9864b4cd | **SIM CHANGE**: Gameplay weapon + melee authored-values batch (per-weapon recoil via hand-socket shot origins, per-melee-set values) | Classic + Smart SIMHASH references re-baselined deliberately (docs/handoff/weaponbatch/rebaseline/) | identity N/A vs earlier heads (sim) | expected eye change: weapon / arm kick per weapon (shotgun / burst / pistol / launcher), none on rifle / IonBlaster | joins the regress base via Gameplay's sim-only diff |
 | (rows) f1ce1c84 physmat pair | Systems Streets physmat pair PASS: SIMHASH equal 4201 steps; 16 / 24 captures = force-field squibs | - | - | - | closes the stack's rows |
+| 0d5399f4 | Frontend GfxPresenter popup mouse-focus fix (popup buttons now clickable with the mouse on PC) | frontend only | no sim or renderer change | not needed | no run |
+| 19fbf3ca | docs | - | - | - | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
