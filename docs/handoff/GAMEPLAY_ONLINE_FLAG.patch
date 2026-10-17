@@ -1,0 +1,59 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index e7abc639..ac4a3b38 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5598,7 +5598,7 @@ void Application::runSessionTest() {
+         uint64_t hs[2] = {0, 0};
+         for (int peer = 0; peer < 2; ++peer) {
+             game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=2", S);
+-            S.localTeam = 0; S.seed = 0x5eed4321u;
++            S.localTeam = 0; S.seed = 0x5eed4321u; S.online = true;
+             world_.launchMatch(S);
+             const int meL = world_.localMatchPlayer();
+             world_.match().selectCharacter(meL, cs);
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 9c7f2da7..b6fa3d3b 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -119,6 +119,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+         gl.remotes.push_back(r);
+     }
+     gl.seed = m.seed;   // online: the host's match seed (0 offline)
++    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)
+     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
+ }
+ template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 88f9a36f..64e0d19c 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3041,7 +3041,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
+         const char* sd = std::getenv("WFC_SEED");
+         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
+-        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.seed != 0;   // online: the local seat through the wire path
++        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch; never from the seed)
+         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
+         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+     }
+diff --git a/src/game/World.h b/src/game/World.h
+index 9c31d47e..50ced6f6 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -80,6 +80,7 @@ struct MatchLaunch {
+     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
+     std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
+     uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
++    bool online = false;               // a session launch (from the launch record): every human through the wire path; offline false
+     static bool fromURL(const std::string& url, MatchLaunch& out);
+ };
+ 
+@@ -1198,7 +1199,7 @@ private:
+     bool remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
+     void remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume = true);
+     void runLocalSeat(float dt);
+-    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.seed set, or the test override)
++    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
+     int localWireOverride_ = -1;        // tests: -1 auto, 0 direct, 1 wire
+     MoveIntent localSeatIntent_; bool localSeatPickup_ = false; float localSeatAimPitch_ = 0.0f;
+     core::Vec3 seatAimPoint(const Character& pc, const RemoteCommand& c, float range) const;

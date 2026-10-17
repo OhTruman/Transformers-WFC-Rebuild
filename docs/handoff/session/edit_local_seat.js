@@ -1,5 +1,5 @@
 // The online local seat through the wire path (REMOTE_COMMAND_CONTRACT.md AMENDED, Integration decision (A)).
-// - Online (MatchLaunch.seed set): the local PlayerController still reads input and drives the camera every frame, but the SIM takes the
+// - Online (MatchLaunch.online, from the session's launch record; never inferred from the seed): the local PlayerController still reads input and drives the camera every frame, but the SIM takes the
 //   local pawn's input only from the decoded command for tick N, through the same seat path as the Remote seats:
 //   World::encodeLocalCommand() builds the wire command for N = simTick() + 1 from the controller (int8 axes; aim on the rotator grid:
 //   orbit yaw / pitch in robot form, the view rotation in vehicles; held + pressed bits accumulated since the last step; Active = a look
@@ -21,6 +21,16 @@ function ed(f, pairs) {
     }
     fs.writeFileSync(f, crlf ? s.replace(/\n/g, '\r\n') : s);
 }
+ed('src/game/World.h', [[
+    '    uint32_t seed = 0;                 // online: the host\'s match seed (every peer alike); 0 = the local source (offline)\n',
+    '    uint32_t seed = 0;                 // online: the host\'s match seed (every peer alike); 0 = the local source (offline)\n' +
+    '    bool online = false;               // a session launch (from the launch record): every human through the wire path; offline false\n'
+]]);
+ed('src/core/Application_Frontend.cpp', [[
+    '    gl.seed = m.seed;   // online: the host\'s match seed (0 offline)\n',
+    '    gl.seed = m.seed;   // online: the host\'s match seed (0 offline)\n' +
+    '    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)\n'
+]]);
 ed('src/game/PlayerController.h', [[
     '    float accMouseDX_ = 0.0f, accMouseDY_ = 0.0f;\n',
     '    float accMouseDX_ = 0.0f, accMouseDY_ = 0.0f;\n' +
@@ -52,7 +62,7 @@ ed('src/game/World.h', [
      '    bool remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);\n' +
      '    void remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume = true);\n' +
      '    void runLocalSeat(float dt);\n' +
-     '    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.seed set, or the test override)\n' +
+     '    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)\n' +
      '    int localWireOverride_ = -1;        // tests: -1 auto, 0 direct, 1 wire\n' +
      '    MoveIntent localSeatIntent_; bool localSeatPickup_ = false; float localSeatAimPitch_ = 0.0f;\n'],
     ['    bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);\n',
@@ -66,7 +76,7 @@ ed('src/game/World.h', [
 ed('src/game/World.cpp', [
     ['        hostSeed_ = l.seed;   // online: the host\'s seed replaces the local source on every peer\n',
      '        hostSeed_ = l.seed;   // online: the host\'s seed replaces the local source on every peer\n' +
-     '        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.seed != 0;   // online: the local seat through the wire path\n' +
+     '        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch): the local seat through the wire path\n' +
      '        localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;\n'],
     ['    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) return false;\n    if ((int64_t)c.tick != simTick_ + 1) return false;',
      '    if (p < 0 || (size_t)p >= match_.players().size() || (match_.players()[(size_t)p].kind != ParticipantKind::Remote && !(onlineSeats_ && p == localPlayer_))) return false;\n    if ((int64_t)c.tick != simTick_ + 1) return false;'],
@@ -173,7 +183,7 @@ ed('src/core/Application.cpp', [[
     '        uint64_t hs[2] = {0, 0};\n' +
     '        for (int peer = 0; peer < 2; ++peer) {\n' +
     '            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=2", S);\n' +
-    '            S.localTeam = 0; S.seed = 0x5eed4321u;\n' +
+    '            S.localTeam = 0; S.seed = 0x5eed4321u; S.online = true;\n' +
     '            world_.launchMatch(S);\n' +
     '            const int meL = world_.localMatchPlayer();\n' +
     '            world_.match().selectCharacter(meL, cs);\n' +
