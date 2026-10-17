@@ -2,6 +2,7 @@
 - Package 6 gate on af4d0731 DONE: results/PACKAGE-GATE_af4d0731.md (no blocking row; 1b = the attribution-hold head arm; X3 +0.40-0.60 ms, bodies at RT on +0.17-0.49).
 - Leak series: results/NPP_LEAK_2026-10-17.txt - ~4 GB of the pool is Malwarebytes EDR (FlightRecorder.sys); the D3D12 presenter shows no AMD-tag growth. Fix = the user's decision (Integration surfaced it).
 - OPEN: wfc_rebuild pid 19880 (arm B run 32) stuck in the kernel after an exit hang, unkillable; gone only at the reboot. Its leak-arm bash 14164 / lockstep-ab 31476 wait on it.
+- NEXT after the reboot: package 7 gate design - per merged head identity + eye sheet as now; one combined timed regress / 1b / FAST on the package 7 head; write tonight's hold rules into package-respin.sh's header (no interpreters from any session during a hold, AssetTools' hold check, the 9.5 GB pool guard, clear-card wait before the first rep, rerun any CONTAMINATED map whole). Card held for all lanes until the reboot (Integration).
 - TDR ledger day 6 running (work/sweep/tdrledger_day6.csv, from 05:0x).
 
 # IN PROGRESS 2026-10-17 02:14: package 6 gate on af4d0731 (Integration GO 02:10; package 6 = af4d0731 as is, no Streets step)
