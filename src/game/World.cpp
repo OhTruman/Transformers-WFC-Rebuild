@@ -5057,9 +5057,18 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
     const std::vector<std::string> movers = mapState_.moverActorNames();
     const bool keepForcedDir = std::getenv("WFC_NOFORCEDDIR") != nullptr;
     std::vector<uint16_t> perTri;
+    const assets::Json& overrides = root["node_overrides"];   // a listed node takes this physmat for all its triangles
+    int overridden = 0;
     for (const render::SubMesh& sm : glbMesh.subs) {
         if (std::find(movers.begin(), movers.end(), sm.nodeName) != movers.end()) continue;
         if (!keepForcedDir && sm.nodeName.rfind("TnForcedDirVolume", 0) == 0) continue;
+        const std::string nodeKey = std::to_string(sm.gltfNode);
+        if (sm.gltfNode >= 0 && overrides.has(nodeKey)) {
+            const uint16_t o = (uint16_t)overrides[nodeKey].asInt(0);
+            for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(o);
+            ++overridden;
+            continue;
+        }
         const std::vector<uint16_t>* v = sm.gltfMesh >= 0 && perMesh.count(sm.gltfMesh) ? &perMesh[sm.gltfMesh] : nullptr;
         for (uint32_t t = 0; t < sm.indexCount / 3; ++t) perTri.push_back(v && sm.meshTriOffset + t < v->size() ? (*v)[sm.meshTriOffset + t] : 0);
     }
@@ -5067,8 +5076,8 @@ void World::loadWeaponPhysmats(const std::string& mapDir, const render::MeshData
     if (!weaponCollision_.setPhysmats(std::move(perTri), std::move(names), root["engine_default_physmat"].asString()))
         LOG_WARN("physmat: %zu triangles vs %zu built: skipped", n, weaponCollision_.triangleCount());
     else {
-        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked",
-                 mapName_.c_str(), n, mismatched, nameChecked);
+        LOG_INFO("physmat: %s: %zu weapon-collision triangles, %d mesh(es) with a triangle-count mismatch (engine default), %d submesh source names checked, %d node-override submeshes",
+                 mapName_.c_str(), n, mismatched, nameChecked, overridden);
         if (std::getenv("WFC_PHYSMATLOG")) {
             int tested = 0; const int ok = weaponCollision_.physmatSelfTest(2000, tested);
             LOG_INFO("physmat self-test: %d of %d centroid rays report their triangle's material", ok, tested);

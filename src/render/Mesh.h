@@ -31,6 +31,7 @@ struct SubMesh {
     int sourceSection = -1;           // primitive index within that mesh
     int gltfMesh = -1;                // glTF mesh index of the node (collision physmat runs are per mesh)
     uint32_t meshTriOffset = 0;       // first triangle of this primitive within that glTF mesh
+    int gltfNode = -1;                // glTF node index (collision physmat node_overrides)
     bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};

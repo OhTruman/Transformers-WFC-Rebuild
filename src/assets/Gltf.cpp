@@ -292,6 +292,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 }
             }
             sm.gltfMesh = meshIdx; sm.meshTriOffset = meshTri; meshTri += (uint32_t)(idx.size() / 3);
+            sm.gltfNode = nodeIdx;
             out.subs.push_back(sm);
         }
     }
