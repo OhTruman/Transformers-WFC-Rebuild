@@ -2951,3 +2951,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   follow-up with the Debris 'reflective' view as its pair). Experimental's measure of the pool: additive, not opaque (1.06x +
   18.6 levels, detail correlation 0.965) -> the composite check is a glance, no pair. Ledger: "(B) whole, nothing held" to be
   amended to the one held entry.
+2026-10-17 11:28 MERGED f46bdfe4 Gameplay remote seat actions (queued apply at tickPrefix; fire / reload / switch / melee / abilities incl. Decoy /
+  grenade / pickup; SESSIONTEST 25 / 25 on the merged head; offline identical). OmegaLiquid CONFIRMED by the shipped PS (Debris
+  ShaderCache_1203: Edge_Fresnel_Color rgb x its own alpha) -> all 118 (B) entries switch at Systems' CARD FREE. Rendering: additive
+  composite = pure add (ONE, ONE; no depth write): authored, no pair; door DRAW code complete (d2b54522, cand32 = cand31 +
+  Gameplay's transact + draw; 6 materials as a render-data overlay); ~10-min x15slot for the door views rides after x14.
