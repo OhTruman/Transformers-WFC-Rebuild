@@ -39,8 +39,12 @@ projectiles pass through:
     start state holds for the whole match.
 - **Needed from the data:** the transform animation per actor (its AnimSet / sequence) and the bodies' bone names. If the json lacks
   the animation, ask AssetTools for the export.
-- **Draw:** the actors' meshes should animate with the same anim position (Rendering's draw of these actors: to check, so what you see
-  matches what blocks).
+- **Draw: also a gap.** The renderer's skeletal map-actor path (`WfcMapFx.cpp` ~1169) loads only HmSkeletalMeshActor, in bind
+  pose; TnTransformingWorldActor isn't matched. So these actors are most likely not drawn (or are frozen, if world.glb has them as
+  static nodes). To confirm with a capture.
+  - **Proposal to Integration:** Gameplay owns the state and exposes per actor its anim position + pose; Rendering draws the skeletal
+    mesh at that pose. One shared state, so what you see is what blocks.
+- **Nav:** the actor gates its nav points (blocked while closed / retracted). It also raises an AI stimulus on transform (RE).
 
 ## Gates
 
