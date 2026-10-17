@@ -2790,3 +2790,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   dash Time 0 = none, PlaneRocket no burst in Versus (SV keeps 4). Two MISSING recoil rows: TnWeaponHeavyRocketTurret (authored
   spine + hand recoil) and TnWeaponGatlingGun (zero recoil, must not fall back to the archetype). Gameplay adds them before the
   Classic re-baseline. RE lane next: Rendering's Remnant toggleable shadows + Exp_Death distortion PS questions.
+2026-10-17 10:22 MERGED 93d67979 Gameplay physmat node_overrides (53 MP nodes; neutral) and c73fd924 Rendering Set D height-fog layers (all modes,
+  as authored; RE-confirmed data + shader); the lighting.json 'fogs' regen gates PASS 10 / 10 in the scratchpad and is copied into
+  Rebuild/work/render after Experimental's (B) CARD FREE. Rendering order: dark-frame exposure floor -> Remnant toggleable light;
+  trail item (per-frame Trail2 points for attached sources) queued. Systems' ability family built (trigger FX f701e438, drain
+  beam 3f1bbf12, test switches); Trail2 templates deny-listed by default until the trail item; slot = whole family if check_bin
+  is rebuilt by 11:30, else the frozen 12 min. Decoy Trap CONFIRMED a real MP Scout ability (every Car chassis pool; bots never
+  pick it): Gameplay sim item after session hooks. Weapon + melee batch corrected (turret rows, eb08b8b1); 50-min NAVQ
+  re-baseline on 8a080210 WITH SIMHASH running. Frontend phase 2 docs complete (e3f6b6ac strings + tests); next: voice chat UI
+  on FakeSession. AssetTools: PACKAGE7_SLIM_AUDIT.
