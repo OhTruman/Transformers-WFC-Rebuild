@@ -1703,6 +1703,40 @@ static void testOnlineFirstRun() {
     std::remove("wfc_profile.ini");
 }
 
+static void testLaunchRecordAndIdleKick() {
+    using T = SessionEvent::Type;
+    // IK1: "Kick Idle Players" - online host row, Off by default (no URL option); On -> ?WfcIdleKick=1 in the launch URL
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    DataStores& ds = r.rt->dataStores();
+    const std::string fields = ds.call("GetDataStoreFields", {"TnGameSettings"}).s;
+    const bool off = fields.find("WfcIdleKick") != std::string::npos && ds.call("ReadValue", {"<TnGameSettings:WfcIdleKick>"}).s == "Off" &&
+                     r.f().launchUrlForTest().find("WfcIdleKick") == std::string::npos;
+    ds.call("WriteValue", {"<TnGameSettings:WfcIdleKick>", "On"});
+    const bool on = r.f().launchUrlForTest().find("?WfcIdleKick=1") != std::string::npos;
+    check(host && off && on, "online.IK1_idle_kick_row", fields);
+    // L1: the host hands the launch record (its full match URL + a seed) to the session before Start
+    r.f().call("Online.BeginLobbyExitCountdown");
+    const FakeSession::Call* lc = r.fake->last("setLaunch");
+    check(lc && lc->arg.rfind(r.f().launchUrlForTest() + "|", 0) == 0 && r.fake->count("requestStart") == 1, "online.L1_host_sends_launch_record",
+          lc ? lc->arg : std::string());
+    r.f().profile().bots.idleKick = false;
+    r.f().profile().save();
+    // L2: a member launches from the host's record verbatim (not its own profile rows)
+    OnlineRig m;
+    const bool in = m.ok && memberIn(m, false);
+    const std::string hostUrl = "MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame"
+                                "?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters="
+                                "?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508"
+                                "?BotsAutobot=3?BotsDecepticon=4?BotsFriendly=3?BotsEnemy=4?BotDifficulty=2?ExtendedPlayers=0?WfcIdleKick=1";
+    SessionEvent cs = ev(T::CountdownStarted); cs.launchUrl = hostUrl; cs.seed = 4242;
+    m.fake->inject(cs);
+    const bool launched = runUntil(*m.rt, [&] { return m.f().hasPendingMatch(); }, 60 * 30);
+    check(in && launched && m.f().currentMatch().url.toString() == hostUrl && m.f().currentMatch().seed == 4242, "online.L2_member_launches_host_record",
+          m.f().currentMatch().url.toString());
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1733,6 +1767,7 @@ int main() {
     testIconicMode();
     testVoiceUi();
     testOnlineFirstRun();
+    testLaunchRecordAndIdleKick();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

@@ -70,6 +70,7 @@ public:
     struct Bots {
         int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false, editedSinceMap = false;
         bool iconic = false;   // PC EXTENSION: versus "Iconic Characters" (OnlyAllowIconicCharacters); written only when on
+        bool idleKick = false; // online host row "Kick Idle Players" (D5 revised: the original never kicked in private); only when on
     };
     Bots bots;
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,

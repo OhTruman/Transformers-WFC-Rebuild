@@ -54,6 +54,7 @@ public:
     void publishLobby(const SessionLobby& l) override { Call c = mk("publishLobby"); c.lobby = l; calls_.push_back(c); }
     void setMemberInfo(const SessionMemberInfo& i) override { Call c = mk("setMemberInfo"); c.info = i; calls_.push_back(c); }
     void requestStart() override { calls_.push_back(mk("requestStart")); }
+    void setLaunch(const std::string& url, uint32_t seed, const SessionLobby&) override { Call c = mk("setLaunch"); c.arg = url + "|" + std::to_string(seed); calls_.push_back(c); }
     void reportLoaded(uint64_t simId, uint64_t loadHash) override {
         Call c = mk("reportLoaded"); c.arg = std::to_string(simId) + "," + std::to_string(loadHash); calls_.push_back(c);
     }

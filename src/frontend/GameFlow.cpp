@@ -395,7 +395,12 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.BeginLobbyExitCountdown") {
         if (role_ == SessionRole::Member) { FlowTrace::emit("online.memberIgnored", {{"fn", fn}}); return {}; }   // host only
         hostRequestsGameStart();
-        if (session_ && role_ == SessionRole::Host) session_->requestStart();
+        if (session_ && role_ == SessionRole::Host) {   // the launch record first, then Start (the session sends both)
+            std::random_device rd;
+            launchSeed_ = rd() | 1u;
+            session_->setLaunch(buildLaunchUrl(), launchSeed_, hostLobbySnapshot());
+            session_->requestStart();
+        }
         return {};
     }
     if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
@@ -517,7 +522,7 @@ GameFlow::BotRows GameFlow::botRows() const {
 
 int GameFlow::botMax(const std::string& field) const {
     if (field == "difficulty") return 3;   // EASY / MEDIUM / HARD / EXPERT (PC EXTENSION: Expert, user decision)
-    if (field == "extended" || field == "iconic") return 1;
+    if (field == "extended" || field == "iconic" || field == "idlekick") return 1;
     const bool ext = profile_.bots.extended;
     // players per side incl. the human: original 5; extended = Gameplay MatchSettings (applyExtendedSlots) only
     const int perSide = ext ? gpPerTeam_ : 5;
@@ -536,7 +541,17 @@ int GameFlow::botMax(const std::string& field) const {
 int GameFlow::botValue(const std::string& field) const {
     const LocalProfile::Bots& b = profile_.bots;
     return field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy
-         : field == "extended" ? (b.extended ? 1 : 0) : field == "iconic" ? (b.iconic ? 1 : 0) : b.difficulty;
+         : field == "extended" ? (b.extended ? 1 : 0) : field == "iconic" ? (b.iconic ? 1 : 0)
+         : field == "idlekick" ? (b.idleKick ? 1 : 0) : b.difficulty;
+}
+
+bool GameFlow::idleKickOn() const {
+    if (!session_ || role_ == SessionRole::Offline) return false;
+    if (role_ == SessionRole::Member) {
+        auto it = memberLobby_.settings.find("WfcIdleKick");
+        return it != memberLobby_.settings.end() && it->second == botChoiceLabel("idlekick", 1);
+    }
+    return profile_.bots.idleKick;
 }
 
 bool GameFlow::iconicMode() const {
@@ -559,6 +574,7 @@ const GameFlow::BotOption kBotOptions[] = {
     {"WfcBots", "enemy", "Bots"},
     {"WfcBotDifficulty", "difficulty", "Bot Difficulty"},
     {"WfcIconicCharacters", "iconic", "Iconic Characters"},   // PC EXTENSION (OnlyAllowIconicCharacters), team modes only
+    {"WfcIdleKick", "idlekick", "Kick Idle Players"},         // online host row (D5 revised), absent offline
 };
 }
 
@@ -570,6 +586,7 @@ std::vector<GameFlow::BotOption> GameFlow::botOptions() const {
         const std::string f = o.field;
         if (rows == BotRows::Teams && f == "enemy") continue;
         if (rows == BotRows::FreeForAll && (f == "autobot" || f == "decepticon" || f == "iconic")) continue;   // claims are per team
+        if (f == "idlekick" && !session_) continue;   // offline: no such row (fields and URL byte-identical)
         out.push_back(o);
     }
     return out;
@@ -586,7 +603,7 @@ std::string GameFlow::botChoiceLabel(const std::string& field, int v) const {
     const bool teams = botRows() == BotRows::Teams;
     if (field == "difficulty") return kDiff[std::clamp(v, 0, 3)];
     if (field == "extended") return v ? (teams ? "Extended (32 v 32)" : "Extended") : (teams ? "Original (5 v 5)" : "Original (10)");
-    if (field == "iconic") return v ? "On" : "Off";
+    if (field == "iconic" || field == "idlekick") return v ? "On" : "Off";
     return std::to_string(v);
 }
 
@@ -644,6 +661,8 @@ void GameFlow::setBotSetting(const std::string& field, int value) {
         if (b.extended && !b.editedSinceMap) applyRecommendedBots("extended");
     } else if (field == "iconic") {
         b.iconic = value != 0;
+    } else if (field == "idlekick") {
+        b.idleKick = value != 0;
     } else {
         if (field != "difficulty") b.editedSinceMap = true;
         int& v = field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy : b.difficulty;
@@ -1010,10 +1029,10 @@ void GameFlow::gameLobbyTick(float dt) {
     }
 }
 
-void GameFlow::startLevel() {
+std::string GameFlow::buildLaunchUrl() const {
     const GameSettings* gs = lobby_.settings;
-    const MapInfo* mi = cat_->mapById(lobby_.mapId);
-    if (!gs || !mi) { LOG_WARN("FLOW StartLevel: no settings/map"); return; }
+    const MapInfo* mi = cat_ ? cat_->mapById(lobby_.mapId) : nullptr;
+    if (!gs || !mi) return {};
     // GameSettings.BuildURL(MapURL); LobbyGRI.ModifyURL(MapURL): GetMapFilename() $ MapURL $ "?MapId=" $ GetMapID().
     std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
     {   // Private Match bots (PC ADAPTATION; Gameplay's MatchLaunch::fromURL reads them): only when any are configured.
@@ -1035,6 +1054,19 @@ void GameFlow::startLevel() {
                                             {"extended", FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
         }
     }
+    if (idleKickOn()) url += "?WfcIdleKick=1";   // online, the host row On (D5 revised); never offline
+    return url;
+}
+
+void GameFlow::startLevel() {
+    const GameSettings* gs = lobby_.settings;
+    const MapInfo* mi = cat_->mapById(lobby_.mapId);
+    if (!gs || !mi) { LOG_WARN("FLOW StartLevel: no settings/map"); return; }
+    // Online member: the host's launch record verbatim (lockstep: every peer starts from the host's launch); else our own.
+    const bool hostRecord = role_ == SessionRole::Member && !memberLaunchUrl_.empty();
+    const std::string url = hostRecord ? memberLaunchUrl_ : buildLaunchUrl();
+    if (hostRecord) FlowTrace::emit("online.launchRecord", {{"url", url}, {"seed", std::to_string(launchSeed_)}});
+    memberLaunchUrl_.clear();
     match_ = MatchLaunch{};
     match_.url = Url::parse(url);
     match_.map = mi;
@@ -1047,7 +1079,7 @@ void GameFlow::startLevel() {
     match_.timeLimit = std::max(0, match_.url.intOption("TimeLimit", 0));
     match_.gameTeamStatus = match_.url.intOption("GameTeamStatus", 0);
     match_.teamIndex = lobby_.localTeam;
-    if (session_ && role_ != SessionRole::Offline) fillOnlineLaunch();
+    if (session_ && role_ != SessionRole::Offline) { match_.seed = launchSeed_; fillOnlineLaunch(); }
     FlowTrace::emit("gamelobby.startLevel", {{"url", url}});
     travel(url, true);
 }

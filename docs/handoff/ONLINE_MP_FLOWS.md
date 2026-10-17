@@ -526,7 +526,13 @@ Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defi
   check comes with public matches.
 - **D4 decided:** the original gate - every player has a character, teams balanced (when Team Balancing is on), the
   host starts. No Ready toggle.
-- **D5 decided:** the idle kick is on at the original 180 s in every session (public and private).
+- **D5 decided (revised 2026-10-17 by Integration, RE MP_INPUT_CONTRACT_RE 4a1f8fb):** the original kicked idlers only in
+  public sessions, never in private ones, and all our sessions are private. The idle kick is a host option: the online-only
+  Game Mode Options row "Kick Idle Players" (Off / On, default Off). On: 180 s, the host is never kicked; members read the
+  host's row; the match URL carries ?WfcIdleKick=1 (Gameplay MatchSettings.kickIdle) only when On; offline unchanged.
+- **Launch record (Integration, ONLINE_MP_ARCHITECTURE 10.3):** every peer starts from the host's launch - its full match
+  URL (every option incl. the bot rows / Iconic / WfcIdleKick), the seed and the roster, sent with CountdownStarted
+  (SessionEvent launchUrl / seed / lobby); members launch from it verbatim, never from their own profile rows.
 - **D6 decided:** in phase 1, a player joining during a match waits in the host's game lobby ("Match in progress") and
   enters with everyone for the next match; faithful join in progress (state transfer, bot slot) comes in phase 1b.
 - **D7 decided (user):** voice chat is in scope - push-to-talk by default, an open-mic option, per-player mute, Team /
