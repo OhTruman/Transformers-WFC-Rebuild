@@ -213,6 +213,7 @@ void Pipeline::drawLensFlares() {
             }
             for (int k = 0; k < 3; ++k) q.color[k] = col[k] * dmc[k] * (el.modSource ? f.srcColor[k] : 1.0f);
             q.color[3] = al[0] * dma[0] * (el.modSource ? f.srcColor[3] : 1.0f);
+            if (subtle && el.name == "Base_SUN") q.color[3] *= 0.25f;   // (Subtle, our design choice 2026-10-17: the full-frame sun veil x 0.25)
             lensFlareU_[0] = r; lensFlareU_[1] = srcD; lensFlareU_[2] = el.ray; lensFlareU_[3] = vis;
             lensFlareI_ = 1.0f;                          // (proxy+0xE4: 1 without a cone / radius - RE C, 0x82FB6C40)
             drawSprites(el.mats[m].c_str(), &q, 1, back);
