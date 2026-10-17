@@ -2581,3 +2581,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   cfca1717 src/game). Card after PRESENTER DONE (~09:07): Experimental's 6-min base check (same-match True; negative control
   diverges ~601) -> (A) data switch + Gameplay follow-up merge + Set A merge -> Frontend 10 min -> Rendering 20 min -> (B) eye
   pass ~100 min. Presenter loop 36 / 64 at 08:38, clean. AssetTools: movies conversion running (4 threads, low priority).
+2026-10-17 08:41 Merged: 35811523 + 8dd72f58 HUD ability jam / TransformDisrupted display (Frontend; Hud_GFX ApplyBuff / UnapplyBuff from the
+  HUD state buffs; crop waits for Gameplay's buff state). AssetTools: D2 verdict PASS (PROVISIONAL; airborne + elevated exempt);
+  movies conversion running (Logo test 220 / 220 frames, 10 Opus tracks); FINDING: the movie subtitle sidecar header '100' is
+  ticks per second (centiseconds), so the older ExtractedAssets/movies/*.subtitles.json labels raw ticks as ms (10x too early):
+  the campaign FMV player must use the new out/movies JSON. Presenter loop 41 / 64 at 08:41, clean.
