@@ -2941,3 +2941,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Debris' pool + Gorge's glass floor go milky / opaque (alpha treated as intensity on a glass / liquid material?) and Berth's
   lilac mid-ground volume flattens contrast. Decision: switch (B) in MINUS the entries behind the two findings; Systems names
   them (after their slot) and checks each against RE's shipped-PS decode; those follow with their own pair.
+2026-10-17 11:25 (B) shipped-PS verdict (Systems): (a) the candidate matches the original: ForceField_ALL_MAT's PS multiplies fresnel x
+  FresnelColor rgb THEN x its alpha (3.0) (Seed ShaderCache_12865 l.39-43), live squared the colour and never applied the 3.0
+  (5-20x too dark); the LightVolume family reads UniformVector_1.w alone as the intensity (ShaderCache_6631). So the milky glass
+  and Berth's volumes are AUTHORED. (B) switches in WHOLE right after Systems' CARD FREE (not mid-pair). Rendering checks that
+  BLEND_Additive / MLM_Unlit composites as pure add (Debris pool reads opaque; saturation vs a composite bug).
