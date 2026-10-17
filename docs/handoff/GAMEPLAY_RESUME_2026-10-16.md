@@ -8,7 +8,9 @@
     - Edits in `docs/handoff/corpsep2/`, in order: `edit_scorch.js`, the DeathDecal_MAT scorch under gibbed robots via
       `renderer_->spawnDecal`. It's Rendering's documented recipe: 300 UU trace down from actorLocation, |n.y| ≥ 0.5, 800-950 UU,
       random roll, 30 s, with random numbers hashed from the body seed so `frand()` is untouched.
-    - **Next:** skeletal gibs, the Death camera values, the momentum picker. Then, after FREEZE LIFTED, build, run headless
+    - **Skeletal gibs are ragdolls** (`corpsep2/SKELETAL_GIBS_AUTHORED.md`, 49714373): a PBD ragdoll, 8-12 h. The initial pose
+      needs RE (ReVa is down: headless export into work/).
+    - **Next:** the Death camera values and the momentum picker (small), then the ragdoll. Then, after FREEZE LIFTED, build, run headless
       (SIMHASH identical, BOTTEST), and do a crop eye check of the decal.
   - **RE-ORDERED 2026-10-17 (the user, via Integration):** "I just want the game to look beautiful. After it looks like a brand new
     game only then while we optimize for more FPS at no extra cost to the Fidelity."
