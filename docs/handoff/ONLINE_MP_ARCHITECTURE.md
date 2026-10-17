@@ -257,14 +257,15 @@ peer and dropped afterwards (the peer's address is then the key).
 - **The launch record:** every peer starts from the host's launch record:
   - map and mode;
   - the URL options, including the bot rows, Iconic and WfcIdleKick;
-  - the roster (onlineSlots + names);
+  - the roster: seats, names and characters (onlineSlots);
   - the seed (the match RNG seed, chosen by the host).
 - **When:** the host publishes it at the load gate (with CountdownStarted or AllLoaded).
 - **Field:** `SessionEvent.launchUrl`, the host's full match URL (Frontend). Members use it verbatim when present. The roster and the
   seed travel beside it in the same event.
 - **Members** launch from the record and never from their local profile rows; presentation settings stay local.
 - **Version check:** the first bundle carries a hash of (launch record, the exe's sim build id). A member whose record or build
-  differs refuses to start, with JoinFailed{Version}-style text, instead of desyncing later.
+  differs refuses to start and exits to the lobby with the original's "settings changed" text, instead of desyncing later. The
+  members' own URL-from-local-rows path is replaced by the published record (Integration decision).
 
 ## 11. Phases and exit criteria
 
