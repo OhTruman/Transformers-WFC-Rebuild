@@ -71,7 +71,8 @@ peer and dropped afterwards (the peer's address is then the key).
 
 ## 4. Lockstep on the wire (from the netcode design; unchanged unless stated)
 
-- **Command:** ~10 bytes per human per tick (buttons 32 bits, quantised view yaw / pitch deltas, pad axes, trigger).
+- **Command:** ~15 bytes per human per tick: buttons held + pressed (2 x 32 bits), quantised ABSOLUTE view yaw (u16) / pitch (i16),
+  two int8 move axes (section 10.2 contract; absolute aim replaces the earlier deltas so a missed bundle cannot drift).
 - **Up (client -> host):** one packet per tick with that client's last R commands (R = 8; R = 3 for > 10 humans).
 - **Down (host -> all):** one packet per tick with the merged bundle for the ticks each receiver has not acked.
 - **Input delay D** = 4 at start (67 ms), from the measured RTT: D = ceil(RTT_max / 2 / 16.7 ms) + 1, clamped 2..8,
@@ -225,6 +226,20 @@ peer and dropped afterwards (the peer's address is then the key).
     SessionSlotSwap.atTick.
 - **Addition (Frontend, pending):** `virtual float micLevel() const` returns the capture level 0..1 for the Settings > Audio Mic Test
   meter (default 0). VoiceCapture fills it from the pre-gate RMS of the last 20 ms frame.
+
+### 10.2 Remote command contract (with Gameplay, 2026-10-17; their docs/handoff/REMOTE_COMMAND_CONTRACT.md, agents/gameplay b46a2565)
+- `bool World::applyRemoteCommand(int matchPlayer, const RemoteCommand& c)`, with
+  `RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; }`. The floats are
+  the DECODED wire values (yaw u16 over 0..2pi, pitch i16 over +-pi/2), so every peer applies identical numbers.
+- **When:** inside the lockstep step for tick N, once all of N's commands have arrived, before World::tick runs step N, in ascending
+  match-player order on every peer.
+- **The local human too:** in an online match the local human goes through the same call, decoded from the bytes sent. The camera
+  turns locally every frame; the sim side waits for N.
+- **World builds the MoveIntent** from the axes, aim and buttons, and judges idle itself. Any held / pressed bit, a non-zero axis, or
+  an aim change > 0.5 deg against that player's previously APPLIED command counts as non-idle; World then calls noteRemoteCommand.
+  The transport never calls it.
+- **No holes:** a missing command for N stalls the step (section 5). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
+- **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
 ## 11. Phases and exit criteria
 
