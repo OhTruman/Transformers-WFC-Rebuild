@@ -3295,3 +3295,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:54 RETRACTED the WFC_NORECOIL decision: that switch skips the skeletal recoil only (what the weapon batch changes), not the camera
   pitch step (arms still differ from 5215 with it). Instead Gameplay ports onLocalShot's pitch step into the sim-only base diffs
   (B); re-cut TRANSACT + weapon-batch diffs with same-match results ~15:45; Experimental rebuilds the base before the hold.
+2026-10-17 14:54 tools/fidelity synced by path: package-respin.sh fixed (broken cd since 5b665578), p7-gate.sh (pre / gate phases), gate doc.
+  Experimental confirmed NORECOIL's scope headless. Ready for Gameplay's re-cut diffs ~15:45 -> base rebuild -> pre on the named
+  head.
