@@ -7,6 +7,12 @@
     - BOTTEST 48 / 48 on all 12 seeds; seed-7 SIMHASH identical to the base `work/int_p2b` (af4d0731) over 18,007 lines.
     - Logs are in `work/pass29/p2`. The null renderer never spawns gibs, so the ragdoll / scorch / camera need the windowed crop slot
       (about 06:15, after Experimental's arm B and Rendering's Streets run).
+  - **Crops READY for the slot:**
+    - Both trees are rebuilt with the diagnostic hooks (`corpsegpu/stage_hooks2.py` + `corpsep2/stage_hooks_p2.py`; never in the patch,
+      which comes from a clean archive + the edit scripts).
+    - Steps: `work/pass29/p2/steps_crops.txt` (`node docs/handoff/corpsep2/mkp2.js crops`; 6 runs: corpse_10 / deathcam_robot /
+      deathcam_vehicle × base / new).
+    - Run with run_guarded `-EnvSep '^^'`, adding `-OwnWindow` if Integration's hold is ours. Then compare the shots.
   - **HARD RULE until FREEZE LIFTED** (Integration, after my sqlite / node runs in the timed hold forced 3 map reruns): **no interpreter
     process at all** (python, node, sqlite3, py_compile). Only the editor / file tools, git and sed.
     - The ragdoll's GIB_LowBody2_PHYSSYS table (7 bodies, 6 constraints) is read from authored.db **after** the lift.
