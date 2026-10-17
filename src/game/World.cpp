@@ -7021,7 +7021,7 @@ void World::gibCorpse(Corpse& c) {
         for (int i = 1; i <= 11; ++i) {
             char nm[96]; std::snprintf(nm, sizeof nm, "/../content/TR_Death_Gibs_p/Static/RB_Gib_%02d_STAT.gltf", i);
             render::MeshData md;
-            if (assets::loadGlb(assetRoot() + nm, md)) { for (render::Material& M : md.mats) { M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } const render::MeshHandle h = renderer_->uploadMesh(md); if (h != render::kInvalidMesh) gibMeshes_.push_back(h); }
+            if (assets::loadGlb(assetRoot() + nm, md)) { for (render::Material& M : md.mats) { if (M.wfcName.empty() && !M.sourceName.empty()) M.wfcName = "TR_Death_Gibs_p.Materials." + M.sourceName; M.tex = resolveTexture(M.baseColorUri); M.emissiveTexHandle = resolveTexture(M.emissiveUri); } const render::MeshHandle h = renderer_->uploadMesh(md); if (h != render::kInvalidMesh) gibMeshes_.push_back(h); }
         }
     }
     // HmGibsDestructionEffect: NumChunks 4, LinearSpeed U(800, 2000) UU/s (jets U(2000, 4000)) in a 60 deg half-cone about +Z from a
@@ -7040,8 +7040,7 @@ void World::gibCorpse(Corpse& c) {
         c.chunks.push_back(k);
     }
     // The death scorch (robots): DeathDecal_MAT on the floor below the pawn origin (actorLocation: the capsule centre, as UE3).
-    static const bool scorchOn = std::getenv("WFC_DEATHSCORCH") != nullptr;   // gated until the runtime-decal blend is fixed (Rendering)
-    if (scorchOn && !c.vehicle && !c.noDecal && renderer_ && collision_.valid()) {
+    if (!c.vehicle && !c.noDecal && renderer_ && collision_.valid()) {
         const float y0 = c.pos.y;
         float gy; core::Vec3 n;
         if (collision_.groundHeight(c.pos.x, c.pos.z, y0, 0.0f, gy, n) && gy >= y0 - 3.0f && std::fabs(n.y) >= 0.5f) {
@@ -7057,7 +7056,10 @@ void World::gibCorpse(Corpse& c) {
             skelGibModelsTried_ = true;
             for (int g = 0; g < 2; ++g) {
                 std::unique_ptr<assets::SkinnedModel> m = std::make_unique<assets::SkinnedModel>();
-                if (assets::loadSkinnedGlb(assetRoot() + gibMeshPath(g), *m) && m->valid()) { resolveModelTextures(*m); skelGibModels_[g] = std::move(m); }
+                if (assets::loadSkinnedGlb(assetRoot() + gibMeshPath(g), *m) && m->valid()) {
+                    for (render::Material& mt : m->mats) if (mt.wfcName.empty() && !mt.sourceName.empty()) mt.wfcName = "TR_Death_Gibs_p.Materials." + mt.sourceName;
+                    resolveModelTextures(*m); skelGibModels_[g] = std::move(m);
+                }
                 else LOG_INFO("skeletal gib %s: not loaded", gibMeshPath(g));
             }
         }
@@ -7196,15 +7198,19 @@ void World::tickCorpses(float dt) {
         if (!c.gibbed) {
             if (c.fxAt >= 0.0f && c.t >= c.fxAt) {   // TnDeathModifierPlayEffect (robot Exp_Death_Sm_FX at Head_FX + BoosterSocket_C; vehicle A)
                 c.fxAt = -1.0f;
+                int onlyPlay = -1;   // PET_Random (car / tank): one uniformly picked entry of play[]
+                if (c.fxRow >= 0 && kDeathFx[(size_t)c.fxRow].playRandom && kDeathFx[(size_t)c.fxRow].nPlay > 0)
+                    onlyPlay = (int)(c.frand() * (float)kDeathFx[(size_t)c.fxRow].nPlay) % kDeathFx[(size_t)c.fxRow].nPlay;
                 if (deathFxLogOn() && c.fxRow >= 0) {
                     const DeathFxEntry& R = kDeathFx[(size_t)c.fxRow];
                     std::string pl;
-                    for (int i = 0; i < R.nPlay; ++i) { core::Vec3 tmp; pl += std::string(pl.empty() ? "" : ", ") + R.play[i].tmpl + "@" + (c.deathSocketWorld(R.play[i].socket, tmp) ? R.play[i].socket : "fallback"); }
+                    for (int i = 0; i < R.nPlay; ++i) { if (onlyPlay >= 0 && i != onlyPlay) continue; core::Vec3 tmp; pl += std::string(pl.empty() ? "" : ", ") + R.play[i].tmpl + "@" + (c.deathSocketWorld(R.play[i].socket, tmp) ? R.play[i].socket : "fallback"); }
                     LOG_INFO("DEATHFX p%d entry %s play: [%s]", c.player, c.entry, pl.c_str());
                 }
                 if (renderer_ && c.fxRow >= 0) {
                     const DeathFxEntry& R = kDeathFx[(size_t)c.fxRow];
                     for (int i = 0; i < R.nPlay; ++i) {
+                        if (onlyPlay >= 0 && i != onlyPlay) continue;
                         const char* so = R.play[i].socket;
                         core::Vec3 at = c.pos + core::Vec3{0, c.vehicle ? 1.0f : 1.5f, 0};   // BoosterSocket_C / TargetingSocket [PROV]
                         const char* bone = !std::strcmp(so, "Head_FX") ? "C_Spine04_Head_XB" : !std::strcmp(so, "Chest_FX") ? "C_Spine02_Lumbar02_XB" : nullptr;
