@@ -96,9 +96,19 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
     return true;
 }
 
-void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon) {
+void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation) {
     for (Actor& a : actors_) {
-        a.t = 0.0f;                          // every MP actor starts Untransformed (bridges: PreGameplaySetup's Untransform)
+        if (!escalation && a.startDesired == 0) {
+            // Versus on the Escalation-only maps (BrokenHope / Remnant: CompatibleGameTypes SV, RE MP_TRANSFORMING_ACTORS_RE.md section 4):
+            // no authored versus state. Integration decision 2026-10-17: the fully connected late-Escalation layout, every actor
+            // Transformed from the start (t = length, no animation; bridges extended, shown and colliding: TransformBridgeN's
+            // ChangeCollision + UnHide).
+            a.t = a.length; a.desired = 1; a.hidden = false; a.collide = true;
+            a.posedT = -1.0f;
+            pose(a, pawn, weapon);
+            continue;
+        }
+        a.t = 0.0f;                          // Escalation (and Rust in every mode): Untransformed at the start (bridges: PreGameplaySetup's Untransform)
         a.desired = a.startDesired;          // Rust doors: Transform at level start
         a.hidden = a.bridge;                 // bridges: Hide + ChangeCollision NoCollision at setup
         a.collide = !a.bridge;
@@ -149,7 +159,7 @@ int TransformingActors::applyNavBlocks(BotNav& nav) const {
     if (!nav.valid()) return 0;
     std::vector<uint8_t> blocked(nav.cells().size(), 0);
     for (const Actor& a : actors_) {
-        if (!a.collide) continue;
+        if (!a.collide || a.bridge) continue;   // a bridge deck is a walkable surface, not a wall
         const float rest = a.desired ? a.length : 0.0f;
         for (const Box& b : a.boxes) {
             core::Vec3 lo, hi;
@@ -164,6 +174,7 @@ int TransformingActors::applyNavBlocks(BotNav& nav) const {
     }
     int n = 0;
     for (size_t c = 0; c < blocked.size(); ++c) { nav.setBlocked((int)c, blocked[c] != 0); n += blocked[c]; }
+    if (n > 0) nav.recomputePieces();   // sealed-off areas leave the main piece
     return n;
 }
 

@@ -24,11 +24,58 @@ ed('src/game/BotNav.h', [
      '    std::vector<int> piece_;     // connected piece id per cell (portals + links, undirected)\n' +
      '    std::vector<uint8_t> blocked_;   // setBlocked (empty / another mesh\'s size: none)\n'],
 ]);
-ed('src/game/BotNav.cpp', [[
-    'bool BotNav::usable(int cell, const Agent& a) const {\n    if (cell < 0 || (size_t)cell >= cells_.size()) return false;\n',
-    'bool BotNav::usable(int cell, const Agent& a) const {\n    if (cell < 0 || (size_t)cell >= cells_.size()) return false;\n' +
-    '    if (blocked_.size() == cells_.size() && blocked_[(size_t)cell]) return false;   // a closed transforming door\n'
-]]);
+ed('src/game/BotNav.h', [
+    ['    void setBlocked(int cell, bool b) {\n',
+     '    // After setBlocked: the connected pieces again without the blocked cells (areas sealed off by closed doors leave the main\n' +
+     '    // piece: roaming goals stay reachable and a search across a closed door fails at once instead of exhausting the budget).\n' +
+     '    void recomputePieces() { computePieces(); }\n' +
+     '    void setBlocked(int cell, bool b) {\n'],
+    ['    std::vector<uint8_t> blocked_;   // setBlocked (empty / another mesh\'s size: none)\n',
+     '    std::vector<uint8_t> blocked_;   // setBlocked (empty / another mesh\'s size: none)\n' +
+     '    void computePieces();\n'],
+]);
+ed('src/game/BotNav.cpp', [
+    ['bool BotNav::usable(int cell, const Agent& a) const {\n    if (cell < 0 || (size_t)cell >= cells_.size()) return false;\n',
+     'bool BotNav::usable(int cell, const Agent& a) const {\n    if (cell < 0 || (size_t)cell >= cells_.size()) return false;\n' +
+     '    if (blocked_.size() == cells_.size() && blocked_[(size_t)cell]) return false;   // a closed transforming door\n'],
+    ['    // Connected pieces (portals + links, undirected).\n' +
+     '    piece_.assign(cells_.size(), -1);\n' +
+     '    std::vector<std::vector<int>> adj(cells_.size());\n' +
+     '    for (size_t i = 0; i < cells_.size(); ++i) for (const Portal& p : cells_[i].portals) { adj[i].push_back(p.to); adj[(size_t)p.to].push_back((int)i); }\n' +
+     '    for (const Link& l : links_) { adj[(size_t)l.from].push_back(l.to); adj[(size_t)l.to].push_back(l.from); }\n' +
+     '    int pid = 0, best = 0;\n' +
+     '    for (size_t i = 0; i < cells_.size(); ++i) {\n' +
+     '        if (piece_[i] >= 0) continue;\n' +
+     '        int n = 0; std::vector<int> st{(int)i}; piece_[i] = pid;\n' +
+     '        while (!st.empty()) { int c = st.back(); st.pop_back(); ++n; for (int q : adj[(size_t)c]) if (piece_[(size_t)q] < 0) { piece_[(size_t)q] = pid; st.push_back(q); } }\n' +
+     '        if (n > best) { best = n; mainPieceId_ = pid; }\n' +
+     '        ++pid;\n' +
+     '    }\n' +
+     '    mainPiece_ = best;\n',
+     '    computePieces();\n'],
+    ['anchors_.size(), pid, best);\n',
+     'anchors_.size(), [&] { int n = 0; for (int q : piece_) n = std::max(n, q + 1); return n; }(), mainPiece_);\n'],
+    ['bool BotNav::usable(int cell, const Agent& a) const {\n',
+     '// Connected pieces (portals + links, undirected); blocked cells belong to no piece and connect nothing.\n' +
+     'void BotNav::computePieces() {\n' +
+     '    const bool blk = blocked_.size() == cells_.size();\n' +
+     '    auto open = [&](size_t c) { return !blk || !blocked_[c]; };\n' +
+     '    piece_.assign(cells_.size(), -1);\n' +
+     '    std::vector<std::vector<int>> adj(cells_.size());\n' +
+     '    for (size_t i = 0; i < cells_.size(); ++i) for (const Portal& p : cells_[i].portals) { adj[i].push_back(p.to); adj[(size_t)p.to].push_back((int)i); }\n' +
+     '    for (const Link& l : links_) { adj[(size_t)l.from].push_back(l.to); adj[(size_t)l.to].push_back(l.from); }\n' +
+     '    int pid = 0, best = 0;\n' +
+     '    for (size_t i = 0; i < cells_.size(); ++i) {\n' +
+     '        if (piece_[i] >= 0 || !open(i)) continue;\n' +
+     '        int n = 0; std::vector<int> st{(int)i}; piece_[i] = pid;\n' +
+     '        while (!st.empty()) { int c = st.back(); st.pop_back(); ++n; for (int q : adj[(size_t)c]) if (piece_[(size_t)q] < 0 && open((size_t)q)) { piece_[(size_t)q] = pid; st.push_back(q); } }\n' +
+     '        if (n > best) { best = n; mainPieceId_ = pid; }\n' +
+     '        ++pid;\n' +
+     '    }\n' +
+     '    mainPiece_ = best;\n' +
+     '}\n\n' +
+     'bool BotNav::usable(int cell, const Agent& a) const {\n'],
+]);
 ed('src/game/World.h', [
     ['#include "game/MapState.h"\n', '#include "game/MapState.h"\n#include "game/TransformingActors.h"\n'],
     ['    MapState mapState_;\n',
@@ -101,15 +148,30 @@ ed('src/core/Application.cpp', [
      '        for (const auto& bd : a.bodies) if (s >= 0 && s == (weapon ? bd.weaponSet : bd.pawnSet)) return true;\n' +
      '        return false;\n' +
      '    };\n' +
-     '    int closedBlocked = 0, closedTotal = 0, bridgeClear = 0, bridgeTotal = 0;\n' +
-     '    for (const auto& a : T.actors()) for (const auto& b : a.boxes) {\n' +
-     '        core::Vec3 p0, p1; through(a, b, 0.0f, p0, p1);\n' +
-     '        const bool hp = hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1), hw = hitsActor(world_.weaponCollisionWorld(), a, true, p0, p1);\n' +
-     '        if (a.bridge) { ++bridgeTotal; bridgeClear += !hp && !hw; }\n' +
-     '        else if (a.startDesired == 0) { ++closedTotal; closedBlocked += hp && hw; }\n' +
+     '    // Versus on the Escalation-only maps (BrokenHope / Remnant): every actor Transformed from the start (no animation). Doors: open,\n' +
+     '    // their closed pose clear; bridges: extended and solid (pawns and shots) at their pose.\n' +
+     '    int doorOpen = 0, doorTotal = 0, bridgeSolid = 0, bridgeTotal = 0;\n' +
+     '    for (const auto& a : T.actors()) {\n' +
+     '        if (a.startDesired != 0) continue;\n' +
+     '        if (a.bridge) {\n' +
+     '            for (const auto& b : a.boxes) {\n' +
+     '                core::Vec3 p0, p1; through(a, b, a.t, p0, p1); ++bridgeTotal;\n' +
+     '                bridgeSolid += a.collide && !a.hidden && hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1) && hitsActor(world_.weaponCollisionWorld(), a, true, p0, p1);\n' +
+     '            }\n' +
+     '        } else {\n' +
+     '            ++doorTotal;\n' +
+     '            bool clear = a.t >= a.length - 1e-3f;\n' +
+     '            for (const auto& b : a.boxes) {\n' +
+     '                // only the moving panels: a static body (Remnant\'s C_Body_XB side post) stays where it is in both poses\n' +
+     '                core::Vec3 l0, h0, l1, h1; T.boxBounds(a, b, 0.0f, l0, h0); T.boxBounds(a, b, a.length, l1, h1);\n' +
+     '                if (core::length(l1 - l0) + core::length(h1 - h0) < 0.5f) continue;\n' +
+     '                core::Vec3 p0, p1; through(a, b, 0.0f, p0, p1); clear = clear && !hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1);\n' +
+     '            }\n' +
+     '            doorOpen += clear;\n' +
+     '        }\n' +
      '    }\n' +
-     '    if (closedTotal) check(closedBlocked == closedTotal, "closed doors block pawns and shots (" + std::to_string(closedBlocked) + "/" + std::to_string(closedTotal) + " boxes)");\n' +
-     '    if (bridgeTotal) check(bridgeClear == bridgeTotal, "retracted bridges: no collision (" + std::to_string(bridgeClear) + "/" + std::to_string(bridgeTotal) + ")");\n' +
+     '    if (doorTotal) check(doorOpen == doorTotal, "versus: the Escalation-map doors start open, their doorways clear (" + std::to_string(doorOpen) + "/" + std::to_string(doorTotal) + ")");\n' +
+     '    if (bridgeTotal) check(bridgeSolid == bridgeTotal, "versus: the bridges start extended and solid (" + std::to_string(bridgeSolid) + "/" + std::to_string(bridgeTotal) + " boxes)");\n' +
      '    // Level-start transforms (Rust): open after the clip; the closed pose no longer blocks.\n' +
      '    run(4.0f);\n' +
      '    int opened = 0, openTotal = 0;\n' +

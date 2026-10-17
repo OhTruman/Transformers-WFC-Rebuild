@@ -5,9 +5,11 @@
 // - Collision = the PhysicsAsset bodies at the animated bones: world box = actor gltf_matrix x bone_global(t) x box_local_gltf.
 //   One dynamic collision set per body, in the pawn and weapon worlds.
 // - Start states:
-//   - BrokenHope / Remnant doors: Untransformed (closed); they open only on Escalation's SurvivalGenerator "New Power Level".
-//   - BrokenHope bridges: PreGameplaySetup Untransform + SeqAct_ChangeCollision NoCollision + Hide, so retracted, hidden, no collision.
-//     Their body bone does not animate: TransformBridgeN switches collision / visibility (ChangeCollision + UnHide), not the boxes.
+//   - BrokenHope / Remnant are Escalation-only maps in the original (CompatibleGameTypes SV, RE section 4): there the doors start
+//     closed and open on the SurvivalGenerator's "New Power Level" for good; the bridges start retracted (PreGameplaySetup Untransform +
+//     ChangeCollision NoCollision + Hide) and TransformBridgeN extends them (ChangeCollision + UnHide; their body bone does not animate).
+//   - VERSUS on those two maps (no authored state; Integration decision 2026-10-17): every actor starts Transformed, the fully connected
+//     late-Escalation layout (doors open, bridges extended and colliding), with no animation at the start.
 //   - Rust doors: Transform at level start in every mode (SequenceActivated -> TransformWorldProp).
 // - Nav: the bot nav cells under a colliding actor's resting boxes are unusable (BotNav::setBlocked).
 // Gameplay owns the state; Rendering draws each actor's skeletal mesh (glb) at its matrix with the clip at time t, unless hidden.
@@ -47,8 +49,8 @@ public:
     void clear() { actors_.clear(); }
     // Kismet: TnSeqAct_TransformWorldProp Transform (1) / Untransform (0); SeqAct_ChangeCollision / ToggleHidden for the bridges.
     void setDesired(size_t i, int desired) { if (i < actors_.size()) actors_[i].desired = desired ? 1 : 0; }
-    // Match start (a fresh level): the start states above, t at the start pose.
-    void resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon);
+    // Match start (a fresh level): the start states above, t at the start pose. escalation: the SV game type (not in the rebuild yet).
+    void resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation = false);
     // Advances t toward desired at rate 1 and poses the collision sets.
     void tick(float dt, CollisionWorld& pawn, CollisionWorld* weapon);
     // Blocks the nav cells under every colliding actor's boxes at its resting pose (desired end).
