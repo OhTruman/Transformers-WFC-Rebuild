@@ -3190,3 +3190,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Trails_Bumblebee 19 m over 2 s wrong for a limb); doors verdict in ~15 min. FX always-include data INSTALLED 13:47 (gate PASS).
   Card -> Gameplay 6 (13:48) -> Systems 16 -> Frontend 5 -> Experimental 10. Set E patch (flash + exposure + Remnant light)
   requested against c069952c.
+2026-10-17 13:50 APPLIED 814e7cf5 Gameplay's transforming actors + dying-vehicle collision (door head part 1; NOT yet a shipped state: the draw
+  follows in the same hour). Door verdict PASS by eye (Rendering cand33: closed IAC doors with two-sided baked lighting, Rust tube
+  door opening sequence with the light-map lerp, no pop). Rendering cuts RENDERING_P7_TRANSACT_DRAW.patch against 814e7cf5.
