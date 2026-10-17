@@ -3436,3 +3436,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:08 RETRACTED my "bug" call on the Rust floor fog: Rendering's numbers explain it (+0.4 % light-blue layer x 1/ln2 = ~+20 sRGB
   levels on a near-black floor, invisible on lit walls); authored per the native maths, the only original frame (thumbnail)
   shows darker floors -> the user's look decision (pair sent). Views floor stays on package 6 meanwhile. Flare views synced.
+2026-10-17 16:10 MERGED lens-flare option: 03e8ec10 Frontend row (Off / Subtle / Original) -> f895142c Rendering modes (setLensFlareMode, WFC_LENSFLARE,
+  keep list, settings-test row) -> 5e5be7a5 Frontend glue (trait + static_assert). Build OK, frontend tests pass, SIMHASH identical;
+  the Off / Subtle / Original sheet = Rendering's eye row from the current card slot; WFC_SETTINGSTEST run next.
