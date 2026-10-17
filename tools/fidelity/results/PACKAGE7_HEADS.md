@@ -63,6 +63,7 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | f9ee2ca0 | Frontend case-insensitive $Key localisation fallback ("WEAPON 2" instead of the raw key on the iconic wheel) | frontend only | match frames unaffected | not needed | no run |
 | 041cba87 + 1d0ad363 | ISession::simHeld (FakeSession held from reportLoaded until AllLoaded) + the Application::runMatch zero-step hold while held | online sessions only | offline / bot matches byte-identical (no session, never held); SESSIONTEST 25 / 25 (Integration) | not needed | no run |
 | (docs) | LENS_FLARE_RE, WEAPON_CAMERA_SHAKE_RE | - | - | - | no run |
+| e19924a6 | Gameplay remote-seat partial actions (absolute aimPoint, killstreak, Plasma charge, repair beam, HardLock, jammer / disruptor owners, Shockwave delay) | online only (remote seats) | offline / bot matches identical: seed 7 48 / 48, SIMHASH unchanged; SESSIONTEST 30 / 30 (Integration) | not needed | online sim path for the NET.* rows |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
