@@ -59,6 +59,11 @@ First sim change: cfca1717 (2026-10-17).
     are already treated that way.
   - **SIMHASH is always checked.** The sim side stays provable, because the windowed lockstep and eye-pass runs log SIMHASH every
     step: lockstep-ab's "same match" and the eye pass's simhash.txt (6,001 lines per run). Any identity row checks it first.
+- **The camera recoil enters the base too** (package 7 note, Integration 2026-10-17). 1f1d4e17's camera recoil steps the local orbit
+  pitch on each local shot - for the local PlayerBot that pitch is its aim, so base and head split at step 5215 (31 v 32; the bot's
+  burst lands on p61 vs p44). WFC_NORECOIL does NOT help: it skips only pawn_->notifyFired() (skeletal recoil), not onLocalShot's
+  pitch step (Experimental's headless re-run with it: still 5215, the head's SIMHASH stream unchanged). Gameplay ports the pitch step
+  into the sim-only base diffs; the gate arms run without extra switches.
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
@@ -79,7 +84,17 @@ with a negative control.
 | pending: the door head (Gameplay's transact 1b894dc7 + Rendering's door draw + (b) lighting + materials) | sim (Integration) | **yes**: only the sim part (the transact side) goes into the base; the draw / lighting / materials stay head-only |
 | 8454c173 / f46bdfe4 remote-seat paths | sim only with remote seats / a host seed | no: offline identical (seed 7 48 / 48) |
 
-The base is rebuilt once the head is named. Today's fast_af4d073_hover carries cfca1717 only.
+The base is rebuilt once the head is named. Today's fast_af4d073_hover_hl2 carries cfca1717 and the headless runner.
+
+**How later sim changes enter the base** (Integration, option (a)):
+
+- Each sim change's owner supplies a minimal sim-only diff against the current base (af4d0731 + hover + runner). Gameplay does this
+  for 814e7cf5 now, and for the weapon + melee batch when it merges.
+- A commit's own src/game no longer applies cleanly: for example, 814e7cf5's World.cpp hunk 7 fails because of intermediate
+  integration changes.
+- Each diff is verified by the same-match row (HEADLESS=1) against the head, with a negative control.
+- The regress then reads "package 7 renderer vs package 6 renderer at the same sim". That is the number the user's rule needs: no
+  fps cost without a fidelity gain.
 
 ### 2. Render-data switches in Rebuild/work/render today
 
