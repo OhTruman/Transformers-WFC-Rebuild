@@ -213,6 +213,7 @@ void GameFlow::onlineTick() {
     }
     if (role_ != SessionRole::Offline) syncVoiceSettings();
     else voiceSent_.clear();
+    if (!lobbyServiceSent_) { session_->setLobbyService(profile_.lobbyService); lobbyServiceSent_ = true; }
     if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel
         showMessage(pendingEndTitle_, pendingEndMessage_);
         pendingEndTitle_.clear();
@@ -324,7 +325,7 @@ bool GameFlow::onlineHost() {
     SessionHostSettings hs;
     hs.gameModeTag = currentSettings_->tag;
     hs.mapSelectionMethod = currentSettings_->mapSelectionMethod;
-    hs.isPrivate = true;   // phase 1: friends / private sessions only (no XP, decision D8)
+    hs.isPublic = false;   // a private lobby, joined by code (no XP, decision D8); public lobbies come from Quick Match
     for (const SettingField& f : currentSettings_->fields) {
         const int i = settingIndex(currentSettings_, f.name);
         if (i >= 0 && i < (int)f.values.size()) hs.settings[f.name] = f.values[(size_t)i];
@@ -343,18 +344,31 @@ bool GameFlow::onlineHost() {
 }
 
 namespace {
-bool isJoinCode(const std::string& t) {
-    // The shape only: "WFC-" + base32 groups separated by '-' (Systems' codes: "WFC-7QK2-M9TD-4H", relay "WFC-R-...").
-    // Decoding and the check symbol are the session layer's (JoinFailed{Invalid}).
-    if (t.size() < 6 || t.size() > 64) return false;
-    for (size_t i = 0; i < 4; ++i) if ((char)std::toupper((unsigned char)t[i]) != "WFC-"[i]) return false;
+bool isJoinCode(const std::string& in) {
+    // The shape only (Systems' decodeTarget parses and checks; a bad code returns JoinFailed{Invalid}): Crockford base32
+    // in dash-separated groups - a LAN code (2 groups of 5), an internet code (4 groups), the lobby service's 6 letters -
+    // at most 24 characters, dashes optional; an optional "WFC-" prefix is accepted (Systems strips it).
+    std::string t = in;
+    if (t.size() >= 4 && std::toupper((unsigned char)t[0]) == 'W' && std::toupper((unsigned char)t[1]) == 'F' &&
+        std::toupper((unsigned char)t[2]) == 'C' && t[3] == '-') t = t.substr(4);
+    if (t.empty() || t.size() > 24) return false;
     bool groupChar = false;
-    for (size_t i = 4; i < t.size(); ++i) {
-        if (t[i] == '-') { if (!groupChar) return false; groupChar = false; continue; }
-        if (!std::isalnum((unsigned char)t[i])) return false;
+    int chars = 0;
+    for (char c : t) {
+        if (c == '-') { if (!groupChar) return false; groupChar = false; continue; }
+        if (!std::isalnum((unsigned char)c)) return false;
         groupChar = true;
+        ++chars;
     }
-    return groupChar;
+    return groupChar && chars >= 4;
+}
+bool isIpv4(const std::string& t) {   // a plain "a.b.c.d" (the session uses its default port)
+    int parts = 0, digits = 0;
+    for (char c : t) {
+        if (c == '.') { if (digits == 0) return false; ++parts; digits = 0; continue; }
+        if (!std::isdigit((unsigned char)c) || ++digits > 3) return false;
+    }
+    return parts == 3 && digits > 0;
 }
 bool isAddress(const std::string& t) {    // host:port or [v6]:port, port 1..65535
     const size_t colon = t.rfind(':');
@@ -374,7 +388,7 @@ BridgeValue GameFlow::onlineJoin(const std::string& targetIn) {
     std::string target = targetIn;
     while (!target.empty() && std::isspace((unsigned char)target.back())) target.pop_back();
     while (!target.empty() && std::isspace((unsigned char)target.front())) target.erase(target.begin());
-    if (!isJoinCode(target) && !isAddress(target)) {
+    if (!isJoinCode(target) && !isAddress(target) && !isIpv4(target)) {
         showMessage(txt("$UIText.MessagePrompts.GenericErrorTitle"), txt("$WfcPC.Online.JoinInvalid"));
         FlowTrace::emit("online.join", {{"target", target}, {"result", "invalid"}});
         return false;

@@ -705,6 +705,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             if (&movies_[i].movie->player() == audioPagePlayer_) { audioPagePlayer_ = nullptr; micMeterShown_.clear(); }
             if (&movies_[i].movie->player() == firstRunAudioPending_) firstRunAudioPending_ = nullptr;
             if (&movies_[i].movie->player() == firstRunFooterHidden_) firstRunFooterHidden_ = nullptr;
+            if (&movies_[i].movie->player() == gsPlayer_) { gsPlayer_ = nullptr; gsState_ = 0; gsMenu_ = nullptr; }
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1370,6 +1371,154 @@ void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const
     }
 }
 
+// ONLINE_LOBBY_FLOW_V2 1.1: the party lobby's Private Match row hosts at once (the last-used mode; offline the same lobby
+// with bots) instead of opening the mode list and the options page.
+void GfxPresenter::syncHostNowRow(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::MovieClip* host = findClipNamed(p.root(), "hostGame_mc");
+    if (!host || !host->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    if (vm.toBool(vm.get(host->script, "__wfcHostNow"))) return;
+    vm.set(host->script, "__wfcHostNow", V(true));
+    vm.set(host->script, "onClick", V(vm.newFunction([&flow](gfx::avm1::VM&, const V&, gfx::avm1::Args&) -> V {
+        flow.call("Online.HostPrivateNow");
+        return V();
+    }, "onClick", 0)));
+    frontend::FlowTrace::emit("lobby.hostNowRow", {{"provenance", "PC ADAPTATION (lobby flow v2)"}});
+}
+
+// ONLINE_LOBBY_FLOW_V2 2.2: the host's Game Settings row (a duplicate of the lobby's Create a Character button, inserted
+// under Select Map) and its page: the original Settings sub-menu (SettingsMenu.swf mc_subMenu, lateral rows written as they
+// change) with Game Mode and the rows of GameFlow::lobbySettingRows. Back closes the whole page (_global.closeSettings).
+void GfxPresenter::attachGameSettingsPage(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    if (!gsMenu_) return;
+    const V parent = vm.get(gsMenu_, "_parent");
+    if (!parent.isObject()) return;
+    auto choice = [&](std::vector<V>& v, const std::string& value, const std::string& label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", V(value));
+        vm.set(c, "FriendlyName", V(label));
+        v.push_back(V(c));
+    };
+    std::vector<V> rows;
+    auto row = [&](const std::vector<V>& ch, const std::string& store, const std::string& text, const std::string& hint) {
+        gfx::avm1::Object* item = vm.newPlain();
+        vm.set(item, "choiceArray", V(vm.newArray(ch)));
+        vm.set(item, "dataStore", V(store));
+        vm.set(item, "hintText", V(hint));
+        vm.set(item, "panelWidth", V(413.0));
+        vm.set(item, "text", V(text));
+        rows.push_back(V(item));
+    };
+    std::vector<V> modes;
+    for (const std::string& t : frontend::GameFlow::lobbyModes()) choice(modes, t, rt_.catalog().modeFriendlyName(t));
+    row(modes, "<WfcLobby:GameMode>", "$UIText.Lobby.GameMode", "$WfcPC.Lobby.GameModeDesc");
+    for (const frontend::GameFlow::LobbySettingRow& r : flow.lobbySettingRows()) {
+        std::vector<V> ch;
+        for (const std::string& v : r.values) choice(ch, v, v);
+        row(ch, r.store, r.label, "$WfcPC.Lobby.GameSettingsDesc");
+    }
+    gfx::avm1::Object* init = vm.newPlain();
+    vm.set(init, "footer", vm.get(parent.o, "footer_mc"));
+    vm.set(init, "buildArray", V(vm.newArray(rows)));
+    vm.set(init, "listItemSpacing", V(31.0));
+    vm.set(init, "listMenuItemID", V(std::string("mc_lateralSelectorInc")));
+    vm.set(init, "_backMenuRef", V(gsMenu_));
+    vm.set(init, "titleText", V(std::string("$WfcPC.Lobby.GameSettings")));
+    vm.set(init, "_y", vm.get(parent.o, "subMenuPtY"));
+    vm.set(init, "_x", vm.get(parent.o, "subMenuPtX"));
+    const V depth = vm.callMethod(parent, "getNextHighestDepth", {});
+    vm.callMethod(parent, "attachMovie", {V(std::string("mc_subMenu")), V(std::string("subMenu_mc")), depth, V(init)});
+    vm.set(gsMenu_, "_alpha", V(0.0));
+    gsMode_ = flow.lobby().gameModeTag;
+    frontend::FlowTrace::emit("lobby.gameSettingsPage", {{"mode", gsMode_}, {"rows", std::to_string(rows.size())}});
+}
+
+void GfxPresenter::syncGameSettings(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    const bool host = flow.sessionRole() != frontend::GameFlow::SessionRole::Member && flow.level() == frontend::LevelKind::GameLobby &&
+                      flow.lobby().playlistId < 0;
+    // the row (host only)
+    gfx::MovieClip* cc = findClipNamed(p.root(), "customCharacters_mc");
+    gfx::MovieClip* sm = findClipNamed(p.root(), "selectMap_mc");
+    if (host && cc && sm && cc->script && sm->script && cc->parent && cc->parent->script &&
+        !vm.get(cc->parent->script, "gameSettings_mc").isObject()) {
+        gfx::avm1::Object* menu = cc->parent->script;
+        const double smY = vm.toNumber(vm.get(sm->script, "_y")), ccY = vm.toNumber(vm.get(cc->script, "_y"));
+        const double pitch = ccY > smY ? ccY - smY : 20.0;
+        for (auto& [depth, child] : cc->parent->children) {
+            auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+            if (!mc || !mc->script || mc == sm) continue;
+            const double y = vm.toNumber(vm.get(mc->script, "_y"));
+            if (y > smY + 1.0) vm.set(mc->script, "_y", V(y + pitch));
+        }
+        gfx::avm1::Object* init = vm.newPlain();
+        vm.set(init, "_y", V(smY + pitch));
+        gfx::MovieClip* dup = p.duplicate(cc, "gameSettings_mc", 951, init);
+        if (dup && dup->script) {
+            gfx::avm1::Object* o = dup->script;
+            vm.set(o, "text", V(std::string("$WfcPC.Lobby.GameSettings")));
+            const V lab = vm.get(o, "label_txt");
+            if (lab.isObject()) vm.set(lab.o, "htmlText", V(std::string("$WfcPC.Lobby.GameSettings")));
+            const V below = vm.get(sm->script, "focusDown");
+            vm.set(o, "focusUp", V(std::string("selectMap_mc")));
+            vm.set(o, "focusDown", below);
+            vm.set(sm->script, "focusDown", V(std::string("gameSettings_mc")));
+            if (below.isString()) { const V next = vm.get(menu, vm.toString(below)); if (next.isObject()) vm.set(next.o, "focusUp", V(std::string("gameSettings_mc"))); }
+            vm.set(o, "onOver", V(vm.newFunction([menu](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+                const V w = v.get(menu, "HintWidget");
+                if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Lobby.GameSettingsDesc")));
+                return V();
+            }, "onOver", 0)));
+            vm.set(o, "onClick", V(vm.newFunction([this](gfx::avm1::VM&, const V&, gfx::avm1::Args&) -> V {
+                gsOpenRequested_ = true;
+                return V();
+            }, "onClick", 0)));
+            frontend::FlowTrace::emit("lobby.gameSettingsRow", {{"built", "true"}});
+        }
+    }
+    // the page
+    if (gsOpenRequested_ && gsState_ == 0 && host && p.root() && p.root()->script) {
+        gsOpenRequested_ = false;
+        const V clip = vm.callMethod(V(p.root()->script), "createEmptyMovieClip", {V(std::string("wfcGameSettings_mc")), V(90030.0)});
+        if (clip.isObject() && clip.o->display && clip.o->display->kind == gfx::DisplayObject::Kind::Clip) {
+            if (gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc"); anchor && anchor->script) {
+                vm.set(clip.o, "hideClip", V(anchor->script));   // the settings menu restores it on close
+                vm.set(anchor->script, "_alpha", V(0.0));
+            }
+            p.loadMovieInto(static_cast<gfx::MovieClip*>(clip.o->display), "../Settings/SettingsMenu.swf", nullptr);
+            gsPlayer_ = &p; gsState_ = 1; gsFrames_ = 0; gsMenu_ = nullptr;
+        }
+    }
+    if (gsPlayer_ != &p) return;
+    gfx::MovieClip* gsClip = findClipNamed(p.root(), "wfcGameSettings_mc");
+    if (gsState_ == 1) {   // the settings movie initialised: its top menu is the Back target, the page goes over it
+        gfx::MovieClip* audio = gsClip ? findClipNamed(gsClip, "audioBtn_mc") : nullptr;
+        if (audio && audio->parent && audio->parent->script && vm.get(audio->script, "onClick").isObject()) {
+            gsMenu_ = audio->parent->script;
+            attachGameSettingsPage(p, flow);
+            gsState_ = 2;
+        } else if (++gsFrames_ > 600) { gsState_ = 0; gsPlayer_ = nullptr; }
+        return;
+    }
+    if (gsState_ == 2) {
+        gfx::MovieClip* sub = gsClip ? findClipNamed(gsClip, "subMenu_mc") : nullptr;
+        const bool close = !sub || sub->removed || !host || flow.lobby().countingDown;   // Back, a member, or the countdown
+        if (close) {
+            if (sub && !sub->removed) vm.callMethod(V(sub->script), "removeMovieClip", {});
+            vm.callMethod(V(vm.global), "closeSettings", {});
+            gsState_ = 0; gsPlayer_ = nullptr; gsMenu_ = nullptr;
+            frontend::FlowTrace::emit("lobby.gameSettingsPage", {{"closed", "true"}});
+        } else if (flow.lobby().gameModeTag != gsMode_) {   // a new mode: its own rows
+            vm.callMethod(V(sub->script), "removeMovieClip", {});
+            attachGameSettingsPage(p, flow);
+        }
+    }
+}
+
 void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
     gfx::avm1::VM& vm = p.vm();
     using V = gfx::avm1::Value;
@@ -1672,6 +1821,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (Open& op : movies_) {
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) syncJoinGameRow(op.movie->player(), flow);
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
+        if (op.object.find("PartyLobby_GFX") != std::string::npos) syncHostNowRow(op.movie->player(), flow);   // lobby flow v2
+        if (op.object.find("GameLobby_GFX") != std::string::npos) syncGameSettings(op.movie->player(), flow);
         if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
             (!flow.lobby().settings || flow.lobby().settings->teamTypeValue == 3))
             syncIconicVersusMenu(op.movie->player());

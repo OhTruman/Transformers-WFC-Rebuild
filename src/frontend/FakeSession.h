@@ -66,6 +66,10 @@ public:
         calls_.push_back(c);
     }
     void setPushToTalk(bool held) override { Call c = mk("setPushToTalk"); c.arg = held ? "1" : "0"; calls_.push_back(c); }
+    void findGames(const SessionGameQuery& q) override { Call c = mk("findGames"); c.arg = q.playlist + "|" + q.modeTag; calls_.push_back(c); }
+    void quickMatch(const std::string& playlist) override { Call c = mk("quickMatch"); c.arg = playlist; calls_.push_back(c); }
+    void cancelSearch() override { calls_.push_back(mk("cancelSearch")); }
+    void setLobbyService(const std::string& a) override { Call c = mk("setLobbyService"); c.arg = a; calls_.push_back(c); }
     float mic = 0.0f;   // scripted Mic Test level
     float micLevel() const override { return mic; }
     void setMuted(const SessionMemberId& m, bool muted) override { Call c = mk("setMuted"); c.arg = m.fingerprint + (muted ? ",1" : ",0"); calls_.push_back(c); }

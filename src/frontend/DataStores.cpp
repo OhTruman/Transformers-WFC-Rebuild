@@ -86,6 +86,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
     if (markup == "<PCSettings:LensFlares>") return std::to_string(flow_.profile().display.lensFlares);     // PC EXTENSION (user)
+    if (markup == "<WfcLobby:GameMode>") return flow_.lobby().gameModeTag;   // lobby flow v2: the Game Settings mode row
     if (markup == "<PCSettings:VolumetricLighting>") return flow_.profile().display.volumetricLighting ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:VoiceMode>") return std::to_string(flow_.profile().voice.mode);              // PC EXTENSION (voice, 3.12)
     if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
@@ -428,6 +429,12 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         flow_.profile().display.volumetricLighting = arg(1) == "1" || arg(1) == "true";
         FlowTrace::emit("settings.volumetricLighting", {{"on", FlowTrace::boolean(flow_.profile().display.volumetricLighting)},
                                                         {"provenance", "PC ADAPTATION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<WfcLobby:GameMode>") {   // lobby flow v2: the host changes the mode in the lobby
+        const bool ok = flow_.changeLobbyMode(arg(1));
+        FlowTrace::emit("lobby.gameModeRow", {{"mode", arg(1)}, {"applied", FlowTrace::boolean(ok)}});
+        invalidate();
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:LensFlares>") {   // PC EXTENSION (user): Off / Subtle / Original; the renderer follows

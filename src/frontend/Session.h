@@ -60,6 +60,15 @@ struct SessionSlot {
     bool connecting = false;                // PlayerList_GFX IsConnecting
 };
 
+// Public matches (ONLINE_LOBBY_FLOW_V2 section 4; Systems ONLINE_MATCHMAKING_DESIGN): one open lobby in a GameList.
+struct SessionGameEntry {
+    std::string code, hostName, modeTag, playlist;
+    int mapId = -1, players = 0, maxPlayers = 0, pingMs = -1;   // ping: measured by this session's probe
+    SessionPlatform hostPlatform = SessionPlatform::PC;
+    bool lan = false;                       // found by LAN broadcast (no lobby service needed)
+};
+struct SessionGameQuery { std::string playlist, modeTag; };   // "" = any
+
 // The host's lobby, as members receive it (the <CurrentGame:*> / <TnGameSettings:*> answers on a member come from it).
 struct SessionLobby {
     std::string gameModeTag;                // "TDM" ...
@@ -79,7 +88,8 @@ struct SessionHostSettings {
     std::string gameModeTag;
     std::map<std::string, std::string> settings;
     int mapSelectionMethod = 1;
-    bool isPrivate = true;                  // phase 1: friends / private only (no XP, decision D8)
+    bool isPublic = false;                  // a public lobby the lobby service lists (ONLINE_LOBBY_FLOW_V2 4); false = by code only
+    std::string playlist;                   // public: the playlist it was hosted for (Quick Match)
     std::string relay;                      // phase 3: a self-hosted relay ("host:port[,room]"); "" = direct UDP
 };
 
@@ -122,6 +132,9 @@ struct SessionEvent {
         ConnectionLost,    // member side; timedOut picks ConnectionTimeout vs ConnectionFailed text
         Desync,            // value = tick
         Kicked,            // kickReason
+        GameList,          // games, serviceReachable (findGames)
+        SearchProgress,    // searchTried, searchOf: "Reserving space in game `i of `n" (quickMatch)
+        SearchCancelled,   // cancelSearch done
         MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState;
                            // voiceVia: 1 radio / 2 proximity while speaking (both: radio), for the talker cue
     } type = Type::LobbyState;
@@ -142,11 +155,15 @@ struct SessionEvent {
     // = the roster at the start. Members launch from it verbatim; empty = none sent (dev FakeSession: the member builds its own).
     std::string launchUrl;
     uint32_t seed = 0;
+    std::vector<SessionGameEntry> games;    // GameList
+    bool serviceReachable = true;           // GameList: false = no lobby service (LAN games only)
+    int searchTried = 0, searchOf = 0;      // SearchProgress
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
                                     "LobbyState", "MemberJoined", "MemberLeft", "CountdownStarted", "PeerLoaded", "AllLoaded",
-                                    "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "MemberVoice"};
+                                    "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "GameList", "SearchProgress",
+                                    "SearchCancelled", "MemberVoice"};
     const int i = (int)t;
     return i >= 0 && i < (int)(sizeof k / sizeof k[0]) ? k[i] : "?";
 }
@@ -177,6 +194,13 @@ public:
     virtual bool simHeld() const { return false; }
     // Events since the last poll, in order. `now` = the frontend's update time (seconds).
     virtual std::vector<SessionEvent> poll(double now) = 0;
+    // Public matches (defaults: none). findGames -> GameList; quickMatch(playlist) -> SearchProgress..., then Joined (a lobby
+    // took us) or HostOpened (none: we host a public lobby for the playlist); cancelSearch -> SearchCancelled.
+    virtual void findGames(const SessionGameQuery& q) { (void)q; }
+    virtual void quickMatch(const std::string& playlist) { (void)playlist; }
+    virtual void cancelSearch() {}
+    // The lobby service ("host:port", "" = none = LAN discovery only): from the profile at session start and on each change.
+    virtual void setLobbyService(const std::string& address) { (void)address; }
 };
 
 // Match-side plumbing for WFC_SESSIONTEST (Gameplay's harness, ONLINE_MP_FRONTEND_TESTS.md section 4); declared here so
