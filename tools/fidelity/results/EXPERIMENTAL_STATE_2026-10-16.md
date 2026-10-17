@@ -1,3 +1,8 @@
+# 2026-10-17 06:16 state (after the 05:41 reboot)
+- Package 7 gate design DONE: tools/fidelity/PACKAGE7-GATE.md + package-respin.sh header / whole-map contamination reruns / 1b in-hold X3=0 + NOCORPSE arms (5b665578).
+- WAITING for the card (4th in queue: Rendering, Gameplay, Systems, me): presenter-fix verification on Rendering's fixed exe - bash tools/fidelity/presenter-verify.sh <name> <exe> 64 (307e8b58); ~70 min.
+- TDR ledger day 7 running (work/sweep/tdrledger_day7.csv).
+
 # 2026-10-17 05:32 state
 - Package 6 gate on af4d0731 DONE: results/PACKAGE-GATE_af4d0731.md (no blocking row; 1b = the attribution-hold head arm; X3 +0.40-0.60 ms, bodies at RT on +0.17-0.49).
 - Leak series: results/NPP_LEAK_2026-10-17.txt - ~4 GB of the pool is Malwarebytes EDR (FlightRecorder.sys); the D3D12 presenter shows no AMD-tag growth. Fix = the user's decision (Integration surfaced it).
