@@ -2273,3 +2273,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 22:02 MAPSWITCH MEMORY A/B (RT off, 2 reps interleaved): int_base8 6,116 / 5,713 MB vs int_cand10 6,248 /
   5,695: both swing ~400 MB over the same range -> the FAST 6,071 row was spread, not an X3 regression. Rule change
   approved: FAIL > 6,500, INFO 6,000-6,500 with the spread noted. cand12 eye pass started 22:02.
+  2026-10-16 22:36 FACEFX RE MILESTONE (AssetTools, CAMPAIGN_FACEFX_RE.md + work/fxa/fxa_parse.py): all 22 .fxa parse
+  exactly (3,616 animations, constant 572-byte tail): class hash table, name table, master bone list (rest pose,
+  inverse rot, skeleton index, per-node bone-pose deltas), compiled face graph (nodes + links: fn 1 linear, fn 10
+  4-param; user props e.g. Omega EmissiveBlink -> material slot 2), name -> node lookup, groups (Dialogue +
+  cinematic). Systems' 74 exceptions = block trailers (blend / cue / name at the END) + 59 cinematic curves with
+  i8 in / out slopes. Value scale hypothesis i8 / 127 x node range. Open: the tail (phoneme map?), node float
+  roles, b, interpolation, a visual proof. Early cand12 read (mine, raw shots, checkpoint -> cand12 Realistic mean):
+  Streets 300 49 -> 55, 1740 58 -> 62; Gorge 36 -> 36, 40 -> 46; Molten 69 -> 82, 81 -> 89 (cand10 was +60-80).
