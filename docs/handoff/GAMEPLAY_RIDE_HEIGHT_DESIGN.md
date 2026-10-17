@@ -113,3 +113,11 @@ all axes : yaw.
   / stucks / off-mesh.
 - **Classic** (af4d0731) does not run the AI righting path at all: aiTip −1, player rule only. That's a Classic fidelity gap,
   **raised to Integration, not fixed** (Classic byte-identity is a user rule).
+
+**Integration decision 2026-10-17 (the user delegated it): Classic gets the original's AI righting path too.**
+- The attitude gate > 30°, rate-limited AiMaxAngular*, and no player pull for AI vehicles: Classic's purpose is the original's AI,
+  and this is a proven gap, not drift.
+- Done inside this item, so ONE Classic SIMHASH re-baseline covers ride height + squad + righting.
+- The re-baseline is recorded as a deliberate fidelity change in the package 7 doc, with before / after tipped time on the 4 maps for
+  Classic as well as Smart.
+- Until this item, Classic stays as is (the patch 2 and killer-cam gates keep the current baseline).
