@@ -170,7 +170,7 @@ void Pipeline::rtSkinNote(const MeshData& bind, const SkinModel& sm, const void*
     }
     RtSkinRec r;
     r.key = key; r.bindKey = &bind; r.row = row; r.mode = mode; r.bones = bones; r.alpha = alpha;
-    r.serial = serial; r.model = model; r.mn = mn; r.mx = mx;
+    r.serial = serial; r.model = model; r.mn = mn; r.mx = mx; r.body = drawBody_;
     auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins; a second
     if (it != rtSkinIdx_.end()) {                         //  draw elsewhere - another matrix - is counted in the log)
         if (std::memcmp(rtSkinCur_[it->second].model.m, model.m, sizeof model.m) != 0) ++S.renoted;
@@ -249,7 +249,7 @@ void Pipeline::rtSkinFeed(bool afterCharacters) {
             if (changed && gi.updated && dist > farD && ((frameNo_ + gi.slot) & 1)) { update = false; ++S.farSkipped; }
             if (!changed) ++S.unchanged;
             RtDynamicInstance di;
-            di.slot = gi.slot; di.update = update;
+            di.slot = gi.slot; di.update = update; di.body = r.body;
             if (update) {                                 // refit, or rebuild: after many refits / when the box outgrew the build's
                 static const int maxRefits = [] { const char* e = std::getenv("WFC_RT_CHARREBUILD"); return e ? std::max(1, std::atoi(e)) : 120; }();
                 bool rebuild = false;

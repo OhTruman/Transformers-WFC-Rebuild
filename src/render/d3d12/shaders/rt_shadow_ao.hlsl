@@ -31,7 +31,8 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
     // (R3, Realistic: ToSun.w >= 2) AO everywhere - world pixels are occluded by the world too (contact shadows in corners
     // and under props, 1 m radius), not only by the characters; Faithful keeps the characters-only contact AO. (A map
     // without a directional sun has ToSun.w 0: characters-only AO there in both modes.)
-    const uint traceMask = (dynamicPx || ToSun.w > 1.5) ? (uint)Params.z : 0x4u;
+    // (0x14: the characters 0x4 and the death bodies 0x10 - one class everywhere but the X3 sun rays)
+    const uint traceMask = (dynamicPx || ToSun.w > 1.5) ? (uint)Params.z : 0x14u;
     if (inside && d < 1.0) {
         const float3 p = worldAt(px, d);
         // normal from depth: per axis the neighbour with the smaller step (keeps silhouettes from bending the normal)
@@ -67,9 +68,9 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             }
             else {
                 const bool any = occluded(o, sd, 10000.0, (uint)Params.z); ++rays;
-                if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x4u) ? 1.0 : 0.0; ++rays; }
+                if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x14u) ? 1.0 : 0.0; ++rays; }
                 // (R2) the character's distance (only where a character is the sun's blocker)
-                if (outv.x < 0.5) { float t; if (occludedT(o, sd, 10000.0, 0x4u, t)) blockT = t; ++rays; }
+                if (outv.x < 0.5) { float t; if (occludedT(o, sd, 10000.0, 0x14u, t)) blockT = t; ++rays; }
             }
         }
         const uint nAo = (uint)Size.w;
@@ -102,7 +103,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
             const float3 dl = L.xyz - o;
             const float dist = length(dl);
             if (dist >= L.w || dist < 0.05) continue;
-            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x4u) ? 0.0 : 1.0;
+            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x14u) ? 0.0 : 1.0;
             ++rays;
         }
     }
@@ -110,7 +111,7 @@ void main(uint3 id : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID, uint3 g
         const float3 p = worldAt(px, d);
         const float3 eye = worldAt(px, 0.0);
         const float3 o = p + n * (0.01 + Params.y * length(p - eye));
-        const uint lmask = dynamicPx ? (uint)Params.z : 0x4u;
+        const uint lmask = dynamicPx ? (uint)Params.z : 0x14u;
         [unroll] for (uint k = 0; k < 4; ++k) {
             if ((float)k >= nShadow) break;
             const float4 L = ShadowLights[(uint)Extra2.w + k];

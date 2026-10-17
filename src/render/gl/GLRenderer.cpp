@@ -1575,6 +1575,7 @@ public:
     void setDrawMaterialParam(const std::string& n, const float v[4]) override { wfc_.setDrawMaterialParam(n, v); }
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
+    void setDrawBody(bool b) override { wfc_.setDrawBody(b); }
     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
     void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
     void setUpscaling(int mode) override {

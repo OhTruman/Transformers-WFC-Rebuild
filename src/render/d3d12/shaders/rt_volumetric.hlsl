@@ -123,9 +123,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         const uint mask = (uint)Params.z;
         // (round 1: over a long sunlit path the in-scatter saturates toward the sun's radiance x phase - open sky went white;
         // the phase is normalised to its forward peak, so VSun is the brightness of fully lit air looking into the sun)
-        // (package 7: the characters and bodies (0x4) are left out, as for the lamps - a full froxel grid of sun rays
-        // through every body's BLAS is the suspect for af4d0731's ~1.8 ms; a robot's shadow in the air is not seen)
-        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask & ~0x4u))
+        // (package 7: the death bodies (0x10) are left out - a full froxel grid of sun rays through every body's BLAS is the
+        // suspect for af4d0731's ~1.8 ms; the live characters (0x4) keep their shadows in the air)
+        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask & ~0x10u))
             L += VSun.rgb * (hg(dot(dir, ToSun.xyz), VSun.w) / hg(1.0, VSun.w));
         const uint base = (uint)Extra.z;
         const uint nl = (uint)Extra2.z;                          // the in-view lamps (ring + 20 positions / + 24 colours)
@@ -143,7 +143,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             // (round 1: the UE falloff alone stays high over a lamp's whole radius - every lamp filled its room with an even
             // glow, the grey veil on Gorge; the inverse-square core keeps the scattered light at the bulb, a halo)
             const float r0 = max(Size.w, 0.05), core = r0 * r0 / (r0 * r0 + d2);
-            if (!blocked(x, ldir, dlen, mask & ~0x4u)) L += Lc.rgb * att * core * hg(dot(dir, ldir), 0.3) * Extra.w;
+            if (!blocked(x, ldir, dlen, mask & ~0x14u)) L += Lc.rgb * att * core * hg(dot(dir, ldir), 0.3) * Extra.w;
         }
         const uint nt = (uint)VCtl.w;                            // transient lights (ring + 4 positions / + 12 colours)
         [loop] for (uint t = 0; t < 4; ++t) {

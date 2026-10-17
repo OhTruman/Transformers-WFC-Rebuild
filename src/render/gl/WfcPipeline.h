@@ -212,6 +212,7 @@ public:
         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    void setDrawBody(bool b) { drawBody_ = b; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
     void flushPendingDraws() { flushWeaponQueue(); }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
@@ -660,7 +661,7 @@ private:
     // with D3D12 (D3D12RtDynamic.h), whose job refits their BLAS. afterCharacters false: last frame's instances / palettes
     // (the round trip runs before this frame's characters), true: this frame's (after the opaque characters)
     struct RtSkinRec { const void* key = nullptr; const void* bindKey = nullptr; int row = 0, mode = 1, bones = 0; float alpha = 1.0f;
-                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; };
+                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; bool body = false; };
     std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
     std::map<const void*, size_t> rtSkinIdx_;
     int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
@@ -878,6 +879,7 @@ private:
     float znear_ = 0.1f, zfar_ = 20000.0f;
     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
     int drawOwner_ = 0;                              // character instance of the current dynamic draws
+    bool drawBody_ = false;                          // ... and they are a death body (RT: TLAS mask 0x10, not 0x4)
     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
     // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque
     // pass (GL_ANY_SAMPLES_PASSED, colour / depth writes off); the result of the query issued two frames earlier

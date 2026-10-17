@@ -210,6 +210,8 @@ public:
     // TnDefragger ramps it 1 -> 0 linearly over TransitionTime (car / tank hull gib: 0.5..1 s delay, 4.5 s; jet hull:
     // 6 s; robot body + arm: melee deaths only, 3 s).
     virtual void setDrawEnergyDeath(float defrag) { (void)defrag; }
+    // the following draws are a death body (World::drawCorpses): RT puts its instance under its own TLAS mask bit
+    virtual void setDrawBody(bool body) { (void)body; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.

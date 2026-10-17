@@ -1,0 +1,18 @@
+--- a/src/game/World.cpp	2026-10-17 03:34:08.774980200 -0500
++++ b/src/game/World.cpp	2026-10-17 03:34:08.845221400 -0500
+@@ -7076,6 +7076,7 @@
+         if (c.owner) r.setCharacterColors(render::CharacterColors{});
+         // Melee deaths: TnDeathModifierSetMaterial, the form's EnergyDeathMaterial with Defrag 1 -> 0 over TransitionTime 3 s.
+         if (c.defrag) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - c.t / 3.0f));
++        r.setDrawBody(true);                             // (RT: the body's own TLAS bit - the X3 sun rays skip bodies)
+         bool drawn = false;
+         if (c.gpuOk) {   // the character path: queued, its shadow caster batched with live robots; the palette row is cached while the serial holds
+             render::MeshData& bind = bindMeshOf(*c.model);
+@@ -7087,6 +7088,7 @@
+         if (!drawn && !c.gpuOk && !c.mesh.positions.empty())
+             r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // CPU fallback, cached while the pose is static
+         if (c.defrag) r.setDrawEnergyDeath(-1.0f);
++        r.setDrawBody(false);
+         r.setDrawOwner(0);
+     }
+ }

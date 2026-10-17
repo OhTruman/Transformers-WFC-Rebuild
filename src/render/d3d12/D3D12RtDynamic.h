@@ -37,6 +37,7 @@ struct RtDynamicInstance {
     float transform[12];          // model -> world, row-major 3x4 (D3D12_RAYTRACING_INSTANCE_DESC::Transform)
     bool update = false;          // the slot's positions were rewritten this frame: build (first time) or refit its BLAS
     bool rebuild = false;         // (with update) a full build instead of a refit: a refit's quality decays over many poses
+    bool body = false;            // a death body: TLAS mask 0x10 instead of the characters' bit (the X3 sun rays skip it)
 };
 // this frame's characters in the TLAS (replaces the last call's list); the next record consumes the updates
 void rtDynamicFrame(const RtDynamicInstance* inst, int n);
