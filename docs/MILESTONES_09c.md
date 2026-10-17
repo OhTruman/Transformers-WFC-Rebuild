@@ -3303,3 +3303,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   playable fallback. Systems' build plan accepted: build_slim --plan PASS 0 PROBLEM (overlay 85 / 85, HD D 3506 + M6 498, bin 20
   incl. opus + vgmstream licences); SLIM_TSV patch (--tsv) merges with the head; AssetTools re-measures after 14:13 at the head;
   5 new static checks in verify_slim. NET.identity four profiles running headless.
+2026-10-17 15:03 Rendering CARD FREE 15:05 with four verdicts: fog in-scatter x1.443 PASS as authored (Rust dark view 36.2 -> 42.1); doors on
+  live data PASS (Remnant versus open, Rust opening 30 / 30, light maps following); particles set (Trail2 979b071e + spawn-time
+  23d3c36c) PASS by eye (TF_Death_MED_FX death streaks now drawn; moving-source trails as particle chains); lens flares WORK
+  (Debris sun flare, Rust occluded) -> one open-sky pass + RE's read before merging. Card: Frontend gap2 15:03 -> Rendering
+  open-sky ~15:10 -> head candidate. Patches cut against efa19b6b.
