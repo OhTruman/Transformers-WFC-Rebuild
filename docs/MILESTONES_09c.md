@@ -3092,3 +3092,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Disconnect: faithful (suicide + empty seat + 1.5 s team forfeit) when the lobby has no bots; SlotSwap-to-bot after the suicide
   when bot rows are on (10.5; Gameplay implements). Systems' slot: rerun_bin = 1c5de2d8 + 9 patches ((a) body notify Dodge,Drain,
   (b) physmat ForceField force, (c) reverb_check 3 maps) at ~13:10 after Gameplay's gap.
+2026-10-17 12:37 MERGED be54be6d Systems' headless match runner (verified on integration: 1801 steps / 1.8 s wall, two runs identical SIMHASH,
+  1202 distinct), 292c63a4 Frontend forfeit text (TransContent.int ForfeitMessage) + 3b271bd1 its glue. Determinism BLOCKER found
+  by Systems: match player numbering differs per peer (local first) -> Gameplay's priority 1: a global human seat order from the
+  launch record (humans + localSeat), iteration by match player index, a cross-perspective SESSIONTEST; Frontend adapts
+  fillOnlineLaunch after. Systems builds INetTransport / Udp / Loopback / LockstepLayer meanwhile.
