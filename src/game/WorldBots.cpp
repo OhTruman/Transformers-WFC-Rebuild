@@ -602,7 +602,7 @@ void World::botThink(BotBody o, BotBrain& b) {
             }
         // Opportunistic reload out of combat.
         Weapon& cw = pc.weapon();
-        if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { cw.beginReload(); ++b.reloads; }
+        if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { if (pbSandbox_) pbPress_ |= 1u << (int)platform::Button::Reload; else cw.beginReload(); ++b.reloads; }
     }
 }
 
