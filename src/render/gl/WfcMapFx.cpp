@@ -1603,7 +1603,7 @@ void Pipeline::drawMapPresentation() {
         pawnOcclusionQueries();                        // characters are all drawn: test their boxes against the depth
         if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::PawnOcc] += fxSubNowMs() - tp;
     }
-    if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); return; }
+    if (WFC_ENV("WFC_NOMAPFX")) { flushTranslucency(); drawLensFlares(); return; }
     glx::gpuStamp("map props, pickups, FX meshes");
     auto t0 = std::chrono::steady_clock::now();
     // WFC_MAPFXPROF=1 (diagnostics): average CPU ms per frame of this function's sections, logged every 600 frames
@@ -2390,6 +2390,7 @@ void Pipeline::drawMapPresentation() {
     if (fxSubCpuOn()) gFxSub.ms[FxSubCpu::MotionReactive] += fxSubNowMs() - tMotion;
     glx::gpuStamp("translucency: build / upload");
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
+    drawLensFlares();                                  // (SDPG_Foreground: after the translucency, no depth test)
     reactiveEnd();
     temporalDump();                                    // WFC_TEMPORALDUMP (diagnostics; motion vectors on only)
     glx::gpuMark(glx::kPassTranslucent);

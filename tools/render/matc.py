@@ -456,7 +456,8 @@ class MatCompiler:
         exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
         return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
 
-    VARYING = {'DynamicParameter', 'VertexColor', 'TextureSample', 'TextureSampleParameter2D', 'TextureCoordinate',
+    VARYING = {'DynamicParameter', 'LensFlareRadialDistance', 'LensFlareSourceDistance', 'LensFlareIntensity', 'LensFlareOcclusion',
+               'LensFlareRayDistance', 'VertexColor', 'TextureSample', 'TextureSampleParameter2D', 'TextureCoordinate',
                'ScreenPosition', 'PixelDepth', 'SceneDepth', 'DestDepth', 'CameraVector', 'ReflectionVector',
                'LightVector', 'WorldPosition', 'ParticleSubUV', 'TextureSampleParameterCube',
                'TextureSampleParameterMovie', 'TextureSampleParameterSubUV', 'FlipBookSample', 'MeshSubUV'}
@@ -507,6 +508,25 @@ class MatCompiler:
         # particle DynamicParameter: four scalar outputs, output k = Param(k+1) (all 50 cooked nodes use outputs
         # 0..3 only, and ParamNames match: output 1 always 'DepthBiasScale', output 0 'Desat1')
         return ['m.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 3)], 1
+
+    # Lens-flare element values (RE LENS_FLARE_RE.md s4a, native 0x82FC6620 / 0x82FC2AA0, C): TEXCOORD2 = (r, 0.5 |S - E|,
+    # RayDistance), TEXCOORD3 = (Occlusion, the per-frame intensity proxy+0xE4); constant per element quad: m.lensFlare =
+    # (radial distance r, source distance, ray distance, occlusion), m.lensFlareIntensity - per-draw uniforms (outside the
+    # flare draw (0, 0, 0, 1) and 1)
+    def x_LensFlareRadialDistance(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlare.x', 1
+
+    def x_LensFlareSourceDistance(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlare.y', 1
+
+    def x_LensFlareRayDistance(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlare.z', 1
+
+    def x_LensFlareOcclusion(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlare.w', 1
+
+    def x_LensFlareIntensity(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlareIntensity', 1
 
     def x_ParticleSubUV(self, c, n, p, o):
         # M67: the particle's two SubUV cells (m.uv0 = cell 1, m.subUV2.xy = cell 2) lerped by its interp
