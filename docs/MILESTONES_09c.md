@@ -2761,3 +2761,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   snapshot of integration's render data (only the 118 manifest materials swapped), replacing Systems' matB/render. Kismet
   handlers 15 / 15 CONFIRMED (RE lane a020383). RE lane next: MP ability cue table for Systems; then Gameplay's value table check.
   Card: Rendering fog A/B (10:0x, ~15 min) -> (B) ~100 min -> Systems body-notify 8 min -> Gameplay recoil eye check.
+2026-10-17 10:11 CORRECTION: Rendering's Set C particle-module CODE (RENDERING_P7_SET_C_PARTICLES.patch bd63223e: WfcMapFx.cpp, WfcPipeline.h/.cpp,
+  build_map_fx.py) is inside commit 95c199f2, whose message names only the PROVISIONALs part 2 doc (Integration staging slip; pushed,
+  not rewritten). Set C's row = Rendering's x10slot particle pair (expected-change: particles only). Systems' body-notify
+  (4196ccfb) + physmat impacts (135eba9d: 34 physmats' ImpactEffect / ImpactSound up the Parent chain; force fields, coolant,
+  Metal_dest change on the MP maps) build clean on 5fc2e552; merge on their 12-min slot after (B). AssetTools 83b669d: the 30
+  physmat json carry the owner-class split with unchanged glb_sha256; node_overrides (53 MP nodes) must be applied by Gameplay.
