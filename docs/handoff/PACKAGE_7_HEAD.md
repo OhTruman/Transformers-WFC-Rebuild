@@ -1,4 +1,4 @@
-# Package 7: integration deed7f1a (<DATE>)
+# Package 7: integration ab855fe7 (<DATE>)
 
 **The hand-over build** (user 2026-10-17: package 6 af4d0731 is the internal checkpoint; package 7 is what the user
 playtests).
@@ -9,7 +9,10 @@ playtests).
 
 ## Status (kept current; newest first)
 
-- 2026-10-17 15:25: FINAL PACKAGE 7 HEAD = deed7f1a (057aded3 + the lens flares + the lead-based auto delay + the verify_slim
+- 2026-10-17 15:3x: FINAL PACKAGE 7 HEAD = ab855fe7 (deed7f1a + the Frontend HUD glue fix; no data change). Build:
+  `NOPROMOTE=1 JOBS=2 SLIMTSV="F:/Transformers Rebuild/AssetTools/out/package/slim_files.refresh.tsv" bash work/refresh.sh ab855fe7
+  "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack" D`.
+- 2026-10-17 15:25: (superseded) package 7 head = deed7f1a (057aded3 + the lens flares + the lead-based auto delay + the verify_slim
   'package 7 data:' row). The package builds after Experimental's gate PASS on Integration's word: refresh.sh at deed7f1a with
   SLIMTSV = AssetTools' slim_files.refresh.tsv (re-measured for the 6 lens_flares.json + 6 changed materials files).
 
