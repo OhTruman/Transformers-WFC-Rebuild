@@ -27,3 +27,6 @@ other lanes' builds (remove with rmdir only).
 - cand12 (round 3): match 1.26 OK / 1.27 below by 0.01 (Streets), views 1.47 / 1.50 = checkpoint; results/X3_EYEPASS_cand12.md.
 - GPU-skinned corpses (merged): -0.41 ms p90 on Berth, still +0.9 ms vs no bodies (package 7: fewer draws per settled body).
 - Final head tomorrow: RERUN_1B=1 EYE_FROM=x3_<final cand> GATE_REGRESS_NOTE="..." bash tools/fidelity/package-respin.sh <final> 9350f19b
+- cand13 (round 4) = the package 6 volumetrics (Integration 23:2x): match 1.2654 OK / 1.2748 vs 1.28 (miss 0.005, noted in the report),
+  views 1.47 / 1.50 = checkpoint, no veil. Tomorrow: an optional Streets-only value step (eye pass, ~30 min) if ready within 40 min of the
+  relaunch; then package-respin.sh on Integration's final sha with RERUN_1B=1 EYE_FROM=x3_cand13 (or the Streets step's sheet).
