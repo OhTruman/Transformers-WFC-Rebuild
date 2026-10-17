@@ -2623,3 +2623,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   sphere axis / SurfaceOnly / Velocity flags, ColorByParameter name / default, DynamicParameter bUseEmitterTime), ~3-4 h after,
   interleaved with X7 as CPU allows. AssetTools next: campaign physmat, then the pstream decode fields. Presenter verification:
   64 / 64 clean, FG run (latency max 281 ms, FG resets 1: Experimental reads it), resize done, map switch running.
+2026-10-17 09:04 Merged 4953261b + a36b2ee1 audit-3 HUD item (ReapplyBuff, SetSpectateTarget from Gameplay's HUD state, scoreboard input online-only;
+  DisplayCharacterSelect already movie-side). Gameplay camera patch refreshed (0c0a5665: + HudState.spectateTarget; 271 lines,
+  dry-runs clean; merges on its firing crop sheet). Particle module data: the cook strips per-instance module objects; AssetTools
+  does option A now (class defaults labelled + MP map_fx_runtime.json regen, ~1 h); option B (decode per-instance values from the
+  compiled stream) only if the RE lane says the stream carries them. Campaign physmat: D5 done (two thirds of triangles on the
+  Metal default), 9 chapters running. Presenter verification: map-switch step running since 09:00:56.
