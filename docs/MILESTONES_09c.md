@@ -2629,3 +2629,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   does option A now (class defaults labelled + MP map_fx_runtime.json regen, ~1 h); option B (decode per-instance values from the
   compiled stream) only if the RE lane says the stream carries them. Campaign physmat: D5 done (two thirds of triangles on the
   Metal default), 9 chapters running. Presenter verification: map-switch step running since 09:00:56.
+2026-10-17 09:08 PRESENTER VERIFICATION PASS (Experimental, tools/fidelity/results/PRESENTER_VERIFY_cand15.md 3cf61199): 64 / 64 WFC_D3D12PRESENT exits
+  clean (before 1 hang in 32), latency wait avg 0.002 / max 14.9 ms vs 0.120 / 32.9, FG run clean (the 10-12 FSR 3 crash class
+  did not recur), 3 resizes clean, map switch with the presenter 6 / 0. MERGED 76da5484 Rendering set A (fence fix 8736608c,
+  presenter event 9015c4e9, X3 GPU timer): the D3D12 presenter exit hang known issue CLOSES. Also merged 5cb9886f campaign
+  objectives loader; 186c1a84 particle audit batch 2 (8 missing modules' semantics). Experimental's base check running; then
+  the (A) data switch -> Gameplay follow-up merge -> Frontend 10 -> Gameplay 4 -> Rendering 20 -> Systems 10 -> (B) eye pass.
