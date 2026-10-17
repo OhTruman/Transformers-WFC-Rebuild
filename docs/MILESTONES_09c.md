@@ -3406,3 +3406,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:47 Rendering: LENSFLARE_MODES patch ready (rt2 62beef47; merge order row 0f913411 -> patch -> glue d4c8978e after the eye pass);
   all 38 campaign materials compile in matc (rt2 f31431f5; decal projection at draw time = campaign item; Omega Ddx switch
   question to RE); X7 ready for a 25-min slot. Card plan after the eye pass: flare sheet 6 min + X7 25 min.
+2026-10-17 15:48 Escalation data (AssetTools, GO): both maps ship the ORIGINAL Escalation nav mesh (NavigationCell 469 / 625 + tactical / path
+  nodes) = the authored bot nav for the mode; plan A geometry per generator / event target, B original navmesh in bot_nav schema
+  (primary), C closed-doors bot_nav (cross-check), D SurvivalData rows (fallback UNKNOWN -> RE asked). ~30 min CPU.
