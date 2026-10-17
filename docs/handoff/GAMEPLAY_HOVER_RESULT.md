@@ -42,3 +42,29 @@ The RE source is `GAMEPLAY_HOVER_RE.md`; the decisions are Integration's, 2026-1
 
 - **Classic SIMHASH changes** (a deliberate fidelity change). One re-baseline, batched with the squad item.
 - Smart changes slightly too (the tank force; the shared springs).
+
+## Squad follow reversals (Smart only; Classic has no squad following, so Classic identity is untouched by this part)
+
+**Diagnosis** (NAVQ trace, `hover/diag_follow_*.js`, diagnostics only):
+- About 80 % of the "follow" reversals are the member turning back alone, while its leader keeps its heading. The rest follow a leader
+  that turned round, which is legitimate.
+- Two mechanisms:
+  - an unwalkable wedge slot fell back onto the leader's own position (radius 2.5 m), so the member walked into it and turned away;
+  - the member flapped between the wedge and the regroup goal at squadRegroupM (the goal jumped 13-270 m).
+
+**Fix** (`hover/edit_squad_slots.js`):
+- an unwalkable slot tries the mirrored side, half depth and straight behind, then the last usable slot; only then the leader, with a
+  5 m radius;
+- 1.5 s wedge hysteresis, out to squadRegroupM + 5 m.
+
+**Measured** (24 seeds, Smart, per travel-min, before → after):
+
+| Map | fidget | follow | stucks / bot-min |
+|---|---|---|---|
+| Streets | 0.48 → 0.34 | 2.26 → 1.98 | 1.31 → 1.03 |
+| Molten | 0.50 → 0.28 | 1.80 → 1.46 | 0.87 → 0.62 |
+| Debris | 0.30 → 0.23 | 0.99 → 1.30 | 0.82 → 0.86 |
+| Gorge | 0.73 → 0.40 | 2.22 → 2.28 | 1.52 → 1.33 |
+
+**Left for later** (a bounded 2-round item at the end of the queue): dithering near a moving slot (a lead point ahead of the slot, or
+per-member slot smoothing).
