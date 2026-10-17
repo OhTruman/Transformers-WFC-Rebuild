@@ -2928,3 +2928,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:18 Experimental CARD FREE 11:18: (B) captures complete (24 + 24 runs + views, no INVALID); sheets + MATB.md in ~15 min, then the
   (B) switch. Set D 'fogs' lighting.json data copied LIVE into Rebuild/work/render at 11:18 (gate PASS 10 / 10; backup in the
   scratchpad). Card -> Systems' combined 15-min slot (full_bin) 11:18.
+2026-10-17 11:19 RE: campaign material nodes specified (If exact compares; Ddx / Ddy compiled out; CameraWorldPosition = c3 absolute; lens-flare
+  inputs = VF interpolators but NO lens-flare VF shaders cooked anywhere: how the 32 LensFlareComponents draw is UNKNOWN;
+  DecalMaterial = Material root + VF projection). RE next: the interpolated-lightmap decode for the 32 doors (~1.5 h), then the
+  lens-flare runtime look, with Gameplay's recoil crops in between.
