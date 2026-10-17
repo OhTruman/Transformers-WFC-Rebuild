@@ -111,6 +111,7 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "BotsExtended") bots.extended = v == "1";
             else if (k == "BotsEdited") bots.editedSinceMap = v == "1";
             else if (k == "IconicCharacters") bots.iconic = v == "1";
+            else if (k == "IdleKick") bots.idleKick = v == "1";
             else if (k == "OriginalChassisLocks") originalChassisLocks = v == "1";
         } else if (section == "[Voice]") {
             if (k == "Mode") voice.mode = std::clamp(std::atoi(v.c_str()), 0, 2);
@@ -190,6 +191,7 @@ void LocalProfile::save() const {
       << "\nAutoDetectGpu=" << autoDetectGpu
       << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nBotsEdited=" << (bots.editedSinceMap ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";
     if (bots.iconic) f << "IconicCharacters=1\n";   // only when on: existing profiles stay byte-identical
+    if (bots.idleKick) f << "IdleKick=1\n";
     f << "\n[Progression]\n";
     for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
     for (int i = 0; i < 4; ++i) f << "LastMatch" << progression::specialtyName(i) << "=" << progression.lastMatchXp[(size_t)i] << "\n";

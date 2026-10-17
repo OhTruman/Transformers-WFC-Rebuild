@@ -137,6 +137,11 @@ struct SessionEvent {
     int64_t value = 0;
     bool connecting = false, timedOut = false;
     int headsetState = 0, voiceVia = 0;
+    // CountdownStarted (member): the host's launch record (ONLINE_MP_ARCHITECTURE 10.3, a requirement for lockstep) - the
+    // host's full match URL (map, mode, every option incl. the bot rows / Iconic / WfcIdleKick), the match seed, and `lobby`
+    // = the roster at the start. Members launch from it verbatim; empty = none sent (dev FakeSession: the member builds its own).
+    std::string launchUrl;
+    uint32_t seed = 0;
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
@@ -157,6 +162,9 @@ public:
     virtual void publishLobby(const SessionLobby& lobby) = 0;                 // host: every LobbyState change
     virtual void setMemberInfo(const SessionMemberInfo& info) = 0;            // every member: name, character, team request
     virtual void requestStart() = 0;                                          // host: Start Game
+    // host, just before requestStart: the launch record every peer starts from (the session sends it to the members with
+    // CountdownStarted). Default: none.
+    virtual void setLaunch(const std::string& matchUrl, uint32_t seed, const SessionLobby& roster) { (void)matchUrl; (void)seed; (void)roster; }
     virtual void reportLoaded(uint64_t simId, uint64_t loadHash) = 0;         // after the map load (load gate)
     virtual void kick(const SessionMemberId& member, SessionKickReason why) = 0;   // host: a manual kick (idle: see the doc)
     virtual void setVoiceSettings(const SessionVoiceSettings& v) = 0;          // on start and whenever the Audio rows change

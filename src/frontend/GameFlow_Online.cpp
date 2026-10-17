@@ -546,6 +546,11 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
         voiceStates_[e.member.fingerprint] = VoiceState{e.headsetState, e.voiceVia};
         break;
     case T::CountdownStarted:   // member: the host started the game - the same lobby exit countdown here
+        if (role_ == SessionRole::Member) {   // the host's launch record (map, options, seed, roster) for StartLevel
+            memberLaunchUrl_ = e.launchUrl;
+            launchSeed_ = e.seed;
+            if (!e.lobby.slots.empty()) { memberLobby_.slots = e.lobby.slots; memberLobby_.members = e.lobby.members; }
+        }
         if (role_ == SessionRole::Member && level_ == LevelKind::GameLobby && !lobby_.countingDown) hostRequestsGameStart();
         break;
     case T::PeerLoaded:

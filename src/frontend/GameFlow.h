@@ -87,6 +87,7 @@ struct MatchLaunch {
     int rounds = 0;             // GetIntOption("Rounds")
     int timeLimit = 0;          // GetIntOption("TimeLimit"), seconds (GameInfo.InitGame)
     int teamIndex = -1;         // 0 Autobots, 1 Decepticons (lobby FinalCountdown; survives seamless travel)
+    uint32_t seed = 0;          // online: the host's match seed (the launch record); 0 offline (the engine's own)
     // Online (empty offline): the host's published slots in order, this player's id ("" on the host) and every member's
     // display name ("" id = the host). Gameplay makes the human slots other than self ParticipantKind::Remote participants.
     std::vector<SessionSlot> onlineSlots;
@@ -247,6 +248,7 @@ public:
     // host's gate counts the later one as "no character" until it picks another one.
     std::vector<std::string> claimedIconicCharacters() const;
     std::string lobbyUrlForTest() const { return lobby_.settings ? buildLobbyUrl(*lobby_.settings) : std::string(); }
+    std::string launchUrlForTest() const { return buildLaunchUrl(); }
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
     void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
@@ -370,6 +372,10 @@ private:
     const GameSettings* settingsByConfigName(const std::string& name, bool privateMatch) const;
     std::string buildLobbyUrl(const GameSettings& gs) const;
     std::string buildMatchUrl(const GameSettings& gs) const;
+    std::string buildLaunchUrl() const;   // the full match URL (StartLevel's): map, BuildURL options, bot rows, online options
+    bool idleKickOn() const;              // the "Kick Idle Players" host row (online; a member: the host's published row)
+    std::string memberLaunchUrl_;         // member: the host's launch record (CountdownStarted), used verbatim at StartLevel
+    uint32_t launchSeed_ = 0;
     void openMovie(const std::string& movie);
     void closeMovie(const std::string& movie);
     void setUIController(UIControllerClass cls, bool inGameLobby = false);
