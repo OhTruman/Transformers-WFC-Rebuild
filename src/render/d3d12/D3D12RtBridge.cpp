@@ -707,7 +707,7 @@ public:
     }
     bool giReady() const { return psoGi_ && giTexels_ && !gi_.empty(); }
     // load time: whole passes over every texel, in chunks of one submission each (GL owns the pages around it)
-    bool giRunNow(const RtGiJob& j0, int passes, UINT chunk) {
+    bool giRunNow(const RtGiJob& j0, int passes, UINT chunk, void (*yield)(void*) = nullptr, void* ctx = nullptr) {
         if (!giReady() || !tlas_) return false;
         using clk = std::chrono::steady_clock;
         const clk::time_point t0 = clk::now();
@@ -729,6 +729,7 @@ public:
                 RtGiJob j = j0; j.first = first; j.count = std::min(chunk, giTexelN_ - first); j.frame = (unsigned)(pass * 7919u + first);
                 j.dilate = first + chunk >= giTexelN_;
                 if (!oneShot([&](ID3D12GraphicsCommandList* cl) { giRecord(cl, j); }, "GI: load-time pass")) return false;
+                if (yield) yield(ctx);                   // (each chunk waited: the loading screen may present now)
             }
         LOG_INFO("RT GI: %d load-time passes over %u texels in %.0f ms", passes, giTexelN_,
                  std::chrono::duration<double, std::milli>(clk::now() - t0).count());
@@ -1680,7 +1681,7 @@ void rtBridgeSetSignalBuffers(const GLuint* bufs, int n) { if (g_bridge) g_bridg
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex) { return g_bridge && g_bridge->giSetup(s, glTex); }
 double rtBridgeVramMB() { return g_bridge ? g_bridge->vramMB() : 0.0; }
 void rtBridgeGiQueue(const RtGiJob& j) { if (g_bridge) g_bridge->giQueue(j); }
-bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk) { return g_bridge && g_bridge->giRunNow(j, passes, chunk); }
+bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk, void (*yield)(void*), void* ctx) { return g_bridge && g_bridge->giRunNow(j, passes, chunk, yield, ctx); }
 bool rtBridgeGiProbes(const RtGiJob& j, const float origin[3], float spacing, const int dims[3], int rays, const std::vector<uint32_t>& cells,
                       std::vector<float>& out) {
     return g_bridge && g_bridge->giProbes(j, origin, spacing, dims, rays, cells, out);
@@ -1703,7 +1704,7 @@ void rtBridgeSetSignalBuffers(const GLuint*, int) {}
 bool rtBridgeGiSetup(const RtGiSetup&, std::vector<GLuint>& glTex) { glTex.clear(); return false; }
 double rtBridgeVramMB() { return 0.0; }
 void rtBridgeGiQueue(const RtGiJob&) {}
-bool rtBridgeGiRunNow(const RtGiJob&, int, unsigned) { return false; }
+bool rtBridgeGiRunNow(const RtGiJob&, int, unsigned, void (*)(void*), void*) { return false; }
 bool rtBridgeGiProbes(const RtGiJob&, const float*, float, const int*, int, const std::vector<uint32_t>&, std::vector<float>& out) { out.clear(); return false; }
 }  // namespace render
 #endif

@@ -414,9 +414,12 @@ void Pipeline::giSetup() {
     auto runPasses = [&](float gain) {
         RtGiJob L = J;
         L.mix[3] = gain; L.mix[0] = 1.0f;
-        bool ok = rtBridgeGiRunNow(L, passes, 262144u);
+        // (the loading screen presents between chunks: the bake - ~4x with X7 - no longer reads as a freeze or trips the
+        // watchdog's no-frame gap)
+        auto yieldFn = [](void* p) { static_cast<Pipeline*>(p)->yieldLoad(); };
+        bool ok = rtBridgeGiRunNow(L, passes, 262144u, yieldFn, this);
         L.mix[0] = J.mix[0];
-        if (ok && accum) ok = rtBridgeGiRunNow(L, accum, 262144u);
+        if (ok && accum) ok = rtBridgeGiRunNow(L, accum, 262144u, yieldFn, this);
         return ok;
     };
     // the decoded mean (value x scale, coefficients / 3: a flat surface) of the RT lightmap against the bake's over the

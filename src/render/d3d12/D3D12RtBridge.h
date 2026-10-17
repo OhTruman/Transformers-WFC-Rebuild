@@ -115,7 +115,8 @@ struct RtGiJob {
 bool rtBridgeGiSetup(const RtGiSetup& s, std::vector<GLuint>& glTex);
 double rtBridgeVramMB();                                  // (leak diagnostics) the process's local video memory, MB (0: unknown)
 void rtBridgeGiQueue(const RtGiJob& j);
-bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk);
+// (yield: called between passes - the loading screen presents during a long bake; X7 made it ~4x)
+bool rtBridgeGiRunNow(const RtGiJob& j, int passes, unsigned chunk, void (*yield)(void*) = nullptr, void* ctx = nullptr);
 // S3: the probe grid (origin, spacing, dims) traced from the current RT lightmap with the job's offsets / mask / bounce
 // gain, rays per probe; out: 24 floats per probe (6 x (rgb, w): the ambient cube +X -X +Y -Y +Z -Z; w of axis 0 = the
 // share of front-face hits, of axis 1 = the share of rays that hit)
