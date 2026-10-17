@@ -368,7 +368,8 @@ original's talker icons and HeadsetState column where the movies have them.
 | row | values | default |
 |---|---|---|
 | Voice Chat | Off / Push to Talk / Open Mic | Push to Talk |
-| Voice Channel | Team / All | Team (FFA modes: All) |
+| Voice Channel | Team Radio / All Radio / Proximity / Radio + Proximity | Radio + Proximity (FFA modes: All Radio + Proximity's positional part) |
+| Proximity Volume | 0-100 in tens (only if Systems' mix wants a separate level) | 70 |
 | Input Device | System Default, then the capture devices by name | System Default |
 | Push-to-Talk Key | a short list: V, T, B, Caps Lock, Mouse 4, Mouse 5 (pad: hold the left d-pad) | V |
 | Voice Volume | 0-100 in tens (the original volume rows' scale) | 70 |
@@ -389,7 +390,16 @@ original's talker icons and HeadsetState column where the movies have them.
 **In the match:**
 - The HUD's own talker list (Hud_GFX sprite 573) shows the names of the players speaking, including the local player
   while the key is held or the open mic is live.
-- The channel follows Voice Channel: Team sends to the own team only; All to everyone.
+- The channel follows Voice Channel (user addition 2026-10-17, proximity voice; Systems' architecture section 7):
+  - **Team Radio:** the own team, anywhere on the map;
+  - **All Radio:** everyone, anywhere;
+  - **Proximity:** everyone within range (64 m), heard from the speaker's position with room reverb;
+  - **Radio + Proximity** (default): team radio anywhere, plus positional voice for everyone in range.
+- **Which channel a speaker is on:** the session reports it with each speaking state (MemberVoice.voiceVia).
+  - Radio: the original headset / speaking icon (HeadsetState 2) and the HUD talker list as the original.
+  - Proximity: the same speaking icon, and in the HUD talker list the name followed by the "Near" tag (NEW text).
+  - A speaker heard both ways shows as radio.
+  - The per-player mute is one switch for both kinds.
 - **Spectators and the dead:** they hear and talk on their team channel as normal. The original's dead-chat rule is
   unknown (R7).
 
