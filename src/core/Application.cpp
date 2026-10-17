@@ -5515,6 +5515,84 @@ void Application::runSessionTest() {
             check(r2 && r2->weapon().reloading(), "remote reload (" + std::string(r2 && r2->weapon().def ? r2->weapon().def->id : "-") + " ammo " + std::to_string(r2 ? r2->weapon().ammo : -1) + " reserve " + std::to_string(r2 ? r2->weapon().reserve : -1) + ")");
         }
     }
+    // The PARTIAL group: killstreak, Plasma Cannon charge, beam, HardLock, jammer; one Remote seat against a harness enemy each.
+    auto partialCase = [&](const char* what, game::Specialty spec, std::vector<std::string> weapons, std::vector<std::string> abilities, const std::function<bool(int, game::MatchOpponent*, game::RemoteCommand&, const std::function<void()>&, const std::function<void()>&)>& body) {
+        game::MatchLaunch A; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", A);
+        A.localTeam = 0;
+        // A fresh member per case: earlier launches' harness opponents (kind Remote, no member) stay in the player list, so
+        // removeBots keeps the old seats too and the same fingerprint would find a stale one.
+        static int caseNo = 0; const std::string member = "WFC-PART-" + std::to_string(++caseNo);
+        game::RemoteSeat rs = seat("Remote1", 1, member.c_str()); rs.selection.specialty = spec; rs.selection.weapons = weapons; rs.selection.abilities = abilities;
+        A.remotes = {rs};
+        world_.launchMatch(A);
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        std::vector<game::MatchOpponent*> tg;
+        for (int i = 0; i < 3; ++i) tg.push_back(world_.addMatchOpponent("PT" + std::to_string(i), false));
+        const int q = byMember(member.c_str());
+        game::RemoteCommand cmd;
+        std::function<void()> stepCmd = [&]() { cmd.tick = (uint32_t)(world_.simTick() + 1); world_.applyRemoteCommand(q, cmd); world_.handleInput(idle, dt); world_.tick(dt); cmd.pressed = 0; };
+        for (int i = 0; i < 20 * 60; ++i) { bool all = world_.participantPawn(q) != nullptr; for (auto* t : tg) all &= t->spawned(); if (all) break; stepCmd(); }
+        game::MatchOpponent* T = nullptr;
+        for (auto* t : tg) if (t->spawned() && !world_.match().sameTeam(t->matchPlayer(), q)) { T = t; break; }
+        const game::Character* rp = world_.participantPawn(q);
+        if (!T || !rp) { check(false, std::string(what) + ": seat and target spawned"); return; }
+        const core::Vec3 P = rp->actorLocation();
+        world_.setParticipantPosition(T->matchPlayer(), P + core::Vec3{6.0f, 0.0f, 0.0f});
+        std::function<void()> aimAt = [&]() {
+            const game::Character* me2 = world_.participantPawn(q); const game::Character* tp = world_.participantPawn(T->matchPlayer());
+            if (!me2 || !tp) return;
+            const core::Vec3 d = tp->actorLocation() - me2->actorLocation();
+            cmd.aimYaw = std::atan2(-d.x, -d.z); cmd.aimPitch = std::asin(core::clampf(d.y / std::max(core::length(d), 0.01f), -1.0f, 1.0f));
+            cmd.aimPoint = tp->actorLocation(); cmd.buttons |= game::kRemoteBitAimPoint;   // the camera-trace result on the target
+        };
+        LOG_INFO("SESSIONTEST %s: seat weapon %s abilities %s / %s", what, rp->weapon().def ? rp->weapon().def->id : "-", rp->abilities_[0].id.c_str(), rp->abilities_[1].id.c_str());
+        check(body(q, T, cmd, stepCmd, aimAt), what);
+    };
+    partialCase("remote killstreak trigger", game::Specialty::Soldier, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Hover", "Cloaking"},
+        [&](int q, game::MatchOpponent*, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>&) {
+            world_.match().playerMutable(q).acquiredKillstreaks.push_back("FastAbilityCooldownStreak");
+            cmd.pressed = 1u << (int)platform::Button::Killstreak; stepCmd();
+            for (int i = 0; i < 10; ++i) stepCmd();
+            return world_.match().players()[(size_t)q].acquiredKillstreaks.empty();
+        });
+    partialCase("remote Plasma Cannon charge and release", game::Specialty::Scout, {"PlasmaCannon", "HeavyPistol", "FlakGrenades"}, {"Hover", "Cloaking"},
+        [&](int q, game::MatchOpponent*, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            const game::Character* c = world_.participantPawn(q);
+            if (!c || !c->weapon().charge()) return false;
+            const int ammo0 = c->weapon().ammo;
+            cmd.buttons = 1u << (int)platform::Button::Fire; cmd.pressed = cmd.buttons;
+            for (int i = 0; i < 90; ++i) { aimAt(); stepCmd(); }
+            const int state = world_.participantPawn(q)->weapon().chargeState;
+            cmd.buttons = 0; aimAt(); stepCmd();   // release
+            c = world_.participantPawn(q);
+            return c && state >= 2 && c->weapon().chargeShotLevel >= 1 && c->weapon().ammo < ammo0;
+        });
+    partialCase("remote beam (repair ray) damages an enemy", game::Specialty::Scientist, {"RepairRay", "HeavyPistol", "HealGrenades"}, {"Hover", "Cloaking"},
+        [&](int q3, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            const game::Character* tp = world_.participantPawn(T->matchPlayer());
+            const game::Character* me3 = world_.participantPawn(q3);
+            if (!tp || !me3 || !me3->weapon().beam()) return false;   // the repair ray must be the held weapon
+            const float h0 = tp->health().current;
+            cmd.buttons = 1u << (int)platform::Button::Fire;
+            for (int i = 0; i < 60; ++i) { aimAt(); stepCmd(); }
+            cmd.buttons = 0;
+            tp = world_.participantPawn(T->matchPlayer());
+            return !tp || tp->health().current < h0;
+        });
+    partialCase("remote HardLock marks the aimed enemy", game::Specialty::Soldier, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Hover", "HardLock"},
+        [&](int, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            aimAt(); cmd.pressed = 1u << (int)platform::Button::Ability1; stepCmd();
+            for (int i = 0; i < 5; ++i) { aimAt(); stepCmd(); }
+            const game::Character* tp = world_.participantPawn(T->matchPlayer());
+            return tp && tp->hardLockedRemain_ > 0.0f;
+        });
+    partialCase("remote AbilityJammer jams the aimed enemy", game::Specialty::Soldier, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Hover", "AbilityJammer"},
+        [&](int, game::MatchOpponent* T, game::RemoteCommand& cmd, const std::function<void()>& stepCmd, const std::function<void()>& aimAt) {
+            aimAt(); cmd.pressed = 1u << (int)platform::Button::Ability1; stepCmd();
+            for (int i = 0; i < 40; ++i) { aimAt(); stepCmd(); }
+            const game::Character* tp = world_.participantPawn(T->matchPlayer());
+            return tp && tp->jammedRemain_ > 0.0f;
+        });
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

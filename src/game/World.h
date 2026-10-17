@@ -64,9 +64,11 @@ struct RemoteSeat { std::string name; int team = 255; std::string member; Charac
 struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
 // One participant's decoded lockstep command for sim tick `tick` (REMOTE_COMMAND_CONTRACT.md, agreed with Systems): absolute aim on the
 // rotator grid (decoded to radians), int8 move axes, held / pressed bits = platform::Button bits + kRemoteBitHover + kRemoteBitActive.
-struct RemoteCommand { uint32_t tick = 0; int8_t moveForward = 0, moveRight = 0; uint32_t buttons = 0, pressed = 0; float aimYaw = 0.0f, aimPitch = 0.0f; };
+struct RemoteCommand { uint32_t tick = 0; int8_t moveForward = 0, moveRight = 0; uint32_t buttons = 0, pressed = 0; float aimYaw = 0.0f, aimPitch = 0.0f;
+                       core::Vec3 aimPoint{0, 0, 0}; };   // aimPoint: world (3 x int24 at 1 cm), valid with kRemoteBitAimPoint
 constexpr uint32_t kRemoteBitHover = 1u << 29;    // the original's move flag 1024 (Hover), held
 constexpr uint32_t kRemoteBitActive = 1u << 30;   // the sender's look axis was non-zero this tick or it sent team chat (idle rule)
+constexpr uint32_t kRemoteBitAimPoint = 1u << 31; // aimPoint is valid (the sender's camera-trace result); not an input for the idle rule
 
 struct MatchLaunch {
     std::string map = "MP_IAC_Streets";
@@ -1183,10 +1185,13 @@ private:
     std::vector<std::pair<int, RemoteCommand>> remoteQueue_;   // commands for the step about to run (applied after joinStep)
     struct RemoteGrenade { int player = -1; float delay = -1.0f; core::Vec3 target{0, 0, 0}; };
     std::vector<RemoteGrenade> remoteGrenades_;
-    void applyQueuedRemoteCommands();
-    void applyRemoteNow(MatchOpponent& o, const RemoteCommand& c);
-    bool remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, MoveIntent& in);
-    void remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& dir);
+    void applyQueuedRemoteCommands(float dt);
+    void applyRemoteNow(MatchOpponent& o, const RemoteCommand& c, float dt);
+    bool remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
+    void remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& aimPt, bool consume = true);
+    core::Vec3 seatAimPoint(const Character& pc, const RemoteCommand& c, float range) const;
+    void participantBeam(int shooter, const Weapon& w, const core::Vec3& eye, const core::Vec3& dir);
+    int pickTargetFrom(int self, const core::Vec3& eye, const core::Vec3& fwd, bool allowRobots, float range) const;
     void tickRemoteSeats(float dt);
     int remoteIdleKicks_ = 0;
     void tickSlotSwaps(float dt);
@@ -1355,7 +1360,7 @@ private:
     // PlayerTargeting.GetHomingLockTarget picker (index 4) about the crosshair; robots only when allowRobots.
     int pickHomingTarget(bool allowRobots, float range) const;
     // TnAbilityAbilityJammer / TnAbilityTransformDisruptor projectiles (enemies only, no damage).
-    struct BuffShot { core::Vec3 pos, vel; float radius, life; int kind; };   // kind 0 jammer, 1 transform disruptor
+    struct BuffShot { core::Vec3 pos, vel; float radius, life; int kind; int owner = -1; };   // kind 0 jammer, 1 transform disruptor; owner -1 = local
     std::vector<BuffShot> buffShots_;
     // TnProjectileKamikazeMineKillstreak (MinePooper) [CONF RE §K]: hover 2 s, then seek an enemy within SearchRadius 2000 UU
     // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
