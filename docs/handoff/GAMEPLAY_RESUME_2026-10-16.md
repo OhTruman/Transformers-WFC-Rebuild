@@ -3,6 +3,13 @@
 ## Current state (update at every stable point)
 
 - **2026-10-17 03:35, the user set the package 7 scope:** package 7 is now the **hand-over build**; package 6 still finishes as the checkpoint.
+  - **Patch 2 in progress (code edits only, freeze):**
+    - The tree is `work/int_p2`, a git archive of af4d0731 (not built yet).
+    - Edits in `docs/handoff/corpsep2/`, in order: `edit_scorch.js`, the DeathDecal_MAT scorch under gibbed robots via
+      `renderer_->spawnDecal`. It's Rendering's documented recipe: 300 UU trace down from actorLocation, |n.y| ≥ 0.5, 800-950 UU,
+      random roll, 30 s, with random numbers hashed from the body seed so `frand()` is untouched.
+    - **Next:** skeletal gibs, the Death camera values, the momentum picker. Then, after FREEZE LIFTED, build, run headless
+      (SIMHASH identical, BOTTEST), and do a crop eye check of the decal.
   - **RE-ORDERED 2026-10-17 (the user, via Integration):** "I just want the game to look beautiful. After it looks like a brand new
     game only then while we optimize for more FPS at no extra cost to the Fidelity."
     - **New order:**
