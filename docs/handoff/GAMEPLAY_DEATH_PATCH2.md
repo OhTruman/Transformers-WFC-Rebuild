@@ -12,6 +12,10 @@ applied in this order from a tree root (new files in `corpsep2/new/`: `src/game/
 | 4 | `edit_death_camera_roll.js` | The camera roll (needs e5fc6d65) |
 | 5 | `edit_faithful_picker.js` | Four momentum types, ShouldInstaGib, per-entry custom gibs, the light cut with the pawn |
 | 6 | `edit_skeletal_gibs.js` | The robot skeletal gib ragdoll |
+| 7 | `edit_killer_cam.js` | The killer cam (RE KILLER_CAM_RE): PlayerSpectating after 3 s on SpectateOverTheShoulder (orbit 16 m, FOV 80, free look), hard cuts, target cycling LB / ']' and RB / '[' (new Buttons SpectateNext / Prev), the 1 s recheck, the respawn cut. [PROV: target order by match player index; bots are valid killer targets; no LevelCamera fallback] |
+
+Headless after all seven: BOTTEST 48 / 48 × 12, seed-7 SIMHASH identical to af4d0731 (agents/gameplay ebd359cf).
+Systems owns the death audio / FX hooks (call sites sent 2026-10-17).
 
 ## Sources
 
