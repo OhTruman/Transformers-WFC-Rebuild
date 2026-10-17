@@ -3029,3 +3029,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   arms, which is why RE saw identical camera motion; it matches RE's section 5 (per-shot pitch climb, FOV kick, single-slot shake,
   authored values). Three gaps -> a small camera-only follow-up now: ReduceRecoil x 0.35, no kick in drive / first person / guided
   missile, the EMPShotgun row; then the wire-path local seat.
+2026-10-17 11:52 Aim-point encoding FINAL (Systems 10.2 e81b3410 / 404541c8, agreed with Gameplay): an ABSOLUTE world-space aim point, 3 x int24 at
+  1 cm, presence bit 31 in buttons (excluded from the idle test); without it eye + look direction x weapon range; aimYaw / aimPitch
+  stay the look direction; 23 bytes per human per tick. Rationale: eye + direction x distance drifts by the pawn's movement over the
+  input delay (~0.3-0.6 m strafing). Gameplay implements both ends now.
