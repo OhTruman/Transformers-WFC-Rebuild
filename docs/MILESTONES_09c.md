@@ -3260,3 +3260,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:33 gatebase/TRANSACT_sim_only_af4d.patch merged for the regress base (base + diff == 814e7cf5 on 9001 steps; bots matter). Gameplay's
   remoteFire adaptation confirmed right. 1299 simMatrix patch in its gates (rebase on 9864b4cd), then 1723 (note: p1 shows 530 hp
   above its 330 max where local: the local side may gain something extra rather than the remote side taking a hit).
+2026-10-17 14:34 MP_ESCALATION_RE.md complete for both maps (BrokenHope's script byte-identical to Remnant's; 17 waves, boss Tank from displayed
+  wave 15, 30 spawn zones, 12 door events opening 13 doors + 5 bridges, 23 item generators): the mode is fully specified for
+  whenever the user schedules it. RE stands by for the 15:15 sheets look.
