@@ -113,3 +113,86 @@ All three MP templates (FINAL01 / 02_SmallBound / 03) share the structure. Value
 - MP needs only the ORB_LensFlare_FINAL01 / 02_SmallBound / 03 templates (6 maps).
 - **Open (UNKNOWN):** the WFC proxy's exact occlusion latency / smoothing and radial normalisation were not traced natively. The
   vertex layout, shaders, DPGs and data are confirmed.
+
+## 4a. Native per-element fill (C, traced 2026-10-18; replaces the §4 H steps 1 and 3)
+
+Functions:
+- `0x82FC6620`: the proxy draw; per element, one 4-vertex quad of 80-byte vertices → `0x82F05628`.
+- `0x82FC2AA0`: element evaluation.
+- `0x82DCDBC8`: project with View+0x210 (ViewProjection; returns x/w, y/w, z/w, w).
+- View+0x2D0: the inverse ViewProjection. View+0x310: the view origin.
+
+Element struct offsets follow the declared order:
+- +4 RayDistance;
+- +8 bits: 0x80000000 bIsEnabled, 0x40000000 bUseSourceDistance, 0x20000000 bNormalizeRadialDistance, 0x10000000
+  bModulateColorBySource;
+- +0xC Size;
+- +0x18 LFMaterials;
+- distributions at 0x14-byte steps: +0x24 LFMaterialIndex, +0x38 Scaling, +0x4C OcclusionScaling, +0x60 AxisScaling, +0x74
+  Rotation, +0x88 Color, +0x9C Alpha, +0xB0 Offset, +0xC4 DistMap_Scale, +0xD8 DistMap_Color, +0xEC DistMap_Alpha.
+
+Per frame:
+1. `S` = the source's NDC (x/w, y/w) from the component origin (LocalToWorld translation). `D_src` = |ViewOrigin − source| in
+   world units (UU).
+2. `Occ = ScreenPercentageMap(proxy+0xE8)`, where +0xE8 is the visible-coverage input (see 6).
+3. For each enabled element:
+   - **Screen position:** `E = S·(1 − RD) − S·RD = S·(1 − 2·RD)`. So RD 0 = on the source, 0.5 = the screen centre, 1 = the point
+     mirrored through the centre.
+   - **Radial distance** (curve input `r`):
+     - `|E|` (NDC);
+     - if bNormalizeRadialDistance: `|E| / sqrt(1 + (min(|Ex|,|Ey|)/max)²)`, which equals **max(|Ex|, |Ey|)**: 0 at the centre, 1 on
+       the NDC square's edge, including the corners. That's in NDC, so **no aspect correction**.
+     - If bUseSourceDistance, `r = 0.5·|S − E|` instead.
+     - `0.5·|S − E|` is always computed (vertex TEXCOORD2.y).
+   - **Curves:**
+     - `Scaling(r)`, `OcclusionScaling(Occ)`, `AxisScaling(r) × DistMap_Scale(D_src)`, `Rotation(r)`;
+     - `Color(r) × DistMap_Color(D_src)`, `Alpha(r) × DistMap_Alpha(D_src)`;
+     - `LFMaterialIndex(r)` picks the material (out of range → material 0; invalid → the default material);
+     - `Offset(r)` is evaluated, but the fill doesn't use it.
+   - **Placement:** **unproject (Ex, Ey, z = 0.1, 1)** with the inverse ViewProjection → `P = xyz / w_h`. The quad sits at NDC depth
+     0.1 (near the camera, in front of everything; Foreground DPG), **not at the source's depth**.
+   - **Size:** `k = 1 / w_h` = the clip w (view depth) of P. `TANGENT = (Size.X·Scaling·OcclScaling·k, Size.Y·Scaling·OcclScaling·k,
+     AxisScale.x, AxisScale.y)`. The world extent is scaled by the view depth, so **the on-screen size is depth-independent**:
+     NDC half-extent = 0.5 · Size · Scaling · OcclScaling · AxisScale · Proj[0][0] (x) or Proj[1][1] (y). The VS corner is
+     (uv − 0.5) · tangent.xz / .yw along the camera right / up.
+4. **Vertex** (all 4 corners equal except the UV):
+
+| Offset | Value |
+|---|---|
+| 0 | (P, 1) |
+| 16 | TANGENT above |
+| 32 | Rotation |
+| 36 | UV (0, 0) / (1, 0) / (1, 1) / (0, 1) |
+| 44 | Color.rgb × DistMap_Color, Alpha × DistMap_Alpha (× SourceColor rgba when bModulateColorBySource; SourceColor at proxy+0xF0) |
+| 60 | (r, 0.5·\|S − E\|, RayDistance) |
+| 72 | (Occ, proxy+0xE4) |
+
+5. The draw flags carry the DPG from the element setup. A disabled element (bIsEnabled clear) or a null material skips the
+   quad.
+6. **Still H:** what fills proxy+0xE4 / +0xE8.
+   - Stock: +0xE8 = the occlusion query's visible fraction of the FixedRelativeBoundingBox (visible samples / the box's projected
+     pixel area);
+   - +0xE4 = the per-frame intensity / coverage.
+   - The query writer wasn't traced.
+
+## 4b. Intensity, curve tables, distance input (C, 2026-10-18)
+
+- **proxy+0xE4 (TEXCOORD3.y "Intensity"):** set by `0x82FB6C40`.
+  - **1.0** when proxy +0xD4 and +0xE0 are both 0 (H by name: OuterCone / Radius);
+  - 0 if +0xE0 ≠ 0 and the camera is farther than +0xE0;
+  - nonzero +0xD4 runs a cone test.
+  - No MP template or component authors these, so **Intensity is always 1** in MP.
+  - Coverage goes only through +0xE8 → ScreenPercentageMap.
+- **No coverage gate in the element draw** (0x82FC6620, vtable slot 0x8232A704). Elements whose OcclusionScaling is constant
+  (Reflection_01) stay visible while the flare primitive itself is drawn. H: the whole proxy is culled only by primitive
+  occlusion / frustum on its bounds (the FixedRelativeBoundingBox).
+- **Curve tables** (float `0x82B270B0`, vector `0x82B27210`):
+  - header `[MinOut, MaxOut, InBias, InScale]`; points interleaved per point at stride ChunkSize;
+  - `index = int(InScale·(x − InBias))`, clamped to the **table length − stride** (not LookupTableNumElements), lerp to the
+    next point;
+  - Type 1/7 = constant (first value).
+- **DistMap_* input** = |ViewOrigin − flare origin| in **raw UU**, so every MP DistMap curve (authored over 0..1) takes its
+  **last point**:
+  - Base_SUN DistMap_Color = (0, 0, 2.45), so its colour is (0, 0, 1.225) × α 0.1, **blue**;
+  - 02 DistMap_Scale = (5, 4, 4);
+  - Reflection_01 DistMap_Alpha (InScale 0) = 1.
