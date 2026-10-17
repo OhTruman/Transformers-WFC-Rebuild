@@ -7,6 +7,8 @@
 //   WFC_NET_DELAY=D (4)       WFC_NET_HASH_EVERY=k (60)              WFC_NET_LOG=path (per-tick CSV)
 //   WFC_NET_SEED=s            the match seed (the launch record's; default 0x5eed0001)
 //   WFC_NET_TIMEOUT_S=t (10)  WFC_NET_DESYNC_AT=tick (TEST ONLY: this seat reports a flipped state hash at that tick)
+//   WFC_NET_PACE=1            real-time pacing: tick N steps no earlier than N x 1/60 s after the start (a real match's rhythm;
+//                             the impairment profiles' timed bursts / outages); unset = as fast as the commands arrive
 // Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error.
 #include "core/Application.h"
 #include "core/Log.h"
@@ -112,6 +114,7 @@ void Application::runNetMatch() {
     const float step = clock_.stepSeconds();
     const float matchSeconds = (float)std::atof(std::getenv("WFC_MATCH_SECONDS") ? std::getenv("WFC_MATCH_SECONDS") : "0");
     uint32_t nextLocal = 1;
+    const bool pace = std::getenv("WFC_NET_PACE") != nullptr;
     long steps = 0;
     bool started = false;
     const auto tRun = std::chrono::steady_clock::now();
@@ -125,6 +128,10 @@ void Application::runNetMatch() {
             world_.handleInput(input, step);
             ls.submitLocal(nextLocal, world_.encodeLocalCommand());
             ++nextLocal;
+        }
+        if (pace && secsSince(tRun) < (double)n * step) {   // not yet this tick's wall time (real-time pacing)
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            continue;
         }
         if (!ls.haveAll(n)) {
             const auto w0 = std::chrono::steady_clock::now();
