@@ -2887,3 +2887,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   match in all 3 modes; 20 / 26 frames change in Off / Faithful (18 Realistic), changed pixels 3.5 % of the frame, ~20 levels
   brighter: the ceiling lamps' light shafts now show as volumetric beams onto the floor and robots (the authored (rgb, 2).w
   shafts at 2x), nothing else moves. Card chain from ~11:25: Systems 15 -> Gameplay 4 -> Frontend 5 -> Rendering 20 + 15.
+2026-10-17 10:57 RE input contract review merged: FineAim / Hover = command bits; idle kick PUBLIC sessions only (the original disables it in
+  private matches; phase 1 is all private); 'active' = any input -> Gameplay (isPublic flag, active rule, bits) + Systems 10.2.
+  (B) switch prepared (scratchpad matb_switch.py, entry-level, verified against Experimental's frozen after root): 8 / 10 maps
+  equal; on BrokenHope + Streets ONE manifest entry (Energon_Lava_Mat) stays live in the tested after arm while the candidate
+  differs -> asked Experimental (skip or guard?) and Systems (where visible, what changed); the switch installs exactly what the
+  pass tested. AssetTools reruns review.py on the frozen after root before the switch. Frontend PACKAGE_7_PLAYTEST_GUIDE_MENUS.md merged.
