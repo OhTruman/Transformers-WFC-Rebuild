@@ -26,6 +26,17 @@
      insta-gib, the robot / vehicle death camera, the roll sign, and the killer cam at 3 s.
   5. Then generate the final patch from a clean af4d0731 archive + e5fc6d65 Camera.h + the 11 scripts + new/* (never from int_p2,
      which has the hooks), via `work/mkpatch.sh`. Byte-check with patch -p1, commit, and send Integration the hash.
+- **2026-10-17 ~07:30, the crop slot was RUN** (shots in `work/pass29/p2/crop_*`; sheets in work/pass29/p2). The behaviour all passes.
+  Three visual defects block the merge:
+  1. the scorch draws opaque white: Rendering fixes the decal blend; if it slips past tonight, apply `corpsep2/edit_scorch_gate.js`;
+  2. the gib materials are untextured: Systems compiles DeathSkelGib / DeathGib_Mat_INST, then apply `corpsep2/edit_gib_materials.js`;
+  3. the robot death camera sat inside the corpse: FIXED by `corpsep2/edit_death_camera_anchor.js` (860eac04). It needs the 2-min
+     re-crop, `work/pass29/p2/steps_recrop.txt`, on Integration's relay.
+  - Transforming actors: "not drawn" accepted; the draw is on Rendering's list.
+- **Hover: the 24-seed data (`docs/handoff/hover/tip_summary_24seeds.txt`) went to Integration with a decision request:**
+  - (a) faithful for both;
+  - (b) Classic faithful, Smart keeps its steadier righting (I lean b).
+  - Waiting for the answer.
 - **Open with other lanes:** none blocking. AssetTools will regenerate the FaceFX reference CSV with the product rule (for the FaceFX
   item). Systems adds the local death sound itself.
 - **Hover item notes:** `docs/handoff/GAMEPLAY_RIDE_HEIGHT_DESIGN.md` (RE updates + Integration decisions at the end).
