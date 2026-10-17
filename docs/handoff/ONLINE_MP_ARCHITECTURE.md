@@ -215,6 +215,10 @@ peer and dropped afterwards (the peer's address is then the key).
 | idle kick | the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
 | desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
 
+- **Addition (agents/frontend 1c2dbd11):** `SessionMemberInfo::iconicCharacter` (std::string) - in iconic mode the member's claimed
+  iconic CharacterName, else "". It rides setMemberInfo / MemberJoined like characterSlot; the lobby message serializes it next to
+  characterSlot (one length-prefixed string; an old peer without it reads "").
+
 ## 11. Phases and exit criteria
 
 | phase | scope | exit criteria |
