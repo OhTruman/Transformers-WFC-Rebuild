@@ -67,7 +67,10 @@ At map load (`0x82CE8E08` → `0x82CCB718`):
 
 **Flush** (0x82D60420 / 0x82D601C0 / 0x82D60300; `SeqAct_FlushLevelStreaming` is H the same path):
 - It runs the streaming tick repeatedly until nothing is pending.
-- Between passes it ticks the loading screen (H: `0x82B50CF8(…, 5)`).
+- Between passes (full flush only) it calls `0x82B50CF8(…, 5)`. **CONFIRMED (2026-10-18): this is not a loading-screen tick.** It walks
+  a list of pending entries and services those whose flag word matches mask 5, i.e. an async package-load flush. The loop runs
+  `0x82D5FB28` (the streaming update) until `0x82D3C4E8` reports nothing pending. A flush with the visibility-only argument
+  instead loops on `0x82D3C398` without the async flush. The loading screen / movie is driven elsewhere (H: its own thread).
 - It can force a GC.
 
 ## 4. Checkpoints
