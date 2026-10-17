@@ -3235,3 +3235,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   reverb-switch check PASS 3 maps, physmat pair inconclusive on Remnant -> a 5-min Streets pair with the ForceField force next
   after Gameplay's gap; drain beam not yet exercised). ONLINE_RULES_CHECK_RE.md merged: defaults match the original; 2 divergences:
   CTF Rounds dropped by MatchLaunch::fromURL (REAL, Gameplay) and the singular lobby status text (minor, Frontend).
+2026-10-17 14:17 MERGED 87315966 Frontend singular lobby status (rules check divergence 2). Experimental's NET.identity on df4d62aa: live peers
+  still split at 1299 (lan; bundles identical; replay == recorder now) -> Gameplay: presentation-only state read by sim queries for
+  the live local pawn (drawYawOffset_ lead) + WFC_NET_STATEDUMP; CTF Rounds URL fix (divergence 1) folded in.
