@@ -183,6 +183,10 @@ public:
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
     HudController& hud() { return hud_; }
+    // Campaign tutorial message (TnSeqAct_DisplayTutorialMessage(MessageType) -> TnHUD.DisplayTutorialMessage;
+    // CAMPAIGN_HUD_PLAN.md E5): once per profile, text Localize("TutorialMessages", type, "TransGame") with commands
+    // translated, sound WHSH_TUTORIAL_BOX. False (nothing shown) in versus, for a type already shown, or an unknown type.
+    bool showTutorialMessage(const std::string& type);
     const CharacterRoster& roster() const { return roster_; }
     // The selected-character contract for a custom slot (GameFlow::SelectedCharacter), as Customize.SelectCharacter
     // records it; automation uses it too, so every path hands Gameplay the same data.
