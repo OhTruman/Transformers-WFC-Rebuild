@@ -697,6 +697,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     for (size_t i = movies_.size(); i-- > 0;) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
             rt_.dataStores().forgetMovie(movies_[i].object);
+            if (&movies_[i].movie->player() == graphicsPagePlayer_) { graphicsPagePlayer_ = nullptr; volumetricGateShown_ = -1; }
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1033,16 +1034,29 @@ namespace {
 // panelWidth, text}): the lateral selector reads its value with DataStores.ReadValue and each step writes it and calls
 // Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
 constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
-void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
+// Volumetric Lighting choices: Off / On on Realistic; otherwise the single "Realistic only" value carrying the stored choice.
+void volumetricChoices(gfx::avm1::VM& vm, std::vector<gfx::avm1::Value>& out, bool realistic, bool stored) {
+    out.clear();
+    auto add = [&](int v, const char* label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", gfx::avm1::Value((double)v));
+        vm.set(c, "FriendlyName", gfx::avm1::Value(std::string(label)));
+        out.push_back(gfx::avm1::Value(c));
+    };
+    if (realistic) { add(0, "Off"); add(1, "On"); }
+    else add(stored ? 1 : 0, "$WfcPC.Settings.VolumetricRealisticOnly");
+}
+
+bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current,
                        const std::function<void()>& onRecommended, bool hdAvailable, bool fsr3Available, int upscalingCurrent,
                        bool frameGenAvailable, bool frameGenActive, bool rtAvailable, bool hdEnhancedAvailable, int vramMB, int hdCurrent,
-                       bool rtNextMap) {
-    if (linkage != "mc_subMenu" || !init) return;
+                       bool rtNextMap, int rtCurrent, bool volumetricCurrent, bool volumetricAvailable) {
+    if (linkage != "mc_subMenu" || !init) return false;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
-    if (!a.isObject() || a.o->kind != gfx::avm1::ObjKind::Array || a.o->elems.size() != 6) return;
+    if (!a.isObject() || a.o->kind != gfx::avm1::ObjKind::Array || a.o->elems.size() != 6) return false;
     gfx::avm1::Value last = a.o->elems.back();
-    if (!last.isObject() || vm.toString(vm.get(last.o, "text")) != "$UIText.Settings.CommitButton") return;
+    if (!last.isObject() || vm.toString(vm.get(last.o, "text")) != "$UIText.Settings.CommitButton") return false;
     std::vector<gfx::avm1::Value> choices;
     auto choice = [&](int hz, const std::string& label) {
         gfx::avm1::Object* c = vm.newPlain();
@@ -1128,6 +1142,14 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
         row(rtv, "<PCSettings:RayTracing>",
             rtNextMap ? "Turned on now, it starts with the next map."
                       : "Off frees its memory (~0.2-0.5 GB) when the map changes.", "Ray Tracing");
+        // PC ADAPTATION (Integration, package 7): Rendering's X3 froxel volumetric lighting, Realistic only, default On.
+        // While the Ray Tracing row is not on Realistic the row offers one value, "Realistic only", carrying the stored
+        // choice (it cannot change); syncVolumetricRow switches the choices live as the Ray Tracing row moves.
+        if (volumetricAvailable) {
+            std::vector<gfx::avm1::Value> vl;
+            volumetricChoices(vm, vl, rtCurrent == 2, volumetricCurrent);
+            row(vl, "<PCSettings:VolumetricLighting>", "$WfcPC.Settings.VolumetricLightingDesc", "$WfcPC.Settings.VolumetricLighting");
+        }
     }
     {   // PC EXTENSION (user playtest 2026-10-13): the FPS counter in the top-right corner
         std::vector<gfx::avm1::Value> fc;
@@ -1150,7 +1172,8 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
     }
     frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
                                                           {"provenance", "PC ADAPTATION"}});
-    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + (rtAvailable ? "Ray Tracing," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
+    frontend::FlowTrace::emit("settings.pcExtensionRows", {{"rows", std::string("Upscaling,HD Textures,Anisotropic Filtering,") + (frameGenAvailable ? "Frame Generation," : "") + (rtAvailable ? "Ray Tracing," : "") + (rtAvailable && volumetricAvailable ? "Volumetric Lighting," : "") + "Recommended Settings"}, {"provenance", "PC EXTENSION"}});
+    return true;
 }
 }
 
@@ -1170,6 +1193,42 @@ gfx::MovieClip* findClipNamed(gfx::MovieClip* c, const std::string& name, int de
     }
     return nullptr;
 }
+}
+
+// A lateral-selector row of a settings page by its dataStore markup (the menu's items keep their init properties).
+namespace {
+gfx::avm1::Object* findRowByStore(gfx::avm1::VM& vm, gfx::MovieClip* c, const std::string& store, int depth = 0) {
+    if (!c || depth > 12) return nullptr;
+    for (auto& ch : c->children) {
+        if (!ch.second || ch.second->kind != gfx::DisplayObject::Kind::Clip || ch.second->removed) continue;
+        auto* m = static_cast<gfx::MovieClip*>(ch.second.get());
+        if (m->script && vm.toString(vm.get(m->script, "dataStore")) == store) return m->script;
+        if (gfx::avm1::Object* f = findRowByStore(vm, m, store, depth + 1)) return f;
+    }
+    return nullptr;
+}
+}
+
+void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    gfx::avm1::Object* rt = findRowByStore(vm, p.root(), "<PCSettings:RayTracing>");
+    gfx::avm1::Object* vol = rt ? findRowByStore(vm, p.root(), "<PCSettings:VolumetricLighting>") : nullptr;
+    if (!rt || !vol) return;   // the page is not built (yet) or was left
+    const V cur = vm.get(rt, "currentSelectionData");
+    const bool realistic = cur.isObject() && (int)vm.toNumber(vm.get(cur.o, "Value")) == 2;
+    if ((realistic ? 1 : 0) == volumetricGateShown_) return;
+    // The stored choice: the row's own current value (Off / On), or the value the single "Realistic only" entry carries.
+    const V vcur = vm.get(vol, "currentSelectionData");
+    const bool stored = vcur.isObject() ? vm.toNumber(vm.get(vcur.o, "Value")) != 0.0 : rt_.flow().profile().display.volumetricLighting;
+    std::vector<V> ch;
+    volumetricChoices(vm, ch, realistic, stored);
+    vm.callMethod(V(vol), "createSelectionData", {V(vm.newArray(ch))});
+    vm.set(vol, "currentSelectionIndex", V(realistic ? (stored ? 1.0 : 0.0) : 0.0));
+    if (volumetricGateShown_ >= 0)
+        frontend::FlowTrace::emit("settings.volumetricRow", {{"offered", realistic ? "Off,On" : "Realistic only"},
+                                                             {"stored", frontend::FlowTrace::boolean(stored)}, {"provenance", "PC ADAPTATION"}});
+    volumetricGateShown_ = realistic ? 1 : 0;
 }
 
 void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) {
@@ -1300,6 +1359,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         pendingCalls_.erase(pendingCalls_.begin() + (long)i);
     }
     frameLimitShown_ = flow.profile().display.frameLimit;
+    if (graphicsPagePlayer_) syncVolumetricRow(*graphicsPagePlayer_);
     for (Open& op : movies_) {
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncModeOptionBots(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") == std::string::npos) continue;
@@ -1313,11 +1373,13 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)
             p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) {
-                addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTextureLevelAvailable(1),
-                                 rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
-                                 rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
-                                 rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
-                                 rt_.rayTracingOnAppliesNextMap());
+                if (addFrameLimitItem(p, linkage, init, frameLimitShown_, [this] { recommendedSettingsPressed(); }, rt_.hdTextureLevelAvailable(1),
+                                      rt_.fsr3Available(), rt_.flow().profile().display.upscaling,
+                                      rt_.frameGenerationAvailable(), rt_.frameGenerationActive(), rt_.rayTracingAvailable(),
+                                      rt_.hdTextureLevelAvailable(2), rt_.vramMB(), rt_.flow().profile().display.hdTextures,
+                                      rt_.rayTracingOnAppliesNextMap(), rt_.flow().profile().display.rayTracing,
+                                      rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable()))
+                    graphicsPagePlayer_ = &p;
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

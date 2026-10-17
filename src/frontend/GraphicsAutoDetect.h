@@ -16,6 +16,7 @@ struct HardwareFacts {
     bool hdEnhanced = false;          // the Enhanced HD root (Rendering's hdTextureLevelAvailable(2))
     bool fsr3 = false;                // the FSR 3.1 runtime ships beside the exe (Rendering's upscalingModeAvailable(4))
     bool frameGen = false, frameGenActive = false;   // FSR frame generation can run / did start this session (Rendering)
+    bool volumetricAvailable = false; // Rendering's volumetricLightingAvailable(): the X3 volumetrics of Realistic can run
     bool rtAvailable = false;         // ray-traced shadows / lighting can run (Rendering's rayTracingAvailable(): DXR 1.1 +
                                       // the D3D12 runtime) - the Ray Tracing row shows only then
     int cpuCores = 0;

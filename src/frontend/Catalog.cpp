@@ -109,6 +109,19 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         }
     }
 
+    {   // PC EXTENSION texts: the rebuild's own table in the original INT format (data/frontend/pc_strings.int), read as
+        // "$WfcPC.<Section>.<Key>" exactly like the shipped files (docs/handoff/ONLINE_MP_UI_STRINGS.md section 0).
+        std::ifstream f(openPath(frontendDataFile("pc_strings.int")));
+        std::string line, section;
+        while (std::getline(f, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty() || line[0] == ';') continue;
+            if (line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
+            size_t eq = line.find('=');
+            if (eq == std::string::npos || section.empty()) continue;
+            loc_["WfcPC." + section + "." + line.substr(0, eq)] = line.substr(eq + 1);
+        }
+    }
     for (const char* file : {"TransGame", "UIText", "Engine"}) {
         std::ifstream f(openPath(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + "_360.int"));
         std::string line, section;

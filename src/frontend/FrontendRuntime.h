@@ -163,6 +163,7 @@ public:
     bool frameGenerationActive() const { return hardwareKnown_ && hardware_.frameGenActive; }
     // Ray-traced shadows / lighting can run (the Ray Tracing row is offered; Rendering's rayTracingAvailable at boot).
     bool rayTracingAvailable() const { return hardwareKnown_ && hardware_.rtAvailable; }
+    bool volumetricLightingAvailable() const { return hardwareKnown_ && hardware_.volumetricAvailable; }
     // Turning ray tracing on now applies from the next map (the current one loaded without the RT scene; Rendering's
     // rayTracingLoadedThisMap). Without the query: false (the row makes no claim).
     void setRayTracingLoadedQuery(std::function<bool()> q) { rtLoadedQuery_ = std::move(q); }
