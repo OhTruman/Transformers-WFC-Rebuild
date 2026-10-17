@@ -294,6 +294,7 @@ private:
     bool voiceUiOverride_ = false;
     bool pttCaptureArmed_ = false;   // the capture waits for every key to be released first (the key that chose "Custom...")
     std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie
+    std::string spectateSeen_;            // the last killer-cam target seen (trace on change)
     bool respawnMovieUp_ = false;
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu
     void updateHdPackHint();
