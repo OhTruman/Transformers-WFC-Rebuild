@@ -405,6 +405,10 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.CheckCampaignCompleteMessage") return {};   // no campaign-complete prompt (no campaign progress offline)
     if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return {}; }
     if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return {}; }
+    if (fn == "Online.SwitchTeam" && role_ == SessionRole::Member) {   // online member: a request to the host
+        sendMemberInfo(lobby_.localTeam == 1 ? 0 : 1);
+        return {};
+    }
     if (fn == "Online.SwitchTeam") {
         if (level_ == LevelKind::GameLobby && lobby_.localTeam >= 0) lobby_.localTeam = 1 - lobby_.localTeam;
         FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.localTeam)}});
@@ -731,7 +735,8 @@ void GameFlow::quitToMainMenu() {
     // message, then QuitGame(0) once TnGame.IsSafeToQuit), B No [CONFIRMED script].
     Popup p;
     p.title = "$UIText.MessagePrompts.LeaveLobby";
-    p.message = "$UIText.MessagePrompts.LeaveLobbyConfirm";
+    // online host (PC EXTENSION): leaving ends the game for everyone (the original host ended it too, silently)
+    p.message = role_ == SessionRole::Host && level_ != LevelKind::PartyLobby ? "$WfcPC.Online.HostLeaveConfirm" : "$UIText.MessagePrompts.LeaveLobbyConfirm";
     p.postConfirm = "$UIText.MessagePrompts.LeaveLobbyInProgressMessage";
     p.a = {"$UIText.ButtonHints.Yes", "quit", false};
     p.b = {"$UIText.ButtonHints.No", "", true};
@@ -739,11 +744,22 @@ void GameFlow::quitToMainMenu() {
     showPopup(p);
 }
 
+const char* GameFlow::partyLobbyUrl() { return kPartyLobbyUrl; }
+
 void GameFlow::quitGame() {
     // TnPlayerController.QuitGame(0) [CONFIRMED script]: a standalone world -> QuitToFrontEnd; a listen server (the
     // lobbies and private matches) -> QuitToFrontEnd from the party lobby (TnPlayerControllerPartyLobby.IsInPartyLobby),
     // otherwise QuitToPartyLobby: TellClientsToReturnToPartyHost -> ClientReturnToParty -> BuildPartyLobbyURL.
     bool toFrontEnd = level_ == LevelKind::PartyLobby || level_ == LevelKind::FrontEnd || level_ == LevelKind::None;
+    if (session_ && role_ != SessionRole::Offline && !toFrontEnd) {   // online: leave the game session (a host's leave ends it)
+        session_->leave();
+        FlowTrace::emit("online.leave", {{"role", sessionRoleName(role_)}, {"from", levelKindName(level_)}});
+        role_ = SessionRole::Offline;
+        onlineMembers_.clear();
+        loadGate_ = false;
+        joinCode_.clear();
+        joinAddress_.clear();
+    }
     if (level_ == LevelKind::Match) {
         // TnUIController OnGotoMainMenu (11) from the pause state; OnQuitGame -> RecordSessionComplete("Quit").
         ui_.onUIEvent((int)UIEvent::GotoMainMenu);

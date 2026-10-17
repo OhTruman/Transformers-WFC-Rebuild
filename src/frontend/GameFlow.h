@@ -370,6 +370,13 @@ private:
     std::vector<std::string> pendingGameMessages_;
     std::vector<SessionSlotSwap> pendingSwaps_;
     void updateLoadGateText();
+    // Group E: the session ends for this player (host lost, connection lost, kicked, a late version mismatch) -> the party
+    // lobby with the original text; a desync -> the game lobby. The popup waits until the travel has landed.
+    void endSession(const char* titleKey, const char* messageKey, const char* why);
+    std::string pendingEndTitle_, pendingEndMessage_;
+    void sendMemberInfo(int teamRequest = -1);
+    void returnToPartyLobby() { travel(partyLobbyUrl(), false); }
+    static const char* partyLobbyUrl();           // member: name (D1), platform, character, a team request
     int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans
     int onlineGateStatus() const;                       // LobbyStatus 6 / 4 / 3 (the original start gate, D4)
     void applyBrowserCap(const char* why);              // D10: Player Limit capped to 5 v 5 while a browser peer is in
