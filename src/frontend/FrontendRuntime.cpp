@@ -191,6 +191,7 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
+        if (st.rfind("session:", 0) == 0) { if (sessionHook) sessionHook(st.substr(8)); continue; }
         if (st.rfind("navcheck:", 0) == 0) { if (navCheckHook) navCheckHook(st.substr(9)); continue; }
         if (st.rfind("display:", 0) == 0) {
             std::vector<std::string> p = split(st.substr(8), ',');
@@ -244,6 +245,17 @@ bool FrontendRuntime::init() {
         }
         presenter_->hudCall(fn, args);
     };
+#if WFC_DEV_TOOLS
+    // DEV TOOL (never in a package): WFC_FAKESESSION=1 runs the online flows on a FakeSession that the frontend script's
+    // session:<Event>[,args] steps drive (windowed captures of the online screens without a network).
+    if (std::getenv("WFC_FAKESESSION")) {
+        auto fake = std::make_unique<FakeSession>();
+        devFake_ = fake.get();
+        flow_.setSession(std::move(fake));
+        script_.sessionHook = [this](const std::string& spec) { injectDevSession(spec); };
+        LOG_INFO("frontend: WFC_FAKESESSION - online flows on a scripted FakeSession (DEV TOOL)");
+    }
+#endif
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
@@ -1395,6 +1407,51 @@ void FrontendRuntime::draw(int w, int h) {
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);
     presenter_->draw(flow_, w, h);
+}
+
+// DEV TOOL: session:<Event>[,args] -> an event for the FakeSession (WFC_FAKESESSION). Events and arguments:
+//   HostOpened,<code>,<address>  HostFailed[,nat]  JoinProgress  Joined[,<mode>,<mapId>]  MatchInProgress[,<mode>,<mapId>]
+//   JoinFailed,full|timeout|version|map|invalid  LobbyState,<mode>,<mapId>  MemberJoined,<fingerprint>,<name>[,web]
+//   MemberLeft,<fingerprint>  CountdownStarted  PeerLoaded,<fingerprint>  AllLoaded[,<tick>]  PeerDropped,<fingerprint>
+//   HostLost  ConnectionLost[,timeout]  Desync[,<tick>]  Kicked  MemberVoice,<fingerprint>,<0|1|2>
+void FrontendRuntime::injectDevSession(const std::string& spec) {
+    if (!devFake_) return;
+    std::vector<std::string> a;
+    {
+        std::string cur;
+        for (char c : spec) { if (c == ',') { a.push_back(cur); cur.clear(); } else cur += c; }
+        a.push_back(cur);
+    }
+    auto arg = [&](size_t i, const char* d = "") { return i < a.size() && !a[i].empty() ? a[i] : std::string(d); };
+    SessionEvent e;
+    bool known = false;
+    for (int t = 0; t <= (int)SessionEvent::Type::MemberVoice; ++t)
+        if (a[0] == sessionEventName((SessionEvent::Type)t)) { e.type = (SessionEvent::Type)t; known = true; }
+    if (!known) { FlowTrace::emit("dev.session", {{"spec", spec}, {"error", "unknown event"}}); return; }
+    using T = SessionEvent::Type;
+    e.lobby.gameModeTag = arg(1, "TDM");
+    e.lobby.mapId = std::atoi(arg(2, "508").c_str());
+    e.lobby.matchRunning = e.type == T::MatchInProgress;
+    e.member.fingerprint = arg(1);
+    e.info.id = e.member;
+    e.info.displayName = arg(2, "Player2");
+    e.info.platform = arg(3) == "web" ? SessionPlatform::Web : SessionPlatform::PC;
+    switch (e.type) {
+    case T::HostOpened: e.joinCode = arg(1, "WFC-7QK2-M9TD-4H"); e.address = arg(2, "192.168.1.20:7777"); break;
+    case T::HostFailed: e.hostFailure = arg(1) == "nat" ? SessionHostFailure::StrictNat : SessionHostFailure::NoPath; break;
+    case T::JoinFailed: {
+        const std::string w = arg(1, "full");
+        e.joinFailure = w == "timeout" ? SessionJoinFailure::Timeout : w == "version" ? SessionJoinFailure::Version
+                      : w == "map" ? SessionJoinFailure::MapMissing : w == "invalid" ? SessionJoinFailure::Invalid : SessionJoinFailure::Full;
+        break;
+    }
+    case T::ConnectionLost: e.timedOut = arg(1) == "timeout"; break;
+    case T::Desync: case T::AllLoaded: e.value = std::atoll(arg(1, "0").c_str()); break;
+    case T::MemberVoice: e.headsetState = std::atoi(arg(2, "0").c_str()); break;
+    default: break;
+    }
+    devFake_->inject(e);
+    FlowTrace::emit("dev.session", {{"event", sessionEventName(e.type)}, {"spec", spec}});
 }
 
 void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {

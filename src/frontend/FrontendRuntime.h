@@ -21,6 +21,7 @@
 #include "frontend/FrontendScene.h"
 #include "frontend/Hud.h"
 #include "frontend/InputPrompts.h"
+#include "frontend/FakeSession.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
 #include "platform/Movie.h"
@@ -104,6 +105,7 @@ public:
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
+    std::function<void(const std::string& spec)> sessionHook;    // session:<Event>[,args] (DEV TOOL, WFC_FAKESESSION)
     std::function<void(int w, int h, bool fullscreen)> displayHook;   // display:<w>,<h>,<0|1> (runtime resolution change)
     // call:<fn>,<args>: the same bridge the movies use (PCSettings.*, Customize.*, Online.*, Game.* ...); flow.call if unset.
     std::function<void(const std::string& fn, const std::vector<std::string>& args)> bridgeHook;
@@ -307,6 +309,8 @@ private:
     size_t sceneSeen_ = 0;
     float sceneTraceTimer_ = 0.0f;
     IFrontendAudio* audio_ = nullptr;
+    FakeSession* devFake_ = nullptr;                          // DEV TOOL WFC_FAKESESSION: the session the script drives
+    void injectDevSession(const std::string& spec);
     LevelKind lastAudioLevel_ = LevelKind::None;
     LevelKind progressionLevel_ = LevelKind::None;   // the match begin / end edges of the progression
     bool canGainXp_ = false;
