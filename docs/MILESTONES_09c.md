@@ -2805,3 +2805,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   test switches, TRAIL2_DENY); Streets family pair with forced Drain / Warcry + Remnant physmat pair. Card order after (B):
   Systems 15 -> Gameplay 4 -> Frontend 1 -> Rendering ~10 (flash re-run + Set D views). Frontend: voice UI mostly merged
   (Group F rows, HeadsetState talker icon, mute, Hud sprite 573 talker list); adding Mic Test + PTT "Custom..." capture + V4-V7.
+2026-10-17 10:29 Reference frames: the only shipped in-engine MP renders are the map-select thumbnails (docs/handoff/refs/). Rust's shows warm
+  brown-grey haze over the FAR arches with dark near floors -> target for Rendering's Realistic dark-frame exposure item (our
+  fog_504 dark view fills the near floor grey-blue); Gorge's has no canyon -> the abyss haze stays as authored. Slim audit resolved
+  by Systems: 25 of 26 rows added by build_slim itself; pc_strings.int was the one gap (row appended). Modulate + distortion scan:
+  ef34a4f2's rule reaches ScreenSplatter_01, Trail_Distort_MOD, BlastShell too -> RE lane checks the caches for a pair (~30 min).
+  Gameplay session hooks (178a7bef: RemoteSeat, sessionMember, applySlotSwap, 180 s idle kick, iconic one-holder; SESSIONTEST
+  16 / 16, neutral) build + frontend tests pass on integration; merge on the Frontend's type review. AssetTools next: Decoy Trap
+  asset manifest.
