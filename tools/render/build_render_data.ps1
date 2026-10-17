@@ -56,12 +56,17 @@ $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list)
 $abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --materials) | Where-Object { $_ -match '\S' })
 # Transforming world actors (the MP doors / bridges: AssetTools mp_transforming_actors.json slot materials)
 $trans = @((& $py (Join-Path $PSScriptRoot "transforming_materials.py") $Map) | Where-Object { $_ -match '\S' })
+# Lens-flare element materials (AssetTools lens_flares manifest; RE LENS_FLARE_RE.md)
+$flare = @((& $py (Join-Path $PSScriptRoot "build_lens_flares.py") --materials $Map) | Where-Object { $_ -match '\S' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil @trans
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil @trans @flare
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 # UE3 fog volumes (density infos + their linked shape components) for the runtime fog-volume rendering
 & $py (Join-Path $PSScriptRoot "build_fog_volumes.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "build_fog_volumes failed" }
+# Lens flares (the map's LensFlareSources and their elements; none: no file)
+& $py (Join-Path $PSScriptRoot "build_lens_flares.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "build_lens_flares failed" }
 # Beast light-probe grids (character ambient SH; only Orbital Debris bakes them)
 & $py (Join-Path $PSScriptRoot "beast_probes.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "beast_probes failed" }

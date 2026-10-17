@@ -35,9 +35,10 @@ def main():
                 if os.path.exists(s): shutil.copyfile(s, os.path.join(out, g))
         scene = lines([os.path.join(H, 'scene_materials.py'), m])
         trans = lines([os.path.join(H, 'transforming_materials.py'), m])   # (the MP doors / bridges)
+        flare = lines([os.path.join(H, 'build_lens_flares.py'), '--materials', m])   # (lens-flare elements)
         fxlib = [l for l in lines([os.path.join(H, 'build_map_fx.py'), '--list-materials', m]) if '.' in l and ' ' not in l]
         args = [os.path.join(H, 'build_materials.py'), m, out] + chars + ['WEP_IonBlaster_p.WEP_IonBlaster_MATINST'] + \
-               weapons + fx + ui + scene + fxlib + defrag + abil + trans
+               weapons + fx + ui + scene + fxlib + defrag + abil + trans + flare
         print('== %s: %d extra materials' % (m, len(args) - 3), flush=True)
         subprocess.run([PY] + args, check=True)
 

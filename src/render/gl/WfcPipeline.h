@@ -123,6 +123,7 @@ struct Program {
           uFogIn = -1;
     GLint uTLN = -1, uTLPos = -1, uTLCol = -1, uTLVisOn = -1, uTLVis = -1, uTLMask = -1, uTLCut = -1, uTLDir = -1, uTLCosI = -1;   // (item 4) cached: no lookups per bind
     GLint uTLAllN = -1, uTLData = -1, uTLTile = -1, uTLMask2 = -1;   // (tiled transient lights)
+    GLint uLensFlare = -1, uLensFlareI = -1;   // (lens-flare elements: the per-element values; RE LENS_FLARE_RE s4a)
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
@@ -957,6 +958,20 @@ private:
     const InterpLM* drawInterp_ = nullptr; float drawInterpLerp_ = 0.0f;
     void buildInterpLM(InterpLM& r);
     std::vector<char> interpSetProg_;   // programs whose uLMInterp a door draw left at 1 (reset on their next normal draw)
+    // lens flares (RE LENS_FLARE_RE.md s3 / s4a; <data>/lens_flares.json from build_lens_flares.py): per LensFlareSource its
+    // enabled reflection elements, drawn after the translucency pass without depth test; visibility from an occlusion query on
+    // the fixed bounding box (the previous frame's result)
+    struct LfDist { std::vector<float> c; std::vector<float> t; int n = 1; };   // const value(s), or the cooked lookup table
+    struct LfElement { std::string name; float ray = 0, size[2] = {1, 1}; bool normRadial = true, modSource = false, srcDist = false;
+                       std::vector<std::string> mats; LfDist scaling, occl, axis, rot, color, alpha, dmScale, dmColor, dmAlpha, matIdx; };
+    struct LensFlareRT { core::Vec3 pos; float srcColor[4] = {1, 1, 1, 1}; float boxHalf = 0; LfDist spm; std::vector<LfElement> els;
+                         GLuint query = 0; bool pending = false; float area = 0, coverage = 0; };
+    std::vector<LensFlareRT> lensFlares_;
+    GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
+    float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
+    void loadLensFlares();
+    void drawLensFlares();
+    static void lfEval(const LfDist& d, float x, float* out);
     std::map<std::string, LMRec> lightmaps_;
     std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };

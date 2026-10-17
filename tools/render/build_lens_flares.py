@@ -5,6 +5,7 @@ layout ([MinOut, MaxOut, InBias, InScale, samples...] for curves; a value for co
 manifest writes nothing (no flares: identical runtime).
 
     python build_lens_flares.py <map> <out dir>
+    python build_lens_flares.py --materials <map>      (the flare element materials, for build_materials.py)
 """
 import json, os, sys
 
@@ -22,6 +23,14 @@ def dist(d):
 
 
 def main():
+    if sys.argv[1] == '--materials':
+        src = os.path.join(MANIFESTS, sys.argv[2] + '_lens_flares.json')
+        if os.path.exists(src):
+            m = json.load(open(src, encoding='utf-8'))
+            for name in sorted({x for lf in m['lens_flares'] for e in lf.get('reflections') or [] if e.get('bIsEnabled', True)
+                                for x in e.get('LFMaterials') or []}):
+                print(name)
+        return
     mapname, out = sys.argv[1], sys.argv[2]
     src = os.path.join(MANIFESTS, mapname + '_lens_flares.json')
     if not os.path.exists(src):

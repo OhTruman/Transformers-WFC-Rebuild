@@ -509,24 +509,24 @@ class MatCompiler:
         # 0..3 only, and ParamNames match: output 1 always 'DepthBiasScale', output 0 'Desat1')
         return ['m.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 3)], 1
 
-    # Lens-flare element values (RE LENS_FLARE_RE.md s3: FLensFlareVertexFactory TEXCOORD2 = (RadialDistance, SourceRatio,
-    # Intensity), TEXCOORD3 = (Occlusion, Intensity value); constant per element quad): m.lensFlare = (radial distance,
-    # source ratio, intensity, occlusion), a per-draw uniform - (0, 0, 1, 1) outside the flare draw (RE: 1 / 1 off-flare, H)
+    # Lens-flare element values (RE LENS_FLARE_RE.md s4a, native 0x82FC6620 / 0x82FC2AA0, C): TEXCOORD2 = (r, 0.5 |S - E|,
+    # RayDistance), TEXCOORD3 = (Occlusion, the per-frame intensity proxy+0xE4); constant per element quad: m.lensFlare =
+    # (radial distance r, source distance, ray distance, occlusion), m.lensFlareIntensity - per-draw uniforms (outside the
+    # flare draw (0, 0, 0, 1) and 1)
     def x_LensFlareRadialDistance(self, c, n, p, o):
         self.uses.add('lensflare'); return 'm.lensFlare.x', 1
 
     def x_LensFlareSourceDistance(self, c, n, p, o):
         self.uses.add('lensflare'); return 'm.lensFlare.y', 1
 
-    def x_LensFlareIntensity(self, c, n, p, o):
+    def x_LensFlareRayDistance(self, c, n, p, o):
         self.uses.add('lensflare'); return 'm.lensFlare.z', 1
 
     def x_LensFlareOcclusion(self, c, n, p, o):
         self.uses.add('lensflare'); return 'm.lensFlare.w', 1
 
-    def x_LensFlareRayDistance(self, c, n, p, o):
-        # the element's RayDistance [HIGH: not in RE's vertex layout; the element constant, as the source ratio's sibling]
-        self.uses.add('lensflare'); self.notes.append('LensFlareRayDistance read as m.lensFlare.y [HIGH]'); return 'm.lensFlare.y', 1
+    def x_LensFlareIntensity(self, c, n, p, o):
+        self.uses.add('lensflare'); return 'm.lensFlareIntensity', 1
 
     def x_ParticleSubUV(self, c, n, p, o):
         # M67: the particle's two SubUV cells (m.uv0 = cell 1, m.subUV2.xy = cell 2) lerped by its interp

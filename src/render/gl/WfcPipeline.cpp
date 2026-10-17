@@ -235,6 +235,7 @@ uniform int uBlend;          // 0 opaque, 1 masked, 2 translucent, 3 additive, 4
 uniform vec2 uNearFar;       // metres
 uniform vec2 uViewport;      // pixels
 uniform vec4 uDynParam;      // particle DynamicParameter (map FX emitters; 1 otherwise)
+uniform vec4 uLensFlare; uniform float uLensFlareI;   // lens-flare element (r, source distance, ray distance, occlusion), intensity
 uniform sampler2D uSceneDepth;
 uniform int uHasSceneDepth;
 uniform sampler2D uSceneColor;   // MaterialExpressionSceneTexture: the resolved opaque scene colour (HDR)
@@ -243,7 +244,7 @@ vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, vec2(uv.x, 1.0 - uv.y)
 vec2 wfcScreenUV() { vec2 s = gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); return vec2(s.x, 1.0 - s.y); }
 struct MatIn { vec2 uv0; vec2 uv1; vec3 subUV2; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
-               vec4 dynParam; };
+               vec4 dynParam; vec4 lensFlare; float lensFlareIntensity; };
 struct MatOut { vec3 Distortion; vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal;
                 vec3 EmissiveColor; float Opacity; float OpacityMask; vec3 CustomLighting; float ScreenAlpha; };
 // window depth -> view-space Z in UE units (UE3 PixelDepth / SceneDepth are view Z)
@@ -302,6 +303,7 @@ MatIn wfcBuildInput(out mat3 tbn) {
     m.pixelDepth = wfcLinearDepth(gl_FragCoord.z);
     m.sceneDepth = uHasSceneDepth != 0 ? wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r) : 1e9;
     m.dynParam = uDynParam;
+    m.lensFlare = uLensFlare; m.lensFlareIntensity = uLensFlareI;
     // UE3 ScreenPosition (bScreenAlign false) = clip-space position. UE3's infinite-far perspective
     // gives w = view Z and z = view Z - near (UE units).
     vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
@@ -1469,6 +1471,7 @@ bool Pipeline::load(const std::string& mapName) {
         if (!sj.empty() && assets::Json::parse(sj, S))
             for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
     }
+    loadLensFlares();                                // (<data>/lens_flares.json; none: no flares)
     interpLM_.clear(); drawInterp_ = nullptr;
     for (const auto& kv : L["interpolated_lightmaps"].obj) {   // transforming world actors: {actor: [capture 0, capture 1]}
         if (kv.second.size() < 2) continue;
@@ -3358,6 +3361,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     auto U = [&](const char* n) { return GetUniformLocation(id, n); };
     P.uViewProj = U("uViewProj"); P.uModel = U("uModel"); P.uCamPos = U("uCamPos"); P.uTime = U("uTime");
     P.uTwoSided = U("uTwoSided"); P.uClip = U("uClip"); P.uMasked = U("uMasked"); P.uLit = U("uLit");
+    P.uLensFlare = U("uLensFlare"); P.uLensFlareI = U("uLensFlareI");
     P.uTLN = U("uTLN"); P.uTLPos = U("uTLPos"); P.uTLCol = U("uTLCol"); P.uTLVisOn = U("uTLVisOn"); P.uTLVis = U("uTLVis");
     P.uTLMask = U("uTLMask"); P.uTLCut = U("uTLCut"); P.uTLDir = U("uTLDir"); P.uTLCosI = U("uTLCosI");
     P.uTLAllN = U("uTLAllN"); P.uTLData = U("uTLData"); P.uTLTile = U("uTLTile"); P.uTLMask2 = U("uTLMask2");
@@ -4135,6 +4139,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     }
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    if (P.uLensFlare >= 0) { Uniform4fv(P.uLensFlare, 1, lensFlareU_); Uniform1f(P.uLensFlareI, lensFlareI_); }   // (flare elements)
     Uniform1i(ULOC(P, "uSkin"), skinMode_);
     Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
     if (skinMode_) {
