@@ -2291,3 +2291,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   max, 1/max) 1,145 / 1,145; curves normalised per animation (value = i8 / 127 x b, b = peak); timing vs 728
   dialog waves (end = duration +0.2 s, start -0.27 s lead-in); interpolation open; visual proof plan (Trypticon
   LK004350 jaw vs voice envelope) cleared to run CPU-only tonight.
+  2026-10-16 22:48 X3 ROUND 4 = cand13 (rt2 b9d1f3ad = cand12 + values: x3trans 0.20, x3cap 0.20, Streets per-map haze
+  0.0007; the transient / cap change alone did not move Streets, its lift was the blue sun in open air at the
+  frame edges). Rendering's self-check: Streets 1.013 vs X3 off (shot 1500 0.83, dark lift -0.1). cand12's Off /
+  Faithful identity (5/5 + 5/5 vs int_base10 = 43366aec) stands for value-only changes. Eye-pass-only GO at ~23:00
+  (ends ~23:40); Systems re-pairs the table; merge set on PASS = f5e2d8dd + 1bfced9a + b9d1f3ad + the table.
