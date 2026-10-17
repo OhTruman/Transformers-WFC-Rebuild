@@ -25,6 +25,16 @@
     - GAMEPLAY_SEAT_ANIM 5cf28ea2 (vs dd28a723): online the local seat animates only in the pool while spawned (Systems' 1299 split: a tank shell spawned 0.2 mm apart).
     - Replay workflow for Systems' records: work/netrep (r0 / r1, env as in tools/systems/net_profiles.ps1 + WFC_NET_REPLAY / WFC_NET_SLOT; run with env "VAR=..." quoting).
     - Card gap 13:48: the wobble was INVALID (no WFC_RENDER_DATA, legacy renderer); rerun = work/pass29/wobble/run_gap2.ps1 on the next "gap: Gameplay". Firing pair: no regression (EMP id already matched; data-side evidence stands).
+4j. 2026-10-17 late afternoon (package 7 head = deed7f1a; gate hold ~17:00-19:00: no interpreters, no compiles):
+    - Merged: GAMEPLAY_NET_SIMPOSE (e5bc5a22: simMatrix, per-seat pickups, WFC_NET_STATEDUMP, CTF Rounds), SEAT_MISSILE, PB_RELOAD, SEAT_ANIM.
+    - Gate base: docs/handoff/gatebase/TRANSACT_sim_only_af4d.patch + WEAPON_sim_only_af4d.patch; at the gate settings (classic, profile,
+      frame loop, 31v32, player bot, seed 1234) base + both == 057aded3 on all 9001 steps (trees int_ta / int_tab / int_tw, runs work/tachk;
+      drop them after the gate). The 814e7cf5 split at 5215 was NOT the camera kick (withdrawn); moot for the head.
+    - Killer cam: World's hudState().spectateTarget is set for the whole window on 057aded3 (headless log, work/spec); the Frontend owns (b).
+    - Staged, not built: edit_seat_homing.js, edit_seat_mines.js (fix needed: gate the mines on seatHuman(), not onlineSeats_, so the
+      offline partial cases work), cross-perspective case with a missile.
+    - Escalation design spec: docs/handoff/GAMEPLAY_ESCALATION_SPEC.md (design only, code after online phase 1).
+    - work/ sweep done (68 GB trees + raw frames); kept trees listed in the message to Integration.
 4i. NEXT: the guided missile per seat (docs/handoff/session/edit_seat_missile.js, written, not yet built: rebase on dd28a723 + PB_RELOAD + SEAT_ANIM); Integration's queued sim-only transact diff vs Experimental's af4d0731 base (docs/handoff/gatebase/TRANSACT_sim_only_af4d.patch, same-match SIMHASH check); then the online-local-only paths (homing lock, MinePooper, repair beam); robot fine aim on the seat path (missing for every seat). RE delivered Escalation (RE-Workspace/work/handoff/MP_ESCALATION_RE.md 401a49e, notes/data/escalation/*.json) for later.
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
