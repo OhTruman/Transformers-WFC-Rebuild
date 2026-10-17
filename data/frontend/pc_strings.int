@@ -21,6 +21,14 @@ WaitingForPlayers=Waiting for `n players
 WaitingForOnePlayer=Waiting for `n player
 HostMigrated=The host left. `k is now the host.
 Resync=Resynchronising...
+[FirstRun]
+Title=Online Play
+Message=Other players will see you as `p. Voice chat: `v.
+Continue=Continue
+ChangeName=Change Name
+ChooseName=Choose the name other players will see.
+ChooseNameButton=Choose Name
+VoiceSettings=Voice Settings
 [Settings]
 VolumetricLighting=Volumetric Lighting
 VolumetricLightingDesc=Light shafts and haze. Needs Ray Tracing: Realistic.

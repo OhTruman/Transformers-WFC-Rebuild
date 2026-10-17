@@ -944,6 +944,7 @@ struct OnlineRig {
         setEnv("WFC_FRONTEND_AUTOPLAY", nullptr);
         std::remove("wfc_profile.ini");
         if (!rt->init()) return;
+        rt->flow().profile().onlineFirstRunShown = true;   // the one-time prompt is tested on its own (FR1-FR4)
         auto fs = std::make_unique<FakeSession>(std::move(script));
         fake = fs.get();
         rt->flow().setSession(std::move(fs));
@@ -1642,6 +1643,66 @@ static void testVoiceUi() {
     check(set && esc && cancel, "voice.V7_ptt_key_capture", std::to_string(set) + std::to_string(esc) + std::to_string(cancel));
 }
 
+// A rig whose fresh profile has not answered the one-time "Online Play" prompt yet.
+struct FirstRunRig : OnlineRig {
+    FirstRunRig() : OnlineRig() {
+        if (!ok) return;
+        f().profile().onlineFirstRunShown = false;
+        frames(3);
+    }
+};
+
+static void testOnlineFirstRun() {
+    const std::string title = [] { FrontendRuntime t; t.init(); return t.catalog().localizeKey("$WfcPC.FirstRun.Title"); }();
+    {   // FR1: online, a fresh profile -> the prompt (no account: "Choose the name..."); offline -> never
+        FirstRunRig r;
+        const bool shown = r.ok && r.f().popup().open && r.f().popup().title == title &&
+                           r.f().popup().message == r.rt->catalog().localizeKey("$WfcPC.FirstRun.ChooseName");
+        std::remove("wfc_profile.ini");
+        FrontendRuntime off;
+        bool offline = off.init();
+        GameFlow& f = off.flow();
+        offline = offline && runUntil(off, [&] { return f.frontEndStarted(); });
+        f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+        offline = offline && runUntil(off, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+        for (int i = 0; i < 5; ++i) off.update(platform::InputFrame{}, 1.0f / 60.0f);
+        check(shown && offline && !f.popup().open && !f.profile().onlineFirstRunShown, "online.FR1_prompt_online_only");
+    }
+    {   // FR2 / FR3: Choose Name -> the account prompt (presenter) -> CreateAccount + Login -> the prompt again with the name and
+        // the voice line; Voice Settings -> answered for good, the Audio page requested; never again for this profile
+        FirstRunRig r;
+        r.f().popupButton('A');   // Choose Name
+        const bool nameReq = r.f().takeFirstRunUi() == GameFlow::FirstRunUi::NamePrompt && !r.f().profile().onlineFirstRunShown;
+        r.rt->bridge("UI_GFxLobbies_p.PartyLobby_GFX_1", "Account.CreateAccount", {"Name2"});
+        r.rt->bridge("UI_GFxLobbies_p.PartyLobby_GFX_1", "Account.Login", {"Name2"});
+        r.f().firstRunNameEntered();
+        r.f().popupButton('A');   // the original CreateAccount result box
+        r.frames(3);
+        const std::string msg = r.f().popup().message;
+        const bool again = r.f().popup().open && r.f().popup().title == title && msg.find("Name2") != std::string::npos &&
+                           msg.find("Push to Talk (V)") != std::string::npos;
+        check(r.ok && nameReq && again, "online.FR2_name_then_prompt_again", msg);
+        r.f().popupButton('Y');   // Voice Settings
+        const bool voice = r.f().takeFirstRunUi() == GameFlow::FirstRunUi::VoiceSettings && r.f().profile().onlineFirstRunShown;
+        std::ifstream in("wfc_profile.ini"); std::stringstream ss; ss << in.rdbuf(); in.close();
+        r.f().call("Online.OpenPartyLobby", {"GTS_TeamGame"});   // a new visit
+        runUntil(*r.rt, [&] { return r.f().level() == LevelKind::PartyLobby && !r.f().loading().active; });
+        r.frames(3);
+        check(voice && ss.str().find("[Online]\nFirstRunShown=1") != std::string::npos && !r.f().popup().open, "online.FR3_voice_settings_answers");
+    }
+    {   // FR4: no name, Back -> not answered; the next visit asks again; Multiplayer stays usable
+        FirstRunRig r;
+        r.f().popupButton('B');
+        r.frames(3);
+        const bool closed = !r.f().popup().open && !r.f().profile().onlineFirstRunShown;
+        r.f().call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+        runUntil(*r.rt, [&] { return r.f().level() == LevelKind::PartyLobby && !r.f().loading().active; });
+        r.frames(3);
+        check(r.ok && closed && r.f().popup().open && r.f().popup().title == title, "online.FR4_back_asks_next_visit");
+    }
+    std::remove("wfc_profile.ini");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1671,6 +1732,7 @@ int main() {
     testOnlineMatchSide();
     testIconicMode();
     testVoiceUi();
+    testOnlineFirstRun();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

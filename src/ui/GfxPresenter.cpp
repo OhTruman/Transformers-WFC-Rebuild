@@ -700,6 +700,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             rt_.dataStores().forgetMovie(movies_[i].object);
             if (&movies_[i].movie->player() == graphicsPagePlayer_) { graphicsPagePlayer_ = nullptr; volumetricGateShown_ = -1; }
             if (&movies_[i].movie->player() == audioPagePlayer_) { audioPagePlayer_ = nullptr; micMeterShown_.clear(); }
+            if (&movies_[i].movie->player() == firstRunAudioPending_) firstRunAudioPending_ = nullptr;
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1305,6 +1306,49 @@ void GfxPresenter::syncAudioPage(gfx::Player& p, frontend::GameFlow& flow) {
     frontend::FlowTrace::emit("settings.pttRow", {{"key", key}});
 }
 
+// The "Online Play" prompt's hand-offs (ONLINE_MP_FIRST_RUN.md step 2), over the party lobby:
+// - Change / Choose Name: the Accounts screen's own prompt (AccountsMenu_GFX: NewAccountTitle / NewAccountMessage, 15
+//   characters) -> Account.CreateAccount (which shows the original result box), then the prompt again;
+// - Voice Settings: SettingsMenu.swf loaded into the party lobby as FrontEnd / the pause menu load it (it gives the input
+//   back to the menu that opened it on close), then its Audio button.
+void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const std::string& movie) {
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    if (firstRunAudioPending_ == &p) {
+        if (gfx::MovieClip* audio = findClipNamed(p.root(), "audioBtn_mc"); audio && audio->script && vm.get(audio->script, "onClick").isObject()) {
+            vm.callMethod(V(audio->script), "onClick", {});
+            firstRunAudioPending_ = nullptr;
+            frontend::FlowTrace::emit("online.firstRun", {{"state", "audio page"}});
+        } else if (++firstRunAudioFrames_ > 600) firstRunAudioPending_ = nullptr;
+    }
+    const frontend::GameFlow::FirstRunUi req = flow.takeFirstRunUi();
+    if (req == frontend::GameFlow::FirstRunUi::NamePrompt) {
+        vm.set(vm.global, "WfcFirstRunName", V(vm.newFunction([this, &flow, movie](gfx::avm1::VM& v, const V&, gfx::avm1::Args& a) -> V {
+            const std::string name = a.empty() ? std::string() : v.toString(a[0]);
+            rt_.bridge(movie, "Account.CreateAccount", {name});
+            rt_.bridge(movie, "Account.Login", {name});   // the chosen name is the online name at once (D1)
+            flow.firstRunNameEntered();
+            return V();
+        }, "WfcFirstRunName", 1)));
+        const V util = vm.get(vm.global, "HmUtility");
+        if (util.isObject())
+            vm.callMethod(util, "DisplayTextPrompt", {V(std::string("$UIText.MessagePrompts.NewAccountTitle")),
+                                                      V(std::string("$UIText.MessagePrompts.NewAccountMessage")), V(std::string()),
+                                                      V(std::string("_global.WfcFirstRunName")), V(15.0)});
+    } else if (req == frontend::GameFlow::FirstRunUi::VoiceSettings && p.root() && p.root()->script) {
+        const V clip = vm.callMethod(V(p.root()->script), "createEmptyMovieClip", {V(std::string("wfcSettingsMenu_mc")), V(90020.0)});
+        if (clip.isObject() && clip.o->display && clip.o->display->kind == gfx::DisplayObject::Kind::Clip) {
+            if (gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc"); anchor && anchor->script) {
+                vm.set(clip.o, "hideClip", V(anchor->script));   // the settings menu restores it on close
+                vm.set(anchor->script, "_alpha", V(0.0));
+            }
+            p.loadMovieInto(static_cast<gfx::MovieClip*>(clip.o->display), "../Settings/SettingsMenu.swf", nullptr);
+            firstRunAudioPending_ = &p;
+            firstRunAudioFrames_ = 0;
+        }
+    }
+}
+
 void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
     gfx::avm1::VM& vm = p.vm();
     using V = gfx::avm1::Value;
@@ -1593,6 +1637,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     if (audioPagePlayer_) syncAudioPage(*audioPagePlayer_, flow);
     for (Open& op : movies_) {
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) syncJoinGameRow(op.movie->player(), flow);
+        if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) runFirstRunUi(op.movie->player(), flow, op.object);
         if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
             (!flow.lobby().settings || flow.lobby().settings->teamTypeValue == 3))
             syncIconicVersusMenu(op.movie->player());

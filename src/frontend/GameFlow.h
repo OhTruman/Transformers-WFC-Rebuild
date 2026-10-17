@@ -311,6 +311,11 @@ public:
     // The host's 180 s idle rule fired in the match (Gameplay MatchEvent RemoteIdle): the session kicks that peer
     // (Kicked{Idle} to it, PeerDropped{Kicked} to the others - the kill-feed line; the slot is already a bot).
     void onlineIdleKick(const std::string& fingerprint);
+    // The one-time "Online Play" prompt (ONLINE_MP_FIRST_RUN.md step 2): online sessions only, in the party lobby, until
+    // answered ([Online] FirstRunShown). Its Change Name / Voice Settings buttons hand a request to the presenter.
+    enum class FirstRunUi { None, NamePrompt, VoiceSettings };
+    FirstRunUi takeFirstRunUi() { const FirstRunUi v = firstRunUi_; firstRunUi_ = FirstRunUi::None; return v; }
+    void firstRunNameEntered();   // the account prompt's callback ran (Account.CreateAccount shows its own result first)
     int localHeadsetState() const;   // this player's HeadsetState: 0 voice off, 1 on, 2 transmitting (push-to-talk held)
     bool isMuted(const SessionMemberId& m) const;
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
@@ -410,6 +415,10 @@ private:
     std::string voiceSent_;                             // the voice settings last sent (send on change)
     bool pttHeld_ = false;
     bool pttCapture_ = false;
+    FirstRunUi firstRunUi_ = FirstRunUi::None;
+    bool firstRunAsked_ = false, firstRunReshow_ = false;
+    void showFirstRunPrompt();
+    void answerFirstRun(const std::string& action);
     void syncVoiceSettings();
     void fillOnlineLaunch();
     // Group E: the session ends for this player (host lost, connection lost, kicked, a late version mismatch) -> the party

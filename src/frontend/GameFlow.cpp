@@ -428,6 +428,7 @@ void GameFlow::openPartyLobby(int gts) {
     // and first-time prompts: PARTIAL (not shown). -> ConfirmOpenPartyLobby: GRI.SetGameTeamStatus(GTS),
     // URL = BuildPartyLobbyURL(), TnGame.ClientTravelToMap(URL).
     gameTeamStatus_ = gts;
+    firstRunAsked_ = false;   // a new party lobby visit: the one-time online prompt asks again until answered
     FlowTrace::emit("online.ConfirmOpenPartyLobby", {{"gameTeamStatus", std::to_string(gts)}});
     travel(kPartyLobbyUrl, false);
 }
@@ -841,6 +842,7 @@ void GameFlow::popupButton(char which) {
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
     if (btn.action == "pttCancel") endPttCapture("");
+    if (btn.action.rfind("fr", 0) == 0) answerFirstRun(btn.action);
     if (btn.action == "quit") quitPending_ = true;
     else if (btn.action == "exit") { quit_ = true; FlowTrace::emit("exit", {}); }
 }
