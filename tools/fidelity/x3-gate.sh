@@ -44,10 +44,10 @@ if [ -z "$SKIP_EYE" ]; then
 fi
 # ---- 2 X3 cost (timed: needs the hold granted by Integration)
 if [ -z "$SKIP_COST" ]; then
-  st "2 X3 cost: hold set; waiting for a clear card"; touch work/PERF_HOLD; sleep 60; until [ "$(busy)" = 0 ]; do sleep 15; done
+  mkdir -p $O/cost; st "2 X3 cost: hold set; waiting for a clear card"; touch work/PERF_HOLD; sleep 60; until [ "$(busy)" = 0 ]; do sleep 15; done
   for m in $MAPS; do
     powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/cost/map-$m -Map $m -Arms "x3on|$T|WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR;;x3off|$T|WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR;WFC_X3=0" -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/cost/map-$m.out 2>&1
-    grep -oE "lockstep\.x3o[nf]+\.r[12]: [a-z0-9]+: steps [0-9]+ \([0-9-]+\), same match as '[a-z0-9]+' [A-Za-z]+, workload parity [A-Za-z]+; frame p50 / p90 / p99 [0-9.]+ / [0-9.]+" $O/cost/map-$m.out | sed -E "s/lockstep\.(x3o[nf]+\.r[12]).*same match as '[a-z0-9]+' ([A-Za-z]+).*p99 ([0-9.]+) \/ ([0-9.]+)/map-$m \1 same=\2 p50 \3 p90 \4/" | tee -a $L
+    grep -oE "(PASS|UNKNOWN|FAIL) lockstep\.x3o[nf]+\.r[12]: .{0,700}" $O/cost/map-$m.out | sed -E "s/^([A-Z]+) lockstep\.(x3o[nf]+\.r[12]):.*same match as '[a-z0-9]+' ([A-Za-z]+).*frame p50 \/ p90 \/ p99 ([0-9.]+) \/ ([0-9.]+).*/map-$m \2 \1 same=\3 p50 \4 p90 \5/" | tee -a $L
   done
   rm -f work/PERF_HOLD; st "2 X3 cost TIMED DONE (hold removed)"
 fi
