@@ -3328,10 +3328,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 std::transform(ml.begin(), ml.end(), ml.begin(), ::tolower);
                 progs_[(size_t)r].material = ml;
             }
-            // (no accumulate pass for BLEND_Modulate: the original cooks no distortion shader pair for them - RE, the shader
-            // caches of Streets / Gorge / Debris: BlastSphere_Death_MAT authors Distortion yet draws none; its x20 scalar
-            // was the huge Exp_Death_FX swirl. H for modulate in general: the one material checked)
-            if (!lightmapped && s.blend != 4 && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
+            if (!lightmapped && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
                 s.glsl.find("o.Distortion =") != std::string::npos) {
                 mainOverride_ = kFSMainDistort;
                 int d = buildProgram(key + "|DIST", s.glsl, slots, s.cube, 3, s.twoSided, false, s.clip, false, s.rtParams);
