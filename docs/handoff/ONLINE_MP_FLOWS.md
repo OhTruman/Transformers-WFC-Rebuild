@@ -542,6 +542,11 @@ Decided 2026-10-17 by Integration (rebuild-07), faithful where the original defi
   quit."); host migration comes in phase 1b.
 - **D10 decided:** while a browser peer is in the lobby, Player Limit is capped to 5 v 5 automatically.
 - **D11 decided:** the lobby list shows each member's platform ("PC" / "Web").
+- **D16 decided (Integration; RE combat authority, ONLINE_MP_ARCHITECTURE 10.5):** a player who leaves a match: their pawn
+  dies as a suicide (the kill-feed suicide line). With bot rows on, the existing slot swap gives the seat to a bot (the Game
+  Mode Options bot rows say so online: $WfcPC.Online.BotsLeaverDesc). With no bots the seat stays empty, and when a team has no
+  players left, Gameplay's 1.5 s forfeit check ends the match: the winners' end screen shows the original
+  TransContent.TnVersusGameOverMessage.ForfeitMessage "Enemy team forfeits", then the usual return to the game lobby.
 - **R1** How a joiner entered a running versus match in the original (spawn at once or on the respawn timer, team
   choice, advertising during the match). The flag itself is CONFIRMED true [CDO].
 - **R2** Versus party size limit (the numbers behind "`g only supports a party size of `i").

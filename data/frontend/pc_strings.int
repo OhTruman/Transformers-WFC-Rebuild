@@ -13,6 +13,7 @@ CopyCode=C: copy the join code
 IpPrivacy=Players who join can see your IP address.
 CodeCopied=Join code copied.
 HostOptionsDesc=Change the game mode settings and bots.
+BotsLeaverDesc=Bots fill the free seats. A player who leaves is replaced by a bot.
 MatchInProgressStatus=Match in progress
 BrowserCap=A browser player is in the game: 5 v 5 at most.
 PlatformPC=PC

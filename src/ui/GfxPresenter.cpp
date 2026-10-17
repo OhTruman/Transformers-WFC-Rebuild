@@ -1512,6 +1512,16 @@ void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) 
         const std::string field = o->field;
         if (!vm.toBool(vm.get(it.o, "__wfcBots"))) {
             vm.set(it.o, "__wfcBots", V(true));
+            if (flow.online() && (field == "autobot" || field == "decepticon" || field == "enemy")) {
+                // online (Systems 10.5): a leaver's seat goes to a bot when bot rows are on - the row says so
+                gfx::avm1::Object* page = menu->script;
+                vm.set(it.o, "onOver", V(vm.newFunction([page](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+                    V w = v.get(page, "HintWidget");
+                    if (!w.isObject()) w = v.get(page, "hint_mc");
+                    if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Online.BotsLeaverDesc")));
+                    return V();
+                }, "onOver", 0)));
+            }
             vm.set(it.o, "selectionUpdated", V(vm.newFunction(
                 [&flow, field](gfx::avm1::VM& v, const V& self, gfx::avm1::Args&) -> V {
                     if (!self.isObject()) return V();

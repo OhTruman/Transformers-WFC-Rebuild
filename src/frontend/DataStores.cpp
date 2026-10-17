@@ -44,7 +44,16 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     }
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
     // TnVersusGameOverMessage -> GRI.SetGameOverMessage, read by EndGameStats_GFX [RE A5, CONFIRMED]; Gameplay's result.
-    if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
+    if (markup == "<CurrentGame:GameOverMessage>") {
+        // TnVersusGameOverMessage [RE A5]: a forfeit (Systems 10.5 / Gameplay's 1.5 s team-forfeit check: a team has no
+        // players left) shows the winners the original ForfeitMessage "Enemy team forfeits"; otherwise Gameplay's line.
+        const MatchValues& mv = flow_.matchValues();
+        if (mv.endReason == "Forfeit" && mv.winnerTeam >= 0 && mv.winnerTeam == mv.myTeam) {
+            const std::string f = cat_.localize("TransContent", "TnVersusGameOverMessage", "ForfeitMessage");
+            if (!f.empty()) return f;
+        }
+        return mv.gameOverMessage;
+    }
     // GRI defaults before Gameplay's match values (Default__TnGameReplicationInfoMultiplayer: AttackingTeamIndex -1,
     // CurrentObjectiveCountdown -1 [CONF]; CompetitiveScoreEnabled engine default 0 [HIGH]). ActiveObjectives is the
     // pause menu's objective text (empty -> no objective clip): none in versus [HIGH].

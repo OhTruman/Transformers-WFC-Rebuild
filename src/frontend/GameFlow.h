@@ -61,6 +61,8 @@ struct MatchValues {
     bool dead = false;
     float timeToRespawn = -1.0f;   // <PlayerOwner:TimeToRespawn>
     std::string gameOverMessage;   // <CurrentGame:GameOverMessage> ("Your team won" / "Your team lost" / "Tie game")
+    std::string endReason;         // Gameplay's EndGame reason: "Score", "" (time), "Forfeit" (a team has no players left)
+    int winnerTeam = -1;
     // GRI objective state (Gameplay HudGameState; defaults = Default__TnGameReplicationInfoMultiplayer [CONF]).
     int attackingTeamIndex = -1;           // <CurrentGame:AttackingTeamIndex>: CTF attackers / EXT bomb team, else -1
     int currentObjectiveCountdown = -1;    // <CurrentGame:CurrentObjectiveCountdown>: EXT bomb fuse seconds, else -1
