@@ -17,4 +17,5 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 37fa6376 | campaign E7 cinematic hide | behind the campaign flag | versus unchanged by construction | not needed | no run |
 | f2c285f3 + 61905a60 | online phase 1 groups A / B | online flag unset = offline | byte-identical offline (Integration); tests 180 / 0 | not needed | no run |
 | 202cef15 | ISession aligned with the online architecture (headers, GameFlow join-code shape check) | online flag unset = offline | byte-identical offline (Integration); tests 183 / 0 | not needed | no run |
+| f1ae9baa | online phase 1 group B2 (Join Game row, join panel, WFC_FAKESESSION dev tool) | menu + online only | offline unchanged (Integration); tests 183 / 0 | not needed | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
