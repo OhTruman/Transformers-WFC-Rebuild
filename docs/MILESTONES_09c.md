@@ -2813,3 +2813,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Gameplay session hooks (178a7bef: RemoteSeat, sessionMember, applySlotSwap, 180 s idle kick, iconic one-holder; SESSIONTEST
   16 / 16, neutral) build + frontend tests pass on integration; merge on the Frontend's type review. AssetTools next: Decoy Trap
   asset manifest.
+2026-10-17 10:30 REVERTED ef34a4f2 as 2e9ad1bf: RE's cache check (MODULATE_DISTORTION_CACHE_RE.md) found cooked distortion pairs for ScreenSplatter_01
+  and Trail_Distort_MOD (modulate materials the original DOES distort) and showed cache absence is not proof, so BlastSphere_Death /
+  BlastShell are UNKNOWN; the death swirl is back to a strength / translation question; RE resolves the PS blobs (1-2 h, granted).
+  MERGED 4502b468 Gameplay session hooks (Frontend review OK; 3 follow-ups: idle-kick MatchEvent, noteRemoteCommand from the
+  lockstep step, atTick in simTick units). Rendering exposure floor code complete (83ecd6cd: Realistic haze terms x min(1, 1/e));
+  cand30 = exposure + flash: one ~20-min slot after (B) -> Systems 15 -> Gameplay 4 -> Frontend 1, incl. the Set D views.
