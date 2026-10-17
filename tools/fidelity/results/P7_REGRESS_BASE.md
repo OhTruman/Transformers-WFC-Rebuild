@@ -22,3 +22,13 @@
 - gate-base.sh HEADLESS=1: the VERIFY same-match row runs both exes under WFC_NULLRENDER (CPU only). The head must carry be54be6d
   (any integration head from be54be6d on). Exit code 1 from the runner is expected today (Systems' init-return path).
 - Use: GATE_BASE=work/ab/fast_af4d073_hover_hl2.
+
+## Base + 814e7cf5's sim-only diff (2026-10-17 14:5x) - NOT yet the same match
+
+work/ab/fast_af4d073_p7_t = the hl2 base + gatebase/TRANSACT_sim_only_af4d.patch (Gameplay's diff). Headless, Streets lockstep
+600-9600, seed 1234, PlayerBot, 31 v 32 bots:
+- p7_t vs 814e7cf5: same match False, first SIMHASH difference at step 5215.
+- negative control hl2 (no TRANSACT) vs 814e7cf5: differs from step 895.
+- hl2 vs 02b4bbfa (integration just before 814e7cf5, with the runner): same match True on all steps - the pre-814e7cf5 sim is
+  fully in the base.
+Gameplay's own check (4 v 5 bots) did not reach the step-5215 difference; the diff is back with them. Raw: work/p7t_verify/.
