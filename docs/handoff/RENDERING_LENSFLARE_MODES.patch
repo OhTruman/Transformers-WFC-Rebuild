@@ -1,0 +1,116 @@
+diff -ru base/src/render/Renderer.h modes/src/render/Renderer.h
+--- base/src/render/Renderer.h	2026-10-17 15:44:35.294191300 -0500
++++ modes/src/render/Renderer.h	2026-10-17 15:44:36.177216800 -0500
+@@ -197,6 +197,9 @@
+     // map changes; WFC_X3=0 forces it off over the setting. Available = Realistic is possible on this GPU.
+     virtual void setVolumetricLighting(bool on) { (void)on; }
+     virtual bool volumetricLighting() const { return false; }
++    // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (the shipped look, default)
++    virtual void setLensFlareMode(int mode) { (void)mode; }
++    virtual int lensFlareMode() const { return 2; }
+     virtual bool volumetricLightingAvailable() const { return false; }
+     // True when the current map loaded with the ray-tracing scene (switches are live); false = Faithful / Realistic take
+     // effect from the next map load (the row shows "(next map)").
+diff -ru base/src/render/gl/GLRenderer.cpp modes/src/render/gl/GLRenderer.cpp
+--- base/src/render/gl/GLRenderer.cpp	2026-10-17 15:44:35.035805400 -0500
++++ modes/src/render/gl/GLRenderer.cpp	2026-10-17 15:44:36.184241500 -0500
+@@ -1622,6 +1622,8 @@
+     bool setRayTracingMode(int mode) override { return wfc_.rtSetMode(mode); }
+     void setVolumetricLighting(bool on) override { wfc_.setVolumetricLighting(on); }
+     bool volumetricLighting() const override { return wfc_.volumetricLighting(); }
++    void setLensFlareMode(int mode) override { wfc_.setLensFlareMode(mode); }
++    int lensFlareMode() const override { return wfc_.lensFlareMode(); }
+     bool volumetricLightingAvailable() const override { return wfc_.rtAvailable(); }
+     bool rayTracingLoadedThisMap() const override { return wfc_.rtLoadedThisMap(); }
+     bool hdTexturesAvailable() override { return wfc::Pipeline::hdTexturesAvailable(); }
+diff -ru base/src/render/gl/WfcLensFlare.cpp modes/src/render/gl/WfcLensFlare.cpp
+--- base/src/render/gl/WfcLensFlare.cpp	2026-10-17 15:44:35.113070500 -0500
++++ modes/src/render/gl/WfcLensFlare.cpp	2026-10-17 15:44:36.190262300 -0500
+@@ -98,9 +98,19 @@
+     if (!lensFlares_.empty()) LOG_INFO("wfc: lens flares: %zu source(s)", lensFlares_.size());
+ }
+ 
++// the Lens Flares row; WFC_LENSFLARE=0|1|2 overrides it (harness runs), WFC_NOLENSFLARES=1 = 0
++int Pipeline::lensFlareMode() const {
++    static const int env = std::getenv("WFC_NOLENSFLARES") ? 0
++                         : std::getenv("WFC_LENSFLARE") ? std::min(std::max(std::atoi(std::getenv("WFC_LENSFLARE")), 0), 2) : -1;
++    return env >= 0 ? env : lensFlareMode_;
++}
++
+ void Pipeline::drawLensFlares() {
+-    static const bool off = std::getenv("WFC_NOLENSFLARES") != nullptr;   // A/B
+-    if (off || lensFlares_.empty()) return;
++    const int mode = lensFlareMode();
++    if (mode == 0 || lensFlares_.empty()) return;
++    // Original: the DistMap_* inputs are the raw camera distance in UU (the shipped evaluation: always their last point);
++    // Subtle: their first point (the artists' 0..1 ramps)
++    const bool subtle = mode == 1;
+     const float* V = camView_.m;
+     const core::Vec3 right{V[0], V[4], V[8]}, up{V[1], V[5], V[9]}, back{V[2], V[6], V[10]};
+     const float p00 = camProj_.m[0], p11 = camProj_.m[5];
+@@ -174,7 +184,7 @@
+         const float vis = occ[0];
+         static const bool lfLog = std::getenv("WFC_LFLOG") != nullptr;   // (diagnostics) per frame: coverage, visibility, box area
+         if (lfLog) LOG_INFO("LFLOG src NDC (%.3f %.3f) coverage %.4f vis %.3f box area %.0f px", sx, sy, f.coverage, vis, f.area);
+-        const float D = core::length(f.pos - camPos_) * 100.0f;   // (UU: the DistMap_* input)
++        const float D = subtle ? -1e30f : core::length(f.pos - camPos_) * 100.0f;   // (UU: the DistMap_* input; Subtle: point 0)
+         const float kDepth = 1.0f;                       // the element plane's view depth (cancels in the NDC size)
+         flushingTrans_ = true;                           // (drawn now, not queued)
+         glDisable(GL_DEPTH_TEST);
+diff -ru base/src/render/gl/WfcPipeline.cpp modes/src/render/gl/WfcPipeline.cpp
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 15:44:35.160733800 -0500
++++ modes/src/render/gl/WfcPipeline.cpp	2026-10-17 15:44:36.197286300 -0500
+@@ -1281,8 +1281,14 @@
+                                                        //  frontend -> match unload; WFC_SETTINGSTEST checks every kept setting)
+     const int keepRtMode = rtMode_, keepRtAvail = rtAvailKnown_;   // (the Ray Tracing row / F9: Off at the next map before)
+     const bool keepVol = volUser_;                     // (the Volumetric Lighting row)
++    const int keepLf = lensFlareMode_;                 // (the Lens Flares row)
++    for (LensFlareRT& lf : lensFlares_) if (lf.query) DeleteQueries(1, &lf.query);
++    if (lfBoxProg_) DeleteProgram(lfBoxProg_);
++    if (lfBoxVbo_) DeleteBuffers(1, &lfBoxVbo_);
++    if (lfBoxVao_) DeleteVertexArrays(1, &lfBoxVao_);
+     *this = Pipeline();
+     volUser_ = keepVol;
++    lensFlareMode_ = keepLf;
+     loadYield_ = std::move(keepYield);
+     displayGamma_ = keepGamma;
+     fsrScale_ = keepFsrScale; fsrSharpness_ = keepFsrSharp;
+@@ -1303,12 +1309,14 @@
+     const bool hd = hdTextures_, f3 = fsr3On_, mo = modern_;
+     const int rm = rtMode_;
+     const bool vo = volUser_;
++    const int lf = lensFlareMode_;
+     displayGamma_ = 2.0f; fsrScale_ = 0.5f; fsrSharpness_ = 0.3f; anisotropy_ = 8; hdTextures_ = true; fsr3On_ = true; modern_ = true;
+-    rtMode_ = 2; volUser_ = false;
++    rtMode_ = 2; volUser_ = false; lensFlareMode_ = 1;
+     release();
+     check(rtMode_ == 2, "Ray Tracing mode");
+     check(!volUser_, "Volumetric Lighting");
+-    rtMode_ = rm; volUser_ = vo;
++    check(lensFlareMode_ == 1, "Lens Flares");
++    rtMode_ = rm; volUser_ = vo; lensFlareMode_ = lf;
+     check(displayGamma_ == 2.0f, "display gamma"); check(fsrScale_ == 0.5f && fsrSharpness_ == 0.3f, "FSR scale / sharpness");
+     check(anisotropy_ == 8, "anisotropy"); check(hdTextures_, "HD textures"); check(fsr3On_, "FSR 3.1"); check(modern_, "Modern materials");
+     displayGamma_ = g; fsrScale_ = fs; fsrSharpness_ = fsh; anisotropy_ = an; hdTextures_ = hd; fsr3On_ = f3; modern_ = mo;
+diff -ru base/src/render/gl/WfcPipeline.h modes/src/render/gl/WfcPipeline.h
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 15:44:35.173276700 -0500
++++ modes/src/render/gl/WfcPipeline.h	2026-10-17 15:44:36.202303100 -0500
+@@ -218,6 +218,10 @@
+     void setDrawInterpolatedLightmap(const char* actor, float lerp);
+     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
+     bool volumetricLighting() const { return volUser_; }
++    // the Lens Flares row (user 2026-10-17): 0 Off (no flare pass), 1 Subtle (the DistMap_* curves at their first point, the
++    // artists' 0..1 ramps), 2 Original (the shipped evaluation at the raw camera distance: their last point); restart-free
++    void setLensFlareMode(int m) { lensFlareMode_ = std::min(std::max(m, 0), 2); }
++    int lensFlareMode() const;
+     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
+     void flushPendingDraws() { flushWeaponQueue(); }
+     // the queued characters (flushDynQueue), drawn now: before translucent GL work outside the Pipeline (the game-side
+@@ -968,6 +972,7 @@
+     std::vector<LensFlareRT> lensFlares_;
+     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
+     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;
++    int lensFlareMode_ = 2;                          // the Lens Flares row: 0 Off, 1 Subtle, 2 Original (WFC_LENSFLARE overrides)
+     void loadLensFlares();
+     void drawLensFlares();
+     static void lfEval(const LfDist& d, float x, float* out);
