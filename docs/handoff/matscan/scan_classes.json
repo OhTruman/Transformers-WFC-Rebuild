@@ -1,0 +1,852 @@
+{
+ "classes": {
+  "value_change": [
+   "ENV_AllShader_p.Energon_River.Energon_Lava_Mat",
+   "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST",
+   "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST",
+   "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+   "ENV_CORE_Complex_p.Material.EnergonPlasmaAquaLight_INST",
+   "ENV_CORE_Complex_p.Material.LightCylinder_Rays_Blue_less_MATINST",
+   "ENV_CORE_Complex_p.Material.LightCylinder_Rays_less_MATINST",
+   "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasmaOrange_INST",
+   "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasma_INST",
+   "ENV_CORE_Floors_p.Materials.SmokeCoolDepth_Mat_INST",
+   "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionChamber_MATINST_INST",
+   "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionLessGlow_MATINST_INST",
+   "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortion_MATINST_INST",
+   "ENV_CORE_Shader_p.Material.ENV_ForceField_MATINST_INST",
+   "ENV_GLB_EnvEffects_p.Material.LightCylinder2_Rays_Red_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightCylinder_Cool_Rays_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysDarkCool_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2OrangeMid_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_Light_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Teal_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_Lighter_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_SpaceStation_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRays_RED_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeCoolThick_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessLessDense_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.LightVolumeYellow_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Purp_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Red_MATINST",
+   "ENV_GLB_EnvEffects_p.Material.TrainWarningLights_orange_MATINST",
+   "ENV_IAC_Decagon_p.Materials.IAC_Decagon_GlassPan2_MATINST",
+   "ENV_IAC_Ground_p.Material.ENV_EngergonGlass_MAT_INST",
+   "ENV_IAC_Interior_1_p.Materials.ENV_EnergyBridge_MAT_INST",
+   "ENV_IAC_Interior_1_p.Materials.ENV_EngergonGlassV3_MAT_INST",
+   "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.BrightSmokeDecagon2_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.MachineSmokeCover_red_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.OmegaSilhouette_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.SmokeShadow_MATINST",
+   "ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass2_dense_Dark_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass2_light_thin_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass_HiDISTORT_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass_Opaque_MATINST",
+   "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST",
+   "ENV_KON_Deco_p.Materials.LightVolumeCool_MATINST",
+   "ENV_KON_Molten_p.Material.GlassEnergyA_MATINST",
+   "ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST",
+   "ENV_KON_Molten_p.Material.LightRays_MATINST",
+   "ENV_KON_Molten_p.Material.MoltenMetal2_MATINST",
+   "ENV_KON_Molten_p.Material.PlasmaAqua_INST",
+   "ENV_ORB_D1_Deco_p.Materials.MoltenMetal_MATINST",
+   "ENV_ORB_D1_Shader_p.Materials.ORB_Glass_ElectricityOFF_MATINST",
+   "ENV_ORB_Shader_p.ForceField.ENV_ORB_ForceField_MATINST",
+   "FX_Decals_p.DeathDecal_MAT",
+   "FX_Decals_p.MetalDecal_02_MAT_INST",
+   "FX_Decals_p.MetalDecal_03_MAT_INST",
+   "FX_Materials_p.MatInst.Drip_MAT_INST",
+   "FX_Materials_p.MatInst.EnergonSplatter_03_MAT_INST",
+   "FX_Materials_p.MatInst.PROP_Shard_MATINST",
+   "FX_Materials_p.MatInst.PickUp_LightVolume_MATINST",
+   "FX_Materials_p.Materials.LaserScanner_MAT",
+   "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "FX_Materials_p.Materials.ScreenSplatter_01_MAT",
+   "PROP_IAC_CityProps_p.VendingMachine.PROP_VendingMachineGlass_MATINST",
+   "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST",
+   "PROP_NEU_Barricade_p.BarricadeShield_MAT",
+   "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST",
+   "PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST",
+   "PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST",
+   "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST",
+   "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST",
+   "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST",
+   "PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST",
+   "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystalDark_MAT_INST",
+   "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MATINST",
+   "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST",
+   "WEP_ProngDagger_p.WEP_Energon_A_MATINST",
+   "WEP_Rocket_p.WEP_OmegaRocket_MATINST",
+   "WEP_Rocket_p.WEP_Projectile_MAT",
+   "WEP_Rocket_p.WEP_StandardRocket_MATINST",
+   "WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST",
+   "WEP_Shared_p.WEP_Energon_D_MATINST",
+   "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST",
+   "WEP_Shield_p.Barrier.ENV_ForceField_Defrag_MAT",
+   "WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST",
+   "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST",
+   "WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST"
+  ],
+  "equivalent": [
+   "ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST",
+   "ENV_IAC_Shader_p.Material.Iacon_CoolSmoke_MATINST",
+   "FX_Decals_p.DecalDefault_MAT",
+   "FX_Materials_p.MatInst.LightCylinder_Rays_MAT_INST",
+   "FX_Materials_p.MatInst.LightVolume_Rays_MAT_INST",
+   "FX_Materials_p.Materials.LightVolume_WepPickup_MAT",
+   "FX_Materials_p.Materials.SmokeCoolDepth_Mat"
+  ],
+  "runtime_param": [],
+  "other": [
+   "FX_Materials_p.Materials.Ram_model_MAT"
+  ]
+ },
+ "detail": {
+  "ENV_AllShader_p.Energon_River.Energon_Lava_Mat": {
+   "maps": 2,
+   "selected": [
+    "(0.74453, 0.25084, 0.002586, 150).w"
+   ]
+  },
+  "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(1, 0.05, 0.05, 3).w"
+   ]
+  },
+  "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.2, 0.1, 1, 3).w"
+   ]
+  },
+  "ENV_AllShader_p.Release.ENV_ForceField_MATINST": {
+   "maps": 5,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_CORE_Complex_p.Material.EnergonPlasmaAquaLight_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.042987, 0.21952, 0.476177, 150).w"
+   ]
+  },
+  "ENV_CORE_Complex_p.Material.LightCylinder_Rays_Blue_less_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.016988, 0.080219, 0.116576, 1).w"
+   ]
+  },
+  "ENV_CORE_Complex_p.Material.LightCylinder_Rays_less_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.119264, 0.056374, 0.016068, 1).w"
+   ]
+  },
+  "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasmaOrange_INST": {
+   "maps": 2,
+   "selected": [
+    "(0.042987, 0.21952, 0.476177, 150).w"
+   ]
+  },
+  "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasma_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.042987, 0.21952, 0.476177, 150).w"
+   ]
+  },
+  "ENV_CORE_Floors_p.Materials.SmokeCoolDepth_Mat_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.065754, 0.144972, 0.84337, 1).w"
+   ]
+  },
+  "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionChamber_MATINST_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionLessGlow_MATINST_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortion_MATINST_INST": {
+   "maps": 2,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_CORE_Shader_p.Material.ENV_ForceField_MATINST_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightCylinder2_Rays_Red_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(1, 0.010398, 0.014311, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightCylinder_Cool_Rays_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.325037, 0.625345, 0.948965, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysDarkCool_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.014311, 0.193972, 0.618686, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.383775, 0.47044, 0.751895, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.383775, 0.65237, 0.751895, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2OrangeMid_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.9743, 0.334458, 0.197516, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_Light_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.9743, 0.334458, 0.197516, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.9743, 0.334458, 0.197516, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Teal_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.348865, 0.804559, 0.687031, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.766744, 0.547993, 0.373615, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_Lighter_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0.766744, 0.547993, 0.373615, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.766744, 0.547993, 0.373615, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_SpaceStation_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.774227, 0.378676, 0.368591, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.334458, 0.22331, 0.766744, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRays_RED_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.9743, 0.051122, 0.016068, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT": {
+   "maps": 1,
+   "selected": [
+    "(0.409826, 0.687031, 0.715465, 2).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeCoolThick_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.383775, 0.835528, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.368591, 0.573159, 0.715465, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessLessDense_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.368591, 0.573159, 0.715465, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0.368591, 0.573159, 0.715465, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.121986, 0.121986, 0.121986, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.368591, 0.38891, 0.715465, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.940601, 0.373615, 0.212044, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.940601, 0.373615, 0.212044, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST": {
+   "maps": 3,
+   "selected": [
+    "(0.867136, 0.373615, 0.14198, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.940601, 0.420508, 0.263175, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.LightVolumeYellow_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.65237, 0.65237, 0.560499, 0.5).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Purp_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.227137, 0.111299, 0.573159, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Red_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.442323, 0.001963, 0.001963, 1).w"
+   ]
+  },
+  "ENV_GLB_EnvEffects_p.Material.TrainWarningLights_orange_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(1, 0.212044, 0.010398, 1).w"
+   ]
+  },
+  "ENV_IAC_Decagon_p.Materials.IAC_Decagon_GlassPan2_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.144972, 0.476177, 0.560499, 3).w"
+   ]
+  },
+  "ENV_IAC_Ground_p.Material.ENV_EngergonGlass_MAT_INST": {
+   "maps": 3,
+   "selected": [
+    "(1, 0.306635, 0.073828, 2).w",
+    "(0.038473, 0.042987, 0.373615, 2).w"
+   ]
+  },
+  "ENV_IAC_Interior_1_p.Materials.ENV_EnergyBridge_MAT_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.03423, 0.43134, 0.812241, 5).w",
+    "(0.058187, 0.618686, 0.907547, 2).w"
+   ]
+  },
+  "ENV_IAC_Interior_1_p.Materials.ENV_EngergonGlassV3_MAT_INST": {
+   "maps": 2,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.88318, 0.329729, 0.163641, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.BrightSmokeDecagon2_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.344026, 0.170138, 0.867136, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.88318, 0.271577, 0.147998, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.948965, 0.254916, 0.12753, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.234895, 0.22331, 0.579547, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.MachineSmokeCover_red_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.694081, 0.197516, 0.197516, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.OmegaSilhouette_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.965815, 0.297653, 0.133209, 1).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.SmokeShadow_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0, 0, 0, 0.9).w"
+   ]
+  },
+  "ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.88318, 0.329729, 0.163641, 1).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST": {
+   "maps": 5,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass2_dense_Dark_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass2_light_thin_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass_HiDISTORT_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass_Opaque_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.358654, 0.493616, 0.95737, 1).w",
+    "(0.227137, 0.026549, 0.00456, 1).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST": {
+   "maps": 4,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "ENV_IAC_Shader_p.Material.Iacon_CoolSmoke_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "ENV_KON_Deco_p.Materials.LightVolumeCool_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.334458, 0.263175, 0.781751, 0.5).w"
+   ]
+  },
+  "ENV_KON_Molten_p.Material.GlassEnergyA_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.180144, 0.121986, 0.774227, 2).w"
+   ]
+  },
+  "ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.645555, 0.547993, 0.280124, 1).w"
+   ]
+  },
+  "ENV_KON_Molten_p.Material.LightRays_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.673049, 0.598942, 0.267358, 2).w"
+   ]
+  },
+  "ENV_KON_Molten_p.Material.MoltenMetal2_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.701169, 0.259027, 0.004116, 35).w"
+   ]
+  },
+  "ENV_KON_Molten_p.Material.PlasmaAqua_INST": {
+   "maps": 1,
+   "selected": [
+    "(0.042987, 0.21952, 0.476177, 150).w"
+   ]
+  },
+  "ENV_ORB_D1_Deco_p.Materials.MoltenMetal_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.694081, 0.186989, 0.00456, 35).w"
+   ]
+  },
+  "ENV_ORB_D1_Shader_p.Materials.ORB_Glass_ElectricityOFF_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.271577, 0.68002, 0.835528, 2).w"
+   ]
+  },
+  "ENV_ORB_Shader_p.ForceField.ENV_ORB_ForceField_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "FX_Decals_p.DeathDecal_MAT": {
+   "maps": 10,
+   "selected": [
+    "(20, 20, 20, 1).w"
+   ]
+  },
+  "FX_Decals_p.DecalDefault_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "FX_Decals_p.MetalDecal_02_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(5, 5, 5, 1).w"
+   ]
+  },
+  "FX_Decals_p.MetalDecal_03_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(5, 5, 5, 1).w"
+   ]
+  },
+  "FX_Materials_p.MatInst.Drip_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y"
+   ]
+  },
+  "FX_Materials_p.MatInst.EnergonSplatter_03_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y"
+   ]
+  },
+  "FX_Materials_p.MatInst.LightCylinder_Rays_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.MatInst.LightVolume_Rays_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.MatInst.PROP_Shard_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0, 0.5, 1, 2).w",
+    "(0.56681, 0.193972, 0.002932, 1).w",
+    "(0, 0, 0, 15).w"
+   ]
+  },
+  "FX_Materials_p.MatInst.PickUp_LightVolume_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0.598942, 0.766744, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.Materials.LaserScanner_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 0.05).w",
+    "(3, 3, 3, 1).w"
+   ]
+  },
+  "FX_Materials_p.Materials.LightVolume_Base_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 0.5, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.Materials.LightVolume_WepPickup_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.Materials.Ram_model_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "FX_Materials_p.Materials.ScreenSplatter_01_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y"
+   ]
+  },
+  "FX_Materials_p.Materials.SmokeCoolDepth_Mat": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 1, 1).w"
+   ]
+  },
+  "PROP_IAC_CityProps_p.VendingMachine.PROP_VendingMachineGlass_MATINST": {
+   "maps": 1,
+   "selected": [
+    "(0.051122, 0.573159, 0.729919, 5).w",
+    "(0.058187, 0.618686, 0.907547, 2).w"
+   ]
+  },
+  "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "PROP_NEU_Barricade_p.BarricadeShield_MAT": {
+   "maps": 10,
+   "selected": [
+    "(0.147998, 0.334458, 0.554227, 3).w"
+   ]
+  },
+  "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.267358, 0.425905, 0.965815, 1).w"
+   ]
+  },
+  "PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.085005, 0.598301, 1, 1).w",
+    "(0.085005, 0.598301, 1, 1).w"
+   ]
+  },
+  "PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.085005, 0.598301, 1, 1).w",
+    "(0.085005, 0.598301, 1, 1).w"
+   ]
+  },
+  "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.766744, 0.625345, 0.046149, 5).w",
+    "(0.254916, 0.154152, 0.002263, 2).w"
+   ]
+  },
+  "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1.85, 1.1, 0.27, -0.02).x",
+    "(1.85, 1.1, 0.27, -0.02).y",
+    "(1.85, 1.1, 0.27, -0.02).z",
+    "(1.85, 1.1, 0.27, -0.02).w"
+   ]
+  },
+  "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1.85, 1.1, 0.27, -0.02).x",
+    "(1.85, 1.1, 0.27, -0.02).y",
+    "(1.85, 1.1, 0.27, -0.02).z",
+    "(1.85, 1.1, 0.27, -0.02).w"
+   ]
+  },
+  "PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.052842, 0.729919, 0.694081, 5).w",
+    "(0.003303, 0.22331, 0.242796, 2).w"
+   ]
+  },
+  "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystalDark_MAT_INST": {
+   "maps": 1,
+   "selected": [
+    "(0, 0.031551, 0.45908, 10).w"
+   ]
+  },
+  "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MATINST": {
+   "maps": 2,
+   "selected": [
+    "(0, 0.031551, 0.45908, 10).w"
+   ]
+  },
+  "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST": {
+   "maps": 10,
+   "selected": [
+    "(0, 0.031551, 0.45908, 10).w"
+   ]
+  },
+  "WEP_ProngDagger_p.WEP_Energon_A_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y",
+    "(1.25, 0.05, 0.05, 0.5).w"
+   ]
+  },
+  "WEP_Rocket_p.WEP_OmegaRocket_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1.25, 0.05, 0.05, 2).w"
+   ]
+  },
+  "WEP_Rocket_p.WEP_Projectile_MAT": {
+   "maps": 10,
+   "selected": [
+    "(1.25, 0.05, 0.05, 2).w"
+   ]
+  },
+  "WEP_Rocket_p.WEP_StandardRocket_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1.25, 0.05, 0.05, 2).w"
+   ]
+  },
+  "WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.835528, 0.297653, 0.028991, 1).w",
+    "(0.25084, 0.049433, 0.002586, 1).w"
+   ]
+  },
+  "WEP_Shared_p.WEP_Energon_D_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y",
+    "(0.2, 0.1, 1.25, 0.5).w"
+   ]
+  },
+  "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1, 0, 0, 10).w"
+   ]
+  },
+  "WEP_Shield_p.Barrier.ENV_ForceField_Defrag_MAT": {
+   "maps": 10,
+   "selected": [
+    "(0.111299, 0.420508, 0.517401, 3).w"
+   ]
+  },
+  "WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.037029, 0.151058, 0.186989, 3).w"
+   ]
+  },
+  "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(0.2, 0.1, 2, 10).w"
+   ]
+  },
+  "WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST": {
+   "maps": 10,
+   "selected": [
+    "(1, 1, 0, 1).x",
+    "(1, 1, 0, 1).y",
+    "(0.493616, 0.12753, 1, 0.5).w"
+   ]
+  }
+ }
+}

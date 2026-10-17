@@ -1,0 +1,728 @@
+{
+ "ENV_AllShader_p.Energon_River.Energon_Lava_Mat": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_AllShader_p.Release.ENV_ForceField_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Rust",
+  "MP_ORB_Debris"
+ ],
+ "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortion_MATINST_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightCylinder2_Rays_Red_MATINST": [
+  "MP_IAC_Streets",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ORB_Debris",
+  "MP_UND_Complex"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_Light_MATINST": [
+  "MP_IAC_Streets"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST": [
+  "MP_IAC_Streets",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_Lighter_MATINST": [
+  "MP_IAC_Streets",
+  "MP_IAC_Seed"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRays_RED_MATINST": [
+  "MP_IAC_Streets"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST": [
+  "MP_IAC_Streets"
+ ],
+ "ENV_IAC_Decagon_p.Materials.IAC_Decagon_GlassPan2_MATINST": [
+  "MP_IAC_Streets"
+ ],
+ "ENV_IAC_Ground_p.Material.ENV_EngergonGlass_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_Remnant",
+  "MP_IAC_Rust"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass2_dense_Dark_MATINST": [
+  "MP_IAC_Streets"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope"
+ ],
+ "FX_Decals_p.DeathDecal_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Decals_p.DecalDefault_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Decals_p.MetalDecal_02_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Decals_p.MetalDecal_03_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.MatInst.Drip_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.MatInst.EnergonSplatter_03_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.MatInst.LightCylinder_Rays_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.MatInst.LightVolume_Rays_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.LaserScanner_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.LightVolume_Base_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.LightVolume_WepPickup_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.Ram_model_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.ScreenSplatter_01_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "FX_Materials_p.Materials.SmokeCoolDepth_Mat": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_NEU_Barricade_p.Barricade2.TPRO_NEU_Barricade2ForceField_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_NEU_Barricade_p.BarricadeShield_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_NEU_Barricade_p.RocketBarricade.TPRO_NEU_RocketBarrier_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_NEU_BatteryOS_p.BatteryOmegaGlass_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_VendingMachine_p.Ammo.AP_VendingMachineAmmo_Glass_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_VendingMachine_p.Ammo.PROP_VendingMachine_Ammo_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_VendingMachine_p.PROP_VendingMachine_EnergonCube_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "PROP_VendingMachine_p.PROP_VendingMachine_Glass_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MAT_INST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_ProngDagger_p.WEP_Energon_A_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Rocket_p.WEP_OmegaRocket_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Rocket_p.WEP_Projectile_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Rocket_p.WEP_StandardRocket_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_SentryBlaster01_p.SentryBase.WEP_GlassGlow_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shared_p.WEP_Energon_D_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shield_p.Autobot.WEP_ShieldBruteA_Frame_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shield_p.Barrier.ENV_ForceField_Defrag_MAT": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shield_p.Barrier.WEP_Barrier_Defrag_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shield_p.Decepticon.WEP_ShieldBruteD_Frame_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "WEP_Shield_p.Decepticon.WEP_ShieldD_Energon_MATINST": [
+  "MP_IAC_Streets",
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_ORB_Debris",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_KON_Molten",
+  "MP_ORB_Debris"
+ ],
+ "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasmaOrange_INST": [
+  "MP_ESC_BrokenHope",
+  "MP_KON_Molten"
+ ],
+ "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionLessGlow_MATINST_INST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_IAC_Berth",
+  "MP_IAC_Seed",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_IAC_Berth",
+  "MP_IAC_Seed",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_KON_Molten",
+  "MP_UND_Complex"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_IAC_Berth",
+  "MP_KON_Molten",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeYellow_MATINST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.SmokeShadow_MATINST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass_HiDISTORT_MATINST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "ENV_IAC_Shader_p.Material.Iacon_CoolSmoke_MATINST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "FX_Materials_p.MatInst.PROP_Shard_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant"
+ ],
+ "FX_Materials_p.MatInst.PickUp_LightVolume_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_ESC_Remnant"
+ ],
+ "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystalDark_MAT_INST": [
+  "MP_ESC_BrokenHope"
+ ],
+ "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MATINST": [
+  "MP_ESC_BrokenHope",
+  "MP_IAC_Seed"
+ ],
+ "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST": [
+  "MP_ESC_Remnant",
+  "MP_KON_Molten",
+  "MP_ORB_Debris"
+ ],
+ "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionChamber_MATINST_INST": [
+  "MP_ESC_Remnant"
+ ],
+ "ENV_CORE_Shader_p.Material.ENV_ForceField_MATINST_INST": [
+  "MP_ESC_Remnant"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightCylinder_Cool_Rays_MATINST": [
+  "MP_ESC_Remnant"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.OmegaSilhouette_MATINST": [
+  "MP_ESC_Remnant"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST": [
+  "MP_ESC_Remnant",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_ORB_Debris"
+ ],
+ "ENV_ORB_D1_Shader_p.Materials.ORB_Glass_ElectricityOFF_MATINST": [
+  "MP_ESC_Remnant"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysDarkCool_MATINST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_SpaceStation_MATINST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST": [
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessLessDense_MATINST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.TrainWarningLights_orange_MATINST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_IAC_Interior_1_p.Materials.ENV_EnergyBridge_MAT_INST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST": [
+  "MP_IAC_Berth",
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_UND_Gorge"
+ ],
+ "ENV_KON_Deco_p.Materials.LightVolumeCool_MATINST": [
+  "MP_IAC_Berth"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST": [
+  "MP_IAC_Rust",
+  "MP_IAC_Seed",
+  "MP_UND_Gorge"
+ ],
+ "ENV_IAC_Interior_1_p.Materials.ENV_EngergonGlassV3_MAT_INST": [
+  "MP_IAC_Rust",
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST": [
+  "MP_IAC_Rust"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.MachineSmokeCover_red_MATINST": [
+  "MP_IAC_Rust"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST": [
+  "MP_IAC_Rust"
+ ],
+ "PROP_IAC_CityProps_p.VendingMachine.PROP_VendingMachineGlass_MATINST": [
+  "MP_IAC_Rust"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_MATINST": [
+  "MP_IAC_Seed",
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST": [
+  "MP_IAC_Seed",
+  "MP_KON_Molten",
+  "MP_UND_Complex"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.BrightSmokeDecagon2_MATINST": [
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST": [
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST": [
+  "MP_IAC_Seed"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass2_light_thin_MATINST": [
+  "MP_IAC_Seed",
+  "MP_UND_Complex"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST": [
+  "MP_KON_Molten",
+  "MP_UND_Complex",
+  "MP_UND_Gorge"
+ ],
+ "ENV_KON_Molten_p.Material.GlassEnergyA_MATINST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_KON_Molten_p.Material.LightRays_MATINST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_KON_Molten_p.Material.MoltenMetal2_MATINST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_KON_Molten_p.Material.PlasmaAqua_INST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_ORB_D1_Deco_p.Materials.MoltenMetal_MATINST": [
+  "MP_KON_Molten"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2Teal_MATINST": [
+  "MP_ORB_Debris"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Purp_MATINST": [
+  "MP_ORB_Debris"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Red_MATINST": [
+  "MP_ORB_Debris"
+ ],
+ "ENV_IAC_Shader_p.Material.IAC_Glass_Opaque_MATINST": [
+  "MP_ORB_Debris"
+ ],
+ "ENV_ORB_Shader_p.ForceField.ENV_ORB_ForceField_MATINST": [
+  "MP_ORB_Debris"
+ ],
+ "ENV_CORE_Complex_p.Material.EnergonPlasmaAquaLight_INST": [
+  "MP_UND_Complex"
+ ],
+ "ENV_CORE_Complex_p.Material.LightCylinder_Rays_Blue_less_MATINST": [
+  "MP_UND_Complex"
+ ],
+ "ENV_CORE_Complex_p.Material.LightCylinder_Rays_less_MATINST": [
+  "MP_UND_Complex"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_MATINST": [
+  "MP_UND_Complex"
+ ],
+ "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasma_INST": [
+  "MP_UND_Gorge"
+ ],
+ "ENV_CORE_Floors_p.Materials.SmokeCoolDepth_Mat_INST": [
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightRaysV2OrangeMid_MATINST": [
+  "MP_UND_Gorge"
+ ],
+ "ENV_GLB_EnvEffects_p.Material.LightVolumeCoolThick_MATINST": [
+  "MP_UND_Gorge"
+ ]
+}
