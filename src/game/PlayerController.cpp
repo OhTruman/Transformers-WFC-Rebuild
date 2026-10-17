@@ -948,10 +948,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             w.beginReload();
         }
     }
-    // Presentation-yaw reference for the frames until the next step.
-    stepYawRate_ = std::remainder(pawn_->yaw() - stepBodyYaw_, 6.2831853f) / std::max(dt, 1e-4f);
-    stepBodyYaw_ = pawn_->yaw(); stepFaceYaw_ = step.faceYaw; sinceStep_ = 0.0f;
-    pawn_->setDrawYawOffset(0.0f);
+    presentationStep(step.faceYaw, dt);   // presentation-yaw reference for the frames until the next step
     fireLatch_ = false;   // consumed by this step (a release before the refire clears PendingFire, as StopFire does)
 }
 
@@ -996,6 +993,13 @@ const WeaponCameraDef kWeaponCamera[] = {
 #include "game/WeaponCameraTable.inc"
 };
 } // namespace
+
+void PlayerController::presentationStep(float faceYaw, float dt) {
+    if (!pawn_) return;
+    stepYawRate_ = std::remainder(pawn_->yaw() - stepBodyYaw_, 6.2831853f) / std::max(dt, 1e-4f);
+    stepBodyYaw_ = pawn_->yaw(); stepFaceYaw_ = faceYaw; sinceStep_ = 0.0f;
+    pawn_->setDrawYawOffset(0.0f);
+}
 
 void PlayerController::onLocalShot(const char* weaponId) {
     if (!weaponId) return;

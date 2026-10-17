@@ -548,6 +548,12 @@ void World::botThink(BotBody o, BotBrain& b) {
             //  Warcry - fighting with a teammate close by (the buff level counts friendlies); Shockwave - an enemy within 15 m.
             if (visible && b.frand() < use * 0.5f) {
                 bool mate = false;
+                if (seatOrdered_) {   // online: every teammate by match player index (the local human included)
+                    for (size_t q = 0; q < match_.players().size(); ++q) {
+                        const Character* qc = (int)q == o.matchPlayer() ? nullptr : participantPawn((int)q);
+                        if (qc && match_.sameTeam((int)q, b.player) && core::length(qc->position() - pc.position()) < 25.0f) mate = true;
+                    }
+                } else
                 for (const MatchOpponent* q : opponents_)
                     if (q->matchPlayer() != o.matchPlayer() && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 25.0f) mate = true;
                 if (mate || hpFrac < 0.5f) botTryAbility(o, b, "Warcry");
@@ -561,6 +567,12 @@ void World::botThink(BotBody o, BotBrain& b) {
             {
                 const Weapon& cw = pc.weapon();
                 bool mateNear = false;
+                if (seatOrdered_) {   // online: every teammate by match player index (the local human included)
+                    for (size_t q = 0; q < match_.players().size(); ++q) {
+                        const Character* qc = (int)q == o.matchPlayer() ? nullptr : participantPawn((int)q);
+                        if (qc && match_.sameTeam((int)q, b.player) && core::length(qc->position() - pc.position()) < 15.0f) mateNear = true;
+                    }
+                } else
                 for (const MatchOpponent* q : opponents_)
                     if (q->matchPlayer() != o.matchPlayer() && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 15.0f) mateNear = true;
                 if ((cw.reserveMax > 0 && cw.reserve < cw.reserveMax * 0.6f) || mateNear)
@@ -1299,7 +1311,7 @@ void World::smartCollectNoises() {
     const float now = match_.matchTime();
     for (const ParticipantShot& s : participantShots_)
         if (s.pellet == 0 && s.weapon != "RepairRay") smartNoises_.push_back({s.from, s.player, 1, now});
-    if (!localDead_ && localPlayer_ >= 0) {
+    if (!localDead_ && localPlayer_ >= 0 && !onlineSeats_) {   // online: the seat path records the local seat's shots as participant shots
         const Character& pc = player_.pawn();
         const Weapon* lw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
         const unsigned serial = lw ? lw->shotSerial : 0u;

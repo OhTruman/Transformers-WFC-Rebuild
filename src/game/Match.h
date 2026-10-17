@@ -142,6 +142,33 @@ public:
     int addPlayer(const std::string& name);      // PostLogin: team via TnTeamHandlerTwoTeams.PickTeam (team games)
     int addPlayer(const std::string& name, int team);   // a participant with a host-chosen team (offline bots; 255 = PickTeam)
     // Logout of the trailing participants from index n on (offline bots leave with their match; indices below n are unchanged).
+    // Online: the Match's own RNG (team ties, start choices) restarts from the host's seed at every launch, so every peer draws alike
+    // whatever matches its process played before (offline: never reseeded, as before).
+    void seedRandom(unsigned s) { rng_ = s ? s : 0x1234ABCDu; }
+    // The login start without advancing the clusters' round-robin (online: only this machine's player logs in locally, so a
+    // mutating login would advance a different team's iterator per perspective).
+    int loginStartPeek(int p) {
+        std::vector<int> it; it.reserve(clusters_.size());
+        for (const Cluster& c : clusters_) it.push_back(c.iterator);
+        const int r = loginStart(p);
+        for (size_t i = 0; i < clusters_.size(); ++i) clusters_[i].iterator = it[i];
+        return r;
+    }
+    // A participant with its exact team (no TnTeamHandler.PickTeam tie draw): the online seats, so every peer draws alike.
+    int addPlayerExact(const std::string& name, int team) {
+        MatchPlayer p; p.name = name; p.team = team; p.hasSelectedCharacter = true;
+        players_.push_back(p); locs_.push_back({0, 0, 0}); spawnAt_.push_back(-1); damageHistory_.emplace_back(); deathTime_.push_back(-1.0f);
+        return (int)players_.size() - 1;
+    }
+    // Permute the participants (before any spawn / event refers to them): new player i = old player order[i].
+    void reorderPlayers(const std::vector<int>& order) {
+        if (order.size() != players_.size()) return;
+        std::vector<int> newOf(order.size());
+        for (size_t i = 0; i < order.size(); ++i) newOf[(size_t)order[i]] = (int)i;
+        auto perm = [&](auto& v) { if (v.size() != order.size()) return; auto c = v; for (size_t i = 0; i < order.size(); ++i) v[i] = c[(size_t)order[i]]; };
+        perm(players_); perm(locs_); perm(radii_); perm(lastDamagedAt_); perm(lastHitBy_); perm(spawnAt_); perm(damageHistory_); perm(deathTime_);
+        for (int& h : lastHitBy_) if (h >= 0 && (size_t)h < newOf.size()) h = newOf[(size_t)h];
+    }
     void truncatePlayers(size_t n) {
         if (n >= players_.size()) return;
         players_.resize(n); locs_.resize(n); spawnAt_.resize(n); damageHistory_.resize(n); deathTime_.resize(n);

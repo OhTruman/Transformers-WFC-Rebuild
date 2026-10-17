@@ -20,6 +20,7 @@ class MatchOpponent : public Actor {
 public:
     MatchOpponent(int matchPlayer, int team, bool drawn) : player_(matchPlayer), team_(team), drawn_(drawn) {}
     int matchPlayer() const { return player_; }
+    void setMatchPlayer(int p) { player_ = p; }   // the online seat order permutation at launch
     int team() const { return team_; }
     Character& pawn() { return pawn_; }
     const Character& pawn() const { return pawn_; }

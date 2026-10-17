@@ -1355,8 +1355,15 @@ void World::separatePawns() {
         }
         return r + 0.01f;
     };
-    if (!localDead_) ps.push_back({&player_.pawn(), reach(player_.pawn())});
-    for (MatchOpponent* o : opponents_) if (o->spawned()) ps.push_back({&o->pawn(), reach(o->pawn())});
+    static std::vector<char> human;   // per ps entry: a human seat (the bots yield to it)
+    human.clear();
+    if (seatOrdered_) {   // online: by match player index, every human seat alike
+        for (size_t q = 0; q < match_.players().size(); ++q)
+            if (Character* c = participantPawnMutable((int)q)) { ps.push_back({c, reach(*c)}); human.push_back(seatHuman((int)q) ? 1 : 0); }
+    } else {
+        if (!localDead_) { ps.push_back({&player_.pawn(), reach(player_.pawn())}); human.push_back(1); }
+        for (MatchOpponent* o : opponents_) if (o->spawned()) { ps.push_back({&o->pawn(), reach(o->pawn())}); human.push_back(0); }
+    }
     const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
     auto tryMove = [&](Character& c, const core::Vec3& d) {
         // The pushed pawn keeps its whole radius clear of walls (knee and centre height): a push never wedges a pawn into a pocket
@@ -1382,7 +1389,7 @@ void World::separatePawns() {
             { const float dx = pb.x - pa.x, dz = pb.z - pa.z, rr = ps[i].r + ps[j].r; if (dx * dx + dz * dz >= rr * rr) continue; }   // cannot touch
             if (std::fabs(pa.y - pb.y) >= A.cylinderHalfHeight(A.moveForm()) + B.cylinderHalfHeight(B.moveForm())) continue;
             const bool va = A.moveForm() == Form::Vehicle, vb = B.moveForm() == Form::Vehicle;
-            const bool humanA = &A == &player_.pawn();   // the local pawn is only ever ps[0]
+            const bool humanA = human[i] && !human[j], humanB = human[j] && !human[i];   // offline the local pawn is only ever ps[0]
             if (va != vb) {   // robot cylinder vs vehicle mesh box
                 Character& V = va ? A : B; Character& Rb = va ? B : A;
                 core::Vec3 mn, mx;
@@ -1404,7 +1411,7 @@ void World::separatePawns() {
                     pen = ex[k] + rr;
                 }
                 const core::Vec3 n = fx * nx + fz * nz;   // world direction from the box toward the robot
-                const bool humanIsRobot = &Rb == &player_.pawn(), humanIsVehicle = &V == &player_.pawn();
+                const bool humanIsRobot = va ? humanB : humanA, humanIsVehicle = va ? humanA : humanB;
                 if (humanIsRobot) { if (!tryMove(V, n * -pen)) tryMove(Rb, n * pen); continue; }   // the bot vehicle yields to the human
                 if (humanIsVehicle) { if (!tryMove(Rb, n * pen)) tryMove(V, n * -pen); continue; }
                 if (!tryMove(Rb, n * pen)) tryMove(V, n * -pen);
@@ -1426,6 +1433,7 @@ void World::separatePawns() {
             const float push = need - d;
             const core::Vec3 half = n * (push * 0.5f);
             if (humanA) { if (!tryMove(B, half * 2.0f)) tryMove(A, half * -2.0f); continue; }
+            if (humanB) { if (!tryMove(A, half * -2.0f)) tryMove(B, half * 2.0f); continue; }   // online: a human seat later in the order
             const bool okA = tryMove(A, half * -1.0f), okB = tryMove(B, half);
             if (!okA && okB) tryMove(B, half);
             else if (okA && !okB) tryMove(A, half * -1.0f);
@@ -1588,6 +1596,7 @@ bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
 }
 
 bool World::participantMuzzleWorld(int player, core::Mat4& out) const {
+    if (player == localPlayer_) return !localDead_ && player_.pawn().hasWeapon() && weaponSocketWorld("MuzzleFlash", out);   // the online local seat
     const MatchOpponent* o = player >= 0 && (size_t)player < oppByPlayer_.size() ? oppByPlayer_[(size_t)player] : nullptr;
     if (!o || !o->spawned() || !o->pawn().hasWeapon()) return false;
     auto it = partWeapons_.find(player);
@@ -2058,8 +2067,11 @@ void World::finishRemainder() {
             if (inDetail && player == localPlayer_) LOG_INFO("SIMHASH %ld local camYaw %.6f simYaw? viewYaw %.6f", step, player_.controller().camYaw(), player_.controller().viewYaw());
             if (inDetail) LOG_INFO("SIMHASH %ld p%d pos %.6f %.6f %.6f vel %.6f %.6f %.6f hp %.4f yaw %.6f", step, player, p.x, p.y, p.z, v.x, v.y, v.z, hp, y);
         };
+        if (seatOrdered_) { for (size_t q = 0; q < match_.players().size(); ++q) if (const Character* c = participantPawn((int)q)) pawn(*c, (int)q); }   // online: by index
+        else {
         if (!localDead_) pawn(player_.pawn(), localPlayer_);
         for (MatchOpponent* o : opponents_) if (o->spawned()) pawn(o->pawn(), o->matchPlayer());
+        }
         for (const BotBrain& b : bots_) {
             mix(&b.wp, sizeof b.wp); mix(&b.yaw, sizeof b.yaw); mix(&b.pitch, sizeof b.pitch); mix(&b.target, sizeof b.target);
             const size_t ps = b.path.size(); mix(&ps, sizeof ps);
@@ -2194,9 +2206,13 @@ void World::tickPrefix(float dt) {
     // Health regeneration (robot blueprint HealthRegenParameters, both forms) for every live pawn.
     {
         Character& lp = player_.pawn();
+        if (onlineSeats_) {}   // online: the seat ticks (tickRemoteSeats) run these for every seat
+        else {
         lp.regenBuffRemain_ = std::max(0.0f, lp.regenBuffRemain_ - dt);
         lp.fastCooldownRemain_ = std::max(0.0f, lp.fastCooldownRemain_ - dt);
-        if (lp.ammoLockRemain_ > 0.0f) {                   // TnBuffLockAmmoClip: the clip does not drain while active
+        }
+        if (onlineSeats_) {}
+        else if (lp.ammoLockRemain_ > 0.0f) {                   // TnBuffLockAmmoClip: the clip does not drain while active
             lp.ammoLockRemain_ = std::max(0.0f, lp.ammoLockRemain_ - dt);
             lp.weapon().ammo = std::max(lp.weapon().ammo, lockedClip_);
         } else lockedClip_ = 0;
@@ -2286,10 +2302,11 @@ void World::tickPrefix(float dt) {
         sysprof::Scope sp(sysprof::Ctrl);
         const std::vector<int> walkOut = barrierIgnoreFor(localPlayer_);   // a barrier that spawned around the player: walk out
         CollisionWorld::IgnoreDynamicScope walk(walkOut.empty() ? nullptr : &walkOut);
-        forcedDirPre(player_.pawn(), dt, true);       // TnForcedDirVolume touches / pushes, then HardBlock (forcedDirPost)
-        if (onlineSeats_) runLocalSeat(dt);           // online: the local seat through the wire path (the decoded command)
-        else player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
-        forcedDirPost(player_.pawn());
+        if (!onlineSeats_) {   // online: the local seat moves with every other seat (the participants' pool), in match player order
+            forcedDirPre(player_.pawn(), dt, true);       // TnForcedDirVolume touches / pushes, then HardBlock (forcedDirPost)
+            player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+            forcedDirPost(player_.pawn());
+        }
     }
     prefixMark(10);
     if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
@@ -2333,14 +2350,25 @@ void World::stepRemainder(float dt) {
         const bool prof = TickProf::on();
         if (prof) animMs.assign(opponents_.size(), 0.0);
         static std::vector<std::vector<int>> walkOut;   // per participant: barrier sets it walks out of (built serially, read by its task)
-        walkOut.assign(opponents_.size(), {});
+        const bool localTask = onlineSeats_ && !localDead_;   // online: the local seat moves here, like every other seat
+        walkOut.assign(opponents_.size() + (localTask ? 1 : 0), {});
         bool anyWalkOut = false;
         for (const BarrierState& br : barriers_) anyWalkOut |= br.alive && !br.passThrough.empty();
         if (anyWalkOut) for (size_t i = 0; i < opponents_.size(); ++i) walkOut[i] = barrierIgnoreFor(opponents_[i]->matchPlayer());
-        core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
+        if (anyWalkOut && localTask) walkOut[opponents_.size()] = barrierIgnoreFor(localPlayer_);
+        core::WorkerPool::get().run((int)walkOut.size(), [&](int i) {
+            if ((size_t)i == opponents_.size()) {   // the online local seat: the decoded command's intent
+                Character& lp = player_.pawn();
+                CollisionWorld::IgnoreDynamicScope walk(walkOut[(size_t)i].empty() ? nullptr : &walkOut[(size_t)i]);
+                forcedDirPre(lp, dt, true);
+                CharacterMovement::update(lp, localSeatIntent_, dt, col);
+                forcedDirPost(lp);
+                lp.updateAnimation(dt);
+                return;
+            }
             MatchOpponent* o = opponents_[(size_t)i];
             CollisionWorld::IgnoreDynamicScope walk(walkOut[(size_t)i].empty() ? nullptr : &walkOut[(size_t)i]);
-            forcedDirPre(o->pawn(), dt, false);
+            forcedDirPre(o->pawn(), dt, seatHuman(o->matchPlayer()));   // a human seat is a player (onlyPlayers volumes)
             o->simulateMovement(dt, col);
             forcedDirPost(o->pawn());
             const double a0 = prof ? profNowMs() : 0.0;
@@ -2348,6 +2376,10 @@ void World::stepRemainder(float dt) {
             if (prof) animMs[(size_t)i] = profNowMs() - a0;
         });
         if (prof) { double sum = 0.0; for (double m : animMs) sum += m; tickProfAdd(5, sum); }
+        if (localTask) {   // the edges are consumed; the presentation-yaw reference for the frames until the next step
+            localSeatIntent_.wantJump = false; localSeatIntent_.wantDash = false; localSeatIntent_.dodgeDir = 0; localSeatIntent_.hoverRequest = false;
+            player_.controller().presentationStep(localSeatIntent_.faceYaw, dt);
+        }
     }
     { TickTimer tt(6); tickParticipantWeapons(dt); }
     for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
@@ -2370,7 +2402,7 @@ void World::stepRemainder(float dt) {
     static const char* aimPitchEnv = std::getenv("WFC_AIMPITCH");
     if (const char* ap = aimPitchEnv)     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
-    { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }
+    if (!(onlineSeats_ && !localDead_)) { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }   // online: in the pool
     drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
@@ -2581,7 +2613,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
     // GameInfo.Login: the controller is created at FindPlayerStart (team start of the initial cluster) and spectates
     // from there until the match spawns its pawn [HIGH]. The (not yet existing) pawn is parked at rest at that start.
-    int ls = match_.loginStart(localPlayer_);
+    int ls = seatOrdered_ ? match_.loginStartPeek(localPlayer_) : match_.loginStart(localPlayer_);   // online: no round-robin advance
     if (ls >= 0) {
         const Match::Start& st = match_.starts()[(size_t)ls];
         Character& pc = player_.pawn();
@@ -3036,12 +3068,15 @@ bool World::launchMatch(const MatchLaunch& l) {
     resetForNewLevel();
     clearMatchActors();   // the previous match's projectiles and ability actors go with it (a fresh level in the original)
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
+    if (seatOrdered_ || !l.humans.empty()) clearAllParticipants();   // online seat order: every peer builds the same numbering from scratch
+    seatOrdered_ = !l.humans.empty();
     ++cacheGen_;    // from here on, what this match loads or reuses is stamped; the rest is evicted after the roster loads
     awards_.setXpScale(1.0f);
     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
         const char* sd = std::getenv("WFC_SEED");
         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
-        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.seed != 0;   // online: the local seat through the wire path
+        if (l.online && l.seed) match_.seedRandom(l.seed * 2246822519u + 3u);   // the Match RNG too (it never restarted between matches)
+        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch; never from the seed)
         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
@@ -3051,7 +3086,28 @@ bool World::launchMatch(const MatchLaunch& l) {
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
     simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0; remoteQueue_.clear(); remoteGrenades_.clear();
-    for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
+    if (!l.humans.empty()) {
+        // Online: every human in the host's seat order on every peer. The local player was added first (startLocalMatch); the others
+        // join in seat order with their exact teams, then the participants are permuted so match player i = seat i.
+        const int ls = std::clamp(l.localSeat, 0, (int)l.humans.size() - 1);
+        {
+            MatchPlayer& me = match_.playerMutable(localPlayer_);
+            me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
+            if (match_.settings().teamGame) me.team = l.humans[(size_t)ls].team;
+        }
+        std::vector<int> order(l.humans.size(), -1);
+        order[(size_t)ls] = localPlayer_;
+        for (size_t i = 0; i < l.humans.size(); ++i) if ((int)i != ls) order[i] = addRemoteParticipant(l.humans[i], true);
+        match_.reorderPlayers(order);
+        std::vector<int> newOf(order.size());
+        for (size_t i = 0; i < order.size(); ++i) newOf[(size_t)order[i]] = (int)i;
+        localPlayer_ = newOf[(size_t)localPlayer_];
+        for (MatchOpponent* o : opponents_) o->setMatchPlayer(newOf[(size_t)o->matchPlayer()]);
+        rebuildOppIndex();
+        remoteIdle_.assign(match_.players().size(), 0.0f);
+        LOG_INFO("session: %zu humans in the host's seat order, this machine at seat %d", l.humans.size(), ls);
+    } else
+        for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     evictUnusedAssets();
@@ -3227,8 +3283,9 @@ void World::removeBots() {
 int World::addBots(const BotLaunch& launch) {
     // Per-faction counts (team modes) become friendly / enemy relative to the human's team (team 0 Autobots, 1 Decepticons).
     BotLaunch b = launch;
-    if (match_.settings().teamGame && (b.autobot >= 0 || b.decepticon >= 0) && localPlayer_ >= 0) {
-        const bool humanAutobot = match_.players()[(size_t)localPlayer_].team != 1;
+    const int refPlayer = seatOrdered_ ? 0 : localPlayer_;   // online: seat 0 (the same reference on every peer)
+    if (match_.settings().teamGame && (b.autobot >= 0 || b.decepticon >= 0) && refPlayer >= 0) {
+        const bool humanAutobot = match_.players()[(size_t)refPlayer].team != 1;
         const int a = std::max(0, b.autobot), d = std::max(0, b.decepticon);
         b.friendly = humanAutobot ? a : d; b.enemy = humanAutobot ? d : a;
     }
@@ -3239,7 +3296,7 @@ int World::addBots(const BotLaunch& launch) {
     std::vector<std::string> taken;
     int humans = 0;
     for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot; }
-    const int humanTeam = localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 0;
+    const int humanTeam = refPlayer >= 0 ? match_.players()[(size_t)refPlayer].team : 0;
     static unsigned matchSeed = 0x5eed;
     // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
     // with WFC_SEED every launch uses the same identity seed (no chaining from earlier matches), so a launch replays exactly
@@ -3285,8 +3342,8 @@ int World::addBots(const BotLaunch& launch) {
 }
 
 // ---- Online sessions: Remote participants and slot handovers (see World.h RemoteSeat / SlotSwap) ----
-int World::addRemoteParticipant(const RemoteSeat& r) {
-    const int p = match_.addPlayer(r.name, r.team);
+int World::addRemoteParticipant(const RemoteSeat& r, bool exactTeam) {
+    const int p = exactTeam ? match_.addPlayerExact(r.name, r.team) : match_.addPlayer(r.name, r.team);
     {
         MatchPlayer& mp = match_.playerMutable(p);
         mp.kind = ParticipantKind::Remote;
@@ -3360,11 +3417,14 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
         in.faceYaw = c.aimYaw; in.viewPitch = c.aimPitch;
         in.wantJump = down(platform::Button::Jump);   // an edge, as the direct path's wantJumpLatched_
         in.wantBoost = held(platform::Button::FineAim);          // RightMouseButton = "ToggleFineAim | Boost" (the original's move flag 512)
+        if (seatFineAim_.size() <= (size_t)p) seatFineAim_.resize((size_t)p + 1, 0);
+        seatFineAim_[(size_t)p] = in.wantBoost ? 1 : 0;
         in.wantDash = down(platform::Button::Dash);
         in.ascend = held(platform::Button::Ascend); in.descend = held(platform::Button::Descend);
         in.hoverRequest = (c.buttons & kRemoteBitHover) != 0;     // the original's move flag 1024
         if (!s.spawned) { s.intent = MoveIntent{}; return; }
         Character& pc = *s.pc;
+        pc.setAimPitch(c.aimPitch);
         if (pc.inputLocked()) { s.intent = MoveIntent{}; return; }   // TnBuffDecoyTrap: no movement / buttons
         const bool robot = pc.moveForm() == Form::Robot && !pc.isTransforming();
         if (pc.moveForm() == Form::Robot) in.wantDash = false;   // robot form: Dash = Ability0 (the vehicle special move only in vehicle form)
@@ -3530,7 +3590,26 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
     pc.exposeSelf();
     if (consume) w.onFired();
     pc.notifyFired();
+    if (p == localPlayer_) player_.controller().onLocalShot(w.def ? w.def->id : nullptr);   // the local seat: camera recoil + shake
     const core::Vec3 eye = botEye(pc), d = core::normalize(aimPt - eye);   // from the eye toward the aim point
+    if (pc.moveForm() == Form::Vehicle && !pc.isTransforming() && &w == pc.vehicleWeapon()) {
+        // The vehicle weapon's CurrentSocket: WeaponSocket_Primary, alternating with _Primary2 per shot where both are authored [CONF RE
+        // pass 5 9g]; the posed bone x socket (sim state), else the actor + 1 m.
+        const bool two = w.alternatesMuzzle() && pc.chassis().vehicleWeapon2.valid;
+        if (!two) w.muzzleSocket = 0;
+        const int sock = w.muzzleSocket;
+        core::Vec3 origin = pc.actorLocation() + core::Vec3{0, 1.0f, 0};
+        const SocketDef& vs = sock == 1 ? pc.chassis().vehicleWeapon2 : pc.chassis().vehicleWeapon;
+        core::Mat4 bm;
+        if (vs.valid && pc.form() == Form::Vehicle && pc.boneWorld(vs.bone, bm)) { const core::Mat4 m = bm * vs.local; origin = core::Vec3{m.m[12], m.m[13], m.m[14]}; }
+        if (p == localPlayer_) noteVehicleShot(sock, origin);   // the local muzzle-flash presentation
+        if (two) w.muzzleSocket = (sock + 1) % 2;
+        if (w.projectile()) {   // RealStartLoc = the socket, aimed at the aim point
+            spawnProjectile(origin, core::normalize(aimPt - origin) * w.projSpeed, w, p);
+            participantShots_.push_back({p, w.def ? w.def->id : "", origin, aimPt, false, -1});
+            return;
+        }
+    }
     if (w.beam()) { participantBeam(p, w, eye, d); return; }
     if (w.projectile()) {
         const core::Vec3 muzzle = eye + d * 1.5f;   // the bots' muzzle stand-in (no posed held weapon on participants)
@@ -3554,6 +3633,7 @@ void World::runLocalSeat(float dt) {
     pc.setAimPitch(localSeatAimPitch_);
     pc.tickAbilities(dt); pc.tickSpreadModifier(dt); pc.tickWeaponSwitch(dt); pc.weapon().tick(dt); pc.ability().tick(dt);
     if (pc.moveForm() == Form::Vehicle && !pc.isTransforming()) if (Weapon* vw = pc.vehicleWeapon()) vw->tick(dt);
+    player_.controller().presentationStep(localSeatIntent_.faceYaw, dt);   // the per-frame draw yaw between steps
 }
 
 RemoteCommand World::encodeLocalCommand() {
@@ -3590,15 +3670,21 @@ core::Vec3 World::seatEye(int p) const {
 }
 
 void World::tickRemoteSeats(float dt) {
-    for (MatchOpponent* o : opponents_) {
-        const int p = o->matchPlayer();
-        if (!o->spawned() || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) continue;
-        Character& pc = o->pawn();
+    for (size_t i = 0; i < match_.players().size(); ++i) {   // by match player index (the same order on every peer)
+        const int p = (int)i;
+        const bool local = p == localPlayer_;
+        if (local ? (!onlineSeats_ || localDead_) : match_.players()[i].kind != ParticipantKind::Remote) continue;
+        Character* seat = local ? &player_.pawn() : nullptr;
+        if (!local) { const MatchOpponent* o = (size_t)p < oppByPlayer_.size() ? oppByPlayer_[(size_t)p] : nullptr; if (!o || !o->spawned()) continue; seat = participantPawnMutable(p); }
+        if (!seat) continue;
+        Character& pc = *seat;
         pc.regenBuffRemain_ = std::max(0.0f, pc.regenBuffRemain_ - dt);
         pc.fastCooldownRemain_ = std::max(0.0f, pc.fastCooldownRemain_ - dt);
         pc.ammoLockRemain_ = std::max(0.0f, pc.ammoLockRemain_ - dt);
         pc.tickAbilities(dt);
         tickMeleeFor(pc, p, dt);   // the melee sweeps / timer (the bots' pass and the local tick run their own)
+        tickSeatDrain(pc, p, dt);
+        pc.ability().tick(dt);     // the legacy single-ability timer (the local path ticks it every step)
         if (pc.shockwaveDelay_ >= 0.0f && (pc.shockwaveDelay_ -= dt) < 0.0f) applyShockwave(pc, p);   // Delay 0.25 -> Shockwave()
         if (pc.moveForm() == Form::Robot) { pc.tickSpreadModifier(dt); pc.tickWeaponSwitch(dt); pc.weapon().tick(dt); }
         else if (Weapon* vw = pc.vehicleWeapon()) vw->tick(dt);
@@ -3611,12 +3697,47 @@ void World::tickRemoteSeats(float dt) {
     remoteGrenades_.erase(std::remove_if(remoteGrenades_.begin(), remoteGrenades_.end(), [](const RemoteGrenade& g) { return g.delay < 0.0f; }), remoteGrenades_.end());
 }
 
+void World::tickSeatDrain(Character& pc, int p, float dt) {
+    // TnBuffDrainSource (the local path's tick, per seat): every enemy pawn within 2000 UU with line of sight takes 25 x dt, the caster
+    // heals 35 x dt per target; targets by match player index.
+    if (pc.drainRemain_ <= 0.0f) return;
+    pc.drainRemain_ = std::max(0.0f, pc.drainRemain_ - dt);
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    int targets = 0;
+    if (matchActive_)
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            const Character* t = (int)q == p ? nullptr : participantPawn((int)q);
+            if (!t || match_.sameTeam((int)q, p) || core::length(t->actorLocation() - pc.actorLocation()) > 20.0f) continue;
+            float tt;
+            if (line && line->segmentHit(pc.actorLocation(), t->actorLocation(), tt)) continue;
+            ++targets;
+            const core::Vec3 at = t->actorLocation();
+            applyMatchDamage((int)q, p, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
+            if (p == localPlayer_) onDrainVictimTick(at);   // [Systems M08i] presentation
+        }
+    if (targets > 0) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
+    if (p == localPlayer_) onDrainTick(targets);
+}
+
+void World::clearAllParticipants() {
+    // Every participant leaves (the online seat order rebuilds the numbering identically on every peer).
+    for (MatchOpponent* o : opponents_) o->destroy();
+    opponents_.clear();
+    rebuildOppIndex();
+    for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
+    match_.truncatePlayers(0);
+    localPlayer_ = -1;
+    bots_.clear(); smart_.clear(); anySmart_ = false; remoteIdle_.clear();
+}
+
 uint64_t World::simStateHash() const {
     uint64_t h = 1469598103934665603ULL;
     auto mix = [&](const void* q, size_t n) { const unsigned char* b = (const unsigned char*)q; for (size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ULL; } };
     auto pawn = [&](const Character& c) { const core::Vec3 p = c.position(), v = c.velocity(); const float hp = c.health().current, y = c.yaw(); mix(&p, sizeof p); mix(&v, sizeof v); mix(&hp, sizeof hp); mix(&y, sizeof y); };
-    if (!localDead_) pawn(player_.pawn());
-    for (const MatchOpponent* o : opponents_) if (o->spawned()) pawn(o->pawn());
+    for (size_t i = 0; i < match_.players().size(); ++i) if (const Character* c = participantPawn((int)i)) pawn(*c);   // by match player index
+    // The bots' decision state (their RNGs, targets, aim): a divergence shows here long before it moves a pawn.
+    for (const BotBrain& b : bots_) { mix(&b.player, sizeof b.player); mix(&b.rng, sizeof b.rng); mix(&b.target, sizeof b.target); mix(&b.yaw, sizeof b.yaw); }
+    for (const SmartBot& sb : smart_) mix(&sb.rng, sizeof sb.rng);
     const uint32_t r = core::simRandState(); mix(&r, sizeof r);
     return h;
 }
@@ -3889,18 +4010,37 @@ void World::tickMatch(float dt) {
         mapState_.setKillZ(killZ_);
         std::vector<MapState::ObjPawn> pawns;
         // Carriers: Transform to vehicle drops the heavy weapon (TnPawn.Transform -> DropHeavyWeapons) [CONF].
+        if (seatOrdered_) {   // online: by match player index
+            for (size_t q = 0; q < match_.players().size(); ++q) {
+                const Character* c = participantPawn((int)q);
+                if (!c) continue;
+                if (c->isTransforming() || c->form() == Form::Vehicle) mapState_.dropCarriedBy((int)q, c->actorLocation());
+                if ((int)q == localPlayer_ && pc.heavyDropRequested_) mapState_.dropCarriedBy((int)q, c->actorLocation());
+            }
+            pc.heavyDropRequested_ = false;
+        } else {
         if (!localDead_ && (pc.isTransforming() || pc.form() == Form::Vehicle)) mapState_.dropCarriedBy(localPlayer_, pc.actorLocation());
         if (!localDead_ && pc.heavyDropRequested_) mapState_.dropCarriedBy(localPlayer_, pc.actorLocation());
         pc.heavyDropRequested_ = false;
         for (MatchOpponent* o : opponents_)
             if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
+        }
         auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming() && !c.isMeleeing(); };
         const bool localPickupCtl = player_.controller().consumePickupRequest();
         const bool localPickup = onlineSeats_ ? localSeatPickup_ : localPickupCtl;   // online: the seat command's press
         localPickupLatch_ = localPickup;   // the decoy trap's pickup path reads it (next ability-actor tick)
+        if (seatOrdered_) {   // online: by match player index (pickup contention resolves alike on every peer)
+            for (size_t q = 0; q < match_.players().size(); ++q) {
+                const Character* c = participantPawn((int)q);
+                if (!c) continue;
+                const MatchOpponent* o = (int)q == localPlayer_ ? nullptr : opponentByPlayer((int)q);
+                pawns.push_back({(int)q, o ? o->team() : match_.players()[q].team, c->actorLocation(), true, robotForm(*c), o ? o->pressesPickup : localPickup});
+            }
+        } else {
         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc), localPickup});
         for (MatchOpponent* o : opponents_)
             if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn()), o->pressesPickup});
+        }
         MapState::ObjectiveScoring sc;
         mapState_.tickObjectives(dt, pawns, sc);
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
@@ -3928,6 +4068,14 @@ void World::tickMatch(float dt) {
         // HurtRadius (bomb detonation, AOE): every match pawn within the radius in sight of the bomb (VisibleCollidingActors).
         for (const auto& rd : sc.radiusDamage) {
             LOG_INFO("match: HurtRadius %.0f within %.0f m (%s)", rd.damage, rd.radius, rd.damageType.c_str());
+            if (seatOrdered_) {   // online: by match player index
+                for (size_t q = 0; q < match_.players().size(); ++q) {
+                    const Character* c = participantPawn((int)q);
+                    if (c && core::length(c->position() - rd.pos) <= rd.radius && radiusVisible(rd.pos, c->actorLocation()))
+                        { noteHitDir(c->actorLocation() - rd.pos); applyMatchDamage((int)q, rd.instigator, rd.damage, true, rd.damageType); }
+                }
+                continue;
+            }
             if (!localDead_ && core::length(pc.actorLocation() - rd.pos) <= rd.radius && radiusVisible(rd.pos, pc.actorLocation()))
                 { noteHitDir(pc.actorLocation() - rd.pos); applyMatchDamage(localPlayer_, rd.instigator, rd.damage, true, rd.damageType); }
             for (MatchOpponent* o : opponents_)
@@ -5002,6 +5150,14 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
         return d >= radius ? 0.0f : 1.0f - d / std::max(radius, 1e-3f);
     };
     auto colR = [](const Character& c) { return c.cylinderRadius(c.moveForm()); };
+    if (seatOrdered_ && matchActive_) {   // online: by match player index
+        for (size_t q = 0; q < match_.players().size(); ++q) {
+            const Character* c = participantPawn((int)q);
+            if (!c) continue;
+            const float k = falloff(c->actorLocation(), colR(*c));
+            if (k > 0.0f && radiusVisible(at, c->actorLocation())) { noteHitDir(c->actorLocation() - at); applyMatchDamage((int)q, instigator, damage * k, false, type); }
+        }
+    } else {
     if (matchActive_ && !localDead_) {
         float k = falloff(player_.pawn().actorLocation(), colR(player_.pawn()));
         if (k > 0.0f && radiusVisible(at, player_.pawn().actorLocation())) { noteHitDir(player_.pawn().actorLocation() - at); applyMatchDamage(localPlayer_, instigator, damage * k, false, type); }
@@ -5010,6 +5166,7 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
         if (!o->spawned()) continue;
         float k = falloff(o->pawn().actorLocation(), colR(o->pawn()));
         if (k > 0.0f && radiusVisible(at, o->pawn().actorLocation())) { noteHitDir(o->pawn().actorLocation() - at); applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type); }
+    }
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) {
@@ -5079,6 +5236,13 @@ void World::tickProjectiles(float dt) {
                 float tw;
                 bool hitPawn = false;
                 core::Vec3 seg = nx - p.pos; float sl = core::length(seg);
+                if (sl > 1e-5f && seatOrdered_) {   // online: every pawn but the instigator's, by match player index
+                    for (size_t q = 0; q < match_.players().size() && !hitPawn; ++q) {
+                        const Character* c = (int)q == p.instigator ? nullptr : participantPawn((int)q);
+                        float th;
+                        if (c && MatchOpponent::pawnRayHit(*c, p.pos, seg * (1.0f / sl), sl, th)) hitPawn = true;
+                    }
+                } else
                 if (sl > 1e-5f)
                     for (MatchOpponent* o : opponents_) {
                         float th;
@@ -5131,6 +5295,13 @@ void World::tickProjectiles(float dt) {
         if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; worldHit = false; } }
         if (len > 1e-5f) {
             core::Vec3 dir = d * (1.0f / len);
+            if (seatOrdered_) {   // online: every pawn but the instigator's, one test, by match player index
+                for (size_t q = 0; q < match_.players().size(); ++q) {
+                    const Character* c = (int)q == p.instigator ? nullptr : participantPawn((int)q);
+                    float th;
+                    if (c && MatchOpponent::pawnRayHit(*c, p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; worldHit = false; }
+                }
+            } else {
             for (MatchOpponent* o : opponents_) {
                 if (o->matchPlayer() == p.instigator) continue;
                 float th;
@@ -5143,6 +5314,7 @@ void World::tickProjectiles(float dt) {
                     core::Vec3 q = p.pos + d * (k / 8.0f);
                     if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; worldHit = false; break; }
                 }
+            }
             }
         }
         p.life -= dt;
@@ -5290,8 +5462,12 @@ void World::applyShockwave(Character& pc, int self) {
         if (core::length(dir) > 1e-4f && !(match_.settings().teamGame && match_.sameTeam(victim, self)))
             applyKnockback(victim, core::normalize(dir) * 700000.0f, "TransGame.TnDamageTypeShockwave");
     };
+    if (seatOrdered_) {   // online: by match player index
+        for (size_t q = 0; q < match_.players().size(); ++q) if (const Character* c = participantPawn((int)q)) hit((int)q, *c);
+    } else {
     for (MatchOpponent* o : opponents_) if (o->spawned()) hit(o->matchPlayer(), o->pawn());
     if (self != localPlayer_ && !localDead_) hit(localPlayer_, player_.pawn());
+    }
     for (Destructible* d : destructibles_)
         if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f && radiusVisible(at, d->position())) d->applyDamage(*this, 65.0f);
 }
@@ -5386,7 +5562,7 @@ void World::tickAbilityEffects(float dt) {
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
-    if (pc.drainRemain_ > 0.0f) {
+    if (pc.drainRemain_ > 0.0f && !onlineSeats_) {
         pc.drainRemain_ = localDead_ ? 0.0f : std::max(0.0f, pc.drainRemain_ - dt);
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
         int targets = 0;
@@ -5403,7 +5579,7 @@ void World::tickAbilityEffects(float dt) {
         if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
         if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
     }
-    tickLocalMelee(dt);
+    if (!onlineSeats_) tickLocalMelee(dt);   // online: the seat ticks
     tickHomingLock(dt);
     grenadeCooldown_ = std::max(0.0f, grenadeCooldown_ - dt);
     if (grenadeTossDelay_ >= 0.0f) {
@@ -5414,7 +5590,7 @@ void World::tickAbilityEffects(float dt) {
             releaseGrenade(gp, localPlayer_, *gb, grenadeTarget_);
         }
     }
-    if (pc.shockwaveDelay_ >= 0.0f) {
+    if (pc.shockwaveDelay_ >= 0.0f && !onlineSeats_) {
         pc.shockwaveDelay_ -= dt;
         if (pc.shockwaveDelay_ < 0.0f && !localDead_) applyShockwave(pc, localPlayer_);
     }
@@ -6344,8 +6520,15 @@ void World::tickSentry(float dt) {
                 float wall = 300.0f, tw;
                 if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
                 int hit = -1; float hd = wall;
+                if (seatOrdered_) {   // online: by match player index, the owner excluded
+                    for (size_t q = 0; q < match_.players().size(); ++q) {
+                        const Character* c = (int)q == s.owner ? nullptr : participantPawn((int)q);
+                        float th;
+                        if (c && MatchOpponent::pawnRayHit(*c, muzzle, dir, wall, th) && th < hd) { hd = th; hit = (int)q; }
+                    }
+                } else
                 for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o->matchPlayer(); } }
-                if (!localDead_ && localPlayer_ != s.owner) { float th; if (MatchOpponent::pawnRayHit(player_.pawn(), muzzle, dir, wall, th) && th < hd) { hd = th; hit = localPlayer_; } }
+                if (!seatOrdered_ && !localDead_ && localPlayer_ != s.owner) { float th; if (MatchOpponent::pawnRayHit(player_.pawn(), muzzle, dir, wall, th) && th < hd) { hd = th; hit = localPlayer_; } }
                 onSentryShot(muzzle, hit < 0 && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
                 if (hit >= 0 && !(match_.settings().teamGame && match_.sameTeam(hit, s.owner)) && hit != s.owner) {
                     const float mod = hd <= 80.0f ? 1.0f : 0.5f;   // GetRangeDamageModifier steps (1.0 to 8000 UU, else 0.5) [CONF script]
@@ -8449,7 +8632,8 @@ ParticipantSnapshot World::participantSnapshot(int player) const {
     s.health = c->health().current; s.healthMax = c->health().max;
     s.meleeing = c->isMeleeing();
     s.hovering = c->hoverState_ == 2;
-    s.fineAim = player == localPlayer_ && player_.controller().fineAiming();
+    s.fineAim = onlineSeats_ ? (player >= 0 && (size_t)player < seatFineAim_.size() && seatFineAim_[(size_t)player] != 0)   // online: the seat command
+                             : player == localPlayer_ && player_.controller().fineAiming();
     s.pos = c->position();
     // Active buffs (original class names) the kill-award rules test; instigators where the rebuild tracks them.
     auto buff = [&](bool on, const char* cls) { if (on) s.buffs.push_back({cls, -1}); };

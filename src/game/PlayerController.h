@@ -123,6 +123,9 @@ public:
     }
     // A local shot of the weapon class `weaponId` (TnWeapon<id>): the camera recoil (pitch step + FOV kick) and the per-shot shake.
     void onLocalShot(const char* weaponId);
+    // The per-step reference for the per-frame presentation yaw (draw-yaw offset until the next step): the direct path and the online
+    // local seat call it once per simulation step with the step's face yaw.
+    void presentationStep(float faceYaw, float dt);
     // TnBuffReduceRecoil (the selection's ReduceRecoil skill): x 0.35 on the pitch step, the FOV kick and RecoilTime; 1 without.
     void setRecoilScale(float s) { recoilScale_ = s; }
     int takeSpectateCycle() { const int c = specCycle_; specCycle_ = 0; return c; }   // SwitchSpectatorTarget presses since the last call

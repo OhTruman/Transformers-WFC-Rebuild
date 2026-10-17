@@ -5641,7 +5641,7 @@ void Application::runSessionTest() {
         uint64_t hs[2] = {0, 0};
         for (int peer = 0; peer < 2; ++peer) {
             game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=2", S);
-            S.localTeam = 0; S.seed = 0x5eed4321u;
+            S.localTeam = 0; S.seed = 0x5eed4321u; S.online = true;
             world_.launchMatch(S);
             const int meL = world_.localMatchPlayer();
             world_.match().selectCharacter(meL, cs);
@@ -5689,6 +5689,60 @@ void Application::runSessionTest() {
         LOG_INFO("SESSIONTEST direct vs wire: final position gap %.3f m, yaw gap %.3f deg, shot origin eye vs camera line %.3f m",
                  core::length(pos[0] - pos[1]), std::fabs(std::remainder(yawv[0] - yawv[1], 6.2831853f)) * 57.29578f, originGap);
         check(originGap >= 0.0f && core::length(pos[0] - pos[1]) < 2.0f, "direct vs wire: both paths move the local pawn alike (gaps logged)");
+    }
+    // The cross-perspective identity (Systems): A = this machine at seat 0, B = at seat 1; the same per-seat command streams and seed.
+    {
+        auto seatCmd = [](int seat, int i, int64_t tick) {
+            game::RemoteCommand c; c.tick = (uint32_t)tick;
+            using B = platform::Button;
+            auto at = [&](int k, B b) { if (i == k) c.pressed |= 1u << (int)b; };
+            auto hold = [&](int a, int z, B b) { if (i >= a && i < z) c.buttons |= 1u << (int)b; };
+            c.aimPitch = 0.2f * std::sin((float)i * 0.01f * (seat ? 1.3f : 1.0f));
+            if (seat == 0) { c.moveForward = ((i / 150) % 2) ? 127 : 40; c.aimYaw = std::remainder((float)(i % 2048) * (6.2831853f / 2048.0f), 6.2831853f);
+                             hold(600, 760, B::Fire); at(500, B::Jump); at(650, B::Dash); at(800, B::Transform); hold(900, 1000, B::Fire);
+                             at(1100, B::Transform); at(1300, B::Grenade); hold(1400, 1450, B::Fire); }
+            else { c.moveRight = ((i / 100) % 2) ? 127 : -127; c.moveForward = 60; c.aimYaw = std::remainder(3.0f - (float)(i % 4096) * (6.2831853f / 4096.0f), 6.2831853f);
+                   hold(400, 520, B::Fire); at(700, B::Melee); at(620, B::Ability1); at(900, B::Transform); at(1000, B::Dash); hold(1020, 1080, B::Fire);
+                   at(1200, B::Transform); at(1350, B::NextWeapon); hold(1420, 1500, B::Fire); }
+            return c;
+        };
+        uint64_t hs[2] = {0, 0}; int seatOk = 0;
+        std::vector<uint64_t> per[2]; std::vector<std::string> st[2];   // per-step hashes and seat states (the first divergence)
+        for (int ls = 0; ls < 2; ++ls) {
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=1", S);
+            S.seed = 0x5eedab01u; S.online = true; S.localTeam = ls == 0 ? 0 : 1;
+            S.humans = {seat("Seat0", 0, "WFC-AB-0"), seat("Seat1", 1, "WFC-AB-1")}; S.localSeat = ls;
+            world_.launchMatch(S);
+            world_.match().selectCharacter(world_.localMatchPlayer(), S.humans[(size_t)ls].selection);
+            seatOk += world_.localMatchPlayer() == ls && world_.match().players()[0].sessionMember == "WFC-AB-0" && world_.match().players()[1].sessionMember == "WFC-AB-1";
+            for (int i = 0; i < 1600; ++i) {
+                for (int st = 0; st < 2; ++st) world_.applyRemoteCommand(st, seatCmd(st, i, world_.simTick() + 1));   // ascending match player
+                world_.handleInput(idle, dt); world_.tick(dt);
+                per[ls].push_back(world_.simStateHash());
+                std::string row;
+                for (size_t pp = 0; pp < world_.match().players().size(); ++pp) {
+                    const game::Character* c = world_.participantPawn((int)pp); char b[320];
+                    if (c) std::snprintf(b, sizeof b, " p%zu (%.4f %.4f %.4f) v(%.5f %.5f %.5f) y%.4f h%.3f", pp, c->position().x, c->position().y, c->position().z,
+                                         c->velocity().x, c->velocity().y, c->velocity().z, c->yaw(), c->health().current);
+                    else std::snprintf(b, sizeof b, " p%zu -", pp);
+                    row += b;
+                }
+                { char b[48]; std::snprintf(b, sizeof b, " rand %08x", core::simRandState()); row += b; }
+                st[ls].push_back(row);
+            }
+            hs[ls] = world_.simStateHash();
+        }
+        for (size_t i = 0; i < per[0].size() && i < per[1].size(); ++i)
+            if (per[0][i] != per[1][i]) {
+                LOG_INFO("SESSIONTEST cross-perspective: first divergent step %zu", i);
+                LOG_INFO("SESSIONTEST   A:%s", st[0][i].c_str());
+                LOG_INFO("SESSIONTEST   B:%s", st[1][i].c_str());
+                if (i > 0) { LOG_INFO("SESSIONTEST   A prev:%s", st[0][i - 1].c_str()); LOG_INFO("SESSIONTEST   B prev:%s", st[1][i - 1].c_str()); }
+                break;
+            }
+        LOG_INFO("SESSIONTEST cross-perspective hashes %016llx %016llx", (unsigned long long)hs[0], (unsigned long long)hs[1]);
+        check(seatOk == 2, "seat order: match player i = seat i on both perspectives (local at seat 0 / seat 1)");
+        check(hs[0] == hs[1] && hs[0] != 0, "cross-perspective identity: local at seat 0 vs seat 1, the same seat streams -> equal state at step 1600");
     }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }

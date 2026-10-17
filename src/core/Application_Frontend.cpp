@@ -109,6 +109,22 @@ template <class P> void fillRemote(const P& mp, frontend::MatchValues::Player& p
 }
 // Every human slot except this player's, in the host's order: a Remote participant (its character arrives in the match).
 void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+    // Every human in the host's seat order, this machine's included (game::MatchLaunch::humans + localSeat): one numbering on every peer.
+    for (const frontend::SessionSlot& sl : m.onlineSlots) {
+        if (sl.kind != frontend::SessionSlot::Kind::Human) continue;
+        game::RemoteSeat h;
+        h.team = sl.team;
+        h.member = sl.member.fingerprint;
+        for (const auto& n : m.onlineNames) if (n.first == sl.member) h.name = n.second;
+        if (h.name.empty()) h.name = "Player";
+        if (sl.member == m.self) gl.localSeat = (int)gl.humans.size();
+        gl.humans.push_back(h);
+    }
+    if (!gl.humans.empty()) {   // the seat order replaces the remotes list
+        gl.seed = m.seed; gl.online = true;
+        frontend::FlowTrace::emit("online.launchHumans", {{"humans", std::to_string(gl.humans.size())}, {"localSeat", std::to_string(gl.localSeat)}});
+        return;
+    }
     for (const frontend::SessionSlot& sl : m.onlineSlots) {
         if (sl.kind != frontend::SessionSlot::Kind::Human || sl.member == m.self) continue;
         game::RemoteSeat r;
@@ -119,6 +135,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
         gl.remotes.push_back(r);
     }
     gl.seed = m.seed;   // online: the host's match seed (0 offline)
+    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)
     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
 }
 template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {

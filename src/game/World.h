@@ -80,6 +80,9 @@ struct MatchLaunch {
     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
     std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
     uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
+    std::vector<RemoteSeat> humans;    // online: EVERY human in the host's seat order (this machine's included); empty offline
+    int localSeat = -1;                // online: this machine's index in humans (match player localSeat on every peer)
+    bool online = false;               // a session launch (from the launch record): every human through the wire path; offline false
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
 
@@ -851,7 +854,7 @@ public:
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
     // Online sessions (see RemoteSeat / SlotSwap): a Remote participant, a queued slot handover, the remote command clock.
-    int addRemoteParticipant(const RemoteSeat& r);
+    int addRemoteParticipant(const RemoteSeat& r, bool exactTeam = false);
     bool applySlotSwap(const SlotSwap& s);
     void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
     int64_t simTick() const { return simTick_; }
@@ -1198,7 +1201,12 @@ private:
     bool remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
     void remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume = true);
     void runLocalSeat(float dt);
-    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.seed set, or the test override)
+    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
+    bool seatOrdered_ = false;          // the running match numbers its humans by the host's seat order (the next launch clears all)
+    void clearAllParticipants();
+    std::vector<char> seatFineAim_;     // online: each seat's last command FineAim bit (the snapshot's fine-aim flag)
+    void tickSeatDrain(Character& pc, int p, float dt);   // TnBuffDrainSource for a seat (remote, or the online local seat)
+    bool seatHuman(int p) const { return p >= 0 && (size_t)p < match_.players().size() && match_.players()[(size_t)p].kind != ParticipantKind::Bot; }
     int localWireOverride_ = -1;        // tests: -1 auto, 0 direct, 1 wire
     MoveIntent localSeatIntent_; bool localSeatPickup_ = false; float localSeatAimPitch_ = 0.0f;
     core::Vec3 seatAimPoint(const Character& pc, const RemoteCommand& c, float range) const;
