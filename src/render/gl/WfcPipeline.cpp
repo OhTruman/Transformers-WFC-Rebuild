@@ -2683,14 +2683,34 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "float wfcX6Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
               "float wfcX6Noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n"
               "    return mix(mix(wfcX6Hash(i), wfcX6Hash(i + vec2(1.0, 0.0)), f.x), mix(wfcX6Hash(i + vec2(0.0, 1.0)), wfcX6Hash(i + vec2(1.0, 1.0)), f.x), f.y); }\n"
+              // (round 5) the lamps in view: pos + radius, colour + falloff (ranked as X3's halo lamps)
+              "uniform vec4 uRtX6L[4]; uniform vec4 uRtX6C[4]; uniform int uRtX6N;\n"
               "float wfcX6Wet() {\n"
-              "    if (uRtX6.y <= 0.0) return 0.0;\n"
+              "    if (uRtX6.y <= 0.0 || uRtX6N <= 0) return 0.0;\n"
+              // placed by the lamps (round 5): the film lies within a lamp's reach (horizontal distance / radius), the
+              // noise only breaks it into patches - damp ground away from any light has nothing bright to show
+              "    float near = 0.0;\n"
+              "    for (int i = 0; i < 4; ++i) { if (i >= uRtX6N) break;\n"
+              "        near = max(near, 1.0 - smoothstep(0.3, 0.9, length((uRtX6L[i].xyz - vPos).xz) / max(uRtX6L[i].w, 0.01))); }\n"
+              "    if (near <= 0.0) return 0.0;\n"
               "    vec2 q = vPos.xz * uRtX6.z;\n"
               "    float pn = wfcX6Noise(q) * 0.7 + wfcX6Noise(q * 3.7 + 17.0) * 0.3;\n"
-              // (round 3: the damp amount sets the patches' coverage; inside a patch the film is whole - round 1's amount x
-              // mask left the ground half rough, a reflection blurred over ~5 mips: darker blotches, no sheen)
+              // (round 3: the damp amount sets the patches' coverage; inside a patch the film is whole)
               "    float t0 = mix(0.78, 0.38, uRtX6.y);\n"
-              "    return smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(t0, t0 + 0.08, pn);\n"
+              "    return near * smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(t0, t0 + 0.08, pn);\n"
+              "}\n"
+              // the lamps' highlights on the film: a tight lobe (exponent 400) of each lamp's calibrated colour x its
+              // falloff, water Fresnel, x x6sheen - the sheen is the lamps' reflection, not the surroundings'
+              "vec3 wfcX6LampSheen(float wet) {\n"
+              "    if (wet <= 0.0) return vec3(0.0);\n"
+              "    vec3 N = normalize(vNrm), V = normalize(uCamPos - vPos), R = reflect(-V, N), s = vec3(0.0);\n"
+              "    float F = 0.02 + 0.98 * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 5.0);\n"
+              "    for (int i = 0; i < 4; ++i) { if (i >= uRtX6N) break;\n"
+              "        vec3 d = uRtX6L[i].xyz - vPos; float r = max(uRtX6L[i].w, 0.01), x2 = dot(d, d) / (r * r);\n"
+              "        if (x2 >= 1.0) continue;\n"
+              "        float att = pow(clamp(1.0 - x2, 0.0, 1.0), max(uRtX6C[i].w, 0.5));\n"
+              "        s += uRtX6C[i].rgb * att * pow(max(dot(R, d * inversesqrt(max(dot(d, d), 1e-6))), 0.0), 400.0) * 30.0; }\n"
+              "    return s * F * wet * uRtX6.w;\n"
               "}\n" : "") +
               "vec3 wfcRtGlossMix(vec3 c, float sp, vec3 spec, vec3 n, vec3 V) {\n"
               "    if (uRtReflOn == 0 || uRtGloss <= 0.0) return c;\n"
@@ -2706,6 +2726,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               // the lit floor with its reflection, and in dark interiors that reads as darker, flatter floors.
               std::string(x6Build ?
               "    float wet = wfcX6Wet(), xg = max(uRtX6.x - gate, 0.0);\n"
+              "    c += wfcX6LampSheen(wet);\n"
               "    if (gate <= 0.0 && xg <= 0.0 && wet <= 0.0) return c;\n" : "    if (gate <= 0.0) return c;\n") +
               "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
               "    if (p.w <= 0.0) return c;\n"
@@ -4004,7 +4025,40 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                     static const struct { const char* map; float damp; } kMapX6[] = {{"MP_KON_Molten", 0.2f}};
                     if (!rtdef::envSet("WFC_X6_DAMP"))
                         for (const auto& mx : kMapX6) if (dataDir_.find(mx.map) != std::string::npos) x6Damp_ = mx.damp;
+                    // (round 5) the lamps in view, ranked as X3's halo lamps (brightness x (radius / distance)^2, within
+                    // 60 m, calibrated colours): the damp film lies near them and shows their highlights
+                    std::vector<std::pair<float, int>> rank;
+                    for (size_t li = 0; li < lights_.size(); ++li) {
+                        const Light& L = lights_[li];
+                        if ((L.type != 0 && L.type != 1) || !L.enabled || L.radius <= 0.0f) continue;
+                        const float dist = core::length(L.pos - camPos_);
+                        if (dist > 60.0f + L.radius) continue;
+                        bool out = false;
+                        for (int f = 0; f < 6 && !out; ++f) {
+                            const float* pl = frustum_[f];
+                            const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+                            if (len > 0.0f && pl[0] * L.pos.x + pl[1] * L.pos.y + pl[2] * L.pos.z + pl[3] < -L.radius * len) out = true;
+                        }
+                        if (out) continue;
+                        const float lum = 0.2126f * L.color.x + 0.7152f * L.color.y + 0.0722f * L.color.z;
+                        const float cov = L.radius / std::max(dist, 1.0f);
+                        rank.push_back({-lum * cov * cov, (int)li});
+                    }
+                    std::sort(rank.begin(), rank.end());
+                    x6N_ = 0;
+                    for (const auto& rk : rank) {
+                        if (x6N_ >= 4) break;
+                        const Light& L = lights_[(size_t)rk.second];
+                        core::Vec3 lc = L.color;
+                        auto cal = giLightCal_.find(rk.second);
+                        if (cal != giLightCal_.end()) lc = {cal->second[0], cal->second[1], cal->second[2]};
+                        float* p = x6L_[x6N_]; p[0] = L.pos.x; p[1] = L.pos.y; p[2] = L.pos.z; p[3] = L.radius;
+                        float* q = x6C_[x6N_]; q[0] = lc.x; q[1] = lc.y; q[2] = lc.z; q[3] = L.falloff;
+                        ++x6N_;
+                    }
                 }
+                Uniform4fv(ULOC(P, "uRtX6L"), 4, &x6L_[0][0]); Uniform4fv(ULOC(P, "uRtX6C"), 4, &x6C_[0][0]);
+                Uniform1i(ULOC(P, "uRtX6N"), x6N_);
                 Uniform4f(ULOC(P, "uRtX6"), rtdef::x6Refl(), x6Damp_, 1.0f / rtdef::x6Scale(), rtdef::x6Sheen());
             } else Uniform4f(ULOC(P, "uRtX6"), 0.0f, 0.0f, 0.0f, 0.0f);
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);

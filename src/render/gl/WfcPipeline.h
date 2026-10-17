@@ -882,6 +882,7 @@ private:
     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
     int drawOwner_ = 0;                              // character instance of the current dynamic draws
     int x6Frame_ = -1; float x6Damp_ = 0.0f;         // X6: this frame's damp amount (per-map table)
+    float x6L_[4][4] = {}, x6C_[4][4] = {}; int x6N_ = 0;   // X6 round 5: the lamps in view (pos, radius; colour, falloff)
     bool volUser_ = true;                            // X3 Settings row (kept by release())
     bool drawBody_ = false;                         // ... and they are a death body (RT: TLAS mask 0x10, not 0x4)
     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
