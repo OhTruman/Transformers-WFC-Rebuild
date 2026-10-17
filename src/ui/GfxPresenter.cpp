@@ -1,5 +1,6 @@
 #include "ui/GfxPresenter.h"
 #include "ui/MapLabel.h"
+#include "platform/Clipboard.h"
 #include "core/FrameProfile.h"
 #include "core/Log.h"
 #include "frontend/FlowTrace.h"
@@ -1231,6 +1232,91 @@ void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
     volumetricGateShown_ = realistic ? 1 : 0;
 }
 
+void GfxPresenter::syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::MovieClip* host = findClipNamed(p.root(), "hostGame_mc");
+    if (!host || !host->script || !host->parent || !host->parent->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    gfx::avm1::Object* menu = host->parent->script;
+    if (vm.get(menu, "joinGame_mc").isObject()) return;   // built for this menu instance
+    gfx::avm1::Object* init = vm.newPlain();
+    vm.set(init, "_y", V(vm.toNumber(vm.get(host->script, "_y")) + 31.0));   // the menu's row pitch (findGame 0, hostGame 31)
+    gfx::MovieClip* dup = p.duplicate(host, "joinGame_mc", 950, init);
+    if (!dup || !dup->script) return;
+    gfx::avm1::Object* o = dup->script;
+    const std::string label = "$UIText.OnlineFriends.JoinGame";   // the original "Join Game"
+    vm.set(o, "text", V(label));
+    const V lab = vm.get(o, "label_txt");
+    if (lab.isObject()) vm.set(lab.o, "htmlText", V(label));
+    // focus: Host Game -> Join Game -> whatever followed Host Game
+    const V below = vm.get(host->script, "focusDown");
+    vm.set(o, "focusUp", V(std::string("hostGame_mc")));
+    vm.set(o, "focusDown", below);
+    vm.set(host->script, "focusDown", V(std::string("joinGame_mc")));
+    if (below.isString()) {
+        const V next = vm.get(menu, vm.toString(below));
+        if (next.isObject()) vm.set(next.o, "focusUp", V(std::string("joinGame_mc")));
+    }
+    vm.set(o, "onOver", V(vm.newFunction([menu](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+        const V w = v.get(menu, "HintWidget");
+        if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Online.JoinGameDesc")));
+        return V();
+    }, "onOver", 0)));
+    // TextPrompt_GFX through the original HmUtility.DisplayTextPrompt(Title, Description, DefaultText, Callback, MaxChars)
+    vm.set(vm.global, "WfcJoinTransmit", V(vm.newFunction([&flow](gfx::avm1::VM& v, const V&, gfx::avm1::Args& a) -> V {
+        flow.call("Online.JoinGame", {a.empty() ? std::string() : v.toString(a[0])});
+        return V();
+    }, "WfcJoinTransmit", 1)));
+    vm.set(o, "onClick", V(vm.newFunction([](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+        const V util = v.get(v.global, "HmUtility");
+        if (util.isObject())
+            v.callMethod(util, "DisplayTextPrompt", {V(std::string("$UIText.OnlineFriends.JoinGame")), V(std::string("$WfcPC.Online.JoinPrompt")),
+                                                    V(std::string()), V(std::string("_global.WfcJoinTransmit")), V(64.0)});
+        return V();
+    }, "onClick", 0)));
+    frontend::FlowTrace::emit("online.joinGameRow", {{"built", "true"}, {"provenance", "PC EXTENSION"}});
+}
+
+void GfxPresenter::syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const platform::InputFrame& in) {
+    gfx::MovieClip* root = p.root();
+    if (!root || !root->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    const bool show = flow.sessionRole() == frontend::GameFlow::SessionRole::Host && !flow.joinCode().empty();
+    V panel = vm.get(root->script, "wfcJoinPanel_mc");
+    if (!show) { if (panel.isObject()) vm.callMethod(panel, "removeMovieClip", {}); return; }
+    if (!panel.isObject()) {
+        // the right column under the team lists (GameLobby_GFX stage 1120 x 720: teams x ~650-1050, status line y ~630)
+        panel = vm.callMethod(V(root->script), "createEmptyMovieClip", {V(std::string("wfcJoinPanel_mc")), V(90010.0)});
+        if (!panel.isObject()) return;
+        vm.set(panel.o, "_x", V(655.0));
+        vm.set(panel.o, "_y", V(470.0));
+        const char* names[] = {"code_txt", "address_txt", "copy_txt", "privacy_txt"};
+        for (int i = 0; i < 4; ++i) {
+            V t = vm.callMethod(panel, "createTextField", {V(std::string(names[i])), V((double)(i + 1)), V(0.0), V(22.0 * i), V(420.0), V(22.0)});
+            if (!t.isObject()) continue;
+            vm.set(t.o, "html", V(true));
+            vm.set(t.o, "embedFonts", V(true));
+            vm.set(t.o, "selectable", V(false));
+        }
+    }
+    auto setLine = [&](const char* name, const std::string& text, const char* colour, int size) {
+        const V t = vm.get(panel.o, name);
+        if (t.isObject())
+            vm.set(t.o, "htmlText", V(std::string("<font face='$NormalFont' size='") + std::to_string(size) + "' color='" + colour + "'>" + text + "</font>"));
+    };
+    auto sub = [](std::string s, const char* tok, const std::string& v) { const size_t at = s.find(tok); if (at != std::string::npos) s.replace(at, 2, v); return s; };
+    const frontend::Catalog& cat = rt_.catalog();
+    bool copied = false;
+    for (uint16_t k : in.keyPresses) if (k == 'C') copied = platform::setClipboardText(flow.joinCode());
+    if (copied) { codeCopiedFor_ = 2.0f; frontend::FlowTrace::emit("online.joinCodeCopied", {{"code", flow.joinCode()}}); }
+    setLine("code_txt", sub(cat.localizeKey("$WfcPC.Online.JoinCode"), "`c", flow.joinCode()), "#FFFFFF", 18);
+    setLine("address_txt", sub(cat.localizeKey("$WfcPC.Online.JoinAddress"), "`a", flow.joinAddress()), "#C8C8C8", 16);
+    setLine("copy_txt", cat.localizeKey(codeCopiedFor_ > 0.0f ? "$WfcPC.Online.CodeCopied" : "$WfcPC.Online.CopyCode"), "#8AF0FF", 14);
+    setLine("privacy_txt", cat.localizeKey("$WfcPC.Online.IpPrivacy"), "#A0A0A0", 13);
+    if (codeCopiedFor_ > 0.0f) codeCopiedFor_ -= 1.0f / 60.0f;
+}
+
 void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) {
     gfx::MovieClip* menu = findClipNamed(p.root(), "menuMultiplayerGameModeSettings_mc");
     if (!menu || !menu->script) return;
@@ -1361,6 +1447,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     frameLimitShown_ = flow.profile().display.frameLimit;
     if (graphicsPagePlayer_) syncVolumetricRow(*graphicsPagePlayer_);
     for (Open& op : movies_) {
+        if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) syncJoinGameRow(op.movie->player(), flow);
+        if (flow.online() && op.object.find("GameLobby_GFX") != std::string::npos) syncJoinPanel(op.movie->player(), flow, in);
         if (op.object.find("PartyLobby_GFX") != std::string::npos) syncModeOptionBots(op.movie->player(), flow);
         if (op.object.find("GameLobby_GFX") == std::string::npos) continue;
         // the selected map's name centred on its preview, above the frame (ui/MapLabel.h, user playtest 2026-10-13)

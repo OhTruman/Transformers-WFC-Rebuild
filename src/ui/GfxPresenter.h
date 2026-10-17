@@ -138,6 +138,11 @@ private:
     float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
     void scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt);
     void syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow);
+    // Online (PC EXTENSION, ONLINE_MP_UI_STRINGS.md 1 / 4): the party lobby's Join Game row (-> TextPrompt -> Online.JoinGame)
+    // and the host's join panel in the game lobby (join code, address, copy key, privacy line). Online only.
+    void syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow);
+    void syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const platform::InputFrame& in);
+    float codeCopiedFor_ = 0.0f;
     // Settings > Graphics: the movie whose Graphics page got the PC rows (null when none is open); the Volumetric
     // Lighting row follows the Ray Tracing row's current choice live (Realistic: Off / On; otherwise "Realistic only").
     gfx::Player* graphicsPagePlayer_ = nullptr;
