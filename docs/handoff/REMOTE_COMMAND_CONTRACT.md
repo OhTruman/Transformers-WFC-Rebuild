@@ -56,3 +56,17 @@ bool World::applyRemoteCommand(int matchPlayer, const RemoteCommand& c);   // fa
    `static_assert((int)platform::Button::Count <= 32)`.
 4. **Idle rule:** compare against the previously APPLIED command of that player (decoded values).
    - Non-idle = any held / pressed bit, a non-zero axis, or an aim change > 0.5 deg.
+
+## AMENDED (RE MP_INPUT_CONTRACT_RE 4a1f8fb; Integration decision (A); Systems 10.2, 2026-10-17)
+
+- **Aim** on the rotator grid: aimYaw u16 / aimPitch i16 in rotator units (65536 = 360 deg), decoded to radians. It is the look direction
+  (facing, camera-relative movement, animation, vehicles).
+- **aimPoint:** the sender's camera-trace RESULT in ABSOLUTE world space, 3 x int24 at 1 cm, decoded to metres. Absolute because of the
+  input delay (the command for N is built at N-D). Present when `kRemoteBitAimPoint` (bit 31) is held. Without it: eye + dir x weapon range.
+  - Shots / beams / aimed abilities go from the pawn's eye at tick N toward aimPoint. Fine aim and the hover smoothers stay camera-only.
+- **Bits:** 0..28 platform::Button (FineAim = Button::FineAim), 29 Hover, 30 Active (look axis / team chat), 31 AimPoint.
+- **Idle** = the original's input rule: any held / pressed bit or a non-zero move axis. No aim delta.
+- **The kick** only with the host option ?WfcIdleKick=1 (MatchSettings.kickIdle). The original never kicks in private matches.
+- **Online, every human goes through this path** (Integration decision (A)): the local PlayerController sends its command like everyone
+  else. Offline keeps the direct path.
+- `RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; core::Vec3 aimPoint; }`
