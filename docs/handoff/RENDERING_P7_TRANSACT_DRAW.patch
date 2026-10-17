@@ -1,0 +1,593 @@
+diff -ruN base/src/assets/SkinnedModel.cpp doors/src/assets/SkinnedModel.cpp
+--- base/src/assets/SkinnedModel.cpp	2026-10-17 13:54:31.150635500 -0500
++++ doors/src/assets/SkinnedModel.cpp	2026-10-17 13:52:00.000000000 -0500
+@@ -198,6 +198,7 @@
+     const Json& prims = meshes[(size_t)meshIdx]["primitives"];
+     bool bInit = false;
+     bool anyTangent = false;
++    bool anyUv1 = false;                     // (TEXCOORD_1: the light-map UV - transforming world actors; absent elsewhere)
+     for (size_t pi = 0; pi < prims.size(); ++pi) {
+         const Json& pr = prims[pi];
+         const Json& at = pr["attributes"];
+@@ -208,6 +209,8 @@
+         std::vector<float> tan = at.has("TANGENT") ? doc.floats(at["TANGENT"].asInt(-1)) : std::vector<float>();
+         anyTangent = anyTangent || !tan.empty();
+         std::vector<float> uvv = at.has("TEXCOORD_0") ? doc.floats(at["TEXCOORD_0"].asInt(-1)) : std::vector<float>();
++        std::vector<float> uv1v = at.has("TEXCOORD_1") ? doc.floats(at["TEXCOORD_1"].asInt(-1)) : std::vector<float>();
++        anyUv1 = anyUv1 || !uv1v.empty();
+         std::vector<uint16_t> jnt = at.has("JOINTS_0") ? doc.joints(at["JOINTS_0"].asInt(-1)) : std::vector<uint16_t>();
+         std::vector<float> wgt = at.has("WEIGHTS_0") ? doc.floats(at["WEIGHTS_0"].asInt(-1), true) : std::vector<float>();
+         std::vector<uint32_t> idx = pr.has("indices") ? doc.indices(pr["indices"].asInt(-1)) : std::vector<uint32_t>();
+@@ -221,6 +224,8 @@
+             for (int c = 0; c < 4; ++c) m.tangents.push_back(i * 4 + c < tan.size() ? tan[i * 4 + c] : (c == 0 || c == 3 ? 1.0f : 0.0f));
+             m.uv.push_back(i * 2 < uvv.size() ? uvv[i * 2] : 0.0f);
+             m.uv.push_back(i * 2 + 1 < uvv.size() ? uvv[i * 2 + 1] : 0.0f);
++            m.uv1.push_back(i * 2 < uv1v.size() ? uv1v[i * 2] : 0.0f);
++            m.uv1.push_back(i * 2 + 1 < uv1v.size() ? uv1v[i * 2 + 1] : 0.0f);
+             for (int c = 0; c < 4; ++c) m.joints.push_back(i * 4 + c < jnt.size() ? jnt[i * 4 + c] : 0);
+             for (int c = 0; c < 4; ++c) m.weights.push_back(i * 4 + c < wgt.size() ? wgt[i * 4 + c] : (c == 0 ? 1.0f : 0.0f));
+             core::Vec3 p{pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]};
+@@ -237,6 +242,7 @@
+     }
+ 
+     if (!anyTangent) m.tangents.clear();
++    if (!anyUv1) m.uv1.clear();
+     // Materials: base-colour texture URI (resolved vs the glb dir) + tint factor.
+     {
+         std::string dir;
+diff -ruN base/src/assets/SkinnedModel.h doors/src/assets/SkinnedModel.h
+--- base/src/assets/SkinnedModel.h	2026-10-17 13:54:31.155652900 -0500
++++ doors/src/assets/SkinnedModel.h	2026-10-17 13:52:00.000000000 -0500
+@@ -60,6 +60,7 @@
+     std::vector<float> normals;      // 3/vertex
+     std::vector<float> tangents;     // 4/vertex (glTF TANGENT xyz + bitangent sign w); empty when the export carries none
+     std::vector<float> uv;           // 2/vertex
++    std::vector<float> uv1;          // 2/vertex: the light-map UV (TEXCOORD_1); empty when the export carries none
+     std::vector<uint16_t> joints;    // 4/vertex (indices into skinJoints)
+     std::vector<float> weights;      // 4/vertex
+     std::vector<uint32_t> indices;
+diff -ruN base/src/game/GpuSkin.h doors/src/game/GpuSkin.h
+--- base/src/game/GpuSkin.h	2026-10-17 13:54:31.817425000 -0500
++++ doors/src/game/GpuSkin.h	2026-10-17 13:52:00.000000000 -0500
+@@ -53,6 +53,7 @@
+     m.gpuBind.mesh = std::make_unique<render::MeshData>();
+     render::MeshData& b = *m.gpuBind.mesh;
+     b.positions = m.positions; b.normals = m.normals; b.uv = m.uv; b.indices = m.indices; b.subs = m.subs; b.mats = m.mats;
++    b.uv1 = m.uv1;                                   // (the light-map UV: transforming world actors)
+     if (!m.tangents.empty()) setBindTangents(b, m.tangents, 0);
+     return b;
+ }
+diff -ruN base/src/game/TransformingActorsDraw.cpp doors/src/game/TransformingActorsDraw.cpp
+--- base/src/game/TransformingActorsDraw.cpp	1969-12-31 18:00:00.000000000 -0600
++++ doors/src/game/TransformingActorsDraw.cpp	2026-10-17 13:52:14.000000000 -0500
+@@ -0,0 +1,39 @@
++#include "game/TransformingActorsDraw.h"
++#include <algorithm>
++#include "assets/SkinnedModel.h"
++#include "game/GpuSkin.h"
++#include "game/TransformingActors.h"
++#include "render/Renderer.h"
++
++namespace game {
++
++void TransformingActorsDraw::draw(const TransformingActors& actors, render::IRenderer& r) const {
++    const std::vector<TransformingActors::Actor>& list = actors.actors();
++    if (list.empty()) return;
++    if (states_.size() != list.size()) states_.assign(list.size(), State{});   // (built once per map: Gameplay keeps the order)
++    assets::LocalPose lp;
++    std::vector<core::Mat4> globals;
++    for (size_t i = 0; i < list.size(); ++i) {
++        const TransformingActors::Actor& a = list[i];
++        if (a.hidden || !a.model || a.model->joints.empty()) continue;
++        State& s = states_[i];
++        // the transform clip at t (RE: one AnimNodeSequence, position 0 = Untransformed, 1 = Transformed): the pose collision uses
++        if (s.posedT != a.t || s.palette.empty()) {
++            assets::samplePose(*a.model, a.clipIndex, std::clamp(a.t, 0.0f, a.length), false, lp);
++            assets::poseGlobals(*a.model, lp, globals);
++            buildPalette(*a.model, globals, s.palette);
++            s.posedT = a.t;
++            ++s.serial;
++        }
++        render::MeshData& bind = bindMeshOf(*a.model);
++        syncMats(bind.mats, a.model->mats);
++        // lit by its two baked light-map captures lerped by the transform's normalized position (RE: the component's tick sets
++        // LightMapLerpAmount = the AnimNodeSequence position every frame; no dynamic light reaches it)
++        r.setDrawInterpolatedLightmap(a.name.c_str(), a.length > 0.0f ? a.t / a.length : 0.0f);
++        drawSkinnedGpu(r, bind, a.model->joints, a.model->weights, s.palette, nullptr, 1.0f, a.matrix, core::Vec3{1, 1, 1}, &s,
++                       s.serial, 0);
++        r.setDrawInterpolatedLightmap(nullptr, 0.0f);
++    }
++}
++
++} // namespace game
+diff -ruN base/src/game/TransformingActorsDraw.h doors/src/game/TransformingActorsDraw.h
+--- base/src/game/TransformingActorsDraw.h	1969-12-31 18:00:00.000000000 -0600
++++ doors/src/game/TransformingActorsDraw.h	2026-10-17 13:52:14.000000000 -0500
+@@ -0,0 +1,27 @@
++#pragma once
++// Rendering: the MP transforming world actors' presentation (TnTransformingWorldActor doors / bridges; World::transformingActors()).
++// Each actor's skeletal mesh (its glb, Gameplay's loaded model) posed by its one transform clip at the actor's t, drawn at its
++// matrix unless hidden - GPU-skinned like a character (the same pose Gameplay's collision uses). Lighting: its two baked
++// light-map captures lerped by the transform's position (IRenderer::setDrawInterpolatedLightmap; RE INTERPOLATED_LIGHTMAP_RE.md),
++// no light environment. Identity: maps without transforming actors draw nothing more.
++#include <cstdint>
++#include <vector>
++#include "core/Math.h"
++
++namespace render { class IRenderer; }
++
++namespace game {
++
++class TransformingActors;
++
++class TransformingActorsDraw {
++public:
++    // Main thread (World::draw). Per-actor palettes are re-posed only when t changes (the doors hold still almost always).
++    void draw(const TransformingActors& actors, render::IRenderer& r) const;
++
++private:
++    struct State { float posedT = -1.0f; uint64_t serial = 0; std::vector<core::Mat4> palette; };
++    mutable std::vector<State> states_;
++};
++
++} // namespace game
+diff -ruN base/src/game/World.cpp doors/src/game/World.cpp
+--- base/src/game/World.cpp	2026-10-17 13:54:32.216287300 -0500
++++ doors/src/game/World.cpp	2026-10-17 13:52:14.000000000 -0500
+@@ -4325,6 +4325,7 @@
+ 
+ void World::draw(render::IRenderer& r) const {
+     syncMapPresentation(r);
++    transformingDraw_.draw(transforming_, r);   // the map's transforming doors / bridges (posed at t; nothing on maps without them)
+     if (mapMesh_ != render::kInvalidMesh) {
+         r.drawMesh(mapMesh_, core::Mat4::identity(), mapColor_);
+     } else {
+diff -ruN base/src/game/World.h doors/src/game/World.h
+--- base/src/game/World.h	2026-10-17 13:54:32.220803500 -0500
++++ doors/src/game/World.h	2026-10-17 13:52:14.000000000 -0500
+@@ -18,6 +18,7 @@
+ #include "game/PickupFactory.h"
+ #include "game/MapState.h"
+ #include "game/TransformingActors.h"
++#include "game/TransformingActorsDraw.h"
+ #include "game/Match.h"
+ #include "game/ChassisDef.h"
+ #include "game/MatchOpponent.h"
+@@ -1188,6 +1189,7 @@
+ private:
+     MapState mapState_;
+     TransformingActors transforming_;   // the map's TnTransformingWorldActors (doors / bridges): state, collision, nav blocks
++    TransformingActorsDraw transformingDraw_;   // (Rendering) their skeletal meshes posed at t, drawn each frame
+     // VehicleDying bodies (see noteVehicleDeath): a pool of unit-box dynamic sets; queued at the death, applied in the map tick.
+     struct DyingBody { int pawnSet = -1, weaponSet = -1; float remain = 0.0f; };
+     struct DyingRequest { core::Vec3 pos{0, 0, 0}; float yaw = 0.0f, radius = 1.0f, halfHeight = 1.0f, time = 0.5f; };
+diff -ruN base/src/render/Renderer.h doors/src/render/Renderer.h
+--- base/src/render/Renderer.h	2026-10-17 13:54:32.677869400 -0500
++++ doors/src/render/Renderer.h	2026-10-17 13:52:08.000000000 -0500
+@@ -229,6 +229,10 @@
+     // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
+     // *_VEH_p, WEP_*), never from character names.
+     virtual void setDrawOwner(int ownerId) { (void)ownerId; }
++    // Transforming world actors (doors / bridges): the next skinned draws are lit by this actor's two baked light-map captures
++    // (lighting.json 'interpolated_lightmaps', RE INTERPOLATED_LIGHTMAP_RE.md) blended by lerp = the transform's normalized
++    // position, instead of a light environment; nullptr ends it.
++    virtual void setDrawInterpolatedLightmap(const char* actor, float lerp) { (void)actor; (void)lerp; }
+     // UE3 Client DisplayGamma (default 2.2): the scene resolve and Canvas material tiles apply pow(1 / DisplayGamma).
+     // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
+     //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)
+diff -ruN base/src/render/gl/GLRenderer.cpp doors/src/render/gl/GLRenderer.cpp
+--- base/src/render/gl/GLRenderer.cpp	2026-10-17 13:54:32.566989700 -0500
++++ doors/src/render/gl/GLRenderer.cpp	2026-10-17 13:52:08.000000000 -0500
+@@ -1186,6 +1186,7 @@
+     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
+     void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
+     void setDrawOwner(int o) override { wfc_.setDrawOwner(o); }
++    void setDrawInterpolatedLightmap(const char* actor, float lerp) override { wfc_.setDrawInterpolatedLightmap(actor, lerp); }
+     void setDisplayGamma(float g) override { wfc_.setDisplayGamma(g); }
+     void setFrontendActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override {
+         wfc_.setActorPose(a, p, r);
+diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:54:32.626694200 -0500
++++ doors/src/render/gl/WfcPipeline.cpp	2026-10-17 13:52:00.000000000 -0500
+@@ -116,6 +116,7 @@
+ uniform vec4 uShadowZ;       // world -> shadow-space z row
+ uniform vec3 uCamPos;
+ uniform vec4 uLMCoord;
++uniform vec4 uLMCoordB;   // (transforming world actors) capture B's light-map UV transform (uLMInterp draws)
+ uniform int uFogOn;
+ uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
+ uniform vec3 uFogIn;
+@@ -127,6 +128,7 @@
+ uniform int uVLMBase;
+ uniform sampler2D uVLM;
+ out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
++out vec2 vUV1B;
+ out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
+ out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
+ 
+@@ -192,6 +194,7 @@
+     vUV0 = aUV0;
+     vSubUV2 = aSubUV2;
+     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
++    vUV1B = aUV1 * uLMCoordB.xy + uLMCoordB.zw;
+     vUV1Mat = aUV1;
+     vColor = aColor;
+     if (uVertexLM != 0) {
+@@ -214,6 +217,7 @@
+ 
+ const char* kFSHead = R"(#version 330 compatibility
+ in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor; in vec3 vSubUV2;
++in vec2 vUV1B;
+ in vec2 vUV1Mat;
+ layout(location=0) out vec4 oColor;
+ uniform vec3 uCamPos;
+@@ -362,6 +366,7 @@
+ const char* kFSMainLM = R"(
+ uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
+ uniform vec3 uLMScale[3];
++uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
+ uniform int uVertexLM;
+ in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
+ const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
+@@ -381,6 +386,11 @@
+         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
+         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
+         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
++        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
++            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
++            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
++            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
++        }
+         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
+         c += o.DiffuseColor * L;
+     }
+@@ -464,6 +474,7 @@
+ const char* kFSMainLMModern = R"(
+ uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
+ uniform vec3 uLMScale[3];
++uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
+ uniform int uVertexLM;
+ in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
+ const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
+@@ -506,6 +517,11 @@
+         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
+         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
+         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
++        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
++            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
++            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
++            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
++        }
+         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
+         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
+         vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
+@@ -1450,6 +1466,20 @@
+         if (!sj.empty() && assets::Json::parse(sj, S))
+             for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
+     }
++    interpLM_.clear(); drawInterp_ = nullptr;
++    for (const auto& kv : L["interpolated_lightmaps"].obj) {   // transforming world actors: {actor: [capture 0, capture 1]}
++        if (kv.second.size() < 2) continue;
++        InterpLM& r = interpLM_[kv.first];
++        for (int k = 0; k < 2; ++k) {
++            const assets::Json& c = kv.second[(size_t)k];
++            for (int i = 0; i < 3; ++i) {
++                r.cap[k].coeff[i] = c["coeffs"][(size_t)i].asString();
++                for (int ch = 0; ch < 3; ++ch) r.cap[k].scale[i][ch] = c["scales"][(size_t)i][(size_t)ch].asFloat(1.0f);
++            }
++            r.cap[k].cs[0] = c["coordScale"][0].asFloat(1); r.cap[k].cs[1] = c["coordScale"][1].asFloat(1);
++            r.cap[k].cb[0] = c["coordBias"][0].asFloat(0); r.cap[k].cb[1] = c["coordBias"][1].asFloat(0);
++        }
++    }
+     const assets::Json& lp = L["lightmaps"]["props"];
+     for (const auto& kv : lp.obj) {
+         LMRec r;
+@@ -2342,6 +2372,77 @@
+     return true;
+ }
+ 
++// (transforming world actors) per coefficient: capture A's atlas rect and capture B's side by side (an 8-texel gutter of
++// replicated edges between them, a 1-texel margin around each rect) in one texture; each capture's lightmap UV transform
++// re-expressed in it. The texels are the atlases' own (the decoded PNG exports).
++void Pipeline::buildInterpLM(InterpLM& r) {
++    r.built = true;
++    std::map<std::string, ImageData> atl;
++    auto atlas = [&](const std::string& name) -> const ImageData* {
++        auto it = atl.find(name);
++        if (it == atl.end()) {
++            ImageData img;
++            if (!platform::decodeImage(dataDir_ + "/lightmaps/" + name + ".png", img) || !img.valid()) return nullptr;
++            it = atl.emplace(name, std::move(img)).first;
++        }
++        return &it->second;
++    };
++    constexpr int kGutter = 8;
++    for (int i = 0; i < 3; ++i) {
++        const ImageData* src[2] = {atlas(r.cap[0].coeff[i]), atlas(r.cap[1].coeff[i])};
++        if (!src[0] || !src[1]) { LOG_WARN("wfc: interpolated light map: atlas %s / %s missing", r.cap[0].coeff[i].c_str(), r.cap[1].coeff[i].c_str()); return; }
++        int x0[2], y0[2], w[2], h[2];
++        for (int k = 0; k < 2; ++k) {
++            const int W = src[k]->w, H = src[k]->h;
++            x0[k] = std::max(0, (int)std::floor(r.cap[k].cb[0] * (float)W) - 1);
++            y0[k] = std::max(0, (int)std::floor(r.cap[k].cb[1] * (float)H) - 1);
++            const int x1 = std::min(W, (int)std::ceil((r.cap[k].cb[0] + r.cap[k].cs[0]) * (float)W) + 1);
++            const int y1 = std::min(H, (int)std::ceil((r.cap[k].cb[1] + r.cap[k].cs[1]) * (float)H) + 1);
++            w[k] = std::max(1, x1 - x0[k]); h[k] = std::max(1, y1 - y0[k]);
++        }
++        ImageData c;
++        c.w = w[0] + kGutter + w[1]; c.h = std::max(h[0], h[1]);
++        c.rgba.assign((size_t)c.w * (size_t)c.h * 4, 0);
++        const int ox[2] = {0, w[0] + kGutter};
++        for (int k = 0; k < 2; ++k)
++            for (int y = 0; y < c.h; ++y)
++                for (int x = (k == 0 ? 0 : w[0] + kGutter / 2); x < (k == 0 ? w[0] + kGutter / 2 : c.w); ++x) {
++                    const int sx = x0[k] + std::min(std::max(x - ox[k], 0), w[k] - 1), sy = y0[k] + std::min(y, h[k] - 1);
++                    std::memcpy(&c.rgba[((size_t)y * (size_t)c.w + (size_t)x) * 4], &src[k]->rgba[((size_t)sy * (size_t)src[k]->w + (size_t)sx) * 4], 4);
++                }
++        GLuint id = 0;
++        glGenTextures(1, &id);
++        glBindTexture(GL_TEXTURE_2D, id);
++        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++        uploadTex(GL_TEXTURE_2D, c, true);
++        GenerateMipmap(GL_TEXTURE_2D);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glBindTexture(GL_TEXTURE_2D, 0);
++        lmTextures_.push_back(id);
++        r.tex[i] = (int)lmTextures_.size() - 1;
++        if (i == 0)
++            for (int k = 0; k < 2; ++k) {   // uv' = (uv cs + cb) (W, H) - (x0, y0) + (ox, 0), over the composite size
++                const float W = (float)src[k]->w, H = (float)src[k]->h;
++                r.coord[k][0] = r.cap[k].cs[0] * W / (float)c.w; r.coord[k][1] = r.cap[k].cs[1] * H / (float)c.h;
++                r.coord[k][2] = (r.cap[k].cb[0] * W - (float)x0[k] + (float)ox[k]) / (float)c.w;
++                r.coord[k][3] = (r.cap[k].cb[1] * H - (float)y0[k]) / (float)c.h;
++            }
++    }
++    r.ok = true;
++}
++
++void Pipeline::setDrawInterpolatedLightmap(const char* actor, float lerp) {
++    drawInterp_ = nullptr;
++    if (!actor) return;
++    auto it = interpLM_.find(actor);
++    if (it == interpLM_.end()) return;
++    if (!it->second.built) buildInterpLM(it->second);
++    if (it->second.ok) { drawInterp_ = &it->second; drawInterpLerp_ = std::min(std::max(lerp, 0.0f), 1.0f); }
++}
++
+ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
+     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
+     auto it = texCache_.find(key);
+@@ -4607,10 +4708,31 @@
+                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
+                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
+                 Uniform1i(ULOC(P, "uVertexLM"), 1);
++                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {
++                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
+                 Uniform1i(ULOC(P, "uVLMBase"), s.vlmBase);
+                 ActiveTexture(GL_TEXTURE0 + 11);
+                 glBindTexture(GL_TEXTURE_2D, s.vlmTex);
++            } else if (s.interpLM && drawInterp_) {      // transforming world actor: its two captures, lerped (RE)
++                const InterpLM& r = *drawInterp_;
++                static const float kOne[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
++                Uniform4f(P.uLMCoord, r.coord[0][0], r.coord[0][1], r.coord[0][2], r.coord[0][3]);
++                Uniform3fv(P.uLMScale, 3, kOne);           // (the shader applies each capture's own scale before the lerp)
++                Uniform1i(ULOC(P, "uLMInterp"), 1);
++                if ((size_t)s.prog >= interpSetProg_.size()) interpSetProg_.resize((size_t)s.prog + 1, 0);
++                interpSetProg_[(size_t)s.prog] = 1;
++                Uniform4f(ULOC(P, "uLMCoordB"), r.coord[1][0], r.coord[1][1], r.coord[1][2], r.coord[1][3]);
++                Uniform3fv(ULOC(P, "uLMScaleA"), 3, &r.cap[0].scale[0][0]);
++                Uniform3fv(ULOC(P, "uLMScaleB"), 3, &r.cap[1].scale[0][0]);
++                Uniform1f(ULOC(P, "uLMLerp"), drawInterpLerp_);
++                Uniform1i(ULOC(P, "uVertexLM"), 0);
++                for (int i = 0; i < 3; ++i) {
++                    ActiveTexture(GL_TEXTURE0 + 13 + i);
++                    glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)r.tex[i]] ? lmTextures_[(size_t)r.tex[i]] : blackTex_);
++                }
+             } else if (s.lmTex[0] >= 0) {
++                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {   // (a program a door drew with)
++                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
+                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
+                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
+                 if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
+@@ -7225,7 +7347,7 @@
+         static thread_local std::vector<uint64_t> sig;
+         sig.clear();
+         sig.push_back((uint64_t)m.subs.size() << 32 | (uint64_t)m.mats.size());
+-        sig.push_back((uint64_t)m.indices.size() << 1 | (defrag ? 1u : 0u));
++        sig.push_back((uint64_t)m.indices.size() << 2 | (drawInterp_ ? 2u : 0u) | (defrag ? 1u : 0u));   // (+ interpolated light maps)
+         for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
+         for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
+         if (noDynCache || ds.sig != sig) {
+@@ -7254,6 +7376,10 @@
+                 d.first = s.indexOffset; d.count = s.indexCount;
+                 d.prog = dynamicProgram(mat);
+                 d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
++                if (drawInterp_ && mat) {   // (transforming world actor) its material's light-mapped program
++                    const int p = programFor(d.matName, mat, true);
++                    if (p >= 0 && progs_[(size_t)p].original) { d.prog = p; d.interpLM = true; }
++                }
+                 if (defrag && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
+                     if (const std::string* ed = energyDeathFor(mat->wfcName)) {
+                         Material dm; dm.wfcName = *ed;
+diff -ruN base/src/render/gl/WfcPipeline.h doors/src/render/gl/WfcPipeline.h
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 13:54:32.631711300 -0500
++++ doors/src/render/gl/WfcPipeline.h	2026-10-17 13:52:08.000000000 -0500
+@@ -213,6 +213,8 @@
+         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
+     }
+     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
++    // (transforming world actors) the next skinned draws use this actor's interpolated light maps (nullptr: off)
++    void setDrawInterpolatedLightmap(const char* actor, float lerp);
+     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
+     bool volumetricLighting() const { return volUser_; }
+     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
+@@ -303,6 +305,7 @@
+         int lmTex[3] = {-1, -1, -1};
+         float lmScale[3][3] = {};
+         float lmCoord[4] = {1, 1, 0, 0};
++        bool interpLM = false;    // (transforming world actors) drawn with the lightmapped program and drawInterp_'s captures
+         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
+         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
+         bool noShadow = false;    // authored: CastShadow false (left out of the RT scene)
+@@ -945,6 +948,14 @@
+     std::map<std::string, MatSrc> mats_;
+     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
+     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
++    // transforming world actors' two light-map captures (RE INTERPOLATED_LIGHTMAP_RE.md): per coefficient, capture A's and B's
++    // atlas rects side by side in one composite texture (no extra samplers: the lightmap units 13-15), each capture's UV
++    // transform into it, its scale vectors; the base pass lerps the decoded coefficients by the transform's position
++    struct InterpLM { LMRec cap[2]; bool built = false, ok = false; int tex[3] = {-1, -1, -1}; float coord[2][4] = {}; };
++    std::map<std::string, InterpLM> interpLM_;
++    const InterpLM* drawInterp_ = nullptr; float drawInterpLerp_ = 0.0f;
++    void buildInterpLM(InterpLM& r);
++    std::vector<char> interpSetProg_;   // programs whose uLMInterp a door draw left at 1 (reset on their next normal draw)
+     std::map<std::string, LMRec> lightmaps_;
+     std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
+     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
+diff -ruN base/tools/render/build_interp_lightmaps.py doors/tools/render/build_interp_lightmaps.py
+--- base/tools/render/build_interp_lightmaps.py	1969-12-31 18:00:00.000000000 -0600
++++ doors/tools/render/build_interp_lightmaps.py	2026-10-17 13:52:00.000000000 -0500
+@@ -0,0 +1,62 @@
++"""The transforming world actors' baked lighting (HmInterpolatedLightMappedSkeletalMeshComponent, RE INTERPOLATED_LIGHTMAP_RE.md):
++two directional texture light maps per actor (capture 0 = untransformed, 1 = transformed), each 3 coefficient LightMapTexture2D +
++a scale vector per coefficient + the capture's atlas rect; the base pass lerps the decoded coefficients by the anim's normalized
++position. Adds 'interpolated_lightmaps' to a lighting.json: {actor name: [capture0, capture1]}, each capture in the 'lightmaps'
++record form (coeffs, scales rgb, coordScale, coordBias). Decoded with RE's native-tail reader (RE-Workspace tools/interp_lightmap.py,
++read-only import).
++
++    python build_interp_lightmaps.py <map> <src lighting.json> <out dir>
++"""
++import json, os, sys
++
++sys.dont_write_bytecode = True
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++sys.path.insert(0, r'F:/Transformers Rebuild/RE-Workspace/tools')
++sys.path.insert(0, r'F:/Transformers Rebuild/AssetTools/scripts/wfc')
++import interp_lightmap as il   # noqa: E402  (decode(), CLS, DUMP; its ue3pkg)
++import ue3pkg                  # noqa: E402
++
++
++def captures(pkg_name):
++    p = ue3pkg.Package(os.path.join(il.DUMP, pkg_name + '.xxx')); d = p.data
++    res = {}
++    for i, e in enumerate(p.exports, 1):
++        if p.class_name(e) != il.CLS: continue
++        b = d[e['serial_offset']:e['serial_offset'] + e['serial_size']]
++        rec = None
++        for k in range(len(b) - 21, -1, -1):   # (the tail starts at the LightingGuid copy: the offset whose decode ends exactly)
++            if b[k + 16] != 1: continue
++            try:
++                r, end = il.decode(p, b[k:])
++            except Exception:
++                continue
++            if k + end == len(b) and (r['captures'] or end == 21): rec = r; break
++        if not rec or len(rec['captures']) < 2: continue
++        path = p.object_path(i)
++        actor = next((s for s in path.split('.') if s.startswith('TnTransformingWorldActor_')), None)
++        if not actor: continue
++        res[actor] = [{'coeffs': [t['texture'].split('.')[-1] for t in c['textures']],
++                       'scales': [t['scale'][:3] for t in c['textures']],
++                       'coordScale': c['coordinate_scale'], 'coordBias': c['coordinate_bias']} for c in rec['captures'][:2]]
++    return res
++
++
++def main():
++    from ue3obj import map_packages
++    mapname, src, out = sys.argv[1], sys.argv[2], sys.argv[3]
++    pkgs, _persistent = map_packages(mapname)
++    d = json.load(open(src, encoding='utf-8'))
++    il_all = {}
++    for pk in pkgs:
++        name = os.path.splitext(os.path.basename(pk))[0]
++        if os.path.exists(os.path.join(il.DUMP, name + '.xxx')): il_all.update(captures(name))
++    d['interpolated_lightmaps'] = il_all
++    os.makedirs(out, exist_ok=True)
++    json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
++    lm = os.path.join(os.path.dirname(os.path.abspath(src)), 'lightmaps')
++    miss = sorted({c for caps in il_all.values() for cap in caps for c in cap['coeffs'] if not os.path.exists(os.path.join(lm, c + '.png'))})
++    print(mapname, len(il_all), 'interpolated light-mapped actors; atlases missing from', lm, ':', miss)
++
++
++if __name__ == '__main__':
++    main()
+diff -ruN base/tools/render/build_materials_only.py doors/tools/render/build_materials_only.py
+--- base/tools/render/build_materials_only.py	2026-10-17 13:54:36.835172700 -0500
++++ doors/tools/render/build_materials_only.py	2026-10-17 13:52:14.000000000 -0500
+@@ -37,9 +37,10 @@
+                 s = os.path.join(src_root, m, g)
+                 if os.path.exists(s): shutil.copyfile(s, os.path.join(out, g))
+         scene = lines([os.path.join(H, 'scene_materials.py'), m])
++        trans = lines([os.path.join(H, 'transforming_materials.py'), m])   # (the MP doors / bridges)
+         fxlib = [l for l in lines([os.path.join(H, 'build_map_fx.py'), '--list-materials', m]) if '.' in l and ' ' not in l]
+         args = [os.path.join(H, 'build_materials.py'), m, out] + chars + ['WEP_IonBlaster_p.WEP_IonBlaster_MATINST'] + \
+-               weapons + fx + ui + scene + fxlib + defrag + abil + sx
++               weapons + fx + ui + scene + fxlib + defrag + abil + sx + trans
+         print('== %s: %d extra materials' % (m, len(args) - 3), flush=True)
+         subprocess.run([PY] + args, check=True)
+ 
+diff -ruN base/tools/render/build_render_data.ps1 doors/tools/render/build_render_data.ps1
+--- base/tools/render/build_render_data.ps1	2026-10-17 13:54:36.856748600 -0500
++++ doors/tools/render/build_render_data.ps1	2026-10-17 13:52:00.000000000 -0500
+@@ -54,8 +54,10 @@
+ $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list) | Where-Object { $_ -match '\S' })
+ # Ability / killstreak mesh materials (AssetTools ability_assets.json; Milestone E)
+ $abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --materials) | Where-Object { $_ -match '\S' })
++# Transforming world actors (the MP doors / bridges: AssetTools mp_transforming_actors.json slot materials)
++$trans = @((& $py (Join-Path $PSScriptRoot "transforming_materials.py") $Map) | Where-Object { $_ -match '\S' })
+ & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
+-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil
++    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil @trans
+ if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
+ # UE3 fog volumes (density infos + their linked shape components) for the runtime fog-volume rendering
+ & $py (Join-Path $PSScriptRoot "build_fog_volumes.py") $Map $out
+diff -ruN base/tools/render/merge_transforming_materials.py doors/tools/render/merge_transforming_materials.py
+--- base/tools/render/merge_transforming_materials.py	1969-12-31 18:00:00.000000000 -0600
++++ doors/tools/render/merge_transforming_materials.py	2026-10-17 13:52:00.000000000 -0500
+@@ -0,0 +1,19 @@
++# Transforming-actor materials into the LIVE materials_glsl.json (only the keys it lacks; tex paths -> the live map tex/): after
++# build_materials_only.py <live root> work/mat_trans MP_ESC_BrokenHope MP_ESC_Remnant MP_IAC_Rust -> work/mat_trans_merged/<map>/
++import json, os, subprocess, sys, shutil
++PY = r"F:/Transformers Rebuild/AssetTools/bin/py/python.exe"
++LIVE = r"F:/Transformers Rebuild/Rebuild/work/render"
++for m in ["MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Rust"]:
++    a = json.load(open(f"{LIVE}/{m}/materials_glsl.json", encoding="utf-8"))
++    b = json.load(open(f"work/mat_trans/{m}/materials_glsl.json", encoding="utf-8"))
++    A = a.get("materials", a); B = b.get("materials", b)
++    want = subprocess.run([PY, "-I", "tools/render/transforming_materials.py", m], capture_output=True, text=True).stdout.split()
++    add = [w for w in want if w not in A]
++    bad = [w for w in add if w not in B or B[w].get("error") not in (None, "None") or not B[w].get("glsl")]
++    for w in add:
++        if w in B: A[w] = json.loads(json.dumps(B[w]).replace(f"work/mat_trans/{m}/tex/", f"F:/Transformers Rebuild/Rebuild/work/render/{m}/tex/"))
++    os.makedirs(f"work/mat_trans_merged/{m}", exist_ok=True)
++    json.dump(a, open(f"work/mat_trans_merged/{m}/materials_glsl.json", "w", encoding="utf-8"), indent=0)
++    tex = sorted({f for w in add for f in (t.get("file") if isinstance(t, dict) else t for t in A[w]["info"].get("textures", [])) if isinstance(f, str)})
++    missing = [f for f in tex if not os.path.exists(f)]
++    print(m, "added", add, "bad", bad, "| textures", len(tex), "missing in live", missing)
+diff -ruN base/tools/render/transforming_materials.py doors/tools/render/transforming_materials.py
+--- base/tools/render/transforming_materials.py	1969-12-31 18:00:00.000000000 -0600
++++ doors/tools/render/transforming_materials.py	2026-10-17 13:52:00.000000000 -0500
+@@ -0,0 +1,21 @@
++"""The materials of a map's transforming world actors (TnTransformingWorldActor: the MP doors / bridges; AssetTools
++manifests/maps/mp_transforming_actors.json, their skeletal meshes' slot materials): extra materials for build_materials.py.
++
++    python transforming_materials.py MAP
++"""
++import json, os, sys
++
++MANIFEST = r'F:/Transformers Rebuild/AssetTools/manifests/maps/mp_transforming_actors.json'
++
++
++def main():
++    m = sys.argv[1]
++    if not os.path.exists(MANIFEST): return
++    d = json.load(open(MANIFEST, encoding='utf-8'))
++    meshes = {a['mesh'] for a in d['actors'] if a['map'] == m}
++    for name in sorted({x['material'] for k in meshes for x in d['meshes'].get(k, {}).get('materials', [])}):
++        print(name)
++
++
++if __name__ == '__main__':
++    main()

@@ -27,8 +27,12 @@ void TransformingActorsDraw::draw(const TransformingActors& actors, render::IRen
         }
         render::MeshData& bind = bindMeshOf(*a.model);
         syncMats(bind.mats, a.model->mats);
+        // lit by its two baked light-map captures lerped by the transform's normalized position (RE: the component's tick sets
+        // LightMapLerpAmount = the AnimNodeSequence position every frame; no dynamic light reaches it)
+        r.setDrawInterpolatedLightmap(a.name.c_str(), a.length > 0.0f ? a.t / a.length : 0.0f);
         drawSkinnedGpu(r, bind, a.model->joints, a.model->weights, s.palette, nullptr, 1.0f, a.matrix, core::Vec3{1, 1, 1}, &s,
                        s.serial, 0);
+        r.setDrawInterpolatedLightmap(nullptr, 0.0f);
     }
 }
 
