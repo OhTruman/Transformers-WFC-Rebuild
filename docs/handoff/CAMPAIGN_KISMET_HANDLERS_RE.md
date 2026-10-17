@@ -92,6 +92,16 @@ They are in TransContent inside the map packages.
 - If either set is none, the swap is skipped.
 - **Note:** "Enable Default Behavior" restores the plans but **not the weapons**. The inventory was destroyed.
 
+**Re-verified 2026-10-18 (Integration request):** both handlers re-decompiled; identical to the above.
+- `SeqAct_TnAiUseTurret`'s script is cooked into every design sublevel that places it: A1_IAC_Strts0_Design_m,
+  A2_KON_WallCrawler_Design_m, A4_ORB_Flying2_DSN_m (among the 11 sublevels with instances).
+- Its CDO sets: `_TurretGoalSet` = TR_AIGoalSet_p.TR_AiGoalSet_UseTurret, `_TurretActionSet` = TR_AiActionSet_p.TR_AiActionSet_UseTurret.
+- `TnSeqAct_AiDisableShootingBehavior`'s script is in A2_KON_BASE_m (6 instances, all A2_KON). Its CDO sets:
+  `ShootingDisabledActionSet` = TR_AiActionSet_p.Soldier_NoWeapon_Buddy_AiActionSet, `ShootingDisabledGoalSet` =
+  TR_AIGoalSet_p.NoWeapon_Buddy_AiGoalSet.
+- `TnAiController.SetScriptedTurrets` / `ClearScriptedTurrets` have no TransGame caller because their only caller is this
+  TransContent action.
+
 ### TnSeqAct_DownRevive
 
 - **Links:** in `Down` / `Revive`; props DrainHealthWhenDown (true), CanHealWhenDown (true), FullRevive.

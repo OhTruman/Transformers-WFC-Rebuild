@@ -157,7 +157,7 @@ check result. The PhysMaterial order, **C from the code**:
 
 So D3B is chapter 4 (matching `FMV_d4text_*.bik`); there is no `D4_` package because chapter 4 reuses the IAC level as D3B.
 
-### 9. High Moon custom Kismet classes "with no RE decomp file" — **CONFIRMED for 13 of 15; 2 handlers not located**
+### 9. High Moon custom Kismet classes "with no RE decomp file" — **CONFIRMED for all 15**
 
 - **Why there's no file:** the 15 classes have **no script functions of their own** (data-only SequenceActions / SequenceEvents), so
   `ue3dis --class` emits nothing. Their behaviour is the target's handler (actions) or the activating code (events):
@@ -175,8 +175,11 @@ So D3B is chapter 4 (matching `FMV_d4text_*.bik`); there is no `D4_` package bec
 | TnSeqEvent_OmegaStatus | `TnOmegaSupremePawn`, `TnAiActionGrab`, `TnAiActionLockOnTarget` |
 | TnSeqEvent_TankStatus | `TnTankAiPawn` |
 | TnSeqEvent_TrypticonEvents | `TnTrypticonPawn` |
-| **SeqAct_TnAiUseTurret** (TransContent; links Target, "Turret Object" → `Turrets`) | handler `OnTnAiUseTurret` not found in any decompiled package. The consumers are `TnAiController.SetScriptedTurrets(Turrets)` / `ClearScriptedTurrets()`, which have **no script caller** (H: the handler sits in a campaign TransContent class not yet decompiled) |
-| **TnSeqAct_AiDisableShootingBehavior** (TransContent, no variable links) | handler not located (UNKNOWN). The only "DisableShooting" in script is `TnSentryPawn._DisableShooting`, set by Trypticon's shoulder-cannon action |
+| **SeqAct_TnAiUseTurret** (TransContent) | **own script, CONFIRMED.** It is cooked into the design sublevels that use it (A1_IAC_Strts0_Design_m, A2_KON_WallCrawler_Design_m, A4_ORB_Flying2_DSN_m). Input 0 → `SetScriptedTurrets` + UseTurret goal / action sets; input 1 → clear + reset + CancelCurrentPlan. See `CAMPAIGN_KISMET_HANDLERS_RE.md` (93790c1) |
+| **TnSeqAct_AiDisableShootingBehavior** (TransContent) | **own script, CONFIRMED** (A2_KON_BASE_m). `DestroyInventory()` on both inputs, then NoWeapon_Buddy sets (0) or the template's own sets (1). See `CAMPAIGN_KISMET_HANDLERS_RE.md` |
+
+**Correction (2026-10-18):** the first version of this item said these two handlers were not located. They were already decoded in
+`CAMPAIGN_KISMET_HANDLERS_RE.md` (93790c1), and they were re-verified today from the packages above. So all 15 are resolved.
 
 ### 10. A4 `Checkpoint_14441` ("02a -Watchdog Part 2") truly air, by design — **CONFIRMED**
 
