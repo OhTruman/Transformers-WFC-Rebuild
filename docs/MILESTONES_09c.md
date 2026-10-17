@@ -3193,3 +3193,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:50 APPLIED 814e7cf5 Gameplay's transforming actors + dying-vehicle collision (door head part 1; NOT yet a shipped state: the draw
   follows in the same hour). Door verdict PASS by eye (Rendering cand33: closed IAC doors with two-sided baked lighting, Rust tube
   door opening sequence with the light-map lerp, no pop). Rendering cuts RENDERING_P7_TRANSACT_DRAW.patch against 814e7cf5.
+2026-10-17 13:51 Slim refresh re-measured at 13:50 (+31.7 MB, 47 rows; map_fx +26.5 MB after the always-include install); one more re-measure at
+  the named head (door materials + interpolated light maps + Remnant standalone light pending).
