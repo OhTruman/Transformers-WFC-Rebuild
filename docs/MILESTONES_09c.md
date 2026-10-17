@@ -2265,3 +2265,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 21:47 ASSETTOOLS BACK (the user answered its deletion prompt directly): diagnostic chain done 14:59 (8 / 10
   chapters OK at 2 m tiles, every peak < 10 GB; A1 / A3 tiled m05 retry rerunning); push_full + full/in* deletion
   (102 GB) running; feasibility doc dropped (Systems wrote it); next = the FaceFX RE continuation.
+  2026-10-16 21:50 X3 ROUND 3 CANDIDATE int_cand12 (= 43366aec + rt2 X3 round 3 + Defrag fix f5e2d8dd): Rendering's
+  match read X3 on / off: Streets 0.996 (dark lift 0.8 levels, was 60-80), Molten 1.006 (min 0.957), Gorge 1.028;
+  shafts kept; Streets shot 1500 at 0.79 = local sky-lit air at the frame edge. Experimental eye-pass-only GO;
+  Systems re-pairs the table (x3cap=0.25). Identity base int_base10 = 43366aec (Off arm beside the eye pass,
+  Faithful in the RT slot after). AssetTools: deletions done (60 GB freed, F: 166 GB free; in_cn / _hdpng kept).
