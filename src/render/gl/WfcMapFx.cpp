@@ -8,7 +8,8 @@
 //    CDO 1) caps the active particles [HIGH: every LOD's PeakActiveParticles <= MaxPeakCount].
 //    PARTIAL / not reproduced: HmParticleModuleGravity (WFC module, GravityMultiplier native), ColorByParameter
 //    (no instance parameter), DynamicParameter slot order (values decoded, order unproven: natural order used),
-//    SERM_Octagon / BestFit sprite cut-out polygons (drawn as full quads), LocationPrimitiveSphere sampling.
+//    SERM_Octagon / BestFit sprite cut-out polygons (drawn as full quads). LocationPrimitiveSphere: RE audit (c) batch 1 rule
+//    on the cooked class-default flags (per-instance flags are not in the cook).
 //  * TnDominationPoint energon totems (render_index.json): NEU_EnergonTotem_SKEL, DeactivatedLoopAnim
 //    EnergonTotem_StandBy looping.
 //  * TnStaticDestructibleActor_14465 (WallPanelSign): state 0 Base mesh (texture lightmap of its authored
@@ -331,6 +332,11 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     mod.name = ms[m]["module"].asString();
                     mod.flagA = ms[m]["raw_flags"][0].asInt(1);
                     mod.flagB = ms[m]["raw_flags"][1].asInt(1);
+                    for (const auto& kv : ms[m]["fields"].obj) {   // (RE audit (c): the cooked per-instance properties)
+                        if (kv.second.isNumber()) mod.fields[kv.first] = kv.second.asFloat();
+                        else if (kv.second.type == assets::Json::Type::Bool) mod.fields[kv.first] = kv.second.asBool() ? 1.0f : 0.0f;
+                        else if (kv.second.isString()) mod.fieldNames[kv.first] = kv.second.asString();
+                    }
                     const assets::Json& le = ms[m]["location_emitter"];
                     if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
                         mod.sourceEmitter = le["emitter"].asString();
@@ -615,12 +621,24 @@ void Pipeline::tickMapFx(float dt) {
             // update / kill
             bool killOnHit = false;                           // ParticleModuleCollision (world-space particles)
             if (!L.localSpace) for (const FxModule& m : L.modules) killOnHit |= m.flagA != 0 && m.killOnHit;
+            // HmParticleModuleGravity (RE particle audit (c) batch 1, update): Velocity.Z and BaseVelocity.Z +=
+            // GravityMultiplier x ComponentScale.Z x the instance's gravity scalar x dt. The scalar (inst +0x94) is still
+            // UNKNOWN: WorldInfo.DefaultGravityZ (-2940 UU/s^2) stands in. Only modules whose cooked GravityMultiplier is in
+            // the data act (none before AssetTools' parameter-blob regen: unchanged until then)
+            float gravZ = 0.0f;
+            for (const FxModule& m : L.modules)
+                if (m.name == "PMI_Gravity" && m.flagA != 0 && m.fields.count("GravityMultiplier")) gravZ += m.fields.at("GravityMultiplier");
+            if (gravZ != 0.0f) {
+                const float sz = std::sqrt(in.R[2][0] * in.R[2][0] + in.R[2][1] * in.R[2][1] + in.R[2][2] * in.R[2][2]);   // (ComponentScale.Z)
+                gravZ *= sz * -2940.0f * dt;
+            }
             for (size_t p = 0; p < rt.parts.size();) {
                 FxParticle& q = rt.parts[p];
                 q.relTime += dt * q.oneOverLife;
                 if (q.oneOverLife > 0.0f && q.relTime >= 1.0f) { rt.parts[p] = rt.parts.back(); rt.parts.pop_back(); continue; }
                 // ParticleModuleAcceleration: Velocity and BaseVelocity += UsedAcceleration * dt
                 for (int c = 0; c < 3; ++c) q.baseVel[c] += q.accel[c] * dt;
+                q.baseVel[2] += gravZ;                            // (Gravity: BaseVelocity.Z; Velocity follows from it below)
                 for (int c = 0; c < 3; ++c) q.vel[c] = q.baseVel[c], q.size[c] = q.baseSize[c];
                 for (int c = 0; c < 4; ++c) q.color[c] = q.baseColor[c];
                 for (const FxModule& m : L.modules) {
@@ -884,22 +902,39 @@ void Pipeline::tickMapFx(float dt) {
                                 for (int c = 0; c < 3; ++c) q.baseVel[c] = L.localSpace ? q.baseVel[c] : wvel[c];
                             break;
                         }
-                    } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
-                        float rad[1], vs[1], off[3], d[3];
+                    } else if (m.name == "PMI_LocationPrimitiveSphere") {
+                        // RE particle audit (c) batch 1 (native spawn runner, stock UE3 structure): per axis a cube sample
+                        // (both signs 2r - 1, + only r, - only -r, neither 0); n = normalize; SurfaceOnly -> n; offset = u x R
+                        // clamped per enabled axis to +-|n_i| R (denser along the axes than a uniform sphere); + StartLocation.
+                        // The Velocity flag adds (p - StartLocation) x VelocityScale. Flags: the module's cooked "fields"
+                        // (AssetTools pstream, the LOD parameter blob), else the class defaults (all six axes on, SurfaceOnly
+                        // off, Velocity off) - with Velocity off the former always-on outward velocity is gone
+                        const bool kPos[3] = {m.field("Positive_X", 1) != 0, m.field("Positive_Y", 1) != 0, m.field("Positive_Z", 1) != 0};
+                        const bool kNeg[3] = {m.field("Negative_X", 1) != 0, m.field("Negative_Y", 1) != 0, m.field("Negative_Z", 1) != 0};
+                        const bool kSurface = m.field("SurfaceOnly", 0) != 0, kVelocity = m.field("Velocity", 0) != 0;
+                        float rad[1], vs[1], off[3], d[3], n[3];
                         evalDist(m, "StartRadius", efrac, in.rng, rad);
                         evalDist(m, "VelocityScale", efrac, in.rng, vs);
                         evalDist(m, "StartLocation", efrac, in.rng, off);
-                        float n2 = 0;
-                        do {
-                            for (int c = 0; c < 3; ++c) { in.rng = in.rng * 1664525u + 1013904223u; d[c] = (float)(in.rng >> 8) / 8388608.0f - 1.0f; }
-                            n2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-                        } while (n2 < 1e-6f || n2 > 1.0f);
-                        float inv = 1.0f / std::sqrt(n2);
-                        for (int c = 0; c < 3; ++c) { d[c] *= inv; v3[c] = off[c] + d[c] * rad[0]; }
+                        for (int c = 0; c < 3; ++c) {
+                            in.rng = in.rng * 1664525u + 1013904223u;
+                            const float r = (float)(in.rng >> 8) / 16777216.0f;
+                            d[c] = kPos[c] && kNeg[c] ? 2.0f * r - 1.0f : kPos[c] ? r : kNeg[c] ? -r : 0.0f;
+                        }
+                        const float dl = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                        for (int c = 0; c < 3; ++c) n[c] = dl > 1e-6f ? d[c] / dl : 0.0f;
+                        float u3[3];
+                        for (int c = 0; c < 3; ++c) {
+                            u3[c] = (kSurface ? n[c] : d[c]) * rad[0];
+                            if (kPos[c] || kNeg[c]) { const float lim = std::fabs(n[c]) * rad[0]; u3[c] = std::min(lim, std::max(-lim, u3[c])); }
+                            v3[c] = off[c] + u3[c];
+                        }
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
-                        toWorldDir(d, w3);
-                        for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
+                        if (kVelocity) {
+                            toWorldDir(u3, w3);
+                            for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
+                        }
                     } else if (m.name == "PMI_Velocity") {
                         evalDist(m, "StartVelocity", efrac, in.rng, v3);
                         toWorldDir(v3, w3);

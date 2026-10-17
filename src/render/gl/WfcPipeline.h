@@ -1215,6 +1215,11 @@ public:
         bool inheritVelocity = false, inheritRotation = false;
         float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
         bool killOnHit = false;           // PMI_Collision: MaxCollisions 0 + EPCC_Kill (AssetTools authored.db)
+        // the module's cooked scalar properties (AssetTools pstream "fields": the LOD parameter blob per instance, else the
+        // class default): numbers / bools as floats, names as strings; absent = the runtime's documented default
+        std::map<std::string, float> fields;
+        std::map<std::string, std::string> fieldNames;
+        float field(const char* k, float def) const { auto it = fields.find(k); return it == fields.end() ? def : it->second; }
     };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {
