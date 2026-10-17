@@ -237,9 +237,9 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - **Off-path cost in extended (> 10-player) matches - reduced in the respin, the rest is package 7**: at 63 bots RT off,
   the death bodies are the whole regression vs package 5 (about 0.2 ms per live body; the mines cost nothing): 1.87 ms
   p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay 9350f19b: a body
-  whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; the rest
-  is the faithful body presentation at 63 bots. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
-  original's player count): [PLACEHOLDER: measured cost with its few live bodies]. The gib trails' particle load is the original's own LOD authoring (see the
+  whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; after it the body cost
+  is +1.3 ms p90 on Berth at 63 bots - the faithful body presentation at that player count. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
+  original's player count): +0.06 ms p90 on Berth (1.57 -> 1.63 ms). The gib trails' particle load is the original's own LOD authoring (see the
   particle LOD note).
 - **Smart ride height / hover**: on top of package 5's tip-over self-righting, package 6 carries the S5 / S6
   vehicle-movement fixes, all with Classic re-baselines: bot hover vehicles turn at the authored AiMaxAngularSpeed /
@@ -325,7 +325,7 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | PASS | p50 Streets 9.26 / Gorge 9.48 / Debris 7.32 / Rust 8.18 / Molten 9.30 ms; p90 10.33 / 11.63 / 8.56 / 10.35 / 10.35 (105-137 fps); Realistic alone p50 7.2-9.4 / p90 8.4-11.4 |
 | R4 leak rows (GPU dedicated over 5 map changes) | PASS | lobby GPU 2180 / 2841 / 2980 / 2974 MB, plateau spread 138 MB |
 | Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | PASS (0 UNKNOWN) | all maps contrast 1.28 / 1.30 (Realistic / + Enhanced); per map 1.14-1.48; authored views 1.25-1.88 |
-| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | [PLACEHOLDER] | dry run 64771c71 + matfix: all rows PASS; build plan a5db23da clean (~27.5 GB) |
+| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | PASS | 9350f19b (work/verify_9350f19b/REPORT.md): HD 3,505 + 498 M6 rows, 4,005 files, 0 problems; bin 20 / 20 + M5; overlay barrier + frozen 85 / 85; Streets / Gorge / Debris PASS (0 [error], 0 outside reads, 0 failing opens); Settings 7 / 7; RT gate build / context / runtime / r4 / rtlights / defaults 27 / 27; HD runtime at level 2: 3505 textures, 498 modern maps, Modern on for MP_IAC_Streets |
 | FAST gate | PASS 59 / KNOWN 1 (ribbon / beam FX) / PRODUCT FAIL 0 / HARNESS FAIL 0 | on 7cd22027 and the 4078e47b delta; [PLACEHOLDER: the respun 9350f19b delta] |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | PASS | BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn); | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
-| Settings survive map change (WFC_SETTINGSTEST) | PASS 7 / 7 | verify rehearsal on 4078e47b; [PLACEHOLDER: the 9350f19b verify] |
+| Settings survive map change (WFC_SETTINGSTEST) | PASS 7 / 7 | 9350f19b verify (and the 4078e47b rehearsal) |

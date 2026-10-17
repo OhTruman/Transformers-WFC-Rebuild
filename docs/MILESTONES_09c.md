@@ -2183,3 +2183,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (+0.06 ms: essentially free at the original default). PACKAGE-GATE 9350f19b: regress REPORT (bodies), 1b REPORT
   >= 60 fps, leak PASS, eye pass 1.28 / 1.30, FAST PASS x2 (results on Experimental's branch 7d736441). Systems
   GO for the RT + HD rows, then the quiet promote; the card is Rendering's after that until 00:00.
+  2026-10-16 19:38 CHECKPOINT PROMOTED (internal, no hand-over): work/playtest_slim = 9350f19b (verify_slim PASS exit 0:
+  static 4,005 HD files 0 problems, bin 20 / 20, overlay 85 / 85, maps Streets / Gorge / Debris PASS, Settings 7 / 7,
+  RT gate PASS incl. rtlights + defaults 27 / 27, HD runtime level 2 PASS 3505 + 498 + Modern on); package 5 kept as
+  playtest_slim_398b27ef; 4078e47b deleted; F: 128 GB. x3-gate.sh + the busy watchdog synced (d0a6e8e5, c1597d0a).
+  Card = Rendering's for x3f1 until 00:00.
