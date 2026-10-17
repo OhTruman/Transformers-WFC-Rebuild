@@ -704,6 +704,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             if (&movies_[i].movie->player() == graphicsPagePlayer_) { graphicsPagePlayer_ = nullptr; volumetricGateShown_ = -1; }
             if (&movies_[i].movie->player() == audioPagePlayer_) { audioPagePlayer_ = nullptr; micMeterShown_.clear(); }
             if (&movies_[i].movie->player() == firstRunAudioPending_) firstRunAudioPending_ = nullptr;
+            if (&movies_[i].movie->player() == firstRunFooterHidden_) firstRunFooterHidden_ = nullptr;
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1317,6 +1318,13 @@ void GfxPresenter::syncAudioPage(gfx::Player& p, frontend::GameFlow& flow) {
 void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const std::string& movie) {
     gfx::avm1::VM& vm = p.vm();
     using V = gfx::avm1::Value;
+    if (firstRunFooterHidden_ == &p) {   // the settings menu closed (it restores the lobby menu's alpha): the footer back
+        gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc");
+        if (!anchor || !anchor->script || vm.toNumber(vm.get(anchor->script, "_alpha")) >= 99.0) {
+            if (gfx::MovieClip* footer = findClipNamed(p.root(), "footer_mc"); footer && footer->script) vm.set(footer->script, "_alpha", V(100.0));
+            firstRunFooterHidden_ = nullptr;
+        }
+    }
     if (firstRunAudioPending_ == &p) {
         if (gfx::MovieClip* audio = findClipNamed(p.root(), "audioBtn_mc"); audio && audio->script && vm.get(audio->script, "onClick").isObject()) {
             vm.callMethod(V(audio->script), "onClick", {});
@@ -1344,6 +1352,11 @@ void GfxPresenter::runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const
             if (gfx::MovieClip* anchor = findClipNamed(p.root(), "menuAnchor_mc"); anchor && anchor->script) {
                 vm.set(clip.o, "hideClip", V(anchor->script));   // the settings menu restores it on close
                 vm.set(anchor->script, "_alpha", V(0.0));
+                // the lobby's footer (Back / XP hints, the hint line) would show through: hidden until the menu is back
+                if (gfx::MovieClip* footer = findClipNamed(p.root(), "footer_mc"); footer && footer->script) {
+                    vm.set(footer->script, "_alpha", V(0.0));
+                    firstRunFooterHidden_ = &p;
+                }
             }
             p.loadMovieInto(static_cast<gfx::MovieClip*>(clip.o->display), "../Settings/SettingsMenu.swf", nullptr);
             firstRunAudioPending_ = &p;
@@ -1517,10 +1530,13 @@ void GfxPresenter::syncModeOptionBots(gfx::Player& p, frontend::GameFlow& flow) 
             vm.set(it.o, "__wfcBots", V(true));
             if (flow.online() && (field == "autobot" || field == "decepticon" || field == "enemy")) {
                 // online (Systems 10.5): a leaver's seat goes to a bot when bot rows are on - the row says so
+                // the page has no hint widget of its own: the party lobby's footer hint (footer_mc.hint_mc), as its menus use
                 gfx::avm1::Object* page = menu->script;
-                vm.set(it.o, "onOver", V(vm.newFunction([page](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
-                    V w = v.get(page, "HintWidget");
-                    if (!w.isObject()) w = v.get(page, "hint_mc");
+                gfx::avm1::Object* root = p.root() ? p.root()->script : nullptr;
+                vm.set(it.o, "onOver", V(vm.newFunction([page, root](gfx::avm1::VM& v, const V&, gfx::avm1::Args&) -> V {
+                    V w;
+                    if (root) { const V f = v.get(root, "footer_mc"); if (f.isObject()) w = v.get(f.o, "hint_mc"); }
+                    if (!w.isObject()) w = v.get(page, "HintWidget");
                     if (w.isObject()) v.set(w.o, "HintText", V(std::string("$WfcPC.Online.BotsLeaverDesc")));
                     return V();
                 }, "onOver", 0)));

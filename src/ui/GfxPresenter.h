@@ -155,6 +155,7 @@ private:
     void runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const std::string& movie);
     gfx::Player* firstRunAudioPending_ = nullptr;   // Voice Settings: open the Audio page once the settings movie is in
     int firstRunAudioFrames_ = 0;
+    gfx::Player* firstRunFooterHidden_ = nullptr;   // the lobby footer hidden under the settings menu (restored on close)
     int volumetricGateShown_ = -1;   // 1 = Off / On offered, 0 = "Realistic only", -1 unknown
     void syncVolumetricRow(gfx::Player& p);
     bool prevMouseLeft_ = false;
