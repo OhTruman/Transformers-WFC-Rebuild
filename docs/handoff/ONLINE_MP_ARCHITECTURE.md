@@ -126,6 +126,10 @@ peer and dropped afterwards (the peer's address is then the key).
     within 4 m, -6 dB per doubling, silent beyond 64 m (the host's proximity cut-off for fan-out: 64 m);
   - **occlusion:** the existing sound-occlusion traces (the same low-pass / attenuation every 3D cue gets);
   - **panning:** the existing 3D pan.
+- **Room source (RE MP_REVERB_ROOMS_RE 54f4519; Integration):** the "listener's room" below is the SAME current room the match audio
+  already keeps: AmbientAudio's current SeqAct_Reverb preset (Touch / UnTouched on the local pawn, last room wins, dry at load).
+  - The original's VOIP was not in the MASTER_WET categories [H], so proximity voice reverb is the user's addition. It keys off that
+    current preset, plus the second I3DL2 instance for a talker in another room, as below.
 - **Reverb (the room):** the rebuild's maps do not use ReverbVolume actors (one in all of authored.db, none in MP). The
   original sets the room reverb with **Kismet SeqAct_Reverb actions** fired by Touch volumes (MP maps: 7-49 per map) - the
   data we already export (tools/systems/gen_level_audio.py -> LevelAudio.inc: the Touch volumes' brush polygons, the
