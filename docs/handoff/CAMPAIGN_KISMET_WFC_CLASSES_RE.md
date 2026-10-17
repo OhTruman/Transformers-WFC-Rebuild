@@ -425,3 +425,211 @@ CheckSpecialSpawnLogic(C, CharacterName):
    *SpawnIsAI* = true; Handled has no UI event (not a PlayerController).
 
 The action must be **armed** (Start input) and its `Character` must match the spawning character's name.
+
+
+---
+
+# Batch 2: the next 32 classes by campaign instance count (RE, 2026-10-18)
+
+**Progress: 64 / 176 classes decoded** (batch 1 = §1–32 above; batch 2 = §33–64 below). Ranking from
+`notes/data/campaign_kismet_classes.json`: status (c), most instances first, editor-only frames skipped.
+
+**Locator:** `tools/kismet_native.py <Class>` resolves the wide name "U<Class>" → class registration → InternalConstructor → vtable.
+Slots, CONFIRMED by diffing the vtables of SetBool / SetInt / Switch / Log / CauseDamage / Conversation:
+
+| Slot | Meaning |
+|---|---|
+| **+0x170** | **Activated** (per class) |
+| +0x16C | Update (latent ops only; the base is 0x82F09458) |
+| +0x17C | the input-impulse hook (base 0x82F09438; FinishSequence calls it on the parent's linked ops) |
+| SeqVar +0x164 / +0x168 / +0x16C / +0x178 / +0x180 | GetIntRef / GetBoolRef / GetFloatRef / GetStringRef / **GetObjectRef** |
+| SeqVar +0x184 | GetValueStr |
+
+**Generic action dispatch (C, 0x82F4C7B8):** this is the shared SequenceAction Activated, used by every action without its own
+native body.
+- When bCallHandler is set, for each **Targets** entry, call the script function **"On" + class name minus "SeqAct_"** on the target
+  (FindFunction + ProcessEvent).
+- If the target lacks it: if the target is a Pawn, try its Controller; if a Controller, try its Pawn.
+- Below, "handler" names the script that actually runs.
+
+Labels: C = bytecode / native code read; H = stock UE3 behaviour, native body not read (address given). Classes with no "In / Out"
+listed inherit the SequenceAction defaults (In → Out).
+
+## 33. TnSeqVar_Character (2,863, data, WFC)
+- Props: Character (TnCharacterData), ChassisTypePathName (resolved at load / edit), VarName.
+- **GetObjectRef 0x829F8658** → 0x829F85F0 → script `FindMatchingPawn` (C): the **first TnPawn in AllPawns whose
+  `_CurrentCharacter.ChassisType` path equals ChassisTypePathName**, re-resolved on every read (none → empty).
+- `GetCharacterName` = Character.AiCharacterDataResolved.CharacterName (the AI actions use it; batch 1 notation).
+- **Ours:** resolve by chassis path at read time, not cached; it can return a player pawn when the player plays that character.
+
+## 34. SeqVar_Named (1,772, data)
+- Props: FindVarName, ExpectedType.
+- Resolved at sequence load to the same-named variable anywhere in the level's sequences (stock). The ref slots are stubs
+  (0x827BF7C8), and GetValueStr is 0x82F25D60.
+- **Ours:** link at load by VarName across all sequences of the level (persistent + streamed); unresolved = empty.
+
+## 35. SeqVar_Int (1,563) · 38. SeqVar_Float (1,220) · 45. SeqVar_Bool (502) · 48. SeqVar_String (380)
+- Plain value holders: GetIntRef / GetFloatRef / GetBoolRef / GetStringRef return the address of Value (0x82794B10 shared).
+- **Ours:** a typed cell shared by every linked op.
+
+## 36. SeqAct_CauseDamage (1,400)
+- **VAR** Target → Targets, Amount → DamageAmount (Float), Instigator (Object). Props: DamageType (default DmgType_Default),
+  Momentum.
+- Native vtable 0x82312B08; **Activated = generic dispatch → `Actor.OnCauseDamage`** (C):
+  - instigator controller = Action.Instigator as Controller, or its Pawn's Controller;
+  - `TakeDamage(DamageAmount, InstigatorController, Location, −Momentum along the rotation, DamageType)`.
+- `Controller.OnCauseDamage` forwards to its Pawn.
+- **Ours:** use the normal damage path (death / gib / TakeDamage events fire). The campaign uses it for scripted kills and wall
+  breaks (e.g. Escalation's 200-damage walls).
+
+## 37. SeqVar_Player (1,273, data)
+- Props: bAllPlayers (default true), bOnlyLocalPlayers, PlayerIdx.
+- **GetObjectRef 0x82F25898** (C):
+  - rebuilds the list on every read from the controller list: PlayerControllers, local only when bOnlyLocalPlayers;
+  - bAllPlayers → all of them; else Players[PlayerIdx].
+- **Ours:** co-op aware. All human players, or local only when flagged.
+
+## 39. SeqVar_External (1,020, data)
+- VariableLabel. It's the sub-sequence's input port: the parent Sequence's variable link of that label supplies the value
+  (stock). Ref slots are stubs.
+- **Ours:** alias to the parent sequence's linked variable.
+
+## 40. SeqAct_Destroy (748; no native class)
+- Handler **`Actor.OnDestroy`** (C): bNoDelete or a non-authority role → Shutdown(); else DestroyActor().
+  - `Pawn.OnDestroy` first calls `Game.NotifyExplicitDestroy(self)`;
+  - `PlayerController.OnDestroy` refuses ("Cannot use Destroy action on players").
+- **Ours:** destroy targets, with those three rules.
+
+## 41. TnSeqVar_Buddy (679, data, WFC)
+- Prop: BuddyIndex 1–2.
+- **GetObjectRef 0x829F79C0** → script `FindBuddy` (C): `CampaignGame.GetAiTeammates()[BuddyIndex − 1].Pawn` (none if absent).
+- `GetCharacterName` = `AiSquad.GetMemberNames()[BuddyIndex − 1]`.
+- **Ours:** AI teammate slot 1 / 2 of the campaign squad, resolved per read.
+
+## 42. SeqAct_ForceFeedback (639; no native class)
+- **IN** Start, Stop. Prop: FFWaveform.
+- Handler **`PlayerController.OnForceFeedback`** (C): Start → ClientPlayForceFeedbackWaveform(FFWaveform); Stop → stop it.
+- **Ours:** rumble on the targeted players (respect the PC rumble setting).
+
+## 43. SeqAct_CameraShake (601; no native class; HM handler)
+- **IN** Timed, Continuous, Stop. Props: CameraShake, GlobalScale, GlobalAmplitudeScale, GlobalFrequencyScale (all 1).
+- Handler **`HmPlayerController.OnCameraShake`** (C):
+  - shake = CameraShake with TimeDuration × GlobalScale; Rot / Loc / FOV Amplitude × (GlobalScale × GlobalAmplitudeScale);
+    Frequency × (GlobalScale × GlobalFrequencyScale);
+  - **Timed** → PlayCameraShake(shake);
+  - **Continuous** → TimeDuration = 9,999,999;
+  - **Stop** → TimeDuration = −1 (replaces the running shake).
+- Shake model: WEAPON_CAMERA_SHAKE_RE.
+
+## 44. SeqAct_Switch (509)
+- **OUT** Link 1…LinkCount. **VAR** Index → Indices (Int). Props: LinkCount, IncrementAmount (1), bLooping, bAutoDisableLinks.
+- **Activated 0x82F5A970** (C, asm), for each Indices value i (1-based):
+  - if 1 ≤ i ≤ #outputs and that output isn't disabled → fire it, and if bAutoDisableLinks disable it;
+  - then if IncrementAmount ≠ 0: i += IncrementAmount, and if bLooping, i = ((i − 1) mod #outputs) + 1;
+  - written back to the variable.
+
+## 46. SeqCond_CompareBool (432)
+- **OUT** True, False. **VAR** Bool.
+- **Activated 0x82F308F0** (C): result = AND of all linked bools (none → true); fire True if true else False, unless that output is
+  disabled.
+
+## 47. SeqAct_FinishSequence (390)
+- Prop: OutputLabel.
+- **Activated 0x82F183C0** (C): in the parent Sequence, find the output link bound to this op. For each op linked from it (not
+  disabled): set its input impulse, call its input hook (+0x17C), and queue it on the parent sequence (+0x19C).
+- **Ours:** a sub-sequence output port that fires the parent's outgoing links of that label.
+
+## 49. SeqVar_RandomFloat (367, data)
+- Props: Min (0), Max (1). **GetFloatRef 0x82F506D8** (C): a **new uniform random in [Min, Max] on every read**.
+
+## 50. SeqAct_AttachToActor (342; no native class)
+- **VAR** Target, Attachment. Props: bDetach, bHardAttach (true), BoneName, bUseRelativeOffset / Rotation, RelativeOffset /
+  Rotation.
+- Handler **`Actor.OnAttachToActor`** (C), for each Attachment (a Controller → its Pawn):
+  - bDetach → SetBase(none);
+  - else DoKismetAttachment(attachment, action) on the target (a Controller target → its Pawn): stock SetBase with bHardAttach,
+    bone and relative offset.
+
+## 51. SeqAct_Log (335)
+- **VAR** String / Float / Bool / Object / Int / Target. Props: bOutputToScreen, bIncludeObjComment, TargetDuration.
+- **Activated 0x82F30280** (C): concatenates every linked variable's GetValueStr into one line and logs it (screen output when
+  enabled).
+- **Ours:** debug log only. Don't show it on screen in normal play.
+
+## 52. SeqAct_SetBool (303)
+- **VAR** Target (Bool), Value (Bool). **Activated 0x82F309B8** (C): v = AND of the Value vars (none → the DefaultValue bit); write
+  v into every Target bool.
+
+## 53. SeqVar_ObjectList (277, data)
+- An object array. GetObjectRef 0x82F18080 serves indexed entries (stock). The list ops (SeqAct_ModifyObjectList) are separate.
+
+## 54. SeqAct_Teleport (230; script CheckForErrors only)
+- **VAR** Target, Destination → DestinationActor. Prop: bUpdateRotation (true).
+- Handler chain (C):
+  - `Controller.OnTeleport` → Pawn.
+  - `Pawn.OnTeleport`:
+    - server only;
+    - picks the Destination matching the target's index in the Target list (else the first);
+    - a Controller destination → its Pawn;
+    - SetLocation + PlayTeleportEffect;
+    - with bUpdateRotation: pawn, controller and client rotation + DesiredRotation;
+    - then Controller.OnTeleport(none).
+  - **`TnPawn.OnTeleport`**:
+    - ends any interaction;
+    - anchors to the Destination NavigationPoint (or the best anchor);
+    - after the move, traces 500 UU down: in vehicle form snaps to the ground + height + 1 and FindSpotAwayFromPawns;
+    - ClientTeleport for remote pawns; SetBase on the hit actor.
+  - `TnAiController.OnTeleport` clears scripted turret states.
+  - `TnPlayerController` → Game.NotifyTeleported.
+  - `HmPlayerController` → camera Reset.
+
+## 55. SeqAct_ToggleNavGate (195; no native class)
+- **IN** Open, Close, Toggle. Handler **`NavigationPoint.OnToggleNavGate`** (C): bGateOpen = true / false / not bGateOpen, then
+  Game.NotifyNavigationChanged.
+- **Ours:** gate a nav point for AI pathing.
+
+## 56. SeqAct_SetInt (183) · 58. SeqAct_SetFloat (143)
+- **VAR** Target, Value. Activated **0x82F5B4D0** / **0x82F5B3F0** (H, stock): Value (sum of the linked Value vars, or the Value
+  prop) written to every Target.
+
+## 57. SeqCond_Increment (161)
+- **OUT** A<=B, A>B, A==B, A<B, A>=B. **VAR** A → ValueA, B → ValueB. Prop: IncrementAmount (1).
+- **Activated 0x82F583E0** (H, stock): A += IncrementAmount (written back), then fire every output whose relation holds.
+- Used by Escalation's round counters (MP_ESCALATION_RE §5a).
+
+## 59. SeqAct_ChangeCollision (141; no native class)
+- Prop: CollisionPreset.
+- Handler **`Actor.OnChangeCollision`** (C):
+  - SetCollisionPreset(Action.CollisionPreset);
+  - re-apply BlockRigidBody on the collision component;
+  - ForceNetRelevant;
+  - replicate bCollideActors / bBlockActors.
+
+## 60. SeqAct_RandomSwitch (132)
+- **OUT** Link 1…N. **VAR** Active Link → Indices.
+- **Activated 0x82F5AC00** (C): pick uniformly among the **non-disabled** outputs and fire it; if bAutoDisableLinks, disable it;
+  write the chosen index + 1 to Active Link.
+
+## 61. SeqEvent_TakeDamage (125; script)
+- **VAR** Instigator, Damage Taken. Props: DamageThreshold (100), MinDamageAmount, DamageTypes / IgnoreDamageTypes, bPlayerOnly.
+- Fired from `Actor.TakeDamage` / `KActor.TakeDamage` → `HandleDamage` (C):
+  - accumulates hits ≥ MinDamageAmount of valid types (bPlayerOnly: player instigators);
+  - when CurrentDamage ≥ DamageThreshold → activate; Damage Taken = CurrentDamage (added if it already fired this tick);
+  - then CurrentDamage −= DamageThreshold (or 0 if the threshold is ≤ 0).
+- Reset clears it.
+
+## 62. SeqCond_CompareObject (124)
+- **OUT** A == B, A != B. **Activated 0x82F33388** (C): equal if every A equals every B, **treating a Pawn and its Controller as
+  equal** (either side's +0x1C8 link).
+
+## 63. SeqCond_CompareInt (119)
+- 5 relation outputs. **Activated 0x82F580C8** (H, stock): fire every output whose relation between ValueA and ValueB holds.
+
+## 64. SeqAct_AttachToEvent (101)
+- **VAR** Attachee. **EV** Event. **Activated 0x82F33C40** (C):
+  - for each Attachee (a Controller → its Pawn when flagged): instantiate a copy of each linked event for that actor;
+  - add it to the actor's GeneratedEvents with originator = the attachee.
+- So events (Death, TakeDamage …) start firing for spawned / dynamic actors.
+
+**Next (65+), by instances:** SeqAct_SetActorMatInstScalarParam 92, SeqCond_CompareFloat 92, SeqAct_AddInt 83, SeqAct_GetDistance
+81, …
