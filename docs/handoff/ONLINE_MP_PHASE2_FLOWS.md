@@ -113,11 +113,16 @@ PSN overlay. Ours opens when the leader asks for a code. Why: no overlay, no pre
 
 ### 3.5 P5 - Leaving and leader loss
 - Leave: `LeaveParty` / `LeavePartyConfirm`; the member returns to its own (offline) party lobby.
-- Leader quits or drops: **disband** (until R8), with `$Engine.Errors.ConnectionFailedHostQuit` reworded for a party
-  **[PC text]** ("The party has ended because the leader has left."). Members keep their current game if one is running.
+- Leader quits or drops (D12): the party session **promotes the next member** (the oldest join) to leader and sends
+  `PartyLeaderChanged{member, code}`. A browser member is skipped (B3: it cannot host). The new leader's party lobby
+  becomes actionable (mode / Private Match rows, the code panel: the same code through a relay room, the new leader's
+  code with a direct one - section 5); the others keep the waiting popup. Everyone sees the original
+  kill-feed style line in the lobby **[PC text]** "`k is now the party leader." (the original has no leader-change text;
+  R8 may supply one). Members keep their current game if one is running.
+- If the leader was the last member, the party simply closes.
 
-**Simplified:** disband instead of promotion (if R8 says the original promoted). Why: promotion needs a second leader
-election in the session layer; the visible cost is one re-invite.
+**Simplified:** none known (R8 open: if the original disbanded instead, promotion is a PC adaptation kept by D12).
+Why promote: one re-invite less for everyone; the party code survives.
 
 ### 3.6 P6 - After the match
 - The game ends as in phase 1 (back to the game host's lobby). Leaving that lobby returns each party member to the party
@@ -125,13 +130,15 @@ election in the session layer; the visible cost is one re-invite.
 
 ### 3.7 I1-I3 - Friends and invites without a service
 - **I1 Friends List (OnlineFriendsMenu_GFX)** stays the original movie. `<OnlinePlayerData:Friends>` is filled with
-  **recent players** **[PC adaptation]**: everyone met in an online lobby, newest first, kept in the profile
-  (`[RecentPlayers]`, display name + fingerprint + last seen), `PresenceInfo` = "Last played <date>" **[PC text]**.
-  `NickName` = the display name.
-- **I2 Send an invite** (`Online.SendGameInvite(nick)`): without a mailbox (D13), the invite is the current game or party
-  code copied to the clipboard and the prompt `GameInviteSentMessage` reworded **[PC text]**: "Invite code copied. Send
-  it to `p." `GameInvitePreviouslySent` keeps its rule per lobby.
-- **With a mailbox (D13 option b):** the relay keeps a per-fingerprint inbox; `SendGameInvite` posts the code, the
+  **recent players** **[PC adaptation]** (D15): everyone met in an online lobby or party, the last 50 by last seen,
+  newest first, kept in the profile (`[RecentPlayers]`, display name + fingerprint + last seen; written only when not
+  empty, so offline profiles are unchanged). `PresenceInfo` = "Last played <date>" **[PC text]**, or the original's
+  `$UIText.OnlineFriends.Online` when the relay mailbox reports the player online. `NickName` = the display name. A fresh
+  profile shows the original "No friends online" text (`NoFriendsOnline`).
+- **I2 Send an invite** (`Online.SendGameInvite(nick)`, D13): **always** the current game or party code copied to the
+  clipboard, with `GameInviteSentMessage` reworded **[PC text]**: "Invite code copied. Send it to `p." This path works
+  with no relay. `GameInvitePreviouslySent` keeps its rule per lobby.
+- **Also, when both sides are online through the relay (D13):** the relay keeps a per-fingerprint inbox; `SendGameInvite` posts the code, the
   receiver's FriendMessages row shows `OnlineFriends.Invited` ("Sent you a game invite!"), `GameInviteReceivedMessage`
   pops ("`p wants to play"), accepting runs `Online.JoinFriendGame` -> phase 1 join; failure -> `JoinGameInviteFailedTitle`
   / `JoinGameInviteFailedMessage`; mailbox unreachable -> `...NotLoggedIntoOnlineServiceMessage`.
@@ -148,12 +155,13 @@ the movie, its rows and texts stay the original's.
 ### 3.9 B1-B6 - PC to browser
 - **B1 First run (browser):** before the main menu: "Select your game data folder" and "Click to start" **[PC texts;
   web]**; then the main menu as on PC. Settings: browser-only rows (no HD, no RT; Off / Faithful).
-- **B2 Browser joins a PC host:** the Join Game prompt as on PC. A browser cannot reach `host:port`; a code must lead to
-  a signalling point (D14): (a) the relay doubles as the WebRTC signalling server (recommended), or (b) copy-paste of
-  offer / answer (two codes each way). The joining popup, failures and texts are phase 1's; a host without WebRTC
-  support -> `JoinFailed{Version}` text **[PC text]** "This game does not accept browser players."
+- **B2 Browser joins a PC host:** the Join Game prompt as on PC. A browser cannot reach `host:port`, so (D14) the relay
+  doubles as the WebRTC signalling server: a PC host that accepts browser players registers its room with the relay, and
+  its code names the relay room ("WFC-R-..."); the browser exchanges offer / answer there. No copy-paste offers. The
+  joining popup, failures and texts are phase 1's; a host code without a relay room -> `JoinFailed{Version}` text
+  **[PC text]** "This game does not accept browser players."; the relay unreachable -> phase 1's Timeout text.
 - **B3 Browser hosting:** not offered; Private Match -> Create Game shows D2's "Unable to Host" with a web text
-  **[PC text]** "Hosting needs the PC version." Parties: a browser can join a party but not lead one (same reason).
+  **[PC text]** "Hosting needs the PC version." Parties: a browser can join a party but not lead one (same reason); D12's promotion skips browser members.
 - **B4 Mixed lobbies:** D10 (5 v 5 cap) and D11 (platform tags) are implemented in phase 1 code; the host's Player
   Limit row shows the cap's reason in its hint **[PC text]**.
 - **B5 Voice in the browser:** the microphone permission prompt appears the first time voice is used (getUserMedia);
@@ -183,7 +191,12 @@ the movie, its rows and texts stay the original's.
 
 - `hostParty()` / `joinParty(code)` / `leaveParty()`: a party session beside the game session (one each at most).
 - Events: `PartyOpened{code}`, `PartyMemberJoined/Left{member, info}`, `PartyFollow{code}` (leader -> members),
-  `PartyDisbanded{why}`, `InviteReceived{from, code}` (mailbox only).
+  `PartyLeaderChanged{member, code}` (D12), `PartyClosed{why}` (the last member left / an error ->
+  `$UIText.Errors.PartyLobbyError`), `InviteReceived{from, code}` (mailbox only).
+- Leader promotion (D12) in a star topology: the promoted member (the oldest join among PC members - a browser cannot
+  host, B3) re-hosts the party session and the others reconnect to it inside the session layer. With a relay room the
+  party code is unchanged; with a direct code `PartyLeaderChanged` carries the new code (the panel shows it). The frontend
+  only reacts to the event.
 - `SessionMemberInfo` unchanged (it already carries platform, level, voice through MemberVoice, iconicCharacter).
 - `sendInvite(fingerprint, code)` (mailbox only); the relay's mailbox API is Systems' (phase 3).
 - WebRTC: `join(code)` accepts signalling codes; nothing else changes on the frontend side.
@@ -191,17 +204,21 @@ the movie, its rows and texts stay the original's.
 ## 6. Tests (headless, FakeSession, as phase 1)
 
 P1 party code shown; P2 join a party by code; P3 member waits (popup, rows read-only); P4 follow (all members join the
-leader's game; one failing member keeps the party); P4b party too large (texts with `g `i `n); P5 leave / leader loss
-(disband text); P6 back to the party lobby; I1 recent players rows; I2 invite = code copied (+ mailbox variant);
+leader's game; one failing member keeps the party); P4b party too large (texts with `g `i `n); P5 leave; P5b leader loss
+(promotion: the oldest PC member leads, the line, rows become actionable; the last member closes the party); P6 back to the party lobby; I1 recent players rows; I2 invite = code copied (+ mailbox variant);
 B2 browser join through a signalling code; B3 browser cannot host (text); B6 tab close = PeerDropped.
 
 ## 7. Decisions (D) and open RE questions (R)
 
-- **D12** Party leader loss: disband (proposed, until R8) or promote.
-- **D13** Invites: (a) code copied, nothing sent (proposed for phase 2 LAN); (b) a relay mailbox per fingerprint
-  (phase 3, with the relay).
-- **D14** Browser signalling: (a) the relay as WebRTC signalling server (recommended); (b) copy-paste offer / answer.
-- **D15** Friends List content: recent players (proposed) vs an empty list with only "join by code".
+Decided by default 2026-10-17 by Integration (rebuild-07); the user can override (Integration lists them to the user).
+
+- **D12 decided (default):** party leader loss PROMOTES the next member (the oldest join); the party survives. The
+  original's text is used where one fits (3.5).
+- **D13 decided (default):** invites always copy the code (this path works with no relay); when both sides are online
+  through the relay, its per-fingerprint mailbox also delivers the invite (3.7).
+- **D14 decided (default):** browser signalling goes through the relay; no copy-paste offer / answer (3.9 B2).
+- **D15 decided (default):** the Friends List shows recent players, the last 50 by last seen; it is empty only on a
+  fresh profile (3.7 I1).
 - **R8** Party leader loss in the original (promotion or disband).
 - **R9** Where party members went after a match (party lobby or game lobby).
 - **R2** (phase 1) per-mode party size limits, used by P4's check.
