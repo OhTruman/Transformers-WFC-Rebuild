@@ -2799,3 +2799,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   pick it): Gameplay sim item after session hooks. Weapon + melee batch corrected (turret rows, eb08b8b1); 50-min NAVQ
   re-baseline on 8a080210 WITH SIMHASH running. Frontend phase 2 docs complete (e3f6b6ac strings + tests); next: voice chat UI
   on FakeSession. AssetTools: PACKAGE7_SLIM_AUDIT.
+2026-10-17 10:24 MERGED ef34a4f2: no distortion program for BLEND_Modulate materials (RE: the original cooks none for BlastSphere_Death_MAT; our x20
+  death swirl gone; translucent distortion keeps its pair); Systems' translator scan lists the rule's reach. Systems' combined
+  15-min slot GRANTED after (B): full_bin = 5fc2e552 + 6 patches (body notify, physmat impacts, ability trigger FX, drain beam,
+  test switches, TRAIL2_DENY); Streets family pair with forced Drain / Warcry + Remnant physmat pair. Card order after (B):
+  Systems 15 -> Gameplay 4 -> Frontend 1 -> Rendering ~10 (flash re-run + Set D views). Frontend: voice UI mostly merged
+  (Group F rows, HeadsetState talker icon, mute, Hud sprite 573 talker list); adding Mic Test + PTT "Custom..." capture + V4-V7.
