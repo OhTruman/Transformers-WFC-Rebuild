@@ -2194,3 +2194,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   face bones per robot (33 on KON Megatron), 3,580 dialogue animations linked to BL_DX_SWITCHBOARD cues; the
   animation block decoded (curves: node index, i16 times, i8 values; 3,505 / 3,579 blocks land exactly); not yet:
   name-table widths, master bone list / face graph, value scale, interpolation, the KON exceptions.
+  2026-10-16 19:59 X3 FIRST LOOK (Rendering x3r2, Molten sun views; work/fsr3/x3r2_509sun.png sent to the user): real
+  shafts cut by geometry; sun shadow rays block indoors; lamp halos local after an inverse-square core (2 m); sun
+  phase normalised; per-map medium (Gorge 2x fog); X1 contrast 1.20 on X3 frames. Authored views X3 on / off:
+  contrast 0.94-1.08 (mean ~1.02), brightness -5 % -> the sheet floor should hold; sun views 0.58-0.71 (into the
+  sun). My eye notes for the candidate: firefight_sun veil too uniform (reds go grey), lane_sun diagonal streaks
+  (slice / jitter aliasing; check in motion), lane_sun loses the purple lamp hue. Candidate = 9350f19b + X3,
+  identity + SETTINGSTEST tonight, x3-gate.sh tomorrow with the _sun / _lamp views added (reported, not in the floor).
+  User: reboot at any time tonight when home; lanes keep WIP committed + resume notes current.
