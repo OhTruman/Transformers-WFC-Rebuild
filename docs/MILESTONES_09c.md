@@ -2996,3 +2996,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   head: the door head (Gameplay collision + Rendering draw + 6 materials, stage (b) lighting if passed), Systems' stack, the
   weapon + melee batch (axis check + wobble), the cand30 / x14 verdicts. Gap after Rendering (~12:35): Gameplay wobble 3 ->
   Systems re-run 10 (after the FX data install) -> Frontend HUD re-run 5 -> Experimental's 1e11edc2 Off / Faithful pair 10.
+2026-10-17 11:42 RE correction (scanner VF labels one block off; attribution unaffected): lens flares DO cook their VF shaders -> the original draws
+  its 32 LensFlareComponents (6 MP maps) with the stock path; asked Rendering whether we draw them at all (likely a missing authored
+  element); RE writes LENS_FLARE_RE.md, then WEAPON_CAMERA_SHAKE_RE.md (audit gap 1) for Gameplay's next batch. Distortion
+  allow-list v3 (same materials, corrected VF names); static-decal PSs add the decal tangent frame.
