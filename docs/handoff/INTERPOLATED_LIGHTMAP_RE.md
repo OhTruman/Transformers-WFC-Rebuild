@@ -23,16 +23,16 @@ u8          1 (all)
 u32 N       0 → unbuilt: the tail ends here (21 bytes; 198 campaign instances, none in MP)
 -- built (N = 1) --
 u32 ×3      0, 0, 3 (all built; meaning UNKNOWN)
-u32 n, n × GUID16      union of all captures' baked lights (light LightGuid)
+u32 n, n × GUID16      union of all captures' baked lights (light **LightmapGuid**)
 u32         0
 u32 C       capture count = 2 (all 697 built)
 C × capture:
   u32 type             2 = texture light map (2D) on all
-  u32 g, g × GUID16    lights baked into this capture (LightGuid)
+  u32 g, g × GUID16    lights baked into this capture (light **LightmapGuid**)
   u32                  0
   3 × { u32 export index → LightMapTexture2D, float4 ScaleVector }   one per directional coefficient
   float2 CoordinateScale, float2 CoordinateBias                      the capture's atlas rectangle in those textures
-u32 m, m × GUID16      static lights that do NOT affect this mesh (H: the "irrelevant lights")
+u32 m, m × GUID16      static lights that do NOT affect this mesh (light **LightGuid**; H: the "irrelevant lights")
 ```
 
 **Example**: MP_ESC_BrokenHope TnTransformingWorldActor_11211.

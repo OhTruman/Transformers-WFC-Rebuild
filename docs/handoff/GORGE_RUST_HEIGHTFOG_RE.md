@@ -90,3 +90,34 @@ decides only the composite order: the layer composited last is not attenuated by
 4. LightBrightness **0** (Rust low) must give no in-scatter. The **defaults** apply where the field is absent: Gorge −1530 has
    brightness 0.1, not 1.
 5. No clamp before the scene's 7e3 store. In Off, the original's 3.984 cap applies after the blend.
+
+## (4) CPU fill — CONFIRMED (2026-10-18, Ghidra)
+
+Supersedes the H "CPU fill" above.
+
+**`FHeightFogSceneInfo` ctor 0x82ED6CF8** (from UHeightFogComponent, at AddHeightFog 0x82EAD5B0):
+- Component;
+- **Height** (+0x44) and **Density** (+0x48) copied raw;
+- **LightColor = FLinearColor(FColor @+0x50) × LightBrightness (+0x4C)** on all four channels. The conversion 0x82B15F08 is
+  **sRGB → linear via the (c/255)^2.2 table** for RGB (128 → 0.2195) and c/255 for A;
+- ExtinctionDistance (+0x54), StartDistance (+0x58).
+
+**Per-view setup 0x82EA6380** (InitFogConstants): copies the scene's fogs (Scene+0x1D80, stride 0x24, at most 4), sorts by Height
+against the view, then per layer:
+- **`FogDistanceScale = ln(1 − Density) / ln 2 = log2(1 − Density)`**. CRT `log` 0x830EEBE0, constants 1.0 and 2.0. There is **no
+  other factor**: no 1/65536, no DrawScale, no squaring.
+  - For small densities this equals −Density / ln 2: for 2e-6, −2.8854e-6, a relative difference of ~1e-6.
+- **`FogInScattering = LightColor_linear × LightBrightness × (1 / ln 0.5)`**, i.e. **× (−1/ln 2) = × −1.4427**.
+- FogExtinctionDistance = ExtinctionDistance; FogStartDistance = max(StartDistance, 0).
+- One height bound = the layer's Height and the other = the next layer's Height, or −327680 for the last (both + a per-view offset
+  at view+0x208).
+
+**Shader side (C, the fog VS microcode):** the composite multiplies FogInScattering by **(scatter − 1)**, adding the −1 literal, so
+the negative constant comes out positive. Effective per layer:
+
+```
+fog.rgb = fog.rgb × s + LightColor_linear × LightBrightness × (1 − s) / ln 2,     s = (1 − Density)^d   (d in UU)
+```
+
+**So the in-scatter colour is 1/ln 2 ≈ 1.443× brighter than `LightColor × Brightness × (1 − s)`.** That is the factor to apply if the
+rebuild used the stock-looking form. The extinction rate is unchanged.
