@@ -2,7 +2,9 @@
 
 Apply order on integration 814e7cf5 (each patch is `diff -ru`, LF; `patch -p1` after stripping CR from the touched files):
 
-1. `RENDERING_P7_SET_E.patch` (against 814e7cf5): flash term, haze exposure, Remnant toggleable light + `build_lighting.py --standalone-only`.
+1. `RENDERING_P7_SET_E.patch` (against 814e7cf5): flash term, haze exposure, Remnant toggleable light + `build_lighting.py --standalone-only`,
+   and the Set D follow-up: height fog in-scattering x 1 / ln 2 (RE 302c5e7; all modes; expected change: every fogged view's fog
+   term 1.443x - Rust near-floor fill, Gorge far haze; the colour already uses the native 2.2 table).
 2. `RENDERING_P7_TRANSACT_DRAW.patch` (against 814e7cf5 + Set E): the door draw (`src/game/TransformingActorsDraw.*`, World member + draw call),
    the interpolated light maps (`IRenderer::setDrawInterpolatedLightmap`, WfcPipeline, SkinnedModel TEXCOORD_1, GpuSkin), and the tools
    (`build_interp_lightmaps.py`, `transforming_materials.py`, `merge_transforming_materials.py`, `build_render_data.ps1`, `build_materials_only.py`).

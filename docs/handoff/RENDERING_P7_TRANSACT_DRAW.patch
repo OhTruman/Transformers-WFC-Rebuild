@@ -1,5 +1,5 @@
 diff -ruN base/src/assets/SkinnedModel.cpp doors/src/assets/SkinnedModel.cpp
---- base/src/assets/SkinnedModel.cpp	2026-10-17 13:54:31.150635500 -0500
+--- base/src/assets/SkinnedModel.cpp	2026-10-17 13:56:41.208620100 -0500
 +++ doors/src/assets/SkinnedModel.cpp	2026-10-17 13:52:00.000000000 -0500
 @@ -198,6 +198,7 @@
      const Json& prims = meshes[(size_t)meshIdx]["primitives"];
@@ -36,7 +36,7 @@ diff -ruN base/src/assets/SkinnedModel.cpp doors/src/assets/SkinnedModel.cpp
      {
          std::string dir;
 diff -ruN base/src/assets/SkinnedModel.h doors/src/assets/SkinnedModel.h
---- base/src/assets/SkinnedModel.h	2026-10-17 13:54:31.155652900 -0500
+--- base/src/assets/SkinnedModel.h	2026-10-17 13:56:41.209121900 -0500
 +++ doors/src/assets/SkinnedModel.h	2026-10-17 13:52:00.000000000 -0500
 @@ -60,6 +60,7 @@
      std::vector<float> normals;      // 3/vertex
@@ -47,7 +47,7 @@ diff -ruN base/src/assets/SkinnedModel.h doors/src/assets/SkinnedModel.h
      std::vector<float> weights;      // 4/vertex
      std::vector<uint32_t> indices;
 diff -ruN base/src/game/GpuSkin.h doors/src/game/GpuSkin.h
---- base/src/game/GpuSkin.h	2026-10-17 13:54:31.817425000 -0500
+--- base/src/game/GpuSkin.h	2026-10-17 13:56:41.296922900 -0500
 +++ doors/src/game/GpuSkin.h	2026-10-17 13:52:00.000000000 -0500
 @@ -53,6 +53,7 @@
      m.gpuBind.mesh = std::make_unique<render::MeshData>();
@@ -132,7 +132,7 @@ diff -ruN base/src/game/TransformingActorsDraw.h doors/src/game/TransformingActo
 +
 +} // namespace game
 diff -ruN base/src/game/World.cpp doors/src/game/World.cpp
---- base/src/game/World.cpp	2026-10-17 13:54:32.216287300 -0500
+--- base/src/game/World.cpp	2026-10-17 13:56:41.356627400 -0500
 +++ doors/src/game/World.cpp	2026-10-17 13:52:14.000000000 -0500
 @@ -4325,6 +4325,7 @@
  
@@ -143,7 +143,7 @@ diff -ruN base/src/game/World.cpp doors/src/game/World.cpp
          r.drawMesh(mapMesh_, core::Mat4::identity(), mapColor_);
      } else {
 diff -ruN base/src/game/World.h doors/src/game/World.h
---- base/src/game/World.h	2026-10-17 13:54:32.220803500 -0500
+--- base/src/game/World.h	2026-10-17 13:56:41.357630900 -0500
 +++ doors/src/game/World.h	2026-10-17 13:52:14.000000000 -0500
 @@ -18,6 +18,7 @@
  #include "game/PickupFactory.h"
@@ -162,7 +162,7 @@ diff -ruN base/src/game/World.h doors/src/game/World.h
      struct DyingBody { int pawnSet = -1, weaponSet = -1; float remain = 0.0f; };
      struct DyingRequest { core::Vec3 pos{0, 0, 0}; float yaw = 0.0f, radius = 1.0f, halfHeight = 1.0f, time = 0.5f; };
 diff -ruN base/src/render/Renderer.h doors/src/render/Renderer.h
---- base/src/render/Renderer.h	2026-10-17 13:54:32.677869400 -0500
+--- base/src/render/Renderer.h	2026-10-17 13:56:41.438909900 -0500
 +++ doors/src/render/Renderer.h	2026-10-17 13:52:08.000000000 -0500
 @@ -229,6 +229,10 @@
      // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
@@ -176,7 +176,7 @@ diff -ruN base/src/render/Renderer.h doors/src/render/Renderer.h
      // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
      //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)
 diff -ruN base/src/render/gl/GLRenderer.cpp doors/src/render/gl/GLRenderer.cpp
---- base/src/render/gl/GLRenderer.cpp	2026-10-17 13:54:32.566989700 -0500
+--- base/src/render/gl/GLRenderer.cpp	2026-10-17 13:56:41.420847800 -0500
 +++ doors/src/render/gl/GLRenderer.cpp	2026-10-17 13:52:08.000000000 -0500
 @@ -1186,6 +1186,7 @@
      void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
@@ -187,9 +187,9 @@ diff -ruN base/src/render/gl/GLRenderer.cpp doors/src/render/gl/GLRenderer.cpp
      void setFrontendActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override {
          wfc_.setActorPose(a, p, r);
 diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
---- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:54:32.626694200 -0500
-+++ doors/src/render/gl/WfcPipeline.cpp	2026-10-17 13:52:00.000000000 -0500
-@@ -116,6 +116,7 @@
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:56:41.434394000 -0500
++++ doors/src/render/gl/WfcPipeline.cpp	2026-10-17 13:56:33.000000000 -0500
+@@ -119,6 +119,7 @@
  uniform vec4 uShadowZ;       // world -> shadow-space z row
  uniform vec3 uCamPos;
  uniform vec4 uLMCoord;
@@ -197,7 +197,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  uniform int uFogOn;
  uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
  uniform vec3 uFogIn;
-@@ -127,6 +128,7 @@
+@@ -130,6 +131,7 @@
  uniform int uVLMBase;
  uniform sampler2D uVLM;
  out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
@@ -205,7 +205,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
  out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
  
-@@ -192,6 +194,7 @@
+@@ -195,6 +197,7 @@
      vUV0 = aUV0;
      vSubUV2 = aSubUV2;
      vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
@@ -213,7 +213,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
      vUV1Mat = aUV1;
      vColor = aColor;
      if (uVertexLM != 0) {
-@@ -214,6 +217,7 @@
+@@ -217,6 +220,7 @@
  
  const char* kFSHead = R"(#version 330 compatibility
  in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor; in vec3 vSubUV2;
@@ -221,7 +221,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  in vec2 vUV1Mat;
  layout(location=0) out vec4 oColor;
  uniform vec3 uCamPos;
-@@ -362,6 +366,7 @@
+@@ -365,6 +369,7 @@
  const char* kFSMainLM = R"(
  uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
  uniform vec3 uLMScale[3];
@@ -229,7 +229,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  uniform int uVertexLM;
  in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
  const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
-@@ -381,6 +386,11 @@
+@@ -384,6 +389,11 @@
          vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
          vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
          vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
@@ -241,7 +241,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
          vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
          c += o.DiffuseColor * L;
      }
-@@ -464,6 +474,7 @@
+@@ -467,6 +477,7 @@
  const char* kFSMainLMModern = R"(
  uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
  uniform vec3 uLMScale[3];
@@ -249,7 +249,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  uniform int uVertexLM;
  in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
  const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
-@@ -506,6 +517,11 @@
+@@ -509,6 +520,11 @@
          vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
          vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
          vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
@@ -261,7 +261,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
          vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
          float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
          vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
-@@ -1450,6 +1466,20 @@
+@@ -1453,6 +1469,20 @@
          if (!sj.empty() && assets::Json::parse(sj, S))
              for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
      }
@@ -282,7 +282,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
      const assets::Json& lp = L["lightmaps"]["props"];
      for (const auto& kv : lp.obj) {
          LMRec r;
-@@ -2342,6 +2372,77 @@
+@@ -2345,6 +2375,77 @@
      return true;
  }
  
@@ -360,7 +360,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
  GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
      std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
      auto it = texCache_.find(key);
-@@ -4607,10 +4708,31 @@
+@@ -4610,10 +4711,31 @@
                  Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                  Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                  Uniform1i(ULOC(P, "uVertexLM"), 1);
@@ -392,7 +392,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
                  Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                  Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                  if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
-@@ -7225,7 +7347,7 @@
+@@ -7228,7 +7350,7 @@
          static thread_local std::vector<uint64_t> sig;
          sig.clear();
          sig.push_back((uint64_t)m.subs.size() << 32 | (uint64_t)m.mats.size());
@@ -401,7 +401,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
          for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
          for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
          if (noDynCache || ds.sig != sig) {
-@@ -7254,6 +7376,10 @@
+@@ -7257,6 +7379,10 @@
                  d.first = s.indexOffset; d.count = s.indexCount;
                  d.prog = dynamicProgram(mat);
                  d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
@@ -413,7 +413,7 @@ diff -ruN base/src/render/gl/WfcPipeline.cpp doors/src/render/gl/WfcPipeline.cpp
                      if (const std::string* ed = energyDeathFor(mat->wfcName)) {
                          Material dm; dm.wfcName = *ed;
 diff -ruN base/src/render/gl/WfcPipeline.h doors/src/render/gl/WfcPipeline.h
---- base/src/render/gl/WfcPipeline.h	2026-10-17 13:54:32.631711300 -0500
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 13:56:41.429376700 -0500
 +++ doors/src/render/gl/WfcPipeline.h	2026-10-17 13:52:08.000000000 -0500
 @@ -213,6 +213,8 @@
          L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
@@ -514,7 +514,7 @@ diff -ruN base/tools/render/build_interp_lightmaps.py doors/tools/render/build_i
 +if __name__ == '__main__':
 +    main()
 diff -ruN base/tools/render/build_materials_only.py doors/tools/render/build_materials_only.py
---- base/tools/render/build_materials_only.py	2026-10-17 13:54:36.835172700 -0500
+--- base/tools/render/build_materials_only.py	2026-10-17 13:56:42.145832600 -0500
 +++ doors/tools/render/build_materials_only.py	2026-10-17 13:52:14.000000000 -0500
 @@ -37,9 +37,10 @@
                  s = os.path.join(src_root, m, g)
@@ -529,7 +529,7 @@ diff -ruN base/tools/render/build_materials_only.py doors/tools/render/build_mat
          subprocess.run([PY] + args, check=True)
  
 diff -ruN base/tools/render/build_render_data.ps1 doors/tools/render/build_render_data.ps1
---- base/tools/render/build_render_data.ps1	2026-10-17 13:54:36.856748600 -0500
+--- base/tools/render/build_render_data.ps1	2026-10-17 13:56:42.147337600 -0500
 +++ doors/tools/render/build_render_data.ps1	2026-10-17 13:52:00.000000000 -0500
 @@ -54,8 +54,10 @@
  $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list) | Where-Object { $_ -match '\S' })

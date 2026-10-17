@@ -1,7 +1,17 @@
 diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
---- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:51:53.105838000 -0500
-+++ sete/src/render/gl/WfcPipeline.cpp	2026-10-17 13:51:53.122896100 -0500
-@@ -120,6 +120,7 @@
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:56:39.395406500 -0500
++++ sete/src/render/gl/WfcPipeline.cpp	2026-10-17 13:56:39.409454500 -0500
+@@ -62,6 +62,9 @@
+ }
+ 
+ float srgbToLinear(float c) { return std::pow(c, 2.2f); }   // UE3 FLinearColor(FColor) table
++// Height fog in-scattering (RE GORGE_RUST_HEIGHTFOG_RE s4, native InitFogConstants / FHeightFogSceneInfo): FogInScattering =
++// LightColor (the 2.2 table) x LightBrightness x (1 / ln 0.5), and the VS multiplies it by (s - 1): LightColor x Brightness x (1 - s) / ln 2
++constexpr float kFogInScale = 1.4426950409f;
+ 
+ #if __has_include("core/LoadYield.h")
+ #include "core/LoadYield.h"
+@@ -120,6 +123,7 @@
  uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
  uniform vec3 uFogIn;
  uniform int uFogN;                           // authored height fog layers (1 = the first only)
@@ -9,7 +19,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
  uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
  uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
  uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
-@@ -202,6 +203,7 @@
+@@ -202,6 +206,7 @@
          vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
      }
      vFog = heightFog(wp.xyz);
@@ -17,7 +27,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      gl_Position = uViewProj * wp;
      if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
          float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
-@@ -798,6 +800,7 @@
+@@ -798,6 +803,7 @@
  uniform int uFilmic;
  uniform sampler2D uAdapt;
  uniform vec4 uExpo;      // key, adaptation strength, min, max
@@ -25,7 +35,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
  uniform vec3 uToneGrade; // pre-gain, saturation, contrast
  uniform float uBloomMix;
  uniform vec3 uWhiteRoll;   // (X1 white roll) brightest-channel range lo..hi, warm-white mix; hi <= lo = off
-@@ -840,7 +843,9 @@
+@@ -840,7 +846,9 @@
      if (uFilmic != 0) {
          float avg = exp(texture(uAdapt, vec2(0.5)).r);
          float e = uToneGrade.x * clamp(pow(uExpo.x / max(avg, 1e-4), uExpo.y), uExpo.z, uExpo.w);
@@ -36,7 +46,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          c = 0.18 * pow(max(c, vec3(1e-6)) / 0.18, vec3(uToneGrade.z));   // (contrast around 18 % grey: lit and shadowed sides part)
          float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
          c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
-@@ -862,6 +867,7 @@
+@@ -862,6 +870,7 @@
  const char* kVolApplyFS = R"(#version 330 compatibility
  in vec2 vUV;
  uniform sampler2D uVol, uDepth;
@@ -44,7 +54,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
  uniform vec2 uNearFar, uRender;
  uniform vec4 uGrid;      // tiles x, tiles y, tile size (px), max distance (m)
  layout(location=0) out vec4 oColor;
-@@ -883,39 +889,52 @@
+@@ -883,39 +892,52 @@
      vec4 v;
      if (u < 0.0) v = mix(vec4(0.0, 0.0, 0.0, 1.0), sliceAt(tp, 0), clamp(u + 1.0, 0.0, 1.0));
      else { int k = int(floor(u)); v = mix(sliceAt(tp, k), sliceAt(tp, k + 1), u - float(k)); }
@@ -104,7 +114,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
  }
  )";
  
-@@ -1218,7 +1237,7 @@
+@@ -1218,7 +1240,7 @@
      refMask_ = MaskSet{};
      for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
      for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
@@ -113,7 +123,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &volApplyProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                        &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
          prog(*p);
-@@ -1531,6 +1550,7 @@
+@@ -1531,6 +1553,7 @@
          l.name = e["name"].asString();
          l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
          l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
@@ -121,7 +131,27 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          l.castStaticShadows = e["cast_static_shadows"].asBool(true);
          l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
          {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
-@@ -2905,6 +2925,7 @@
+@@ -1603,7 +1626,7 @@
+         l[2] = Fk["StartDistance"].asFloat(0.0f); l[3] = Fk["ExtinctionDistance"].asFloat(1e8f);
+         const assets::Json& ck = Fk["LightColor"];
+         const float bk = Fk["LightBrightness"].asFloat(0.1f);
+-        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk;
++        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk * kFogInScale;
+     }
+     if (F.isObject() && F["bEnabled"].asBool(true)) {
+         fogOn_ = !std::getenv("WFC_NOFOG");
+@@ -1641,8 +1664,8 @@
+         fogExt_ = F["ExtinctionDistance"].asFloat(1e8f);
+         const assets::Json& c = F["LightColor"];
+         float br = F["LightBrightness"].asFloat(0.1f);
+-        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br, srgbToLinear(c[1].asFloat(255) / 255.0f) * br,
+-                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br};
++        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br * kFogInScale, srgbToLinear(c[1].asFloat(255) / 255.0f) * br * kFogInScale,
++                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br * kFogInScale};
+     }
+ 
+     {
+@@ -2905,6 +2928,7 @@
          if (at != std::string::npos && ma != std::string::npos && at > ma) {
              fs.insert(at, "    if (uLit != 0 && (uTLN > 0 || uTLAllN > 0)) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
              fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
@@ -129,7 +159,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
                            "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
                            "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
                            "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
-@@ -2937,7 +2958,7 @@
+@@ -2937,7 +2961,7 @@
                            "    }\n"
                            "    for (int k = 0; k < 8; ++k) {\n"
                            "        if (k >= uTLN) break;\n"
@@ -138,7 +168,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
                            "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
                            "        float x2 = dot(dn, dn);\n"
                            "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
-@@ -3912,7 +3933,7 @@
+@@ -3912,7 +3936,7 @@
                             dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
                             maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
                             P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
@@ -147,7 +177,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
      CommonKey& ck = commonKeyById_[P.id];
      const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
-@@ -3940,6 +3961,7 @@
+@@ -3940,6 +3964,7 @@
          Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
          Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
          Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
@@ -155,7 +185,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          if (fogN_ > 1) {
              Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
              Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
-@@ -3948,6 +3970,7 @@
+@@ -3948,6 +3973,7 @@
      Uniform1i(ULOC(P, "uVertexLM"), 0);
      Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
      Uniform1i(ULOC(P, "uSkin"), skinMode_);
@@ -163,7 +193,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      if (skinMode_) {
          Uniform1i(ULOC(P, "uSkinRow"), skinRow_);
          Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
-@@ -8164,10 +8187,21 @@
+@@ -8164,10 +8190,21 @@
              }
          }
      }
@@ -186,7 +216,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      if (off || tlightsDraw_.empty()) return;
      std::vector<std::pair<float, size_t>> rank;
      for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
-@@ -8211,6 +8245,7 @@
+@@ -8211,6 +8248,7 @@
          tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
          tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
          tlCosI_[tlN_] = L.cosI;
@@ -194,7 +224,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          ++tlN_;
      }
      if (tlTiledOn()) tlBuildTiles();
-@@ -8913,12 +8948,12 @@
+@@ -8913,12 +8951,12 @@
          Uniform1i(U("uAdapt"), 4);
          // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
          // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
@@ -212,7 +242,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          Uniform3f(U("uToneGrade"), gain, sat, con);
          Uniform1f(U("uBloomMix"), 1.0f);
          Uniform3f(U("uWhiteRoll"), rtdef::whiteRoll() ? rtdef::whiteLo() : 0.0f, rtdef::whiteRoll() ? rtdef::whiteHi() : 0.0f, rtdef::whiteMix());
-@@ -8965,6 +9000,7 @@
+@@ -8965,6 +9003,7 @@
      Uniform2f(cachedUniformLocation(volApplyProg_, "uNearFar"), znear_, zfar_);
      Uniform2f(cachedUniformLocation(volApplyProg_, "uRender"), (float)vpW_, (float)vpH_);
      Uniform4f(cachedUniformLocation(volApplyProg_, "uGrid"), (float)((vpW_ + 15) / 16), (float)((vpH_ + 15) / 16), 16.0f, rtdef::x3Dist());
@@ -220,7 +250,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      glDrawArrays(GL_TRIANGLES, 0, 3);
      ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
      ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
-@@ -8973,17 +9009,28 @@
+@@ -8973,17 +9012,28 @@
      glx::textureCacheInvalidate();
  }
  
@@ -251,7 +281,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
          GenerateMipmap(GL_TEXTURE_2D);
          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-@@ -8992,7 +9039,7 @@
+@@ -8992,7 +9042,7 @@
          for (int i = 0; i < 2; ++i) {
              glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
              glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
@@ -260,7 +290,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
              glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
              BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[i]);
-@@ -9009,9 +9056,14 @@
+@@ -9009,9 +9059,14 @@
      BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
      glViewport(0, 0, 128, 128);
      UseProgram(toneLumProg_);
@@ -275,7 +305,7 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
      glDrawArrays(GL_TRIANGLES, 0, 3);
      glBindTexture(GL_TEXTURE_2D, toneLumTex_);
      GenerateMipmap(GL_TEXTURE_2D);
-@@ -9025,16 +9077,41 @@
+@@ -9025,16 +9080,41 @@
      Uniform1i(cachedUniformLocation(toneAdaptProg_, "uPrev"), 1);
      Uniform1f(cachedUniformLocation(toneAdaptProg_, "uLevel"), 7.0f);
      Uniform1f(cachedUniformLocation(toneAdaptProg_, "uRate"), 1.0f - std::exp(-dt * 1.5f));
@@ -321,8 +351,8 @@ diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
  }
  
 diff -ru base/src/render/gl/WfcPipeline.h sete/src/render/gl/WfcPipeline.h
---- base/src/render/gl/WfcPipeline.h	2026-10-17 13:51:53.192133600 -0500
-+++ sete/src/render/gl/WfcPipeline.h	2026-10-17 13:51:53.208690100 -0500
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 13:56:39.462635900 -0500
++++ sete/src/render/gl/WfcPipeline.h	2026-10-17 13:56:39.476183500 -0500
 @@ -48,6 +48,7 @@
      bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
      std::string name;             // source light component (frame report)
@@ -352,8 +382,8 @@ diff -ru base/src/render/gl/WfcPipeline.h sete/src/render/gl/WfcPipeline.h
      int bloomW_ = 1, bloomH_ = 1;
      int fbW_ = 0, fbH_ = 0;
 diff -ru base/src/render/gl/WfcRtDefaults.h sete/src/render/gl/WfcRtDefaults.h
---- base/src/render/gl/WfcRtDefaults.h	2026-10-17 13:51:53.271906800 -0500
-+++ sete/src/render/gl/WfcRtDefaults.h	2026-10-17 13:51:53.287461000 -0500
+--- base/src/render/gl/WfcRtDefaults.h	2026-10-17 13:56:39.530369100 -0500
++++ sete/src/render/gl/WfcRtDefaults.h	2026-10-17 13:56:39.543412800 -0500
 @@ -62,6 +62,16 @@
  inline float x3Cap() { static const float v = std::max(0.0f, envNum("WFC_X3_CAP", 0.2f)); return v; }   // integrated in-scatter cap
  inline float x3History() { static const float v = std::min(0.98f, std::max(0.0f, envNum("WFC_X3_HISTORY", 0.9f))); return v; }
@@ -372,8 +402,8 @@ diff -ru base/src/render/gl/WfcRtDefaults.h sete/src/render/gl/WfcRtDefaults.h
  }  // namespace wfc
  }  // namespace render
 diff -ru base/tools/render/build_lighting.py sete/tools/render/build_lighting.py
---- base/tools/render/build_lighting.py	2026-10-17 13:51:53.356696700 -0500
-+++ sete/tools/render/build_lighting.py	2026-10-17 13:51:53.373254500 -0500
+--- base/tools/render/build_lighting.py	2026-10-17 13:56:39.596595700 -0500
++++ sete/tools/render/build_lighting.py	2026-10-17 13:56:39.611145900 -0500
 @@ -156,6 +156,51 @@
      return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
  
