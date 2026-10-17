@@ -2946,3 +2946,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (5-20x too dark); the LightVolume family reads UniformVector_1.w alone as the intensity (ShaderCache_6631). So the milky glass
   and Berth's volumes are AUTHORED. (B) switches in WHOLE right after Systems' CARD FREE (not mid-pair). Rendering checks that
   BLEND_Additive / MLM_Unlit composites as pure add (Debris pool reads opaque; saturation vs a composite bug).
+2026-10-17 11:26 (B) switch plan: 117 entries at Systems' CARD FREE; PROP_NEU_BatteryOS_p.OmegaLiquid_MATINST (master TryptiGelGlass_Mat,
+  translucent unlit, the likelier Debris pool) HELD until Systems' shipped-PS decode confirms its alpha-pin reading (one-entry
+  follow-up with the Debris 'reflective' view as its pair). Experimental's measure of the pool: additive, not opaque (1.06x +
+  18.6 levels, detail correlation 0.965) -> the composite check is a glance, no pair. Ledger: "(B) whole, nothing held" to be
+  amended to the one held entry.
