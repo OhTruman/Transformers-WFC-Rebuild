@@ -79,7 +79,17 @@ with a negative control.
 | pending: the door head (Gameplay's transact 1b894dc7 + Rendering's door draw + (b) lighting + materials) | sim (Integration) | **yes**: only the sim part (the transact side) goes into the base; the draw / lighting / materials stay head-only |
 | 8454c173 / f46bdfe4 remote-seat paths | sim only with remote seats / a host seed | no: offline identical (seed 7 48 / 48) |
 
-The base is rebuilt once the head is named. Today's fast_af4d073_hover carries cfca1717 only.
+The base is rebuilt once the head is named. Today's fast_af4d073_hover_hl2 carries cfca1717 and the headless runner.
+
+**How later sim changes enter the base** (Integration, option (a)):
+
+- Each sim change's owner supplies a minimal sim-only diff against the current base (af4d0731 + hover + runner). Gameplay does this
+  for 814e7cf5 now, and for the weapon + melee batch when it merges.
+- A commit's own src/game no longer applies cleanly: for example, 814e7cf5's World.cpp hunk 7 fails because of intermediate
+  integration changes.
+- Each diff is verified by the same-match row (HEADLESS=1) against the head, with a negative control.
+- The regress then reads "package 7 renderer vs package 6 renderer at the same sim". That is the number the user's rule needs: no
+  fps cost without a fidelity gain.
 
 ### 2. Render-data switches in Rebuild/work/render today
 
