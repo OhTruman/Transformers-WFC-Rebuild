@@ -3174,3 +3174,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:39 MERGED 3daab0b5 proximity voice as 3D emitters in the cue mix (the listener's room reverb colours it: the user's proximity + room
   reverb ask) + the voice star relay (host fans out to the audience). The reverb-with-device check (muted) joins Systems' card
   slot. Online phase 1 code complete except Gameplay's two local-pawn fixes.
+2026-10-17 13:43 MERGED 986320f1 WFC_NULLRENDER_AUDIO (audio device in a null-render boot, muted): the proximity-voice ROOM REVERB check passed
+  headless (the listener's preset switched through 4 Streets rooms under the talker; routing and occlusion as designed). Systems'
+  card slot = family re-run + physmat ForceField pair + reverb-switch check only.
