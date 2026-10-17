@@ -249,7 +249,12 @@ peer and dropped afterwards (the peer's address is then the key).
   bKickLiveIdlers when IsPrivateMatch()). On rides the match URL as `?WfcIdleKick=1` into Gameplay's MatchSettings.kickIdle: 180 s,
   and the host's own player is never kicked [H]. Kicked{Idle} / PeerDropped{Kicked} are unchanged.
 - **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
-- **Button count:** the Button enum is static_assert-ed to <= 32 bits.
+- **Implemented (Gameplay GAMEPLAY_SESSION_FOLLOWUP, agents/gameplay a037ed35):** `game::RemoteCommand` as above;
+  `c.tick == World::simTick() + 1`, else the call returns false.
+  - Bits 0..28 are platform::Button (static_assert Count <= 29); FineAim is Button::FineAim.
+  - `kRemoteBitHover = 1u << 29` (held) and `kRemoteBitActive = 1u << 30` (look axis non-zero, or team chat since the last command).
+  - The aim floats are absolute radians decoded from the u16 / i16 rotator units.
+  - The encoder (LockstepLayer, Systems) writes exactly these bits.
 
 ### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
