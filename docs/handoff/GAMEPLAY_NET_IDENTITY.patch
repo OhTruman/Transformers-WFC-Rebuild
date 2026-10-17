@@ -1,0 +1,301 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 34d12dd3..a723dbe3 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5744,6 +5744,56 @@ void Application::runSessionTest() {
+         check(seatOk == 2, "seat order: match player i = seat i on both perspectives (local at seat 0 / seat 1)");
+         check(hs[0] == hs[1] && hs[0] != 0, "cross-perspective identity: local at seat 0 vs seat 1, the same seat streams -> equal state at step 1600");
+     }
++    // The cross-perspective identity from the launch (NET.identity's conditions): selections only from the launch record, 2 v 2 bots,
++    // aim-only commands, every step compared from the launch on.
++    {
++        std::vector<std::string> rows[2]; std::vector<uint64_t> hh[2];
++        const bool pbot = game::World::playerBotDifficulty() >= 0;
++        std::vector<game::RemoteCommand> rec;
++        LOG_INFO("SESSIONTEST launch identity: seat 0 input from %s", pbot ? "the player bot (recorded on A, replayed on B)" : "aim-only commands");
++        for (int ls = 0; ls < 2; ++ls) {
++            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2", S);
++            S.seed = 0x5eedc0deu; S.online = true; S.localTeam = ls == 0 ? 0 : 1;
++            S.humans = {seat("Seat0", 0, "WFC-LA-0"), seat("Seat1", 1, "WFC-LA-1")}; S.localSeat = ls;
++            world_.launchMatch(S);
++            for (int i = 0; i < 2400; ++i) {
++                // With WFC_PLAYERBOT the local seat's input comes from the player bot (as NET.identity's live peers): A sends seat 0's
++                // encoded commands and records them, B replays them as its remote seat 0 (B's own player bot runs too, input only).
++                platform::InputFrame fr = idle;
++                if (pbot) world_.playerBotInput(fr, dt);
++                world_.handleInput(fr, dt);
++                for (int st = 0; st < 2; ++st) {
++                    game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1);
++                    c.aimYaw = st == 0 ? -2.356194f : 0.785398f; c.aimPitch = 0.0f;
++                    if (pbot && st == 0) {
++                        if (ls == 0) { c = world_.encodeLocalCommand(); rec.push_back(c); }
++                        else if ((size_t)i < rec.size()) c = rec[(size_t)i];
++                        c.tick = (uint32_t)(world_.simTick() + 1);
++                    }
++                    world_.applyRemoteCommand(st, c);
++                }
++                world_.tick(dt);
++                hh[ls].push_back(world_.simStateHash());
++                std::string row;
++                for (size_t pp = 0; pp < world_.match().players().size(); ++pp) {
++                    const game::Character* c = world_.participantPawn((int)pp); char b[200];
++                    if (c) std::snprintf(b, sizeof b, " p%zu (%.4f %.4f %.4f) v(%.4f %.4f %.4f) y%.4f h%.1f", pp, c->position().x, c->position().y, c->position().z,
++                                         c->velocity().x, c->velocity().y, c->velocity().z, c->yaw(), c->health().current);
++                    else std::snprintf(b, sizeof b, " p%zu -", pp);
++                    row += b;
++                }
++                rows[ls].push_back(row);
++            }
++        }
++        size_t first = hh[0].size();
++        for (size_t i = 0; i < hh[0].size() && i < hh[1].size(); ++i) if (hh[0][i] != hh[1][i]) { first = i; break; }
++        if (first < hh[0].size()) {
++            LOG_INFO("SESSIONTEST launch identity: first divergent step %zu", first);
++            LOG_INFO("SESSIONTEST   A:%s", rows[0][first].c_str()); LOG_INFO("SESSIONTEST   B:%s", rows[1][first].c_str());
++            if (first > 0) { LOG_INFO("SESSIONTEST   A prev:%s", rows[0][first - 1].c_str()); LOG_INFO("SESSIONTEST   B prev:%s", rows[1][first - 1].c_str()); }
++        }
++        check(first == hh[0].size(), "launch identity: local at seat 0 vs seat 1 from the launch record alone, every step through the first InProgress seconds");
++    }
+     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+ }
+ 
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index 91dca33b..309d6654 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -163,8 +163,10 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt)
+         pawn_->vehicleParams().form == VehicleFormType::Tank && pawn_->vehicleState().dashCooldown <= 0.0f && quickTurnRemain_ <= 0.0f) {
+         quickTurnRemain_ = 0.3f; quickTurnFrom_ = camYaw_; quickTurnTo_ = pawn_->yaw() + 3.14159265f;
+         quickTurnFrom_ = quickTurnTo_ - 3.14159265f + std::remainder(camYaw_ - pawn_->yaw(), 6.2831853f);   // start from the current view
++        if (!wireSeat_) {   // online the seat path owns the pawn (the camera turn stays)
+         pawn_->vehicleState().dashCooldown = 1.2f;
+         ++pawn_->vehicleState().quickTurnSerial;   // Systems: Tank 180 sound event
++        }
+     }
+     if (in.wasPressed(Button::Dash)) {
+         wantDashLatched_ = true;
+@@ -187,7 +189,7 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt)
+     if (transforming && in.wasPressed(Button::Transform) && pawn_) ++transformFailedCount_;   // [Systems M08i] Transform() fails
+     if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
+         if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
+-        tryBeginTransform();
++        if (!wireSeat_) tryBeginTransform();   // online: the press goes in the seat command (applied on every peer)
+     }
+ 
+     // Fire: held flag persists across frames (consumed per simulation step while held) [CONF RE].
+@@ -663,7 +665,14 @@ bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec
+ }
+ 
+ bool PlayerController::tryBeginTransform() {
+-    if (!pawn_) return false;
++    return pawn_ && tryBeginTransformOn(*pawn_, col_, &cantTransformCount_, &transformFailedCount_);
++}
++
++bool PlayerController::tryBeginTransformOn(Character& pawnRef, const CollisionWorld* col_, int* cantTransform, int* transformFailed) {
++    Character* pawn_ = &pawnRef;
++    int dummyCant = 0, dummyFailed = 0;
++    int& cantTransformCount_ = cantTransform ? *cantTransform : dummyCant;
++    int& transformFailedCount_ = transformFailed ? *transformFailed : dummyFailed;
+     if (pawn_->transformDisruptRemain_ > 0.0f) { ++transformFailedCount_; return false; }   // TnBuffTransformDisruptor: transforming disabled
+     if (pawn_->moveForm() == Form::Vehicle && col_) {
+         // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index 52fecf9f..dc6e3cf1 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -91,6 +91,8 @@ public:
+     int transformFailedCount() const { return transformFailedCount_; }
+     int forcedVehicleCount() const { return forcedVehicleCount_; }
+     bool tryBeginTransform();
++    // StartTransform for any pawn: TransformDisruptor refusal, the robot fit + safe-spot shift out of vehicle form (counters optional).
++    static bool tryBeginTransformOn(Character& pawn, const CollisionWorld* col, int* cantTransform, int* transformFailed);
+     // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
+     // 30) scales the orbit speed by Lerp(0.03, 0.20, s/100) - applied relative to the default 30 (the absolute mouse rate
+     // stays PROV); invert Y per form: InvertY_Robot, InvertY_Car (car AND truck), InvertY_Plane, InvertY_Tank.
+@@ -269,6 +271,11 @@ private:
+     core::Vec3 specPos_{0, 0, 0};
+     float specYaw_ = 0.0f, specPitch_ = 0.0f, specFov_ = 0.0f;
+     bool guiding_ = false, detonate_ = false;
++    bool wireSeat_ = false;   // online: the pawn moves only through the seat commands (no direct pawn writes from input)
++public:
++    void setWireSeat(bool w) { wireSeat_ = w; }
++    bool tryBeginTransformSeat(Character& pawn, const CollisionWorld* col) { return tryBeginTransformOn(pawn, col, &cantTransformCount_, &transformFailedCount_); }   // + the HUD pulses
++private:
+     float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
+     float camSmoothRemain_ = 0.0f;
+     int camCollStrategy_ = -1;
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 60fa5a51..9ade0ec4 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -3077,6 +3077,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
+         if (l.online && l.seed) match_.seedRandom(l.seed * 2246822519u + 3u);   // the Match RNG too (it never restarted between matches)
+         onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch; never from the seed)
++        player_.controller().setWireSeat(onlineSeats_);
+         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
+         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+     }
+@@ -3093,6 +3094,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+         {
+             MatchPlayer& me = match_.playerMutable(localPlayer_);
+             me.name = l.humans[(size_t)ls].name; me.sessionMember = l.humans[(size_t)ls].member;
++            if (l.humans[(size_t)ls].selected) match_.selectCharacter(localPlayer_, l.humans[(size_t)ls].selection);   // as the remote seats
+             if (match_.settings().teamGame) me.team = l.humans[(size_t)ls].team;
+         }
+         std::vector<int> order(l.humans.size(), -1);
+@@ -3435,7 +3437,10 @@ void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
+         // Killstreak (TriggerKillstreak, B): the newest earned reward, robot form [the same entry the bots use].
+         if (robot && down(platform::Button::Killstreak) && !match_.players()[(size_t)p].acquiredKillstreaks.empty()) triggerKillstreakFor(p);
+         s.intent = in;
+-        if (down(platform::Button::Transform) && !pc.isTransforming()) pc.beginTransform();
++        if (down(platform::Button::Transform) && !pc.isTransforming()) {   // StartTransform with the direct path's checks (every peer)
++            if (p == localPlayer_) player_.controller().tryBeginTransformSeat(pc, collision());
++            else PlayerController::tryBeginTransformOn(pc, collision(), nullptr, nullptr);
++        }
+         if (robot && down(platform::Button::Melee) && !pc.isMeleeing()) startMeleeFor(pc, p, false, c.aimYaw);
+         if (robot && down(platform::Button::NextWeapon)) pc.requestWeaponSwitch(1);
+         if (robot && down(platform::Button::PrevWeapon)) pc.requestWeaponSwitch(-1);
+diff --git a/src/game/World.h b/src/game/World.h
+index 4300f47b..7bc4abbf 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -1204,6 +1204,8 @@ private:
+     bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
+     bool seatOrdered_ = false;          // the running match numbers its humans by the host's seat order (the next launch clears all)
+     void clearAllParticipants();
++    bool pbSandbox_ = false;            // online: the player bot's brain is running (input only: its actions become presses)
++    uint32_t pbPress_ = 0;              // the presses it asked for (platform::Button bits)
+     std::vector<char> seatFineAim_;     // online: each seat's last command FineAim bit (the snapshot's fine-aim flag)
+     void tickSeatDrain(Character& pc, int p, float dt);   // TnBuffDrainSource for a seat (remote, or the online local seat)
+     bool seatHuman(int p) const { return p >= 0 && (size_t)p < match_.players().size() && match_.players()[(size_t)p].kind != ParticipantKind::Bot; }
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index f0320341..4575c5e1 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -508,7 +508,9 @@ void World::botThink(BotBody o, BotBrain& b) {
+             if (b.switchHold >= 0.5f) {
+                 const int n = (int)inv.size();
+                 const int dir = ((want - pc.activeWeaponIndex()) % n + n) % n <= n / 2 ? 1 : -1;
+-                pc.requestWeaponSwitch(dir); ++b.switches; b.switchHold = 0.0f;
++                if (pbSandbox_) pbPress_ |= 1u << (int)(dir > 0 ? platform::Button::NextWeapon : platform::Button::PrevWeapon);   // online player bot
++                else pc.requestWeaponSwitch(dir);
++                ++b.switches; b.switchHold = 0.0f;
+             }
+         } else b.switchHold = 0.0f;
+         // Grenade toss (TnGrenadeThrower through the shared release): at a visible enemy 8-30 m away now and then, from the bag's
+@@ -522,6 +524,8 @@ void World::botThink(BotBody o, BotBrain& b) {
+             static const float kChance[4] = {0.05f, 0.09f, 0.14f, 0.18f};   // EXPERT: PC EXTENSION
+             if (tp && bag && bag->reserve > 0 && std::string(bag->def->id) != "HealGrenades" && d >= 8.0f && d <= 30.0f &&
+                 b.frand() < kChance[std::clamp(b.difficulty, 0, kMaxBotDifficulty)]) {
++                if (pbSandbox_) { pbPress_ |= 1u << (int)platform::Button::Grenade; b.grenadeCooldown = std::max(6.0f, bag->fireInterval); ++b.grenades; }   // online player bot
++                else {
+                 bag->reserve -= 1;
+                 b.grenadeCooldown = std::max(6.0f, bag->fireInterval);
+                 b.grenadeDelay = 0.4f;
+@@ -529,6 +533,7 @@ void World::botThink(BotBody o, BotBrain& b) {
+                 pc.playAction("GrenadeThrow", true);
+                 pc.exposeSelf();
+                 ++b.grenades;
++                }
+             }
+         }
+         // Abilities (PC ADAPTATION: when to use them; the effects are the original ones):
+@@ -606,6 +611,12 @@ bool World::botTryAbility(BotBody o, BotBrain& b, const char* id) {
+     if (pc.moveForm() != Form::Robot || pc.isTransforming() || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
+     for (Character::AbilitySlot& a : pc.abilities_) {
+         if (a.id != id || !a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) continue;
++        if (pbSandbox_) {   // online player bot: the ability button (the seat path triggers it on every peer)
++            const int slot = (int)(&a - &pc.abilities_[0]);
++            pbPress_ |= 1u << (int)(slot == 0 ? platform::Button::Dash : platform::Button::Ability1);
++            ++b.abilities;
++            return true;
++        }
+         if (a.id == "Whirlwind") {
+             if (pc.isMeleeing()) return false;
+             startMeleeFor(pc, o.matchPlayer(), true, b.yaw);
+@@ -650,6 +661,16 @@ void World::botPathUpkeep(BotBody o, BotBrain& b, float dt) {
+     const bool chasing = b.goal.kind == BotGoalKind::Attack;
+     const bool trapped = match_.matchTime() < b.trappedUntil;   // Smart dither escape off the mesh (botSteer)
+     const bool wants = !trapped && (b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid();
++    if (pbSandbox_) {   // online player bot: a private synchronous search when no time-sliced one is in flight (the bots' state untouched)
++        if (!wants || botNav_.searchActive()) return;
++        b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
++        if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
++        ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;
++        std::vector<BotNav::Waypoint> path;
++        if (botNav_.findPath(pos, b.goal.pos, ag, path) && !path.empty()) { b.path.swap(path); b.wp = 0; b.bestDist = 1e9f; b.progressTimer = 0.0f; }
++        else botPathFailed(b, vehicle);
++        return;
++    }
+     if (wants && std::find(botSearchQueue_.begin(), botSearchQueue_.end(), b.player) == botSearchQueue_.end()) botSearchQueue_.push_back(b.player);
+     if (wants && botSearchOwner_ < 0 && botPathBudget_ > 0 && !botSearchQueue_.empty() && botSearchQueue_.front() == b.player) {
+         botSearchQueue_.pop_front();
+@@ -1071,10 +1092,11 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
+             const float maxStep = sk.turnRateDeg * 0.0174533f * dt;
+             b.yaw = wrapPi(b.yaw + core::clampf(wrapPi(yawOf(d) - b.yaw), -maxStep, maxStep));
+             b.pitch = core::clampf(b.pitch + core::clampf(pitchOf(d) - b.pitch, -maxStep, maxStep), -1.2f, 1.2f);
+-            pc.setAimPitch(b.pitch);
++            if (!pbSandbox_) pc.setAimPitch(b.pitch);   // online player bot: the camera pitch reaches the pawn through the command
+             const float range = w->rangeM > 0.0f ? w->rangeM : 35.0f;
+-            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
++            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { if (pbSandbox_) pbPress_ |= 1u << (int)platform::Button::Reload; else w->beginReload(); ++b.reloads; }
+             if (pc.weaponUsable() && core::length(d) <= range && std::fabs(wrapPi(yawOf(d) - b.yaw)) < 0.15f && w->canFire()) {
++                if (pbSandbox_) { b.fireWish = true; return; }   // online player bot: Fire (the seat path runs the beam)
+                 w->onFired();
+                 const float tick = w->fireInterval > 0.0f ? w->fireInterval : 0.1f;
+                 for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.healTarget && q->spawned()) q->pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tick);
+@@ -1117,18 +1139,19 @@ void World::botAimAndFire(BotBody o, BotBrain& b, float dt) {
+     const float dy = wrapPi(wantYaw - b.yaw), dp = wantPitch - b.pitch;
+     b.yaw = wrapPi(b.yaw + core::clampf(dy, -maxStep, maxStep));
+     b.pitch = core::clampf(b.pitch + core::clampf(dp, -maxStep, maxStep), -1.2f, 1.2f);
+-    pc.setAimPitch(b.pitch);
++    if (!pbSandbox_) pc.setAimPitch(b.pitch);
+     // Weapon state.
+     if (!w) return;
+     if (pc.moveForm() == Form::Vehicle && o.matchPlayer() != localPlayer_) w->tick(dt);   // the robot weapon ticks in tickBots (local: the controller)
+     const bool usable = pc.moveForm() == Form::Vehicle ? !pc.isTransforming() : (pc.weaponUsable() && !pc.isMeleeing() && pc.carryingHeavy_ == 0);
+-    if (usable && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
++    if (usable && w->ammo == 0 && w->canReload()) { if (pbSandbox_) pbPress_ |= 1u << (int)platform::Button::Reload; else w->beginReload(); ++b.reloads; }
+     if (!t || pc.isMeleeing()) return;
+     // Melee (the shared TnMeleeAttack path, assist lunge included): an enemy within Striking range in front of the robot.
+     if (pc.moveForm() == Form::Robot && b.reactionLeft <= 0.0f && b.meleeCooldown <= 0.0f && pc.carryingHeavy_ == 0) {
+         const core::Vec3 to = targetable(*t) - pc.actorLocation();
+         const float d = std::sqrt(to.x * to.x + to.z * to.z);
+         if (d <= 7.0f && std::fabs(wrapPi(yawOf(to) - b.yaw)) < 0.6f) {   // the assist lunge closes the rest
++            if (pbSandbox_) { pbPress_ |= 1u << (int)platform::Button::Melee; ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }   // online player bot
+             startMeleeFor(pc, o.matchPlayer(), false, b.yaw);
+             if (pc.isMeleeing()) { ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }
+         }
+@@ -1236,6 +1259,8 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
+     ensureBotNav();
+     Character& pc = player_.pawn();
+     BotBrain& b = playerBot_;
++    struct PbScope { bool& f; ~PbScope() { f = false; } } pbScope{pbSandbox_};
++    pbSandbox_ = onlineSeats_; pbPress_ = 0;   // online: input only
+     if (!b.wasSpawned) {   // a fresh spawn: a fresh brain facing the camera
+         const unsigned rng = b.rng ? b.rng + 17U : 0x51ed270bU;
+         b = BotBrain{};
+@@ -1247,10 +1272,12 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
+     if ((b.thinkTimer -= dt) <= 0.0f) { b.thinkTimer = 0.25f; botThink(body, b); }
+     // The bots spend the per-step search budget inside the step; the player bot (between steps) may start one when the shared search is
+     // free (it completes in the step, delivered to playerBot_).
+-    { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
++    if (pbSandbox_) botPathUpkeep(body, b, dt);   // online: a private search
++    else { const int keep = botPathBudget_; if (botSearchOwner_ < 0) botPathBudget_ = std::max(botPathBudget_, 1); botPathUpkeep(body, b, dt); if (botPathBudget_ > 0) botPathBudget_ = keep; }
+     MoveIntent mi;
+     botSteer(body, b, dt, mi);
+     botOffMeshWatch(b, pc, dt);
++    if (b.suicideWish && pbSandbox_) { b.suicideWish = false; b.offMeshRun = 0.0f; }   // online: no direct kill (input only)
+     if (b.suicideWish) {   // stranded (botSteer / the off-mesh watch): the bots' suicide (harness only: a human never runs the player bot)
+         b.suicideWish = false; b.offMeshRun = 0.0f;
+         LOG_INFO("bots: p%d (player bot) stranded 30 s with no way back at t %.2f: suicide", localPlayer_, match_.matchTime());
+@@ -1291,6 +1318,8 @@ bool World::playerBotInput(platform::InputFrame& in, float dt) {
+         in.pressed[(int)platform::Button::Transform] = true;
+         playerBotTransformCd_ = 2.0f;
+     }
++    for (size_t k = 0; k < std::size(in.pressed) && k < 32; ++k) if ((pbPress_ >> k) & 1u) in.pressed[k] = true;   // online: the brain's actions
++    pbPress_ = 0;
+     in.mouseDX = 0; in.mouseDY = 0;
+     static const bool pblog = std::getenv("WFC_PLAYERBOTLOG") != nullptr;
+     if (pblog) { static float acc = 0.0f; if ((acc += dt) >= 1.0f) { acc = 0.0f;
