@@ -36,7 +36,7 @@ one() {
     fi
   done
   local lw; lw=$(grep -ohE "latency wait [0-9.]+ / [0-9.]+" $d/*/wfc.log 2>/dev/null | awk '{ if ($5 > m) m = $5 } END { printf "%.2f", m }')
-  echo "$(basename $d) $(grep -oE '(PASS|UNKNOWN|FAIL) lockstep\.arm\.r1' $d.out | head -1) present=$(grep -m1 -oE 'PRESENT: [A-Za-z0-9]+' $d/*/wfc.log 2>/dev/null | head -1 | cut -d' ' -f2) latencywait_max=$lw smoke=$(grep -c 'smoke test complete' $d/*/wfc.log 2>/dev/null) watchdog=$(grep -c 'watchdog:' $d/*/wfc.log 2>/dev/null)" | tee -a $L
+  echo "$(basename $d) $(grep -oE '(PASS|UNKNOWN|FAIL) lockstep\.arm\.r1' $d.out | head -1) present=$(grep -m1 -oE 'PRESENT: [A-Za-z0-9]+' $d/*/wfc.log 2>/dev/null | head -1 | cut -d' ' -f2) latencywait_max=$lw smoke=$(grep -c 'smoke test complete' $d/*/wfc.log 2>/dev/null) watchdog=$(grep -c 'watchdog:' $d/*/wfc.log 2>/dev/null) escape=$(grep -c 'raised from the CPU' $d/*/wfc.log 2>/dev/null) nodrain=$(grep -c 'did not drain in 2 s' $d/*/wfc.log 2>/dev/null)" | tee -a $L
   return 0
 }
 st "PRESENTER VERIFY $N: $E ($K runs, hang at ${HANG_S} s)"
@@ -46,7 +46,7 @@ if [ -z "$SKIP_LOOP" ]; then
   for d in work/leak/armB_d3d12present $O; do
     printf "%s: " "$d" | tee -a $L; grep -ohE "latency wait [0-9.]+ / [0-9.]+" $d/*/*/wfc.log $d/*/*/*/wfc.log 2>/dev/null | awk '{ n++; s += $3; if ($5 > m) m = $5 } END { printf "latency wait avg %.3f ms, max %.2f ms over %d lines\n", s / n, m, n }' | tee -a $L
   done
-  st "1 loop: $(grep -c ' present=D3D12 ' $L) D3D12 runs, $(grep -c ' HANG: ' $L) hangs, $(grep -E 'watchdog=[1-9]' $L | wc -l) runs with watchdog lines"
+  st "1 loop: $(grep -c ' present=D3D12 ' $L) D3D12 runs, $(grep -c ' HANG: ' $L) hangs, $(grep -E 'watchdog=[1-9]' $L | wc -l) runs with watchdog lines; shutdown escape fired in $(grep -E 'escape=[1-9]' $L | wc -l) runs; queue not drained in $(grep -E 'nodrain=[1-9]' $L | wc -l) runs (must be 0)"
 fi
 [ -n "$SKIP_FG" ] || { st "2 FG run"; one $O/fg "WFC_D3D12PRESENT=1;WFC_FRAMEGEN=1" || exit 2; grep -m2 -hE "FG|frame generation" $O/fg/*/wfc.log | cut -c1-200 | tee -a $L; }
 [ -n "$SKIP_RESIZE" ] || { st "3 resize run"; one $O/resize "WFC_D3D12PRESENT=1" resize || exit 2; grep -hiE "resize|swapchain" $O/resize/*/wfc.log | head -6 | cut -c1-200 | tee -a $L; }
