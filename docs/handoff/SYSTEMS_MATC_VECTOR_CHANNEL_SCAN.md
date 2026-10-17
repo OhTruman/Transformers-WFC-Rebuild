@@ -66,3 +66,12 @@ list for the vending machines' screens.
   LightVolumeCool). Step 1 decoded this family's shipped PS (Seed ShaderCache_6631 @ 89371): the alpha is read alone as a scalar
   intensity. So the brighter volumes are the authored intensity.
 - **Outcome:** (B) switches in whole (Integration).
+- **Debris pool, OmegaLiquid_MATINST:**
+  - Master ENV_ORB_PowerCorridor_p.Materials.TryptiGelGlass_Mat (BLEND_Translucent); its graph is node-for-node identical to
+    ENV_Refractive_Glass_Opaque_Mat.
+  - Shipped base-pass PS, MP_ORB_Art_m ShaderCache_1203 @ 127734:
+    - l.72 `mul r8.xyz, c8{UniformVector_2}.xzyy, c8{UniformVector_2}.wwww`: Edge_Fresnel_Color's rgb x its own alpha (the authored
+      Multiply_4383, A pin 0, B pin 4);
+    - Refractive_Caustic_Color read as rgb (l.72-74) and separately as `.wwww` (l.77).
+  - Verdict: the candidate (colour x alpha) is the original; live squared the colour.
+  - Experimental's pool measurement fits: after = 1.06 x before + 18.6 levels, detail kept.
