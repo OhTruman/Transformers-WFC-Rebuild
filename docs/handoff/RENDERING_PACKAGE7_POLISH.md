@@ -86,3 +86,9 @@ What remains is how much of the frame the flash covers (item 1's bar: Gorge step
 
 Eye sheet: Gorge step 1080 and one Molten mine close-up, against the bar above. Off / Faithful identity unchanged.
 Estimate 4-5 h (not a two-hour item): queued after X6, X7 and the Streets haze.
+
+Known residual (low priority, Faithful): our RGBA16F scene target does not saturate at 3.984 during additive blending. A
+pixel pushed far above 4 by additive layers and then darkened by a later translucent layer can end brighter than on the
+360. The fix would be a per-draw clamp in the Faithful path. Do it only after a measured A/B on explosion frames shows a
+visible difference; no capture has shown one so far. Realistic keeps the bloom input cap at 16 (headroom), not at the
+faithful 3.984.
