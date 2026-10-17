@@ -2,6 +2,28 @@
 
 ## Current state (update at every stable point)
 
+- **2026-10-17: the package 6 gate is running on af4d0731. FREEZE** (Integration): no compiles and no exes until Integration lifts
+  it by message; code edits and docs only.
+  - **Both items below move to package 7:** the Defrag latch removal, and lever 1, the instanced gibs. They can't be measured during
+    the gate, and Systems' build follows it.
+  - **Also package 7:** the FaceFX pose hook, from AssetTools' spec `docs/handoff/CAMPAIGN_FACEFX_RE.md` (integration 181c9d27). The
+    plan is in `docs/handoff/GAMEPLAY_FACEFX_HOOK.md`: the LocalPose override before poseGlobals, a bone-space probe, and the unit test
+    on DX_OPRIME_LK002649 at t = 1.0 s.
+- **Update (late 2026-10-16):** the package 6 candidate head is **af4d0731**, with the X3 volumetrics **and Rendering's Defrag draw-list cache fix**. Base both items below on af4d0731.
+  - They may run **in parallel**.
+  - They join package 6 **only** if they pass before Systems' package build starts, about 1.5 h after the relaunch.
+  - The latch removal: `node docs/handoff/corpsegpu/remove_gpu_defrag.js` in an af4d0731 tree, then the 4 crops (`mkgc.js crops`, retargeted to af4d0731 trees), especially frames 300-360 (the Defrag body).
+- **Tomorrow, 2026-10-17, after the user's reboot** (Integration's order):
+  1. **Lever 1 of `GAMEPLAY_CORPSE_ONEDRAW.md` (merged 51b64874): instanced gib chunks.**
+     - First read the renderer's instance / `instRejected` counters on a gib-heavy 63-bot frame (Berth / Gorge, `WFC_PERFSTATS`).
+     - If the chunks are rejected, make them qualify (neutral colour, owner 0) or ask Rendering for an instanced call.
+     - Compiles and headless runs are free then; the crops and the corpse arm need a slot.
+     - It joins package 6 **only** if it passes before Systems' package build on the final head starts; otherwise package 7.
+  2. **Remove the Defrag CPU latch** (`edit_gpu_defrag.js`) once Rendering's energy-death fix for queued skinned draws is in, then re-run the 4 crops.
+- **About 21:30: the GPU-corpse patch is MERGED** by Integration.
+  - Corpse arm on Berth at 63 bots: p90 3.10 ms, against 3.50 for the head and 2.17 for the NOCORPSE floor. That's −0.41 ms; the 0.1 ms target was missed, with about 0.9 ms left. Dynamic draws are unchanged (176 vs 126 without bodies).
+  - **Next (package 7 lever, the user's look bar):** fewer draws per settled body: merge the gib chunks and body parts into one draw, and instanced gibs (check `gStats.instRejected` first). Not a shorter life, a cap or shadow removal.
+  - **Tomorrow:** remove the Defrag CPU latch once Rendering's fix lands (the queued skinned draw honouring setDrawEnergyDeath), then re-run the 4 crops.
 - **About 21:05**, at agents/gameplay 252e6426: the GPU-corpse crops **PASS** under Integration's decisions (Defrag CPU latch; GPU/CPU rounding accepted; f920 for Rendering's eye). The exes have gone to Experimental for the corpse arm. Waiting for the timing result and the merge.
 - **About 20:45**, at c0938c76: the GPU-corpse patch builds.
   - Headless checks pass: BOTTEST 48/48 on 12 seeds; seed-7 SIMHASH identical (null render never draws, so these are sim only).
