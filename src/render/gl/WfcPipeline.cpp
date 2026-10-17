@@ -1295,7 +1295,7 @@ bool Pipeline::load(const std::string& mapName) {
     }
     loadMovers(dataDir_ + "/movers.json");
     yieldLoad();
-    loadMapFx(dataDir_ + "/map_fx_runtime.json");
+    loadMapFx(mapFxPath());
     loadFogVolumes(dataDir_ + "/fog_volumes.json");
     {   // MaterialInstanceActor -> MIC (build_materials.py): Matinee material-parameter routing
         assets::Json MJ;

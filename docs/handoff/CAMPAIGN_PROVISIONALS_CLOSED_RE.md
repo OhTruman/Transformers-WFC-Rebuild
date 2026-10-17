@@ -21,7 +21,7 @@ AssetTools `docs/handoff/chapter_notes/*.md`. Part 1 = the five that gate verdic
   stock (H), but the data pins flag 2 to fly-only reach independently.
 - **Verdict:** airborne_by_design's reading holds; the A4_ORB / D2_COR exemptions stand.
 
-### 4. Empty SetCurrentObjective Description = "clear" — **CONFIRMED (script)**, with a nuance
+### 4. Empty SetCurrentObjective Description = "clear" — **CONFIRMED (script) for empty; CORRECTED for A1's blank `" "`**
 
 Chain: `SeqAct_TnSetCurrentObjective.Activated` → `TnGameReplicationInfoGameBase.SetCurrentObjective` →
 `TnObjectiveManager.SetCurrentObjective` → `ClientSetCurrentObjective`.
@@ -36,6 +36,16 @@ Chain: `SeqAct_TnSetCurrentObjective.Activated` → `TnGameReplicationInfoGameBa
    - If found and different, it becomes current; the previous one completes the same way.
    - **Not found:** `LogInternal("Error: objective … not found in world info objective list")` and **no change at all**.
      The CAMPAIGN_DATA_INDEX note "D1 sets one key not in its bank" is therefore a runtime no-op (C), not a clear.
+4. **The bank is localized too:** `TnGameReplicationInfoGameBase` fills it with `Localize("Objectives", key, "TransGame")` per entry,
+   so lookups compare localized texts.
+5. **A blank `" "` Description is NOT a clear (added 2026-10-18, C):**
+   - The test is `Description != ""`, so `" "` goes through `Localize`.
+   - The native `execLocalize` (`0x82B982D8` → `0x82B906A8` → core `0x82B2D928`) passes **Optional = 0**, so a missing key returns
+     the marker string **`<?%s?%s.%s.%s?>`** (format at `0x82253D64`), e.g. `<?INT?TransGame.Objectives. ?>`. It never returns "".
+   - That string is not in the bank → "objective not found" → **no change**: the current objective stays on screen.
+   - **Census (AssetTools `*_objectives.json`):** of the 41 `clears_objective` setters, **34 have an empty Description** and clear
+     (D3B 17, D3A 11, A3 / A4 / A5 / D1 / D2 / D5 1 each). **A1_IAC's 7 use `" "` and are runtime no-ops.**
+   - Fix in the schema: `clears_objective` only when the Description is empty; a whitespace-only Description is `no_op`.
 
 ### 3. elevated_above_floor exemption (start 3–30 m above walkable floor) — **CONFIRMED (script)**, falling physics H
 
@@ -111,4 +121,95 @@ check result. The PhysMaterial order, **C from the code**:
 
 ## Part 2
 
-Items 6–12 follow in the next commit.
+### 6. UseSubtitles false = the HUD shows only flagged lines — **HIGH (data)**; consumer not located
+
+- **Where the field lives:** `UseSubtitles` is a WFC field inside each `SoundNodeWaveEx.Subtitles[]` cue (beside Text / Time).
+- **Census:** 15,016 cues; **1,649 true / 13,367 false**.
+- **Sampled content:**
+  - true = story / mission dialogue ("Autobots--a new age is upon you! I, Megatron…", "My scans indicate that door should lead us…");
+  - false = combat barks ("Let's dogpile on that guy.", "That hit the spot!", "Got some Cloakers -- look sharp!").
+- **The reading fits.** The per-cue native filter (the subtitle queue, stat names QueueSubtitles / FindHighestPrioritySubtitle)
+  was not traced to the field.
+- The player switch is separate (C): `HmPlayerController` → `SetShowSubtitles(ProfileSettings.GetSubtitleConfigOption())`;
+  `TnUIController` Paused states call `DisableSubtitles()` and restore them on exit.
+
+### 7. 32 characters with no map-package reference load at runtime from AI character definitions — **CONFIRMED, two paths**
+
+- **Enemies / bosses / buddies (C):** campaign maps reference them indirectly. The chain is
+  `SeqAct_TnPawnFactory` (1,263) → `TnActorFactoryAI` (1,038) → **`AiCharacterDefinitionTemplate`** → `TR_AiCharacterDefinition_p.*_AICD`
+  → `AiCharacterDataResolved.ChassisType` → the `TR_*_ROBODEF_p` package.
+  - 53 AICDs are in use, e.g. `Trypticon_AICD`, `StarScream_Boss_AICD`, `Soundwave_Boss_AICD`, `Frenzy_AICD`, `Rumble_AICD`,
+    `Spider_AICD`, `SecurityDrone_AICD`, `CQCSpecialist_*`, `Brawl_VIP_AICD`, `AirRaid_Buddy_AICD`.
+  - So the ROBODEFs are reached through an object reference, not a name. A walk that follows AICD → ChassisType finds them.
+- **Playable iconic characters (C):**
+  - Arcee, Jazz, Slipstream, Zeta Prime, Shockwave, Onslaught, Demolishor and the others come from
+    `TnProfileSettings.PresetIconicCharacters` (30 `TR_SPPlayerCharacterData_p.*_PCD_SP`).
+  - Each PCD's `ChassisTypes` → the TransCustomization.ini `TnDataProvider_Chassis` sections (UniqueIconicId) → ROBODEF.
+  - Each chapter's selectable set is `TransLevels.ini` `CampaignCharacters` (e.g. A4: AirRaid / Jetfire / SilverBolt).
+- **Correction:** not "presumably from AI definitions". The AI ones come through AICD objects; the playable ones come through PCD_SP + the chassis ini.
+
+### 8. D3A / D3B = Decepticon chapters 3 and 4 — **CONFIRMED (TransLevels.ini)**
+
+| Map | MapId | PresenceId | Checkpoint ids | Thumbnails | Faction | CampaignCharacters |
+|---|---|---|---|---|---|---|
+| D3A_IAC_Base_m | 103 | 7 | `D3_CP*` | | 1 (Decepticon) | Megatron / Soundwave / Breakdown |
+| D3B_IAC_Base_m | 104 | 8 | **`D4_CP01…D4_CP19`** | `UI_CheckpointThumbnails_p.D4_CP*` | 1 | Megatron / Soundwave / Breakdown |
+
+So D3B is chapter 4 (matching `FMV_d4text_*.bik`); there is no `D4_` package because chapter 4 reuses the IAC level as D3B.
+
+### 9. High Moon custom Kismet classes "with no RE decomp file" — **CONFIRMED for 13 of 15; 2 handlers not located**
+
+- **Why there's no file:** the 15 classes have **no script functions of their own** (data-only SequenceActions / SequenceEvents), so
+  `ue3dis --class` emits nothing. Their behaviour is the target's handler (actions) or the activating code (events):
+
+| Class (package) | Behaviour lives in |
+|---|---|
+| SeqAct_TnAiJump, SeqAct_TnAiMoveToActor, SeqAct_TnAssignTacticalVolume (TransGame) | `TnAiController` handlers |
+| TnSeqAct_DownRevive (TransGame) | `TnAiController`, `TnPlayerController` |
+| TnSeqAct_ActivateTogethernessVolume (TransGame) | `TnTogethernessVolume` |
+| TnSeqAct_MissionComplete (TransContent) | TransContent game code (decomp_tc) |
+| TnSeqEvent_DetPack | `TnInteractActionFireDetpackEvent` |
+| TnSeqEvent_Downed | `TnPawn` |
+| TnSeqEvent_HealthStatus | `TnAiHealthMonitor`, `TnTankAiPawn` |
+| TnSeqEvent_Interact | `TnInteractBase` |
+| TnSeqEvent_OmegaStatus | `TnOmegaSupremePawn`, `TnAiActionGrab`, `TnAiActionLockOnTarget` |
+| TnSeqEvent_TankStatus | `TnTankAiPawn` |
+| TnSeqEvent_TrypticonEvents | `TnTrypticonPawn` |
+| **SeqAct_TnAiUseTurret** (TransContent; links Target, "Turret Object" → `Turrets`) | handler `OnTnAiUseTurret` not found in any decompiled package. The consumers are `TnAiController.SetScriptedTurrets(Turrets)` / `ClearScriptedTurrets()`, which have **no script caller** (H: the handler sits in a campaign TransContent class not yet decompiled) |
+| **TnSeqAct_AiDisableShootingBehavior** (TransContent, no variable links) | handler not located (UNKNOWN). The only "DisableShooting" in script is `TnSentryPawn._DisableShooting`, set by Trypticon's shoulder-cannon action |
+
+### 10. A4 `Checkpoint_14441` ("02a -Watchdog Part 2") truly air, by design — **CONFIRMED**
+
+- **Spawn form:** the checkpoint's action `TnStartingFormOverrideCheckpointAction` has **StartingFormOverride = TF_Vehicle**.
+  `Process()` → `TnCampaignGameBase.set_PendingStartingFormOverride`, so the player spawns in vehicle form.
+- **Spawn points:** the auxiliary spawns are two **AirPathNodes** (`AirPathNode_2348`, `_7858`). The checkpoint itself has no
+  reach specs.
+- **Characters:** A4's CampaignCharacters are **AirRaid, Jetfire, SilverBolt**, all jets.
+- So the restart spawns a jet in flight at (236044, 69344, 233996), by design.
+
+### 11. FaceFX node clamp to [min, max] is the face graph's own — **HIGH** (1 h cap reached)
+
+- **The base node (C):** `FxFaceGraphNode`, registered `0x832FDE18`, size 0x44. Its constructor `0x832FDE98` initialises
+  **+0x10 = 0.0 and +0x14 = 1.0** (the node's min / max defaults) and the input-link array at +0x1C. The subclasses
+  (`FxCombinerNode` vtable `0x8238D8E0`, Delta / GenericTarget / MorphTarget / BonePose) share it.
+- **No clamp downstream (C, prior):** the bone pass has none (FACEFX_BONE_BLEND_RE.md).
+- **Not found:** the node-value evaluator (where input links are summed and clamped). Within the cap, no FaceFX-library function pairs
+  +0x10 / +0x14 loads with a compare or fsel.
+- The stock FaceFX 1.x semantics (node value = Σ link outputs + track value, clamped to [min, max]) remain the HIGH reading.
+
+### 12. CAMPAIGN_MATINEE_SCHEMA runtime semantics — see item 5
+
+The doc's only runtime PROVISIONALs are the actorless-group rules. They are covered by item 5: the stock InitInterp behaviour is HIGH,
+and the empty-object groups are corrected (23 with Event / Sound tracks are live).
+
+### Not closable by RE (stated as such)
+
+- **Trypticon's low jaw-voice correlation** (CAMPAIGN_FACEFX_RE): a measurement / lip-sync-timing question, not a data reading.
+- **CAMPAIGN_FACEFX_RE "mapping from the data … for Gameplay to confirm on the full skeleton":** it needs the in-engine skeleton hook.
+- **CAMPAIGN_STREAMING_RUNTIME.md (design note, PROVISIONAL):** our runtime design, not an original-behaviour claim.
+- **CAMPAIGN_ASSET_INVENTORY's work estimate ("about a day … PROVISIONAL"):** a planning estimate.
+- **Pilot / summary document titles marked PROVISIONAL:** they inherit the verdict gate. That gate is resolved by items 1 and 3
+  (the A4 / D2 PASS readings hold).
+
+**X1 tone re-check (Integration's side item):** Rendering confirmed the "intentionally not driven" list against
+`RENDERING_RT_PLAN_V3.md`. No change.

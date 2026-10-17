@@ -177,6 +177,9 @@ def system_runtime(name, s):
                         mod['partial'].append(prop)
                 if m['module'] in ('PMI_LocationEmitter', 'PMI_LocationEmitterDirect') and L.get('location_emitter'):
                     mod['location_emitter'] = L['location_emitter']
+                if m.get('fields'):   # the cooked per-instance properties (AssetTools pstream: the LOD parameter blob, RE audit (c))
+                    mod['fields'] = m['fields']
+                    if m.get('fields_source'): mod['fields_source'] = m['fields_source']
                 if m.get('props'):   # non-curve properties of decoded WFC / UE3 modules (AssetTools: Collision, Switchable...)
                     mod['props'] = m['props']
                 mp = m.get('module_properties (authored, defaults filled)') if mname != 'PMI_Unknown' else None

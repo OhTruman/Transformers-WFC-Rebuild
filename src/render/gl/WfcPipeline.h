@@ -1198,6 +1198,11 @@ public:
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
     long statFxFrozen_ = 0, statFxTicked_ = 0;   // (statFxFrozen_ = throttled-off instance-ticks)   // [Systems] SecondsBeforeInactive: frozen / ticked instance-ticks (600-frame window)
+    // HmParticleModuleGravity: the instance gravity scalar (UU/s^2) - the world's DefaultGravityZ (Xe-TransGame.ini
+    // [Engine.WorldInfo] DefaultGravityZ=-2940; no MP map authors an override; RE: the cached world gravity Z, HIGH).
+    // Set per map at loadMapFx (kMapGravityZ: a campaign map that authors its own)
+    static constexpr float kDefaultGravityZ = -2940.0f;
+    float fxGravityZ_ = kDefaultGravityZ;
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
@@ -1215,6 +1220,11 @@ public:
         bool inheritVelocity = false, inheritRotation = false;
         float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
         bool killOnHit = false;           // PMI_Collision: MaxCollisions 0 + EPCC_Kill (AssetTools authored.db)
+        // the module's cooked scalar properties (AssetTools pstream "fields": the LOD parameter blob per instance, else the
+        // class default): numbers / bools as floats, names as strings; absent = the runtime's documented default
+        std::map<std::string, float> fields;
+        std::map<std::string, std::string> fieldNames;
+        float field(const char* k, float def) const { auto it = fields.find(k); return it == fields.end() ? def : it->second; }
     };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {
@@ -1279,6 +1289,7 @@ private:
         float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
+        float locDirect[3] = {0, 0, 0};   // ParticleModuleLocationDirect: the stored LocationOffset (EmitterTime at spawn)
         int subImage = 0, subImage2 = 0;  // SubUV cells (row-major index) and the blend interp (RE s16)
         float subInterp = 0.0f, subLastChange = 0.0f; bool subInit = false;
         bool subDirect = false; float subPos[2] = {0, 0}, subSize[2] = {1, 1};   // SubUVDirect (cell units)
@@ -1312,6 +1323,7 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
         float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
         long poolSeq = 0;                     // > 0: an EmitterPool effect, in spawn order
+        float prevT[3] = {0, 0, 0}, vel[3] = {0, 0, 0}; bool havePrevT = false;   // the instance's velocity (UU/s, VelocityInheritParent)
         // [Systems] ParticleSystemComponent.SecondsBeforeInactive (FxInactive.inc; 0 = never): unrendered longer than this
         // and ticked longer than this, the component stops ticking - frozen, resumed when rendered again (UE3 PSC Tick).
         float sbi = 0.0f, sbiAccum = 0.0f, lastRenderTime = 0.0f, skipped = 0.0f;   // skipped: time not yet ticked (the UE3 throttle)   // sbiFrozenAt >= 0: frozen since then
@@ -1331,6 +1343,13 @@ private:
     float lastFxTime_ = -1.0f;
     core::Mat4 camView_;
     bool loadMapFx(const std::string& path);
+    // the map FX runtime file: <render data>/<map>/map_fx_runtime.json, or WFC_MAPFX_DIR/<map>/ (a regenerated copy for A/Bs)
+    std::string mapFxPath() const {
+        const char* e = std::getenv("WFC_MAPFX_DIR");
+        if (!e || !*e) return dataDir_ + "/map_fx_runtime.json";
+        const size_t s = dataDir_.find_last_of("/\\");
+        return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/map_fx_runtime.json";
+    }
     void tickMapFx(float dt);
     int fxMeshFor(const FxLod& L);
     struct MapProp {
