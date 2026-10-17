@@ -18,7 +18,7 @@ class FakeSession : public ISession {
 public:
     struct Call {
         std::string fn;                     // "host", "join", "cancelJoin", "leave", "publishLobby", "setMemberInfo",
-                                            // "requestStart", "reportLoaded", "kick"
+                                            // "requestStart", "reportLoaded", "kick", "setVoiceSettings", "setPushToTalk", "setMuted"
         double time = 0.0;
         std::string arg;                    // join target / kicked member / "simId,loadHash"
         SessionHostSettings hostSettings;   // host()
@@ -58,6 +58,12 @@ public:
         Call c = mk("reportLoaded"); c.arg = std::to_string(simId) + "," + std::to_string(loadHash); calls_.push_back(c);
     }
     void kick(const SessionMemberId& m, SessionKickReason) override { Call c = mk("kick"); c.arg = m.fingerprint; calls_.push_back(c); }
+    void setVoiceSettings(const SessionVoiceSettings& v) override {
+        Call c = mk("setVoiceSettings"); c.arg = std::to_string((int)v.mode) + "," + std::to_string((int)v.audience) + "," + v.device + "," + std::to_string(v.volume);
+        calls_.push_back(c);
+    }
+    void setPushToTalk(bool held) override { Call c = mk("setPushToTalk"); c.arg = held ? "1" : "0"; calls_.push_back(c); }
+    void setMuted(const SessionMemberId& m, bool muted) override { Call c = mk("setMuted"); c.arg = m.fingerprint + (muted ? ",1" : ",0"); calls_.push_back(c); }
 
     std::vector<SessionEvent> poll(double now) override {
         now_ = now;

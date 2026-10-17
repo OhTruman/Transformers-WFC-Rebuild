@@ -272,6 +272,7 @@ public:
     const std::string& joinAddress() const { return joinAddress_; }
     bool matchInProgressForMember() const { return role_ == SessionRole::Member && memberLobby_.matchRunning; }
     static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
+    static constexpr double kJoinBackstop = kInitialConnectTimeout + 5.0;   // the session layer owns the 50 s timeout
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].

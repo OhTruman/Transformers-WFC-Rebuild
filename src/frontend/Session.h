@@ -8,6 +8,16 @@
 // (RE NETWORK_ARCHITECTURE_2026-10-01): a player-hosted listen server, sessions 'Party' and 'Game', no host migration;
 // the reservation beacon's packets (request / response 4 = accepted / tell clients to join / host ready / cancelled /
 // heartbeat / return to session) map onto host / join / Joined / JoinFailed / CountdownStarted / HostLost below.
+//
+// Alignment with Systems' ONLINE_MP_ARCHITECTURE.md (section 10) and the frontend flows (docs/handoff/ONLINE_MP_MISMATCHES.md):
+// - poll(now) is called once per frontend update in every level, the match included (PeerDropped / HostLost / Desync /
+//   Kicked reach the flow mid-match); the session layer hands lockstep-channel packets to its LockstepLayer queue.
+// - The host's GameFlow decides teams / slots from MemberJoined / MemberLeft (the original PickTeam) and publishes them in
+//   SessionLobby::slots; the session layer relays and owns membership / connectivity.
+// - JoinFailed{Version} can also arrive after the join (a sim id / load hash mismatch at reportLoaded): it ends the session
+//   for that peer.
+// - The session layer owns the join timeout (InitialConnectTimeout 50 s); the frontend's own timer is a backstop.
+// - SessionHostFailure::StrictNat is not produced in phases 1-3 (no NAT-type detection without STUN); Web peers are phase 4.
 #pragma once
 #include <cstdint>
 #include <map>
@@ -67,10 +77,23 @@ struct SessionHostSettings {
     std::map<std::string, std::string> settings;
     int mapSelectionMethod = 1;
     bool isPrivate = true;                  // phase 1: friends / private only (no XP, decision D8)
+    std::string relay;                      // phase 3: a self-hosted relay ("host:port[,room]"); "" = direct UDP
 };
 
 enum class SessionHostFailure { NoPath, StrictNat };                     // D2: PC text / the original NAT text
-enum class SessionJoinFailure { Full, Timeout, Version, MapMissing };    // the original texts (ONLINE_MP_UI_STRINGS.md 3)
+// the original texts (ONLINE_MP_UI_STRINGS.md 3); Invalid: the code failed the session layer's decode / check symbol
+enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid };
+
+// Voice (decision D7; ONLINE_MP_FLOWS.md 3.12, architecture section 7). Capture / playback / Opus are Systems'; the
+// frontend hands over the player's settings and the push-to-talk key state, and shows MemberVoice as HeadsetState.
+enum class SessionVoiceMode { Off, PushToTalk, OpenMic };
+enum class SessionVoiceAudience { Team, All };
+struct SessionVoiceSettings {
+    SessionVoiceMode mode = SessionVoiceMode::PushToTalk;   // the user's default
+    SessionVoiceAudience audience = SessionVoiceAudience::Team;
+    std::string device;                     // capture device name; "" = the system default
+    int volume = 70;                        // playback 0-100
+};
 enum class SessionLeaveReason { Left, Timeout, Kicked, LoadTimeout };
 enum class SessionKickReason { Idle, Host };                             // D5: the original 180 s idle kick
 
@@ -94,6 +117,7 @@ struct SessionEvent {
         ConnectionLost,    // member side; timedOut picks ConnectionTimeout vs ConnectionFailed text
         Desync,            // value = tick
         Kicked,            // kickReason
+        MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState
     } type = Type::LobbyState;
     double time = 0.0;
     std::string joinCode, address;
@@ -106,11 +130,12 @@ struct SessionEvent {
     SessionLobby lobby;
     int64_t value = 0;
     bool connecting = false, timedOut = false;
+    int headsetState = 0;
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",
                                     "LobbyState", "MemberJoined", "MemberLeft", "CountdownStarted", "PeerLoaded", "AllLoaded",
-                                    "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked"};
+                                    "PeerDropped", "HostLost", "ConnectionLost", "Desync", "Kicked", "MemberVoice"};
     const int i = (int)t;
     return i >= 0 && i < (int)(sizeof k / sizeof k[0]) ? k[i] : "?";
 }
@@ -127,7 +152,10 @@ public:
     virtual void setMemberInfo(const SessionMemberInfo& info) = 0;            // every member: name, character, team request
     virtual void requestStart() = 0;                                          // host: Start Game
     virtual void reportLoaded(uint64_t simId, uint64_t loadHash) = 0;         // after the map load (load gate)
-    virtual void kick(const SessionMemberId& member, SessionKickReason why) = 0;   // host: the idle kick
+    virtual void kick(const SessionMemberId& member, SessionKickReason why) = 0;   // host: a manual kick (idle: see the doc)
+    virtual void setVoiceSettings(const SessionVoiceSettings& v) = 0;          // on start and whenever the Audio rows change
+    virtual void setPushToTalk(bool held) = 0;                                 // on each change of the key's state
+    virtual void setMuted(const SessionMemberId& member, bool muted) = 0;      // local only: nobody is told
     // Events since the last poll, in order. `now` = the frontend's update time (seconds).
     virtual std::vector<SessionEvent> poll(double now) = 0;
 };

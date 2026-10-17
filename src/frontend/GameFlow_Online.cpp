@@ -14,8 +14,9 @@ std::string GameFlow::txt(const char* dollarKey) const { return cat_ ? cat_->loc
 
 void GameFlow::onlineTick() {
     for (const SessionEvent& e : session_->poll(clock_)) onSessionEvent(e);
-    // Join timeout: no answer within the original InitialConnectTimeout (50 s of frontend time).
-    if (onlinePending_ == OnlinePending::Joining && clock_ - joinStartedAt_ >= kInitialConnectTimeout) {
+    // Join timeout: the session layer sends JoinFailed{Timeout} at the original InitialConnectTimeout (50 s); this is the
+    // frontend's backstop should it never answer.
+    if (onlinePending_ == OnlinePending::Joining && clock_ - joinStartedAt_ >= kJoinBackstop) {
         session_->cancelJoin();
         onlineJoinFailed(SessionJoinFailure::Timeout);
     }
@@ -70,15 +71,18 @@ bool GameFlow::onlineHost() {
 }
 
 namespace {
-bool isJoinCode(const std::string& t) {   // WFC-XXXX-XXXX (CROSSPLAY_PROFILE_STATS.md fingerprint style)
-    if (t.size() != 13) return false;
-    for (size_t i = 0; i < t.size(); ++i) {
-        const char c = (char)std::toupper((unsigned char)t[i]);
-        if (i < 3) { if (c != "WFC"[i]) return false; }
-        else if (i == 3 || i == 8) { if (c != '-') return false; }
-        else if (!std::isalnum((unsigned char)c)) return false;
+bool isJoinCode(const std::string& t) {
+    // The shape only: "WFC-" + base32 groups separated by '-' (Systems' codes: "WFC-7QK2-M9TD-4H", relay "WFC-R-...").
+    // Decoding and the check symbol are the session layer's (JoinFailed{Invalid}).
+    if (t.size() < 6 || t.size() > 64) return false;
+    for (size_t i = 0; i < 4; ++i) if ((char)std::toupper((unsigned char)t[i]) != "WFC-"[i]) return false;
+    bool groupChar = false;
+    for (size_t i = 4; i < t.size(); ++i) {
+        if (t[i] == '-') { if (!groupChar) return false; groupChar = false; continue; }
+        if (!std::isalnum((unsigned char)t[i])) return false;
+        groupChar = true;
     }
-    return true;
+    return groupChar;
 }
 bool isAddress(const std::string& t) {    // host:port or [v6]:port, port 1..65535
     const size_t colon = t.rfind(':');
@@ -120,13 +124,18 @@ BridgeValue GameFlow::onlineJoin(const std::string& targetIn) {
 void GameFlow::onlineJoinFailed(SessionJoinFailure why) {
     onlinePending_ = OnlinePending::None;
     closePopup();
+    if (why == SessionJoinFailure::Invalid) {   // the code failed the session layer's decode: the entry popup's own text
+        showMessage(txt("$UIText.MessagePrompts.GenericErrorTitle"), txt("$WfcPC.Online.JoinInvalid"));
+        FlowTrace::emit("online.join", {{"result", "failed"}, {"why", "invalid code"}});
+        return;
+    }
     const char* title = why == SessionJoinFailure::MapMissing ? "$UIText.MessagePrompts.LobbyInvalidMapTitle"
                                                               : "$UIText.MessagePrompts.JoinGameInviteFailedTitle";
     const char* msg = why == SessionJoinFailure::Version      ? "$Engine.Errors.ClientOutdated"
                       : why == SessionJoinFailure::MapMissing ? "$UIText.MessagePrompts.LobbyInvalidMapMessage"
                                                               : "$UIText.MessagePrompts.JoinGameInviteFailedMessage";
     showMessage(txt(title), txt(msg));
-    static const char* const kWhy[] = {"full", "timeout", "version", "map"};
+    static const char* const kWhy[] = {"full", "timeout", "version", "map", "invalid"};
     FlowTrace::emit("online.join", {{"result", "failed"}, {"why", kWhy[(int)why]}});
 }
 
