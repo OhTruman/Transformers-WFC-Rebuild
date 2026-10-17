@@ -1,0 +1,72 @@
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-17 10:14:02.202833800 -0500
++++ b/src/game/World.cpp	2026-10-17 10:15:03.116605500 -0500
+@@ -5091,6 +5091,9 @@
+ // Attached body effects follow their socket; after 2 s [PROV: the systems' own lifetimes are not modelled] or when the pawn is gone
+ // they are deactivated (live particles finish).
+ void World::tickBodyNotifyFx(float dt) {
++    std::vector<std::pair<int, std::string>> abilities;
++    { std::lock_guard<std::mutex> lk(abilityFxMu_); abilities.swap(abilityFxPending_); }
++    for (const auto& a : abilities) spawnAbilityTriggerFx(a.first, a.second);
+     for (size_t i = 0; i < bodyFx_.size();) {
+         BodyFx& b = bodyFx_[i];
+         b.age += dt;
+@@ -6413,6 +6416,10 @@
+ }
+ 
+ void World::onParticipantAbility(int player, const std::string& id, const std::string& chassisKey, const core::Vec3& pos) {
++    {   // [Systems] OnTriggerEffect (every client): queued, spawned by tickBodyNotifyFx (the bot hook may run off the main thread)
++        std::lock_guard<std::mutex> lk(abilityFxMu_);
++        abilityFxPending_.emplace_back(player, id);
++    }
+     if (!audio_ || levelAudio_.level().empty()) return;
+     const CharacterAudioProfile* prof = CharacterAudio::find(chassisKey);
+     const CharacterAudioProfile& p = prof ? *prof : CharacterAudio::defaultProfile();
+@@ -6677,6 +6684,34 @@
+ 
+ void World::onAbilityTriggered(const std::string& abilityId) {
+     abilityAudio_.abilityTriggered(cues_, abilityId, atPawn(), 0.0f);
++    spawnAbilityTriggerFx(localPlayer_, abilityId);
++}
++
++// [Systems] TnAbility.OnTriggerEffect at OnTriggerEffectSocket (default PositionSocket), attached to the caster's mesh; every client
++// plays it (ReplicatedTriggerAbility RepNotify -> ClientOnTriggerAbility; RE MP_ABILITY_CUES_RE efcd305, CONFIRMED CDOs). Only two
++// MP abilities author one. Participants within 40 m, as the notify effects. WFC_BODYNOTIFYFX=0 turns it off with the body effects.
++void World::spawnAbilityTriggerFx(int player, const std::string& abilityId) {
++    struct TriggerFx { const char* ability; const char* effect; const char* socket; };
++    static const TriggerFx kTriggerFx[] = {
++        {"TnAbilityDrain", "FX_Multiplayer_p.FX.Drain_Blast_FX", "PositionSocket"},   // TransGame.Default__TnAbilityDrain
++        {"TnAbilityWarcry", "FX_Multiplayer_p.FX.WarCry_AOE_FX", "Chest_FX"},         // TransGame.Default__TnAbilityWarcry
++    };
++    static const bool off = std::getenv("WFC_BODYNOTIFYFX") && std::getenv("WFC_BODYNOTIFYFX")[0] == '0';
++    static const bool log = std::getenv("WFC_NOTIFYLOG") != nullptr;
++    if (off || !renderer_) return;
++    const std::string cls = AbilityAudio::abilityClass(abilityId);
++    const TriggerFx* t = nullptr;
++    for (const TriggerFx& f : kTriggerFx) if (cls == f.ability) t = &f;
++    if (!t) return;
++    const bool local = player == localPlayer_;
++    const Character* c = local ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(player);
++    if (!c || (!local && core::length(c->position() - player_.pawn().position()) > 40.0f)) return;
++    core::Mat4 sw;
++    if (!bodySocketWorld(*c, t->socket, sw)) return;
++    const int vid = fxStepSpawn(t->effect, core::Vec3{sw.m[12], sw.m[13], sw.m[14]}, core::normalize(core::Vec3{sw.m[0], sw.m[1], sw.m[2]}),
++                                core::normalize(core::Vec3{sw.m[4], sw.m[5], sw.m[6]}), fxTeamOf(player), false);
++    if (log) LOG_INFO("ABILITYFX p%d %s %s @%s", player, abilityId.c_str(), t->effect, t->socket);
++    if (vid >= 0) bodyFx_.push_back({vid, player, t->socket, 0.0f});
+ }
+ 
+ void World::setLocalBuffAudio(const std::string& buffClass, bool active, int team) {
+diff -ruN a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-17 10:14:02.210861200 -0500
++++ b/src/game/World.h	2026-10-17 10:15:03.126639800 -0500
+@@ -1348,6 +1348,9 @@
+     std::vector<BodyFx> bodyFx_;
+     bool bodySocketWorld(const Character& c, const std::string& socket, core::Mat4& out) const;
+     void tickBodyNotifyFx(float dt);
++    void spawnAbilityTriggerFx(int player, const std::string& abilityId);   // TnAbility.OnTriggerEffect
++    std::mutex abilityFxMu_;
++    std::vector<std::pair<int, std::string>> abilityFxPending_;   // bot triggers, spawned on the main thread
+     void tickLocalMelee(float dt);
+     bool deferredKillstreak_ = false;
+     int lockedClip_ = 0;
