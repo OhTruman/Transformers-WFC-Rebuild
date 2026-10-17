@@ -22,7 +22,7 @@ common = sorted(set.intersection(*(set(r) for r in peers.values()))) if peers el
 if not common: print("no common ticks"); sys.exit(3)
 names = list(peers); first_hash = first_bundle = None
 for t in common:
-    hs = {peers[n][t].get("simhash") for n in names}; bs = {peers[n][t].get("bundle") for n in names if peers[n][t].get("bundle")}
+    hs = {peers[n][t].get("simhash") for n in names}; bs = {peers[n][t].get("bundle") or peers[n][t].get("bundlehash") for n in names if peers[n][t].get("bundle") or peers[n][t].get("bundlehash")}
     if first_bundle is None and len(bs) > 1: first_bundle = t
     if first_hash is None and len(hs) > 1: first_hash = t
     if first_hash is not None and first_bundle is not None: break
