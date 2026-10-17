@@ -2507,3 +2507,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Faithful 2.8 / 0.68, Realistic 7.5 / 4.96 s at 'World: map mesh upload' (0.04 s under the 5 s watchdog), Realistic + HD 2
   6.0 / 4.2. No watchdog line, 0 dumps. The Realistic first-frame hitch sits at the watchdog edge at 1x; Rendering's gutter
   frontier + loading-screen yield (02c9ceb4 / 9d6ac5b5) is measured against 4.96 s; X7 must come in below it. Card -> Rendering.
+2026-10-17 07:59 Merged: eebe15b2 campaign flag + <Strings:File.Section.Key> data store (answers "" in versus as before; decision: answer it
+  in versus too as a follow-up, the original filled the rename prompt and Claimed / Unclaimed texts from it), b79692b6 campaign
+  objective path (bank, setCurrent, HudController::setObjective -> AddObjective, ActiveObjectives store), fedf83ee campaign
+  tutorial messages once per profile; all behind GameFlow::campaign(), versus unchanged, wfc_frontend_tests 165 / 0.
+  eee61182 CAMPAIGN_CONTENT_DELTAS_RE.md + data exports (campaign specification complete on semantics + data). RE lane ->
+  package 7 support: the Faithful per-draw 3.984 saturate rule. Card: Rendering's 20-min slot in progress.
