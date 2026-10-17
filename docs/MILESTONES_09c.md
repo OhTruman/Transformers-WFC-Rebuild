@@ -2202,3 +2202,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (slice / jitter aliasing; check in motion), lane_sun loses the purple lamp hue. Candidate = 9350f19b + X3,
   identity + SETTINGSTEST tonight, x3-gate.sh tomorrow with the _sun / _lamp views added (reported, not in the floor).
   User: reboot at any time tonight when home; lanes keep WIP committed + resume notes current.
+  2026-10-16 20:04 GPU-SKINNED CORPSES (Gameplay GAMEPLAY_CORPSE_GPU.patch vs 78d06b6e): built (int_gcb head / int_gcn
+  patch), headless PASS (BOTTEST 48 / 48 x 12 seeds, seed-7 SIMHASH identical); slot granted for 4 crops (10 / 40 m
+  look-back, byte-identical required) + a 16v16 refusal count; then Experimental's corpse arm (int_gcb / int_gcn /
+  int_gcn + NOCORPSE, target within 0.1 ms of NOCORPSE) before 00:00; merge on PASS. X3 gate floors final
+  (90df7714): match 1.26 / 1.28, views 1.42 / 1.45, checkpoint values printed.
