@@ -9,7 +9,7 @@ public static class PoolTags {
   [DllImport("ntdll.dll")] public static extern int NtQuerySystemInformation(int c, IntPtr b, int l, out int r);
 }
 "@
-$len = 1 << 20; $buf = [IntPtr]::Zero
+$len = 1048576; $buf = [IntPtr]::Zero
 for ($i = 0; $i -lt 6; $i++) {
   $buf = [Runtime.InteropServices.Marshal]::AllocHGlobal($len); $ret = 0
   $st = [PoolTags]::NtQuerySystemInformation(22, $buf, $len, [ref]$ret)
