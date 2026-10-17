@@ -2897,3 +2897,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (Energon_Lava_Mat, present only on Streets + BrokenHope) never matched; fixed (utf-8-sig). Streets' after arm reruns inside the
   pass (~6 min; CARD FREE ~11:35), plus a BrokenHope lava view pair if a view reaches it. The switch installs the candidate
   (manifest rebuild) verified against the fixed after root.
+2026-10-17 10:58 (B): Experimental patched the lava entry into the after root before Streets ran, so no rerun; BrokenHope is Escalation-only (no
+  versus boot, no views) so the Streets lava frames stand for both maps. The switch dry run now matches the after root on 10 / 10
+  maps. D5 CHANGED: idle kick = host option "Kick Idle Players", default Off (original never kicked in private matches); one-launch
+  requirement: members start from the host's published MatchLaunch (Systems' transport).
