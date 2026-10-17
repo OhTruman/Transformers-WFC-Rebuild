@@ -3277,3 +3277,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:37 PACKAGE_7_HEAD.md updated to today's merges (Systems d9e87a14, copied); the data switches recorded by time + manifest (no commits
   of their own). Pending before the head candidate: Rendering's x17 / x18 verdicts (particles set, lens flares), Gameplay's
   combined online patch (offline identical; may join the head without touching the base).
+2026-10-17 14:39 MERGED c306878a transforming-door sounds (anim sound notifies through the body-notify table; Rust's level-start DOOR_TUBE +
+  DOOR_INTERIOR verified headless with the audio mix; SIMHASH identical) + PACKAGE_7_HEAD.md bc6733a5 (data switches by time).
