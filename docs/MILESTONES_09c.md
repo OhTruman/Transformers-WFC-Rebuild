@@ -3385,3 +3385,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   = lockstep identity + transport + voice proven headless. Tonight's two-PC test = headless LAN run via Play_NetTest_Host /
   _Join.bat (Systems' doc). The playable online match (UdpSession over ISession + Frontend wiring + rendered net match with the
   human seat) = item 1 of the next head; Systems posts the split + estimates by 19:00.
+2026-10-17 15:31 Campaign Kismet decode COMPLETE (176 / 176; only ScalarValueRamp's ease shape left as H). Campaign RE inputs now: data,
+  Kismet, natives, Escalation; remaining RE gaps = 38 materials + the render-data pipeline items.
