@@ -73,3 +73,27 @@ The source is the RE lane's `VEHICLE_DEATH_PRESENTATION_RE.md` (2babd61).
   actors).
 - **Visual:** the doors and bridges drawn and animated (Rendering's half); death frames otherwise unchanged.
 - **NAVQ before / after:** on the 4 user maps (vehicle deaths) and Rust (doors).
+
+## Data delivered (AssetTools, 2026-10-17; Integration's copy)
+
+- **GLBs:** `manifests/maps/transforming_actors/{IAC_InteriorDoor, IAC_TubeDoor, ORB_InteriorDoor, NEU_BridgeStraight}_SKEL.glb`
+  (skinned, one clip each).
+- **`mp_transforming_actors.json`** (old keys unchanged): meshes{glb, clip, clip_length_s (doors 2.333, tube door 1.667, bridge 0.967),
+  clip_direction, bodies[{bone, boxes[{box_extent_*, box_local_*}]}], body_bone_keyframes (unused: I sample the GLB)},
+  actors[*].drivers[], actors[*].nav_nodes_in_volume.
+- **Posing:** world_box = actor.gltf_matrix × bone_global(t) × box_local_gltf, with half extents = box_extent_gltf / 2.
+  - t = 0 is Untransformed (doors closed, bridge retracted at 12.3 m); t = clip_length is Transformed (doors open, bridge 20.5 m).
+  - Checked by AssetTools: the bone globals match the umodel anim exactly, and the box AABBs match the skinned mesh at both ends.
+- **Drivers:**
+  - BrokenHope / Remnant doors: Transform ← TnSeqEvent_SurvivalGenerator (Escalation only).
+  - Bridges: TransformWorldProp ← TransformBridgeN / UntransformBridgeN, plus Setup's Untransform.
+  - **Rust: Transform ← SeqEvent_SequenceActivated, but the op's comment reads "KOTH or BOMB Active OPEN DOORS".** Check that
+    sequence's mode gating against RE's "every mode" before implementing (an open question for the RE lane).
+- **IMPORTANT, bridges:** their only body bone (L_Robo01_XT) does not animate, so the 3 boxes always cover the EXTENDED deck. The
+  original switches that collision in Kismet:
+  - UntransformBridgeN / Setup: SeqAct_ChangeCollision COLLIDE_NoCollision + Hide;
+  - TransformBridgeN: ChangeCollision with the preset unauthored (the enum default, PROVISIONAL: blocking) + UnHide.
+  - **So a retracted bridge has no collision and is hidden.** The plan follows the ChangeCollision / ToggleHidden ops, not posed boxes,
+    for the bridges.
+- **Nav:** no nav point references these actors in the cook. nav_nodes_in_volume lists the nodes inside each actor's box union
+  (0 for Rust; up to 24 at Remnant), and those are the nodes to gate.
