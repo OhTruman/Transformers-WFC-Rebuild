@@ -3086,3 +3086,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:30 AssetTools: the SoundMixerPresetName premise did not hold (empty rows are archetype-inherited; the exporter's chain / prefix logic
   is the cause of audio.json's missing presets); no runtime effect; PARKED. AssetTools next: stage the slim_files.tsv refresh as a
   sibling file for the package step.
+2026-10-17 12:32 DECISIONS: (1) Systems starts INetTransport + LockstepLayer code NOW in parallel with its remaining package 7 items (the game side
+  is complete; online code is offline-identical; user's "all gears firing"); first milestone = two processes on one PC via the
+  netshim harness, equal simStateHash 1000 ticks under 7 impairment profiles; listed to the user as an open question. (2)
+  Disconnect: faithful (suicide + empty seat + 1.5 s team forfeit) when the lobby has no bots; SlotSwap-to-bot after the suicide
+  when bot rows are on (10.5; Gameplay implements). Systems' slot: rerun_bin = 1c5de2d8 + 9 patches ((a) body notify Dodge,Drain,
+  (b) physmat ForceField force, (c) reverb_check 3 maps) at ~13:10 after Gameplay's gap.
