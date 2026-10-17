@@ -1,0 +1,1486 @@
+{
+ "attacks": [
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 125.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 0.0,
+   "dash": "1000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Mace"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 125.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "1000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Axe"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 125.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 50000.0,
+   "dash": "1000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Flag"
+   ],
+   "anim": "Melee_LightStrike_EnergonHammer_01",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": []
+  },
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_GunButt_H2H",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 20000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+    "Sound:H2H_GUN_BUTT_WHSH_01"
+   ]
+  },
+  {
+   "set": "AiHeavyMediumMeleeSet",
+   "chassis": [
+    "Minion1"
+   ],
+   "type": "BerzerkAttack",
+   "weapons": [
+    "Hammer",
+    "Axe"
+   ],
+   "anim": "Melee_BerzerkAttack_EnergonHammer",
+   "damage": 90.0,
+   "dtype": "TnDamageTypeMeleeBerzerk",
+   "impulse": 100.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.0,
+   "allow_flight": false,
+   "notifies": []
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Poke"
+   ],
+   "anim": "Melee_Axe",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypePoke",
+   "impulse": 200000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 1.5,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:FS_LAND_DEFAULT",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "Whirlwind",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Transform_Whirlwind_ROBO",
+   "damage": 85.0,
+   "dtype": "TnDamageTypeWhirlwind",
+   "impulse": 2000.0,
+   "dash": "2000 for 0 s (end x0)",
+   "ground_speed_mult": 1.2000000476837158,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@PositionSocket",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_RightHand",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_L",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_R",
+    "Sound:WHIRLWIND_COMPLETE",
+    "Sound:WHIRLWIND_WHOOSH_SINGLE"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Turret"
+   ],
+   "anim": "Melee_Turret",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "Sound:SWING_HVY_01"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Mace",
+    "Club"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:",
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Shockwave_Melee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:MACE_SWING_HVY_01",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Axe",
+    "Hammer"
+   ],
+   "anim": "Melee_Axe",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 50000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:FS_LAND_DEFAULT",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "Stomp",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_Ground",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 70000.0,
+   "dash": "0 for 0 s (end x1)",
+   "ground_speed_mult": 1.0,
+   "allow_flight": true,
+   "notifies": []
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Flag"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "0 for 0 s (end x1)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:",
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Shockwave_Melee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:MACE_SWING_HVY_01",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Bomb"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:",
+    "DamageSweep:@MeleeSocket_LargeRobot",
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Shockwave_Melee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:MACE_SWING_HVY_01",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "HeavyMediumMeleeSet",
+   "chassis": [
+    "Tank",
+    "Truck",
+    "Truck7",
+    "Jet5",
+    "Jet7",
+    "Tank2",
+    "Tank3",
+    "Tank4",
+    "Tank5",
+    "Truck5"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_GunButt_H2H",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 0.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+    "Sound:H2H_GUN_BUTT_WHSH_01"
+   ]
+  },
+  {
+   "set": "HeavySmallMeleeSet",
+   "chassis": [
+    "Minion2"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Nav_RunCharge_Hit",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 0.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "PlayEffect:Rumble_Charge_Impact_FX@WeaponSocket_Primary",
+    "Sound:MINION_RUMBLE_JUMP@Chest_FX",
+    "Sound:MINION_RUMBLE_RUN_CHARGE_FX@Chest_FX"
+   ]
+  },
+  {
+   "set": "HeavySmallMeleeSet",
+   "chassis": [
+    "Minion2"
+   ],
+   "type": "Stampede_Miss",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Nav_RunCharge_Miss",
+   "damage": 0.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 0.0,
+   "dash": "0 for 0 s (end x1)",
+   "ground_speed_mult": 1.0,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "Sound:MINION_RUMBLE_ARM_FOLEY@Chest_FX",
+    "Sound:MINION_RUMBLE_BODYFALL@Chest_FX",
+    "Sound:MINION_RUMBLE_JUMP@Chest_FX",
+    "Sound:MINION_RUMBLE_LAND@Chest_FX"
+   ]
+  },
+  {
+   "set": "HeavySmallMeleeSet",
+   "chassis": [
+    "Minion2"
+   ],
+   "type": "Stampede",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Nav_RunCharge_Hit",
+   "damage": 25.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 0.0,
+   "dash": "2000 for 0.75 s (end x1)",
+   "ground_speed_mult": 1.0,
+   "allow_flight": false,
+   "notifies": [
+    "PlayEffect:Rumble_Charge_Impact_FX@WeaponSocket_Primary",
+    "Sound:MINION_RUMBLE_JUMP@Chest_FX",
+    "Sound:MINION_RUMBLE_RUN_CHARGE_FX@Chest_FX"
+   ]
+  },
+  {
+   "set": "AiLightMediumMeleeSet",
+   "chassis": [
+    "Car8",
+    "Car9",
+    "Car10",
+    "Minion3"
+   ],
+   "type": "Whirlwind",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Transform_Whirlwind_ROBO",
+   "damage": 75.0,
+   "dtype": "TnDamageTypeShoulderSlam",
+   "impulse": 2000.0,
+   "dash": "2000 for 0 s (end x0)",
+   "ground_speed_mult": 1.2000000476837158,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@PositionSocket",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_RightHand",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_L",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_R",
+    "Sound:WHIRLWIND_COMPLETE",
+    "Sound:WHIRLWIND_WHOOSH_SINGLE"
+   ]
+  },
+  {
+   "set": "AiLightMediumMeleeSet",
+   "chassis": [
+    "Car8",
+    "Car9",
+    "Car10",
+    "Minion3"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 125.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 40000.0,
+   "dash": "1000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiLightMediumMeleeSet",
+   "chassis": [
+    "Car8",
+    "Car9",
+    "Car10",
+    "Minion3"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Mace",
+    "Axe"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 125.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 50000.0,
+   "dash": "1000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiLightMediumMeleeSet",
+   "chassis": [
+    "Car8",
+    "Car9",
+    "Car10",
+    "Minion3"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Flag"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "3000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "AiLightMediumMeleeSet",
+   "chassis": [
+    "Car8",
+    "Car9",
+    "Car10",
+    "Minion3"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_LeftArm",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 20000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": []
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "Whirlwind",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Transform_Whirlwind_ROBO",
+   "damage": 85.0,
+   "dtype": "TnDamageTypeWhirlwind",
+   "impulse": 2000.0,
+   "dash": "2000 for 0 s (end x0)",
+   "ground_speed_mult": 1.2000000476837158,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@PositionSocket",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_RightHand",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_L",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_R",
+    "Sound:WHIRLWIND_COMPLETE",
+    "Sound:WHIRLWIND_WHOOSH_SINGLE"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 20000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Turret"
+   ],
+   "anim": "Melee_Turret",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 20000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "Sound:SWING_HVY_01"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Axe"
+   ],
+   "anim": "Melee_Axe",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 50000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Mace"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 50000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Club"
+   ],
+   "anim": "Melee_Club",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 20000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Poke"
+   ],
+   "anim": "Melee_Axe",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypePoke",
+   "impulse": 200000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 1.5,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Flag"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "3000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Bomb"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "3000 for 1 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "Stomp",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_Ground",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 70000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.0,
+   "allow_flight": false,
+   "notifies": []
+  },
+  {
+   "set": "LightMediumMeleeSet",
+   "chassis": [
+    "Jet",
+    "Car5",
+    "Jet2",
+    "Jet3",
+    "Jet4",
+    "Jet6",
+    "Jet8",
+    "Truck2",
+    "Truck3",
+    "Truck4",
+    "Truck6"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_GunButt_H2H",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 20000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+    "Sound:H2H_GUN_BUTT_WHSH_01"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "Whirlwind",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Transform_Whirlwind_ROBO",
+   "damage": 85.0,
+   "dtype": "TnDamageTypeWhirlwind",
+   "impulse": 2000.0,
+   "dash": "2000 for 0 s (end x0)",
+   "ground_speed_mult": 1.2000000476837158,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@PositionSocket",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_LeftHand",
+    "PlayEffect:Trails_Bumblebee_FX@MeleeSocket_RightHand",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_L",
+    "PlayEffect:hover_jump_A_FX@BoosterSocket_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Knee_R",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_L",
+    "PlayEffect:stabilizer_01_FX@Stabilizer_Shoulder_R",
+    "Sound:FOLEY_JUMPJETS_BOOST",
+    "Sound:WHIRLWIND_COMPLETE",
+    "Sound:WHIRLWIND_WHOOSH_SINGLE"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_EnergonSword",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Turret"
+   ],
+   "anim": "Melee_Turret",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 30000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "Sound:SWING_HVY_01"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Mace",
+    "Club"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 40000.0,
+   "dash": "2500 for 0.25 s (end x0.3)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Flag"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "Stomp",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_Ground",
+   "damage": 150.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 70000.0,
+   "dash": "0 for 0 s (end x1)",
+   "ground_speed_mult": 1.0,
+   "allow_flight": false,
+   "notifies": []
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "WeaponAttack",
+   "weapons": [
+    "Bomb"
+   ],
+   "anim": "Melee_Mace",
+   "damage": 9999.0,
+   "dtype": "TnDamageTypeMelee",
+   "impulse": 80000.0,
+   "dash": "0 for 0 s (end x1)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": true,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_L",
+    "PlayEffect:DashPulse_1_FX@BoosterSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@ElbowSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@KneeSideSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingLrgSocket_R",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_L",
+    "PlayEffect:Trails_Bumblebee_FX@WingSmSocket_R",
+    "Sound:SWING_LT_02"
+   ]
+  },
+  {
+   "set": "LightSmallMeleeSet",
+   "chassis": [
+    "Car",
+    "Car2",
+    "Car3",
+    "Car4",
+    "Car6",
+    "Car7"
+   ],
+   "type": "Combo",
+   "weapons": [
+    "Any"
+   ],
+   "anim": "Melee_GunButt_H2H",
+   "damage": 15.0,
+   "dtype": "TnDamageTypeWeakMelee",
+   "impulse": 20000.0,
+   "dash": "0 for 0 s (end x0)",
+   "ground_speed_mult": 0.75,
+   "allow_flight": false,
+   "notifies": [
+    "DamageSweep:@MeleeSocket_SmallRobot",
+    "PlayEffect:SwordTrail_Red_FX@WeaponTrailSocket",
+    "Sound:H2H_GUN_BUTT_WHSH_01"
+   ]
+  }
+ ],
+ "hit_effects": [
+  {
+   "dtype": "TnDamageTypeMelee",
+   "fx": "Squib_Transformer_FX",
+   "block_fx": "shield_D_SML_END_FX",
+   "hit_sound": "IMPT_DMG_MELEE_HV",
+   "block_sound": "IMPT_BLOCK_MELEE",
+   "camera": null,
+   "retrigger": 0.10000000149011612
+  },
+  {
+   "dtype": "TnDamageTypeShoulderSlam",
+   "fx": "Squib_Transformer_FX",
+   "block_fx": "shield_D_SML_END_FX",
+   "hit_sound": "IMPT_DMG_MELEE_HV",
+   "block_sound": "IMPT_BLOCK_MELEE",
+   "camera": null,
+   "retrigger": 0.10000000149011612
+  },
+  {
+   "dtype": "TnDamageTypeWeakMelee",
+   "fx": "Squib_Transformer_FX",
+   "block_fx": "shield_D_SML_END_FX",
+   "hit_sound": "IMPT_DMG_MELEE_LT",
+   "block_sound": "IMPT_BLOCK_MELEE",
+   "camera": null,
+   "retrigger": 0.10000000149011612
+  },
+  {
+   "dtype": "TnDamageTypeRammed",
+   "fx": "Squib_Transformer_FX",
+   "block_fx": "shield_D_SML_END_FX",
+   "hit_sound": "IMPT_DMG_MELEE_HV",
+   "block_sound": "IMPT_BLOCK_MELEE",
+   "camera": null,
+   "retrigger": 0.10000000149011612
+  },
+  {
+   "dtype": "TnDamageTypeWhirlwind",
+   "fx": "Squib_Transformer_FX",
+   "block_fx": "shield_D_SML_END_FX",
+   "hit_sound": "IMPT_DMG_MELEE_HV",
+   "block_sound": "IMPT_BLOCK_MELEE",
+   "camera": null,
+   "retrigger": 0.10000000149011612
+  }
+ ]
+}
