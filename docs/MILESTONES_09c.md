@@ -2528,3 +2528,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   answered in versus (rename prompt, Claimed / Unclaimed), 22c15bc9 E7 cinematic hide; both merge after the before / after
   shots; Frontend now implements the phase 1 online flows on ISession + FakeSession behind a flag. RE lane -> weapon firing
   presentation audit. Card: Experimental presenter loop.
+2026-10-17 08:11 Merged: 8da495f9 campaign objectives export + CAMPAIGN_DATA_INDEX.md (the campaign DATA side is complete); 56eb4271 material
+  fix (A) tools side (DeathDecal_MAT into vector_channel_proven, the 2 gib MIs into systems_extra_materials); the 10 regenerated
+  materials_glsl.json (Systems handoff, before hashes match 10 / 10 live) switch into work/render after PRESENTER DONE, then
+  Gameplay's follow-up (scorch default on, gib wfcName, DeathFx PlayType a22a2f69) merges. AssetTools next: the 32 transforming
+  actors' skinned GLBs + anim + PhysicsAsset bodies (manifests/maps/transforming_actors/, ~4 h). Frontend: phase 1 online flows
+  on ISession + FakeSession (16-18 h, 6 groups) started; E7 + the versus <Strings:> fix merge after the shots gap.
+  Experimental: presenter loop restarted 08:13 as cand15b (the 08:08 "hang" was the harness start gate waiting on Gameplay's
+  headless exes; fixed bda00781).
