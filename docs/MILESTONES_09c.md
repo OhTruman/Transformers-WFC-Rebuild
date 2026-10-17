@@ -2915,3 +2915,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   base-index fix (regression 7,348 / 7,348 identical) -> I regen the 10 MP map_fx files against the named pstream commit with an
   identity gate. Campaign data is complete; only the sized translator work (38 materials) remains -> RE documents the 5 missing
   expression nodes + the DecalMaterial root as the original compiles them.
+2026-10-17 11:14 MERGED 8454c173 Gameplay session follow-up: kickIdle gate, applyRemoteCommand (active = any input; FineAim / Hover / Active bits;
+  movement intents, fire / abilities PARTIAL next), the host seed into the sim RNG + bot seeds; SESSIONTEST 19 / 19 on the merged
+  head incl. two same-seed launches = equal simStateHash at step 1000. Gameplay's transforming actors + dying-vehicle collision
+  are code complete (WIP fb62bd13; TRANSACTTEST: BrokenHope 26 / 26, Remnant 72 / 72 boxes block, Rust doors open at start,
+  dying vehicles block until the gib); NAVQ re-baseline next, then the gate; World::transformingActors() is Rendering's draw hook.
