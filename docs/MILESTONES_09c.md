@@ -2733,3 +2733,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   on: 10 / 28 + 15 / 28 frames, emitters at another phase, nothing frozen). CUELOG: 173 cues start in base (the E-class check).
   Gate rule: windowed identity is judged against the same-exe floor; the lockstep harness should print SIMHASH. Card ->
   Rendering x10slot ~10 min (10:02) -> Experimental's (B) eye pass. Systems next: body-notify dispatch on Gameplay's hook.
+2026-10-17 10:02 MERGED 3363f1d0 Iconic Mode (Frontend): in-game _bIconicMode from the lobby type (GTS 2 / 4, RE CONFIRMED) or the versus "Iconic
+  Characters" Game Mode Options row (a labelled PC extension, default Off; OnlyAllowIconicCharacters is true only on CCP / CP / SV
+  settings); the movies' own AS then opens the iconic wheel (authored PresetIconicCharacters order, presets from mp_characters.json,
+  locked characters through our unlock rule), SelectCharacter type 1, ClaimedIconicCharacters per team, the online gate holds
+  on a same-team duplicate; tests 215 / 0; versus byte-identical. Asked: Systems SessionMemberInfo.iconicCharacter, Gameplay
+  type-1 spawn + host claim check (queued). Capture (~4 min incl. the rename pair) in the gap after Rendering's pair, before (B).
