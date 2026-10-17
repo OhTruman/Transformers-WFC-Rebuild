@@ -39,7 +39,8 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | X7 2x lightmap | the RT lightmap at twice the resolution (Realistic) | Rendering | open |
 | Streets haze | Streets' volumetric haze (per-map X3 medium) | Rendering | open |
 | Mine saturation, Realistic | the point-blank explosion's exposure / flash term (RENDERING_PACKAGE7_POLISH.md item 1); Faithful unchanged by evidence (SYSTEMS_HDR_SHADER_DECODE.md 6b90296c + RE HDR_SCENE_PATH_RE.md 43d7bc1) | Rendering (Systems evidence done) | open |
-| Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | open |
+| Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | merged cfca1717 |
+| Online multiplayer, design | ONLINE_MP_ARCHITECTURE.md (with proximity voice, 6045a7a9), ISession alignment (202cef15), online B2 (f1ae9baa); code after package 7 | Systems / Frontend / Experimental | design merged |
 | Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | merged 1e11edc2 (+ Camera.h roll be0cac77); scorch gated off until the DeathDecal_MAT regen (Systems); gib materials = Systems' compile (pending) |
 | Volumetric Lighting setting | the X3 row in Settings > Graphics (pc_strings.int) and its setter | Frontend / Rendering | merged 72eec90c (row); setter merging |
 | Online session boundary | ISession / FakeSession (src/frontend/Session.h; no behaviour; GameFlow::setSession unset = offline) | Frontend | merged 3a19b47a |
@@ -66,6 +67,11 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
   ParticleSystemComponent.SecondsBeforeInactive) and resume where they froze. Streets 35 / 45 and Molten 62 / 75 effects
   eligible, frozen 45 % / 38 % of their ticks; switch-off byte-identical (Molten within its own 1-2 level run noise); the
   switch-on differences are resumed particles at another phase (crops in docs/handoff/fxinactive/). No cost change.
+
+- **Hover + squad polish** (Gameplay, integration cfca1717): faithful four-probe springs for every vehicle; Classic bots
+  right themselves with the original's AI righting (Streets' longest tipped time 214 -> 9 s); Smart keeps its steadier
+  righting as a deliberate improvement; squad follow fidget -30..-45 %. Classic and Smart SIMHASH are re-baselined
+  deliberately (tables in docs/handoff/hover/).
 
 [PLACEHOLDER: one bullet per merged item - what the user sees, commit, switch (WFC_*=0 off), Realistic-only / identity
 note, measured cost.]
@@ -164,7 +170,7 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 | gate | result | notes |
 |---|---|---|
 | regress-8map (3 arms x 8 maps, RT off, Classic, lockstep) vs af4d0731 | [PLACEHOLDER] | report rows +0.35 ms p90 per map |
-| Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | vs af4d0731; any intended Faithful change named per draw |
+| Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | vs af4d0731; byte-identical except documented fidelity corrections with a re-baseline (hover 2026-10-17: Classic + Smart SIMHASH; FXINACTIVE resumed particles; the decal / gib / vector-channel materials) - each named per draw |
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | floor ~60 fps at 1440p (report, not a gate) |
 | R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
 | Eye pass: Off / Realistic / Realistic+HD sheets, 5 user maps + authored views + match frames | [PLACEHOLDER] | floors as package 6 (match 1.26 / 1.28, views 1.42 / 1.45) unless Integration resets them |
