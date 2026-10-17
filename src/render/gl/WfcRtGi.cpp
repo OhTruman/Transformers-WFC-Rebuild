@@ -187,26 +187,51 @@ void Pipeline::giFinishTexels() {
         std::vector<uint32_t> cov(giCovered_.begin() + (std::ptrdiff_t)giCoveredBase_[k],
                                  giCovered_.begin() + (std::ptrdiff_t)(giCoveredBase_[k] + (size_t)pw * (size_t)ph));
         auto pack = [&](int x, int y) { return (uint32_t)k | ((uint32_t)x << 9) | ((uint32_t)y << 20); };
-        for (int ring = 0; ring < 2; ++ring) {           // (ring 2 copies from ring 1: a 2-texel gutter)
+        // the gutter: 2 texels of the bake page's padding, i.e. 2 x the page scale rings (X7: 4 at 2x - with 2, bounce
+        // rays hitting the bake's padding beyond read black, and the fit raised the gain 0.414 -> 0.530 on Gorge)
+        GLint bw = 0;
+        if ((size_t)k < lmTextures_.size() && lmTextures_[k]) {
+            glBindTexture(GL_TEXTURE_2D, lmTextures_[k]);
+            glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &bw);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        const int rings = 2 * std::max(1, bw > 0 ? pw / bw : 1);
+        // frontier: ring 0 scans the page once; each later ring only looks at the neighbours of the previous ring's texels
+        std::vector<int> cand;
+        for (int y = 0; y < ph; ++y)
+            for (int x = 0; x < pw; ++x) if (!cov[(size_t)y * pw + x]) cand.push_back(y * pw + x);
+        std::vector<uint8_t> seen((size_t)pw * (size_t)ph, 0);
+        for (int ring = 0; ring < rings && !cand.empty(); ++ring) {
             struct Added { int x, y; uint32_t sub; };
             std::vector<Added> added;
-            for (int y = 0; y < ph; ++y)
-                for (int x = 0; x < pw; ++x) {
-                    if (cov[(size_t)y * pw + x]) continue;
-                    int best = -1, bx = 0, by = 0; uint32_t bs = 0;
-                    for (int dy = -1; dy <= 1; ++dy)
-                        for (int dx = -1; dx <= 1; ++dx) {
-                            const int nx = x + dx, ny = y + dy;
-                            if ((dx | dy) == 0 || nx < 0 || ny < 0 || nx >= pw || ny >= ph || !cov[(size_t)ny * pw + nx]) continue;
-                            const int d = dx * dx + dy * dy;
-                            if (best < 0 || d < best) { best = d; bx = nx; by = ny; bs = cov[(size_t)ny * pw + nx]; }
-                        }
-                    if (best < 0) continue;
-                    giDilate_.push_back(pack(x, y)); giDilate_.push_back(pack(bx, by)); giDilate_.push_back(bs - 1);
-                    added.push_back({x, y, bs});
-                }
+            for (int c : cand) {
+                const int x = c % pw, y = c / pw;
+                if (cov[(size_t)c]) continue;
+                int best = -1, bx = 0, by = 0; uint32_t bs = 0;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const int nx = x + dx, ny = y + dy;
+                        if ((dx | dy) == 0 || nx < 0 || ny < 0 || nx >= pw || ny >= ph || !cov[(size_t)ny * pw + nx]) continue;
+                        const int d = dx * dx + dy * dy;
+                        if (best < 0 || d < best) { best = d; bx = nx; by = ny; bs = cov[(size_t)ny * pw + nx]; }
+                    }
+                if (best < 0) continue;
+                giDilate_.push_back(pack(x, y)); giDilate_.push_back(pack(bx, by)); giDilate_.push_back(bs - 1);
+                added.push_back({x, y, bs});
+            }
             for (const auto& a : added) cov[(size_t)a.y * pw + a.x] = a.sub;
+            cand.clear();                                 // (the next ring: uncovered neighbours of this ring)
+            for (const auto& a : added)
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const int nx = a.x + dx, ny = a.y + dy;
+                        if (nx < 0 || ny < 0 || nx >= pw || ny >= ph) continue;
+                        const int c = ny * pw + nx;
+                        if (cov[(size_t)c] || seen[(size_t)c] == (uint8_t)(ring + 1)) continue;
+                        seen[(size_t)c] = (uint8_t)(ring + 1); cand.push_back(c);
+                    }
         }
+        yieldLoad();                                      // (per page: the loading screen presents - X7 4x the texels)
     }
     LOG_INFO("RT GI: %zu lightmap texels in %zu pages from %zu subs (%.1f MB; %zu gutter texels; %zu vertex-lit subs keep the bake;"
              " %zu overlapping texels skipped)", giTexels_.size(), pages, giSubs_.size(),
