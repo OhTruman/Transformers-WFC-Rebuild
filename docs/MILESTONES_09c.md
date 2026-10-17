@@ -2706,3 +2706,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   at the scripted path (the Customize movie was dumped to take the right path). Card -> Systems 40 min (09:43): notifyfx check,
   FX throttle rows, muzzle energon pair; then Rendering 10 if ready, then the (B) eye pass. RE lane: PROVISIONALs sweep started
   (~6-7 h, two commits).
+2026-10-17 09:42 Integration viewed the online re-slot shots: r_member_lobby (member lobby without host controls, own row with the voice icon,
+  "Waiting for host to start game") and r_host_talker (join code / address / copy hint / privacy line, remote "Alpha  PC  Near" with
+  the talker icon, the original gate text): as designed, original style. The rename prompt capture still pending (path fix).
+  Systems' 40-min slot running since 09:43.
