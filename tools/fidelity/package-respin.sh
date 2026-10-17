@@ -20,7 +20,7 @@
 #   - the nonpaged-pool guard stops at every step boundary above GATE_POOL_MAX_GB (9.5; TDR zone ~10.6); hold removed, results on disk
 #   - one windowed exe on the machine at a time; WFC_MUTE=1 WFC_NOINTERACT=1 on every exe; never edit this script while it runs
 #   - compare only inside one hold: an out-of-hold row (e.g. a carried 1b) can read 1.7 ms off (package 6: a 2b-hold 1b outlier)
-cd"F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
+cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 R=${1:?respun sha}; G=${2:?gated sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
 r=${R:0:7}; g=${G:0:7}; GD=work/package-gate/$g; O=work/package-gate/$r; mkdir -p $O/regress $O/bodies; L=$O/gate.log
 BASE=${GATE_BASE:-work/ab/fast_398b27e_rise}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw + drive-probe + steer + walkable + rise-snap 63368d05"}
