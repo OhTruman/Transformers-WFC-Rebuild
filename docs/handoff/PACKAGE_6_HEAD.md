@@ -28,7 +28,7 @@ reverse direction around a walking leader. Anything else is news.
 Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (27.53 GB: 46,744 files kept +
 7,161 .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay
 push_gltf_wfcmat_20261016, 85 files; promoted <DATE>). This is the
-hand-over build the user playtests. Fallbacks: work/playtest_slim_398b27ef (package 5, internal checkpoint),
+hand-over build the user playtests. Fallbacks: work/playtest_slim_9350f19b (internal checkpoint), work/playtest_slim_398b27ef (package 5),
 work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package6-<HEAD>.
 
 Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load and only a reboot clears it.
@@ -318,8 +318,12 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
    doc's <HEAD>, <SIZE>, <N>, <OVERLAY>, <DATE> from build_slim.json / build_slim.log.
 4. **Promote only on Integration's word after the gate PASS** (the hand-over is the user's), Git Bash, in work/:
 
-       [ -e playtest_slim_398b27ef ] && echo "playtest_slim_398b27ef exists: stop" || mv playtest_slim playtest_slim_398b27ef
+       grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json      # must print 9350f19b (the internal checkpoint)
+       [ -e playtest_slim_9350f19b ] && echo "playtest_slim_9350f19b exists: stop" || mv playtest_slim playtest_slim_9350f19b
        mv playtest_slim_<HEAD> playtest_slim && grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json
+
+   Fallbacks after it: playtest_slim_9350f19b (the 9350f19b checkpoint), playtest_slim_398b27ef (package 5) and
+   playtest_slim_30b2fa74 (package 4) stay as they are.
 
    Play.bat inside the package starts its own exe (verify checks it). Integration copies / announces; never rebuild a package exe
    or touch build/release while the user plays.
