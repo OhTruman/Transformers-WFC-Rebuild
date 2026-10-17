@@ -2880,3 +2880,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   dry run 97.8 % of the 1,763 untranslated campaign materials compile clean; 38 need 5 new nodes + DecalMaterial roots + ddy /
   acos (sized for the campaign phase). AssetTools next: close our gaps (cube maps as faces, psa-only anim sets, PowerCell_Voltage_FX
   to RE).
+2026-10-17 10:54 MERGED 64475797 the one-time "Online Play" prompt (name / voice / settings shortcut; only with an online session; FR1-FR4) ->
+  the ONLINE FRONTEND IS COMPLETE on FakeSession; Systems' transport is the one remaining phase 1 piece. Frontend gap = 5 min
+  (onlinehud incl. fr_prompt + iconic) after Gameplay. Frontend next: PACKAGE_7_PLAYTEST_GUIDE.md "Menus" section.
