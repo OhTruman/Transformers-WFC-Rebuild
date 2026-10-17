@@ -2686,3 +2686,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   colour); particle float order for Sphere / Cylinder = base-class first (Rendering told). RE lane next: per-map authored lighting
   intent tables (sun / sky, top placed lights, fog / post-process volumes, light environments) as the eye-pass reference in the
   absence of 360 captures. Gate rule added: identity / eye pairs from 1f1d4e17 on share the camera code. netlog_join.py synced.
+2026-10-17 09:31 Systems built SYSTEMS_MUZZLE_ENERGON.patch (e08474a5: the muzzle light uses the owner's EnergonColor x authored Brightness, as
+  TnWeaponMesh.Attach; WFC_MUZZLEENERGON=0 restores the authored colour); dry-runs clean. Systems' slot = 40 min back to back
+  (notifyfx crops + CUELOG, the FX throttle rows, the muzzle pair), each patch isolated by its switch; merges on the rows.
+  Card: Rendering (~10 min left) -> Frontend 4 -> Systems 40 -> (B) eye pass (~10:30).
