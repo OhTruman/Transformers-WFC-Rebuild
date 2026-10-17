@@ -3106,3 +3106,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   identical (frontend tests; headless SIMHASH stream equal to the pre-transport head).
 2026-10-17 12:51 Package 7 regress base = af4d0731 + hover + the headless runner (sim-neutral, proven on CPU: headless == windowed on 10,200
   steps); gate-base.sh HEADLESS=1 same-match rows need no card. Experimental's 1e11edc2 pair stays at ~13:30.
+2026-10-17 12:53 MERGED 2770eec8 net pacing switch; netshim transport rows on d22fb45a: all 6 profiles exit 0 (lan / good / typical / burst on
+  schedule, bad +3.3 s at D 4, outage one 2 s stall then catch-up), no deadlock / timeout, 10-25 KB/s per peer. Systems' order:
+  seat-order switch + NET.identity the moment Gameplay's sha lands, then adaptive D from the measured RTT, bandwidth trim toward
+  ~1.5 KB/s per human, voice capture.
