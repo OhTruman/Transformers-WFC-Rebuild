@@ -46,6 +46,11 @@ First sim change: cfca1717 (2026-10-17).
     GATE_BASE_NAME="af4d0731 + sim <shas>"`.
   - The 2b bodies / 5v5 and the 1b arms run the head (plus its own X3 = 0 / NOCORPSE arms), so they are same-match by
     construction.
+- **Camera changes on the player view (1f1d4e17).** Recoil / FOV kick / fire shake and the jet blend keep SIMHASH identical, but
+  they move every eye-pass and identity frame after the PlayerBot's first shot, because those frames are its own camera. Renderer
+  identity and eye passes from 1f1d4e17 on use a base cut from integration at or after 1f1d4e17. Rendering's base11 pairs
+  (cand26 / cand27) predate it and stay valid (Integration). The combined regress / 1b don't need it: both arms run the head, and
+  the regress base only needs the sim.
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
