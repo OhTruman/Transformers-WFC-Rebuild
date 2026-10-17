@@ -2,13 +2,15 @@
 
 ## Current state (update at every stable point)
 
-- **About 20:20:** both check trees were prepared from integration **1c60a8ba** (no World.cpp / World.h change since the patch base) with `sh docs/handoff/corpsegpu/prep_gc_trees.sh 1c60a8ba`. **Run it from work/**: it extracts with `git -C ..`.
-- **The trees:**
-  - `work/int_gcb` (head + the stage hook): built;
-  - `work/int_gcn` (head + the patch + the hook): built after a fix. The `drawSkinnedGpu` call needed the trailing overload tag `, 0`, which is now in the patch and the edit script.
-- **Headless checks:** running. Steps from `docs/handoff/corpsegpu/mkgc.js headless` (`node mkgc.js headless` writes `steps_c45_headless.txt` next to itself); results go to `work/pass29/c46/bt_s*.log`.
-- **After a reboot:** if `work/int_gcn` / `work/int_gcb` exist, just rebuild with `powershell -File work/int_build.ps1 -Tag gcn` (and `gcb`), then rerun the headless steps; otherwise prep them first.
-- **Crops:** need a slot from Integration, after Rendering's X3 capture round and before the 00:00 GPU curfew; otherwise in the morning. Steps: `node mkgc.js crops` (distances 10 and -40, the look-back; 65 frames per arm must be byte-identical).
+- **About 20:45**, at agents/gameplay c0938c76: the GPU-corpse patch builds.
+  - Headless checks pass: BOTTEST 48/48 on 12 seeds; seed-7 SIMHASH identical (null render never draws, so these are sim only).
+  - First windowed crops **FAILED** on the Defrag (melee) body: the queued GPU draw ignores setDrawEnergyDeath (`docs/handoff/corpsegpu/defrag_cmp.png`).
+  - Fixed: Defrag bodies stay on the CPU path (`edit_gpu_defrag.js`). `work/int_gcn` is rebuilt with the fix; the crops are **not yet re-run**.
+  - Other bodies differ only by GPU/CPU rounding (max 1-2, plus 2 edge pixels). Rendering decides whether that meets identity.
+  - 16 v 16: 0 GPU refusals, 0 rows-full warnings.
+- **Next:** with a slot from Integration, re-run the 4 crops (`node docs/handoff/corpsegpu/mkgc.js crops`, the first 4 steps). Then on PASS, Integration merges and Experimental times the corpse arm (target within 0.1 ms of WFC_NOCORPSE).
+- **Trees:** `work/int_gcb` (head 1c60a8ba + the stage hook) and `work/int_gcn` (+ patch + hook). After a reboot, rebuild with `powershell -File work/int_build.ps1 -Tag gcn` / `gcb` if needed.
+- **The patch edits, in order** (`docs/handoff/corpsegpu/`): `edit_corpse_gpu.js`, `edit_gpu_refuse_log.js`, `edit_gpu_defrag.js`.
 
 ## In progress: GPU-skinned death bodies (moved into package 6 by the user's decision; package 6 is held 2-3 days for volumetric lighting)
 
