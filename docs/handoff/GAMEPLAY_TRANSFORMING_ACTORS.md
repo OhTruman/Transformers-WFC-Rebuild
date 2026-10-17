@@ -97,3 +97,16 @@ The source is the RE lane's `VEHICLE_DEATH_PRESENTATION_RE.md` (2babd61).
     for the bridges.
 - **Nav:** no nav point references these actors in the cook. nav_nodes_in_volume lists the nodes inside each actor's box union
   (0 for Rust; up to 24 at Remnant), and those are the nodes to gate.
+
+## Rust doors: answered (RE, CONFIRMED from MP_IAC_Rust_BASE_m Main_Sequence)
+
+- **The doors Transform (open) at level start in EVERY mode.** SeqEvent_SequenceActivated_15226 Out feeds TnSeqAct_TransformWorldProp_9939
+  input 1 (Transform) directly.
+  - The op's "KOTH or BOMB Active" comment and its three SeqCond_GameRuleActive inputs (KOTH 5944, BombingRun 1798, ScoreFlags 6200) are
+    dead authoring: nothing links into those conditions.
+- **There's a separate, mode-dependent hide:** SeqEvent_GameplayStarted → SeqCond_GameRuleActive SingleFlagCTF ("CTF") / ScoreBombingRun
+  ("EXT") → True → SeqAct_ToggleHidden_1487 Hide on its targets.
+  - So in CTF / EXT only, those targets are hidden. Check whether the doors are among the targets, and whether the hide also drops
+    collision (ToggleHidden alone does not).
+- **Rebuild:** transform the Rust doors unconditionally at match start; apply the ToggleHidden_1487 targets' hide only when the CTF or EXT
+  rule is active.
