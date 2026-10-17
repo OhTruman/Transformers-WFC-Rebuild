@@ -203,6 +203,11 @@ public:
     const UIController& ui() const { return ui_; }
     const Catalog& catalog() const { return *cat_; }
     const MatchLaunch& currentMatch() const { return match_; }
+    // Campaign presentation paths (docs/handoff/CAMPAIGN_HUD_PLAN.md): on for a campaign match (SOLO / CP / CCP), off in
+    // versus, so versus stays byte-identical. Tests set it directly until the campaign boots.
+    static bool isCampaignTag(const std::string& tag) { return tag == "SOLO" || tag == "CP" || tag == "CCP"; }
+    bool campaign() const { return campaignForced_ || isCampaignTag(match_.modeTag); }
+    void setCampaignForTest(bool on) { campaignForced_ = on; }
     // Kismet-driven frontend presentation (UI_FrontEnd_m Main_Sequence).
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
     const std::vector<std::string>& queuedMovies() const { return movieQueue_; }   // the chain still to play
@@ -329,6 +334,7 @@ private:
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
+    bool campaignForced_ = false;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 
     // Frontend Kismet state.
