@@ -29,6 +29,9 @@ public:
     static std::string manifestFor(const std::string& manifestRoot, const std::string& map);   // ".../next_map/A1_IAC_objectives.json"
     bool loadManifest(const std::string& path);                     // bank[] (trimmed keys, index order) + setters[]
     bool fireSetter(const std::string& action, const Catalog& cat); // a setter by its Kismet object path (clears: "")
+    // Only an EMPTY Description clears; a whitespace one (A1's seven " " setters) is localized, misses the bank and changes
+    // nothing - the objective stays up [CONFIRMED, RE CAMPAIGN_PROVISIONALS_CLOSED_RE.md].
+    static constexpr const char* kNoOpSetter = "\x01noop";
     size_t setterCount() const { return setters_.size(); }
     const std::vector<std::string>& bank() const { return bank_; }
     int current() const { return current_; }

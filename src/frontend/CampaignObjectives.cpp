@@ -42,7 +42,9 @@ bool CampaignObjectives::loadManifest(const std::string& path) {
         const assets::Json& s = setters[i];
         const std::string action = s["action"].asString();
         if (action.empty()) continue;
-        setters_[action] = s["clears_objective"].asBool() ? std::string() : trimmed(s["key"].asString());
+        const std::string raw = s["key_raw"].asString();
+        if (!raw.empty() && trimmed(raw).empty()) setters_[action] = kNoOpSetter;   // " ": no-op, not a clear
+        else setters_[action] = s["clears_objective"].asBool() ? std::string() : trimmed(s["key"].asString());
     }
     FlowTrace::emit("campaign.objectiveBank", {{"file", path}, {"bank", std::to_string(bank_.size())}, {"setters", std::to_string(setters_.size())}});
     return true;
@@ -53,6 +55,10 @@ bool CampaignObjectives::fireSetter(const std::string& action, const Catalog& ca
     if (it == setters_.end()) {
         FlowTrace::emit("campaign.objectiveError", {{"setter", action}, {"why", "unknown SeqAct_TnSetCurrentObjective"}});
         return false;
+    }
+    if (it->second == kNoOpSetter) {
+        FlowTrace::emit("campaign.objectiveNoOp", {{"setter", action}, {"why", "whitespace Description: not in the bank, nothing changes"}});
+        return true;
     }
     return setCurrent(it->second, cat);   // an out-of-bank key (D1's D1_ORB_OBJ08) is refused there, as the original
 }
