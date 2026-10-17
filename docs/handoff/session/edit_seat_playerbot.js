@@ -49,6 +49,8 @@ ed('src/game/WorldBots.cpp', [
      '            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { if (pbSandbox_) ' + P('Reload') + '; else w->beginReload(); ++b.reloads; }\n'],
     ['    pc.setAimPitch(b.pitch);\n    // Weapon state.\n',
      '    if (!pbSandbox_) pc.setAimPitch(b.pitch);\n    // Weapon state.\n'],
+    ['        if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { cw.beginReload(); ++b.reloads; }\n',
+     '        if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { if (pbSandbox_) ' + P('Reload') + '; else cw.beginReload(); ++b.reloads; }\n'],
     ['    if (usable && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }\n',
      '    if (usable && w->ammo == 0 && w->canReload()) { if (pbSandbox_) ' + P('Reload') + '; else w->beginReload(); ++b.reloads; }\n'],
     ['            startMeleeFor(pc, o.matchPlayer(), false, b.yaw);\n',
