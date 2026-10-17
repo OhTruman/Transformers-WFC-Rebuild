@@ -2233,3 +2233,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   unchanged 176 vs 126 = per-body draws + casters). MERGED anyway as 51b55a09 (identity-equivalent, 0 refusals);
   package 7 lever = one draw per settled body (merge gib chunks / parts, instanced gibs); no life / cap / shadow
   changes (look). Integration Debug build OK on the X3 + corpse head (WFC_X3 strings in the exe).
+  2026-10-16 20:26 X3 GATE GO on int_cand10 (SETTINGSTEST PASS 7 / 7 at 20:20; X3 settings are env statics):
+  x3-gate.sh cand10 with CAND_SHA e224ebf2: eye pass (floors match 1.26 / 1.28, views 1.42 / 1.45; light-facing
+  views reported) -> timed 2-arm X3 on / off cost (5 maps, Realistic + HD 2, 1440p) -> delta FAST. Rendering's
+  Defrag draw-list cache fix f5e2d8dd built as int_cand11 (= 106db906 + fix); RT-off identity beside the eye pass.
