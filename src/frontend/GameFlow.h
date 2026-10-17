@@ -24,6 +24,7 @@
 
 #include "frontend/Catalog.h"
 #include "frontend/Profile.h"
+#include "frontend/Session.h"
 #include "frontend/UIController.h"
 #include "frontend/Bridge.h"
 #include "frontend/Url.h"
@@ -248,6 +249,10 @@ public:
     void applyRecommendedBots(const char* why);
     LocalProfile& profile() { return profile_; }
     const LocalProfile& profile() const { return profile_; }
+    // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
+    // (today's behaviour); nothing reads it yet.
+    void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); }
+    ISession* session() const { return session_.get(); }
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].
@@ -317,6 +322,7 @@ private:
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     MatchValues matchValues_;
     LocalProfile profile_;
+    std::unique_ptr<ISession> session_;
     SelectedCharacter selected_;
     uint32_t selectionSerial_ = 0;
     int gpPerTeam_ = 32, gpMaxPlayers_ = 64, gpBotsPerTeam_ = 32;   // Gameplay clamp (detected); defaults = the extended target (32 v 32)
