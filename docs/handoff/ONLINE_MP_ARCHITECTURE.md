@@ -162,6 +162,21 @@ peer and dropped afterwards (the peer's address is then the key).
 | **mismatch 4: load hash** | `reportLoaded(simId, loadHash)`: the host compares both; a mismatch becomes `JoinFailed{Version}` (before the match) - no new event needed |
 | **mismatch 5: platform** | `SessionPlatform::Web` is phase 4; phases 1-3 report PC only |
 
+### 10.1 Resolved with the Frontend (2026-10-17; they land these in Session.h)
+
+| point | resolution |
+|---|---|
+| voice | `setVoiceSettings(SessionVoiceSettings{mode Off / PushToTalk / OpenMic, audience Team / All, device, volume})`, `setPushToTalk(bool held)` per change (sampled per 20 ms voice frame), `setMuted(member, bool)` (local only); event `MemberVoice{member, headsetState 0 / 1 / 2}` |
+| relay | `SessionHostSettings.relay` ("" = direct), filled from a [PCSettings] value in phase 3 |
+| StrictNat | kept in the enum, never produced in phases 1-3; the frontend shows "Unable to Host" + the PC text for NoPath |
+| load-hash / version | `JoinFailed{Version}` accepted in any state (lobby or load gate): that peer's session ends with the original ClientOutdated text |
+| join codes | "WFC-" + base32 groups, or ip:port / [ipv6]:port; decoding is Systems'; new `SessionJoinFailure::Invalid` for a failed decode / check symbol (emitted on the next poll, no network wait) |
+| join timeout | Systems emits `JoinFailed{Timeout}` at 50 s; the frontend's own timer is a 55 s backstop |
+| pumping | one socket; whichever pump runs first (`ISession::poll`, every frontend update incl. the match, or the LockstepLayer's per-tick poll) drains it and dispatches by channel into two queues (lockstep / session+voice); each consumer reads only its queue |
+| slots / teams | the host's GameFlow decides (PickTeam: smaller team; humans take bot slots) and publishes `SessionLobby.slots`; SessionLayer owns membership / connectivity; in-match slot changes go through `SessionSlotSwap` at a tick the host's LockstepLayer picks |
+| idle kick | the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
+| desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
+
 ## 11. Phases and exit criteria
 
 | phase | scope | exit criteria |
