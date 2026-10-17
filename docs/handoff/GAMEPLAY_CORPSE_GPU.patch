@@ -13,7 +13,7 @@ index 7de83a6..06025b1 100644
      };
      struct CorpseRequest {
 diff --git a/src/game/World.cpp b/src/game/World.cpp
-index 93108f0..a9f6f63 100644
+index 93108f0..ead00c6 100644
 --- a/src/game/World.cpp
 +++ b/src/game/World.cpp
 @@ -7003,11 +7003,17 @@ void World::tickCorpses(float dt) {
@@ -52,7 +52,7 @@ index 93108f0..a9f6f63 100644
 +            syncMats(bind.mats, c.model->mats);
 +            drawn = drawSkinnedGpu(r, bind, c.model->joints, c.model->weights, c.palette, nullptr, 1.0f, c.world, core::Vec3{1, 1, 1},
 +                                   c.gpuKey.get(), c.poseSerial, 0);
-+            if (!drawn) c.gpuOk = false;   // refused: the next tick CPU-skins this body (nothing drawn this frame)
++            if (!drawn) { c.gpuOk = false; LOG_INFO("corpse p%d %s: GPU-skinned draw refused, CPU fallback", c.player, c.chassis.c_str()); }   // the next tick CPU-skins it
 +        }
 +        if (!drawn && !c.gpuOk && !c.mesh.positions.empty())
 +            r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // CPU fallback, cached while the pose is static
