@@ -3443,3 +3443,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (pregame lobby gathering or join in progress); pregame lobby with Halo Reach-style map voting. Smoke: a setting Original /
   Enhanced, Enhanced = moving / near-volumetric smoke if possible. Rust floor fog: Rendering's per-vertex interpolation
   explanation accepted; per-pixel A/B granted after their CARD FREE (3 min).
+2026-10-17 16:12 USER (2026-10-17 16:12): Enhanced smoke should be lit by its surroundings and shadowed / affected by nearby geometry and players ("if not
+  it's okay") -> Rendering's proposal: froxel injection into X3's lit volume first, sprites as fallback.
