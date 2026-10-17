@@ -3457,3 +3457,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:15 MERGED a78386dc per-pixel height fog (Rendering c2fb7eb5; the Rust near-floor sheet was per-vertex fog interpolated across the
   big floor polygon: Rust 'dark' lower third 48 -> 16, like the thumbnail; finely tessellated views unchanged; all modes;
   WFC_FOGPERVERTEX=1 = old path). Build OK, SIMHASH identical. Experimental's Rust rows re-base on this, not package 6.
+2026-10-17 16:16 x21 / x22: Lens Flares row works (Off / Original right; Subtle as "first point" only a little calmer: DECIDED Subtle = first
+  points + Base_SUN alpha x 0.25, our design choice, re-shoot next gap). X7: GI 1x -> 2x Rust 180 -> 482 MB, load 0.9-1.4 s;
+  the earlier ~1 GB device delta was noise; look sharper but Gorge lane shifts beyond "sharper" (1x bounce gain at 2x) -> recalibrate,
+  re-shoot, RE eye; X7 stays out until then.
