@@ -328,6 +328,7 @@ template <class R> void setRtLoadedQuery(frontend::FrontendRuntime& fr, R* r) {
 template <class O, class = void> struct HasHudBuffs : std::false_type {};
 template <class O> struct HasHudBuffs<O, std::void_t<decltype(std::declval<const O&>().buffs.front().id),
                                                      decltype(std::declval<const O&>().buffs.front().remain)>> : std::true_type {};
+static_assert(HasHudBuffs<game::HudGameState>::value, "HudGameState::buffs (Gameplay) must reach HudFrame");
 template <class O> void fillJamBuffs(frontend::HudFrame& hf, const O& o) {
     if constexpr (HasHudBuffs<O>::value) {
         std::vector<frontend::HudFrame::Buff> v;
@@ -340,6 +341,7 @@ template <class O> void fillJamBuffs(frontend::HudFrame& hf, const O& o) {
 // "" otherwise - into HudFrame::spectateTarget (the respawn movie's "currently spectating" label). Detected.
 template <class O, class = void> struct HasHudSpectate : std::false_type {};
 template <class O> struct HasHudSpectate<O, std::void_t<decltype(std::string(std::declval<const O&>().spectateTarget))>> : std::true_type {};
+static_assert(HasHudSpectate<game::HudGameState>::value, "HudGameState::spectateTarget (Gameplay) must reach HudFrame");
 template <class O> void fillSpectateTarget(frontend::HudFrame& hf, const O& o) {
     if constexpr (HasHudSpectate<O>::value) hf.spectateTarget = std::string(o.spectateTarget);
     (void)hf; (void)o;
@@ -1690,8 +1692,10 @@ void Application::routeMatchToFrontend(float dt) {
         hf.targetName = o.target.name;           // only on a direct crosshair hit of a pawn with a PRI
         if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
         hf.weaponJammed = o.weapon.jammed;
-        fillJamBuffs(hf, o);
-        fillSpectateTarget(hf, o);
+        // buffs / spectateTarget live in HudGameState (h = pf.hud), not in pf.hud2: with o the traits found no member and
+        // the jam display and the killer cam's "currently spectating" label were never fed in real play
+        fillJamBuffs(hf, h);
+        fillSpectateTarget(hf, h);
         hf.weaponSpread = o.weapon.spread;
         hf.weaponMessage = o.weapon.message;
         hf.contextualPrompts = o.contextual;
