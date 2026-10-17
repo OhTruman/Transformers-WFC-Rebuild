@@ -98,3 +98,79 @@ That is 266 of the 544 systems in authored.db. List: `work/q/ps_refs.json` (not 
 - TypeDataTrail2: 170 LODs / 50 systems, every tracer and shell trail;
 - TypeDataBeam2: 107 / 25;
 - TypeDataMesh: 325 / 106.
+
+## (c) Semantics of missing / partial modules
+
+**Source:** headless Ghidra on the compiled module runners (`work/q/pr*.txt`):
+- spawn runner `0x8303E288`, update runner `0x83039A18`;
+- both switch on the record's ModuleId (record +0x0A), payload at LOD-blob +0x5C + record payload offset.
+
+**Particle layout (this build):**
+- OldLocation +0x00, **RelativeTime +0x0C**, Location +0x10, **OneOverMaxLifetime +0x1C**, BaseVelocity +0x20, Rotation +0x2C,
+  Velocity +0x30, …, **Color +0x60**, **BaseColor +0x70**, Flags +0x5C;
+- update cases skip particles with flag bit 0.
+
+**Common rules:**
+- **Spawn-module distributions are evaluated at EmitterTime** (instance +0xD4). Over-life modules use the particle's RelativeTime.
+- **Modules run in the LOD's compiled record order** (authored module order).
+- The **shared RNG** is the engine LCG: `x = x·0x0BB38435 + 0x3619636B`, mantissa-filled float in [0, 1).
+
+### Batch 1: the four modules our runtime flags PARTIAL (highest usage)
+
+**PMI_Gravity** (HmParticleModuleGravity; update case 0x1C; 1285 LODs). **CONFIRMED.** Per update, per live particle:
+
+```
+g      = ComponentScale(component).Z * inst[+0x94]          // 0x82DC2BF0
+dv     = GravityMultiplier(payload float; CDO 1.0) * g * DeltaTime
+Velocity.Z     += dv
+BaseVelocity.Z += dv                                         // both, like stock Acceleration
+```
+
+- `ComponentScale` = `Component.Scale × Component.Scale3D × (Owner ? Owner.DrawScale × Owner.DrawScale3D : 1)`, per axis. **Gravity
+  scales with the emitter's actor and component scale.**
+- No spawn case, no X/Y term.
+- **UNKNOWN:** the source of `inst[+0x94]`. It is not `GetGravityZ` (no particle-code caller); the instance is written by a
+  per-tick block copy near `0x83038B3C`. Until it is traced, use the world gravity Z ([H], WFC −520 × the WorldInfo factor) and
+  keep the scale factor above.
+
+**PMI_LocationPrimitiveSphere** (spawn case 0x16; 1482 LODs). **CONFIRMED** (stock UE3 structure). Payload flags `[0..5]` =
+Positive_X / Y / Z, Negative_X / Y / Z, `[6]` SurfaceOnly, `[7]` Velocity.
+
+1. `u` = DetermineUnitDirection (`0x8300E2C0`), per axis from 3 RNG draws:
+   - both signs → 2r − 1;
+   - positive only → r;
+   - negative only → −r;
+   - neither → 0.
+   - **This is a cube sample, not a sphere sample.**
+2. `n = u / |u|` (if |u| > ε). If SurfaceOnly, `u = n`.
+3. `off = u × StartRadius(EmitterTime)`; then, for each axis enabled in either sign, `off[i] = clamp(off[i], −|n[i]|·R, +|n[i]|·R)`.
+   That keeps the point inside the sphere along that direction; the distribution is non-uniform, denser along the axes.
+4. `p = StartLocation(EmitterTime) + off`. Transformed by the component LocalToWorld unless the emitter is local-space (instance
+   flag +0xA8 bit 0x40000000). Then `Location += p`.
+5. If Velocity: `v = (p_world − StartLocation) × VelocityScale(EmitterTime)`; `Velocity += v`, `BaseVelocity += v`.
+
+**PMI_ColorByParameter** (spawn case 3; 1697 LODs). **CONFIRMED.**
+
+1. Search the component's InstanceParameters (component +0x1F0, count +0x1F4, 36-byte entries) for an entry whose **name equals the
+   module's ColorParam**.
+2. **Found:** particle Color = the parameter's FColor bytes **× 1/255, clamped to [0, 1], linear: no gamma**.
+3. **Not found:** `DefaultColor` (CDO white) converted through the engine's **FColor → FLinearColor table: (c/255)^2.2** for RGB,
+   alpha /255.
+4. Then **BaseColor = Color**. It **overwrites** both; it does not multiply. A later ColorScaleOverLife scales BaseColor.
+
+So an unset parameter gives gamma-decoded DefaultColor, while a set one is linear /255. **Ours lacks the instance-parameter lookup.**
+H: which gameplay code sets the parameters (weapon team colour, character colours) is the next step if needed.
+
+**PMI_DynamicParameter** (spawn and update case 0x1D; 773 LODs). **CONFIRMED.**
+- Four slots in order 0..3. Distributions are stored consecutively in the LOD's float-distribution table (0x14 stride), so **slot
+  order = natural order. Our "natural order used" is right.**
+- Per slot, the time = `bUseEmitterTime ? EmitterTime : particle RelativeTime` (payload ints `[0..3]`).
+- Value = ParamValue(t), written to the particle's dynamic-parameter payload (offset from the LOD's per-module payload table).
+- **The same evaluation runs at spawn and on every update** (no "spawn only" variant). The dynamic parameter feeds the vertex
+  stream (DynParam +0x54) to the material.
+
+**Bonus, PMI_Lifetime** (spawn case 1), the stacking rule:
+- First Lifetime: `OneOverMaxLifetime = 1 / L`.
+- A **second Lifetime module adds**: `1 / (1/old + L)`.
+- L ≤ 0 → OneOverMaxLifetime = 0 (immortal).
+- `RelativeTime = OneOverMaxLifetime × SpawnTime`.
