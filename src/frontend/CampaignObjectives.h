@@ -8,9 +8,12 @@
 // _global.CompleteObjective is not defined in the movie, so completion has no visual. The pause menu reads
 // <CurrentGame:ActiveObjectives> (the current text).
 //
-// Campaign only (GameFlow::campaign()); versus never sets a bank. Until AssetTools' campaign map export carries the bank
-// (plan question C1) only tests set one.
+// Campaign only (GameFlow::campaign()); versus never sets a bank. The bank and the setters come from AssetTools' map export
+// (<manifests>/next_map/<map>_objectives.json, CAMPAIGN_OBJECTIVES_SCHEMA.md; plan question C1 answered): loadManifest, then
+// the campaign Kismet runner calls fireSetter with the SeqAct_TnSetCurrentObjective's object path.
 #pragma once
+#include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -22,7 +25,11 @@ namespace frontend {
 class CampaignObjectives {
 public:
     void setBank(std::vector<std::string> keys) { bank_ = std::move(keys); current_ = -1; text_.clear(); }
-    void clear() { bank_.clear(); current_ = -1; text_.clear(); }
+    void clear() { bank_.clear(); current_ = -1; text_.clear(); setters_.clear(); }
+    static std::string manifestFor(const std::string& manifestRoot, const std::string& map);   // ".../next_map/A1_IAC_objectives.json"
+    bool loadManifest(const std::string& path);                     // bank[] (trimmed keys, index order) + setters[]
+    bool fireSetter(const std::string& action, const Catalog& cat); // a setter by its Kismet object path (clears: "")
+    size_t setterCount() const { return setters_.size(); }
     const std::vector<std::string>& bank() const { return bank_; }
     int current() const { return current_; }
     const std::string& activeText() const { return text_; }
@@ -56,6 +63,7 @@ public:
 
 private:
     std::vector<std::string> bank_;
+    std::map<std::string, std::string> setters_;   // SeqAct_TnSetCurrentObjective object path -> key ("" clears)
     int current_ = -1;
     std::string text_;
 };

@@ -1408,6 +1408,22 @@ static void testOnlineVoice() {
           talking + " / " + hs + " / " + mutedName + " / " + mutedHs);
 }
 
+static void testCampaignObjectivesManifest() {
+    // AssetTools' D1_ORB objectives: the bank and setters load; a bank setter shows its text; the out-of-bank D1_ORB_OBJ08
+    // setter is refused (the original logs it, shows nothing); a clearing setter clears.
+    FrontendRuntime rt;
+    check(rt.init(), "objmanifest.init");
+    CampaignObjectives o;
+    const std::string path = CampaignObjectives::manifestFor(frontend::Catalog::defaultManifestRoot(), "D1_ORB");
+    const bool loaded = o.loadManifest(path) && !o.bank().empty() && o.setterCount() > 0;
+    const bool first = o.setCurrent(o.bank().front(), rt.catalog()) && !o.activeText().empty();
+    const int before = o.current();
+    const bool refused = !o.fireSetter("D1_ORB_Base_m.TheWorld.PersistentLevel.Main_Sequence.Objective_Markers.SeqAct_TnSetCurrentObjective_11332", rt.catalog()) &&
+                         o.current() == before;
+    check(loaded && first && refused && !o.fireSetter("No.Such.Setter", rt.catalog()), "campaign.objectives_manifest_d1",
+          std::to_string(loaded) + std::to_string(first) + std::to_string(refused) + " bank " + std::to_string(o.bank().size()));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1434,6 +1450,7 @@ int main() {
     testOnlineMemberCountdown();
     testOnlineSessionEnd();
     testOnlineVoice();
+    testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
