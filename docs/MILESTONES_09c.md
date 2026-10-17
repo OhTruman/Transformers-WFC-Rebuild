@@ -3352,3 +3352,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:16 AssetTools re-measured slim_files.refresh.tsv at 057aded3 (report SLIM_REFRESH.md): rows 101,031 unchanged, 6 byte counts moved
   (+81 KB: the door / light data); vs the live tsv 47 rows, keep / xpr +31.8 MB. bin/licenses/opus ships via build_slim's bin
   walk from the package build's own bin (Systems to confirm in the dry run), not a tsv row.
+2026-10-17 15:17 RE flare verdict: sizes + colours AUTHORED (VF normalises right / up; no screen constant; Rendering's px table = the original);
+  missing = cull the whole flare at coverage 0 (bounds = the occlusion box) + the +XYZ box. Rendering adds the cull and re-shoots
+  (x20); RE judges by 16:00; PASS -> the candidate is re-named with the flares (~16:15), else next head. Hold ~17:30 at worst.
