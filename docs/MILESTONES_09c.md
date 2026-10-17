@@ -2427,3 +2427,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   work/leak/armB_d3d12present/run-32/arm-r1/wfc_hang_19880_0.dmp. Routed to Rendering as a high-priority package 7 item
   (user-facing with Frame Generation on). CARD HELD for every lane until the user reboots (TDR-cascade risk); CPU work open.
   Card queue after the reboot: Rendering Streets match run, Gameplay crops, Systems death-cue runs.
+2026-10-17 06:12 REBOOT DONE (user "Reboot" 05:39; boot 05:41:05): nonpaged pool 1.13 GB, C: 107 GB free (old 52 GB pagefile gone,
+  pagefile on F: 16 GB), no game exe, stuck pid 19880 cleared. Sessions relaunched: rebuild-07 (Integration), rebuild-rendering-94,
+  rebuild-gameplay-0a, rebuild-experimental-d6, Systems (same name), assettools-fb, re-workspace-0c. FREEZE LIFTED 06:13 with the
+  card queue: Rendering (Streets X3 haze match run, X6 captures / identity / eye sheet) -> Gameplay (patch 2 crop slot) ->
+  Systems (death cue paced run, FXINACTIVE rows) -> Experimental (presenter-fix 64-run loop, FG-on, resize; gaps). CPU work open
+  on every lane; AssetTools option A; RE lane TnShake units.
