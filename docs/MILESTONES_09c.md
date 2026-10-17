@@ -3073,3 +3073,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   SoundMixerPresetName fix (MP-facing: before / after proof first).
 2026-10-17 12:24 RE: InitInterp (all 148 empty matinee groups instantiated; 125 no-ops, 23 live) and PlayDialog timing CONFIRMED; next setpiece
   vulnerable flags, buddy health-bar markers.
+2026-10-17 12:26 RE: setpiece tank god mode + buddy markers CONFIRMED: the campaign H shortlist is closed except the two low items. The RE lane's
+  campaign specification is complete; RE returns to package 7 / online support items.
