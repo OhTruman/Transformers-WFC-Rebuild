@@ -259,8 +259,15 @@ public:
     const LocalProfile& profile() const { return profile_; }
     // Online session (PC EXTENSION, Session.h; docs/handoff/ONLINE_MP_FRONTEND_TESTS.md). Not set = the offline flow
     // (today's behaviour); nothing reads it yet.
-    void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); }
+    void setSession(std::unique_ptr<ISession> s) { session_ = std::move(s); role_ = SessionRole::Offline; }
     ISession* session() const { return session_.get(); }
+    // Online play (PC EXTENSION, docs/handoff/ONLINE_MP_FLOWS.md; GameFlow_Online.cpp). The flag is the session itself:
+    // no session = today's offline frontend, unchanged. The role is this player's place in the current game session.
+    enum class SessionRole { Offline, Host, Member };
+    bool online() const { return session_ != nullptr; }
+    SessionRole sessionRole() const { return role_; }
+    static const char* sessionRoleName(SessionRole r) { return r == SessionRole::Host ? "Host" : r == SessionRole::Member ? "Member" : "Offline"; }
+    double onlineTime() const { return clock_; }   // the frontend-update time the session's timeouts count
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].
@@ -331,6 +338,9 @@ private:
     MatchValues matchValues_;
     LocalProfile profile_;
     std::unique_ptr<ISession> session_;
+    SessionRole role_ = SessionRole::Offline;
+    void onlineTick();                                  // poll the session (GameFlow_Online.cpp)
+    void onSessionEvent(const SessionEvent& e);
     SelectedCharacter selected_;
     uint32_t selectionSerial_ = 0;
     int gpPerTeam_ = 32, gpMaxPlayers_ = 64, gpBotsPerTeam_ = 32;   // Gameplay clamp (detected); defaults = the extended target (32 v 32)

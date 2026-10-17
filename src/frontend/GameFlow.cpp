@@ -193,6 +193,7 @@ void GameFlow::tick(float dt) {
         }
     }
     if (level_ == LevelKind::GameLobby) gameLobbyTick(dt);
+    if (session_) onlineTick();
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -388,7 +389,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         return {};
     }
     if (fn == "Online.BeginLobbyExitCountdown") { hostRequestsGameStart(); return {}; }
-    if (fn == "Online.IsHost") return true;   // the local player hosts the private match
+    if (fn == "Online.IsHost") return role_ != SessionRole::Member;   // offline: the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
     if (fn == "Online.CheckCampaignCompleteMessage") return {};   // no campaign-complete prompt (no campaign progress offline)

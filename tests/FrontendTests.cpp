@@ -898,6 +898,27 @@ static void testCampaignCinematicHud() {
     std::remove("wfc_profile.ini");
 }
 
+static void testOnlineBoundary() {
+    // Group A (ONLINE_MP_FRONTEND_TESTS.md S24 + the flag): a session set but quiet keeps the offline answers; events are
+    // polled once per frontend update on frontend time.
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    check(rt.init(), "online.init");
+    GameFlow& f = rt.flow();
+    const bool offline = !f.online() && f.call("Online.IsHost").b && f.sessionRole() == GameFlow::SessionRole::Offline;
+    auto fs = std::make_unique<FakeSession>();
+    FakeSession* fake = fs.get();
+    FakeSession::Step s; s.at = 0.5; s.event.type = SessionEvent::Type::LobbyState;
+    fake->add(s);
+    f.setSession(std::move(fs));
+    platform::InputFrame none;
+    for (int i = 0; i < 20; ++i) rt.update(none, 1.0f / 60.0f);
+    const bool notYet = !fake->scriptDone();
+    for (int i = 0; i < 20; ++i) rt.update(none, 1.0f / 60.0f);
+    check(offline && f.online() && f.call("Online.IsHost").b && notYet && fake->scriptDone(), "online.boundary_polled_on_frontend_time");
+    std::remove("wfc_profile.ini");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -915,6 +936,7 @@ int main() {
     testCampaignObjectives();
     testCampaignTutorials();
     testCampaignCinematicHud();
+    testOnlineBoundary();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
