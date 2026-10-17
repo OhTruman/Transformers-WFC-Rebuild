@@ -2826,3 +2826,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 10:33 Decoy Trap asset manifest merged (no own mesh: the thrower's weapon pickup mesh; deploy = Skill_Barrier; stun React_DecoyTrap_In /
   _Out on all 27 MP chassis; death_Decoy = kill-feed icon; EXPLODE one-shot with the TRAP_ELEC_LP layer; DecoyTrap_FX Color owner
   UNKNOWN -> RE lane). AssetTools next: TRAIL2_TEMPLATES dump for Rendering's Trail2 item.
+2026-10-17 10:34 Distortion RESOLVED at GUID level over all 460 cooked packages (RE 4a7ca06): BlastSphere_Death_MAT never cooks the DistortMesh
+  pair (the death swirl is never drawn), BlastShell MP never, ScreenSplatter_01 + Trail_Distort_MOD do; Ring_Distort_Add never
+  (our x4 / 0.1 constants in e418b3f6 were credited to a mislabelled cache name). Faithful form = a per-(material, vertex factory)
+  allow-list from the cooked maps: RE exports distortion_allowlist.json, Rendering's accumulate pass draws only listed materials
+  (all modes; changes only distortion frames; death crops = evidence), after the exposure slot; RE then decodes the real PS
+  scale / kill literals.
