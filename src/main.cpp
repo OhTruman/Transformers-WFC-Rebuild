@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
 #endif
     render::watchdog::installCrashHandler();      // crash report + minidump for any unhandled exception
     core::Application app;
-    if (!app.init()) return 1;
+    if (!app.init()) return app.exitCode() >= 0 ? app.exitCode() : 1;   // [Systems] headless / net runs set their code
     app.run();
     app.shutdown();
     return 0;

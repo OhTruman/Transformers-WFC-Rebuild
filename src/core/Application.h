@@ -32,6 +32,12 @@ private:
     enum class MatchExit { Quit, ReturnToFrontend };
     MatchExit runMatch();
     void runHeadlessMatch();   // [Systems] WFC_NULLRENDER + direct match boot: the sim loop without a window
+    void runNetMatch();        // [Systems] WFC_NET_SLOT: the headless match over the lockstep layer (Application_Net.cpp)
+    static bool netMatchRequested();
+    int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+public:
+    int exitCode() const { return exitCode_; }
+private:
     bool loadMatch(const frontend::MatchLaunch& m);
     void unloadMatch();
     void drawFrontendFrame();

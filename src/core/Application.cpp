@@ -517,6 +517,8 @@ void Application::run() {
 // in runMatch. Ends: WFC_MATCH_SECONDS of InProgress match time, the match leaving InProgress after it started, WFC_SMOKE_FRAMES
 // iterations, or 600 s of simulated time (guard).
 void Application::runHeadlessMatch() {
+    if (netMatchRequested()) { runNetMatch(); return; }   // [Systems] online: the same loop over the lockstep layer
+    exitCode_ = 0;
     const float step = clock_.stepSeconds();
     const float matchSeconds = std::getenv("WFC_MATCH_SECONDS") ? (float)std::atof(std::getenv("WFC_MATCH_SECONDS")) : 0.0f;
     const long maxIters = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 0;

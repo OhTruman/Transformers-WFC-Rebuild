@@ -1,0 +1,81 @@
+#pragma once
+// [Systems] Lockstep layer (ONLINE_MP_ARCHITECTURE.md sections 4, 5, 10.2): every peer simulates every human seat from the same command
+// stream. A seat's command for tick N is produced at N - D (input delay D) and sent to every other peer; tick N steps on a peer only once
+// every seat's command for N is in (a missing one stalls the step, never a hole). Commands travel as the 23-byte wire form of
+// game::RemoteCommand and every peer, the sender too, simulates the DECODED form - one code path per peer, deterministic by construction.
+// Packets (the transport payload, little endian):
+//   1 CMDS  (unreliable) u8 type, u8 seat, u32 ack (the highest tick of YOUR seat I hold contiguously), u32 first, u8 count, count x 23
+//   2 HELLO (reliable)   u8 type, u8 seat, u64 launch hash (the launch record + sim build: a mismatch refuses the match)
+//   3 HASH  (reliable)   u8 type, u8 seat, u32 tick, u64 simStateHash (desync detector, every hashEvery ticks)
+//   4 BYE   (reliable)   u8 type, u8 seat
+// Wire command (23 bytes): i8 forward, i8 right, u32 buttons, u32 pressed, u16 yaw, i16 pitch (rotator units, 65536 = 360 deg),
+//   i24 x / y / z aim point (cm; valid with kRemoteBitAimPoint).
+#include "net/NetTransport.h"
+
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <map>
+#include <string>
+#include <vector>
+
+namespace game { struct RemoteCommand; }
+
+namespace net {
+
+constexpr size_t kWireCommandBytes = 23;
+using WireCommand = std::array<uint8_t, kWireCommandBytes>;
+WireCommand encodeCommand(const game::RemoteCommand& c);
+void decodeCommand(const WireCommand& w, uint32_t tick, game::RemoteCommand& out);
+
+class Lockstep {
+public:
+    struct Config {
+        int seats = 2;              // humans (seat 0 = host)
+        int self = 0;
+        int delay = 4;              // D (ticks)
+        int maxResend = 32;         // ticks of commands per CMDS packet at most (from the peer's ack)
+        int hashEvery = 60;         // desync-detector period (ticks)
+        double peerTimeoutS = 10.0; // a stall this long = the peer is lost
+        uint64_t launchHash = 0;
+        std::string logPath;        // per-tick CSV (WFC_NET_LOG)
+    };
+    enum class Status { Running = 0, Desync = 3, PeerTimeout = 4, HostLost = 5, LaunchMismatch = 6 };
+
+    Lockstep(INetTransport& t, const Config& c);
+    ~Lockstep();
+    void pump();                                  // transport service + receive; periodic command resend; call every loop iteration
+    bool everyoneHere() const;                    // every peer's HELLO arrived (and matched)
+    void submitLocal(uint32_t tick, const game::RemoteCommand& c);   // this seat's command for `tick` (encoded, stored, sent)
+    bool haveAll(uint32_t tick) const;
+    void command(int seat, uint32_t tick, game::RemoteCommand& out) const;   // decoded (also for this seat)
+    uint64_t bundleHash(uint32_t tick) const;     // FNV over every seat's wire bytes for `tick` (transport / merge check)
+    void reportHash(uint32_t tick, uint64_t h);   // own state hash (sent every hashEvery ticks, compared with the peers')
+    void stalled(double ms);                      // the loop could not step this long (timeout + log accounting)
+    void stepped(uint32_t tick, uint64_t stateHash);   // log row
+    void forget(uint32_t belowTick);              // drop stored commands older than this
+    void bye();
+    Status status() const { return status_; }
+    const std::string& statusText() const { return statusText_; }
+    uint32_t localHigh() const { return localHigh_; }
+
+private:
+    void handle(const NetPacket& p);
+    void sendCommands(int peer);
+    void fail(Status s, const std::string& why);
+    INetTransport& t_;
+    Config cfg_;
+    std::vector<std::map<uint32_t, WireCommand>> cmds_;   // per seat
+    std::vector<uint32_t> contiguous_;                    // per seat: highest tick held with no gap from 1
+    std::vector<uint32_t> peerAck_;                       // per peer: their ack of MY commands
+    std::vector<char> hello_;
+    std::map<uint32_t, uint64_t> ownHash_;
+    std::map<uint32_t, std::vector<std::pair<int, uint64_t>>> peerHash_;
+    uint32_t localHigh_ = 0;
+    double lastSendMs_ = 0.0, stallMs_ = 0.0, stallTotalMs_ = 0.0;
+    Status status_ = Status::Running;
+    std::string statusText_;
+    FILE* log_ = nullptr;
+};
+
+}  // namespace net
