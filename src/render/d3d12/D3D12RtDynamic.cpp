@@ -197,7 +197,10 @@ public:
             D3D12_RAYTRACING_INSTANCE_DESC d{};
             std::memcpy(d.Transform, i.transform, sizeof d.Transform);
             d.InstanceID = (UINT)i.slot;
-            d.InstanceMask = (i.body ? 0x10u : mask) & 0xFF;   // (bodies: their own bit; every pass that traces 0x4 traces 0x14)
+            // (bodies: their own bit; every pass that traces 0x4 traces 0x14. WFC_RT_BODYBIT=0: bodies stay on the
+            // characters' bit - the rays of before, for the zero-difference eye sheet)
+            static const bool bodyBit = [] { const char* e = std::getenv("WFC_RT_BODYBIT"); return !(e && e[0] == '0'); }();
+            d.InstanceMask = (i.body && bodyBit ? 0x10u : mask) & 0xFF;
             // closed meshes, but a mirrored model matrix or a refit's degenerate triangles must not let shadow rays through
             d.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
             d.AccelerationStructure = s.blas->GetGPUVirtualAddress();
