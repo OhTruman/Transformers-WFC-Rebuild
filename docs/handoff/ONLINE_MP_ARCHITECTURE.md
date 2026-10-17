@@ -328,11 +328,11 @@ peer and dropped afterwards (the peer's address is then the key).
   - the projectile from the muzzle.
   These play on the local machine at press time, cosmetic only, never touching the sim. The simulated result follows D ticks later.
   Health / death / kill feed come at the simulated tick.
-- **Disconnect (faithful default):** the leaving player's pawn is killed as a suicide (Killer = the leaving player; the mode's
-  suicide scoring), the seat stays EMPTY, and a team that is now empty triggers the 1.5 s forfeit check in team versus
-  ("Forfeit"). This replaces the earlier "SlotSwap to Bot" default.
-  - A bot taking over the seat stays possible as a host option, pending the user's answer to "bot takes over or the slot goes
-    empty" (13). Gameplay's SlotSwap path is kept for it.
+- **Disconnect (Integration decision, the default pair):**
+  - **No bot rows in the lobby (faithful):** the leaver's pawn is killed as a suicide (Killer = the leaver, the mode's suicide
+    scoring), the seat stays EMPTY, and the 1.5 s team-forfeit check runs in team versus ("Forfeit" when a team is empty).
+  - **Host's bot rows on (our extension):** the same suicide, then the existing SlotSwap-to-bot takes the seat; no forfeit.
+  - Gameplay owns the suicide + forfeit path. The transport reports the drop (PeerDropped at an agreed simTick) and does nothing else.
 
 ## 11. Phases and exit criteria
 
