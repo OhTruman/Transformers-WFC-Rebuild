@@ -2237,3 +2237,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   x3-gate.sh cand10 with CAND_SHA e224ebf2: eye pass (floors match 1.26 / 1.28, views 1.42 / 1.45; light-facing
   views reported) -> timed 2-arm X3 on / off cost (5 maps, Realistic + HD 2, 1440p) -> delta FAST. Rendering's
   Defrag draw-list cache fix f5e2d8dd built as int_cand11 (= 106db906 + fix); RT-off identity beside the eye pass.
+  2026-10-16 20:58 X3 GATE cand10 EYE PASS: FAIL (match sheets Realistic 1.08 vs floor 1.26, + Enhanced 1.09 vs 1.28;
+  brightness +39.3 vs the checkpoint's +11.6; 65 % pixels changed; colourfulness -0.1); authored views 1.42 / 1.46
+  = at the floor (short paths). Streets step 1740: a uniform grey veil down the corridor (Off 39 / checkpoint 56 /
+  candidate 124 mean luminance), colour drained = the v1-v3 failure on long paths. Direction to Rendering: the
+  medium / haze term must not accumulate over 120 m (haze ~0 outside the authored fog, cap the integrated medium
+  in-scatter, shafts from the shadow-tested sun / lamp terms only); tune on match frames. Cost step + FAST continue;
+  round 3 (cand12) eye-pass-only tonight if before 00:00, else tomorrow. X3 stays merged (Realistic-only, tunable).
