@@ -2219,3 +2219,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   2026-10-16 20:12 MERGE SLIP (mine, fixed): a cherry-pick loop over HEAD..agents/gameplay re-applied ~60 historical
   commits (docs only; GAMEPLAY_BOTS.md regressed); reset to 77dfcced, the four GPU-corpse doc commits re-applied
   (c0938c76, 3ab95dbc, 252e6426, 6fec17b0) -> 7e952312, force-with-lease push. src untouched.
+  2026-10-16 20:17 X3 FROXEL VOLUMETRICS MERGED as a set (rt2 2a3a1d33 base, e003ccc5 round 2, 607baafd Molten haze
+  0.001): identity vs 3b6b36ca (src == 9350f19b) Off 5/5 + Faithful 5/5 byte-identical, SIMHASH 088bd3b99da5768e
+  x4; candidate exe Rendering work/int_cand10 (Release). Eye notes answered: firefight_sun 0.71 -> 0.81 at haze
+  0.001 (shafts keep their gaps); the lane_sun streaks are Molten's falling particles (two X3-off runs differ the
+  same way; a 0.25 m dolly shows no banding); the purple lamp hue holds (1.05). Build check after the corpse
+  hold; x3-gate tonight (eye pass -> timed cost -> FAST delta) before 00:00. DEFRAG BUG (Rendering): the per-mesh
+  draw-list cache dynSubs_ is keyed by bind mesh only, so a live robot of the same model rebuilds the corpse's
+  list without Defrag -> fix = a second cache for the defrag state (GO after SETTINGSTEST). GPU-vs-CPU skinning
+  rounding = identity-equivalent (Rendering confirms).
