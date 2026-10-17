@@ -43,7 +43,8 @@ try:
     r = ask(host, {"op": "ping", "id": 1}, "pong")
     check(r and r.get("id") == 1 and r.get("seen") == "127.0.0.1:%d" % host.getsockname()[1], "ping: the service sees the sender's address")
     reg = {"op": "register", "name": "HostPC", "mode": "TDM", "playlist": "TeamDeathmatch", "map": 3, "players": 1, "max": 10,
-           "version": "p2a", "region": "eu", "lan": "192.168.1.23:14000", "public": True}
+           "version": "p2a", "region": "eu", "lan": "192.168.1.23:14000", "public": True, "state": "pregame",
+           "vote": {"options": ["MP_IAC_Streets", "MP_IAC_Rust", "MP_UND_Gorge"], "counts": [0, 0, 0], "ends_in": 15}}
     r = ask(host, reg, "registered")
     code = r and r.get("code")
     check(bool(code) and len(code) == 6 and code.isalpha(), "register -> a 6-letter code (%s)" % code)
@@ -53,8 +54,20 @@ try:
     check(g and len(g["games"]) == 1 and g["games"][0]["code"] == code and g["games"][0]["name"] == "HostPC", "list: the public lobby")
     g = ask(joiner, {"op": "list", "version": "other"}, "games")
     check(g is not None and g["games"] == [], "list: another version sees nothing")
-    q = ask(joiner, {"op": "quick", "version": "p2a", "playlist": "TeamDeathmatch"}, "quick")
-    check(q and q["game"] and q["game"]["code"] == code, "quick match finds it")
+    q = ask(joiner, {"op": "quick", "version": "p2a", "playlist": "TeamDeathmatch", "lan": "192.168.1.50:50000"}, "quick")
+    check(q and len(q["candidates"]) == 1 and q["candidates"][0]["code"] == code and q["candidates"][0]["state"] == "pregame"
+          and q["candidates"][0]["host_public"] == "127.0.0.1:%d" % host.getsockname()[1], "quick match: the candidate with its endpoints")
+    pq = None
+    end = time.time() + 1.5
+    while time.time() < end and not pq:
+        try:
+            d, _ = host.recvfrom(65536)
+            m = json.loads(d[4:])
+            if m.get("op") == "punch":
+                pq = m
+        except socket.timeout:
+            pass
+    check(pq and pq.get("peer_lan") == "192.168.1.50:50000", "quick match: the candidate host gets a punch notice")
     e = ask(joiner, {"op": "lookup", "code": code.lower(), "lan": "192.168.1.50:50000"}, "endpoints")
     check(e and e.get("host_public") == "127.0.0.1:%d" % host.getsockname()[1] and e.get("host_lan") == "192.168.1.23:14000",
           "lookup: the host's public + LAN endpoints")

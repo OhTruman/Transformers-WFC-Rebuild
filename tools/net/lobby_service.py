@@ -4,11 +4,15 @@ by a setting later). One UDP port; the match itself stays lockstep peer-to-peer,
   python lobby_service.py [--bind 0.0.0.0:14010] [--log FILE]       (Python 3.8+, standard library only)
 
 Datagrams: b"WFCL" + one JSON object {"op": ..., ...}; every answer echoes "id" when the request had one.
-  register   {name, mode, playlist, map, players, max, version, region, lan, public: bool, code?}
+  register   {name, mode, playlist, map, players, max, version, region, lan, public: bool, state: pregame | inprogress,
+              vote: {options, counts, ends_in}, code?}
              -> {op: registered, code, seen}   (code: 6 letters, kept while the host re-registers every <= 5 s; gone after 15 s)
   unregister {code}
   list       {version, playlist?, mode?}      -> {op: games, games: [{code, name, mode, playlist, map, players, max, region}]}  (public only)
-  quick      {version, playlist}              -> {op: quick, game: {...} | null}  (the fullest open public lobby that fits)
+  quick      {version, mode?, playlist?, lan}  -> {op: quick, candidates: [{code, state, players, max, vote, host_public,
+                                                 host_lan, ...}]}: Quick Match (no list on screen) - pregame lobbies first, then in-progress
+                                                 matches with open seats, max 8; each candidate host gets a punch notice; the client pings
+                                                 them and joins the best ping
   lookup     {code, lan?}                     -> {op: endpoints, code, host_public, host_lan}; the host gets
                                                  {op: punch, peer_public, peer_lan} at once (both sides then send to each other:
                                                  the UDP hole punch)
@@ -81,7 +85,8 @@ class Service(asyncio.DatagramProtocol):
             if not code or code not in self.lobbies or self.lobbies[code]["host"] != addr:
                 code = self.new_code()
                 self.note("register", code, seen, m.get("name"), m.get("mode"), m.get("playlist"))
-            info = {k: m.get(k) for k in ("name", "mode", "playlist", "map", "players", "max", "version", "region", "lan", "public")}
+            info = {k: m.get(k) for k in ("name", "mode", "playlist", "map", "players", "max", "version", "region", "lan", "public",
+                                           "state", "vote")}
             self.lobbies[code] = {"host": addr, "info": info, "last": time.time()}
             reply({"op": "registered", "code": code, "seen": seen})
         elif op == "unregister":
@@ -101,12 +106,20 @@ class Service(asyncio.DatagramProtocol):
                     continue
                 if (i.get("players") or 0) >= (i.get("max") or 0):
                     continue
-                games.append(dict({"code": c}, **{k: i.get(k) for k in ("name", "mode", "playlist", "map", "players", "max", "region")}))
+                games.append(dict({"code": c}, **{k: i.get(k) for k in ("name", "mode", "playlist", "map", "players", "max", "region",
+                                                                      "state", "vote")}))
             if op == "list":
                 reply({"op": "games", "games": games})
-            else:
-                games.sort(key=lambda g: -(g.get("players") or 0))
-                reply({"op": "quick", "game": games[0] if games else None})
+            else:   # Quick Match: candidates (pregame first, then in progress; the fullest first), max 8, + a punch notice to each
+                games.sort(key=lambda g: (g.get("state") != "pregame", -(g.get("players") or 0)))
+                games = games[:8]
+                for g in games:
+                    h = self.lobbies[g["code"]]["host"]
+                    g["host_public"] = "%s:%d" % h
+                    g["host_lan"] = self.lobbies[g["code"]]["info"].get("lan")
+                    self.send(h, {"op": "punch", "peer_public": seen, "peer_lan": m.get("lan")})
+                self.peers[addr] = time.time()
+                reply({"op": "quick", "candidates": games})
         elif op == "lookup":
             l = self.lobbies.get(str(m.get("code", "")).upper())
             if not l:
