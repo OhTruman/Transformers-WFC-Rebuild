@@ -2397,3 +2397,17 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   to the transient-light owner. RE lane next: the 360 HDR scene path (7e3 resolve bias, exposure) with Systems for the
   explosion saturation item. Gameplay patch 2 estimate 11-14 h; killer cam queued after it. AssetTools watchdog test PASS
   (3d1cc87), D1_ORB running. Rendering cand14 identity pair building (X6 + body bit + X3 timer + presenter event).
+2026-10-17 04:37 PACKAGE 6 BUILD + VERIFY: Systems refresh.sh af4d0731 (NOPROMOTE, JOBS=2, 04:13-04:23): BUILD OK, M6 498 / 498, keep
+  46,744 / xpr 7,161 / 27.53 GB / failures 0, HD 4,005 files / 21.70 GB -> work/playtest_slim_af4d0731. verify_slim -SubstDrive
+  (04:25-04:32, work/verify_af4d0731/REPORT.md): PASS - Streets / Gorge / Debris PASS (99 / 94 / 94 s, 0 outside reads, 282
+  localized), rtcheck runtime / r4 / rtlights / defaults 39 of 39 PASS, HD runtime row PASS at level 2. GO PROMOTE sent
+  (playtest_slim -> playtest_slim_9350f19b fallback; af4d0731 -> playtest_slim; doc PACKAGE_6_af4d0731.md; tag by Integration).
+  Card released to Experimental's leak arm B (D3D12 present, RT off, 30 min, per-tag). Package 6 = internal checkpoint; the
+  hand-over build is package 7.
+2026-10-17 04:37 RE lane: GAMEPLAY_HOVER_RE.md (354df5f6): no ride-height controller, four implicit spring probes (HoverCar / Truck /
+  Tank authored values, Optimus on HoverTruck 185 / 10000 / 4000 / 250), AI righting attitude-gated (> 30 deg) not contact-
+  gated (package 5 applied the player rule): Gameplay's ride-height item = the faithful model + Smart righting rule; Classic
+  righting-path question raised. RENDERING_HDR_SCENE_PATH_RE.md (7353b641) + SYSTEMS_HDR_SHADER_DECODE.md final (205c8da3):
+  Faithful explosion clip is the original's (7e3 ceiling 3.984, gather 4.0, uber sat at 1); Realistic treatment = Rendering
+  RENDERING_PACKAGE7_POLISH.md section 4 (4-5 h). AssetTools backlog 5 merged (d842464f); next: no_floor_below starts,
+  mover initial-pose collision in the walk graph. RE lane next: FaceFX native bone-pose blending.
