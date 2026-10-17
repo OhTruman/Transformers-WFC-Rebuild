@@ -38,5 +38,19 @@ if (mode === 'crops') {
     out.push([r, e.join('^^'), exe(t), r + bs + 'run.log', to].join('|'));
   }
 }
+// The transforming-actor visual check (Integration 2026-10-17, rides in the crop slot): a fixed camera 8 m along +X of a Rust door
+// (TnTransformingWorldActor_6492) and a BrokenHope bridge (TnTransformingWorldActor_1476), glTF metres from
+// mp_transforming_actors.json: are they drawn at all?
+if (mode === 'crops') {
+  const tw = [['transform_rust_door', 'MP_IAC_Rust', '-174.56,28.88,60.80,90,-10'],
+              ['transform_brokenhope_bridge', 'MP_ESC_BrokenHope', '67.52,19.36,-44.80,90,-20']];
+  for (const [scene, map, cam] of tw) {
+    const r = W + bs + 'crop_' + scene; fs.mkdirSync(r + bs + 'shots', {recursive: true});
+    const e = ['WFC_BOOT=match', 'WFC_SKIPINTRO=1', 'WFC_NOMOUSE=1', 'WFC_AUTODETECT=0', 'WFC_LOCKSTEP=1', 'WFC_SEED=7', 'WFC_FLOWSEED=7',
+      'WFC_RT_MODE=0', 'WFC_SMOKE_FRAMES=2000000', 'WFC_MATCH_SECONDS=15', 'WFC_FIXEDCAM=' + cam,
+      'WFC_MATCH_URL=' + map + '?GameModeTag=TDM?BotsFriendly=0?BotsEnemy=0?PointsToWin=1000', 'WFC_SHOTMATCH=' + r + bs + 'shots,200,800,100'];
+    out.push([r, e.join('^^'), exe('p2'), r + bs + 'run.log', '240'].join('|'));
+  }
+}
 fs.writeFileSync(W + bs + 'steps_' + mode + '.txt', out.join('\n') + '\n');
 console.log(out.length + ' steps -> ' + W + bs + 'steps_' + mode + '.txt');
