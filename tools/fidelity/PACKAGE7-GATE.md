@@ -76,6 +76,7 @@ with a negative control.
 | 104b31cc Decoy Trap | none in bot matches (bots never select it) | no, unless bots or the PlayerBot loadout pick it up |
 | pending: Gameplay's per-weapon recoil + melee values batch | sim (its owner records the new NAVQ references) | **yes**, as a further item when it lands |
 | pending: transforming actors + dying-vehicle collision | sim (expected) | **yes**, if merged before the head is named |
+| pending: the door head (Gameplay's transact 1b894dc7 + Rendering's door draw + (b) lighting + materials) | sim (Integration) | **yes**: only the sim part (the transact side) goes into the base; the draw / lighting / materials stay head-only |
 | 8454c173 / f46bdfe4 remote-seat paths | sim only with remote seats / a host seed | no: offline identical (seed 7 48 / 48) |
 
 The base is rebuilt once the head is named. Today's fast_af4d073_hover carries cfca1717 only.
