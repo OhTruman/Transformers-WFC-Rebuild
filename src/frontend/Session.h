@@ -17,6 +17,8 @@
 // - JoinFailed{Version} can also arrive after the join (a sim id / load hash mismatch at reportLoaded): it ends the session
 //   for that peer.
 // - The session layer owns the join timeout (InitialConnectTimeout 50 s); the frontend's own timer is a backstop.
+// - Joined / MatchInProgress carry the joiner's own id in member (the member finds itself in SessionLobby::slots).
+// - A MemberJoined for a member already in the lobby is that member's updated info (setMemberInfo on its side).
 // - SessionHostFailure::StrictNat is not produced in phases 1-3 (no NAT-type detection without STUN); Web peers are phase 4.
 #pragma once
 #include <cstdint>

@@ -271,6 +271,13 @@ public:
     const std::string& joinCode() const { return joinCode_; }        // host: shown in the lobby's join panel
     const std::string& joinAddress() const { return joinAddress_; }
     bool matchInProgressForMember() const { return role_ == SessionRole::Member && memberLobby_.matchRunning; }
+    // The other humans in the online lobby (host: from MemberJoined / MemberLeft; member: the host's published list minus
+    // itself), with the slot each holds (team, connecting). Empty offline.
+    struct OnlineMember { SessionMemberInfo info; int team = 255; bool connecting = false; };
+    const std::vector<OnlineMember>& onlineMembers() const { return onlineMembers_; }
+    // Bots each team keeps after the humans took their slots (Game Mode Options' counts are maxima, ONLINE_MP_FLOWS.md 3.4).
+    int onlineBotsFor(int team) const;
+    int selfTeam() const { return lobby_.localTeam; }
     static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
     static constexpr double kJoinBackstop = kInitialConnectTimeout + 5.0;   // the session layer owns the 50 s timeout
     std::string stateSummary() const;
@@ -348,6 +355,11 @@ private:
     std::string joinCode_, joinAddress_;
     double joinStartedAt_ = 0.0;
     SessionLobby memberLobby_;                          // member: the host's lobby as last received
+    SessionMemberId selfId_;                            // member: this player's id (from Joined)
+    std::vector<OnlineMember> onlineMembers_;
+    int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans
+    int onlineGateStatus() const;                       // LobbyStatus 6 / 4 / 3 (the original start gate, D4)
+    void applyBrowserCap(const char* why);              // D10: Player Limit capped to 5 v 5 while a browser peer is in
     std::string publishedLobbyKey_;                     // host: the lobby last published (publish on change)
     bool onlineHost();                                  // Create Game while online: host(), the hosting popup
     BridgeValue onlineJoin(const std::string& target);  // Online.JoinGame (PC EXTENSION): validate, join(), the joining popup

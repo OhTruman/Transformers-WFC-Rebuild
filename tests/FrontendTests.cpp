@@ -1083,6 +1083,103 @@ static void testOnlineHostJoin() {
     }
 }
 
+static SessionEvent memberEv(const char* fp, const char* name, bool hasChar, int teamRequest = -1, SessionPlatform pl = SessionPlatform::PC) {
+    SessionEvent e = ev(SessionEvent::Type::MemberJoined);
+    e.member.fingerprint = fp;
+    e.info.id = e.member; e.info.displayName = name; e.info.hasCharacter = hasChar; e.info.teamRequest = teamRequest; e.info.platform = pl;
+    if (hasChar) e.info.characterSlot = "Soldier";
+    return e;
+}
+
+// A host in its game lobby (TDM, map 508 picked), 4 + 4 bots set.
+static bool hostLobby(OnlineRig& r) {
+    r.f().profile().bots.autobot = 4; r.f().profile().bots.decepticon = 4; r.f().profile().bots.extended = false;
+    r.f().call("Online.EditGameMode", {"TDM"});
+    r.f().call("Online.PlayPrivateGame", {"TDM"});
+    if (!runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; })) return false;
+    r.frames(2);
+    if (r.f().lobby().mapId != 508) r.f().call("Online.SetSelectedMapID", {"508"});
+    r.frames(2);
+    return true;
+}
+
+static void testOnlineLobbyGate() {
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    DataStores& ds = r.rt->dataStores();
+    auto status = [&]() { return ds.call("ReadValue", {"<CurrentGame:LobbyStatus>"}).s; };
+    auto canStart = [&]() { return ds.call("ReadBoolValue", {"<CurrentGame:CanHostRequestGameStart>"}).b; };
+    auto st = [&](const char* k) { return r.rt->catalog().localize("TransGame", "TnGameReplicationInfoGameLobby", k); };
+    // S10: a joiner without a character holds the start; with one, the host may start
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", false));
+    r.frames(2);
+    const bool waitChar = status() == st("WaitingForCharacterChoiceStatus") && !canStart();
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true));
+    r.frames(2);
+    const bool ready = status() == st("WaitingForHostToStartStatus") && canStart();
+    // unbalanced teams hold the start with Team Balancing "Manual" (Autobalanced balances them at the countdown)
+    r.f().call("Online.EditGameMode", {"TDM"});
+    ds.call("WriteValue", {"<TnGameSettings:AutobalanceTeams>", "Manual"});
+    r.fake->inject(memberEv("WFC-BBBB-BBBB-2", "Bravo", true, 1));
+    r.fake->inject(memberEv("WFC-CCCC-CCCC-3", "Charlie", true, 1));
+    r.frames(2);
+    r.fake->inject(memberEv("WFC-BBBB-BBBB-2", "Bravo", true, 1));   // (updates: the team requests apply)
+    r.fake->inject(memberEv("WFC-CCCC-CCCC-3", "Charlie", true, 1));
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true, 1));
+    r.frames(2);
+    ds.poll();   // (no presenter polls headless: a new frame for the data-store cache)
+    const bool unbalanced = status() == st("WaitingForBalancedTeamsStatus") && !canStart();
+    r.fake->inject(memberEv("WFC-CCCC-CCCC-3", "Charlie", true, 0));
+    r.frames(2);
+    const bool balanced = status() == st("WaitingForHostToStartStatus") && canStart();
+    check(host && waitChar && ready && unbalanced && balanced, "online.S10_lobby_gate",
+          std::to_string(host) + std::to_string(waitChar) + std::to_string(ready) + std::to_string(unbalanced) + std::to_string(balanced) + " " + status());
+    // S11: humans take bot slots (team 0: host + Charlie, team 1: Alpha + Bravo; 5 a side -> 3 bots each)
+    const SessionLobby* pub = r.fake->last("publishLobby") ? &r.fake->last("publishLobby")->lobby : nullptr;
+    check(r.f().onlineBotsFor(0) == 3 && r.f().onlineBotsFor(1) == 3 && r.f().profile().bots.autobot == 4 && pub && pub->slots.size() == 4 &&
+          pub->members.size() == 4, "online.S11_humans_take_bot_slots",
+          std::to_string(r.f().onlineBotsFor(0)) + "/" + std::to_string(r.f().onlineBotsFor(1)) + " slots " + std::to_string(pub ? pub->slots.size() : 0));
+    // S13: platform tags in the player list (the local player first)
+    const std::string row0 = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "0"}).s;
+    const std::string row1 = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
+    // S12: a browser peer caps Player Limit to 5 v 5
+    r.f().profile().bots.extended = true;
+    r.fake->inject(memberEv("WFC-WWWW-WWWW-4", "Webby", true, -1, SessionPlatform::Web));
+    r.frames(2);
+    ds.poll();
+    const std::string rowWeb = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "4"}).s;
+    check(!r.f().profile().bots.extended, "online.S12_browser_cap");
+    check(row0.size() > 4 && row0.substr(row0.size() - 4) == "  PC" && row1 == "Alpha  PC" && rowWeb == "Webby  Web" &&
+          ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 5, "online.S13_platform_tags", row0 + " | " + row1 + " | " + rowWeb);
+    // a member leaves: its row and slot go
+    SessionEvent left = ev(T::MemberLeft); left.member.fingerprint = "WFC-WWWW-WWWW-4";
+    r.fake->inject(left);
+    r.frames(2);
+    ds.poll();
+    check(ds.call("GetCollectionRowCount", {"<CurrentGame:Players>"}).n == 4 && r.f().onlineMembers().size() == 3, "online.member_left_row_gone");
+}
+
+static void testOnlineMemberSlots() {
+    // A member finds itself in the host's slots (its team) and lists the other humans.
+    using T = SessionEvent::Type;
+    SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.mapSelectionMethod = 1;
+    SessionMemberInfo hostInfo; hostInfo.displayName = "Hosty"; hostInfo.hasCharacter = true;
+    SessionMemberInfo me; me.id.fingerprint = "WFC-SELF-SELF-9"; me.displayName = "Me"; me.hasCharacter = true;
+    l.members = {hostInfo, me};
+    SessionSlot hs; hs.kind = SessionSlot::Kind::Human; hs.team = 0;
+    SessionSlot ms; ms.kind = SessionSlot::Kind::Human; ms.member = me.id; ms.team = 1;
+    l.slots = {hs, ms};
+    SessionEvent j = ev(T::Joined); j.lobby = l; j.member = me.id;
+    OnlineRig r({after("join", j)});
+    r.f().call("Online.JoinGame", {"WFC-7QK2-M9TD-4H"});
+    runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+    r.frames(3);
+    const std::string row1 = r.rt->dataStores().call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
+    check(r.ok && r.f().lobby().localTeam == 1 && r.f().onlineMembers().size() == 1 && row1 == "Hosty  PC", "online.member_slots_from_host", row1);
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1102,6 +1199,8 @@ int main() {
     testCampaignCinematicHud();
     testOnlineBoundary();
     testOnlineHostJoin();
+    testOnlineLobbyGate();
+    testOnlineMemberSlots();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

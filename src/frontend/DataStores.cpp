@@ -105,11 +105,13 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:CurrentCountdown>") return std::to_string(L.countdown);
     if (markup == "<CurrentGame:CanHostRequestGameStart>")
         return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
-                 flow_.sessionRole() != GameFlow::SessionRole::Member);   // an online member never starts the game
+                 flow_.sessionRole() != GameFlow::SessionRole::Member &&     // an online member never starts the game
+                 (flow_.sessionRole() == GameFlow::SessionRole::Offline || L.lobbyStatus == 3));   // online: the original gate (D4)
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
         if (flow_.matchInProgressForMember()) return cat_.localizeKey("$WfcPC.Online.MatchInProgressStatus");   // D6
-        const char* key = L.lobbyStatus == 3 ? "WaitingForHostToStartStatus" : L.lobbyStatus == 4 ? "WaitingForBalancedTeamsStatus" : "WaitingForPlayersStatus";
+        const char* key = L.lobbyStatus == 3 ? "WaitingForHostToStartStatus" : L.lobbyStatus == 4 ? "WaitingForBalancedTeamsStatus"
+                        : L.lobbyStatus == 6 ? "WaitingForCharacterChoiceStatus" : "WaitingForPlayersStatus";
         std::string s = cat_.localize("TransGame", "TnGameReplicationInfoGameLobby", key);
         return replaceAll(s, "`p", std::to_string(std::max(0, L.numRequiredPlayers - L.numPlayers)));
     }
@@ -211,6 +213,17 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
         c.enabled.push_back(true);
+        if (flow_.sessionRole() != GameFlow::SessionRole::Offline) {   // online lobby: the other humans, with platform tags (D11)
+            const std::string pc = cat_.localizeKey("$WfcPC.Online.PlatformPC"), web = cat_.localizeKey("$WfcPC.Online.PlatformWeb");
+            c.rows.back()[0] += "  " + pc;
+            for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
+                const std::string nm = (m.info.displayName.empty() ? std::string("Player") : m.info.displayName) + "  " +
+                                       (m.info.platform == SessionPlatform::Web ? web : pc);
+                c.rows.push_back({nm, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", "0", "", "0", m.connecting ? "1" : "0", "0", "", "",
+                                  "0", "0", "0", "0", std::to_string(m.info.level)});
+                c.enabled.push_back(true);
+            }
+        }
         return true;
     }
     if (markup == "<CurrentGame:Teams>") {
