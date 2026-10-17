@@ -178,21 +178,24 @@ static void testVolumetricSetting() {
 }
 
 static void testCampaignStrings() {
-    // <Strings:File.Section.Key> (CAMPAIGN_HUD_PLAN.md E4): the INT text in a campaign match, "" in versus (unchanged).
+    // <Strings:File.Section.Key>: the INT text in versus and campaign alike (the original's rename prompt / Claimed).
     // Hud_GFX's <Strings:TransGame.ContextualCommands.DownedSuicide> has no entry in the shipped TransGame.int (the text
     // is UIText [Hud] DownedSuicide, which the movie also names): it answers "" as the data has nothing there.
     FrontendRuntime rt;
     check(rt.init(), "campaign.init");
     DataStores& ds = rt.dataStores();
     const std::string m = "<Strings:UIText.Customization.NameTrans>";
-    const bool versusEmpty = ds.call("ReadValue", {m}).s.empty() && !rt.flow().campaign();
+    const bool versusText = ds.call("ReadValue", {m}).s == "Name Character" && !rt.flow().campaign() &&
+                            ds.call("ReadValue", {"<Strings:UIText.Customization.NameDesc>"}).s == "Enter a name for this custom character build." &&
+                            ds.call("ReadValue", {"<Strings:UIText.CharacterSelect.Unclaimed>"}).s == "Available" &&
+                            ds.call("ReadValue", {"<Strings:Bad>"}).s.empty();
     rt.flow().setCampaignForTest(true);
     const std::string t = ds.call("ReadValue", {m}).s;
     const std::string u = ds.call("ReadValue", {"<Strings:UIText.CharacterSelect.Claimed>"}).s;
     const std::string d = ds.call("ReadValue", {"<Strings:TransGame.ContextualCommands.DownedSuicide>"}).s;
     rt.flow().setCampaignForTest(false);
-    check(versusEmpty && t == "Name Character" && u == "Selected" && d.empty() &&
-          frontend::GameFlow::isCampaignTag("CP") && !frontend::GameFlow::isCampaignTag("TDM"), "datastores.strings_store_campaign_only", t + " / " + u);
+    check(versusText && t == "Name Character" && u == "Selected" && d.empty() &&
+          frontend::GameFlow::isCampaignTag("CP") && !frontend::GameFlow::isCampaignTag("TDM"), "datastores.strings_store", t + " / " + u);
 }
 
 static void testFakeSession() {
