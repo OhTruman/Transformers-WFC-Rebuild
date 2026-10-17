@@ -1,0 +1,18 @@
+diff -ruN a/tools/render/systems_extra_materials.txt b/tools/render/systems_extra_materials.txt
+--- a/tools/render/systems_extra_materials.txt	2026-10-16 23:19:24.000000000 -0500
++++ b/tools/render/systems_extra_materials.txt	2026-10-17 08:09:57.602418500 -0500
+@@ -57,3 +57,6 @@
+ WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MATINST
+ WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MATINST
+ WEP_TurretBase_p.WEP_TurretBase01_MATINST
++# Death gibs (Systems 2026-10-17, Integration): the skeletal / static gib materials (RB_GibExtra_CLR / MASK / NORM), compiled in no map
++TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST
++TR_Death_Gibs_p.Materials.DeathGib_Mat_INST
+diff -ruN a/tools/render/vector_channel_proven.txt b/tools/render/vector_channel_proven.txt
+--- a/tools/render/vector_channel_proven.txt	2026-10-16 23:19:24.000000000 -0500
++++ b/tools/render/vector_channel_proven.txt	2026-10-17 08:09:57.594888400 -0500
+@@ -3,3 +3,4 @@
+ # the channel reading has none (matc type_violations; see FIDELITY.md M04). Other materials keep the
+ # full-vector reading until proven (permutation checks cannot discriminate them).
+ FX_Materials_p.Materials.ParticleBase_BW_MAT   # AppendVector(UVandOffset.B, UVandOffset.B): vec4+vec4 invalid; 2 violations -> 0
++FX_Decals_p.DeathDecal_MAT   # (Systems 2026-10-17) the shipped decal PS (RE TARGETED_PASS5 add. 31): oC0.rgb = 1 + G*A*((R + Blacks)*Color - 1): the lerp weight takes Color.A; full-vector reading gives m max 25.7 vs 2.24 (MetalDecal_02 / 03 MICs inherit)
