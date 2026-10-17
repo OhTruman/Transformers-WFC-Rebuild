@@ -2774,3 +2774,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   all-mode if they hold. Experimental's (B) pass: option (c): both arms on a fresh integration 5fc2e552 Release exe
   (work/ab/fast_5fc2e55, building now), snapshot after my REGEN DONE. MP_ABILITY_CUES_RE.md merged (trigger sound replicated,
   trigger FX via RepNotify, buff cues local per BuffReplicationType; Whirlwind / Dash / Hover routed to melee / dodge / hover).
+2026-10-17 10:19 REGEN DONE 10:16: all 10 MP maps' map_fx_runtime.json in Rebuild/work/render (Set C data). Gate: vs the OLD files more than the
+  fields keys differ (pstream 3470a25's corrected decode renames the Cylinder dists VelocityScale / StartRadius, empties 'partial',
+  changes confidences), but the 5 pair-tested maps are BYTE-IDENTICAL to Rendering's work/mapfx2, so the data is exactly what the
+  particle pair ran on. Experimental snapshots now for (B). Fog layers: Rendering's math matches RE's decode term for term; the
+  Gorge white is abyss-only (authored), Rust's floor veil = Realistic auto-exposure lifting a 0.3 % linear term -> Set D (fog
+  layers, all-mode as authored) requested against cb7a6913 + lighting.json 'fogs' regen; dark-frame exposure floor = next
+  Realistic item (closes the X3 near-white residual too). Frontend merged: 3d12103d whitespace no-op, a745320b claims across all
+  players + no Escalation row in the versus iconic lobby, 686f8314 ONLINE_MP_PHASE2_FLOWS.md; D12-D15 decided by default
+  (promote leader / code + relay mailbox / relay signalling / recent players). AssetTools 94c758e reruns in; slim_files.tsv
+  +10 physmat rows; next: PACKAGE7_SLIM_AUDIT. Systems: ability trigger FX patch (f701e438) rides their next pair; Decoy Trap
+  ability has NO implementation -> Gameplay checks the authored MP class lists. Gameplay weapon + melee batch rebased
+  (f678bcf6), value table with the RE lane, 4-min recoil eye check queued after (B) + Systems.
