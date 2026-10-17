@@ -20,7 +20,7 @@ $mats = @((Get-Content -Raw $Manifest | ConvertFrom-Json).materials)
 $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
 $merge = @"
 import json, sys
-src, cand, out, names = sys.argv[1], sys.argv[2], sys.argv[3], set(open(sys.argv[4], encoding='utf-8').read().split())
+src, cand, out, names = sys.argv[1], sys.argv[2], sys.argv[3], set(open(sys.argv[4], encoding='utf-8-sig').read().split())   # (utf-8-sig: Set-Content utf8 writes a BOM onto the first name - it dropped Energon_Lava_Mat on 2026-10-17)
 a = json.load(open(src, encoding='utf-8')); b = json.load(open(cand, encoding='utf-8')); n = 0
 for k in names:
     if k in b and k in a and a[k] != b[k]: a[k] = b[k]; n += 1
