@@ -1,0 +1,44 @@
+diff -ruN a/tools/package/verify_slim.ps1 b/tools/package/verify_slim.ps1
+--- a/tools/package/verify_slim.ps1	2026-10-17 15:17:19.908525700 -0500
++++ b/tools/package/verify_slim.ps1	2026-10-17 15:17:45.183651400 -0500
+@@ -307,6 +307,40 @@
+     Write-Host "render data: materials_pbr.json in $pbrMaps map folder(s)"
+ }
+ 
++# ---- package 7 data (Systems 2026-10-17): the files new in package 7 ship, and the late render data ships as the live tree has it.
++# (1) the 10 weapon-collision physmat files (Gameplay's hit-surface lookup), (2) the frontend PC texts, (3) the Opus licence beside the
++# exe, (4) every map_fx_runtime.json (the FX always-include regen) and the lighting.json of the 3 maps with the door / light data
++# byte-equal to F:\Transformers Rebuild\Rebuild\work\render (sha256; checked against the live tree, so run it at build time), (5) the
++# FX always-include templates present in every MP map's map_fx_runtime.json. A miss is a package problem.
++$p7 = @()
++$physmat = @(Get-ChildItem -Path (Join-Path $pkg 'AssetTools\manifests\maps\MP_*\collision_weapon_physmat.json') -ErrorAction SilentlyContinue)
++if ($physmat.Count -ne 10) { $pk.Problems += "package 7: $($physmat.Count) of 10 collision_weapon_physmat.json files" } else { $p7 += 'physmat 10 / 10' }
++if (Test-Path -LiteralPath (Join-Path $pkg 'Rebuild\data\frontend\pc_strings.int')) { $p7 += 'pc_strings.int' } else { $pk.Problems += 'package 7: Rebuild\data\frontend\pc_strings.int missing' }
++if (Test-Path -LiteralPath (Join-Path $pkg 'Rebuild\build\release\bin\licenses\opus\COPYING')) { $p7 += 'licenses\opus' } else { $pk.Problems += 'package 7: bin\licenses\opus\COPYING missing' }
++$liveRender = 'F:\Transformers Rebuild\Rebuild\work\render'
++$same = 0; $want = @()
++if (Test-Path -LiteralPath $renderDir) {
++    foreach ($d in Get-ChildItem -LiteralPath $renderDir -Directory) { if (Test-Path -LiteralPath (Join-Path $d.FullName 'map_fx_runtime.json')) { $want += "$($d.Name)\map_fx_runtime.json" } }
++}
++foreach ($m in 'MP_IAC_Rust', 'MP_ESC_Remnant', 'MP_ESC_BrokenHope') { $want += "$m\lighting.json" }
++foreach ($rel in $want) {
++    $a = Join-Path $renderDir $rel; $b = Join-Path $liveRender $rel
++    if (-not (Test-Path -LiteralPath $a)) { $pk.Problems += "package 7: render\$rel missing"; continue }
++    if (-not (Test-Path -LiteralPath $b)) { continue }   # not in the live tree any more: nothing to compare
++    if ((Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash) { $same++ }
++    else { $pk.Problems += "package 7: render\$rel differs from the live $liveRender (a stale slim_files row?)" }
++}
++$p7 += "late render data $same / $($want.Count) byte-equal to the live tree"
++$tmpl = 'Drain_Blast', 'WarCry_AOE', 'DrainRay_Beam', 'DecoyTrap'
++$fxOk = 0; $fxN = 0
++foreach ($rel in ($want | Where-Object { $_ -like 'MP_*\map_fx_runtime.json' })) {   # the MP maps (the UI levels have no abilities)
++    $fxN++
++    $miss = @($tmpl | Where-Object { -not (Select-String -LiteralPath (Join-Path $renderDir $rel) -Pattern $_ -SimpleMatch -Quiet) })
++    if ($miss.Count) { $pk.Problems += "package 7: $rel lacks the always-include template(s) $($miss -join ', ')" } else { $fxOk++ }
++}
++$p7 += "FX always-include templates in $fxOk / $fxN map_fx_runtime.json"
++Write-Host ("package 7 data: " + ($p7 -join '; '))
++
+ function WaitHold {
+     if (-not $HoldFile) { return }
+     $said = $false
