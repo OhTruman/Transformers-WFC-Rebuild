@@ -680,7 +680,7 @@ diff -ruN a/src/render/gl/FxInactive.inc b/src/render/gl/FxInactive.inc
 +};
 diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
 --- a/src/render/gl/WfcMapFx.cpp	2026-10-16 23:19:24.000000000 -0500
-+++ b/src/render/gl/WfcMapFx.cpp	2026-10-17 06:52:26.429421700 -0500
++++ b/src/render/gl/WfcMapFx.cpp	2026-10-17 06:59:13.237318400 -0500
 @@ -33,6 +33,17 @@
  #include <cstring>
  #include <fstream>
@@ -688,9 +688,9 @@ diff -ruN a/src/render/gl/WfcMapFx.cpp b/src/render/gl/WfcMapFx.cpp
 +#include "render/gl/FxInactive.inc"
 +
 +namespace {
-+// [Systems] WFC_FXINACTIVE=1: map-FX components stop ticking after their authored SecondsBeforeInactive unrendered (UE3);
-+// off by default until the card checks (counters, Off / Faithful expected-change list, eye crops) agree.
-+bool fxInactiveOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXINACTIVE"); return e && e[0] == '1'; }(); return on; }
++// [Systems] WFC_FXINACTIVE (default on; =0 off): map-FX components stop ticking after their authored SecondsBeforeInactive unrendered (UE3);
++// default ON since 2026-10-17: the card checks (counters, Off / Faithful expected-change list, eye crops) agreed; WFC_FXINACTIVE=0 restores the always-tick behaviour.
++bool fxInactiveOn() { static const bool on = [] { const char* e = std::getenv("WFC_FXINACTIVE"); return !(e && e[0] == '0'); }(); return on; } // default ON (Systems rows i-iii agree, 2026-10-17); WFC_FXINACTIVE=0 turns it off
 +const FxInactiveRow* fxInactiveRow(const std::string& component) {
 +    for (const FxInactiveRow& r : kFxInactive) if (component == r.component) return &r;
 +    return nullptr;
