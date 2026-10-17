@@ -62,6 +62,9 @@ void replaceAll(std::string& s, const std::string& a, const std::string& b) {
 }
 
 float srgbToLinear(float c) { return std::pow(c, 2.2f); }   // UE3 FLinearColor(FColor) table
+// Height fog in-scattering (RE GORGE_RUST_HEIGHTFOG_RE s4, native InitFogConstants / FHeightFogSceneInfo): FogInScattering =
+// LightColor (the 2.2 table) x LightBrightness x (1 / ln 0.5), and the VS multiplies it by (s - 1): LightColor x Brightness x (1 - s) / ln 2
+constexpr float kFogInScale = 1.4426950409f;
 
 #if __has_include("core/LoadYield.h")
 #include "core/LoadYield.h"
@@ -1653,7 +1656,7 @@ bool Pipeline::load(const std::string& mapName) {
         l[2] = Fk["StartDistance"].asFloat(0.0f); l[3] = Fk["ExtinctionDistance"].asFloat(1e8f);
         const assets::Json& ck = Fk["LightColor"];
         const float bk = Fk["LightBrightness"].asFloat(0.1f);
-        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk;
+        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk * kFogInScale;
     }
     if (F.isObject() && F["bEnabled"].asBool(true)) {
         fogOn_ = !std::getenv("WFC_NOFOG");
@@ -1691,8 +1694,8 @@ bool Pipeline::load(const std::string& mapName) {
         fogExt_ = F["ExtinctionDistance"].asFloat(1e8f);
         const assets::Json& c = F["LightColor"];
         float br = F["LightBrightness"].asFloat(0.1f);
-        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br, srgbToLinear(c[1].asFloat(255) / 255.0f) * br,
-                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br};
+        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br * kFogInScale, srgbToLinear(c[1].asFloat(255) / 255.0f) * br * kFogInScale,
+                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br * kFogInScale};
     }
 
     {
