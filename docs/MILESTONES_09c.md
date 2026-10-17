@@ -3075,3 +3075,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   vulnerable flags, buddy health-bar markers.
 2026-10-17 12:26 RE: setpiece tank god mode + buddy markers CONFIRMED: the campaign H shortlist is closed except the two low items. The RE lane's
   campaign specification is complete; RE returns to package 7 / online support items.
+2026-10-17 12:29 MERGED 578e21bb Gameplay's online local seat through the wire path (decision A: encodeLocalCommand + the shared seat path; two peers
+  = equal simStateHash at step 1000; direct vs wire 0.001 m / 0.002 deg; SESSIONTEST 32 / 32; offline identical). The GAME SIDE OF
+  LOCKSTEP IS COMPLETE: Systems' transport calls encodeLocalCommand once per step and feeds every decoded command to
+  applyRemoteCommand before World::tick. PARTIAL: local inter-step yaw smoothing online, vehicle muzzle sockets, guided missile.
