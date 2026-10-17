@@ -1,0 +1,216 @@
+diff -ru base/src/render/gl/WfcPipeline.cpp setd/src/render/gl/WfcPipeline.cpp
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 10:19:25.974505600 -0500
++++ setd/src/render/gl/WfcPipeline.cpp	2026-10-17 10:19:26.770233200 -0500
+@@ -119,7 +119,10 @@
+ uniform int uFogOn;
+ uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
+ uniform vec3 uFogIn;
+-uniform int uVertexLM;       // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
++uniform int uFogN;                           // authored height fog layers (1 = the first only)
++uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
++uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
++uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
+ uniform int uVLMBase;
+ uniform sampler2D uVLM;
+ out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
+@@ -132,7 +135,7 @@
+ vec4 heightFog(vec3 p) {
+     if (uFogOn == 0) return vec4(0.0, 0.0, 0.0, 1.0);
+     float camZ = uCamPos.y * 100.0, z = p.y * 100.0, dz = z - camZ;
+-    float minH = -262144.0, maxH = uFogMaxH;
++    float minH = uFogN > 1 ? uFogMinH.x : -262144.0, maxH = uFogMaxH;   // (layers stack as slabs: min = the next layer's height)
+     float frac;
+     if (abs(dz) < 1e-3) frac = (camZ > minH && camZ < maxH) ? 1.0 : 0.0;
+     else {
+@@ -144,7 +147,19 @@
+     float ld = max(d - uFogStart, 0.0) * frac;
+     float sc = exp2(uFogScale * ld);
+     if (ld > uFogExt) sc = 0.0;
+-    return vec4(uFogIn * (1.0 - sc), sc);
++    vec4 r = vec4(uFogIn * (1.0 - sc), sc);
++    // layers 2-4 (UE3 renders up to four height fog layers; one-layer maps never enter the loop): each scatters what is
++    // already there and adds its own in-scattering - rgb = rgb x s + in x (1 - s), a *= s
++    for (int i = 0; i < 3; ++i) {
++        if (i + 1 >= uFogN) break;
++        float mx = uFogL[i].x, mn = i == 0 ? uFogMinH.y : i == 1 ? uFogMinH.z : uFogMinH.w, fr2;
++        if (abs(dz) < 1e-3) fr2 = (camZ > mn && camZ < mx) ? 1.0 : 0.0;
++        else fr2 = abs(clamp((mx - camZ) / dz, 0.0, 1.0) - clamp((mn - camZ) / dz, 0.0, 1.0));
++        float ld2 = max(d - uFogL[i].z, 0.0) * fr2;
++        float s2 = ld2 > uFogL[i].w ? 0.0 : exp2(uFogL[i].y * ld2);
++        r = vec4(r.rgb * s2 + uFogC[i] * (1.0 - s2), r.a * s2);
++    }
++    return r;
+ }
+ 
+ void main() {
+@@ -1271,7 +1286,9 @@
+     dataDir_ = root + "/" + mapName;
+     std::string mj = readText(dataDir_ + "/materials_glsl.json");
+     yieldLoad();
+-    std::string lj = readText(dataDir_ + "/lighting.json");
++    // (WFC_LIGHTING_DIR=<dir>: <dir>/<map>/lighting.json, a regenerated copy for A/Bs)
++    std::string lj = readText([&] { const char* e = std::getenv("WFC_LIGHTING_DIR"); if (!e || !*e) return dataDir_ + "/lighting.json";
++        const size_t s = dataDir_.find_last_of("/\\"); return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/lighting.json"; }());
+     yieldLoad();
+     if (rtInfra_) {   // R1 sun swap data (Systems' tools/systems/vbake): WFC_RT_VBAKE=<dir> (<dir>/<map>/), else <render data>/vbake/
+         const char* vb = std::getenv("WFC_RT_VBAKE");
+@@ -1558,7 +1575,36 @@
+         lights_.push_back(l);
+     }
+ 
+-    const assets::Json& F = L["fog"];
++    // the authored height fog: 'fogs' (every enabled layer, up to 4 - build_lighting.py fogs()) when present, the first
++    // in the members below and the rest in fogL_ / fogC_; else the single 'fog' (first component) of older data
++    const assets::Json& FL = L["fogs"];
++    const bool haveFogs = FL.isArray();
++    const assets::Json& F = haveFogs ? FL[0] : L["fog"];
++    fogN_ = haveFogs ? (int)std::min<size_t>(FL.size(), 4) : 1;
++    for (int k = 0; k < 4; ++k)                      // (sorted by height, highest first: each layer above the next one)
++        fogMinH_[k] = k + 1 < fogN_ ? FL[(size_t)k + 1]["Height"].asFloat(-262144.0f) : -262144.0f;
++    {   // X3 keeps the medium it was tuned on: the single 'fog' (first component) of the data, whatever the layer order
++        const assets::Json& F0 = L["fog"];
++        x3FogOn_ = F0.isObject() && F0["bEnabled"].asBool(true);
++        x3FogMaxH_ = F0["Height"].asFloat(0.0f);
++        x3FogScale_ = -F0["Density"].asFloat(5e-5f) / std::log(2.0f);
++        clearFogIn_ = {0, 0, 0};                       // (the frame clear: this component's in-scattering, as before)
++        if (x3FogOn_) {
++            const assets::Json& c0 = F0["LightColor"];
++            const float b0 = F0["LightBrightness"].asFloat(0.1f);
++            clearFogIn_ = {srgbToLinear(c0[0].asFloat(255) / 255.0f) * b0, srgbToLinear(c0[1].asFloat(255) / 255.0f) * b0,
++                           srgbToLinear(c0[2].asFloat(255) / 255.0f) * b0};
++        }
++    }
++    for (int k = 1; k < fogN_; ++k) {
++        const assets::Json& Fk = FL[(size_t)k];
++        float* l = fogL_[k - 1]; float* cc = fogC_[k - 1];
++        l[0] = Fk["Height"].asFloat(0.0f); l[1] = -Fk["Density"].asFloat(5e-5f) / std::log(2.0f);
++        l[2] = Fk["StartDistance"].asFloat(0.0f); l[3] = Fk["ExtinctionDistance"].asFloat(1e8f);
++        const assets::Json& ck = Fk["LightColor"];
++        const float bk = Fk["LightBrightness"].asFloat(0.1f);
++        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk;
++    }
+     if (F.isObject() && F["bEnabled"].asBool(true)) {
+         fogOn_ = !std::getenv("WFC_NOFOG");
+         fogMaxH_ = F["Height"].asFloat(0.0f);
+@@ -3866,7 +3912,7 @@
+                            dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
+                            maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
+                            P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
+-                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, 0, 0, 0};
++                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, 0, 0};   // (fogN_: the layer uniforms ride in the same block)
+     if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
+     CommonKey& ck = commonKeyById_[P.id];
+     const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
+@@ -3893,6 +3939,11 @@
+         Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
+         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
+         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
++        Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
++        if (fogN_ > 1) {
++            Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
++            Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
++        }
+     }
+     Uniform1i(ULOC(P, "uVertexLM"), 0);
+     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+@@ -8574,7 +8625,9 @@
+     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+     glViewport(0, 0, w, h);
+     // Clear to the fog in-scatter colour: what an infinitely distant ray converges to.
+-    glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
++    // (with several height fog layers the clear keeps the data's single first component, as before the layers - the
++    // sorted first layer is the highest one, e.g. Rust's light-blue haze instead of its zero-brightness ground layer)
++    glClearColor(clearFogIn_.x, clearFogIn_.y, clearFogIn_.z, 1.0f);
+     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+     glx::gpuStamp("world: before the MDI");
+     depthDirty_ = true;
+diff -ru base/src/render/gl/WfcPipeline.h setd/src/render/gl/WfcPipeline.h
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 10:19:26.164156200 -0500
++++ setd/src/render/gl/WfcPipeline.h	2026-10-17 10:19:26.778260900 -0500
+@@ -990,6 +990,11 @@
+     bool fogOn_ = false;
+     float fogMaxH_ = 0, fogScale_ = 0, fogStart_ = 0, fogExt_ = 1e8f;
+     core::Vec3 fogIn_{0, 0, 0};
++    int fogN_ = 1;                                   // authored height fog layers in use (the first in the members above)
++    float fogL_[3][4] = {}, fogC_[3][3] = {};        // layers 2-4: (max height, scale, start, extinction), in-scattering
++    float fogMinH_[4] = {-262144.0f, -262144.0f, -262144.0f, -262144.0f};   // each layer's min height (the next layer's)
++    bool x3FogOn_ = false; float x3FogMaxH_ = 0.0f, x3FogScale_ = 0.0f;   // X3's medium: the data's first 'fog' component
++    core::Vec3 clearFogIn_{0, 0, 0};                 // the frame clear colour: that first component's in-scattering
+ 
+     std::map<std::string, GLuint> texCache_;
+     std::map<std::string, int> progIndex_;
+diff -ru base/src/render/gl/WfcRt.cpp setd/src/render/gl/WfcRt.cpp
+--- base/src/render/gl/WfcRt.cpp	2026-10-17 10:19:26.316177600 -0500
++++ setd/src/render/gl/WfcRt.cpp	2026-10-17 10:19:26.696981900 -0500
+@@ -1224,8 +1224,8 @@
+                     }
+                 const core::Vec3 sc = sun ? sun->color * rtdef::x3Sun() : core::Vec3{0, 0, 0};
+                 fr.volSun[0] = sc.x; fr.volSun[1] = sc.y; fr.volSun[2] = sc.z; fr.volSun[3] = rtdef::x3G();
+-                const float fogPerM = fogOn_ ? -fogScale_ * 0.69314718f * 100.0f * dens : 0.0f;   // (fogScale_ = -Density / ln 2, per UE unit)
+-                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = fogMaxH_ / 100.0f; fr.volFog[3] = haze;
++                const float fogPerM = x3FogOn_ && !std::getenv("WFC_NOFOG") ? -x3FogScale_ * 0.69314718f * 100.0f * dens : 0.0f;   // (X3: the data's first fog component, as tuned; -Density / ln 2 per UE unit)
++                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = x3FogMaxH_ / 100.0f; fr.volFog[3] = haze;
+                 fr.volMisc[0] = rtdef::x3Dist(); fr.volMisc[1] = 64.0f;
+                 fr.volLampK = lampK; fr.volTransK = rtdef::x3Trans(); fr.volHistory = rtdef::x3History(); fr.volLampCore = rtdef::x3LampCore(); fr.volCap = rtdef::x3Cap();
+                 // (v3) the halo lamps: the point / spot lights in view (cull sphere vs the frustum, within 60 m) ranked by
+diff -ru base/tools/render/build_lighting.py setd/tools/render/build_lighting.py
+--- base/tools/render/build_lighting.py	2026-10-17 10:19:26.465689400 -0500
++++ setd/tools/render/build_lighting.py	2026-10-17 10:19:26.704006200 -0500
+@@ -223,6 +223,30 @@
+     return None
+ 
+ 
++def fogs(repo):
++    """Every ENABLED HeightFogComponent of the map's level packages, in package then export order, up to 4 (stock UE3
++    renders up to four height fog layers per view; RE MAP_LIGHTING_REFERENCE: six MP maps author 2-4, Gorge loses three
++    - incl. a dense low layer - to fog()'s first-component rule)."""
++    out = []
++    for pi in range(len(repo.pkgs)):
++        p = repo.pkgs[pi]
++        for i, e in enumerate(p.exports):
++            if p.class_name(e) != 'HeightFogComponent' or 'Default__' in p.obj_name(i + 1):
++                continue
++            f = dict(FOG_DEFAULTS); f.update(repo.obj(p.object_path(i + 1)) or {})
++            if not f.get('bEnabled', True):
++                continue
++            f['height_m'] = f['Height'] * 0.01
++            f['LightColor'] = fcolor_rgb(f.get('LightColor'))
++            f['object'] = p.object_path(i + 1)
++            out.append(f)
++    # stock UE3 FScene::AddHeightFog keeps the list SORTED BY HEIGHT, highest first; the view takes the first 4 and each
++    # layer spans [the next layer's Height, its own Height], the last down to -HALF_WORLD_MAX (RE: the 360 VS constants
++    # FogMinHeight / FogMaxHeight c20 / c21, one float4 each = 4 layers; the order H)
++    out.sort(key=lambda f: -f['Height'])
++    return out[:4]
++
++
+ PF_INVISIBLE, PF_TWOSIDED, PF_PORTAL = 0x1, 0x100, 0x04000000
+ 
+ 
+@@ -773,6 +797,17 @@
+         # (indexed under the _LM outer; umodel exports the ones whose data the ART file carries, skips the rest)
+         print(' '.join(sorted({p.split('.')[-1] for p in r.index if (r.cls(p) or '') == 'LightMapTexture2D'})))
+         return
++    if len(sys.argv) > 3 and sys.argv[1] == '--fogs-only':
++        # <map> <src lighting.json> <out dir>: the same file + 'fogs' (A/B copies without the lightmap export)
++        from ue3obj import map_packages
++        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
++        pkgs, _persistent = map_packages(mapname)
++        d = json.load(open(src, encoding='utf-8'))
++        d['fogs'] = fogs(Repo(pkgs))
++        os.makedirs(out, exist_ok=True)
++        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
++        print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
++        return
+     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
+     from ue3obj import map_packages
+@@ -818,7 +853,7 @@
+                'component_flags': component_flags(mapname),
+                'light_visibility_volumes': light_visibility_volumes(repo, out),
+                'lightmaps': {'props': props, 'atlases': atl},
+-               'lights': L, 'fog': F, 'postprocess': PP},
++               'lights': L, 'fog': F, 'fogs': fogs(repo), 'postprocess': PP},
+               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+     from collections import Counter
+     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
