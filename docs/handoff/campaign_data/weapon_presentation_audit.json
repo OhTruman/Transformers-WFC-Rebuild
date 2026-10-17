@@ -1,0 +1,3947 @@
+[
+ {
+  "id": "PlasmaCannon",
+  "class": "TnWeaponPlasmaCannon",
+  "mesh": "WEP_PlasmaCannon_p.PlasmaCannon_WEPMESH",
+  "data": "WEP_PlasmaCannon_p.PlasmaCannon_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "PowerUp_PlasmaCannon_FX",
+    true
+   ],
+   [
+    "WP_LoopingTail",
+    "MuzzleFlash_PlasmaCannon_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": "MetalDecal_02_MAT_INST",
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "PlasmaCannon_Equip",
+   "WP_PutDown": "PlasmaCannon_Drop",
+   "WP_Fire": "PlasmaCannon_Fire",
+   "WP_Looping": "PlasmaCannon_Charge",
+   "WP_LoopingTail": "PlasmaCannon_Fire",
+   "WP_Reload": "PlasmaCannon_Reload"
+  },
+  "notifies": {
+   "PlasmaCannon_Reload": [
+    "PlayEffect:Reload_PlasmaCannon_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "PlasmaCannon_Idle": [
+    "Sound:IDLE_01"
+   ],
+   "PlasmaCannon_Fire": [
+    "Sound:ANIM_SPIN_FIRE"
+   ],
+   "PlasmaCannon_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "PlasmaCannon_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ]
+  },
+  "projectiles": [
+   {
+    "class": "TnProjectilePlasmaCannonCharge1"
+   },
+   {
+    "class": "TnProjectilePlasmaCannonCharge2"
+   },
+   {
+    "class": "TnProjectilePlasmaCannonCharge3"
+   }
+  ],
+  "spine_recoil": {
+   "TimeDuration": 1.0,
+   "RotAmplitude": {
+    "X": -4000.0,
+    "Y": 3000.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 1.0,
+   "RotAmplitude": {
+    "X": 8000.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 20.0,
+    "Z": 20.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -15.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 20.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -1.0,
+   "RecoilTime": 0.6499999761581421,
+   "RecoilDelay": 0.15000000596046448
+  },
+  "camera_shake": {
+   "Intensity": 0.800000011920929,
+   "Roll": 0.800000011920929,
+   "RollFalloffDuration": 0.4000000059604645,
+   "ShakeFalloffDuration": 0.4000000059604645
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "PowerUp_PlasmaCannon_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ],
+    "MuzzleFlash_PlasmaCannon_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {
+    "MetalDecal_02_MAT_INST": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {
+    "PlasmaCannon_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponPlasmaCannon": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SniperRifle",
+  "class": "TnWeaponSniperRifle",
+  "mesh": "WEP_SniperRifle_p.SniperRifle_WEPMESH",
+  "data": "WEP_SniperRifle_p.SniperRifle_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_Sniper_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 128,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_SniperRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Fire": "SniperRifle_Fire",
+   "WP_Equip": "SniperRifle_Equip",
+   "WP_PutDown": "SniperRifle_Drop",
+   "WP_Reload": "SniperRifle_Reload"
+  },
+  "notifies": {
+   "SniperRifle_Reload": [
+    "PlayEffect:Reload_AssaultRifle_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "SniperRifle_Fire": [
+    "PlayEffect:Shell_AssaultRifle_FX@ShellEject"
+   ],
+   "SniperRifle_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "SniperRifle_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "SniperRifle_Idle": [
+    "Sound:IDLE_02",
+    "Sound:IDLE_01"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": 2000.0,
+    "Y": 6000.0,
+    "Z": -1000.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 10.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 3000.0,
+    "Y": -6000.0,
+    "Z": -0.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 10.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -8.0,
+    "Y": -10.0,
+    "Z": 0.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": 0.5,
+   "PitchAdjustmentDeg": 1.0,
+   "RecoilTime": 0.699999988079071,
+   "RecoilDelay": 0.05000000074505806
+  },
+  "camera_shake": {
+   "Intensity": 0.10000000149011612,
+   "Roll": 0.30000001192092896,
+   "RollFalloffDuration": 0.20000000298023224,
+   "ShakeFalloffDuration": 0.20000000298023224
+  },
+  "heat": {
+   "HeatPerShot": 1.2000000476837158,
+   "HeatCooldownTime": 3.0
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_Sniper_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Tracer_SniperRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {},
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_AssaultRifle_FX": [
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h",
+     "src\\game\\WeaponMesh.cpp"
+    ]
+   },
+   "reload_anim": {
+    "SniperRifle_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponSniperRifle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "AssaultRifle",
+  "class": "TnWeaponAssaultRifle",
+  "mesh": "WEP_AssaultRifle_p.AssaultRifle_WEPMESH",
+  "data": "WEP_AssaultRifle_p.AssaultRifle_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 255,
+    "G": 143,
+    "R": 140,
+    "A": 255
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 5,
+  "default_decal": "MetalDecal_02_MAT_INST",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "AssaultRifle_Equip",
+   "WP_PutDown": "AssaultRifle_Drop",
+   "WP_Fire": "AssaultRifle_Fire",
+   "WP_Reload": "AssaultRifle_Reload"
+  },
+  "notifies": {
+   "AssaultRifle_Fire": [
+    "PlayEffect:Shell_AssaultRifle_FX@ShellEject"
+   ],
+   "AssaultRifle_Reload": [
+    "PlayEffect:None@ClipSocket",
+    "PlayEffect:Reload_AssaultRifle_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "AssaultRifle_Overheat": [
+    "Sound:ANIM_RELOAD"
+   ],
+   "AssaultRifle_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "AssaultRifle_Idle": [
+    "Sound:IDLE_02",
+    "Sound:IDLE_01"
+   ],
+   "AssaultRifle_Equip": [
+    "Sound:ANIM_EQUIP"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 500.0,
+    "Y": 1000.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.5,
+   "RotAmplitude": {
+    "X": 2000.0,
+    "Y": 500.0,
+    "Z": -2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 10.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "PitchAdjustmentDeg": 0.05000000074505806,
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.17000000178813934,
+   "Roll": 0.15000000596046448,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.05999999865889549
+  },
+  "heat": {
+   "HeatPerShot": 0.10000000149011612,
+   "HeatCooldownTime": 1.5
+  },
+  "reload_time": 1.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "MetalDecal_02_MAT_INST": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_AssaultRifle_FX": [
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h",
+     "src\\game\\WeaponMesh.cpp"
+    ]
+   },
+   "reload_anim": {
+    "AssaultRifle_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponAssaultRifle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "src\\game\\WeaponDef.cpp"
+    ]
+   }
+  }
+ },
+ {
+  "id": "IonBlaster",
+  "class": "TnWeaponIonBlaster",
+  "mesh": "WEP_IonBlaster_p.IonBlaster_WEPMESH",
+  "data": "WEP_IonBlaster_p.IonBlaster_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 255,
+    "G": 143,
+    "R": 140,
+    "A": 255
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_IonBlaster_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 5,
+  "default_decal": "MetalDecal_02_MAT_INST",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "IonBlaster_Equip",
+   "WP_PutDown": "IonBlaster_Drop",
+   "WP_Fire": "IonBlaster_Fire",
+   "WP_Reload": "Shooting_Reload_IonBlaster_AP"
+  },
+  "notifies": {
+   "Shooting_Reload_IonBlaster_AP": [
+    "PlayEffect:Reload_AssaultRifle_FX@MuzzleFlash",
+    "PlayEffect:Magazine_IonBlaster_FX@MagSocket",
+    "Sound:ANIM_RELOAD_02",
+    "Sound:ANIM_RELOAD_01"
+   ],
+   "IonBlaster_Fire": [
+    "PlayEffect:Shell_AssaultRifle_FX@ShellSocket"
+   ],
+   "IonBlaster_Idle": [
+    "Sound:IDLE_02",
+    "Sound:IDLE_01"
+   ],
+   "Shooting_Reload_IonBlaster": [
+    "Sound:ANIM_RELOAD_01",
+    "Sound:ANIM_RELOAD_02"
+   ],
+   "IonBlaster_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "IonBlaster_Reload": [
+    "Sound:ANIM_RELOAD_02"
+   ],
+   "IonBlaster_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 500.0,
+    "Y": 1000.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.5,
+   "RotAmplitude": {
+    "X": 2000.0,
+    "Y": 500.0,
+    "Z": -2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 10.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": 0.08500000089406967,
+   "PitchAdjustmentDeg": 0.10000000149011612,
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.17000000178813934,
+   "Roll": 0.15000000596046448,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.05999999865889549
+  },
+  "heat": {
+   "HeatPerShot": 0.10000000149011612,
+   "HeatCooldownTime": 0.8999999761581421
+  },
+  "reload_time": 1.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_IonBlaster_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "src\\game\\WeaponFx.cpp"
+    ]
+   },
+   "default_decal": {
+    "MetalDecal_02_MAT_INST": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_AssaultRifle_FX": [
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h",
+     "src\\game\\WeaponMesh.cpp"
+    ]
+   },
+   "reload_anim": {
+    "Shooting_Reload_IonBlaster_AP": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponMesh.cpp",
+     "src\\game\\WeaponMesh.h"
+    ]
+   },
+   "class": {
+    "TnWeaponIonBlaster": [
+     "src\\frontend\\Hud.h",
+     "src\\game\\CharacterAudio.h",
+     "src\\game\\CharacterAudio.inc"
+    ]
+   }
+  }
+ },
+ {
+  "id": "HeavyPistol",
+  "class": "TnWeaponHeavyPistol",
+  "mesh": "WEP_HeavyPistol_p.HeavyPistol_WEPMESH",
+  "data": "WEP_HeavyPistol_p.HeavyPistol_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 187,
+    "G": 187,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": 0.30000001192092896,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Squib_HeavyPistol_FX",
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "HeavyPistol_Equip",
+   "WP_Fire": "HeavyPistol_Fire",
+   "WP_PutDown": "HeavyPistol_Drop",
+   "WP_Reload": "heavypistol_reload"
+  },
+  "notifies": {
+   "HeavyPistol_Fire": [
+    "PlayEffect:Shell_HeavyPistol_FX@ShellEject"
+   ],
+   "HeavyPistol_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "HeavyPistol_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "HeavyPistol_Idle": [
+    "Sound:IDLE_01"
+   ],
+   "heavypistol_reload": [
+    "Sound:ANIM_RELOAD"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 1000.0,
+    "Y": 2000.0,
+    "Z": 1800.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 10.0,
+    "Z": 15.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": 1200.0,
+    "Y": -1000.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -60.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 10.0,
+    "Z": 0.0
+   },
+   "LocParams": {
+    "Z": "ERS_Zero"
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -1.0,
+   "PitchAdjustmentDeg": 2.0,
+   "RecoilTime": 0.699999988079071,
+   "RecoilDelay": 0.05000000074505806
+  },
+  "camera_shake": {
+   "Intensity": 0.6000000238418579,
+   "Roll": 0.30000001192092896,
+   "RollFalloffDuration": 0.20000000298023224,
+   "ShakeFalloffDuration": 0.20000000298023224
+  },
+  "heat": {
+   "HeatPerShot": 0.20000000298023224,
+   "HeatCooldownTime": 3.5
+  },
+  "reload_time": 1.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Squib_HeavyPistol_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json"
+    ]
+   },
+   "default_decal": {},
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_HeavyPistol_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "heavypistol_reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponHeavyPistol": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "BurstRifle",
+  "class": "TnWeaponBurstRifle",
+  "mesh": "WEP_BurstRifle_p.BurstRifle_WEPMESH",
+  "data": "WEP_BurstRifle_p.BurstRifle_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_BurstRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 128,
+    "G": 255,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": "DecalDefault_MAT",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "BurstRifle_Equip",
+   "WP_PutDown": "BurstRifle_Drop",
+   "WP_Fire": "BurstRifle_Fire",
+   "WP_Reload": "BurstRifle_Reload"
+  },
+  "notifies": {
+   "BurstRifle_Fire": [
+    "PlayEffect:Shell_BurstRifle_FX@ShellEject"
+   ],
+   "BurstRifle_Reload": [
+    "PlayEffect:Reload_BurstRifle_FX@MuzzleFlash",
+    "PlayEffect:None@ClipSocket",
+    "Sound:ANIM_RELOAD"
+   ],
+   "BurstRifle_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "BurstRifle_Idle": [
+    "Sound:IDLE_01",
+    "Sound:IDLE_02"
+   ],
+   "BurstRifle_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "BurstRifle_Overheat": [
+    "Sound:ANIM_RELOAD"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.5,
+   "RotAmplitude": {
+    "X": 1500.0,
+    "Y": -1000.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.5,
+   "RotAmplitude": {
+    "X": 1000.0,
+    "Y": 100.0,
+    "Z": -3000.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 5.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.15000000596046448,
+   "Roll": 0.15000000596046448,
+   "RollFalloffDuration": 0.15000000596046448,
+   "ShakeFalloffDuration": 0.15000000596046448
+  },
+  "heat": {
+   "HeatPerShot": 0.30000001192092896,
+   "HeatCooldownTime": 1.0
+  },
+  "reload_time": 1.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_BurstRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "DecalDefault_MAT": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_BurstRifle_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "BurstRifle_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponBurstRifle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "HeavyMG",
+  "class": "TnWeaponHeavyMG",
+  "mesh": "WEP_HeavyMG_p.HeavyMG_WEPMESH",
+  "data": "WEP_HeavyMG_p.HeavyMG_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_HeavyMG_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash_1",
+   "MuzzleFlash_2",
+   "MuzzleFlash_3"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 128,
+    "G": 128,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_HeavyMG_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 5,
+  "default_decal": "MetalDecal_02_MAT_INST",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "heavymg_equip",
+   "WP_PutDown": "HeavyMG_Drop",
+   "WP_Fire": "HeavyMG_FireSeq",
+   "WP_Reload": "HeavyMG_Reload"
+  },
+  "notifies": {
+   "HeavyMG_FireC": [
+    "PlayEffect:Shell_ElectronPulseRifle_FX@ShellSocket"
+   ],
+   "HeavyMG_Reload": [
+    "PlayEffect:Magazine_HeavyMG_FX@MagazineSocket",
+    "PlayEffect:Reload_HeavyMG_FX@MuzzleFlash_1",
+    "Sound:ANIM_RELOAD"
+   ],
+   "HeavyMG_FireL": [
+    "PlayEffect:Shell_ElectronPulseRifle_FX@ShellSocket"
+   ],
+   "HeavyMG_Fire": [
+    "PlayEffect:Shell_ElectronPulseRifle_FX@ShellSocket"
+   ],
+   "HeavyMG_FireR": [
+    "PlayEffect:Shell_ElectronPulseRifle_FX@ShellSocket"
+   ],
+   "HeavyMG_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "heavymg_equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "HeavyMG_Idle": [
+    "Sound:IDLE_02",
+    "Sound:IDLE_01"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": 1800.0,
+    "Y": 3000.0,
+    "Z": 500.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 5.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -5.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.4000000059604645,
+   "RotAmplitude": {
+    "X": -1000.0,
+    "Y": 500.0,
+    "Z": -250.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 5.0,
+    "Z": 5.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   }
+  },
+  "camera_recoil": {
+   "PitchAdjustmentDeg": 0.20000000298023224,
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.15000000596046448,
+   "Roll": 0.10000000149011612,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.10000000149011612
+  },
+  "heat": {
+   "HeatPerShot": 0.10000000149011612,
+   "HeatCooldownTime": 1.2000000476837158
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_HeavyMG_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_HeavyMG_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "MetalDecal_02_MAT_INST": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_ElectronPulseRifle_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "HeavyMG_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponHeavyMG": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "GrenadeLauncher",
+  "class": "TnWeaponGrenadeLauncher",
+  "mesh": "WEP_GrenadeLauncher_p.GrenadeLauncher_WEPMESH",
+  "data": "WEP_GrenadeLauncher_p.GrenadeLauncher_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_GrenadeLauncher_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": 1.0,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "GrenadeLauncher_Equip",
+   "WP_PutDown": "GrenadeLauncher_Drop",
+   "WP_Fire": "GrenadeLauncher_Fire",
+   "WP_Reload": "GrenadeLauncher_Reload"
+  },
+  "notifies": {
+   "GrenadeLauncher_Fire": [
+    "PlayEffect:Ammo_GrenadeLauncher_FX@AmmoShell"
+   ],
+   "GrenadeLauncher_Reload": [
+    "PlayEffect:Reload_GrenadeLauncher_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "GrenadeLauncher_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ],
+   "GrenadeLauncher_Idle": [
+    "Sound:IDLE_02",
+    "Sound:IDLE_01"
+   ],
+   "GrenadeLauncher_Equip": [
+    "Sound:ANIM_EQUIP"
+   ]
+  },
+  "projectiles": [
+   {
+    "class": "TnProjectileGrenadeLauncher"
+   },
+   {
+    "class": "TnProjectileGrenadeLauncher"
+   }
+  ],
+  "spine_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": 5000.0,
+    "Y": 150.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": -10000.0,
+    "Y": -3000.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 10.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -1.0,
+   "PitchAdjustmentDeg": 0.5,
+   "RecoilTime": 0.6000000238418579,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.5,
+   "Roll": 0.30000001192092896,
+   "RollFalloffDuration": 0.30000001192092896,
+   "ShakeFalloffDuration": 0.30000001192092896
+  },
+  "heat": {
+   "HeatPerShot": 0.699999988079071,
+   "HeatCooldownTime": 3.5
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_GrenadeLauncher_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {
+    "Ammo_GrenadeLauncher_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "GrenadeLauncher_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponGrenadeLauncher": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "Bazooka",
+  "class": "TnWeaponBazooka",
+  "mesh": "WEP_Bazooka_p.Bazooka_WEPMESH",
+  "data": "WEP_Bazooka_p.Bazooka_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "Muzzleflash_FusionCannon_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 5.0,
+   "Radius": 800.0,
+   "LightColor": {
+    "B": 255,
+    "G": 128,
+    "R": 128,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "Bazooka_TransOut",
+   "WP_PutDown": "Bazooka_TransIn",
+   "WP_Fire": "Bazooka_FireBigOne",
+   "WP_Reload": "Bazooka_CoolDown"
+  },
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileBazooka"
+   },
+   {
+    "class": "TnProjectileBazooka"
+   }
+  ],
+  "spine_recoil": {
+   "TimeDuration": 1.0,
+   "RotAmplitude": {
+    "X": 6000.0,
+    "Y": 6000.0,
+    "Z": -3000.0
+   },
+   "RotFrequency": {
+    "X": 5.0,
+    "Y": 5.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": -2000.0,
+    "Y": 150.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -60.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocParams": {
+    "Z": "ERS_Zero"
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -2.0,
+   "PitchAdjustmentDeg": 0.75,
+   "RecoilTime": 0.6000000238418579,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.44999998807907104,
+   "Roll": 0.44999998807907104,
+   "RollFalloffDuration": 0.4000000059604645,
+   "ShakeFalloffDuration": 0.4000000059604645
+  },
+  "heat": {
+   "HeatPerShot": 1.0,
+   "HeatCooldownTime": 0.699999988079071
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "Muzzleflash_FusionCannon_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {
+    "Bazooka_CoolDown": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponBazooka": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "RepairRay",
+  "class": "TnWeaponRepairRay",
+  "mesh": "WEP_RepairBeam_p.RepairBeam_WEPMESH",
+  "data": "WEP_RepairBeam_p.RepairBeam_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 5.0,
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 128,
+    "G": 0,
+    "R": 0,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Looping",
+    "Tracer_RepairBeam_FX"
+   ]
+  ],
+  "default_squib": "Squib_RepairEnemy_FX",
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "RepairBeam_Equip",
+   "WP_PutDown": "RepairBeam_Drop",
+   "WP_Looping": "RepairBeam_Fire",
+   "WP_LoopingTail": "RepairBeam_Fire",
+   "WP_Overheat": "RepairBeam_Reload",
+   "WP_Reload": "RepairBeam_Reload"
+  },
+  "notifies": {
+   "RepairBeam_Reload": [
+    "Sound:ANIM_RELOAD"
+   ],
+   "RepairBeam_Idle": [
+    "Sound:IDLE_01",
+    "Sound:IDLE_02"
+   ],
+   "RepairBeam_Equip": [
+    "Sound:ANIM_EQUIP",
+    "Sound:ANIM_EQUIP"
+   ],
+   "RepairBeam_Drop": [
+    "Sound:ANIM_HOLSTER",
+    "Sound:ANIM_HOLSTER"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 1.0,
+   "RotAmplitude": {
+    "X": 500.0,
+    "Y": -150.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.0,
+   "RotAmplitude": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": 0.4000000059604645,
+   "RecoilTime": 1.0,
+   "RecoilDelay": 0.05000000074505806
+  },
+  "camera_shake": {
+   "Intensity": 0.02500000037252903,
+   "Roll": 0.5,
+   "RollFalloffDuration": 0.05000000074505806,
+   "ShakeFalloffDuration": 0.10000000149011612
+  },
+  "heat": {
+   "HeatPerShot": 0.20000000298023224,
+   "HeatCooldownTime": 2.0
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {},
+   "tracer": {
+    "Tracer_RepairBeam_FX": [
+     "src\\game\\WeaponTable.inc",
+     "src\\game\\World.cpp",
+     "src\\game\\World.cpp.orig"
+    ]
+   },
+   "default_squib": {
+    "Squib_RepairEnemy_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "src\\game\\World.cpp"
+    ]
+   },
+   "default_decal": {},
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {
+    "RepairBeam_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponRepairRay": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\World.cpp",
+     "src\\game\\World.cpp.orig"
+    ]
+   }
+  }
+ },
+ {
+  "id": "EMPShotgun",
+  "class": "TnWeaponEmpShotgun",
+  "mesh": "WEP_EMPShotgun_p.EMPShotgun_WEPMESH",
+  "data": "WEP_EMPShotgun_p.EMPShotgun_WEPDATA",
+  "effects_type": "TnWeaponEffectsTypeExplosive",
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_EMPShotgun_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 255,
+    "G": 128,
+    "R": 128,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Trail_EMPShotgun_FX"
+   ]
+  ],
+  "default_squib": "Squib_EMPShotgun_FX",
+  "squib_pct": null,
+  "squib_max": 13,
+  "default_decal": null,
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "Shotgun_Equip",
+   "WP_PutDown": "Shotgun_Drop",
+   "WP_Fire": "Shotgun_Fire",
+   "WP_Reload": "Shotgun_Reload"
+  },
+  "notifies": {
+   "Shotgun_Reload": [
+    "PlayEffect:Magazine_EMPShotgun_FX@MagazineSocket",
+    "PlayEffect:Reload_EMPShotgun_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "Shotgun_Fire": [
+    "PlayEffect:Shell_EMPShotgun_FX@ShellSocket"
+   ],
+   "Shotgun_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "Shotgun_Idle": [
+    "Sound:IDLE_01",
+    "Sound:IDLE_02"
+   ],
+   "Shotgun_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 1500.0,
+    "Y": 2100.0,
+    "Z": 2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 10.0,
+    "Z": 5.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -20.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": -4000.0,
+    "Y": -4000.0,
+    "Z": 2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 5.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -15.0,
+    "Y": 0.0,
+    "Z": 10.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -1.0,
+   "PitchAdjustmentDeg": 4.0,
+   "RecoilTime": 0.4000000059604645,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.20000000298023224,
+   "Roll": 0.5,
+   "RollFalloffDuration": 0.4000000059604645,
+   "ShakeFalloffDuration": 0.5
+  },
+  "heat": {
+   "HeatPerShot": 0.699999988079071,
+   "HeatCooldownTime": 1.0
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Trail_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_squib": {
+    "Squib_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {},
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_EMPShotgun_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "Shotgun_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponEmpShotgun": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "Shotgun",
+  "class": "TnWeaponShotgun",
+  "mesh": "WEP_Shotgun_p.Shotgun_WEPMESH",
+  "data": "WEP_Shotgun_p.Shotgun_WEPDATA",
+  "effects_type": "TnWeaponEffectsTypeExplosive",
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_EMPShotgun_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 10.0,
+   "Radius": 3000.0,
+   "LightColor": {
+    "B": 255,
+    "G": 128,
+    "R": 128,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Trail_EMPShotgun_FX"
+   ]
+  ],
+  "default_squib": "Squib_EMPShotgun_FX",
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "Shotgun_Equip",
+   "WP_PutDown": "Shotgun_Drop",
+   "WP_Fire": "Shotgun_Fire",
+   "WP_Reload": "Shooting_Reload_Shotgun"
+  },
+  "notifies": {
+   "Shotgun_Reload": [
+    "PlayEffect:Magazine_EMPShotgun_FX@MagazineSocket",
+    "PlayEffect:Reload_EMPShotgun_FX@MuzzleFlash",
+    "Sound:ANIM_RELOAD"
+   ],
+   "Shotgun_Fire": [
+    "PlayEffect:Shell_EMPShotgun_FX@ShellSocket"
+   ],
+   "Shooting_Reload_Shotgun": [
+    "PlayEffect:Reload_EMPShotgun_FX@MuzzleFlash",
+    "PlayEffect:Magazine_Shotgun_FX@MagazineSocket",
+    "Sound:ANIM_RELOAD"
+   ],
+   "Shotgun_Equip": [
+    "Sound:ANIM_EQUIP"
+   ],
+   "Shotgun_Idle": [
+    "Sound:AUTO_SHOT_IDLE_01",
+    "Sound:AUTO_SHOT_IDLE_02"
+   ],
+   "Shotgun_Drop": [
+    "Sound:ANIM_HOLSTER"
+   ]
+  },
+  "projectiles": null,
+  "spine_recoil": {
+   "TimeDuration": 0.800000011920929,
+   "RotAmplitude": {
+    "X": 1500.0,
+    "Y": 2100.0,
+    "Z": 2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 10.0,
+    "Z": 5.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -20.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.6000000238418579,
+   "RotAmplitude": {
+    "X": -4000.0,
+    "Y": -4000.0,
+    "Z": 2000.0
+   },
+   "RotFrequency": {
+    "X": 15.0,
+    "Y": 5.0,
+    "Z": 10.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -15.0,
+    "Y": 0.0,
+    "Z": 10.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 10.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": -1.0,
+   "PitchAdjustmentDeg": 2.0,
+   "RecoilTime": 0.4000000059604645,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.20000000298023224,
+   "Roll": 0.5,
+   "RollFalloffDuration": 0.4000000059604645,
+   "ShakeFalloffDuration": 0.5
+  },
+  "heat": {
+   "HeatPerShot": 0.5,
+   "HeatCooldownTime": 1.0
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Trail_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_squib": {
+    "Squib_EMPShotgun_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {},
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {
+    "Shell_EMPShotgun_FX": [
+     "work\\render\\texture_formats.json",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "reload_anim": {
+    "Shooting_Reload_Shotgun": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponShotgun": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "HomingRocket",
+  "class": "TnWeaponRocketLauncher",
+  "mesh": "WEP_RocketLauncher_p.RocketLauncher_WEPMESH",
+  "data": "WEP_RocketLauncher_p.RocketLauncher_SP_WEPDATA",
+  "effects_type": "TnWeaponEffectsTypeExplosive",
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_HomRocket_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "Brightness": 5.0,
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 128,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    null
+   ]
+  ],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "RocketLauncher_Equip",
+   "WP_PutDown": "RocketLauncher_Drop",
+   "WP_Fire": "RocketLauncher_Fire",
+   "WP_Reload": "RocketLauncher_Reload"
+  },
+  "notifies": {
+   "RocketLauncher_Fire": [
+    "PlayEffect:Exhaust_HomRocket_FX@MuzzleFlash_back"
+   ],
+   "RocketLauncher_Drop": [
+    "Sound:ANIM_HOLSTER",
+    "Sound:ANIM_HOLSTER"
+   ],
+   "RocketLauncher_Idle": [
+    "Sound:IDLE_01",
+    "Sound:IDLE_02"
+   ],
+   "RocketLauncher_Reload": [
+    "Sound:ANIM_RELOAD"
+   ],
+   "RocketLauncher_Equip": [
+    "Sound:ANIM_EQUIP",
+    "Sound:ANIM_EQUIP"
+   ]
+  },
+  "projectiles": [
+   {
+    "class": "TnProjectileHomingRocket"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": {
+   "TimeDuration": 1.0,
+   "RotAmplitude": {
+    "X": -4000.0,
+    "Y": 3000.0,
+    "Z": 0.0
+   },
+   "RotParams": {
+    "Y": "ERS_Zero"
+   },
+   "LocAmplitude": {
+    "X": -10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "hand_recoil": {
+   "TimeDuration": 0.699999988079071,
+   "RotAmplitude": {
+    "X": 8000.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "RotFrequency": {
+    "X": 10.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "LocAmplitude": {
+    "X": -15.0,
+    "Y": 0.0,
+    "Z": 0.0
+   }
+  },
+  "camera_recoil": {
+   "FovAdjustment": 1.0,
+   "PitchAdjustmentDeg": 0.25,
+   "RecoilTime": 0.6000000238418579,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.6000000238418579,
+   "Roll": 0.4000000059604645,
+   "RollFalloffDuration": 0.4000000059604645,
+   "ShakeFalloffDuration": 0.5
+  },
+  "heat": {
+   "HeatPerShot": 0.5,
+   "HeatCooldownTime": 3.0
+  },
+  "reload_time": 2.5,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_HomRocket_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {
+    "RocketLauncher_Reload": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc"
+    ]
+   },
+   "class": {
+    "TnWeaponRocketLauncher": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "RocketVehicle",
+  "class": "TnWeaponRocketVehicle",
+  "mesh": "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH",
+  "data": "WEP_RocketVh_p.Rocket_Vehicle_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_Blaster_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 220,
+    "R": 150,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    null
+   ]
+  ],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectilePlaneRocketTemp"
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "RecoilTime": 0.30000001192092896,
+   "RecoilDelay": 0.05000000074505806
+  },
+  "camera_shake": {
+   "Intensity": 0.20000000298023224,
+   "Roll": 0.20000000298023224,
+   "RollFalloffDuration": 0.20000000298023224,
+   "ShakeFalloffDuration": 0.30000001192092896
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 1.5,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_Blaster_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponRocketVehicle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "AssaultRifleVehicle",
+  "class": "TnWeaponAssaultRifleVehicle",
+  "mesh": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH",
+  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 128,
+    "G": 128,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 5,
+  "default_decal": "DecalDefault_MAT",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.10000000149011612,
+   "Roll": 0.10000000149011612,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.10000000149011612
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 1.5,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "DecalDefault_MAT": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponAssaultRifleVehicle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "TankCannon",
+  "class": "TnWeaponTankCannon",
+  "mesh": "WEP_TankCannon_p.TankCannon_Vehicle_WEPMESH",
+  "data": "WEP_TankCannon_p.TankCannon_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "D_MuzzleFlash_TankCannon_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary"
+  ],
+  "muzzle_light": {
+   "Brightness": 50.0,
+   "Radius": 2000.0,
+   "LightColor": {
+    "B": 150,
+    "G": 100,
+    "R": 150,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Default",
+    "Trail_TankCannon_FX"
+   ]
+  ],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileTankShell"
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "FovAdjustment": -4.0,
+   "RecoilTime": 0.800000011920929,
+   "RecoilDelay": 0.20000000298023224
+  },
+  "camera_shake": {
+   "Intensity": 0.3799999952316284,
+   "Roll": 0.6499999761581421,
+   "RollFalloffDuration": 0.8600000143051147,
+   "ShakeFalloffDuration": 0.7900000214576721
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 2.0,
+  "owner_anims": {
+   "FireAmmoAnimations": [
+    {
+     "AnimationName": "TankShooting_Reload",
+     "BlendInTime": 0.10000000149011612,
+     "BlendOutTime": 0.10000000149011612,
+     "AdditiveAnimation": false,
+     "IsLooping": false
+    }
+   ]
+  },
+  "grep": {
+   "muzzle": {
+    "D_MuzzleFlash_TankCannon_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {
+    "Trail_TankCannon_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponTankCannon": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "HomingRocketVehicle",
+  "class": "TnWeaponHomingRocketVehicle",
+  "mesh": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_WEPMESH",
+  "data": "WEP_HomingRocketVh_p.HomingRocket_Vehicle_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_HomRocket_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": null,
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileHomingRocketVehicle"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "FovAdjustment": 1.0,
+   "RecoilTime": 0.6000000238418579,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.30000001192092896,
+   "Roll": 0.20000000298023224,
+   "RollFalloffDuration": 0.15000000596046448,
+   "ShakeFalloffDuration": 0.20000000298023224
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 2.0,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_HomRocket_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponHomingRocketVehicle": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PlaneAssaultRifle",
+  "class": "TnWeaponAssaultRiflePlane",
+  "mesh": "WEP_AssaultRifleVH_p.AssaultRifle_Vehicle_WEPMESH",
+  "data": "WEP_AssaultRifleVH_p.AssaultRifle_Plane_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 128,
+    "G": 128,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 5,
+  "default_decal": "DecalDefault_MAT",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.10000000149011612,
+   "Roll": 0.10000000149011612,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.10000000149011612
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 1.5,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "DecalDefault_MAT": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponAssaultRiflePlane": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PlaneMachineGun",
+  "class": "TnWeaponPlaneMachineGun",
+  "mesh": "WEP_PlaneMachineGun_p.PlaneMachineGun_WEPMESH",
+  "data": "WEP_PlaneMachineGun_p.PlaneMachineGun_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_AssaultRifle_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 128,
+    "G": 128,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    "Tracer_AssaultRifle_FX"
+   ]
+  ],
+  "default_squib": "Impact_AssaultRifle_FX",
+  "squib_pct": 0.6000000238418579,
+  "squib_max": 6,
+  "default_decal": "DecalDefault_MAT",
+  "impact_sound": "IMPT_WORLD",
+  "bullet_by": "BY",
+  "event_anims": {
+   "WP_Equip": "JetMgVH_Equip",
+   "WP_Fire": "JetMgVH_Fire",
+   "WP_PutDown": "JetMgVH_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "RecoilTime": 0.05000000074505806,
+   "RecoilDelay": 0.25
+  },
+  "camera_shake": {
+   "Intensity": 0.10000000149011612,
+   "Roll": 0.10000000149011612,
+   "RollFalloffDuration": 0.10000000149011612,
+   "ShakeFalloffDuration": 0.10000000149011612
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 2.5,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "tracer": {
+    "Tracer_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponFx.cpp",
+     "src\\game\\WeaponFx.h"
+    ]
+   },
+   "default_squib": {
+    "Impact_AssaultRifle_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\FxLights.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "default_decal": {
+    "DecalDefault_MAT": [
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_glsl.json",
+     "work\\render\\MP_ESC_BrokenHope\\materials_pbr.json"
+    ]
+   },
+   "impact_sound": {
+    "IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\SoundCues.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponPlaneMachineGun": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "PlaneRocket",
+  "class": "TnWeaponRocketPlane",
+  "mesh": "WEP_RocketVh_p.Rocket_Vehicle_WEPMESH",
+  "data": "WEP_RocketVh_p.Rocket_Plane_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Fire",
+    "MuzzleFlash_Blaster_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "WeaponSocket_Primary",
+   "WeaponSocket_Primary2"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 220,
+    "R": 150,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [
+   [
+    "WP_Fire",
+    null
+   ]
+  ],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {},
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectilePlaneRocketTemp"
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": {
+   "RecoilTime": 0.3499999940395355,
+   "RecoilDelay": 0.05000000074505806
+  },
+  "camera_shake": {
+   "Intensity": 0.15000000596046448,
+   "Roll": 0.20000000298023224,
+   "RollFalloffDuration": 0.15000000596046448,
+   "ShakeFalloffDuration": 0.25
+  },
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": 1.5,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {
+    "MuzzleFlash_Blaster_FX": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\texture_formats.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponRocketPlane": [
+     "src\\game\\CharacterAudio.inc",
+     "src\\game\\MuzzleLights.inc",
+     "data\\gameplay\\weapons_mp.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FlakGrenades",
+  "class": "TnWeaponFlakGrenades",
+  "mesh": "WEP_Grenade_p.FlakGrenades_WEPMESH",
+  "data": "WEP_Grenade_p.FlakGrenades_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_LoopingTail",
+    null,
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash_R",
+   "MuzzleFlash_L"
+  ],
+  "muzzle_light": {
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "MAGMA_EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "GrenadeLauncher_Equip",
+   "WP_PutDown": "GrenadeLauncher_Drop",
+   "WP_Fire": "GrenadeLauncher_Fire"
+  },
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileGrenade"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {},
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "MAGMA_EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponFlakGrenades": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "work\\render\\MP_ESC_BrokenHope\\impact_decals.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "KamikazeMines",
+  "class": "TnWeaponKamikazeMines",
+  "mesh": "WEP_KamikazeMine_p.KamikazeMines_WEPMESH",
+  "data": "WEP_KamikazeMine_p.KamikazeMines_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_LoopingTail",
+    null,
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash_R",
+   "MuzzleFlash_L"
+  ],
+  "muzzle_light": {
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "KAMIKAZE_EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "GrenadeLauncher_Equip",
+   "WP_PutDown": "GrenadeLauncher_Drop",
+   "WP_Fire": "GrenadeLauncher_Fire"
+  },
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileKamikazeMine"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {},
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "KAMIKAZE_EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponKamikazeMines": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "HealGrenades",
+  "class": "TnWeaponHealGrenades",
+  "mesh": "WEP_HealGrenades_p.HealGrenades_WEPMESH",
+  "data": "WEP_HealGrenades_p.HealGrenades_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_LoopingTail",
+    null,
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash_R",
+   "MuzzleFlash_L"
+  ],
+  "muzzle_light": {
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "HEAL_EXPL_IMPT_WORLD_PROTRACT",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "GrenadeLauncher_Equip",
+   "WP_PutDown": "GrenadeLauncher_Drop",
+   "WP_Fire": "GrenadeLauncher_Fire"
+  },
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileHealGrenade"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {},
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "HEAL_EXPL_IMPT_WORLD_PROTRACT": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponHealGrenades": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "FlashBangs",
+  "class": "TnWeaponFlashBangs",
+  "mesh": "WEP_FlashBangs_p.FlashBangs_WEPMESH",
+  "data": "WEP_FlashBangs_p.FlashBangs_SP_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_LoopingTail",
+    null,
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash_R",
+   "MuzzleFlash_L"
+  ],
+  "muzzle_light": {
+   "Radius": 700.0,
+   "LightColor": {
+    "B": 0,
+    "G": 0,
+    "R": 255,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": "EMP_EXPL_IMPT_WORLD",
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "GrenadeLauncher_Equip",
+   "WP_PutDown": "GrenadeLauncher_Drop",
+   "WP_Fire": "GrenadeLauncher_Fire"
+  },
+  "notifies": {},
+  "projectiles": [
+   {
+    "class": "TnProjectileFlashBang"
+   },
+   {
+    "class": null
+   }
+  ],
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": null,
+  "grep": {
+   "muzzle": {},
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {
+    "EMP_EXPL_IMPT_WORLD": [
+     "src\\game\\CharacterAudio.inc"
+    ]
+   },
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponFlashBangs": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "ShortSword",
+  "class": "TnWeaponShortSword",
+  "mesh": "WEP_ShortSword_p.ShortSword_WEPMESH",
+  "data": "WEP_ShortSword_p.ShortSword_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "SwordEquip_Red_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 40,
+    "G": 45,
+    "R": 250,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "ShortSword_Equip",
+   "WP_PutDown": "ShortSword_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "SwordEquip_Red_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponShortSword": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "BeatDownClub",
+  "class": "TnWeaponBeatDownClub",
+  "mesh": "WEP_BeatDownClub_p.BeatDownClub_WEPMESH",
+  "data": "WEP_BeatDownClub_p.BeatDownClub_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "SwordEquip_Red_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 40,
+    "G": 45,
+    "R": 250,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "BeatDownClub_Equip",
+   "WP_PutDown": "BeatDownClub_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "SwordEquip_Red_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponBeatDownClub": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "ButterflyAxe",
+  "class": "TnWeaponButterflyAxe",
+  "mesh": "WEP_ButterflyAxe_p.ButterflyAxe_WEPMESH",
+  "data": "WEP_ButterflyAxe_p.ButterflyAxe_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "SwordEquip_Red_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 40,
+    "G": 45,
+    "R": 250,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "ButterflyAxe_Equip",
+   "WP_PutDown": "ButterflyAxe_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "SwordEquip_Red_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponButterflyAxe": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SpikedBat",
+  "class": "TnWeaponSpikedBat",
+  "mesh": "WEP_SpikedBat_p.SpikedBat_WEPMESH",
+  "data": "WEP_SpikedBat_p.SpikedBat_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 133,
+    "R": 171,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "SpikeBat_Equip",
+   "WP_PutDown": "SpikeBat_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponSpikedBat": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "SpikedMace",
+  "class": "TnWeaponSpikedMace",
+  "mesh": "WEP_SpikedMace_p.SpikedMace_WEPMESH",
+  "data": "WEP_SpikedMace_p.SpikedMace_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 133,
+    "R": 171,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "SpikedMace_Equip",
+   "WP_PutDown": "SpikedMace_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponSpikedMace": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "TortureSword",
+  "class": "TnWeaponTortureSword",
+  "mesh": "WEP_TortureSword_p.TortureSword_WEPMESH",
+  "data": "WEP_TortureSword_p.TortureSword_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 235,
+    "G": 54,
+    "R": 231,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "TotureSword_Equip",
+   "WP_PutDown": "TotureSword_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponTortureSword": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "ViciousAxe",
+  "class": "TnWeaponViciousAxe",
+  "mesh": "WEP_ViciousAxe_p.ViciousAxe_WEPMESH",
+  "data": "WEP_ViciousAxe_p.ViciousAxe_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 133,
+    "R": 171,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "ViciousAxe_Equip",
+   "WP_PutDown": "ViciousAxe_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponViciousAxe": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "Maul",
+  "class": "TnWeaponMaul",
+  "mesh": "WEP_Maul_p.Maul_WEPMESH",
+  "data": "WEP_Maul_p.Maul_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 250,
+    "G": 133,
+    "R": 171,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "Maul_Equip",
+   "WP_PutDown": "Maul_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponMaul": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "Axe",
+  "class": "TnWeaponAxe",
+  "mesh": "WEP_Axe_p.Axe_WEPMESH",
+  "data": "WEP_Axe_p.Axe_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "SwordEquip_Red_FX",
+    true
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 40,
+    "G": 45,
+    "R": 250,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "Axe_Equip",
+   "WP_PutDown": "Axe_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "SwordEquip_Red_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponAxe": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ },
+ {
+  "id": "Hammer",
+  "class": "TnWeaponHammer",
+  "mesh": "WEP_Hammer_p.Hammer_WEPMESH",
+  "data": "WEP_Hammer_p.Hammer_WEPDATA",
+  "effects_type": null,
+  "muzzle_flashes": [
+   [
+    "WP_Looping",
+    "MeleeEquip_Purple_FX",
+    false
+   ]
+  ],
+  "muzzle_sockets": [
+   "MuzzleFlash"
+  ],
+  "muzzle_light": {
+   "LightColor": {
+    "B": 40,
+    "G": 45,
+    "R": 250,
+    "A": 0
+   }
+  },
+  "muzzle_flash_duration": null,
+  "tracers": [],
+  "default_squib": null,
+  "squib_pct": null,
+  "squib_max": null,
+  "default_decal": null,
+  "impact_sound": null,
+  "bullet_by": null,
+  "event_anims": {
+   "WP_Equip": "Hammer_Equip",
+   "WP_PutDown": "Hammer_Drop"
+  },
+  "notifies": {},
+  "projectiles": null,
+  "spine_recoil": null,
+  "hand_recoil": null,
+  "camera_recoil": null,
+  "camera_shake": null,
+  "heat": {
+   "HeatPerShot": null,
+   "HeatCooldownTime": null
+  },
+  "reload_time": null,
+  "owner_anims": {
+   "EquipAnimationMask": "CAMT_UpperBody"
+  },
+  "grep": {
+   "muzzle": {
+    "MeleeEquip_Purple_FX": [
+     "src\\game\\WeaponTable.inc",
+     "work\\render\\MP_ESC_BrokenHope\\map_fx_runtime.json",
+     "work\\render\\MP_ESC_Remnant\\map_fx_runtime.json"
+    ]
+   },
+   "tracer": {},
+   "default_squib": {},
+   "default_decal": {},
+   "impact_sound": {},
+   "shell": {},
+   "reload_anim": {},
+   "class": {
+    "TnWeaponHammer": [
+     "src\\game\\CharacterAudio.inc",
+     "data\\gameplay\\weapons_mp.json",
+     "data\\gameplay\\weapon_sockets.json"
+    ]
+   }
+  }
+ }
+]
