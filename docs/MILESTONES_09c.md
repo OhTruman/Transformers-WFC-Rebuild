@@ -2163,3 +2163,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   hold. Rendering's gate now stops on PERF_HOLD. X3 CODE COMPLETE + building (one D3D12 shader, inject + temporal /
   integrate modes; 8x8 slice atlas through the existing u0 share, private history ping-pong; GL apply at each
   pixel's depth; rtdef env statics survive release()); first runs after the reboot.
+  2026-10-16 19:07 NO REBOOT TONIGHT (user away, cannot approve / reboot): GPU CURFEW 00:00 for every lane until the
+  user's morning reboot (pool ~10.6 GB by ~03:00). Card: respin gate to ~20:45 (Systems' RT + HD rows inside),
+  then Rendering's X3 captures + one tuning round until 00:00; Gameplay CPU checks after the block, crops by slot;
+  AssetTools stays blocked on its prompt -> CROSSPLAY_PLATFORM_FEASIBILITY.md reassigned to Systems (docs,
+  overnight). Morning: the user reboots, AssetTools' prompt gets approved, X3 tuning resumes.
