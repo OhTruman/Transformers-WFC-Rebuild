@@ -1,0 +1,21 @@
+diff -ruN a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-17 11:32:04.224351100 -0500
++++ b/src/game/World.cpp	2026-10-17 11:32:04.235388700 -0500
+@@ -6819,12 +6819,16 @@
+ const PhysmatImpactRow* physmatImpactRow(const std::string& physmat) {
+     static const bool off = std::getenv("WFC_PHYSMATIMPACT") && std::getenv("WFC_PHYSMATIMPACT")[0] == '0';
+     if (off || physmat.empty()) return nullptr;
++    // TEST ONLY: WFC_PHYSMATFORCE=<PhysicalMaterial path> replaces every world hit's surface (harness pairs of the rule on any map;
++    // Gameplay's lookup itself has its own WFC_PHYSMATLOG self-test). Unset: the hit's own surface.
++    static const std::string forced = std::getenv("WFC_PHYSMATFORCE") ? std::getenv("WFC_PHYSMATFORCE") : "";
++    const std::string& pm = forced.empty() ? physmat : forced;
+     static const std::unordered_map<std::string, const PhysmatImpactRow*> idx = [] {
+         std::unordered_map<std::string, const PhysmatImpactRow*> m;
+         for (const PhysmatImpactRow& r : kPhysmatImpacts) m.emplace(r.physmat, &r);
+         return m;
+     }();
+-    auto it = idx.find(physmat);
++    auto it = idx.find(pm);
+     return it == idx.end() ? nullptr : it->second;
+ }
+ }  // namespace
