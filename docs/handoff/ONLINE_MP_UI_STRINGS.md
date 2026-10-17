@@ -162,3 +162,52 @@ Lobby / scoreboard / HUD (all original):
 | total | 38 | 45 |
 
 No new movie; every NEW text has a key in `$WfcPC.Online` or `$WfcPC.Voice` (data/frontend/pc_strings.int).
+
+## 11. Phase 2: parties, invites, browser (ONLINE_MP_PHASE2_FLOWS.md, D12-D15)
+
+Original texts first; NEW keys go in `$WfcPC.Party`, `$WfcPC.Friends` and `$WfcPC.Web` (pc_strings.int).
+
+### 11.1 Party (PartyLobby_GFX, MessagePrompt_GFX)
+
+| element | kind | key | text | note |
+|---|---|---|---|---|
+| Invite to Party | row (NEW, under Join Game) | NEW $WfcPC.Party.InviteToParty | "Invite to Party" | same form as the Join Game row |
+| Invite to Party hint | hint | NEW $WfcPC.Party.InviteToPartyDesc | "Get a code your friends can use to join your party." | 52 characters |
+| code panel title | text | $UIText.Lobby.PartySessions | "Party" | original; the panel itself is phase 1's (code, address, copy, privacy) |
+| member list header | header | $UIText.Lobby.PartyMembersHeader | "Party Members" | original |
+| waiting for the leader | popup | $UIText.MessagePrompts.PartyLobbyWaitingForPartyLeader | "Waiting for party leader..." | original |
+| leave button | button | $UIText.MessagePrompts.PartyLobbyWaitingForPartyLeaderLeaveParty | "Leave party" | original |
+| leave confirm | popup | $UIText.MessagePrompts.LeaveParty / LeavePartyConfirm | "Quit Party" / "Are you sure you want to leave the party?" | original |
+| party too large | popup | $UIText.MessagePrompts.PartyTooLargeToPlayGameTypeTitle / ...Message | "Party Too Large" / "`g only supports a party size of `i. You have `n players in your party." | original; `g mode name, `i limit, `n size |
+| join elsewhere disbands | popup | $UIText.MessagePrompts.JoinFriendGameAndDisbandMessage | "Joining this game will disband your party. Continue?" | original |
+| new leader (D12) | lobby line | NEW $WfcPC.Party.NewLeader | "`k is now the party leader." | the original has no leader-change text (R8) |
+| party error | popup | $UIText.Errors.PartyLobbyError | "An unrecoverable error occurred in the party lobby. Please try again later." | original (PartyClosed with an error) |
+
+### 11.2 Friends List and invites (OnlineFriendsMenu_GFX)
+
+| element | kind | key | text | note |
+|---|---|---|---|---|
+| menu row / hint | row | $UIText.Lobby.InviteFriends / InviteFriendsDesc | "Friends List" / "See online friends and manage game invites." | original |
+| empty list | text | $UIText.OnlineFriends.NoFriendsOnline | as shipped | original; a fresh profile (D15) |
+| last seen | PresenceInfo | NEW $WfcPC.Friends.LastPlayed | "Last played `d" | `d = the date in the system's short format |
+| online (mailbox) | PresenceInfo | $UIText.OnlineFriends.Online | as shipped | original; only when the relay mailbox reports it (D13) |
+| invite sent | popup | NEW $WfcPC.Friends.InviteCodeCopied | "Invite code copied. Send it to `p." | replaces GameInviteSentMessage when no mailbox delivers it |
+| invite sent (mailbox) | popup | $UIText.MessagePrompts.GameInviteSentMessage | "Game invite sent to `p" | original |
+| already invited | popup | $UIText.MessagePrompts.GameInvitePreviouslySent | "You have already invited `p to this game. Continue?" | original |
+| invite received (mailbox) | popup / row | $UIText.MessagePrompts.GameInviteReceivedMessage / $UIText.OnlineFriends.Invited | "`p wants to play" / "Sent you a game invite!" | original |
+| invite join failed | popup | $UIText.MessagePrompts.JoinGameInviteFailedTitle / ...Message | "Join Game Failed" / "Could not join the game. The game is full or no longer available." | original |
+| mailbox unreachable | popup | $UIText.MessagePrompts.JoinGameInviteFailedNotLoggedIntoOnlineServiceMessage | as shipped | original |
+| pin / remove | prompts | $UIText.MessagePrompts.AddFriendTitle / AddFriendMessage; $UIText.OnlineFriends.RemoveFriend | as shipped | original; local only (I3) |
+
+### 11.3 Browser (web shell and GFx)
+
+| element | kind | key | text | note |
+|---|---|---|---|---|
+| data folder | page (DOM) | NEW $WfcPC.Web.SelectData | "Select the folder with your extracted game data." | as section 9 |
+| click to start | page (DOM) | NEW $WfcPC.Web.ClickToStart | "Click to start." | as section 9 |
+| cannot host | popup message (title: D2's "Unable to Host") | NEW $WfcPC.Web.HostNeedsPC | "Hosting needs the PC version." | B3 |
+| host refuses browsers | join failure | NEW $WfcPC.Web.NoBrowserPlayers | "This game does not accept browser players." | B2: a code without a relay room |
+| Player Limit cap reason | hint | NEW $WfcPC.Web.PlayerLimitCapped | "Limited to 5 v 5 while a browser player is in the lobby." | 56 characters (D10) |
+| microphone refused | Voice Chat row hint | NEW $WfcPC.Web.MicDenied | "Microphone access was not allowed." | B5 |
+
+Phase 2 count: 17 reused original, 11 NEW.

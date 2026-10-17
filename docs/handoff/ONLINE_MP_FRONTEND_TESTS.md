@@ -146,3 +146,24 @@ WFC_NOINTERACT=1.
 5. S17-S23: session end and return paths.
 6. The real session layer (Systems) replaces FakeSession behind the same interface; S1-S24 keep running against the
    fake.
+
+## 7. Phase 2: parties, invites, browser (ONLINE_MP_PHASE2_FLOWS.md, D12-D15)
+
+Same rig (OnlineRig + FakeSession, the party session scripted like the game session); expected texts from the catalog.
+
+| id | flow | script (session side) | assertions |
+|---|---|---|---|
+| P1 | make a party | Invite to Party -> PartyOpened(code) | the code panel titled "Party" with the code; Party Members lists the leader |
+| P2 | join a party | Join Game prompt with a party code -> joinParty; PartyMemberJoined for the others | level PartyLobby, party role Member; the member list shows every member with platform tags |
+| P3 | member waits | (P2 state) | popup "Waiting for party leader..." with "Leave party"; mode / Private Match rows not actionable; IsHost false |
+| P4 | follow | leader hosts -> PartyFollow(code) to members | each member runs the phase 1 join with that code; one scripted JoinFailed leaves that member in the party lobby with the phase 1 failure popup, the others in the game lobby |
+| P4b | party too large | party of 11, team mode | "Party Too Large" with `g / `i / `n filled; no host() recorded |
+| P5 | leave | Leave party -> confirm | leaveParty() recorded; back to the offline party lobby; no popup |
+| P5b | leader loss (D12) | PartyLeaderChanged(B, code) after the leader drops; a browser member older than B is skipped | B's lobby actionable, the others keep the waiting popup; the line "`k is now the party leader." once; with a direct code the panel shows the new code; the last member leaving closes the party |
+| P6 | after the match | the game ends; members leave the game lobby | each member returns to the party lobby, still in the party |
+| I1 | recent players (D15) | a lobby with A and B, then a new profile | Friends rows A, B newest first with "Last played"; at most 50 kept; [RecentPlayers] written only when not empty; the fresh profile shows "No friends online" |
+| I2 | invite (D13) | SendGameInvite(A) with and without the mailbox | always the code on the clipboard + "Invite code copied..."; with the mailbox also sendInvite(A, code) and "Game invite sent to A"; a second invite asks "already invited" |
+| I2b | invite received (mailbox) | InviteReceived(A, code) | row "Sent you a game invite!", popup "A wants to play"; accept -> the phase 1 join with that code; JoinFailed -> "Join Game Failed" |
+| B2 | browser joins (D14) | a relay room code; JoinFailed(Version) for a code without a room | the phase 1 join flow; the "does not accept browser players" text |
+| B3 | browser cannot host | Create Game in the browser build | "Unable to Host" + "Hosting needs the PC version."; no host() / hostParty() as leader |
+| B6 | tab close | PeerDropped(Web member) in a match | the phase 1 S16 line and bot swap |
