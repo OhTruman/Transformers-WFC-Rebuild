@@ -2253,3 +2253,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   follows the authored fog's height falloff (floor 0.0015); the integrated in-scatter is capped per channel
   (x3cap 0.25, new defaults key -> Systems re-pairs the table); shafts only from the shadow-tested sun / lamps.
   After 21:40: Streets match frames X3 on / off (steps 300 / 1560 / 1740), then Gorge / Molten, then int_cand12.
+  2026-10-16 21:10 FAST DELTA on e224ebf2 (X3 head): REGRESSIONS, 1 product failure: fast.resources.mapswitch private
+  memory peak 6,071 MB (> 6,000 rule; checkpoints 5,576-5,868; route run 5,594 normal, ends clean) = X3 adds ~200-
+  500 MB system memory at the map switch -> Rendering checks froxel / history / staging duplication + release at
+  map change for round 3. PASS 59 / KNOWN 1 / HARNESS 0 otherwise. X3 cost hold 21:12-~21:40.
