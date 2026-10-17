@@ -40,7 +40,9 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
 | Streets haze | Streets' volumetric haze (per-map X3 medium) | Rendering | open |
 | Mine saturation, Realistic | the point-blank explosion's exposure / flash term (RENDERING_PACKAGE7_POLISH.md item 1); Faithful unchanged by evidence (SYSTEMS_HDR_SHADER_DECODE.md 6b90296c + RE HDR_SCENE_PATH_RE.md 43d7bc1) | Rendering (Systems evidence done) | open |
 | Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | open |
-| Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | open; death light ends with the pawn (Gameplay 800e552e) |
+| Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | merged 1e11edc2 (+ Camera.h roll be0cac77); scorch gated off until the DeathDecal_MAT regen (Systems); gib materials = Systems' compile (pending) |
+| Volumetric Lighting setting | the X3 row in Settings > Graphics (pc_strings.int) and its setter | Frontend / Rendering | merged 72eec90c (row); setter merging |
+| Online session boundary | ISession / FakeSession (src/frontend/Session.h; no behaviour; GameFlow::setSession unset = offline) | Frontend | merged 3a19b47a |
 | D3D12 presenter exit hang | 1 in 32 exits stuck in the kernel (known issue below; dump in Experimental work/leak/armB_d3d12present/run-32) | Rendering | open |
 | Death-body cost | one draw per settled body, TLAS / BLAS per body (package 6 item 1: +0.67..+1.94 ms p90 at 63 bots RT off, +0.17..+0.49 ms p50 RT on) | Gameplay + Rendering | open |
 
@@ -50,6 +52,20 @@ The user's package 7 scope (2026-10-17), in the order given; visual items first.
   TnPlayerController.DeathSound (BL_LVL_HUD_INTERFACE.HUD_DEATH_POWER_DOWN) now plays, 2D, at every local death (killed,
   suicide, KillZ / fall); our data had it but nothing played it. Audio only: SIMHASH identical (18,000 steps); paced Rust
   check 2 / 2 local deaths with the cue started in the mixer, no channel refused.
+
+- **Death presentation, patch 2** (Gameplay, integration 1e11edc2; Camera.h roll be0cac77): the faithful death picker
+  (first authored entry whose types are active; momentum by pawn-space quadrant), one ragdoll skeletal gib per robot death
+  (GIB_Body / GIB_LowBody2 in the reference pose, at rest), the authored death camera and the killer cam after 3 s; the
+  original's per-entry death effects at the authored sockets (Systems DeathFx.inc: Poke / Energy / TractorBeam / SingleShot
+  differ from package 6; vehicle deaths have no skeletal gib or scorch, as the original) and the gibbed camera shake; the
+  death light ends with the pawn. Systems' FX-count row: 0 mismatches over 230 deaths, 209 / 215 effects at the authored
+  socket. Pending: the scorch decal (gated off until DeathDecal_MAT is regenerated with its lerp mask fixed) and the gib
+  materials (untextured until compiled).
+- **Off-screen effects freeze as the original's** (Systems SYSTEMS_FX_INACTIVE, integration 24c6618c, default on;
+  WFC_FXINACTIVE=0 off): placed emitters and pickup highlights stop updating after 1 s unrendered (their authored
+  ParticleSystemComponent.SecondsBeforeInactive) and resume where they froze. Streets 35 / 45 and Molten 62 / 75 effects
+  eligible, frozen 45 % / 38 % of their ticks; switch-off byte-identical (Molten within its own 1-2 level run noise); the
+  switch-on differences are resumed particles at another phase (crops in docs/handoff/fxinactive/). No cost change.
 
 [PLACEHOLDER: one bullet per merged item - what the user sees, commit, switch (WFC_*=0 off), Realistic-only / identity
 note, measured cost.]
