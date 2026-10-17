@@ -2586,3 +2586,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   movies conversion running (Logo test 220 / 220 frames, 10 Opus tracks); FINDING: the movie subtitle sidecar header '100' is
   ticks per second (centiseconds), so the older ExtractedAssets/movies/*.subtitles.json labels raw ticks as ms (10x too early):
   the campaign FMV player must use the new out/movies JSON. Presenter loop 41 / 64 at 08:41, clean.
+2026-10-17 08:45 Merged ea1fc228 FRONTEND_PRESENTATION_AUDIT_3_RE.md part (1) versus HUD (no radar in the original; kill feed rules; four small
+  HUD gaps -> Frontend after group F). Staged: Gameplay GAMEPLAY_CAMERA_RECOIL.patch (41c52c86: per-shot orbit pitch step, FOV kick,
+  per-shot shake on the shared shaker, jet transform blend 1.0 s, HUD buff list; SIMHASH identical) dry-runs clean, merges on its
+  4-min firing crop sheet. Systems: material fix (B) candidate ready (matB/render, 118 entries, manifest docs/handoff/matscan_b/);
+  authored FX / sound wiring item APPROVED (~13 h CPU + 1 h card: generic notify dispatcher from 3,554 authored notifies, weapon
+  notifies for every visible pawn, body notifies on Gameplay's onAnimNotifyWindow hook, physmat impact overrides on AssetTools'
+  triangle -> physmat index, R-only muzzles, flight loops, no-hit ability sounds; CUELOG run first). Package 7 date now ~Oct 21.
+  Card after the loop (45 / 64 at 08:45): base check 6 min -> (A) switch -> Frontend 10 -> Gameplay 4 -> Rendering 20 -> (B) ~100.
