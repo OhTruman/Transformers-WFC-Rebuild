@@ -2420,7 +2420,7 @@ void World::stepRemainder(float dt) {
     static const char* aimPitchEnv = std::getenv("WFC_AIMPITCH");
     if (const char* ap = aimPitchEnv)     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
-    if (!(onlineSeats_ && !localDead_)) { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }   // online: in the pool
+    if (!onlineSeats_) { sysprof::Scope sp(sysprof::Anim); player_.pawn().updateAnimation(dt); }   // online: in the pool while spawned (as every seat)
     drainAnimNotifies();   // [Systems] authored body notifies: every participant's anim windows of this step
     { sysprof::Scope sp(sysprof::WpnPres); tickWeaponPresentation(dt); }
     { sysprof::Scope sp(sysprof::Vehicle); tickVehicleBoost(dt); }
