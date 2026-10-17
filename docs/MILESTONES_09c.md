@@ -2714,3 +2714,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   "choose a character" gate text); the proximity cue in that shot is the "Near" tag; the in-match HUD talker list needs Gameplay's
   Remote participants (item 4). The rename pair capture runs by coordinate in the next small gap. Frontend next: Iconic Mode
   (estimate first), then the phase 2 online flows doc.
+2026-10-17 09:47 Frontend finding (CONFIRMED AS): the original has no Iconic Mode lobby option; iconic play comes from the party lobby TYPE
+  (Escalation GTS_SingleTeamGame and co-op campaign set iconic = true; versus GTS_TeamGame = custom characters only), so the iconic
+  wheel and Claimed / Unclaimed belong to Escalation / co-op. DECISION: (a) build the lobby-type flag path + the iconic wheel
+  faithfully (reachable when those modes exist) + (b) a versus "Iconic Characters" Game Mode Options row as a labelled PC
+  extension, default Off (versus byte-identical); ~2.5-3 days Frontend, not package 7-blocking; Gameplay side = host claim
+  validation per team. Rendering's 10-min x10slot (int_base12 = integration 53a12618 vs int_cand28 = + particle commits + flash
+  term threshold 1.5) is ready and goes right after Systems' slot, before the (B) eye pass.
