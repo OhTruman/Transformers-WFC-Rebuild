@@ -50,3 +50,19 @@ instead of (0.27, -0.02) (and matc counted 5 type violations: vec4 + vec4 into a
 vec2(C.x, C.y) and vec2(C.z, C.w) exactly as the two AppendVectors' pins say (1 violation left, unrelated). This is the same
 root cause (the output pin), applied to an AppendVector instead of a lerp alpha - a fidelity correction, in the expected-change
 list for the vending machines' screens.
+
+## (B) eye-pass findings (Experimental MATB_matB.md, 2026-10-17): both authored per the shipped PS
+- **Milky glass** (Gorge 'firefight' glass floor, Debris 'reflective' pool):
+  - Entries: IAC_Glass2_Dark_MATINST (Gorge) and IAC_Glass_Trans_MATINST (Debris), both MICs of ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT
+    (BLEND_Additive, MLM_Unlit). IAC_Glass_Opaque_MATINST (ENV_Refractive_Glass_Opaque_Mat, its alphas 1.0) changes slightly too.
+  - Authored graph: FresnelColor_Intensity is used twice, Multiply_11030.A full vector and Multiply_9356.B pin 4 (the MIC's alpha 3.0).
+  - Shipped PS (Seed ShaderCache_12865 @ 275968):
+    - l.39 `mul r5.yzw, r5.y, c7{UniformVector_1}.xxyz` (by the rgb);
+    - l.40 `mad r5.zw, r5.zw, c7{UniformVector_1}.wwww, r2.xy` and l.43 `mad r5.y, r5.y, c7{UniformVector_1}.wwww, r2.x` (by the alpha).
+  - Verdict: the original multiplies by the rgb and then by the alpha intensity, as the candidate does. Live squared the colour and never
+    applied the x3, so live was 5-20x too dark per channel. The additive fresnel sheen is authored. An OPAQUE-looking sheet would instead
+    point at our BLEND_Additive compositing (a renderer question, not data).
+- **Berth mid-ground veil:** the LightVolume_Base_MAT family entries (LightVolumeCool_LessLessDense, LightVolumeWarmThink, KON
+  LightVolumeCool). Step 1 decoded this family's shipped PS (Seed ShaderCache_6631 @ 89371): the alpha is read alone as a scalar
+  intensity. So the brighter volumes are the authored intensity.
+- **Outcome:** (B) switches in whole (Integration).
