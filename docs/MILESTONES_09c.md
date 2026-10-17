@@ -2188,3 +2188,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   RT gate PASS incl. rtlights + defaults 27 / 27, HD runtime level 2 PASS 3505 + 498 + Modern on); package 5 kept as
   playtest_slim_398b27ef; 4078e47b deleted; F: 128 GB. x3-gate.sh + the busy watchdog synced (d0a6e8e5, c1597d0a).
   Card = Rendering's for x3f1 until 00:00.
+  2026-10-16 19:46 CAMPAIGN PREP (Systems, fill-in): CAMPAIGN_AUDIO_DIALOG.md (work order: sublevel audio streaming,
+  SeqAct_Conversation, dialog manager, subtitles, InterpTrackSound, anim-notify sounds, FaceFX last) +
+  CAMPAIGN_FACEFX_FORMAT.md + tools/systems/fxa/: the 22 .fxa = FaceFX 1.7 archives (FACB 1710, big-endian), 14
+  face bones per robot (33 on KON Megatron), 3,580 dialogue animations linked to BL_DX_SWITCHBOARD cues; the
+  animation block decoded (curves: node index, i16 times, i8 values; 3,505 / 3,579 blocks land exactly); not yet:
+  name-table widths, master bone list / face graph, value scale, interpolation, the KON exceptions.
