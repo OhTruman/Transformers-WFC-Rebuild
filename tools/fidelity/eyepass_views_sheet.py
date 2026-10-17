@@ -24,6 +24,7 @@ def colourful(a):
 def mask(h, w):
     m = np.ones((h, w), bool); m[int(h * 0.46): int(h * 0.54), int(w * 0.47): int(w * 0.53)] = False; return m   # crosshair only (no HUD in views)
 
+cvals = {}
 rows = ["", f"## {TITLE} (fixed cameras from {VDIR or 'tools/fidelity/views'}; difference from " + LAB.get(modes[0], modes[0]) + ")", "",
         "| map | view | mode | mean luminance change (0-255) | brighter (+) / darker (-) | contrast ratio | colourfulness change | pixels changed % |",
         "|---|---|---|---|---|---|---|---|"]
@@ -51,9 +52,18 @@ for m in maps:
             if j == 0: ref = a; continue
             if ref is None or ref.shape != a.shape: continue
             k = mask(*a.shape[:2]); la, lb = lum(ref)[k], lum(a)[k]
+            cvals.setdefault(mo, []).append(float(lb.std() / max(la.std(), 1e-3)))
             rows.append(f"| {NAMES.get(m, m)} ({m}) | {v} | {LAB.get(mo, mo)} | {np.abs(lb - la).mean():.1f} | {(lb - la).mean():+.1f} | {lb.std() / max(la.std(), 1e-3):.2f} | "
                         f"{colourful(a[k]) - colourful(ref[k]):+.1f} | {(np.abs(a - ref).max(-1)[k] > 24).mean() * 100:.1f} |")
     sheet.save(os.path.join(O, f"views_{m}.png")); print(f"{m}: views_{m}.png ({len(vs)} views x {len(modes)} modes)")
+# the authored views' own contrast floor (Integration 2026-10-16: a haze that flattens the views but not the match sheets must still
+# fail): the all-view mean contrast ratio vs Off per mode, against EYE_VIEWS_CONTRAST_MIN (default = the checkpoint 4078e47b's own
+# views: Realistic 1.47, + Enhanced 1.50 over 25 views); only for the authored views (light-facing extras are report-only)
+if not VDIR:
+    vfl = dict(kv.split("=") for kv in os.environ.get("EYE_VIEWS_CONTRAST_MIN", "real=1.47,realhd=1.50").split(",") if "=" in kv)
+    fl = [f"- views contrast floor {LAB.get(mo, mo)}: all-view mean {np.mean(cvals[mo]):.2f} over {len(cvals[mo])} views vs floor {float(vfl[mo]):.2f} -> "
+          f"{'OK' if round(float(np.mean(cvals[mo])), 2) >= float(vfl[mo]) - 1e-9 else 'BELOW FLOOR'}" for mo in modes[1:] if mo in vfl and cvals.get(mo)]
+    if fl: rows += [""] + fl
 md = os.path.join(O, "EYEPASS.md"); t = open(md).read() if os.path.exists(md) else f"# Eye pass - {os.path.basename(O)}\n"
 t = t.split("\n## " + TITLE)[0].rstrip("\n") + "\n" + "\n".join(rows) + "\n"
 open(md, "w").write(t); print("\n".join(rows[-8:]))
