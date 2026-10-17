@@ -69,6 +69,9 @@
     - PlaneRocket bursts of 4 at 0.15 s, then a 0.75 s BurstDelay (sim-side firing: goes with the per-weapon recoil re-baseline);
     - projectile flight loops (*.TRAIL_LP / *_FLIGHT_LP) are not played: Systems (audio).
   - Systems takes the shell / reload notify FX.
+- **Queued for Systems (after the weapon items):**
+  1. **World::onAnimNotifyWindow(matchPlayer, animSet, sequence, t0, t1, backwards, weight):** one call per active sequence per pawn per step; a loop wrap splits into two windows. Presentation only.
+  2. **The hit-surface physmat:** AssetTools/manifests/maps/<MAP>/collision_weapon_physmat.json (physmats[], meshes{runs [first_tri, count, physmat_index]}, glb_sha256). At load, expand to a per-triangle uint16 beside the weapon collision triangles (skip and log on a sha mismatch); return it from CollisionWorld::segmentHit / the weapon trace; carry it in the impact event to Systems' spawnImpact / impact sound.
 - **Queued (proposed, after the perf levers, batched with transforming actors):** the dying vehicle keeps collision until the gib (blocks pawns / projectiles / traces; car / tank 0.2-0.75 s, jet 4-5 s), and the hull gib blocks the world + hitscan (RE VEHICLE_DEATH_PRESENTATION_RE.md 2babd61). Sim-side, so an identity change.
 - **Added to the queue (after hover):** the 32 TnTransformingWorldActor doors / bridges have no collision
   (`docs/handoff/MP_TRANSFORMING_ACTORS.md` + AssetTools `manifests/maps/mp_transforming_actors.json`). Plan: dynamic sets from the
