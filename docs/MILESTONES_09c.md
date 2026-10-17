@@ -2746,3 +2746,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   INCONCLUSIVE (the post-recoil match has no explosion inside the captured steps; ordinary frames untouched, F = 0): extended
   SHOTMATCH re-run in a later gap. Height-fog layers built (rt2 5b72c076 + 315c9843: all enabled layers sorted by height, slab
   min heights; Gorge 4 / Rust 2): 15-min A/B + identity after the Frontend's 4-min capture gap (10:04), then the (B) eye pass.
+2026-10-17 10:05 RE lane PROVISIONALs sweep COMPLETE (part 2 merged 95c199f2): correction to part 1: a whitespace objective Description is NOT a
+  clear (34 of 41 setters clear; A1's 7 " " are no-ops) -> Frontend loader + AssetTools; UseSubtitles = story vs barks (HIGH);
+  runtime characters confirmed (AICD -> ROBODEF; PresetIconicCharacters per chapter); D3A / D3B = chapters 3 / 4; 13 / 15 Kismet
+  handlers resolved (UseTurret consumer in an undecompiled TransContent class, DisableShooting unknown: RE lane's next item);
+  A4 Checkpoint_14441 by design; FaceFX clamp 0..1 (HIGH). Rendering Set C (particle modules; RENDERING_P7_SET_C_PARTICLES.patch
+  bd63223e) applied on integration, Debug build OK; the map_fx_runtime.json regen for the 10 MP maps is running (old files backed
+  up; gate = only fields / fields_source keys differ); commit after the gate.
