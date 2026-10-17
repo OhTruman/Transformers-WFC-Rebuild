@@ -29,8 +29,8 @@ if (mode === 'crops') {
     'WFC_MATCH_URL=MP_IAC_Streets?GameModeTag=TDM?BotsFriendly=3?BotsEnemy=4?PointsToWin=1000'];
   const scenes = [
     ['corpse_10', ['WFC_MATCH_SECONDS=55', 'WFC_CORPSESTAGE=1', 'WFC_CORPSESTAGE_DIST=10'], '280,2800,20', '600'],
-    ['deathcam_robot', ['WFC_MATCH_SECONDS=20', 'WFC_DEATHCAMSTAGE=robot'], '200,1200,10', '300'],
-    ['deathcam_vehicle', ['WFC_MATCH_SECONDS=20', 'WFC_DEATHCAMSTAGE=vehicle'], '200,1200,10', '300'],
+    ['deathcam_robot', ['WFC_MATCH_SECONDS=20', 'WFC_DEATHCAMSTAGE=robot'], '200,1500,10', '300'],
+    ['deathcam_vehicle', ['WFC_MATCH_SECONDS=20', 'WFC_DEATHCAMSTAGE=vehicle'], '200,1500,10', '300'],
   ];
   for (const [scene, env, frames, to] of scenes) for (const [arm, t] of [['base', 'p2b'], ['new', 'p2']]) {
     const r = W + bs + 'crop_' + scene + '_' + arm; fs.mkdirSync(r + bs + 'shots', {recursive: true});
