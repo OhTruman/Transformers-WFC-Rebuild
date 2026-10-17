@@ -2207,3 +2207,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   look-back, byte-identical required) + a 16v16 refusal count; then Experimental's corpse arm (int_gcb / int_gcn /
   int_gcn + NOCORPSE, target within 0.1 ms of NOCORPSE) before 00:00; merge on PASS. X3 gate floors final
   (90df7714): match 1.26 / 1.28, views 1.42 / 1.45, checkpoint values printed.
+  2026-10-16 20:09 GPU-CORPSE CROPS round 1: FAIL on the melee Defrag body (the queued GPU-skinned draw ignores
+  setDrawEnergyDeath: renders undissolved; renderer bug -> Rendering asked to carry energy-death per queue entry;
+  Gameplay latches Defrag bodies to the CPU path meanwhile); other bodies differ only at rounding level (1-2 at
+  silhouette edges; one frame 24 px max 91) = GPU-vs-CPU skinning noise pending Rendering's confirmation; 16v16:
+  0 refusals / 0 rows-full. Rerun of the crops granted on the rebuilt int_gcn.
