@@ -2893,3 +2893,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   equal; on BrokenHope + Streets ONE manifest entry (Energon_Lava_Mat) stays live in the tested after arm while the candidate
   differs -> asked Experimental (skip or guard?) and Systems (where visible, what changed); the switch installs exactly what the
   pass tested. AssetTools reruns review.py on the frozen after root before the switch. Frontend PACKAGE_7_PLAYTEST_GUIDE_MENUS.md merged.
+2026-10-17 10:58 (B) lava discrepancy explained: Experimental's matb_root.ps1 wrote the manifest list with a UTF-8 BOM, so the FIRST entry
+  (Energon_Lava_Mat, present only on Streets + BrokenHope) never matched; fixed (utf-8-sig). Streets' after arm reruns inside the
+  pass (~6 min; CARD FREE ~11:35), plus a BrokenHope lava view pair if a view reaches it. The switch installs the candidate
+  (manifest rebuild) verified against the fixed after root.
