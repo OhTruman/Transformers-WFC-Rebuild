@@ -3312,3 +3312,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Rendering before the flare merge: Reflection_01's constant OcclusionScaling 1 (must survive occlusion unless the material
   multiplies by TEXCOORD3), Base_SUN's warm tint (2.45, 0.5, 0.5) x DistMap_Color vs our neutral glow; doors2: shot interval
   needed (if 30 Hz frames, the tube door opens ~5x too fast vs the 1.70 s TransOut).
+2026-10-17 15:06 ONLINE PHASE 1 MILESTONE MET on e5bc5a22: Systems' lan / typical / bad / burst + a new rttjump profile (host -> client 50 -> 250
+  ms one-way at 30-60 s): all exit 0 / 0, 6001 ticks each, every hash equal; D rose 5 -> 15 on the RTT jump. Plus Experimental's
+  independent row (lan / typical / bad, 4,201 ticks, replay agrees). Remaining for online: a two-PC test (needs the user).
+  Quality finding: auto-D uses srtt / 2 as the one-way latency, so asymmetric latency under-provisions D (client stalled 24 s in
+  rttjump); fix approved: lead-based D (per-peer min lead in PONG, raise by the shortfall, cap 15). Disk: packages 4 + 5
+  deleted, F: 16 -> 60 GB; package 6 = Rebuild-Systems/work/playtest_slim (renamed at promotion).
