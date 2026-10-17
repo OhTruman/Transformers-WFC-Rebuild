@@ -3209,3 +3209,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   slot. Trail2 (Rendering): the Molten arc is the AUTHORED TF_Death_MED_FX streak burst the old path never drew (local-space burst on
   a stationary socket); projectile chains physical; limb-trail length authored (19 m in 2 s), fade curves to confirm -> a close-up
   eye check in the next slot, then merge.
+2026-10-17 14:00 Gameplay gap verdicts: wobble INVALID (run_gap.ps1 lacked WFC_RENDER_DATA: both archive exes ran the LEGACY renderer and read
+  identical; also contaminated by Experimental's net peers) -> 4-min rerun right after Systems' slot; firing pair: no regression,
+  no visible change (EmpShotgun's id already matched; drive had no kick either way); the camera follow-up stands on the data-side
+  check. 1772 split fixed (player bot's direct weapon write); the 1299 + 1772 patch comes together. Card order: Systems (running)
+  -> Gameplay 4 -> Frontend 5 -> Experimental 10.
