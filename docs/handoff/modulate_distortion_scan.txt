@@ -1,0 +1,52 @@
+MAT FX_Materials_p.Materials.BlastSphere_Death_MAT | MICs 0 []
+   FX FX_Corruptor_p.FX.AE_Blast_FX | map refs: A1_IAC_Thumper_Cine_m, D1_ORB_DarkEnergon_DGN_m
+   FX FX_Explosives_p.FX.Exp_Death_FX | map refs: A1_IAC_Base_m, A1_IAC_DecoPlaza_Vig_m, A2_KON_BASE_m, A3_COR_Base_m, A3_COR_OmegaFacility_Cine_m, A3_COR_Routing2C_Design_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D1_ORB_Crash2B_VIG_m, D1_ORB_Space_VIG_m, D2_COR_Base_m, D3A_IAC_Base_m, D3A_IAC_City2B_VIG_m, D3A_IAC_Court_VIG_m, D3B_IAC_Base_m, D3B_IAC_BottomLedge_VIG_m, D3B_IAC_BottomLift2_VIG_m, D5_OME_BASE_m, DES_COR_GHealthCrate_DSYS_p, DES_COR_ShieldGenerator_DSYS_p, DES_Escalation_DSYS_p, DES_NEU_EBarrel_p, DES_Prisoner_p
+   FX FX_Explosives_p.FX.Exp_Death_Lrg_FX | map refs: A2_KON_BASE_m, A3_COR_Intro_Cine_m, A4_ORB_Base_m, D2_COR_Base_m, D5_OME_BASE_m, DES_COR_Monitors_DSYS_p, DES_IAC_OrreryDestructibles_p
+   FX FX_Explosives_p.FX.Exp_Death_XLrg_FX | map refs: D5_OME_BASE_m, DES_COR_AmbientMovers_p, DES_COR_DoorA_DSYS_p
+   FX FX_Explosives_p.FX.TF_Death_Energy_Med_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3A_IAC_CourtTrans_DESIGN_m, D3B_IAC_Base_m, D5_OME_BASE_m, DES_IAC_EnergonTank_p, DES_IAC_WallPanelSignDSYS_p, DES_ORB_NerveCenter_DSYS_p
+   FX FX_Explosives_p.FX.TF_Death_LRG_FX | map refs: A1_IAC_Elevator_Design_m, A1_IAC_Intr1_Vig_m, A1_IAC_Strts0_Design_m, A5_TRY_BASE_m, D1_ORB_Crash2A_VIG_m, D1_ORB_DataCenter_VIG_m, D1_ORB_Space_VIG_m, D3A_IAC_City1_CINE_m, DES_Escalation_DSYS_p, DES_IAC_LedgeDrivingDestruct_p, DES_ORB_SpaceMine_p, DES_TrypticonDestDSYS_p, ENV_IAC_SentinelArena_p
+   FX FX_Explosives_p.FX.TF_Death_MED_FX | map refs: A1_IAC_Base_m, A1_IAC_DecoPlaza_Vig_m, A2_KON_BASE_m, A2_KON_IntroWalk_Vig_m, A3_COR_Base_m, A3_COR_Intro_Cine_m, A3_COR_OmegaFacility_Cine_m, A4_ORB_Base_m, A4_ORB_DebrisIntro_DSN_m, A4_ORB_Relay2Int_DSN_m, A4_ORB_Relay2Int_VIG_m, A5_TRY_BASE_m, D1_ORB_Base_m, D1_ORB_Crash2B_VIG_m, D1_ORB_DarkEnergon_VIG_m, D1_ORB_DataCenter_VIG_m, D2_COR_Base_m, D2_COR_Cave_Design2_m, D2_COR_Gorge_01_VIG_m, D3A_IAC_Alley1_VIG_m, D3A_IAC_Base_m, D3A_IAC_City1_CINE_m, D3A_IAC_City1_VIG_m, D3A_IAC_City2B_VIG_m, D3A_IAC_Court_VIG_m, D3A_IAC_Drive2_DESIGN_m, D3A_IAC_Sentinel_DESIGN_m, D3B_IAC_Base_m, D3B_IAC_Lift1_VIG_m, D3B_IAC_TunnelDrop_DSN_m, D5_OME_BASE_m, DES_OME_ArmSpikes_p
+   FX FX_Explosives_p.FX.TRYP_CORRUPTER_EXPL | map refs: A5_TRY_BASE_m, DES_TrypticonDestDSYS_p
+   FX FX_Explosives_p.FX.TRYP_CORRUPTER_SPAWN | map refs: A5_TRY_BASE_m, DES_TrypticonDestDSYS_p
+   FX FX_Level_Generic_p.FX.ShieldGen_PowerUp_FX | map refs: A1_IAC_DecoInt_Design_m, A2_KON_Dungeons_Design_m, D2_COR_Gorge_01_VIG_m
+   FX FX_Multiplayer_p.FX.Drain_Blast_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_PlasmaCannon_p.FX.PowerUp_PlasmaCannon_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D2_COR_Gorge_02_VIG_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_PlasmaCannon_p.FX.Trail_PlasmaCannon_Lrg_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3A_IAC_Court_VIG_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_PlasmaCannon_p.FX.Trail_PlasmaCannon_Med_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_Shield_p.FX.Shield_Slam_Brute_FX | map refs: -
+   FX FX_Shield_p.FX.Shield_Slam_HoloBrute_FX | map refs: -
+   FX FX_SoundWave_p.FX.Rumble_Charge_Impact_FX | map refs: -
+   FX FX_SoundWave_p.FX.Rumble_GroundPound_FX | map refs: A2_KON_Soundwave_Vig_m, CINE_D2_SandalIntro_p, ENV_CORE_DropShip_p
+   FX FX_SoundWave_p.FX.SoundWave_AOE_FX | map refs: A2_KON_Soundwave_Vig_m, A4_ORB_CogRoom_DSN_m
+   FX FX_TankCannon_p.FX.Tank_AoE_Lrg_FX | map refs: D3A_IAC_CityTank_DESIGN_m
+   FX FX_TankCannon_p.FX.Tank_AoE_Robo_FX | map refs: A4_ORB_PreRelay1_DSN_m
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+MAT FX_Materials_p.Materials.Distortion_Cloud_MOD_MAT | MICs 0 []
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+MAT FX_Materials_p.Materials.Ring_Distort_MOD_MAT | MICs 0 []
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+MAT FX_Materials_p.Materials.ScreenSplatter_01_MAT | MICs 1 ['FX_Materials_p.MatInst.EnergonSplatter_03_MAT_INST']
+   FX FX_Screen_p.FX.Screen_EnergonBloodsplatter_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m, FX_Materials_p
+MAT FX_Materials_p.Materials.Trail_Distort_MOD_MAT | MICs 1 ['FX_Materials_p.Materials.Trail_Distort_MOD_01_MAT_INST']
+   FX FX_Multiplayer_p.FX.WarCry_Buff_01_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_Multiplayer_p.FX.WarCry_Buff_02_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_Multiplayer_p.FX.WarCry_Buff_03_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_SoundWave_p.FX.AudioBeam_Tracer_FX | map refs: A2_KON_Soundwave_Vig_m
+   FX FX_Transformers_p.FX.Ax_DoorOpener_Blast_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A5_TRY_BASE_m
+   FX FX_Transformers_p.FX.Ax_DoorOpener_Buildup_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A5_TRY_BASE_m, A5_TRY_Outro_CINE_m
+   FX FX_Transformers_p.FX.DarkEnergon_Beam_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   FX FX_Transformers_p.FX.Teleport_Char_FX | map refs: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m, FX_Materials_p
+MAT FX_Materials_p.Materials.Trail_DrainRay_MOD_MAT | MICs 0 []
+   other referencing packages: A1_IAC_Base_m, A2_KON_BASE_m, A3_COR_Base_m, A4_ORB_Base_m, A5_TRY_BASE_m, D1_ORB_Base_m, D2_COR_Base_m, D3A_IAC_Base_m, D3B_IAC_Base_m, D5_OME_BASE_m
+MAT FX_Materials_p.Materials.BlastShell_MAT | MICs 0 []
+   FX FX_Navigation_p.hover_jump_Lrg_A_FX | map refs: A3_COR_OmegaGate_Cine_m
+   FX FX_Navigation_p.hover_jump_Lrg_FX | map refs: D5_OME_BASE_m
+   FX FX_Navigation_p.hover_jump_Sm_FX | map refs: -
+   FX FX_OmegaSupremeAE_p.FX.Omega_RightHand_fireball_FX | map refs: D3B_IAC_LevelIntro_CINE_m, D5_OME_BASE_m
+   FX FX_Trypticon_p.FX.Squib_Mouth_Mortar_FX | map refs: A5_TRY_BASE_m, A5_TRY_DSN_m
+   FX FX_Trypticon_p.FX.Trail_Head_Mortar_FX | map refs: A5_TRY_BASE_m
+   FX FX_Trypticon_p.FX.Trail_Missiles_FX | map refs: A5_TRY_BASE_m, D2_COR_Gorge_01_VIG_m
+   FX FX_Trypticon_p.FX.Trail_Mouth_Mortar_FX | map refs: A5_TRY_BASE_m, A5_TRY_DSN_m
+   other referencing packages: A4_ORB_Base_m, A5_TRY_BASE_m, D5_OME_BASE_m
