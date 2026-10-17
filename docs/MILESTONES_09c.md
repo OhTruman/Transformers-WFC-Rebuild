@@ -3036,3 +3036,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:57 MP_REVERB_ROOMS_RE.md merged: reverb = Kismet mixer presets switched by trigger volumes (230 MP actions resolved); the
   authored.db preset-name gap (860 empty) explains AssetTools' missing presets on 3 maps -> Systems checks our match reverb
   against the per-map json and designs the proximity-voice reverb on the same rooms.
+2026-10-17 11:59 MERGED e19924a6 Gameplay remote PARTIAL actions (aimPoint bit 31, killstreak, Plasma charge, repair beam, HardLock, jammer /
+  disruptor owners, Shockwave delay; SESSIONTEST 30 / 30; offline identical; guided missile still local-only). Transforming
+  actors: Remnant Smart reversals 4.3 / min vs 1.0 with 349 nav cells blocked by the doors (Classic helped by a piece recompute,
+  Smart not) -> Gameplay investigates before posting. Reverb: our AmbientAudio applies the rooms per Touch today; two gaps
+  (UnTouched links on Rust / Remnant / Debris restore the outer room; empty preset names on 3 maps) -> Systems' package 7 audio
+  item from RE's per-map json + a ~6-min windowed check later; voice reverb keys off the same current room (c81c9040).
