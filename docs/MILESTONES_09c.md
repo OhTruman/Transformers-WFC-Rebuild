@@ -3144,3 +3144,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Experimental's independent identity row = b7d3588f (expect the known 602 split until Gameplay's fix).
 2026-10-17 13:23 MERGED 6f701256 Frontend member-view seat-order test (L3; fillOnlineLaunch reviewed: matches the launch record). Experimental's
   independent identity row runs on b7d3588f (transport half now; full PASS after Gameplay's two local-pawn fixes).
+2026-10-17 13:24 Rendering ETA CARD FREE ~13:55 (x13 took 53 min; x15 trimmed to its 3 before arms, superseded by x16's light-mapped doors).
+  Early verdicts: x13 identity 10 / 10 byte-identical; flash PASS (Gorge near-white 64.9 -> 60.8 %, inside the 55-62 bar, SIMHASH
+  equal); haze exposure small (Rust dark floor -4 levels, Streets < 2) and the Rust grey-blue floor is present in OFF too = the fog
+  layer itself, not exposure (report pending); Remnant light present in Off / Faithful as an authored cyan pool; Trail2: body trails
+  fired out of view (inconclusive), Molten Off shows a NEW blue electric-arc ribbon on a robot that base14 never drew -> template
+  to identify before calling it authored.
