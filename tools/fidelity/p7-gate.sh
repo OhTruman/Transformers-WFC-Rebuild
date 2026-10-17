@@ -14,7 +14,7 @@ O=work/p7gate/$h; mkdir -p $O; L=$O/p7gate.log
 st() { echo "$(date +%T) $*" | tee -a $L; }
 export WFC_MUTE=1 WFC_NOINTERACT=1 PYTHONDONTWRITEBYTECODE=1
 ITEMS=${P7_BASE_ITEMS:-"tools/fidelity/gatebase/hover_cfca1717_srcgame.patch tools/fidelity/gatebase/headless_runner_be54be6d_af4d.patch tools/fidelity/gatebase/TRANSACT_sim_only_af4d.patch"}
-BN=p7_$h; BASE=work/ab/fast_af4d073_$BN
+BN=p7_$h; BASE=${P7_BASE:-work/ab/fast_af4d073_$BN}   # (P7_BASE: an already built + verified base, e.g. built for an earlier candidate with the same sim)
 if [ "$PH" = pre ]; then
   st "P7 GATE pre: head $H; base items: $ITEMS"
   [ -d work/ab/fast_$h/build-release/bin ] || { powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref $H -Name fast_$h -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party > $O/build_head.log 2>&1; powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target work/ab/fast_$h -Alias m9c_$h >> $O/build_head.log 2>&1; }

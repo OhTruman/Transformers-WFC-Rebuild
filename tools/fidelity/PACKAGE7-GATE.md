@@ -59,11 +59,11 @@ First sim change: cfca1717 (2026-10-17).
     are already treated that way.
   - **SIMHASH is always checked.** The sim side stays provable, because the windowed lockstep and eye-pass runs log SIMHASH every
     step: lockstep-ab's "same match" and the eye pass's simhash.txt (6,001 lines per run). Any identity row checks it first.
-- **The camera recoil enters the base too** (package 7 note, Integration 2026-10-17). 1f1d4e17's camera recoil steps the local orbit
-  pitch on each local shot - for the local PlayerBot that pitch is its aim, so base and head split at step 5215 (31 v 32; the bot's
-  burst lands on p61 vs p44). WFC_NORECOIL does NOT help: it skips only pawn_->notifyFired() (skeletal recoil), not onLocalShot's
-  pitch step (Experimental's headless re-run with it: still 5215, the head's SIMHASH stream unchanged). Gameplay ports the pitch step
-  into the sim-only base diffs; the gate arms run without extra switches.
+- **Base verified against 057aded3 / ab855fe7** (2026-10-17 15:3x). work/ab/fast_af4d073_p7_057aded = af4d0731 + hover +
+  headless runner + Gameplay's TRANSACT_sim_only_af4d.patch + WEAPON_sim_only_af4d.patch. Headless, Streets lockstep 600-9600,
+  seed 1234, PlayerBot, 31 v 32: same match as 057aded3 True and as the final head ab855fe7 True (all steps); negative control
+  (base + TRANSACT alone) differs from step 1558 (Gameplay's own check: 1558 too). The earlier 5215 split was the missing weapon
+  batch; the recoil explanation is withdrawn (no camera port needed).
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
