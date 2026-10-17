@@ -3160,3 +3160,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:27 Molten blue arc IDENTIFIED (RE): Trail_FusionCannon_FX, the Bazooka PROJECTILE trail drawn on the firer = a Trail2 source-binding bug
   in cand31, not authored -> Trail2 HELD until projectile trails follow the projectile and the Molten pair is re-shot; the Remnant
   light and the exposure item are unaffected.
+2026-10-17 13:27 Rendering: Trail2 suspect = the projectile FX instance spawns its first particles before its first transform update, then the
+  ribbon chains them to the flying projectile (a 3 m arc across the firer for 0.35 s); a ~4-min Molten Off FXTEST granted after x16
+  on the same hand-over to name the system and log per-ribbon positions; CARD FREE after it (~14:00).
