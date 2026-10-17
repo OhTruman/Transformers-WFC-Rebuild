@@ -113,14 +113,19 @@ sheet): Streets 1.15 | 1.17, Gorge 1.32 | 1.28, Debris 1.14 | 1.14, Rust 1.27 | 
 | Berth | 602 | 25 |
 | Debris | 559 | 30 |
 
-- **Volumetric light (X3)** (froxel volumetrics; Rendering 2a3a1d33 base, e003ccc5 round 2, 607baafd - integration
-  b09bc018 / 3ff6b4b8 / 28696d67; WFC_X3=0 off): sun shafts cut by the geometry (one ray-traced shadow ray per froxel; indoors
+- **Volumetric light (X3)** (froxel volumetrics; Rendering 2a3a1d33 base, e003ccc5 round 2, 607baafd, round 3 1bfced9a,
+  round 4 b9d1f3ad - integration b09bc018 / 3ff6b4b8 / 28696d67 / c0a901d2 / 32fa75eb; WFC_X3=0 off): sun shafts cut by the geometry (one ray-traced shadow ray per froxel; indoors
   the sun is blocked), lamp halos from the 4 shadowed lamps with a 2 m inverse-square core, the transient lights in the
-  medium, the authored height fog plus a thin haze floor as the medium; 160 x 90 tiles x 64 slices to 120 m with temporal
+  medium (x 0.2, with the same core), the authored height fog plus a thin haze floor following its height falloff as the medium, the integrated
+  in-scatter capped per channel (0.2: no corridor greys the frame); 160 x 90 tiles x 64 slices to 120 m with temporal
   reprojection, applied before the X1 tone curve. Per-map medium: Gorge density 0.1 / haze 0.0015 / lamp 1, Molten haze
-  0.001 (its shafts keep their gaps); on X3 frames the X1 contrast is 1.20. Realistic only (Off / Faithful byte-identical,
+  0.001 (its shafts keep their gaps), Streets haze 0.0007; on X3 frames the X1 contrast is 1.20. Realistic only (Off / Faithful byte-identical,
   5 / 5 + 5 / 5, SIMHASH 088bd3b99da5768e x4). Authored views X3 on vs off: contrast 0.94-1.08 (mean ~1.02), brightness
-  -5 %; sun-facing views 0.58-0.71 (looking into the sun) [PLACEHOLDER: the x3-gate result and the cost at 1440p].
+  -5 %; sun-facing views 0.58-0.71 (looking into the sun). x3-gate (cand13 = round 4): match sheets 1.27 / 1.27 against
+  the 1.26 / 1.28 floors (Realistic + Enhanced mean 0.005 under its floor, noted and accepted), authored views 1.47 / 1.50
+  at the checkpoint (floors 1.42 / 1.45), no veil on the Streets match frames; cost +0.4-0.6 ms p50 at 1440p. Rounds 1-3
+  failed on the match sheets (a uniform grey fog down long corridors in firefights), which round 3's transient core, height
+  haze and cap and round 4's values fixed.
 - **Molten's lava lights the scene** (584c873b, Rendering e233a641; WFC_RT_GIEMISSIVE = 4 in Realistic): with the
   surface-colour fix the lava's emissive reaches the bounce light; on lava-facing views rock over a lava basin reads
   contrast 2.13 (gain 1) -> 2.29 (gain 4, a heat glow; 8 reads as a red lamp) vs Off.
@@ -160,11 +165,11 @@ sheet): Streets 1.15 | 1.17, Gorge 1.32 | 1.28, Debris 1.14 | 1.14, Rust 1.27 | 
 | tiled transient lights | WFC_TLTILED=0 | on |
 | rows 1 / 8 / 6 / 2 / 5 | WFC_RT_CHARSUN / _CHARLAMPCAL / _REFLTL / _SUNSHARE / _PROBEFILL | on |
 | Enhanced: original specular | WFC_PBR_ORIGSPEC=0 (restores the GGX lobe) | on |
-| X3 volumetrics | WFC_X3=0; WFC_X3_DENSITY / _HAZE / _SUN / _LAMP / _TRANS / _G / _DIST / _HISTORY / _LAMPCORE / _TONECONTRAST | on; 0.3 / 0.003 / 0.6 / 2 / 1 / 0.5 / 120 m / 0.9 / 2 m / 1.2 (per-map medium on Gorge and Molten) |
+| X3 volumetrics | WFC_X3=0; WFC_X3_DENSITY / _HAZE / _SUN / _LAMP / _TRANS / _G / _DIST / _HISTORY / _LAMPCORE / _TONECONTRAST / _CAP | on; 0.3 / 0.0015 / 0.6 / 2 / 0.2 / 0.5 / 120 m / 0.9 / 2 m / 1.2 / 0.2 (per-map medium on Gorge, Molten and Streets) |
 
 All are environment-only (no new menu setting; SETTINGSTEST stays 7). The Realistic boot log names them in one line
-("RT Realistic defaults (first Realistic frame): ...", 38 keys with X3) and verify_slim checks it (rtcheck.defaults,
-SYSTEMS_VERIFY_RT_DEFAULTS + the paired _X3 table patch).
+("RT Realistic defaults (first Realistic frame): ...", 39 keys with X3) and verify_slim checks it (rtcheck.defaults,
+SYSTEMS_VERIFY_RT_DEFAULTS + the paired _X3 / _X3R3 table patches).
 Off / Faithful stay byte-identical to the original (identity rows).
 
 ### Gameplay
@@ -228,8 +233,8 @@ Off / Faithful stay byte-identical to the original (identity rows).
 - (CLOSED) Idle 20 s BOTTEST row at seeds 1 / 5 (47 / 48 before): BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn) after
   the walkable-floor fix f19e0052.
 - (CLOSED) No volumetric lighting: the froxel version is in (see Volumetric light (X3)); v1-v3 (screen-space haze) were
-  rejected by eye. Eye notes still open [PLACEHOLDER: the x3-gate verdict]: the firefight_sun veil (0.71 -> 0.81 at Molten's
-  haze 0.001) and slice / jitter aliasing in motion (the lane_sun streaks were Molten's falling particles).
+  rejected by eye; the froxel version passed the x3-gate on cand13 (no veil, match 1.27 / 1.27, views 1.47 / 1.50). Noted:
+  Realistic + Enhanced's match mean sits 0.005 under its floor.
 - **Death bodies, patch 2 deferred**: decals, skeletal gibs, the authored death camera and the full momentum picker come
   after package 6; the death-type choice is still an approximation.
 - **X6 / X7 = package 7** unless pulled in: more reflective surfaces + damp sheen (X6), 2x RT lightmap (X7).
