@@ -103,17 +103,55 @@ peer and dropped afterwards (the peer's address is then the key).
   KeepAliveTime 0.1 s.
 - **Kick:** the host's idle kick (180 s, decision D5) via `kick()` -> `Kicked{Idle}` on the member.
 
-## 7. Voice (user decision: in scope)
+## 7. Voice (user decisions: in scope; proximity voice with room reverb)
 
 - **Lane:** `sendVoice` on the same socket, unreliable, its own byte budget; frames are dropped, never resent.
 - **Codec:** Opus (BSD), mono 16 kHz, 20 ms frames at a fixed 16 kbit/s (~40 bytes per frame + header): ~2.6 KB/s per
   talking member up; the host fans each frame out to that frame's audience.
-- **Capture / playback:** in the Systems audio layer (Win32Audio / the browser's WebAudio later): capture only while
-  push-to-talk is held (default; a Settings option for open mic with a voice-activity gate); playback mixed on a voice bus,
-  positional off (the original's party chat was not positional).
-- **Audience:** team or all, per member setting; the host enforces MaxRemoteTalkers 30 (the original's value) per receiver.
+- **Capture:** in the Systems audio layer (Win32Audio; the browser's WebAudio later), only while push-to-talk is held
+  (default) or, in OpenMic, behind a voice-activity gate (`SessionVoiceSettings`).
+- **Modes** (`SessionVoiceSettings.audience`, extended): **Team radio** (team members, anywhere on the map), **All** (all
+  members, radio), **Proximity** (everyone in earshot, positional), and **Radio + Proximity** (the usual choice and the
+  proposed default: the squad hears you on the radio anywhere; everyone near you hears you in the world). Each voice frame
+  carries a 1-bit flag "radio" / "proximity" per audience; the host fans out radio frames to the team and proximity frames
+  to everyone within the cut-off distance (below).
+- **Radio playback:** 2D, dry (never through the reverb), on a voice bus with its own volume; the original's chat was
+  non-positional, so this is the faithful baseline.
+- **Proximity playback:** the speaker's decoded stream is a **3D emitter at the speaker's pawn head**, positioned every
+  mixer block from the lockstep sim (every peer already has every pawn's exact position: no position data on the wire).
+  It uses the sound system we already have for every cue:
+  - **attenuation:** the original's dialog-class cue values (BL_HUD_INTERFACE.DX_SLIDER_VOLUME, category DX_DRY - the only
+    DX cue: DistanceMin 400 UU, DistanceMax 6,400 UU, rolloff 1, the FMOD log curve our SoundCues applies): full level
+    within 4 m, -6 dB per doubling, silent beyond 64 m (the host's proximity cut-off for fan-out: 64 m);
+  - **occlusion:** the existing sound-occlusion traces (the same low-pass / attenuation every 3D cue gets);
+  - **panning:** the existing 3D pan.
+- **Reverb (the room):** the rebuild's maps do not use ReverbVolume actors (one in all of authored.db, none in MP). The
+  original sets the room reverb with **Kismet SeqAct_Reverb actions** fired by Touch volumes (MP maps: 7-49 per map) - the
+  data we already export (tools/systems/gen_level_audio.py -> LevelAudio.inc: the Touch volumes' brush polygons, the
+  preset per action) and play (LevelAudioScript: the listener's pawn enters a volume -> the I3DL2 preset cross-fades on the
+  MASTER_WET bus).
+  - **Listener's room:** a proximity voice is a wet 3D emitter like every world sound, so it goes through the listener's
+    current preset - the engine's own rule, at no extra cost.
+  - **Speaker's room:** a static map volume -> preset (the Touch volume whose Touched output leads to a SeqAct_Reverb,
+    resolved by the generator) gives the speaker's room by point-in-volume on the speaker's position (LevelAudioScript's
+    insideVolume, ray parity over the brush triangles; ~10-50 us per test, once per talker per 100 ms). When it differs from
+    the listener's, that voice sends 50 % of its wet signal to a **second reverb instance** set to the speaker's preset
+    (cross-fading like the listener's), so a voice from the next hall sounds like that hall. One extra instance covers the
+    common case; at most 2 (the two loudest remote-room talkers), others fall back to the listener's room.
+- **What the mixer needs:** a VOICE bus (radio, dry) and the proximity voices as ordinary 3D emitters on the existing
+  wet / dry paths; the second (and third) reverb instance = another copy of the existing I3DL2 echo + reflections + late tank
+  (Win32Audio.cpp) on its own send. No convolution reverb is needed: the presets are algorithmic I3DL2 parameter sets.
+- **CPU per talker:** Opus decode ~20-50 us per 20 ms frame (~0.2 % of a core); 3D pan + occlusion filter as any cue
+  (negligible); point-in-volume 10-50 us per 100 ms. Each extra reverb instance ~1-2 % of a core at 48 kHz stereo (the
+  existing tank's cost). A 16-talker worst case stays under ~5 % of one core.
+- **Data needed:** none from AssetTools beyond what LevelAudio.inc has; gen_level_audio.py gains the static volume -> preset
+  map (Systems). ReverbVolume support is not needed for MP (the campaign may author some; checked when campaign audio
+  starts).
+- **Audience / limits:** team or all per member setting; the host enforces MaxRemoteTalkers 30 (the original's value) per
+  receiver; proximity is cut at 64 m.
 - **UI:** per-player mute (local only) and the original's HeadsetState (0 none / 1 headset / 2 speaking) in PlayerList_GFX
-  and Hud_GFX - see the `ISession` mismatches in section 10.
+  and Hud_GFX - `setVoiceSettings` / `setPushToTalk` / `setMuted` / `MemberVoice` (section 10.1); the Proximity and
+  Radio + Proximity modes extend `SessionVoiceSettings.audience` (Frontend to add the two values).
 
 ## 8. Bandwidth per player (60 Hz, ~60 bytes UDP framing per packet; IPv4 + UDP = 28, our header 8)
 
@@ -122,7 +160,7 @@ peer and dropped afterwards (the peer's address is then the key).
 | 5 v 5, 10 humans, R = 8 | 10 | (36 + 80) x 60 = 7.0 KB/s | (36 + 8 x 10 x 10) x 60 = 50 KB/s | 9 x 50 = 450 KB/s |
 | 5 v 5, 10 humans, acked deltas (R_eff ~3) | 10 | 7.0 KB/s | (36 + 3 x 100) x 60 = 20 KB/s | 180 KB/s |
 | 16 v 16, 32 humans, acked deltas | 32 | 7.0 KB/s | (36 + 3 x 320) x 60 = 60 KB/s | 31 x 60 = 1.9 MB/s |
-| voice, per talking member | - | +2.6 KB/s | +2.6 KB/s per talker heard | + fan-out |
+| voice, per talking member | - | +2.6 KB/s | +2.6 KB/s per talker heard (radio: team; proximity: within 64 m) | + fan-out; proximity adds no position data (every peer has the speaker's sim position) |
 
 - Bots cost nothing (every peer simulates them). 5 v 5 fits any home connection; a 32-human host needs ~2 MB/s up (a
   good fibre line, or 30 Hz bundles: 2 ticks per packet halves the framing, or the relay as the hub).
@@ -161,6 +199,21 @@ peer and dropped afterwards (the peer's address is then the key).
 | **mismatch 3: NAT failure** | `SessionHostFailure::StrictNat` is never produced with direct UDP (we cannot detect NAT type without STUN); "Unable to Host" maps to `NoPath` only |
 | **mismatch 4: load hash** | `reportLoaded(simId, loadHash)`: the host compares both; a mismatch becomes `JoinFailed{Version}` (before the match) - no new event needed |
 | **mismatch 5: platform** | `SessionPlatform::Web` is phase 4; phases 1-3 report PC only |
+
+### 10.1 Resolved with the Frontend (2026-10-17; landed in Session.h, agents/frontend e0421fc3 = integration 202cef15; shared record: docs/handoff/ONLINE_MP_MISMATCHES.md)
+
+| point | resolution |
+|---|---|
+| voice | `setVoiceSettings(SessionVoiceSettings{mode Off / PushToTalk / OpenMic, audience Team / All, device, volume})`, `setPushToTalk(bool held)` per change (sampled per 20 ms voice frame), `setMuted(member, bool)` (local only); event `MemberVoice{member, headsetState 0 / 1 / 2}` |
+| relay | `SessionHostSettings.relay` ("" = direct), filled from a [PCSettings] value in phase 3 |
+| StrictNat | kept in the enum, never produced in phases 1-3; the frontend shows "Unable to Host" + the PC text for NoPath |
+| load-hash / version | `JoinFailed{Version}` accepted in any state (lobby or load gate): that peer's session ends with the original ClientOutdated text |
+| join codes | "WFC-" + base32 groups, or ip:port / [ipv6]:port; decoding is Systems'; new `SessionJoinFailure::Invalid` for a failed decode / check symbol (emitted on the next poll, no network wait) |
+| join timeout | Systems emits `JoinFailed{Timeout}` at 50 s; the frontend's own timer is a 55 s backstop |
+| pumping | one socket; whichever pump runs first (`ISession::poll`, every frontend update incl. the match, or the LockstepLayer's per-tick poll) drains it and dispatches by channel into two queues (lockstep / session+voice); each consumer reads only its queue |
+| slots / teams | the host's GameFlow decides (PickTeam: smaller team; humans take bot slots) and publishes `SessionLobby.slots`; SessionLayer owns membership / connectivity; in-match slot changes go through `SessionSlotSwap` at a tick the host's LockstepLayer picks |
+| idle kick | the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
+| desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
 
 ## 11. Phases and exit criteria
 
