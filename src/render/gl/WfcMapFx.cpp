@@ -817,7 +817,9 @@ void Pipeline::tickMapFx(float dt) {
                     if (m.flagA == 0) continue;
                     if (m.name == "PMI_Lifetime") {
                         evalDist(m, "Lifetime", efrac, in.rng, v1);
-                        q.oneOverLife = v1[0] > 0.0f ? 1.0f / v1[0] : 0.0f;   // 0 = lives until killed
+                        // (RE particle audit (c) batch 1: a second Lifetime module stacks, 1 / (1 / old + L); the first sets)
+                        if (q.oneOverLife > 0.0f && v1[0] > 0.0f) q.oneOverLife = 1.0f / (1.0f / q.oneOverLife + v1[0]);
+                        else q.oneOverLife = v1[0] > 0.0f ? 1.0f / v1[0] : 0.0f;   // 0 = lives until killed
                     } else if (m.name == "PMI_Size") {
                         evalDist(m, "StartSize", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.baseSize[c] += v3[c];
