@@ -10,7 +10,9 @@ cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 R=${1:?respun sha}; G=${2:?gated sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
 r=${R:0:7}; g=${G:0:7}; GD=work/package-gate/$g; O=work/package-gate/$r; mkdir -p $O/regress $O/bodies; L=$O/gate.log
 BASE=${GATE_BASE:-work/ab/fast_398b27e_rise}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw + drive-probe + steer + walkable + rise-snap 63368d05"}
-P=$(sed -n 's/.*penultimate \([0-9a-f]*\),.*/\1/p' $GD/../../package-gate-$g.out 2>/dev/null | head -1); p=${P:0:7}
+P=$(sed -n 's/.*penultimate \([0-9a-f]*\),.*/\1/p' $GD/../../package-gate-$g.out 2>/dev/null | head -1)
+[ -n "$P" ] || P=$(sed -n '1s/.*(penultimate \([0-9a-f]*\),.*/\1/p' $GD/PACKAGE-GATE.md 2>/dev/null)   # (a gated head that was itself a respin)
+p=${P:0:7}
 export PYTHONDONTWRITEBYTECODE=1 WFC_GATE_IGNORE_HOLD=1 WFC_GATE_GPU_GRACE_MIN=0 WFC_MUTE=1 WFC_NOINTERACT=1
 st() { echo "$(date +%T) $*" | tee -a $L; }
 run() { if [ $WHATIF = 1 ]; then echo "WHATIF: $*" | tee -a $L; else eval "$@"; fi; }
