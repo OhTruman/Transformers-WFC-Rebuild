@@ -41,3 +41,35 @@ SceneScaledLuminanceWeights f8, GammaColorScaleAndInverse f9, GammaOverlayColor 
 - The 7e3 ceiling (31.875 biased) only matters above 31.875 / b unbiased.
 - So for Exp_2500cb_FX (glow x 60 / 60 / 20): per channel it clips at 1 + Shadows unless blue's x 20 term stays under
   that, independent of the gather clamp. Yellow vs white at point blank = whether blue x b exceeds 1 + Shadows.
+
+## Native half (WFC RE, RE-Workspace/work/handoff/HDR_SCENE_PATH_RE.md, 43d7bc1) and the Faithful verdict
+
+Native facts (RE): SceneColorBiasFactor = pow(2, surface ExpBias): **8** while materials draw into the 7e3 scene colour
+(EDRAM), **1** for every other target - so the gather and uber passes run with b = 1. The scene resolve applies
+EXPONENTBIAS -3 into an FP16 texture: the resolved scene holds unbiased linear values with a ceiling of 31.875 / 8 = **3.984**.
+The bloom buffer (FilterColor) is 16_16_16_16 fixed / EXPAND (about +-32): the gather's x 8 of <= 4 fits. No per-frame
+exposure in code. Gather variant: one C++ class binds both; the port's 4-tap decode matches #313's constant set (the 16-tap
+#64 adds HalfWidthHalfHeight) - which microcode is bound stays PARTIAL.
+
+The original's clamp chain for a point-blank explosion:
+1. scene colour in 7e3 EDRAM: every channel saturates at 3.984 (unbiased), during blending (additive particles accumulate
+   into the clamped target);
+2. the 4-tap gather's min(tap, 4) - adds nothing on top of 3.984;
+3. the uber post's sat(composite - Shadows): the visible clip at 1 per channel (b = 1, no rescale).
+
+**Verdict: Faithful stays as it is (identity kept).** The port reproduces the visible clip exactly: the same uber chain
+with b = 1, the same per-channel clip at 1 + Shadows, and a gather clamp of 4.0 against the original's effective 3.984 (a
+pixel between 3.984 and 4 changes the bloom by < 0.4 % of that tap). The flat yellow-green point-blank explosion IS the
+original's look: a channel above 1 clips to 1 on both; blue stays under the clip where the authored x 20 term keeps it
+under 1, hence yellow-green, not white.
+
+One residual difference, not changed (no evidence it is visible): the port's RGBA16F scene target does not saturate at
+3.984 during blending, so a pixel driven far above 4 by additive layers and then darkened by a later translucent /
+modulate layer can end brighter than on the 360. Emulating it means a per-draw clamp of the scene target (a Faithful
+pipeline change), so it would need a measured case first (a Faithful A/B of min(scene, 3.984) at each translucent draw
+on the explosion frames), Rendering's call. The final-clamp alternative (min(scene, 3.984) before post) is a no-op for
+the visible image (the uber clips at 1 first) and changes only bloom by < 0.4 %.
+
+Realistic (Rendering's flash term) is free of this: the original's clip is per channel at 1, so the yellow-green flat
+frame is what Realistic's tone curve replaces; the 3.984 ceiling is the original's own HDR range if Realistic wants a
+faithful upper bound for the bloom input (today's soft-bloom cap 16).
