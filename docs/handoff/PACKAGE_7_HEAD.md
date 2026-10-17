@@ -1,0 +1,135 @@
+# Package 7: integration <HEAD> (<DATE>)
+
+**The hand-over build** (user 2026-10-17: package 6 af4d0731 is the internal checkpoint; package 7 is what the user
+playtests).
+
+<!-- SKELETON (Systems, opened 2026-10-17 from PACKAGE_6_af4d0731.md's shape). Kept current as items merge; Integration
+     merges it by file at each step. At build time: <HEAD>, <DATE>, sizes, the [PLACEHOLDER] rows and the gate table;
+     rename to PACKAGE_7_<head>.md. Owner = the lane that ships the item; status = open / in progress / merged <sha>. -->
+
+## How to play this build
+
+[PLACEHOLDER: carried from package 6's list (reboot first, Play.bat, Settings > Graphics: 2560x1440, Ray Tracing =
+Realistic, HD Textures = Enhanced, F9 cycles Off / Faithful / Realistic), plus where the package 7 items show: reflective /
+damp surfaces, the 2x lightmap detail, Streets' haze, a point-blank mine, death bodies (scorch, gibs, death camera, killer
+cam).]
+
+Launch with Play.bat. Package: work/playtest_slim (<SIZE>; promoted <DATE>). Fallback work/playtest_slim_af4d0731
+(package 6). Tag: playtest/09c-package7-<HEAD>.
+
+## New since package 6 (af4d0731)
+
+The user's package 7 scope (2026-10-17), in the order given; visual items first.
+
+| item | what | owner | status |
+|---|---|---|---|
+| X6 sheen | more reflective surfaces + a damp sheen (Realistic) | Rendering | open |
+| X7 2x lightmap | the RT lightmap at twice the resolution (Realistic) | Rendering | open |
+| Streets haze | Streets' volumetric haze (per-map X3 medium) | Rendering | open |
+| Mine saturation, Realistic | the point-blank explosion's exposure / flash term (RENDERING_PACKAGE7_POLISH.md item 1); Faithful unchanged by evidence (SYSTEMS_HDR_SHADER_DECODE.md 6b90296c + RE HDR_SCENE_PATH_RE.md 43d7bc1) | Rendering (Systems evidence done) | open |
+| Hover + squad polish | Smart ride height / hover (ride-height probe model, ledge guard v3) and squad follow reversals | Gameplay | open |
+| Death bodies in full | scorch decals, ragdoll / skeletal gibs, the faithful death picker, the authored death camera, killer cam | Gameplay (decals with Rendering) | open; death light ends with the pawn (Gameplay 800e552e) |
+| Death-body cost | one draw per settled body, TLAS / BLAS per body (package 6 item 1: +0.67..+1.94 ms p90 at 63 bots RT off, +0.17..+0.49 ms p50 RT on) | Gameplay + Rendering | open |
+
+### Details (filled as items merge)
+
+[PLACEHOLDER: one bullet per merged item - what the user sees, commit, switch (WFC_*=0 off), Realistic-only / identity
+note, measured cost.]
+
+### Realistic defaults
+
+[PLACEHOLDER: package 6's table (39 keys on the defaults line) plus the package 7 keys; the verify table patch is paired
+with each Rendering defaults change (SYSTEMS_VERIFY_RT_DEFAULTS_*).]
+
+## Known issues
+
+Carried from package 6 (open):
+- **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original); WFC_TLIGHTSCALE is the lever.
+- **Extended-match body cost** until the death-body cost item merges (numbers above).
+- **Squad follow reversals** (Smart) until the squad polish merges.
+- **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
+- **Faithful blend-time HDR residual** (documented, not changed): the 360 scene target saturates at 3.984 during
+  blending, our FP16 target does not; visible only if a later translucent layer darkens an over-bright pixel, not seen in
+  any capture (RENDERING_PACKAGE7_POLISH.md section 4).
+- **Two campaign-only materials fall back** (PROP_NEU_BatteryOS_p.OmegaBattery_MATINST, OmegaBatterySpikes_MATINST: their
+  normal-map function is cooked as a stub; SYSTEMS_MATC58_AUDIT.md); no multiplayer effect.
+- [PLACEHOLDER: anything the package 7 gate or eye pass adds]
+
+Closed in package 6 (for reference): the sentry turret / 56 weapon and prop materials (item 6, d0a3f988 + 02c743cc), the
+point-blank yellow-green in Faithful = the original's look (6b90296c), volumetric light (X3).
+
+## Runbook: build and verify package 7 (Systems; mechanical once Integration names <HEAD>)
+
+Run from F:\Transformers Rebuild\Rebuild-Systems (agents/systems). Everything lands in this worktree's work\; nothing is written
+to Rebuild\, AssetTools\ or ExtractedAssets\. The package build is CPU / IO only (no exe); it may run beside Experimental's gate
+builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT set by the script); the RT gate waits for a slot.
+
+0. **Pre-flight** (Git Bash):
+   - `df -h /f` - need >= 40 GB free (package ~27.5 GB + build tree ~0.4 GB + verify runs ~1.5 GB).
+   - `git -C "F:/Transformers Rebuild/Rebuild" log --oneline -1` shows <HEAD>; `ls work/playtest_slim_<HEAD>` must NOT exist.
+   - `ls "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack/hd_index.json" "F:/Transformers Rebuild/AssetTools/out/hd/push_m6/pack/hd_pbr_index.json" "F:/Transformers Rebuild/AssetTools/work/gltf_wfcmat/FROZEN.json"`.
+1. **Build + package** (~45 min: Release + PGO build at 2 jobs, then ~3-4 min copy), Git Bash:
+
+       NOPROMOTE=1 JOBS=2 bash work/refresh.sh <HEAD> "F:/Transformers Rebuild/AssetTools/out/hd/push_full_snap_20261016_b0-31/pack" D > work/refresh_<HEAD>.log 2>&1; echo rc $?
+
+   (refresh.sh defaults: OVERLAY = AssetTools/work/gltf_wfcmat, HDPBR = AssetTools/out/hd/push_m6/pack, vbake = work/vbake;
+   it waits for nothing, so start it outside a PERF_HOLD.) rc 0 and, in work/refresh_<HEAD>.log / work/refresh_<HEAD>/build_slim.log:
+   - `BUILD OK: .../work/refresh_<HEAD>/build` (the script also refuses a build without `WFC_RT_SHADERS=1` or the PGO profile)
+   - `overlay push_gltf_wfcmat_20261016 (...): 85 of 85 files replace package rows`
+   - `R1 vbake from .../work/vbake: 10 maps: ...`
+   - `HD: pack D (3506 files) chosen over the slim_files.tsv HD rows (...)`
+   - `HD M6 modern material maps: 498 of 498 rows from ...push_m6\pack (FROZEN.json push_m6_20261016: bytes + sha256 checked)`
+   - `slim_files.tsv: ... HD: 4005 files (21.70 GB); M5 runtime: yes`
+   - `wrote ...\work\refresh_<HEAD>\work\playtest_slim: keep ..., xpr 7161, ~27.5 GB, ... failures 0`
+   - `REFRESH READY (not promoted): .../work/playtest_slim_<HEAD> (head <HEAD>, HD D)`
+   - no `PROBLEM` line (build_slim.log); the script exits non-zero on any PROBLEM, a missed overlay or fewer than 498 M6 rows.
+2. **Verify** (~15 min RT-off + ~5 min RT gate), PowerShell, with the RT gate held until Integration's GO:
+
+       New-Item -ItemType File -Force 'F:\Transformers Rebuild\Rebuild-Systems\work\RT_SLOT_HOLD' | Out-Null
+       $T = 'F:\Transformers Rebuild\Rebuild-Systems\work\refresh_<HEAD>'
+       & powershell -NoProfile -ExecutionPolicy Bypass -File "$T\tools\package\verify_slim.ps1" -Package 'F:\Transformers Rebuild\Rebuild-Systems\work\playtest_slim_<HEAD>' -WorkDir 'F:\Transformers Rebuild\Rebuild-Systems\work\verify_<HEAD>' -SubstDrive X: -SkipIntro -SettingsExpected 7 -ForeignCwd -RtBuildDir "$T\build" -HoldFile 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD' -RtHoldFile 'F:\Transformers Rebuild\Rebuild-Systems\work\RT_SLOT_HOLD' *> 'F:\Transformers Rebuild\Rebuild-Systems\work\verify_<HEAD>.log'; "exit $LASTEXITCODE"
+
+   (the head's own verify_slim + rt-build-check come with the refresh tree, tools\fidelity\lib included; X: must be free.)
+   On "RT hold file present" in the log, ask Integration for the RT slot; on GO: `Remove-Item 'F:\...\work\RT_SLOT_HOLD'`.
+   Expected lines (work\verify_<HEAD>.log; any other outcome = report, do not promote):
+   - `HD pack: AssetTools\out\hd (loader default): 3505 rows + 498 M6 modern material rows, 4005 files, 21.7 GB, 0 problems`
+   - `package bin: 20 files vs build_slim.json 20; M5 runtime shipped; 0 problems`
+   - `overlay: PASS overlay.barrier ...` and `overlay: PASS overlay.frozen: 85 of 85 files ... byte-identical`
+   - `render data: materials_pbr.json in 15 map folder(s)`
+   - `[Streets] PASS`, `[Gorge] PASS`, `[Debris] PASS` (0 outside reads, 0 failing opens, 282 localized lines, 0 [error])
+   - `[Settings] PASS: 7 pass, 0 fail (expected 7 checks)`
+   - `[Ray Tracing] PASS: PASS rtcheck.build ... PASS rtcheck.context ... PASS rtcheck.runtime ... PASS rtcheck.r4 ...
+     PASS rtcheck.rtlights: ... effect lights on, headlights on; PASS rtcheck.defaults: <n> of <n> as expected`
+     (the table must be the one paired with the head's defaults line: giemissive 4, refltemporal, and the X1 / bloommax keys if
+     Rendering's later commit is in)
+   - `HD runtime row: re-running 508:Streets with HD forced on (level 2)` ... `HD runtime row: PASS` - its log has
+     `HD texture pack available: 3505 textures`, `HD modern material maps: 498 (hd_pbr_index.json)`, `Modern materials on for MP_IAC_Streets`
+   - `PASS: report ...\work\verify_<HEAD>\REPORT.md`, exit 0; then `Get-Process wfc_rebuild | ? Path -like '*Rebuild-Systems*'` = none.
+3. **Report** to Integration: the verify REPORT.md path, the package size / file counts, any non-PASS row verbatim. Fill this
+   doc's <HEAD>, <SIZE>, <N>, <OVERLAY>, <DATE> from build_slim.json / build_slim.log.
+4. **Promote only on Integration's word after the gate PASS** (the hand-over is the user's), Git Bash, in work/:
+
+       grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json      # must print af4d0731 (package 6)
+       [ -e playtest_slim_af4d0731 ] && echo "playtest_slim_af4d0731 exists: stop" || mv playtest_slim playtest_slim_af4d0731
+       mv playtest_slim_<HEAD> playtest_slim && grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json
+
+   Fallbacks after it: playtest_slim_af4d0731 (package 6), playtest_slim_9350f19b (checkpoint), playtest_slim_398b27ef
+   (package 5) and playtest_slim_30b2fa74 (package 4) stay as they are (delete older ones only on Integration's word; F: free
+   space >= 40 GB before the build).
+
+   Play.bat inside the package starts its own exe (verify checks it). Integration copies / announces; never rebuild a package exe
+   or touch build/release while the user plays.
+
+## Gates (final head <HEAD>)
+
+| gate | result | notes |
+|---|---|---|
+| regress-8map (3 arms x 8 maps, RT off, Classic, lockstep) vs af4d0731 | [PLACEHOLDER] | report rows +0.35 ms p90 per map |
+| Off / Faithful identity (Rust, Classic): SIMHASH + frames | [PLACEHOLDER] | vs af4d0731; any intended Faithful change named per draw |
+| Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | [PLACEHOLDER] | floor ~60 fps at 1440p (report, not a gate) |
+| R4 leak rows (GPU dedicated over 5 map changes) | [PLACEHOLDER] | |
+| Eye pass: Off / Realistic / Realistic+HD sheets, 5 user maps + authored views + match frames | [PLACEHOLDER] | floors as package 6 (match 1.26 / 1.28, views 1.42 / 1.45) unless Integration resets them |
+| verify_slim -SubstDrive X: (maps, HD static + runtime level 2, bin, overlay, Settings, RT gate incl. rtcheck.defaults) | [PLACEHOLDER] | |
+| FAST gate | [PLACEHOLDER] | delta vs af4d0731 |
+| BOTTEST / NAVQ / SIMHASH (both AIs) | [PLACEHOLDER] | re-baselines named per Gameplay patch |
+| Settings survive map change (WFC_SETTINGSTEST) | [PLACEHOLDER] | 7 + any new settings |
