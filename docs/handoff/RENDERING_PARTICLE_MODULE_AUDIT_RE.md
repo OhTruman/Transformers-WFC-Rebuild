@@ -148,6 +148,8 @@ Positive_X / Y / Z, Negative_X / Y / Z, `[6]` SurfaceOnly, `[7]` Velocity.
 4. `p = StartLocation(EmitterTime) + off`. Transformed by the component LocalToWorld unless the emitter is local-space (instance
    flag +0xA8 bit 0x40000000). Then `Location += p`.
 5. If Velocity: `v = (p_world − StartLocation) × VelocityScale(EmitterTime)`; `Velocity += v`, `BaseVelocity += v`.
+- **Compiled distribution order (C, 2026-10-17):** float k=0 **VelocityScale**, k=1 **StartRadius**; vector k=0 StartLocation
+  (base-class fields first; a StartRadius-first decode swaps them).
 
 **PMI_ColorByParameter** (spawn case 3; 1697 LODs). **CONFIRMED.**
 
@@ -193,7 +195,8 @@ blob**:
 
 **PMI_LocationPrimitiveCylinder** (spawn 0x15; 179 LODs):
 - Block (40 bytes): ±X / Y / Z flags ×6, SurfaceOnly, Velocity, RadialVelocity, HeightAxis (0 = X, 1 = Y, else Z).
-- Distributions (EmitterTime): StartRadius, StartHeight, VelocityScale; vector StartLocation.
+- Distributions (EmitterTime), **compiled order (C)**: float k=0 VelocityScale, k=1 StartRadius, k=2 StartHeight; vector k=0
+  StartLocation (the LocationPrimitiveBase fields come first).
 - Steps:
   1. `u` = DetermineUnitDirection (as the sphere).
   2. The two radial axes form `r2 = (u_a, u_b)`, normalised in 2D. SurfaceOnly puts the point on the radius.

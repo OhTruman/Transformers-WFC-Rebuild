@@ -1,0 +1,7556 @@
+{
+ "top": [
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_Nebula_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_Nebula_MAT",
+   "ours": "K",
+   "score": 25723105202,
+   "area_m2": 8574368401,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    0,
+    0,
+    0
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5212",
+    "location_ue": [
+     8251.2265625,
+     4417.033203125,
+     11459.2958984375
+    ],
+    "dist_uu": 14796,
+    "yaw_ue": 37895,
+    "pitch_ue": -9241
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.Spacedome_NebulaBright_A_MAT",
+   "master": "ENV_ORB_D1_Architecture_p.Materials.Spacedome_NebulaBright_A_MAT",
+   "ours": "K",
+   "score": 714530725,
+   "area_m2": 238176908,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -57157,
+    -4857,
+    18209
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 58238,
+    "yaw_ue": 33247,
+    "pitch_ue": 3180
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Background_p.Materials.Iacon_Nebula_D_MAT",
+   "master": "ENV_IAC_Background_p.Materials.Iacon_Nebula_D_MAT",
+   "ours": "K",
+   "score": 714530716,
+   "area_m2": 238176905,
+   "tris": 180,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -33885,
+    -28680,
+    117502
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9414",
+    "location_ue": [
+     9088.0,
+     -38528.0,
+     -70572.0234375
+    ],
+    "dist_uu": 193172,
+    "yaw_ue": 30418,
+    "pitch_ue": 13982
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "ours": "K",
+   "score": 714530700,
+   "area_m2": 238176900,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -14078,
+    -6501,
+    55296
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_952",
+    "location_ue": [
+     -7295.99853515625,
+     -8575.998046875,
+     1623.30908203125
+    ],
+    "dist_uu": 54139,
+    "yaw_ue": 29671,
+    "pitch_ue": 15014
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "ours": "K",
+   "score": 714530700,
+   "area_m2": 238176900,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    9472,
+    -640,
+    512
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9832",
+    "location_ue": [
+     11070.0,
+     4799.00048828125,
+     984.0
+    ],
+    "dist_uu": 5689,
+    "yaw_ue": 46171,
+    "pitch_ue": -866
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "ours": "K",
+   "score": 357265350,
+   "area_m2": 119088450,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -6382,
+    -13994,
+    -3673
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_9199",
+    "location_ue": [
+     -4748.00830078125,
+     -15169.984375,
+     -1033.244140625
+    ],
+    "dist_uu": 3320,
+    "yaw_ue": 26262,
+    "pitch_ue": -9587
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "ours": "K",
+   "score": 357265350,
+   "area_m2": 119088450,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -6382,
+    -16442,
+    -3673
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_895",
+    "location_ue": [
+     -1290.449951171875,
+     -18966.400390625,
+     1108.0
+    ],
+    "dist_uu": 7427,
+    "yaw_ue": 27967,
+    "pitch_ue": -7295
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 338111414,
+   "area_m2": 112703805,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 13,
+   "target_ue": [
+    -7240,
+    -60010,
+    71198
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_6312",
+    "location_ue": [
+     -7424.0,
+     -18944.0,
+     -169.99993896484375
+    ],
+    "dist_uu": 82340,
+    "yaw_ue": 49199,
+    "pitch_ue": 10938
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_StarDome_p.Test.KON_newSky_MAT",
+   "master": "ENV_KON_StarDome_p.Test.KON_newSky_MAT",
+   "ours": "K",
+   "score": 203773261,
+   "area_m2": 67924420,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    0,
+    0,
+    0
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11551",
+    "location_ue": [
+     767.9999389648438,
+     1407.999755859375,
+     -152.64894104003906
+    ],
+    "dist_uu": 1611,
+    "yaw_ue": 43944,
+    "pitch_ue": 990
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 145070914,
+   "area_m2": 48356971,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    67259,
+    -10154,
+    -24881
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_16276",
+    "location_ue": [
+     10471.939453125,
+     -12754.5,
+     2243.9990234375
+    ],
+    "dist_uu": 62987,
+    "yaw_ue": 477,
+    "pitch_ue": -4644
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 143035178,
+   "area_m2": 47678393,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 8,
+   "target_ue": [
+    -17075,
+    108685,
+    50440
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 128001,
+    "yaw_ue": 19048,
+    "pitch_ue": 4217
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_IaconSunset_MAT_INST",
+   "master": "ENV_ORB_Spacedome_p.SkyDome_PARENT_MAT",
+   "ours": "K",
+   "score": 121167340,
+   "area_m2": 40389113,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    11840,
+    -374,
+    8336
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 9584,
+    "yaw_ue": 18126,
+    "pitch_ue": 10820
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 30408527,
+   "area_m2": 10136176,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -37561,
+    29936,
+    -3729
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15519",
+    "location_ue": [
+     -34816.0,
+     6784.0,
+     2803.293212890625
+    ],
+    "dist_uu": 24212,
+    "yaw_ue": 17615,
+    "pitch_ue": -2849
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 28707649,
+   "area_m2": 9569216,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    56796,
+    -14182,
+    39724
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 59420,
+    "yaw_ue": 63593,
+    "pitch_ue": 7618
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 14318242,
+   "area_m2": 4772747,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    3744,
+    -4640,
+    42528
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_177",
+    "location_ue": [
+     5760.0,
+     -383.9999694824219,
+     1620.0
+    ],
+    "dist_uu": 41178,
+    "yaw_ue": 44538,
+    "pitch_ue": 15189
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 13785016,
+   "area_m2": 4595005,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -27444,
+    20620,
+    11436
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13609",
+    "location_ue": [
+     -24953.6015625,
+     10231.994140625,
+     980.002197265625
+    ],
+    "dist_uu": 14948,
+    "yaw_ue": 18838,
+    "pitch_ue": 8080
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 6825285,
+   "area_m2": 2275095,
+   "tris": 40,
+   "draws": 20,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 20,
+   "target_ue": [
+    963,
+    -33098,
+    -65408
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9414",
+    "location_ue": [
+     9088.0,
+     -38528.0,
+     -70572.0234375
+    ],
+    "dist_uu": 11053,
+    "yaw_ue": 26623,
+    "pitch_ue": 5071
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 5976660,
+   "area_m2": 1992220,
+   "tris": 120,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -13761,
+    -28160,
+    -65168
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_12027",
+    "location_ue": [
+     9600.0,
+     -29056.0,
+     -71340.0
+    ],
+    "dist_uu": 24179,
+    "yaw_ue": 32368,
+    "pitch_ue": 2692
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1859194,
+   "area_m2": 619731,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -722,
+    -17107,
+    30409
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5189",
+    "location_ue": [
+     -767.99609375,
+     -11264.0009765625,
+     -22.676414489746094
+    ],
+    "dist_uu": 30988,
+    "yaw_ue": 49234,
+    "pitch_ue": 14405
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1363069,
+   "area_m2": 454356,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -16627,
+    9546,
+    36079
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11061",
+    "location_ue": [
+     -18541.453125,
+     4232.10009765625,
+     3140.62451171875
+    ],
+    "dist_uu": 33419,
+    "yaw_ue": 12777,
+    "pitch_ue": 14613
+   }
+  }
+ ],
+ "all_ranked": [
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_Nebula_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_Nebula_MAT",
+   "ours": "K",
+   "score": 25723105202,
+   "area_m2": 8574368401,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    0,
+    0,
+    0
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5212",
+    "location_ue": [
+     8251.2265625,
+     4417.033203125,
+     11459.2958984375
+    ],
+    "dist_uu": 14796,
+    "yaw_ue": 37895,
+    "pitch_ue": -9241
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.Spacedome_NebulaBright_A_MAT",
+   "master": "ENV_ORB_D1_Architecture_p.Materials.Spacedome_NebulaBright_A_MAT",
+   "ours": "K",
+   "score": 714530725,
+   "area_m2": 238176908,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -57157,
+    -4857,
+    18209
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 58238,
+    "yaw_ue": 33247,
+    "pitch_ue": 3180
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Background_p.Materials.Iacon_Nebula_D_MAT",
+   "master": "ENV_IAC_Background_p.Materials.Iacon_Nebula_D_MAT",
+   "ours": "K",
+   "score": 714530716,
+   "area_m2": 238176905,
+   "tris": 180,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -33885,
+    -28680,
+    117502
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9414",
+    "location_ue": [
+     9088.0,
+     -38528.0,
+     -70572.0234375
+    ],
+    "dist_uu": 193172,
+    "yaw_ue": 30418,
+    "pitch_ue": 13982
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "ours": "K",
+   "score": 714530700,
+   "area_m2": 238176900,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -14078,
+    -6501,
+    55296
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_952",
+    "location_ue": [
+     -7295.99853515625,
+     -8575.998046875,
+     1623.30908203125
+    ],
+    "dist_uu": 54139,
+    "yaw_ue": 29671,
+    "pitch_ue": 15014
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT",
+   "ours": "K",
+   "score": 714530700,
+   "area_m2": 238176900,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    9472,
+    -640,
+    512
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9832",
+    "location_ue": [
+     11070.0,
+     4799.00048828125,
+     984.0
+    ],
+    "dist_uu": 5689,
+    "yaw_ue": 46171,
+    "pitch_ue": -866
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "ours": "K",
+   "score": 357265350,
+   "area_m2": 119088450,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -6382,
+    -13994,
+    -3673
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_9199",
+    "location_ue": [
+     -4748.00830078125,
+     -15169.984375,
+     -1033.244140625
+    ],
+    "dist_uu": 3320,
+    "yaw_ue": 26262,
+    "pitch_ue": -9587
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "master": "ENV_ORB_Spacedome_p.Spacedome_MAT",
+   "ours": "K",
+   "score": 357265350,
+   "area_m2": 119088450,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -6382,
+    -16442,
+    -3673
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_895",
+    "location_ue": [
+     -1290.449951171875,
+     -18966.400390625,
+     1108.0
+    ],
+    "dist_uu": 7427,
+    "yaw_ue": 27967,
+    "pitch_ue": -7295
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 338111414,
+   "area_m2": 112703805,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 13,
+   "target_ue": [
+    -7240,
+    -60010,
+    71198
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_6312",
+    "location_ue": [
+     -7424.0,
+     -18944.0,
+     -169.99993896484375
+    ],
+    "dist_uu": 82340,
+    "yaw_ue": 49199,
+    "pitch_ue": 10938
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_StarDome_p.Test.KON_newSky_MAT",
+   "master": "ENV_KON_StarDome_p.Test.KON_newSky_MAT",
+   "ours": "K",
+   "score": 203773261,
+   "area_m2": 67924420,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    0,
+    0,
+    0
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11551",
+    "location_ue": [
+     767.9999389648438,
+     1407.999755859375,
+     -152.64894104003906
+    ],
+    "dist_uu": 1611,
+    "yaw_ue": 43944,
+    "pitch_ue": 990
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 145070914,
+   "area_m2": 48356971,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    67259,
+    -10154,
+    -24881
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_16276",
+    "location_ue": [
+     10471.939453125,
+     -12754.5,
+     2243.9990234375
+    ],
+    "dist_uu": 62987,
+    "yaw_ue": 477,
+    "pitch_ue": -4644
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 143035178,
+   "area_m2": 47678393,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 8,
+   "target_ue": [
+    -17075,
+    108685,
+    50440
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 128001,
+    "yaw_ue": 19048,
+    "pitch_ue": 4217
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_ORB_Spacedome_p.Spacedome_IaconSunset_MAT_INST",
+   "master": "ENV_ORB_Spacedome_p.SkyDome_PARENT_MAT",
+   "ours": "K",
+   "score": 121167340,
+   "area_m2": 40389113,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.0001, 0.0001)",
+    "Rotator(0.0006 rad/s @0.5,0.5)",
+    "Rotator(0.001 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    11840,
+    -374,
+    8336
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 9584,
+    "yaw_ue": 18126,
+    "pitch_ue": 10820
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 30408527,
+   "area_m2": 10136176,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -37561,
+    29936,
+    -3729
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15519",
+    "location_ue": [
+     -34816.0,
+     6784.0,
+     2803.293212890625
+    ],
+    "dist_uu": 24212,
+    "yaw_ue": 17615,
+    "pitch_ue": -2849
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 28707649,
+   "area_m2": 9569216,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    56796,
+    -14182,
+    39724
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 59420,
+    "yaw_ue": 63593,
+    "pitch_ue": 7618
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.MachineSmokeCover_red_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 21523362,
+   "area_m2": 7174454,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -29514,
+    -45645,
+    -7152
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_2879",
+    "location_ue": [
+     -19586.599609375,
+     -21794.19921875,
+     1875.9998779296875
+    ],
+    "dist_uu": 27366,
+    "yaw_ue": 45038,
+    "pitch_ue": -3507
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 18786586,
+   "area_m2": 6262195,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    38089,
+    -20665,
+    67053
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_14257",
+    "location_ue": [
+     10471.939453125,
+     -13864.0,
+     2243.9990234375
+    ],
+    "dist_uu": 70776,
+    "yaw_ue": 63018,
+    "pitch_ue": 12071
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 14318242,
+   "area_m2": 4772747,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    3744,
+    -4640,
+    42528
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_177",
+    "location_ue": [
+     5760.0,
+     -383.9999694824219,
+     1620.0
+    ],
+    "dist_uu": 41178,
+    "yaw_ue": 44538,
+    "pitch_ue": 15189
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 13785016,
+   "area_m2": 4595005,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -27444,
+    20620,
+    11436
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13609",
+    "location_ue": [
+     -24953.6015625,
+     10231.994140625,
+     980.002197265625
+    ],
+    "dist_uu": 14948,
+    "yaw_ue": 18838,
+    "pitch_ue": 8080
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BrightSmokeDecagon2_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 10283733,
+   "area_m2": 3427911,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 7,
+   "target_ue": [
+    24757,
+    -13112,
+    13360
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_6413",
+    "location_ue": [
+     24384.0,
+     -14032.0,
+     980.0
+    ],
+    "dist_uu": 12420,
+    "yaw_ue": 12368,
+    "pitch_ue": 15549
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 6825285,
+   "area_m2": 2275095,
+   "tris": 40,
+   "draws": 20,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 20,
+   "target_ue": [
+    963,
+    -33098,
+    -65408
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9414",
+    "location_ue": [
+     9088.0,
+     -38528.0,
+     -70572.0234375
+    ],
+    "dist_uu": 11053,
+    "yaw_ue": 26623,
+    "pitch_ue": 5071
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 5976660,
+   "area_m2": 1992220,
+   "tris": 120,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -13761,
+    -28160,
+    -65168
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_12027",
+    "location_ue": [
+     9600.0,
+     -29056.0,
+     -71340.0
+    ],
+    "dist_uu": 24179,
+    "yaw_ue": 32368,
+    "pitch_ue": 2692
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MATINST",
+   "master": "ENV_AllShader_p.Special.DarkEnergonCrystal_MAT",
+   "ours": "K",
+   "score": 5402351,
+   "area_m2": 1800784,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.01, -0.02)",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 52,
+   "target_ue": [
+    103904,
+    -55547,
+    129250
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11137",
+    "location_ue": [
+     24953.599609375,
+     -18168.0,
+     980.002197265625
+    ],
+    "dist_uu": 155189,
+    "yaw_ue": 60924,
+    "pitch_ue": 10148
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 4476209,
+   "area_m2": 1492070,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    11984,
+    8584,
+    5908
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12671",
+    "location_ue": [
+     9088.0,
+     7168.0,
+     851.9996337890625
+    ],
+    "dist_uu": 5996,
+    "yaw_ue": 4743,
+    "pitch_ue": 10464
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1859194,
+   "area_m2": 619731,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -722,
+    -17107,
+    30409
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5189",
+    "location_ue": [
+     -767.99609375,
+     -11264.0009765625,
+     -22.676414489746094
+    ],
+    "dist_uu": 30988,
+    "yaw_ue": 49234,
+    "pitch_ue": 14405
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1363069,
+   "area_m2": 454356,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -16627,
+    9546,
+    36079
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11061",
+    "location_ue": [
+     -18541.453125,
+     4232.10009765625,
+     3140.62451171875
+    ],
+    "dist_uu": 33419,
+    "yaw_ue": 12777,
+    "pitch_ue": 14613
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1362730,
+   "area_m2": 454243,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -10310,
+    9546,
+    36079
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11061",
+    "location_ue": [
+     -18541.453125,
+     4232.10009765625,
+     3140.62451171875
+    ],
+    "dist_uu": 34365,
+    "yaw_ue": 5979,
+    "pitch_ue": 13368
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasmaOrange_INST",
+   "master": "ENV_AllShader_p.Energon_River.Energon_River_Mat",
+   "ours": "K",
+   "score": 1158140,
+   "area_m2": 386047,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(-0.02, -0.06)",
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.09, 0.02)",
+    "Panner(0.01, -0.075)",
+    "Panner(0.1, 0.05)"
+   ],
+   "instances": 48,
+   "target_ue": [
+    9278,
+    -10207,
+    1522
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15058",
+    "location_ue": [
+     12534.69140625,
+     -6503.2373046875,
+     83.99961853027344
+    ],
+    "dist_uu": 5137,
+    "yaw_ue": 41629,
+    "pitch_ue": 2960
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.MoltenRain_MatInst",
+   "master": "ENV_AllShader_p.Rain.Rain_Mat",
+   "ours": "K",
+   "score": 693142,
+   "area_m2": 231047,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.2) time-in",
+    "Panner(0, -0.3) time-in",
+    "Time"
+   ],
+   "instances": 58,
+   "target_ue": [
+    14497,
+    -3644,
+    1869
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3114",
+    "location_ue": [
+     13184.0,
+     -1408.0,
+     -556.0
+    ],
+    "dist_uu": 3551,
+    "yaw_ue": 54689,
+    "pitch_ue": 7844
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_CORE_Floors_p.Materials.SmokeCoolDepth_Mat_INST",
+   "master": "FX_Materials_p.Materials.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 542028,
+   "area_m2": 180676,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -7410,
+    -12252,
+    -10048
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10089",
+    "location_ue": [
+     -7032.10205078125,
+     -12029.4541015625,
+     -120.0
+    ],
+    "dist_uu": 9938,
+    "yaw_ue": 38319,
+    "pitch_ue": -15924
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Complex_p.Material.ComplexWaterfall_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 497316,
+   "area_m2": 165772,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 12,
+   "target_ue": [
+    2368,
+    12655,
+    -15404
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_385",
+    "location_ue": [
+     -511.99609375,
+     9727.998046875,
+     591.2450561523438
+    ],
+    "dist_uu": 16514,
+    "yaw_ue": 8276,
+    "pitch_ue": -13763
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 426196,
+   "area_m2": 142065,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    36635,
+    2715,
+    -5248
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 25471,
+    "yaw_ue": 3722,
+    "pitch_ue": -2200
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 329358,
+   "area_m2": 109786,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    23633,
+    16,
+    4314
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 25561,
+    "yaw_ue": 65226,
+    "pitch_ue": 1469
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_Shader_p.Material.Iacon_CoolSmoke_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 180676,
+   "area_m2": 60225,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    30659,
+    3255,
+    3371
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 19941,
+    "yaw_ue": 5101,
+    "pitch_ue": 1727
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 166205,
+   "area_m2": 55402,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -4288,
+    5082,
+    10391
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4116",
+    "location_ue": [
+     -4368.43408203125,
+     5682.4892578125,
+     859.0
+    ],
+    "dist_uu": 9551,
+    "yaw_ue": 50542,
+    "pitch_ue": 15722
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 133108,
+   "area_m2": 44369,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 23,
+   "target_ue": [
+    -890,
+    -8343,
+    3095
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_15227",
+    "location_ue": [
+     -5952.5,
+     -9164.740234375,
+     1876.0
+    ],
+    "dist_uu": 5271,
+    "yaw_ue": 1679,
+    "pitch_ue": 2434
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 130405,
+   "area_m2": 43468,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -8780,
+    -7430,
+    3885
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_952",
+    "location_ue": [
+     -7295.99853515625,
+     -8575.998046875,
+     1623.30908203125
+    ],
+    "dist_uu": 2938,
+    "yaw_ue": 25908,
+    "pitch_ue": 9163
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_CORE_Wall_p.Textures.Waterfall_Slow_MATINST",
+   "master": "ENV_CORE_Wall_p.Textures.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 129842,
+   "area_m2": 43281,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 18,
+   "target_ue": [
+    -5382,
+    11673,
+    4928
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2786",
+    "location_ue": [
+     -3831.09716796875,
+     10958.5908203125,
+     1226.7862548828125
+    ],
+    "dist_uu": 4076,
+    "yaw_ue": 28264,
+    "pitch_ue": 11875
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.LightRays_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 117723,
+   "area_m2": 39241,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    16025,
+    3684,
+    6285
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3744",
+    "location_ue": [
+     16127.99609375,
+     3968.0,
+     213.3851318359375
+    ],
+    "dist_uu": 6079,
+    "yaw_ue": 45517,
+    "pitch_ue": 15865
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_KON_Deco_p.Materials.LightVolumeCool_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 97884,
+   "area_m2": 32628,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 18,
+   "target_ue": [
+    15305,
+    -3141,
+    1729
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8704",
+    "location_ue": [
+     15834.046875,
+     -1682.50146484375,
+     758.7559204101562
+    ],
+    "dist_uu": 1830,
+    "yaw_ue": 45522,
+    "pitch_ue": 5830
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.LavaFall1_MATINST",
+   "master": "ENV_KON_Molten_p.Material.LavaFall_Parent_MAT",
+   "ours": "K",
+   "score": 89523,
+   "area_m2": 29841,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -18040,
+    -13990,
+    -3347
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15595",
+    "location_ue": [
+     -8878.587890625,
+     -16253.3369140625,
+     -171.99990844726562
+    ],
+    "dist_uu": 9957,
+    "yaw_ue": 30242,
+    "pitch_ue": -3385
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_ArchiveInterior_p.Courtyard.CourtyardPool_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Coolant_Parent_MAT",
+   "ours": "K",
+   "score": 77980,
+   "area_m2": 38990,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.02, 0.06) time-in",
+    "Panner(0.001, 0.005) time-in",
+    "Panner(0.002, 0.006) time-in",
+    "Panner(0.05, -0.02) time-in",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -16815,
+    -1136,
+    335
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10418",
+    "location_ue": [
+     -15744.0029296875,
+     -4288.0048828125,
+     83.9921646118164
+    ],
+    "dist_uu": 3339,
+    "yaw_ue": 19801,
+    "pitch_ue": 783
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 76969,
+   "area_m2": 25656,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 30,
+   "target_ue": [
+    18500,
+    -18898,
+    2667
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15058",
+    "location_ue": [
+     12534.69140625,
+     -6503.2373046875,
+     83.99961853027344
+    ],
+    "dist_uu": 13996,
+    "yaw_ue": 53831,
+    "pitch_ue": 1936
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_Interior_1_p.Materials.WallPanel_MAT_INST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 71612,
+   "area_m2": 23871,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 26,
+   "target_ue": [
+    -13560,
+    4672,
+    5888
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 13182,
+    "yaw_ue": 30719,
+    "pitch_ue": 4196
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 63576,
+   "area_m2": 21192,
+   "tris": 1212,
+   "draws": 52,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 52,
+   "target_ue": [
+    23736,
+    -34416,
+    -70712
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_15650",
+    "location_ue": [
+     25856.0,
+     -35712.0,
+     -72364.0
+    ],
+    "dist_uu": 2984,
+    "yaw_ue": 27045,
+    "pitch_ue": 6120
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionChamber_MATINST_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 62144,
+   "area_m2": 20715,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    3040,
+    -5024,
+    8336
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 9350,
+    "yaw_ue": 60068,
+    "pitch_ue": 9916
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_AllShader_p.Energon_River.Energon_Lava_Mat",
+   "master": "ENV_AllShader_p.Energon_River.Energon_Lava_Mat",
+   "ours": "K",
+   "score": 60486,
+   "area_m2": 20162,
+   "tris": 24,
+   "draws": 2,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.015, 0.01)",
+    "Panner(-0.02, -0.06) time-in",
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.09, 0.02)",
+    "Panner(0.01, -0.01)",
+    "Panner(0.01, -0.075)",
+    "Panner(0.1, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    1047,
+    -62022,
+    -73600
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6030",
+    "location_ue": [
+     3032.0,
+     -61040.0,
+     -72086.0
+    ],
+    "dist_uu": 2682,
+    "yaw_ue": 37562,
+    "pitch_ue": -6255
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_Opaque_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_Refractive_Glass_Opaque_Mat",
+   "ours": "K",
+   "score": 59715,
+   "area_m2": 19905,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    -14056,
+    -22629,
+    13338
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3869",
+    "location_ue": [
+     -15840.5615234375,
+     -17951.01953125,
+     13420.607421875
+    ],
+    "dist_uu": 5008,
+    "yaw_ue": 52953,
+    "pitch_ue": -172
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 57718,
+   "area_m2": 19239,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 46,
+   "target_ue": [
+    1156,
+    -17420,
+    2633
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_989",
+    "location_ue": [
+     1780.0,
+     -15398.0,
+     596.0013427734375
+    ],
+    "dist_uu": 2937,
+    "yaw_ue": 46029,
+    "pitch_ue": 7995
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 51972,
+   "area_m2": 17324,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -1422,
+    1452,
+    15590
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5489",
+    "location_ue": [
+     -7285.70556640625,
+     6008.033203125,
+     11417.4189453125
+    ],
+    "dist_uu": 8518,
+    "yaw_ue": 58646,
+    "pitch_ue": 5340
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 51792,
+   "area_m2": 17264,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 20,
+   "target_ue": [
+    -14656,
+    -8295,
+    1658
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12030",
+    "location_ue": [
+     -15360.0029296875,
+     -7424.0048828125,
+     1108.00537109375
+    ],
+    "dist_uu": 1248,
+    "yaw_ue": 56242,
+    "pitch_ue": 4764
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 50332,
+   "area_m2": 16777,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 8,
+   "target_ue": [
+    -3185,
+    -5210,
+    716
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 14966,
+    "yaw_ue": 32351,
+    "pitch_ue": 441
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.OmegaSilhouette_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 50332,
+   "area_m2": 16777,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    13785,
+    1048,
+    6400
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 16460,
+    "yaw_ue": 189,
+    "pitch_ue": 3670
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 49198,
+   "area_m2": 16399,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 9,
+   "target_ue": [
+    -4617,
+    2856,
+    2095
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_9788",
+    "location_ue": [
+     -4543.99609375,
+     3199.998046875,
+     595.9996337890625
+    ],
+    "dist_uu": 1540,
+    "yaw_ue": 46968,
+    "pitch_ue": 13983
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 46428,
+   "area_m2": 15476,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    736,
+    -9216,
+    320
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12233",
+    "location_ue": [
+     3327.998046875,
+     -5248.0,
+     980.0
+    ],
+    "dist_uu": 4785,
+    "yaw_ue": 43117,
+    "pitch_ue": -1443
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Decagon_p.Materials.IAC_Decagon_GlassPan2_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 46122,
+   "area_m2": 15374,
+   "tris": 720,
+   "draws": 18,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 1) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 18,
+   "target_ue": [
+    30780,
+    -32040,
+    -70664
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11679",
+    "location_ue": [
+     32128.0,
+     -34048.0,
+     -72363.9921875
+    ],
+    "dist_uu": 2956,
+    "yaw_ue": 22551,
+    "pitch_ue": 6390
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 45993,
+   "area_m2": 15331,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -18315,
+    29190,
+    -5504
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5039",
+    "location_ue": [
+     -1535.99609375,
+     9727.998046875,
+     591.2450561523438
+    ],
+    "dist_uu": 26409,
+    "yaw_ue": 23805,
+    "pitch_ue": -2429
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 44947,
+   "area_m2": 14982,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -14056,
+    -22629,
+    13338
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3869",
+    "location_ue": [
+     -15840.5615234375,
+     -17951.01953125,
+     13420.607421875
+    ],
+    "dist_uu": 5008,
+    "yaw_ue": 52953,
+    "pitch_ue": -172
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_ORB_Shader_p.ForceField.ENV_ORB_ForceField_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 44771,
+   "area_m2": 14924,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 63,
+   "target_ue": [
+    -16472,
+    -5054,
+    12837
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11802",
+    "location_ue": [
+     -22882.044921875,
+     -5918.4287109375,
+     13183.6005859375
+    ],
+    "dist_uu": 6478,
+    "yaw_ue": 1398,
+    "pitch_ue": -559
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 44752,
+   "area_m2": 14917,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    30976,
+    4029,
+    -344
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_7121",
+    "location_ue": [
+     31488.0,
+     4608.00048828125,
+     -170.84246826171875
+    ],
+    "dist_uu": 792,
+    "yaw_ue": 41602,
+    "pitch_ue": -2302
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_Light_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 42797,
+   "area_m2": 14266,
+   "tris": 120,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    35229,
+    -45742,
+    -70282
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_8218",
+    "location_ue": [
+     34148.9453125,
+     -45696.0,
+     -70569.7890625
+    ],
+    "dist_uu": 1118,
+    "yaw_ue": 65096,
+    "pitch_ue": 2717
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.MoltenRainPuddle_MatInst",
+   "master": "ENV_AllShader_p.Rain.RainPuddles_Mat",
+   "ours": "K",
+   "score": 42750,
+   "area_m2": 14250,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.055) time-in",
+    "Panner(-0.05, 0.05) time-in",
+    "Panner(-0.595, -0.65) time-in",
+    "Panner(-0.995, 0.4) time-in",
+    "Time"
+   ],
+   "instances": 20,
+   "target_ue": [
+    4015,
+    -7006,
+    131
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12233",
+    "location_ue": [
+     3327.998046875,
+     -5248.0,
+     980.0
+    ],
+    "dist_uu": 2070,
+    "yaw_ue": 53036,
+    "pitch_ue": -4411
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 42373,
+   "area_m2": 14124,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 9,
+   "target_ue": [
+    582,
+    -1172,
+    785
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_7005",
+    "location_ue": [
+     896.0,
+     2304.0,
+     -2588.0
+    ],
+    "dist_uu": 4854,
+    "yaw_ue": 48211,
+    "pitch_ue": 8013
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortion_MATINST_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 39558,
+   "area_m2": 13186,
+   "tris": 288,
+   "draws": 2,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    1047,
+    -62022,
+    -73600
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6030",
+    "location_ue": [
+     3032.0,
+     -61040.0,
+     -72086.0
+    ],
+    "dist_uu": 2682,
+    "yaw_ue": 37562,
+    "pitch_ue": -6255
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 39373,
+   "area_m2": 13124,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    22209,
+    21809,
+    3136
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 30922,
+    "yaw_ue": 7145,
+    "pitch_ue": 814
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 38948,
+   "area_m2": 12983,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    5990,
+    -1998,
+    1890
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_8315",
+    "location_ue": [
+     7745.99951171875,
+     -6462.99951171875,
+     979.9988403320312
+    ],
+    "dist_uu": 4883,
+    "yaw_ue": 20292,
+    "pitch_ue": 1956
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_WhiteMaterials_p.Materials.White_Tracks_orangeMATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 36649,
+   "area_m2": 12216,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 18,
+   "target_ue": [
+    -4992,
+    11057,
+    5806
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 10654,
+    "yaw_ue": 20174,
+    "pitch_ue": 5184
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 36531,
+   "area_m2": 12177,
+   "tris": 44,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    6905,
+    -38468,
+    -72451
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9414",
+    "location_ue": [
+     9088.0,
+     -38528.0,
+     -70572.0234375
+    ],
+    "dist_uu": 2881,
+    "yaw_ue": 32483,
+    "pitch_ue": -7409
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Complex_p.Material.LightCylinder_Rays_Blue_less_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 36352,
+   "area_m2": 12117,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 9,
+   "target_ue": [
+    17932,
+    -6391,
+    2967
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3786",
+    "location_ue": [
+     19327.99609375,
+     -9855.998046875,
+     595.999267578125
+    ],
+    "dist_uu": 4424,
+    "yaw_ue": 20378,
+    "pitch_ue": 5898
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRays_RED_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 35765,
+   "area_m2": 11922,
+   "tris": 120,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    15971,
+    -58494,
+    -69211
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_12061",
+    "location_ue": [
+     18944.0,
+     -60160.0,
+     -71596.0
+    ],
+    "dist_uu": 4160,
+    "yaw_ue": 27439,
+    "pitch_ue": 6368
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 34513,
+   "area_m2": 11504,
+   "tris": 28,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    9722,
+    -57890,
+    -69459
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3878",
+    "location_ue": [
+     10112.0,
+     -55680.0,
+     -71595.5859375
+    ],
+    "dist_uu": 3099,
+    "yaw_ue": 47328,
+    "pitch_ue": 7937
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_ORB_CoolantRoom_p.Material.Waterfall2_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 34497,
+   "area_m2": 11499,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    15308,
+    -12980,
+    1150
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13251",
+    "location_ue": [
+     19327.99609375,
+     -10879.998046875,
+     595.999267578125
+    ],
+    "dist_uu": 4569,
+    "yaw_ue": 37790,
+    "pitch_ue": 1268
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 33886,
+   "area_m2": 11295,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 14,
+   "target_ue": [
+    -13584,
+    16,
+    6368
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 13209,
+    "yaw_ue": 33425,
+    "pitch_ue": 4603
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 33710,
+   "area_m2": 11237,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 8,
+   "target_ue": [
+    13623,
+    4273,
+    2645
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_9871",
+    "location_ue": [
+     12890.0478515625,
+     6620.48828125,
+     984.0
+    ],
+    "dist_uu": 2968,
+    "yaw_ue": 52308,
+    "pitch_ue": 6195
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Complex_p.Material.EnergonPlasmaAquaLight_INST",
+   "master": "ENV_AllShader_p.Energon_River.Energon_River_Mat",
+   "ours": "K",
+   "score": 33150,
+   "area_m2": 11050,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(-0.02, -0.06)",
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.09, 0.02)",
+    "Panner(0.01, -0.075)",
+    "Panner(0.1, 0.05)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    14869,
+    -8206,
+    -4497
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3786",
+    "location_ue": [
+     19327.99609375,
+     -9855.998046875,
+     595.999267578125
+    ],
+    "dist_uu": 6968,
+    "yaw_ue": 29071,
+    "pitch_ue": -8550
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.WallPanelWarningSign_NoEmiss_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 32521,
+   "area_m2": 10840,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 7,
+   "target_ue": [
+    1480,
+    -13013,
+    1536
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_355",
+    "location_ue": [
+     -243.1365966796875,
+     -14732.865234375,
+     -172.00120544433594
+    ],
+    "dist_uu": 2974,
+    "yaw_ue": 8183,
+    "pitch_ue": 6381
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 31728,
+   "area_m2": 10576,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 13,
+   "target_ue": [
+    2857,
+    5233,
+    383
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_7005",
+    "location_ue": [
+     896.0,
+     2304.0,
+     -2588.0
+    ],
+    "dist_uu": 4610,
+    "yaw_ue": 10231,
+    "pitch_ue": 7306
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 31362,
+   "area_m2": 10454,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 12,
+   "target_ue": [
+    -9104,
+    6832,
+    7520
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 11046,
+    "yaw_ue": 27065,
+    "pitch_ue": 6909
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_Orrery_p.cards.OrreryRings_BLUE_MAT",
+   "master": "ENV_IAC_Orrery_p.cards.OrreryRings_BLUE_MAT",
+   "ours": "K",
+   "score": 31069,
+   "area_m2": 10356,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.19)",
+    "Panner(0.01, 0)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    3064,
+    48,
+    16
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 4835,
+    "yaw_ue": 63960,
+    "pitch_ue": -1539
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 30661,
+   "area_m2": 10220,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -11270,
+    -400,
+    -2564
+   ],
+   "camera": {
+    "start": "PlayerStart_14233",
+    "location_ue": [
+     -10160.0,
+     -384.0,
+     -682.8656616210938
+    ],
+    "dist_uu": 2184,
+    "yaw_ue": 32918,
+    "pitch_ue": -10823
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeYellow_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 29288,
+   "area_m2": 9763,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    5227,
+    -8541,
+    1331
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 7186,
+    "yaw_ue": 36902,
+    "pitch_ue": 1820
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.WallPanelWarningSign_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 28997,
+   "area_m2": 9666,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 4,
+   "target_ue": [
+    29300,
+    20448,
+    2992
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 35960,
+    "yaw_ue": 5529,
+    "pitch_ue": 658
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 28362,
+   "area_m2": 9454,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 9,
+   "target_ue": [
+    20603,
+    -13446,
+    1679
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_6413",
+    "location_ue": [
+     24384.0,
+     -14032.0,
+     980.0
+    ],
+    "dist_uu": 3889,
+    "yaw_ue": 31165,
+    "pitch_ue": 1885
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 28161,
+   "area_m2": 9387,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    150,
+    -304,
+    6885
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15598",
+    "location_ue": [
+     -3195.9365234375,
+     10132.58984375,
+     1226.7862548828125
+    ],
+    "dist_uu": 12334,
+    "yaw_ue": 52388,
+    "pitch_ue": 4971
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_CleanMaterials_p.Materials.ENV_IAC_CleanDoor_Off_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 27099,
+   "area_m2": 9033,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 6,
+   "target_ue": [
+    9207,
+    -18781,
+    1022
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1614",
+    "location_ue": [
+     7629.5498046875,
+     -17350.400390625,
+     1108.0
+    ],
+    "dist_uu": 2131,
+    "yaw_ue": 57853,
+    "pitch_ue": -421
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 26482,
+   "area_m2": 8827,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 43,
+   "target_ue": [
+    -9716,
+    -13523,
+    581
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13048",
+    "location_ue": [
+     -9528.1015625,
+     -12029.4541015625,
+     -120.0
+    ],
+    "dist_uu": 1661,
+    "yaw_ue": 47847,
+    "pitch_ue": 4546
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_dense_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 26115,
+   "area_m2": 8705,
+   "tris": 112,
+   "draws": 4,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    8986,
+    -45682,
+    -70451
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_8434",
+    "location_ue": [
+     10347.0,
+     -45824.0,
+     -70569.78125
+    ],
+    "dist_uu": 1374,
+    "yaw_ue": 31682,
+    "pitch_ue": 906
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysDarkCool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 25911,
+   "area_m2": 8637,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    12449,
+    -50,
+    4457
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15276",
+    "location_ue": [
+     10002.0126953125,
+     -357.9852600097656,
+     87.3997573852539
+    ],
+    "dist_uu": 5017,
+    "yaw_ue": 1305,
+    "pitch_ue": 11023
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 25862,
+   "area_m2": 8621,
+   "tris": 280,
+   "draws": 7,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 7,
+   "target_ue": [
+    36819,
+    -42542,
+    -69075
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6422",
+    "location_ue": [
+     33687.99609375,
+     -42187.9921875,
+     -70572.0234375
+    ],
+    "dist_uu": 3488,
+    "yaw_ue": 64363,
+    "pitch_ue": 4625
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_light_thin_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 25365,
+   "area_m2": 8455,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    416,
+    2688,
+    3488
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_2975",
+    "location_ue": [
+     1024.0009765625,
+     768.000244140625,
+     612.0820922851562
+    ],
+    "dist_uu": 3511,
+    "yaw_ue": 19583,
+    "pitch_ue": 10012
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 25216,
+   "area_m2": 8405,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 10,
+   "target_ue": [
+    23092,
+    1945,
+    13720
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11194",
+    "location_ue": [
+     24457.80859375,
+     903.1676635742188,
+     13399.6787109375
+    ],
+    "dist_uu": 1747,
+    "yaw_ue": 25972,
+    "pitch_ue": 1924
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 25216,
+   "area_m2": 8405,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 10,
+   "target_ue": [
+    -14772,
+    -16848,
+    13720
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10213",
+    "location_ue": [
+     -15459.7822265625,
+     -17168.990234375,
+     13420.607421875
+    ],
+    "dist_uu": 816,
+    "yaw_ue": 4555,
+    "pitch_ue": 3919
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 25199,
+   "area_m2": 8400,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 29,
+   "target_ue": [
+    -21394,
+    -1063,
+    -768
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4449",
+    "location_ue": [
+     -21156.58984375,
+     -2459.935791015625,
+     -684.0001220703125
+    ],
+    "dist_uu": 1419,
+    "yaw_ue": 18140,
+    "pitch_ue": -618
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Complex_p.Material.LightCylinder_Rays_less_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 22649,
+   "area_m2": 7550,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    1460,
+    -3877,
+    537
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2404",
+    "location_ue": [
+     1152.0037841796875,
+     -3712.0009765625,
+     -811.9981689453125
+    ],
+    "dist_uu": 1393,
+    "yaw_ue": 60395,
+    "pitch_ue": 13742
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 20764,
+   "area_m2": 6921,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 5,
+   "target_ue": [
+    20946,
+    -5976,
+    2798
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_7240",
+    "location_ue": [
+     16670.04296875,
+     -4072.1455078125,
+     758.7559814453125
+    ],
+    "dist_uu": 5105,
+    "yaw_ue": 61167,
+    "pitch_ue": 4285
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_ArchiveInterior_p.Courtyard.CourtyardFalls_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 20524,
+   "area_m2": 6841,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    -16600,
+    -1045,
+    1446
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10418",
+    "location_ue": [
+     -15744.0029296875,
+     -4288.0048828125,
+     83.9921646118164
+    ],
+    "dist_uu": 3620,
+    "yaw_ue": 19075,
+    "pitch_ue": 4023
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_IAC_Bridge_p.ENV_Bridge_Hallogram",
+   "master": "ENV_IAC_Bridge_p.ENV_Bridge_Hallogram",
+   "ours": "K",
+   "score": 20408,
+   "area_m2": 6803,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    1488,
+    -342,
+    4110
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15598",
+    "location_ue": [
+     -3195.9365234375,
+     10132.58984375,
+     1226.7862548828125
+    ],
+    "dist_uu": 11831,
+    "yaw_ue": 53538,
+    "pitch_ue": 2568
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 19359,
+   "area_m2": 6453,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 16,
+   "target_ue": [
+    768,
+    0,
+    1999
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11551",
+    "location_ue": [
+     767.9999389648438,
+     1407.999755859375,
+     -152.64894104003906
+    ],
+    "dist_uu": 2571,
+    "yaw_ue": 49152,
+    "pitch_ue": 10340
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThick2_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 18969,
+   "area_m2": 6323,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    6914,
+    -17001,
+    2146
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11430",
+    "location_ue": [
+     7167.998046875,
+     -17280.0,
+     213.02200317382812
+    ],
+    "dist_uu": 1969,
+    "yaw_ue": 24084,
+    "pitch_ue": 14371
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_ORB_DecoTrim_p.Structural_Trim.PistonChamber_MATINST_BAT",
+   "master": "ENV_ORB_DecoTrim_p.Structural_Trim.PistonChamber_MAT",
+   "ours": "K",
+   "score": 18689,
+   "area_m2": 6230,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.05)",
+    "Panner(0, 0.08)"
+   ],
+   "instances": 8,
+   "target_ue": [
+    -1469,
+    1470,
+    13623
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5489",
+    "location_ue": [
+     -7285.70556640625,
+     6008.033203125,
+     11417.4189453125
+    ],
+    "dist_uu": 7700,
+    "yaw_ue": 58626,
+    "pitch_ue": 3030
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 18586,
+   "area_m2": 6195,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -12660,
+    -9872,
+    3688
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_15227",
+    "location_ue": [
+     -5952.5,
+     -9164.740234375,
+     1876.0
+    ],
+    "dist_uu": 6984,
+    "yaw_ue": 33865,
+    "pitch_ue": 2737
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 18551,
+   "area_m2": 6184,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 14,
+   "target_ue": [
+    12046,
+    758,
+    3392
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 6823,
+    "yaw_ue": 17443,
+    "pitch_ue": 5279
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 17858,
+   "area_m2": 5953,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -7623,
+    11141,
+    5348
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_9132",
+    "location_ue": [
+     -8564.4619140625,
+     11175.74609375,
+     1236.0
+    ],
+    "dist_uu": 4219,
+    "yaw_ue": 65146,
+    "pitch_ue": 14035
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Orrery_p.cards.OrreryRings_MAT",
+   "master": "ENV_IAC_Orrery_p.cards.OrreryRings_MAT",
+   "ours": "K",
+   "score": 17476,
+   "area_m2": 5825,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.19)",
+    "Panner(0.01, 0)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -4352,
+    5120,
+    3584
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4116",
+    "location_ue": [
+     -4368.43408203125,
+     5682.4892578125,
+     859.0
+    ],
+    "dist_uu": 2782,
+    "yaw_ue": 49457,
+    "pitch_ue": 14260
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 17299,
+   "area_m2": 5766,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 11,
+   "target_ue": [
+    -22454,
+    -10752,
+    2362
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11136",
+    "location_ue": [
+     -20762.5,
+     -14516.5,
+     1875.9998779296875
+    ],
+    "dist_uu": 4156,
+    "yaw_ue": 20789,
+    "pitch_ue": 1223
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_SpaceStation_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 16612,
+   "area_m2": 5537,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -28068,
+    -3035,
+    2426
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3573",
+    "location_ue": [
+     -19374.068359375,
+     -4028.35107421875,
+     758.7559204101562
+    ],
+    "dist_uu": 8908,
+    "yaw_ue": 31581,
+    "pitch_ue": 1963
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_Interior_1_p.Materials.ENV_EngergonGlassV3_MAT_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 16050,
+   "area_m2": 5350,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -36116,
+    6134,
+    3206
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_14760",
+    "location_ue": [
+     -34816.0,
+     5504.0,
+     2808.14306640625
+    ],
+    "dist_uu": 1498,
+    "yaw_ue": 28061,
+    "pitch_ue": 2803
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_CoolantRoom_p.Material.CoolantPuddles_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Coolant_Parent_MAT",
+   "ours": "K",
+   "score": 15867,
+   "area_m2": 7933,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.02, 0.06) time-in",
+    "Panner(0.001, 0.005) time-in",
+    "Panner(0.002, 0.006) time-in",
+    "Panner(0.05, -0.02) time-in",
+    "Time"
+   ],
+   "instances": 13,
+   "target_ue": [
+    4520,
+    -13165,
+    4115
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 12949,
+    "yaw_ue": 54551,
+    "pitch_ue": 2761
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Purp_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 15583,
+   "area_m2": 5194,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    958,
+    10560,
+    13545
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2986",
+    "location_ue": [
+     7327.951171875,
+     6060.251953125,
+     11391.2294921875
+    ],
+    "dist_uu": 8091,
+    "yaw_ue": 26353,
+    "pitch_ue": 2810
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "PROP_EnergonSigns_p.DecepticonGraffiti_MATISNT",
+   "master": "PROP_EnergonSigns_p.LaserMarks_CLR_Mat",
+   "ours": "K",
+   "score": 14630,
+   "area_m2": 4877,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.01, -0.33)",
+    "Panner(0.04, 0)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    16194,
+    615,
+    10407
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10320",
+    "location_ue": [
+     17023.998046875,
+     3328.0,
+     213.3851318359375
+    ],
+    "dist_uu": 10581,
+    "yaw_ue": 46056,
+    "pitch_ue": 13552
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 14405,
+   "area_m2": 4802,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 14,
+   "target_ue": [
+    26014,
+    -20001,
+    897
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11137",
+    "location_ue": [
+     24953.599609375,
+     -18168.0,
+     980.002197265625
+    ],
+    "dist_uu": 2119,
+    "yaw_ue": 54622,
+    "pitch_ue": -409
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_AUT_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 13835,
+   "area_m2": 4612,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -5767,
+    -19480,
+    465
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10293",
+    "location_ue": [
+     -6525.3369140625,
+     -18606.587890625,
+     -172.99514770507812
+    ],
+    "dist_uu": 1321,
+    "yaw_ue": 56608,
+    "pitch_ue": 5255
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_AllShader_p.Release.ENV_ForceField_DEC_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_Fac_MAT",
+   "ours": "K",
+   "score": 13529,
+   "area_m2": 4510,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    29850,
+    6254,
+    515
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_14355",
+    "location_ue": [
+     29949.337890625,
+     5422.58642578125,
+     -170.99996948242188
+    ],
+    "dist_uu": 1082,
+    "yaw_ue": 17618,
+    "pitch_ue": 7161
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Complex_p.Material.Energy_Blue_Mat_INST",
+   "master": "ENV_AllShader_p.Special.WEP_ForceField_B_Mat",
+   "ours": "K",
+   "score": 13229,
+   "area_m2": 4410,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.04, -0.12)",
+    "Panner(-0.15, 0.18)",
+    "Panner(0.1, -0.075)",
+    "Panner(0.2, 0.1)"
+   ],
+   "instances": 14,
+   "target_ue": [
+    22169,
+    -1044,
+    1670
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_441",
+    "location_ue": [
+     23423.99609375,
+     0.00244140625,
+     979.9967041015625
+    ],
+    "dist_uu": 1772,
+    "yaw_ue": 40008,
+    "pitch_ue": 4172
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_GLB_EnvEffects_p.Material.MovingLightRays_Red_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 13090,
+   "area_m2": 4363,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    15162,
+    -8216,
+    17212
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2332",
+    "location_ue": [
+     20372.529296875,
+     -12010.345703125,
+     13183.6015625
+    ],
+    "dist_uu": 7601,
+    "yaw_ue": 26203,
+    "pitch_ue": 5826
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 13078,
+   "area_m2": 4359,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    335,
+    4862,
+    3289
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 15955,
+    "yaw_ue": 24930,
+    "pitch_ue": 2110
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystal_MATINST",
+   "master": "ENV_AllShader_p.Special.DarkEnergonCrystal_MAT",
+   "ours": "K",
+   "score": 13002,
+   "area_m2": 4334,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.01, -0.02)",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 10,
+   "target_ue": [
+    16520,
+    -3644,
+    48
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 3984,
+    "yaw_ue": 6553,
+    "pitch_ue": -94
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.WallPanelWarningSign_NoEmiss_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 12565,
+   "area_m2": 4188,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 3,
+   "target_ue": [
+    18794,
+    -6479,
+    3445
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_10409",
+    "location_ue": [
+     21504.0,
+     -8175.99853515625,
+     595.999267578125
+    ],
+    "dist_uu": 4283,
+    "yaw_ue": 26933,
+    "pitch_ue": 7592
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 12506,
+   "area_m2": 4169,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -9600,
+    3962,
+    3503
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6037",
+    "location_ue": [
+     -12544.0029296875,
+     5375.994140625,
+     84.00260925292969
+    ],
+    "dist_uu": 4728,
+    "yaw_ue": 60867,
+    "pitch_ue": 8431
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "ours": "K",
+   "score": 12389,
+   "area_m2": 4130,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -7762,
+    -11254,
+    6132
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1297",
+    "location_ue": [
+     -8353.12890625,
+     -11213.408203125,
+     1236.0
+    ],
+    "dist_uu": 4932,
+    "yaw_ue": 64829,
+    "pitch_ue": 15128
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_IAC_Interior_1_p.Materials.ENV_EnergyBridge_MAT_INST",
+   "master": "ENV_AllShader_p.Debug.ENV_Refractive_Glass_TransVrtxClr_Mat",
+   "ours": "K",
+   "score": 12251,
+   "area_m2": 4084,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.04, 0.08)",
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    8507,
+    -8635,
+    -380
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_377",
+    "location_ue": [
+     12327.3203125,
+     -10368.4833984375,
+     751.9999389648438
+    ],
+    "dist_uu": 4345,
+    "yaw_ue": 28325,
+    "pitch_ue": -2750
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeMid_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 11872,
+   "area_m2": 3957,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    17164,
+    -4476,
+    1988
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15708",
+    "location_ue": [
+     15744.0,
+     -4096.0,
+     84.0
+    ],
+    "dist_uu": 2406,
+    "yaw_ue": 62806,
+    "pitch_ue": 9526
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "ours": "K",
+   "score": 11627,
+   "area_m2": 3876,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 8,
+   "target_ue": [
+    -16098,
+    -128,
+    5737
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13852",
+    "location_ue": [
+     -18415.798828125,
+     -1571.135498046875,
+     758.7559204101562
+    ],
+    "dist_uu": 5678,
+    "yaw_ue": 5808,
+    "pitch_ue": 11151
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 10871,
+   "area_m2": 3624,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 9,
+   "target_ue": [
+    11751,
+    -52,
+    5943
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15276",
+    "location_ue": [
+     10002.0126953125,
+     -357.9852600097656,
+     87.3997573852539
+    ],
+    "dist_uu": 6119,
+    "yaw_ue": 1808,
+    "pitch_ue": 13313
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_light_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 10601,
+   "area_m2": 3534,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 8,
+   "target_ue": [
+    22209,
+    21809,
+    3136
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 30922,
+    "yaw_ue": 7145,
+    "pitch_ue": 814
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 10576,
+   "area_m2": 3525,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 10,
+   "target_ue": [
+    -15760,
+    -12720,
+    1792
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11136",
+    "location_ue": [
+     -20762.5,
+     -14516.5,
+     1875.9998779296875
+    ],
+    "dist_uu": 5316,
+    "yaw_ue": 3596,
+    "pitch_ue": -165
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 10462,
+   "area_m2": 3487,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    362,
+    -13636,
+    147
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10294",
+    "location_ue": [
+     1546.0076904296875,
+     -15395.998046875,
+     -1033.244140625
+    ],
+    "dist_uu": 2427,
+    "yaw_ue": 22563,
+    "pitch_ue": 5296
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightCylinder2_Rays_Red_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 10096,
+   "area_m2": 3365,
+   "tris": 2,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    6905,
+    -41324,
+    -72203
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_16336",
+    "location_ue": [
+     9600.0,
+     -41984.0,
+     -70572.0234375
+    ],
+    "dist_uu": 3219,
+    "yaw_ue": 30264,
+    "pitch_ue": -5541
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_CORE_Floors_p.Materials.ENV_CORE_EnergonPlasmaOrange_INST",
+   "master": "ENV_AllShader_p.Energon_River.Energon_River_Mat",
+   "ours": "K",
+   "score": 9910,
+   "area_m2": 3303,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(-0.02, -0.06)",
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.09, 0.02)",
+    "Panner(0.01, -0.075)",
+    "Panner(0.1, 0.05)"
+   ],
+   "instances": 20,
+   "target_ue": [
+    9495,
+    -99,
+    1180
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3114",
+    "location_ue": [
+     13184.0,
+     -1408.0,
+     -556.0
+    ],
+    "dist_uu": 4282,
+    "yaw_ue": 29210,
+    "pitch_ue": 4354
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_IAC_Orrery_p.cards.OrreryRings_MAT",
+   "master": "ENV_IAC_Orrery_p.cards.OrreryRings_MAT",
+   "ours": "K",
+   "score": 9466,
+   "area_m2": 3155,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.19)",
+    "Panner(0.01, 0)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -23207,
+    -75,
+    2567
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10091",
+    "location_ue": [
+     -19133.984375,
+     -1636.61865234375,
+     758.7559204101562
+    ],
+    "dist_uu": 4722,
+    "yaw_ue": 28951,
+    "pitch_ue": 4098
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_D1_Shader_p.Materials.GlassFloor_Glass_MAT",
+   "master": "ENV_AllShader_p.Special.ENV_CustPhongPointLightUnlit_Reflect_Mat",
+   "ours": "K",
+   "score": 9436,
+   "area_m2": 3145,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.5) time-in",
+    "Time"
+   ],
+   "instances": 10,
+   "target_ue": [
+    13706,
+    -6396,
+    3331
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 16117,
+    "yaw_ue": 62822,
+    "pitch_ue": 1693
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_Trans_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 8965,
+   "area_m2": 2988,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -1360,
+    -12985,
+    12321
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3912",
+    "location_ue": [
+     2140.96728515625,
+     -13751.052734375,
+     12442.4912109375
+    ],
+    "dist_uu": 3585,
+    "yaw_ue": 30520,
+    "pitch_ue": -352
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_ORB_PowerCorridor_p.Materials.PowerTubeEmissPulse_MATINST",
+   "master": "ENV_ORB_PowerCorridor_p.Materials.PowerTube_EmissPulse_MAT",
+   "ours": "K",
+   "score": 7986,
+   "area_m2": 2662,
+   "tris": 1488,
+   "draws": 3,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.4, 0)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    11872,
+    -58120,
+    -69616
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_1274",
+    "location_ue": [
+     10752.0,
+     -60800.0,
+     -71596.0
+    ],
+    "dist_uu": 3515,
+    "yaw_ue": 12255,
+    "pitch_ue": 6241
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 7951,
+   "area_m2": 2650,
+   "tris": 144,
+   "draws": 6,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 6,
+   "target_ue": [
+    11574,
+    -47104,
+    -70656
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_8434",
+    "location_ue": [
+     10347.0,
+     -45824.0,
+     -70569.78125
+    ],
+    "dist_uu": 1775,
+    "yaw_ue": 57124,
+    "pitch_ue": -507
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 7857,
+   "area_m2": 2619,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 5,
+   "target_ue": [
+    16461,
+    -11534,
+    1690
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_16284",
+    "location_ue": [
+     12544.0,
+     -13312.0,
+     84.0
+    ],
+    "dist_uu": 4592,
+    "yaw_ue": 4444,
+    "pitch_ue": 3728
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 7847,
+   "area_m2": 2616,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 3,
+   "target_ue": [
+    1085,
+    9048,
+    3866
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 18679,
+    "yaw_ue": 22881,
+    "pitch_ue": 2126
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_light_thin_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 7816,
+   "area_m2": 2605,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    -6032,
+    -16756,
+    1948
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12706",
+    "location_ue": [
+     -7808.00341796875,
+     -15104.005859375,
+     923.999267578125
+    ],
+    "dist_uu": 2633,
+    "yaw_ue": 57721,
+    "pitch_ue": 4167
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2OrangeMid_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 7786,
+   "area_m2": 2595,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 7,
+   "target_ue": [
+    -7682,
+    -17038,
+    2091
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11660",
+    "location_ue": [
+     -7601.58544921875,
+     -16993.306640625,
+     1236.0
+    ],
+    "dist_uu": 860,
+    "yaw_ue": 38017,
+    "pitch_ue": 15268
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 7712,
+   "area_m2": 2571,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    5946,
+    -8419,
+    4369
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3770",
+    "location_ue": [
+     5485.2998046875,
+     -8748.7001953125,
+     1876.0
+    ],
+    "dist_uu": 2557,
+    "yaw_ue": 6482,
+    "pitch_ue": 14054
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.WallPanelWarningSign_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 7332,
+   "area_m2": 2444,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 7,
+   "target_ue": [
+    -23508,
+    5325,
+    2765
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12066",
+    "location_ue": [
+     -15718.7998046875,
+     5493.6201171875,
+     2806.089599609375
+    ],
+    "dist_uu": 7791,
+    "yaw_ue": 32993,
+    "pitch_ue": -55
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Teal_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 7193,
+   "area_m2": 2398,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -20,
+    4,
+    16628
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5212",
+    "location_ue": [
+     8251.2265625,
+     4417.033203125,
+     11459.2958984375
+    ],
+    "dist_uu": 10705,
+    "yaw_ue": 37880,
+    "pitch_ue": 5256
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Interior_1_p.Materials.ENV_EngergonGlassV3_MAT_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 7165,
+   "area_m2": 2388,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -8316,
+    -18172,
+    3113
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_3960",
+    "location_ue": [
+     -8788.0029296875,
+     -15264.005859375,
+     852.0
+    ],
+    "dist_uu": 3714,
+    "yaw_ue": 50831,
+    "pitch_ue": 6829
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_IAC_Ground_p.EnergyFence.EnergyFence_MAT",
+   "master": "ENV_IAC_Ground_p.EnergyFence.EnergyFence_MAT",
+   "ours": "K",
+   "score": 6823,
+   "area_m2": 2274,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.03)"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -3092,
+    -1271,
+    -781
+   ],
+   "camera": {
+    "start": "PlayerStart_14233",
+    "location_ue": [
+     -10160.0,
+     -384.0,
+     -682.8656616210938
+    ],
+    "dist_uu": 7124,
+    "yaw_ue": 64233,
+    "pitch_ue": -144
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_HiDISTORT_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 6798,
+   "area_m2": 2266,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    5956,
+    -10953,
+    624
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 7771,
+    "yaw_ue": 40336,
+    "pitch_ue": 725
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2purple_Lessdense_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 6699,
+   "area_m2": 2233,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 11,
+   "target_ue": [
+    -9737,
+    12439,
+    580
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_11136",
+    "location_ue": [
+     -9656.1015625,
+     11138.544921875,
+     -120.0
+    ],
+    "dist_uu": 1479,
+    "yaw_ue": 17032,
+    "pitch_ue": 5142
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_ORB_PowerCorridor_p.Materials.PowerTubeEmissPulse_BEAM_MATINST",
+   "master": "ENV_ORB_PowerCorridor_p.Materials.PowerTube_EmissPulse_MAT",
+   "ours": "K",
+   "score": 6597,
+   "area_m2": 2199,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.4, 0)"
+   ],
+   "instances": 27,
+   "target_ue": [
+    7500,
+    -15559,
+    2060
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12500",
+    "location_ue": [
+     7629.5498046875,
+     -16326.400390625,
+     1108.0
+    ],
+    "dist_uu": 1229,
+    "yaw_ue": 18136,
+    "pitch_ue": 9235
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_ORB_PowerCorridor_p.Materials.PowerTube_doorMP_green_MATINST",
+   "master": "ENV_ORB_PowerCorridor_p.Materials.PowerTube_EmissPulse_MAT",
+   "ours": "K",
+   "score": 6565,
+   "area_m2": 2188,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.4, 0)"
+   ],
+   "instances": 13,
+   "target_ue": [
+    -744,
+    5369,
+    2477
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 16939,
+    "yaw_ue": 25158,
+    "pitch_ue": 1479
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.PlasmaAqua_INST",
+   "master": "ENV_AllShader_p.Energon_River.Energon_River_Mat",
+   "ours": "K",
+   "score": 6275,
+   "area_m2": 2092,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(-0.02, -0.06)",
+    "Panner(-0.02, 0.03)",
+    "Panner(-0.09, 0.02)",
+    "Panner(0.01, -0.075)",
+    "Panner(0.1, 0.05)"
+   ],
+   "instances": 13,
+   "target_ue": [
+    23055,
+    -3093,
+    -116
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4937",
+    "location_ue": [
+     25075.099609375,
+     268.86529541015625,
+     -172.0013885498047
+    ],
+    "dist_uu": 3923,
+    "yaw_ue": 43508,
+    "pitch_ue": 150
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "ours": "K",
+   "score": 6062,
+   "area_m2": 2021,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -16644,
+    1243,
+    5182
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15214",
+    "location_ue": [
+     -22784.001953125,
+     639.9945678710938,
+     981.9910888671875
+    ],
+    "dist_uu": 7463,
+    "yaw_ue": 1022,
+    "pitch_ue": 6234
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 5986,
+   "area_m2": 1995,
+   "tris": 40,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    29498,
+    -39726,
+    -70968
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6923",
+    "location_ue": [
+     32280.0,
+     -42699.98828125,
+     -70572.0234375
+    ],
+    "dist_uu": 4092,
+    "yaw_ue": 24229,
+    "pitch_ue": -1011
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 5709,
+   "area_m2": 1903,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 9,
+   "target_ue": [
+    -17158,
+    -3480,
+    11
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10418",
+    "location_ue": [
+     -15744.0029296875,
+     -4288.0048828125,
+     83.9921646118164
+    ],
+    "dist_uu": 1630,
+    "yaw_ue": 27350,
+    "pitch_ue": -465
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_LightSources_p.LightPlanes.SmokeShadow_MATINST",
+   "master": "ENV_AllShader_p.Special.SmokeCoolDepth_Mat",
+   "ours": "K",
+   "score": 5662,
+   "area_m2": 1887,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.02, 0.05) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -2410,
+    2528,
+    2407
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 16601,
+    "yaw_ue": 27220,
+    "pitch_ue": 1464
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_IAC_Ground_p.Material.ENV_EngergonGlass_MAT_INST",
+   "master": "ENV_AllShader_p.Special.ENV_EnergonCube_MAT",
+   "ours": "K",
+   "score": 5607,
+   "area_m2": 1869,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.15, 0.18)",
+    "Panner(0.1, -0.075)"
+   ],
+   "instances": 6,
+   "target_ue": [
+    29247,
+    16017,
+    1032
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 33817,
+    "yaw_ue": 4355,
+    "pitch_ue": 94
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 5510,
+   "area_m2": 1837,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -248,
+    2328,
+    3368
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 14868,
+    "yaw_ue": 26555,
+    "pitch_ue": 2323
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_IAC_Ground_p.EnergyFence.EnergyFencePurple_MAT_INST",
+   "master": "ENV_IAC_Ground_p.EnergyFence.EnergyFence_MAT",
+   "ours": "K",
+   "score": 5412,
+   "area_m2": 1804,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.03)"
+   ],
+   "instances": 11,
+   "target_ue": [
+    -2899,
+    4435,
+    -212
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15598",
+    "location_ue": [
+     -3195.9365234375,
+     10132.58984375,
+     1226.7862548828125
+    ],
+    "dist_uu": 5884,
+    "yaw_ue": 49694,
+    "pitch_ue": -2577
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_IAC_Ground_p.EnergyFence.EnergyFence_MAT_INST",
+   "master": "ENV_IAC_Ground_p.EnergyFence.EnergyFence_MAT",
+   "ours": "K",
+   "score": 5412,
+   "area_m2": 1804,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.03)"
+   ],
+   "instances": 11,
+   "target_ue": [
+    -2899,
+    -5425,
+    -200
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2199",
+    "location_ue": [
+     -3213.3740234375,
+     -11158.119140625,
+     1226.7862548828125
+    ],
+    "dist_uu": 5916,
+    "yaw_ue": 15813,
+    "pitch_ue": -2541
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCool_LessLessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 5231,
+   "area_m2": 1744,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    309,
+    -16058,
+    154
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_2630",
+    "location_ue": [
+     1450.0115966796875,
+     -16200.005859375,
+     -1033.244140625
+    ],
+    "dist_uu": 1653,
+    "yaw_ue": 31474,
+    "pitch_ue": 8357
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_CORE_Shader_p.Material.ENV_ForceFieldNoDestortionLessGlow_MATINST_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 5061,
+   "area_m2": 1687,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    3814,
+    7535,
+    3787
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 15920,
+    "yaw_ue": 22719,
+    "pitch_ue": 2448
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_CORE_Wall_p.Textures.TunnelGlassBlue_MAT",
+   "master": "ENV_CORE_Wall_p.Textures.TunnelGlassBlue_MAT",
+   "ours": "K",
+   "score": 5033,
+   "area_m2": 1678,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor",
+    "Opacity"
+   ],
+   "sources": [
+    "Panner(0.6, 0)",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -13776,
+    3232,
+    6240
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 13340,
+    "yaw_ue": 31970,
+    "pitch_ue": 4444
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass2_Dark_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 5026,
+   "area_m2": 1675,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    -1223,
+    10540,
+    -1888
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6406",
+    "location_ue": [
+     -921.9921875,
+     13019.9921875,
+     -1813.2440185546875
+    ],
+    "dist_uu": 2499,
+    "yaw_ue": 47891,
+    "pitch_ue": -311
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeCoolThick_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 4983,
+   "area_m2": 1661,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 5,
+   "target_ue": [
+    -16794,
+    -515,
+    357
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_10409",
+    "location_ue": [
+     -16800.072265625,
+     -527.0042114257812,
+     1239.0
+    ],
+    "dist_uu": 882,
+    "yaw_ue": 11895,
+    "pitch_ue": -16225
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_CoolantRoom_p.Material.Waterfall1_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 4974,
+   "area_m2": 1658,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    8208,
+    -9568,
+    3520
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 12571,
+    "yaw_ue": 58919,
+    "pitch_ue": 2337
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_GLB_EnvEffects_p.Material.TrainWarningLights_orange_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightVolume_Parent_MAT",
+   "ours": "K",
+   "score": 4778,
+   "area_m2": 1593,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Opacity"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -1254,
+    -11,
+    -2193
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_7005",
+    "location_ue": [
+     896.0,
+     2304.0,
+     -2588.0
+    ],
+    "dist_uu": 3184,
+    "yaw_ue": 41346,
+    "pitch_ue": 1299
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_IAC_Orrery_p.cards.OrreryLines_and_icons_MAT",
+   "master": "ENV_IAC_Orrery_p.cards.OrreryLines_and_icons_MAT",
+   "ours": "K",
+   "score": 4750,
+   "area_m2": 1583,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.19)",
+    "Panner(0.01, 0)"
+   ],
+   "instances": 11,
+   "target_ue": [
+    -4352,
+    5148,
+    3492
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4116",
+    "location_ue": [
+     -4368.43408203125,
+     5682.4892578125,
+     859.0
+    ],
+    "dist_uu": 2687,
+    "yaw_ue": 49473,
+    "pitch_ue": 14294
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_CORE_Deco_p.Materials.AngledSupportWarm_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 4701,
+   "area_m2": 1567,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 5,
+   "target_ue": [
+    6460,
+    -9387,
+    1001
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_4182",
+    "location_ue": [
+     7232.0029296875,
+     -9320.154296875,
+     986.1927490234375
+    ],
+    "dist_uu": 775,
+    "yaw_ue": 33669,
+    "pitch_ue": 199
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Orange_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 4647,
+   "area_m2": 1549,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -34060,
+    -1208,
+    4976
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_5904",
+    "location_ue": [
+     -33664.0,
+     -1024.0,
+     3412.0
+    ],
+    "dist_uu": 1623,
+    "yaw_ue": 37316,
+    "pitch_ue": 13543
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 4646,
+   "area_m2": 1549,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    8900,
+    -790,
+    3776
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_15213",
+    "location_ue": [
+     7296.0,
+     640.0,
+     1620.002685546875
+    ],
+    "dist_uu": 3044,
+    "yaw_ue": 57943,
+    "pitch_ue": 8211
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_CoolantRoom_p.Material.Waterfall2_MATINST",
+   "master": "ENV_ORB_CoolantRoom_p.Material.Waterfall_Parent_MAT",
+   "ours": "K",
+   "score": 4459,
+   "area_m2": 1486,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "Distortion",
+    "EmissiveColor",
+    "Normal"
+   ],
+   "sources": [
+    "Panner(-0.008, -0.5) time-in",
+    "Panner(-0.01, -0.05) time-in",
+    "Panner(0.008, -0.01) time-in",
+    "Panner(0.01, -0.2) time-in",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    4459,
+    -13455,
+    6120
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1834",
+    "location_ue": [
+     -1664.0,
+     -2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 13817,
+    "yaw_ue": 54389,
+    "pitch_ue": 4183
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_IAC_Interior_1_p.Materials.WallPanel_MAT_INST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 3896,
+   "area_m2": 1299,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 8,
+   "target_ue": [
+    14960,
+    192,
+    1024
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_5732",
+    "location_ue": [
+     17920.0,
+     -2303.99951171875,
+     612.0820922851562
+    ],
+    "dist_uu": 3894,
+    "yaw_ue": 25461,
+    "pitch_ue": 1105
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_CORE_Shader_p.Material.ENV_ForceField_MATINST_INST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 3775,
+   "area_m2": 1258,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 3,
+   "target_ue": [
+    10112,
+    10240,
+    4096
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 14595,
+    "yaw_ue": 6185,
+    "pitch_ue": 2430
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_NEU_landmarking_p.landmark_chevrons_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_chevrons_clr_Mat",
+   "ours": "K",
+   "score": 3402,
+   "area_m2": 1134,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.2)"
+   ],
+   "instances": 14,
+   "target_ue": [
+    10352,
+    4272,
+    80
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 9726,
+    "yaw_ue": 18872,
+    "pitch_ue": -4
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 3295,
+   "area_m2": 1098,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    11801,
+    -32,
+    8265
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6416",
+    "location_ue": [
+     12650.333984375,
+     -5179.1015625,
+     83.99961853027344
+    ],
+    "dist_uu": 9703,
+    "yaw_ue": 18091,
+    "pitch_ue": 10463
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 3295,
+   "area_m2": 1098,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    6160,
+    -5216,
+    7775
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 9530,
+    "yaw_ue": 31667,
+    "pitch_ue": 9796
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_ORB_D1_Shader_p.Materials.ORB_Glass_ElectricityOFF_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_Refractive_Glass_Trans_Mat",
+   "ours": "K",
+   "score": 3103,
+   "area_m2": 1034,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    2048,
+    3624,
+    2432
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 4293,
+    "yaw_ue": 3564,
+    "pitch_ue": 4261
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_ORB_DebrisBase_p.Materials.ENV_ORB_SliceFloorBGlass_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_CustPhongUnlit_Reflect_Mat",
+   "ours": "K",
+   "score": 3090,
+   "area_m2": 1030,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.5) time-in",
+    "Time"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -1323,
+    -22,
+    -2667
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_7764",
+    "location_ue": [
+     -3425.0,
+     -2449.0,
+     -2588.0
+    ],
+    "dist_uu": 3212,
+    "yaw_ue": 8938,
+    "pitch_ue": -256
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "DES_IAC_p.Material.LiftLock_MAT_INST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 2993,
+   "area_m2": 998,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 6,
+   "target_ue": [
+    -13621,
+    -12510,
+    3712
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11136",
+    "location_ue": [
+     -20762.5,
+     -14516.5,
+     1875.9998779296875
+    ],
+    "dist_uu": 7642,
+    "yaw_ue": 2857,
+    "pitch_ue": 2531
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.GlassEnergyA_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_Refractive_Glass_Trans_Mat",
+   "ours": "K",
+   "score": 2977,
+   "area_m2": 992,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    23591,
+    -12051,
+    -25
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_10388",
+    "location_ue": [
+     22528.0,
+     -14720.0,
+     -161.35546875
+    ],
+    "dist_uu": 2876,
+    "yaw_ue": 12432,
+    "pitch_ue": 496
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_NEU_Variation_p.EnergonSignsD2_ring_CLR_Mat",
+   "master": "ENV_NEU_Variation_p.EnergonSignsD2_ring_CLR_Mat",
+   "ours": "K",
+   "score": 2888,
+   "area_m2": 963,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Rotator(0.25 rad/s @0.5,0.5)"
+   ],
+   "instances": 12,
+   "target_ue": [
+    -12576,
+    304,
+    7024
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 12607,
+    "yaw_ue": 33211,
+    "pitch_ue": 5455
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "ours": "K",
+   "score": 2869,
+   "area_m2": 956,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    11680,
+    -6316,
+    16392
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_13413",
+    "location_ue": [
+     8951.0107421875,
+     -6021.1728515625,
+     11309.9013671875
+    ],
+    "dist_uu": 5776,
+    "yaw_ue": 64412,
+    "pitch_ue": 11218
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 2564,
+   "area_m2": 855,
+   "tris": 2,
+   "draws": 1,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    34600,
+    -37488,
+    -66728
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_4010",
+    "location_ue": [
+     35712.0,
+     -33664.0,
+     -70572.0234375
+    ],
+    "dist_uu": 5535,
+    "yaw_ue": 46200,
+    "pitch_ue": 8008
+   }
+  },
+  {
+   "map": "MP_ORB_Debris",
+   "material": "PROP_EnergonSigns_p.EnergonSigns_Decepticon_CLR_Mat",
+   "master": "PROP_EnergonSigns_p.EnergonSigns_Decepticon_CLR_Mat",
+   "ours": "K",
+   "score": 2459,
+   "area_m2": 820,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.19)",
+    "Panner(0.01, 0)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -12776,
+    -4082,
+    16130
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_12439",
+    "location_ue": [
+     -9980.8408203125,
+     -4029.56787109375,
+     11309.9013671875
+    ],
+    "dist_uu": 5572,
+    "yaw_ue": 32964,
+    "pitch_ue": 10902
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "ENV_NEU_landmarking_p.landmark_Dchevrons_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_Dchevrons_clr_Mat",
+   "ours": "K",
+   "score": 2430,
+   "area_m2": 810,
+   "tris": 1100,
+   "draws": 10,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.2)"
+   ],
+   "instances": 10,
+   "target_ue": [
+    20056,
+    -40585,
+    -72195
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_4465",
+    "location_ue": [
+     23040.0,
+     -47232.0,
+     -70568.0
+    ],
+    "dist_uu": 7465,
+    "yaw_ue": 20785,
+    "pitch_ue": -2291
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_ORB_D1_Architecture_p.Materials.WallPanelWarningSign_purple_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 2386,
+   "area_m2": 795,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -11332,
+    -21492,
+    3663
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8914",
+    "location_ue": [
+     -12011.2001953125,
+     -21653.0,
+     1875.999755859375
+    ],
+    "dist_uu": 1919,
+    "yaw_ue": 2427,
+    "pitch_ue": 12499
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ablogo_clr_Mat",
+   "ours": "K",
+   "score": 2347,
+   "area_m2": 782,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -18798,
+    -9252,
+    5060
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_11136",
+    "location_ue": [
+     -20762.5,
+     -14516.5,
+     1875.9998779296875
+    ],
+    "dist_uu": 6458,
+    "yaw_ue": 12658,
+    "pitch_ue": 5376
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWARM_lessDense_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 2241,
+   "area_m2": 747,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -9986,
+    3584,
+    3228
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_6037",
+    "location_ue": [
+     -12544.0029296875,
+     5375.994140625,
+     84.00260925292969
+    ],
+    "dist_uu": 4432,
+    "yaw_ue": 59163,
+    "pitch_ue": 8225
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "PROP_NEU_Monitors_p.MonitorScreenDead2_MAT_INST",
+   "master": "PROP_NEU_Monitors_p.MonitorScreen_Parent_MAT",
+   "ours": "K",
+   "score": 2224,
+   "area_m2": 741,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.2) time-in",
+    "Panner(0, 0.2) time-in",
+    "Sine(period 0.5)",
+    "Time"
+   ],
+   "instances": 16,
+   "target_ue": [
+    624,
+    5836,
+    5920
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 6684,
+    "yaw_ue": 10389,
+    "pitch_ue": 9281
+   }
+  },
+  {
+   "map": "MP_KON_Molten",
+   "material": "ENV_KON_Molten_p.Material.CoreGlass_MatINST",
+   "master": "ENV_AllShader_p.Special.ENV_CustPhongPointLightUnlit_Reflect_Mat",
+   "ours": "K",
+   "score": 2222,
+   "area_m2": 741,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.5) time-in",
+    "Time"
+   ],
+   "instances": 2,
+   "target_ue": [
+    -803,
+    -13560,
+    1110
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_3249",
+    "location_ue": [
+     -1779.1365966796875,
+     -13580.865234375,
+     -171.99996948242188
+    ],
+    "dist_uu": 1612,
+    "yaw_ue": 225,
+    "pitch_ue": 9595
+   }
+  },
+  {
+   "map": "MP_IAC_Rust",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 2100,
+   "area_m2": 700,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 4,
+   "target_ue": [
+    1780,
+    -14300,
+    3157
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_2741",
+    "location_ue": [
+     3953.381103515625,
+     -13360.484375,
+     2243.9990234375
+    ],
+    "dist_uu": 2538,
+    "yaw_ue": 37024,
+    "pitch_ue": 3836
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_declogo_clr_Mat",
+   "ours": "K",
+   "score": 2013,
+   "area_m2": 671,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(-0.05, -0.03)",
+    "Panner(0.02, 0.1)"
+   ],
+   "instances": 2,
+   "target_ue": [
+    18352,
+    -4184,
+    2688
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_5732",
+    "location_ue": [
+     17920.0,
+     -2303.99951171875,
+     612.0820922851562
+    ],
+    "dist_uu": 2834,
+    "yaw_ue": 51508,
+    "pitch_ue": 8574
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "DES_IAC_p.Material.LiftLock_MAT_INST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 1996,
+   "area_m2": 665,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -1216,
+    3392,
+    5632
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1675",
+    "location_ue": [
+     -1664.0,
+     2303.999755859375,
+     726.698974609375
+    ],
+    "dist_uu": 5044,
+    "yaw_ue": 12310,
+    "pitch_ue": 13928
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "ENV_IAC_Shader_p.Material.IAC_Glass_MATINST",
+   "master": "ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT",
+   "ours": "K",
+   "score": 1896,
+   "area_m2": 632,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(1, 0) time-in",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    1531,
+    4586,
+    2048
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10074",
+    "location_ue": [
+     11755.6376953125,
+     -5808.6123046875,
+     83.99961853027344
+    ],
+    "dist_uu": 14712,
+    "yaw_ue": 24490,
+    "pitch_ue": 1397
+   }
+  },
+  {
+   "map": "MP_IAC_Berth",
+   "material": "ENV_NEU_landmarking_p.landmark_ring_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_ring_clr_Mat",
+   "ours": "K",
+   "score": 1875,
+   "area_m2": 625,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Rotator(0.25 rad/s @0.5,0.5)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -23244,
+    -89,
+    89
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_10091",
+    "location_ue": [
+     -19133.984375,
+     -1636.61865234375,
+     758.7559204101562
+    ],
+    "dist_uu": 4442,
+    "yaw_ue": 29013,
+    "pitch_ue": -1579
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightVolumeWarmThink_MATINST",
+   "master": "FX_Materials_p.Materials.LightVolume_Base_MAT",
+   "ours": "K",
+   "score": 1861,
+   "area_m2": 620,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    -21781,
+    -228,
+    262
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1503",
+    "location_ue": [
+     -21982.591796875,
+     -2459.936279296875,
+     -684.0001220703125
+    ],
+    "dist_uu": 2433,
+    "yaw_ue": 15444,
+    "pitch_ue": 4166
+   }
+  },
+  {
+   "map": "MP_ESC_Remnant",
+   "material": "ENV_NEU_Variation_p.esigns_d2_CLR_Mat",
+   "master": "ENV_NEU_Variation_p.esigns_d2_CLR_Mat",
+   "ours": "K",
+   "score": 1794,
+   "area_m2": 598,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.1)",
+    "Panner(0.03, 0)"
+   ],
+   "instances": 9,
+   "target_ue": [
+    -12576,
+    304,
+    7024
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_8421",
+    "location_ue": [
+     -1664.0,
+     767.9998779296875,
+     726.698974609375
+    ],
+    "dist_uu": 12607,
+    "yaw_ue": 33211,
+    "pitch_ue": 5455
+   }
+  },
+  {
+   "map": "MP_IAC_Seed",
+   "material": "ENV_GLB_EnvEffects_p.Material.LightRaysV2Warm_MATINST",
+   "master": "ENV_GLB_EnvEffects_p.Material.LightRays_V2_Parent_MAT",
+   "ours": "K",
+   "score": 1781,
+   "area_m2": 594,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.015, -0.025)"
+   ],
+   "instances": 1,
+   "target_ue": [
+    -9472,
+    7930,
+    1319
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1356",
+    "location_ue": [
+     -11904.0029296875,
+     7935.994140625,
+     84.00260925292969
+    ],
+    "dist_uu": 2728,
+    "yaw_ue": 65512,
+    "pitch_ue": 4901
+   }
+  },
+  {
+   "map": "MP_ESC_BrokenHope",
+   "material": "TPRO_KON_CorruptorSpike_p.Materials.DarkEnergonCrystalDark_MAT_INST",
+   "master": "ENV_AllShader_p.Special.DarkEnergonCrystal_MAT",
+   "ours": "K",
+   "score": 1772,
+   "area_m2": 591,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0.01, -0.02)",
+    "Sine(period 1)",
+    "Time"
+   ],
+   "instances": 4,
+   "target_ue": [
+    16520,
+    -3772,
+    8
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13338",
+    "location_ue": [
+     13296.95703125,
+     -5985.23779296875,
+     83.99961853027344
+    ],
+    "dist_uu": 3911,
+    "yaw_ue": 6276,
+    "pitch_ue": -203
+   }
+  },
+  {
+   "map": "MP_IAC_Streets",
+   "material": "PROP_NEU_Monitors_p.MonitorScreenActive_MAT_INST",
+   "master": "PROP_NEU_Monitors_p.MonitorScreen_Parent_MAT",
+   "ours": "K",
+   "score": 1699,
+   "area_m2": 566,
+   "tris": 18,
+   "draws": 9,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, -0.2) time-in",
+    "Panner(0, 0.2) time-in",
+    "Sine(period 0.5)",
+    "Time"
+   ],
+   "instances": 9,
+   "target_ue": [
+    2701,
+    -55514,
+    -71456
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_1753",
+    "location_ue": [
+     3032.0,
+     -58992.0,
+     -72086.0
+    ],
+    "dist_uu": 3550,
+    "yaw_ue": 17375,
+    "pitch_ue": 1861
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "ENV_ORB_CoolantRoom_p.Material.AngledSupportBlue_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 1690,
+   "area_m2": 563,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 2,
+   "target_ue": [
+    17040,
+    1214,
+    -979
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_12945",
+    "location_ue": [
+     17791.99609375,
+     2176.001953125,
+     -811.993408203125
+    ],
+    "dist_uu": 1233,
+    "yaw_ue": 42233,
+    "pitch_ue": -1413
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_NEU_landmarking_p.landmark_Dchevrons_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_Dchevrons_clr_Mat",
+   "ours": "K",
+   "score": 1566,
+   "area_m2": 522,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.2)"
+   ],
+   "instances": 7,
+   "target_ue": [
+    -7694,
+    3749,
+    -142
+   ],
+   "camera": {
+    "start": "PlayerStart_14233",
+    "location_ue": [
+     -10160.0,
+     -384.0,
+     -682.8656616210938
+    ],
+    "dist_uu": 4843,
+    "yaw_ue": 10773,
+    "pitch_ue": 1167
+   }
+  },
+  {
+   "map": "MP_UND_Gorge",
+   "material": "ENV_NEU_landmarking_p.landmark_chevrons_clr_Mat",
+   "master": "ENV_NEU_landmarking_p.landmark_chevrons_clr_Mat",
+   "ours": "K",
+   "score": 1566,
+   "area_m2": 522,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Panner(0, 0.2)"
+   ],
+   "instances": 7,
+   "target_ue": [
+    -9758,
+    -12178,
+    226
+   ],
+   "camera": {
+    "start": "TnTeamPlayerStart_13048",
+    "location_ue": [
+     -9528.1015625,
+     -12029.4541015625,
+     -120.0
+    ],
+    "dist_uu": 441,
+    "yaw_ue": 38752,
+    "pitch_ue": 9397
+   }
+  },
+  {
+   "map": "MP_UND_Complex",
+   "material": "DES_IAC_WallPanelSign_p.Materials.WallPanelSign_MATINST",
+   "master": "ENV_AllShader_p.Release.ENV_PhongMain_NS_Mat",
+   "ours": "K",
+   "score": 1525,
+   "area_m2": 508,
+   "tris": 0,
+   "draws": 0,
+   "outputs": [
+    "EmissiveColor"
+   ],
+   "sources": [
+    "Sine(period 1) in ENV_Emissive_MF",
+    "Time in ENV_Emissive_MF"
+   ],
+   "instances": 2,
+   "target_ue": [
+    9977,
+    -5206,
+    2542
+   ],
+   "camera": {
+    "start": "TnFreeForAllPlayerStart_8315",
+    "location_ue": [
+     7745.99951171875,
+     -6462.99951171875,
+     979.9988403320312
+    ],
+    "dist_uu": 3000,
+    "yaw_ue": 5353,
+    "pitch_ue": 5713
+   }
+  }
+ ]
+}

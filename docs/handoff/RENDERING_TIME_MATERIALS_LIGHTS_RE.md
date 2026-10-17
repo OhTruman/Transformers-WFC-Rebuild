@@ -106,4 +106,55 @@ on time), Time, FlipBookSample, TextureSampleParameterMovie, Sine / Cosine fed b
 3. Domination marker `NodeID` parameter is not set (C script).
 4. Optional: reset material time at map load (phase only).
 
-(3) Top-20 visible time-driven surfaces with crop coordinates: section below (separate commit).
+
+## (3) Top-20 most visible time-driven surfaces, with crop coordinates
+
+Tool: `tools/time_offenders.py` → `notes/data/time_offenders.json` / `.md` (all 313 ranked candidates in the json).
+
+**Ranking.** Every placed world surface (static meshes incl. StaticMeshCollectionActor members, decals) whose material is
+time-driven (section 1); FX sprites are excluded (particle audit).
+- Score = Σ over placed instances and mesh sections of (glTF section bbox diagonal × instance scale)² (decals: width × height),
+  × a weight: 3 if the time term reaches EmissiveColor (or Opacity of a translucent / unlit material), 2 for Diffuse / Normal, 1 otherwise.
+- Only Streets has a renderer draw dump, so screen coverage is a placed-surface proxy, not a measured pixel count.
+- Max 3 per map, every map represented.
+
+**Since every row is K** (time term present), these are the surfaces where a wrong speed / phase / scroll direction would
+show most, i.e. where Rendering's visual check pays off. The sky / space domes rotate very slowly (0.0006–0.001 rad/s:
+one turn in 1.7–2.9 h), so for those, compare the **pan direction** over a ~60 s A/B rather than a single frame.
+
+**Crop coordinates.**
+- Target = the first placed instance (UE units; instance count shown).
+- Camera = the nearest player start, with the UE yaw / pitch (65536 = 360°) that faces the target.
+- For domes centred at the origin, any start works: pitch up.
+
+| # | Map | Material (master) | Time sources -> outputs | Surface proxy m² (weight) | Target UE (x, y, z) / instances | Camera: nearest start, dist, yaw / pitch (UE units) |
+|---|---|---|---|---|---|---|
+| 1 | MP_ORB_Debris | ENV_ORB_Spacedome_p.Spacedome_Nebula_MAT (Spacedome_Nebula_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 8574368401 (×2) | [0, 0, 0] / 1 | TnTeamPlayerStart_5212 @ [8251, 4417, 11459], 14796 uu, 37895 / -9241 |
+| 2 | MP_ESC_Remnant | ENV_ORB_D1_Architecture_p.Materials.Spacedome_NebulaBright_A_MAT (Spacedome_NebulaBright_A_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 238176908 (×3) | [-57157, -4857, 18209] / 1 | TnTeamPlayerStart_1834 @ [-1664, -2304, 727], 58238 uu, 33247 / 3180 |
+| 3 | MP_IAC_Streets | ENV_IAC_Background_p.Materials.Iacon_Nebula_D_MAT (Iacon_Nebula_D_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 238176905 (×3) | [-33885, -28680, 117502] / 1 | TnFreeForAllPlayerStart_9414 @ [9088, -38528, -70572], 193172 uu, 30418 / 13982 |
+| 4 | MP_IAC_Seed | ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT (Spacedome_ORBITAL_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 238176900 (×3) | [-14078, -6501, 55296] / 1 | TnTeamPlayerStart_952 @ [-7296, -8576, 1623], 54139 uu, 29671 / 15014 |
+| 5 | MP_UND_Complex | ENV_ORB_Spacedome_p.Spacedome_ORBITAL_MAT (Spacedome_ORBITAL_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 238176900 (×3) | [9472, -640, 512] / 1 | TnFreeForAllPlayerStart_9832 @ [11070, 4799, 984], 5689 uu, 46171 / -866 |
+| 6 | MP_IAC_Berth | ENV_ORB_Spacedome_p.Spacedome_MAT (Spacedome_MAT) | Panner(0.0001, 0.0001); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 119088450 (×3) | [-6382, -13994, -3673] / 4 | TnTeamPlayerStart_9199 @ [-4748, -15170, -1033], 3320 uu, 26262 / -9587 |
+| 7 | MP_IAC_Rust | ENV_ORB_Spacedome_p.Spacedome_MAT (Spacedome_MAT) | Panner(0.0001, 0.0001); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 119088450 (×3) | [-6382, -16442, -3673] / 4 | TnTeamPlayerStart_895 @ [-1290, -18966, 1108], 7427 uu, 27967 / -7295 |
+| 8 | MP_KON_Molten | ENV_KON_Molten_p.Material.KaonSmokeMolten_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 112703805 (×2) | [-7240, -60010, 71198] / 13 | TnFreeForAllPlayerStart_6312 @ [-7424, -18944, -170], 82340 uu, 49199 / 10938 |
+| 9 | MP_KON_Molten | ENV_KON_StarDome_p.Test.KON_newSky_MAT (KON_newSky_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 67924420 (×3) | [0, 0, 0] / 1 | TnFreeForAllPlayerStart_11551 @ [768, 1408, -153], 1611 uu, 43944 / 990 |
+| 10 | MP_IAC_Rust | ENV_IAC_LightSources_p.LightPlanes.IntroVistaSmoke_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 48356971 (×3) | [67259, -10154, -24881] / 6 | TnTeamPlayerStart_16276 @ [10472, -12754, 2244], 62987 uu, 477 / -4644 |
+| 11 | MP_ESC_BrokenHope | ENV_IAC_LightSources_p.LightPlanes.BrightSmoke_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 47678393 (×2) | [-17075, 108685, 50440] / 8 | TnTeamPlayerStart_6416 @ [12650, -5179, 84], 128001 uu, 19048 / 4217 |
+| 12 | MP_ESC_BrokenHope | ENV_ORB_Spacedome_p.Spacedome_IaconSunset_MAT_INST (SkyDome_PARENT_MAT) | Panner(0.0001, 0.0001); Rotator(0.0006 rad/s @0.5,0.5); Rotator(0.001 rad/s @0.5,0.5) -> EmissiveColor | 40389113 (×3) | [11840, -374, 8336] / 1 | TnTeamPlayerStart_6416 @ [12650, -5179, 84], 9584 uu, 18126 / 10820 |
+| 13 | MP_IAC_Rust | ENV_IAC_LightSources_p.LightPlanes.StarScreamFightSmoke_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 10136176 (×2) | [-37561, 29936, -3729] / 2 | TnTeamPlayerStart_15519 @ [-34816, 6784, 2803], 24212 uu, 17615 / -2849 |
+| 14 | MP_ESC_BrokenHope | ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 9569216 (×3) | [56796, -14182, 39724] / 1 | TnTeamPlayerStart_13338 @ [13297, -5985, 84], 59420 uu, 63593 / 7618 |
+| 15 | MP_IAC_Seed | ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_Light_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 4772747 (×3) | [3744, -4640, 42528] / 1 | TnTeamPlayerStart_177 @ [5760, -384, 1620], 41178 uu, 44538 / 15189 |
+| 16 | MP_IAC_Seed | ENV_IAC_LightSources_p.LightPlanes.ChasmDepths_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 4595005 (×3) | [-27444, 20620, 11436] / 3 | TnTeamPlayerStart_13609 @ [-24954, 10232, 980], 14948 uu, 18838 / 8080 |
+| 17 | MP_IAC_Streets | ENV_IAC_LightSources_p.LightPlanes.BckSillouhetteSmoke_MATINST (SmokeCoolDepth_Mat) | Panner(0.02, 0.05) time-in; Time -> EmissiveColor, Opacity | 2275095 (×3) | [963, -33098, -65408] / 20 | TnFreeForAllPlayerStart_9414 @ [9088, -38528, -70572], 11053 uu, 26623 / 5071 |
+| 18 | MP_IAC_Streets | ENV_GLB_EnvEffects_p.Material.LightVolumePurplish_MATINST (LightVolume_Base_MAT) | Time -> EmissiveColor | 1992220 (×3) | [-13761, -28160, -65168] / 3 | TnFreeForAllPlayerStart_12027 @ [9600, -29056, -71340], 24179 uu, 32368 / 2692 |
+| 19 | MP_UND_Complex | ENV_GLB_EnvEffects_p.Material.LightRaysV2Cool_MATINST (LightRays_V2_Parent_MAT) | Panner(0.015, -0.025) -> EmissiveColor | 619731 (×3) | [-722, -17107, 30409] / 3 | TnTeamPlayerStart_5189 @ [-768, -11264, -23], 30988 uu, 49234 / 14405 |
+| 20 | MP_UND_Gorge | ENV_GLB_EnvEffects_p.Material.LightRaysV2WarmInside_Lighter_MATINST (LightRays_V2_Parent_MAT) | Panner(0.015, -0.025) -> EmissiveColor | 454356 (×3) | [-16627, 9546, 36079] / 2 | TnTeamPlayerStart_11061 @ [-18541, 4232, 3141], 33419 uu, 12777 / 14613 |
+
+**Light gaps, for the same crop pass:**
+
+| Item | Map | Target UE | Camera |
+|---|---|---|---|
+| PointLightToggleable_1918 (missing always-on dynamic light, r 4096 uu, sRGB 64/187/234) | MP_ESC_Remnant | (12384, 13792, 4461) | TnTeamPlayerStart_1675 @ (−1664, 2304, 727), 18527 uu, yaw 7150 / pitch 2117 |
+| Muzzle light colour (owner energon colour vs authored) | any | a firing pawn | any; best a character with a non-default energon colour, at night-lit Debris |
+
+**The time-materials / dynamic-lights audit is complete.**
