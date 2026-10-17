@@ -2544,3 +2544,11 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   field, plasma, light shafts read the alpha as its own scalar); the global candidate builds into Rebuild-Systems/work/matB/out;
   the eye pass (Off / Faithful before vs after on all 10 maps with 360 references) is booked with Experimental after Rendering's
   slot. RE lane next: the same audit for abilities, melee, transformation and vehicle weapons.
+2026-10-17 08:19 Merged: 869666be ONLINE_MP_ARCHITECTURE.md (Systems: working-first; listen host star, UDP phases 1-3, join codes + a small UDP
+  relay, drop-to-lobby on desync, no migration, joiners wait; voice lane Opus 16 kbit/s PTT; INetTransport + switches + exit
+  codes answered for the harness; runHeadlessMatch planned; 5 ISession mismatches for the Frontend); 0cf760f4 <Strings:> in
+  versus, 37fa6376 E7, f2c285f3 online group A, 61905a60 online group B (host / join / member lobby flows on FakeSession,
+  S1-S9 green); 7cb0a992 transforming-actor export doc (4 GLBs + manifest); d6c9f6d7 weapon audit re-merged from MultiplayerData
+  + audit 2 part (4) (projectile flight loop sounds unread -> Systems). Gameplay follow-up de736589 (scorch on, gib materials,
+  DeathFx PlayType) dry-runs clean; merges with the (A) data switch after PRESENTER DONE. Decisions: per-weapon recoil = own
+  re-baseline right after hover + squad ((a)); unknown objective keys refused as the original.
