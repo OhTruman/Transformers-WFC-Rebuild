@@ -804,6 +804,9 @@ Application::MatchExit Application::runMatch() {
         static const long perfEvery = std::getenv("WFC_PERFLOG") ? std::atol(std::getenv("WFC_PERFLOG")) : 0;
         auto simT0 = std::chrono::steady_clock::now();
         int steps = clock_.tick(realDt);
+        // Online load gate (ONLINE_MP_ARCHITECTURE 10.4): from this peer's map load until the start tick the World does not
+        // step; camera, HUD and audio keep running. Offline / no session: never held.
+        if (frontend_ && frontend_->flow().simHeld()) steps = 0;
         float step = clock_.stepSeconds();
         static const bool asyncStep = game::World::asyncStepEnabled();
         static long matchSteps = -1;   // steps since the match went InProgress (WFC_SHOTMATCH)
