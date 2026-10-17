@@ -2861,3 +2861,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   PARTIAL FX, 103 missing + 416 candidate materials PROVISIONAL); AssetTools runs A2..D5 + a summary table, then a translator dry
   run over the campaign masters. RE: Remnant light flags CONFIRMED (forced dynamic, composite shadow, on at load, no toggles);
   LVV culling callers (~1 h) granted after the tonemap / exposure item.
+2026-10-17 10:46 7ff407aa ONLINE_MP_FIRST_RUN.md (Frontend): main menu -> party lobby without sign-in, a NEW one-time "Online Play" prompt (name,
+  push-to-talk key, voice settings shortcut), host / join flows, first lobby, the full first-time error table; Frontend builds the
+  prompt now on FakeSession (FR1-FR4, gated on an online session). Systems' remote-command contract agreed with Gameplay (a09b4054
+  section 10.2: one decoded path for the local human, absolute quantised aim, int8 move axes, idle on applied commands).
