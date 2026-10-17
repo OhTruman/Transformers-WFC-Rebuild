@@ -1,0 +1,23 @@
+diff -ruN a/tools/package/build_slim.py b/tools/package/build_slim.py
+--- a/tools/package/build_slim.py	2026-10-17 14:41:24.500254700 -0500
++++ b/tools/package/build_slim.py	2026-10-17 14:41:45.616125800 -0500
+@@ -29,6 +29,8 @@
+           third_party/d3d12_agility/LICENSE.txt) -> licenses/microsoft_d3d12_agility/. Never d3d12SDKLayers.dll (the debug
+           layer: not needed at run time, not in the package). Without --m5 none of these files ship even if --bin has them.
+   --plan  dry run: counts, bytes, missing sources; writes nothing.
++  --tsv   the AssetTools file list to build from (default AssetTools/out/package/slim_files.tsv), e.g. the staged
++          slim_files.refresh.tsv AssetTools re-measures at a named head.
+ Writes <out>/build_slim.json: head, flags (m5, hd + label) and the exact bin file list, which verify_slim.ps1 holds the
+ package to (no file missing, none extra). Run outside any PERF_HOLD (IO + CPU heavy). Verify afterwards with
+ tools/package/verify_slim.ps1 -Strict.
+@@ -89,7 +91,9 @@
+         for r in csv.DictReader(f, delimiter='\t'):
+             xpr_dest[r['source']] = r['dest_xpr']
+     rows, tsv_bin, drop, tsv_hd = [], [], 0, set()
+-    with open(TSV, encoding='utf-8') as f:
++    tsv = arg('--tsv', TSV)   # AssetTools' staged list (e.g. slim_files.refresh.tsv) without touching their slim_files.tsv
++    print('file list: %s' % tsv)
++    with open(tsv, encoding='utf-8') as f:
+         for r in csv.DictReader(f, delimiter='\t'):
+             if r['action'] == 'drop':
+                 drop += 1
