@@ -2681,3 +2681,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   the translated distortion scale. Frontend: Join Game row overlap fixed; <Strings:> fix = correct per AS, rename prompt to be
   verified in a 4-min re-slot, Claimed / Unclaimed unreachable (no Iconic Mode in our lobby: a later fidelity item). Card:
   Rendering slot running -> Frontend 4 -> Systems 35 -> (B).
+2026-10-17 09:31 RE lane time materials / lights audit COMPLETE (557ca8f0): top-20 time-driven surfaces (sky / space domes, smoke planes, light shafts;
+  all K) with UE camera starts for Rendering's 60 s direction / speed A/B; light gap crops (Remnant toggleable light, muzzle
+  colour); particle float order for Sphere / Cylinder = base-class first (Rendering told). RE lane next: per-map authored lighting
+  intent tables (sun / sky, top placed lights, fog / post-process volumes, light environments) as the eye-pass reference in the
+  absence of 360 captures. Gate rule added: identity / eye pairs from 1f1d4e17 on share the camera code. netlog_join.py synced.
