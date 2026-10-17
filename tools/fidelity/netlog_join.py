@@ -30,7 +30,10 @@ rep = {"peers": names, "ticks_common": [common[0], common[-1], len(common)], "fi
        "first_bundle_split": first_bundle, "per_peer": {}}
 for n in names:
     rows = peers[n]; st = [float(rows[t].get("stall_ms") or 0) for t in common]
-    bi = sum(float(rows[t].get("bytes_in") or 0) for t in common); bo = sum(float(rows[t].get("bytes_out") or 0) for t in common)
+    # bytes_in / bytes_out are cumulative counters in Systems' net.csv: the run's traffic = last - first
+    bi_ = [float(rows[t].get("bytes_in") or 0) for t in common]; bo_ = [float(rows[t].get("bytes_out") or 0) for t in common]
+    cum = all(x <= y for x, y in zip(bi_, bi_[1:]))
+    bi = (bi_[-1] - bi_[0]) if cum else sum(bi_); bo = (bo_[-1] - bo_[0]) if cum else sum(bo_)
     secs = len(common) / 60.0
     rep["per_peer"][n] = {"stall_ticks": sum(1 for s in st if s > 0), "stall_ms_total": round(sum(st), 1), "stall_ms_max": max(st) if st else 0,
                           "bytes_in_per_s": round(bi / secs, 1), "bytes_out_per_s": round(bo / secs, 1)}
