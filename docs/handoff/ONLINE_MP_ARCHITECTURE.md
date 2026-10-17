@@ -316,6 +316,24 @@ peer and dropped afterwards (the peer's address is then the key).
   (true until the start tick). The real SessionLayer and FakeSession both implement it. FakeSession holds until its AllLoaded, so
   offline / fake flows behave the same. Camera, HUD and audio keep running while held.
 
+### 10.5 Combat authority and disconnects (RE MP_COMBAT_AUTHORITY_RE 1ec965d)
+- **The original:**
+  - the shooter's client hit detection was trusted (instant hit, melee, ability triggers, fire rate, overheat), with no rewind;
+  - the server applied damage / death / kill feed a round trip later.
+  Lockstep removes the disagreement by construction: everything happens at the simulated tick.
+- **Presentation follows the local shooter** where the original did:
+  - the immediate muzzle flash / impact / tracer;
+  - melee hit reactions on contact;
+  - ability start + cooldown on press;
+  - the projectile from the muzzle.
+  These play on the local machine at press time, cosmetic only, never touching the sim. The simulated result follows D ticks later.
+  Health / death / kill feed come at the simulated tick.
+- **Disconnect (faithful default):** the leaving player's pawn is killed as a suicide (Killer = the leaving player; the mode's
+  suicide scoring), the seat stays EMPTY, and a team that is now empty triggers the 1.5 s forfeit check in team versus
+  ("Forfeit"). This replaces the earlier "SlotSwap to Bot" default.
+  - A bot taking over the seat stays possible as a host option, pending the user's answer to "bot takes over or the slot goes
+    empty" (13). Gameplay's SlotSwap path is kept for it.
+
 ## 11. Phases and exit criteria
 
 | phase | scope | exit criteria |
