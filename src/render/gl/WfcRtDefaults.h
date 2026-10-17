@@ -67,6 +67,8 @@ inline float x3History() { static const float v = std::min(0.98f, std::max(0.0f,
 inline bool x6() { static const bool v = envOn("WFC_X6"); return v; }
 inline float x6Refl() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_X6_REFL", 0.35f))); return v; }
 inline float x6Damp() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_X6_DAMP", 0.6f))); return v; }
+// X7 (Realistic, RT GI): the RT lightmap at 2x its page (same UVs, 4x texels); WFC_X7=0 = 1x
+inline bool x7() { static const bool v = envOn("WFC_X7"); return v; }
 inline float x6Sheen() { static const float v = std::min(4.0f, std::max(0.0f, envNum("WFC_X6_SHEEN", 1.0f))); return v; }   // damp film: gain on its sharp reflection (water Fresnel), added
 inline float x6Scale() { static const float v = std::max(0.5f, envNum("WFC_X6_SCALE", 4.0f)); return v; }   // damp patch size, m
 inline float whiteMix() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_TONE_WHITEMIX", 0.5f))); return v; }

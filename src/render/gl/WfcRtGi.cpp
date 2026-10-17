@@ -71,7 +71,10 @@ void Pipeline::giRasterMesh(int meshId, const std::vector<uint32_t>& idx, const 
             glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
             glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
             glBindTexture(GL_TEXTURE_2D, 0);
-            s = {w, h};
+            // X7 (Realistic): the RT lightmap at 2x its page - same UVs (the GL / hit lookups are normalised), 4x texels.
+            // Pages are <= 512 wide in every MP map, so 2x stays inside the texel packing (x < 2048)
+            const int k = rtdef::x7() && w <= 1024 && h <= 1024 ? 2 : 1;
+            s = {w * k, h * k};
         }
         return s;
     };
@@ -322,7 +325,8 @@ void Pipeline::giSetup() {
         glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)k]);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-        S.pageSize[(size_t)k] = {w, h};
+        const int x7k = rtdef::x7() && w <= 1024 && h <= 1024 ? 2 : 1;   // (X7: the GI page at 2x, as giRasterMesh)
+        S.pageSize[(size_t)k] = {w * x7k, h * x7k};
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     glx::textureCacheInvalidate();
@@ -389,10 +393,11 @@ void Pipeline::giSetup() {
         glGetTexLevelParameteriv(kArr, 0, GL_TEXTURE_HEIGHT, &h);
         glGetTexLevelParameteriv(kArr, 0, 0x8071 /*GL_TEXTURE_DEPTH*/, &d);
         if (w <= 0 || h <= 0 || d <= 0) continue;
+        const int k = rtdef::x7() && w <= 1024 && h <= 1024 ? 2 : 1;   // (X7: the layers hold 2x pages, as giRasterMesh)
         GLuint t = 0;
         glGenTextures(1, &t);
         glBindTexture(kArr, t);
-        TexStorage3D(kArr, 1, 0x881A /*GL_RGBA16F*/, w, h, d);
+        TexStorage3D(kArr, 1, 0x881A /*GL_RGBA16F*/, w * k, h * k, d);
         glTexParameteri(kArr, GL_TEXTURE_MIN_FILTER, GL_LINEAR); glTexParameteri(kArr, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(kArr, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); glTexParameteri(kArr, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         giArrays_[a] = t;
@@ -433,11 +438,19 @@ void Pipeline::giSetup() {
             std::vector<float> g[3], b[3];
             const int w = giPageSize_[(size_t)k0].first, h = giPageSize_[(size_t)k0].second;
             bool ok = w > 0 && h > 0;
+            GLint bw = 0, bh = 0;                         // (X7: the bake page is half the GI page's size)
+            if (ok) {
+                glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)k0]);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &bw);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &bh);
+                ok = bw > 0 && bh > 0;
+            }
+            const int bs = ok ? std::max(1, w / bw) : 1;
             for (int c = 0; c < 3 && ok; ++c) {
                 const int k = s0.lm[c];
                 if (k < 0 || (size_t)k >= giGlTex_.size() || !giGlTex_[(size_t)k]) { ok = false; break; }
                 readPage(giGlTex_[(size_t)k], w, h, g[c]);
-                readPage(lmTextures_[(size_t)k], w, h, b[c]);   // (GL decodes sRGB lightmap pages on read)
+                readPage(lmTextures_[(size_t)k], bw, bh, b[c]);   // (GL decodes sRGB lightmap pages on read)
             }
             glBindTexture(GL_TEXTURE_2D, 0);
             if (!ok) continue;
@@ -445,10 +458,11 @@ void Pipeline::giSetup() {
             for (size_t ti : kv.second) {
                 const GiTexel& T = giTexels_[ti];
                 const GiSub& s = giSubs_[T.sub & 0x7FFFFFFFu];
-                const size_t o = (((size_t)(T.pageXY >> 20)) * (size_t)w + ((T.pageXY >> 9) & 2047u)) * 4;
+                const size_t tx = (T.pageXY >> 9) & 2047u, ty = T.pageXY >> 20;
+                const size_t o = (ty * (size_t)w + tx) * 4, ob = ((ty / bs) * (size_t)bw + tx / bs) * 4;
                 double lg = 0, lb = 0;
                 for (int c = 0; c < 3; ++c)
-                    for (int ch = 0; ch < 3; ++ch) { lg += g[c][o + ch] * s.scale[c][ch]; lb += b[c][o + ch] * s.scale[c][ch]; }
+                    for (int ch = 0; ch < 3; ++ch) { lg += g[c][o + ch] * s.scale[c][ch]; lb += b[c][ob + ch] * s.scale[c][ch]; }
                 pg += lg / 9.0; pb += lb / 9.0; ++pn;
             }
             if (log) LOG_INFO("RT GI check: page %d (%zu texels): mean decoded RT %.4f vs bake %.4f (ratio %.2f)", k0, pn,
