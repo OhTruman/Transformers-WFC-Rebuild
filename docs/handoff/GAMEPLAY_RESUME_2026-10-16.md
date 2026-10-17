@@ -14,8 +14,12 @@
       - It's consumed by applyMatchDamage and read by requestCorpse; it falls back to the interim. Presentation only.
       - **Not built yet.**
     - **The RE answer on gibs:** one ragdoll per death, the ref pose at PositionSocket, from rest; 6-9 h.
-    - **The Death camera:** authored values in `DEATH_CAMERA_AUTHORED.md`; the view rotation while dead is asked of the RE lane, and
-      the interim camera stays until then.
+    - `edit_death_camera.js` (after the picker): the authored death camera per the RE answer (DEATH_CAMERA_RE).
+      - It keeps the live orbit rotation / offset frozen at death, plus the death anchor offset (robot (0, −300, 150), vehicle
+        (−100, 0, 50)), on the corpse bone, which freezes at the gib.
+      - Vehicles: the wreck yaw, pitch −30. FOV 85 / 0.4; the 1.25 / 1.0 s blend from the live view; the robot wiggle; the existing
+        camera collision. Held until respawn. **Not built yet.**
+      - **Not in it:** the roll (no roll in render::Camera); the 3 s → killer-cam spectating (a follow-up).
     - **Skeletal gibs are ragdolls** (`corpsep2/SKELETAL_GIBS_AUTHORED.md`, 49714373): a PBD ragdoll, 8-12 h. The initial pose
       needs RE (ReVa is down: headless export into work/).
     - **Next:** the Death camera values and the momentum picker (small), then the ragdoll. Then, after FREEZE LIFTED, build, run headless
