@@ -1192,14 +1192,14 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
                          "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f whiteroll=%s whitelo=%.1f whitehi=%.1f whitemix=%.2f "
-                         "x3=%s x3density=%.2f x3haze=%.4f x3sun=%.2f x3lamp=%.2f x3trans=%.2f x3g=%.2f x3dist=%.0f x3history=%.2f",
+                         "x3=%s x3density=%.2f x3haze=%.4f x3sun=%.2f x3lamp=%.2f x3trans=%.2f x3g=%.2f x3dist=%.0f x3history=%.2f x3lampcore=%.1f x3tonecontrast=%.2f",
                          oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
                          rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
                          oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()), rtdef::sunShareMax(),
                          rtdef::toneKey(), rtdef::toneAdapt(), rtdef::toneGain(), rtdef::toneSat(), rtdef::toneContrast(), rtdef::toneBloom(),
                          rtdef::bloomMax(), oo(rtdef::whiteRoll()), rtdef::whiteLo(), rtdef::whiteHi(), rtdef::whiteMix(),
                          oo(rtdef::x3()), rtdef::x3Density(), rtdef::x3Haze(), rtdef::x3Sun(), rtdef::x3Lamp(), rtdef::x3Trans(), rtdef::x3G(),
-                         rtdef::x3Dist(), rtdef::x3History());
+                         rtdef::x3Dist(), rtdef::x3History(), rtdef::x3LampCore(), rtdef::x3ToneContrast());
             }
         }
         // X3 (Realistic): the froxel volumetric light - the map's sun, its in-view lamps and the transient lights scattered by
@@ -1209,12 +1209,22 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
         {
             fr.volumetric = rtdef::x3() && rtMode_ == 2 && rtTargets_.vol != 0;
             if (fr.volumetric) {
+                // per-map medium (the eye pass): Gorge's canyon air is almost all sunlit and its authored fog is twice Molten's -
+                // at the defaults it read as a veil; an env value overrides the table (density, haze, lamp)
+                float dens = rtdef::x3Density(), haze = rtdef::x3Haze(), lampK = rtdef::x3Lamp();
+                static const struct { const char* map; float dens, haze, lamp; } kMapX3[] = {{"MP_UND_Gorge", 0.1f, 0.0015f, 1.0f}};
+                for (const auto& mx : kMapX3)
+                    if (dataDir_.find(mx.map) != std::string::npos) {
+                        if (!rtdef::envSet("WFC_X3_DENSITY")) dens = mx.dens;
+                        if (!rtdef::envSet("WFC_X3_HAZE")) haze = mx.haze;
+                        if (!rtdef::envSet("WFC_X3_LAMP")) lampK = mx.lamp;
+                    }
                 const core::Vec3 sc = sun ? sun->color * rtdef::x3Sun() : core::Vec3{0, 0, 0};
                 fr.volSun[0] = sc.x; fr.volSun[1] = sc.y; fr.volSun[2] = sc.z; fr.volSun[3] = rtdef::x3G();
-                const float fogPerM = fogOn_ ? -fogScale_ * 0.69314718f * 100.0f * rtdef::x3Density() : 0.0f;   // (fogScale_ = -Density / ln 2, per UE unit)
-                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = fogMaxH_ / 100.0f; fr.volFog[3] = rtdef::x3Haze();
+                const float fogPerM = fogOn_ ? -fogScale_ * 0.69314718f * 100.0f * dens : 0.0f;   // (fogScale_ = -Density / ln 2, per UE unit)
+                fr.volFog[0] = fogPerM; fr.volFog[1] = 1.0f / 20.0f; fr.volFog[2] = fogMaxH_ / 100.0f; fr.volFog[3] = haze;
                 fr.volMisc[0] = rtdef::x3Dist(); fr.volMisc[1] = 64.0f;
-                fr.volLampK = rtdef::x3Lamp(); fr.volTransK = rtdef::x3Trans(); fr.volHistory = rtdef::x3History();
+                fr.volLampK = lampK; fr.volTransK = rtdef::x3Trans(); fr.volHistory = rtdef::x3History(); fr.volLampCore = rtdef::x3LampCore();
                 // (v3) the halo lamps: the point / spot lights in view (cull sphere vs the frustum, within 60 m) ranked by
                 // brightness x (radius / distance)^2 - the lamps you see, not the ones the characters used
                 std::vector<std::pair<float, int>> rank;

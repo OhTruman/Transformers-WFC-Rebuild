@@ -48,13 +48,17 @@ inline float whiteHi() { static const float v = std::max(whiteLo() + 0.5f, envNu
 // X3 froxel volumetrics (Realistic, RT): the medium = the map's authored height fog x x3Density + a haze floor (1 / m);
 // in-scatter from the sun (x x3Sun, phase g), the in-view lamps (x x3Lamp, shadowed) and the transient lights (x x3Trans)
 inline bool x3() { static const bool v = envOn("WFC_X3"); return v; }
+inline bool envSet(const char* k) { return std::getenv(k) != nullptr; }
+// the X1 contrast on frames with X3 (the in-scatter lowers the frame's contrast; this gives it back - the eye pass bar)
+inline float x3ToneContrast() { static const float v = envNum("WFC_X3_TONECONTRAST", 1.2f); return v; }
 inline float x3Density() { static const float v = std::max(0.0f, envNum("WFC_X3_DENSITY", 0.3f)); return v; }
-inline float x3Haze() { static const float v = std::max(0.0f, envNum("WFC_X3_HAZE", 0.002f)); return v; }
-inline float x3Sun() { static const float v = std::max(0.0f, envNum("WFC_X3_SUN", 3.0f)); return v; }
-inline float x3Lamp() { static const float v = std::max(0.0f, envNum("WFC_X3_LAMP", 1.0f)); return v; }
+inline float x3Haze() { static const float v = std::max(0.0f, envNum("WFC_X3_HAZE", 0.003f)); return v; }
+inline float x3Sun() { static const float v = std::max(0.0f, envNum("WFC_X3_SUN", 0.6f)); return v; }
+inline float x3Lamp() { static const float v = std::max(0.0f, envNum("WFC_X3_LAMP", 2.0f)); return v; }
 inline float x3Trans() { static const float v = std::max(0.0f, envNum("WFC_X3_TRANS", 1.0f)); return v; }
-inline float x3G() { static const float v = std::min(0.95f, std::max(-0.95f, envNum("WFC_X3_G", 0.6f))); return v; }
+inline float x3G() { static const float v = std::min(0.95f, std::max(-0.95f, envNum("WFC_X3_G", 0.5f))); return v; }
 inline float x3Dist() { static const float v = std::max(10.0f, envNum("WFC_X3_DIST", 120.0f)); return v; }
+inline float x3LampCore() { static const float v = std::max(0.05f, envNum("WFC_X3_LAMPCORE", 2.0f)); return v; }
 inline float x3History() { static const float v = std::min(0.98f, std::max(0.0f, envNum("WFC_X3_HISTORY", 0.9f))); return v; }
 inline float whiteMix() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_TONE_WHITEMIX", 0.5f))); return v; }
 }  // namespace rtdef

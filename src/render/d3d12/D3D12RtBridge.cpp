@@ -1218,6 +1218,7 @@ private:
             cv[43] = (float)std::min(fr.transLightN, 4);
             cv[44] = fr.znear; cv[45] = fr.zfar; cv[46] = (float)(slot * 28); cv[47] = fr.volLampK;
             cv[48] = fr.volHistory; cv[49] = 16.0f; cv[50] = (float)std::min(fr.volLightN, 4); cv[51] = fr.volTransK;
+            cv[23] = fr.volLampCore;                     // (Size.w: the lamp core radius)
             list_->SetComputeRoot32BitConstants(0, 52, cv, 0);
             list_->SetComputeRootShaderResourceView(1, jobTlas_->GetGPUVirtualAddress());
             const UINT inc = dev_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

@@ -16,7 +16,7 @@
 cbuffer Frame : register(b0) {
     float4x4 InvViewProj;
     float4 ToSun;          // xyz towards the sun, w 1 = a sun
-    float4 Size;           // render width, height, frame index, 0
+    float4 Size;           // render width, height, frame index, the lamp core radius (m)
     float4 Params;         // 0, 0, instance mask, 0
     float4 VSun;           // the sun's linear colour x brightness (rgb), the sun phase anisotropy g (w)
     float4 VFog;           // density (1 / m) below the fog height, height falloff (1 / m above it), fog height (m), haze (1 / m)
@@ -119,7 +119,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 L = 0.0;
     if (sig > 0.0) {
         const uint mask = (uint)Params.z;
-        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask)) L += VSun.rgb * hg(dot(dir, ToSun.xyz), VSun.w);
+        // (round 1: over a long sunlit path the in-scatter saturates toward the sun's radiance x phase - open sky went white;
+        // the phase is normalised to its forward peak, so VSun is the brightness of fully lit air looking into the sun)
+        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask))
+            L += VSun.rgb * (hg(dot(dir, ToSun.xyz), VSun.w) / hg(1.0, VSun.w));
         const uint base = (uint)Extra.z;
         const uint nl = (uint)Extra2.z;                          // the in-view lamps (ring + 20 positions / + 24 colours)
         [loop] for (uint k = 0; k < 4; ++k) {
@@ -133,7 +136,10 @@ void main(uint3 id : SV_DispatchThreadID) {
             const float dlen = sqrt(d2);
             const float3 ldir = dl / max(dlen, 1e-4);
             // (phase as the sun's: ldir points at the light, so dot(dir, ldir) = 1 looks straight into it)
-            if (!blocked(x, ldir, dlen, mask & ~0x4u)) L += Lc.rgb * att * hg(dot(dir, ldir), 0.3) * Extra.w;
+            // (round 1: the UE falloff alone stays high over a lamp's whole radius - every lamp filled its room with an even
+            // glow, the grey veil on Gorge; the inverse-square core keeps the scattered light at the bulb, a halo)
+            const float r0 = max(Size.w, 0.05), core = r0 * r0 / (r0 * r0 + d2);
+            if (!blocked(x, ldir, dlen, mask & ~0x4u)) L += Lc.rgb * att * core * hg(dot(dir, ldir), 0.3) * Extra.w;
         }
         const uint nt = (uint)VCtl.w;                            // transient lights (ring + 4 positions / + 12 colours)
         [loop] for (uint t = 0; t < 4; ++t) {
