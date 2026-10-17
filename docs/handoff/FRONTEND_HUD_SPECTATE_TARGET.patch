@@ -1,0 +1,27 @@
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 2ed4ea46..f0298ce9 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -280,6 +280,14 @@ template <class O> void fillJamBuffs(frontend::HudFrame& hf, const O& o) {
+     }
+     (void)hf; (void)o;
+ }
++// Gameplay (agents/gameplay 0c0a5665): the HUD state's spectateTarget - the match name of the player the killer cam follows,
++// "" otherwise - into HudFrame::spectateTarget (the respawn movie's "currently spectating" label). Detected.
++template <class O, class = void> struct HasHudSpectate : std::false_type {};
++template <class O> struct HasHudSpectate<O, std::void_t<decltype(std::string(std::declval<const O&>().spectateTarget))>> : std::true_type {};
++template <class O> void fillSpectateTarget(frontend::HudFrame& hf, const O& o) {
++    if constexpr (HasHudSpectate<O>::value) hf.spectateTarget = std::string(o.spectateTarget);
++    (void)hf; (void)o;
++}
+ template <class R> frontend::HardwareFacts gatherHardwareFacts(R* r, platform::IWindow* w) {
+     frontend::HardwareFacts f;
+     if constexpr (HasRendererGpuFacts<R>::value) {
+@@ -1617,6 +1625,7 @@ void Application::routeMatchToFrontend(float dt) {
+         if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
+         hf.weaponJammed = o.weapon.jammed;
+         fillJamBuffs(hf, o);
++        fillSpectateTarget(hf, o);
+         hf.weaponSpread = o.weapon.spread;
+         hf.weaponMessage = o.weapon.message;
+         hf.contextualPrompts = o.contextual;

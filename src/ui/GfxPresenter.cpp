@@ -1455,6 +1455,16 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 #endif
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
     if (scoreboard_ && scoreboardShown_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
+    // PlayerList_GFX _global.GivePlayerListInput (RE audit 3): the scoreboard's rows take the pad / keys while it is up, so a
+    // row's A (online: Mute / Unmute) works; online only, so versus stays as it was.
+    {
+        const bool want = scoreboard_ && scoreboardShown_ && flow.online();
+        if (want != playerListInputGiven_ && scoreboard_) {
+            scoreboard_->invoke("_global.GivePlayerListInput", {Value(want)});
+            playerListInputGiven_ = want;
+            frontend::FlowTrace::emit("gfx.playerListInput", {{"given", frontend::FlowTrace::boolean(want)}});
+        }
+    }
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string>& objs = objsScratch_;
