@@ -3421,3 +3421,4 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   B the ORIGINAL navmesh in bot_nav schema (primary; Remnant start state CONFIRMED by NavigationCell.bBlocked; BrokenHope: 30
   generator-enabled cells not cooked blocked -> RE), C closed-doors cross-check, D survival_weapon_data (6 SV, 72 PlayerData,
   47 neither). Gameplay has the inputs for E1.
+2026-10-17 15:58 Escalation nav start state closed (RE §7.5: PreGameplaySetup Turn Offs); Escalation inputs COMPLETE for Gameplay's E1.
