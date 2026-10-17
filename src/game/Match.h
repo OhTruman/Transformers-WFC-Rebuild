@@ -23,6 +23,7 @@ namespace game {
 struct MatchSettings {
     std::string modeTag = "TDM";       // TDM (TnVersusGame, team) or DM (TnFreeForAllGame, FFA)
     bool teamGame = true;
+    bool iconicMode = false;           // ?IconicMode=1 (GRI _bIconicMode): iconic characters are claimed, one holder per match
     int goalScore = 40;                // ?PointsToWin (TDM default 40 of 20/30/40/50; DM 20 of 10/20/30)
     int timeLimit = 900;               // ?TimeLimit seconds (TimeLimits[1] of 600/900/1200)
     int teamScoreAmount = 1;           // ScoreKills.TeamScoreAmount: TDM / DM 1; ScoreKillsMP (DOM, KOTH, CTF, EXT) unset = 0
@@ -112,6 +113,7 @@ struct MatchPlayer {
     int level = 0;                     // displayed level (progression; HigherLevel kill award), 0 until supplied
     std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
     std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
+    std::string sessionMember;         // online: the session member fingerprint of a Remote participant ("" Local / Bot)
     // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
     // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
     int currentKillStreak = 0;
@@ -143,11 +145,19 @@ public:
         players_.resize(n); locs_.resize(n); spawnAt_.resize(n); damageHistory_.resize(n); deathTime_.resize(n);
     }
     // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
-    void selectCharacter(int p, const CharacterSelection& s) {
-        if (p < 0 || (size_t)p >= players_.size()) return;
+    // Returns false when the host refuses the selection (the previous one stays).
+    bool selectCharacter(int p, const CharacterSelection& s) {
+        if (p < 0 || (size_t)p >= players_.size()) return false;
+        // GRI.ValidateCharacterSelection (Iconic Mode): an iconic character another participant already holds (any team) is refused
+        // silently; ReplicatedCharacterData is untouched [CONF RE]. Bots play the class presets and never claim.
+        if (s_.iconicMode && s.type == 1)
+            for (size_t i = 0; i < players_.size(); ++i)
+                if ((int)i != p && players_[i].hasSelectedCharacter && players_[i].selection.type == 1 && players_[i].selection.chassisId == s.chassisId)
+                    return false;
         players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true;
         GameplayEvent& e = recordEvent(GameplayEventType::CharacterSelected, p);
         e.text = s.type == 1 ? s.chassisId : specialtyName(s.specialty);
+        return true;
     }
     // ---- Authoritative gameplay events (GameplayEvents.h): recorded once, in order; consumers track the last serial. ----
     const std::vector<GameplayEvent>& gameplayEvents() const { return gevents_; }

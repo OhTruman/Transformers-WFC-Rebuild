@@ -50,7 +50,7 @@ inline const char* defaultChassis(Specialty s, int faction) {
 
 // ResolveReplicatedCharacterData: the body for this spawn.
 inline std::string resolveChassis(const CharacterSelection& sel, int faction) {
-    if (sel.type == 1) return sel.chassisId;                // iconic characters keep their own chassis
+    if (sel.type == 1 && !sel.chassisId.empty()) return sel.chassisId;   // iconic characters keep their own chassis (empty: the faction's entry)
     int f = faction == 1 ? 1 : 0;                           // ResolveReplicatedCharacterData: Index of the faction
     if (!sel.chassisByFaction[f].empty()) return sel.chassisByFaction[f];
     return defaultChassis(sel.specialty, faction);          // custom: the specialty's body for the resolved faction

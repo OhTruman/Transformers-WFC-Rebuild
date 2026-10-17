@@ -2101,6 +2101,7 @@ void World::preloadHeldWeaponsOfPawns() {
 
 void World::tickPrefix(float dt) {
     joinStep();
+    tickSlotSwaps(dt);   // session slot handovers at their agreed tick (main thread, before any bot / pawn work)
     static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
     auto prefixMark = [&](int i) { if (!secLog) return; const double t = profNowMs(); prefixSecMs_[i] += t - prefixMark_; prefixMark_ = t; };
     prefixMark_ = secLog ? profNowMs() : 0.0;
@@ -2629,6 +2630,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
     // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
+    if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
     if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, kMaxBotDifficulty);
@@ -3036,6 +3038,8 @@ bool World::launchMatch(const MatchLaunch& l) {
     // (up to 64 participants, ours) gets 128 so distant bots' sounds are not refused as often (63 bots, paced: Systems).
     if (audio_) audio_->setChannelLimit(l.settings.extendedSlots ? 128 : 96);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
+    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear();
+    for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers' humans (before the bot fill counts them)
     const int nb = addBots(l.bots);
     if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     evictUnusedAssets();
@@ -3194,7 +3198,7 @@ void World::removeBots() {
     smartThreatSnap_[0].clear(); smartThreatSnap_[1].clear(); smartThreatCursor_ = 0;
     for (auto& board : smartBoard_) board.clear();
     size_t first = match_.players().size();
-    for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }
+    for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot && match_.players()[i].sessionMember.empty()) break; first = i; }
     if (first == match_.players().size()) { bots_.clear(); return; }
     for (size_t i = 0; i < opponents_.size();) {
         if ((size_t)opponents_[i]->matchPlayer() >= first) { opponents_[i]->destroy(); opponents_.erase(opponents_.begin() + (long)i); rebuildOppIndex(); } else ++i;
@@ -3264,6 +3268,111 @@ int World::addBots(const BotLaunch& launch) {
     }
     if (anySmart_) ensureSmartTactics();   // under the match load (Smart cover / exposure tables, once per map)
     return (int)ids.size();
+}
+
+// ---- Online sessions: Remote participants and slot handovers (see World.h RemoteSeat / SlotSwap) ----
+int World::addRemoteParticipant(const RemoteSeat& r) {
+    const int p = match_.addPlayer(r.name, r.team);
+    {
+        MatchPlayer& mp = match_.playerMutable(p);
+        mp.kind = ParticipantKind::Remote;
+        mp.sessionMember = r.member;
+    }
+    if (r.selected) match_.selectCharacter(p, r.selection);
+    const MatchPlayer& mp = match_.players()[(size_t)p];
+    auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
+    opponents_.push_back(o.get());
+    rebuildOppIndex();
+    actors_.push_back(std::move(o));
+    if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction(p)));   // under the match load
+    if (remoteIdle_.size() <= (size_t)p) remoteIdle_.resize((size_t)p + 1, 0.0f);
+    remoteIdle_[(size_t)p] = 0.0f;
+    LOG_INFO("session: p%d %s team %d is Remote (member %s)", p, r.name.c_str(), mp.team, r.member.c_str());
+    return p;
+}
+
+bool World::applySlotSwap(const SlotSwap& s) {
+    int p = s.matchPlayer;
+    if (p < 0 && !s.member.empty())
+        for (size_t i = 0; i < match_.players().size(); ++i) if (match_.players()[i].sessionMember == s.member) { p = (int)i; break; }
+    if (p < 0 || (size_t)p >= match_.players().size() || p == localPlayer_) return false;
+    const ParticipantKind k = match_.players()[(size_t)p].kind;
+    if (s.toBot ? k != ParticipantKind::Remote : (k != ParticipantKind::Bot || s.member.empty())) return false;
+    SlotSwap q = s; q.matchPlayer = p;
+    if (q.atTick <= 0) q.atTick = simTick_ + 1;
+    pendingSwaps_.push_back(q);
+    return true;
+}
+
+void World::noteRemoteCommand(int matchPlayer) {
+    if (matchPlayer >= 0 && (size_t)matchPlayer < remoteIdle_.size()) remoteIdle_[(size_t)matchPlayer] = 0.0f;
+}
+
+void World::tickSlotSwaps(float dt) {
+    if (!matchActive_) return;
+    ++simTick_;
+    // Host idle rule: a Remote participant without commands for kRemoteIdleKickSeconds of play is handed to a bot.
+    if (match_.state() == Match::State::InProgress)
+        for (size_t i = 0; i < match_.players().size(); ++i) {
+            const MatchPlayer& mp = match_.players()[i];
+            if (mp.kind != ParticipantKind::Remote || mp.sessionMember.empty()) continue;
+            if (remoteIdle_.size() <= i) remoteIdle_.resize(i + 1, 0.0f);
+            remoteIdle_[i] += dt;
+            if (remoteIdle_[i] < kRemoteIdleKickSeconds) continue;
+            remoteIdle_[i] = -1e9f;   // queued once
+            SlotSwap s; s.matchPlayer = (int)i; s.toBot = true; s.atTick = simTick_;
+            pendingSwaps_.push_back(s);
+            LOG_INFO("session: p%zu idle %.0f s: kicked, the slot becomes a bot", i, kRemoteIdleKickSeconds);
+        }
+    for (size_t k = 0; k < pendingSwaps_.size();) {
+        if (pendingSwaps_[k].atTick > simTick_) { ++k; continue; }
+        const SlotSwap s = pendingSwaps_[k];
+        pendingSwaps_.erase(pendingSwaps_.begin() + (long)k);
+        if (s.toBot) swapSlotToBot(s.matchPlayer); else swapSlotToRemote(s.matchPlayer, s.member);
+    }
+}
+
+void World::swapSlotToBot(int p) {
+    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) return;
+    {
+        MatchPlayer& mp = match_.playerMutable(p);
+        mp.kind = ParticipantKind::Bot;
+        mp.sessionMember.clear();
+    }
+    if (!match_.players()[(size_t)p].hasSelectedCharacter) {   // never selected: the Soldier class preset (bots play class presets)
+        CharacterSelection cs; cs.type = 0; cs.specialty = Specialty::Soldier;
+        match_.selectCharacter(p, cs);
+    }
+    for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) o->pressesPickup = true;
+    ensureBotNav();
+    addBotBrain(p, botDifficulty_);
+    {   // the bot AI: WFC_BOTAI (DEV / TEST) over the default (Smart) [PROVISIONAL: the lobby's per-faction AI row is not kept per match]
+        static const char* envAi = std::getenv("WFC_BOTAI");
+        const BotAi ai = botAiFromString(envAi, BotAi::Smart);
+        if (smart_.size() <= (size_t)p) smart_.resize((size_t)p + 1);
+        smart_[(size_t)p] = SmartBot{};
+        smart_[(size_t)p].active = ai == BotAi::Smart;
+        smart_[(size_t)p].rng = 0x51a7b07U ^ ((unsigned)p * 2654435761U);
+        anySmart_ |= ai == BotAi::Smart;
+        if (anySmart_) ensureSmartTactics();
+    }
+    if ((size_t)p < remoteIdle_.size()) remoteIdle_[(size_t)p] = 0.0f;
+    LOG_INFO("session: p%d Remote -> Bot at tick %lld (slot, score row and team kept)", p, (long long)simTick_);
+}
+
+void World::swapSlotToRemote(int p, const std::string& member) {
+    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Bot) return;
+    {
+        MatchPlayer& mp = match_.playerMutable(p);
+        mp.kind = ParticipantKind::Remote;
+        mp.sessionMember = member;
+    }
+    bots_.erase(std::remove_if(bots_.begin(), bots_.end(), [p](const BotBrain& b) { return b.player == p; }), bots_.end());
+    if ((size_t)p < smart_.size()) smart_[(size_t)p].active = false;
+    for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p) o->pressesPickup = false;
+    if (remoteIdle_.size() <= (size_t)p) remoteIdle_.resize((size_t)p + 1, 0.0f);
+    remoteIdle_[(size_t)p] = 0.0f;
+    LOG_INFO("session: p%d Bot -> Remote (member %s) at tick %lld (slot, score row and team kept)", p, member.c_str(), (long long)simTick_);
 }
 
 MatchOpponent* World::addMatchOpponent(const std::string& name, bool drawn) {

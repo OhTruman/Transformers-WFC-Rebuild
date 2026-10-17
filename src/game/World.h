@@ -57,6 +57,12 @@ namespace game {
 // Launch contract (Frontend / Integration -> Gameplay): the original StartLevel URL form
 // "MP_IAC_Streets_Base_m?Game=TransContent.TnVersusGame?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00..."
 // [CONF RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3.1 / §5.1]. Missing keys keep the TnOnlineGameSettings defaults.
+// Online (Frontend's session layer, PC EXTENSION): another peer's human in this match -> a ParticipantKind::Remote participant.
+struct RemoteSeat { std::string name; int team = 255; std::string member; CharacterSelection selection; bool selected = false; };
+// A slot handover the session agreed (frontend::SessionSlotSwap in game terms). matchPlayer < 0: found by member (sessionMember).
+// toBot: Remote -> Bot; else Bot -> Remote (late join, member = who takes it). atTick: World::simTick() to apply at (<= 0: next tick).
+struct SlotSwap { int matchPlayer = -1; bool toBot = true; std::string member; int64_t atTick = 0; };
+
 struct MatchLaunch {
     std::string map = "MP_IAC_Streets";
     std::string modeTag = "TDM";
@@ -65,6 +71,7 @@ struct MatchLaunch {
     // 1 Decepticons; travels with the player). -1: Gameplay's PickTeam (direct boot / harnesses). Team games only.
     int localTeam = -1;
     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
+    std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
 
@@ -825,6 +832,12 @@ public:
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+    // Online sessions (see RemoteSeat / SlotSwap): a Remote participant, a queued slot handover, the remote command clock.
+    int addRemoteParticipant(const RemoteSeat& r);
+    bool applySlotSwap(const SlotSwap& s);
+    void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)
+    int64_t simTick() const { return simTick_; }
+    static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot
     // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
     // their class selection, clamped to MatchSettings::maxPerTeam / maxPlayers. Returns the number added.
     int addBots(const BotLaunch& b);
@@ -1142,6 +1155,12 @@ private:
     AwardProducer awards_;
     size_t xpLogged_ = 0;
     std::vector<BotBrain> bots_;
+    std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick
+    std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command
+    int64_t simTick_ = 0;
+    void tickSlotSwaps(float dt);
+    void swapSlotToBot(int p);
+    void swapSlotToRemote(int p, const std::string& member);
     bool botOverlay_ = false;
     // Smart AI (BotSmart.h): per match player; Classic bots have active == false and never reach the Smart code.
     std::vector<SmartBot> smart_;

@@ -225,6 +225,7 @@ bool Application::init() {
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
+    if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
@@ -5325,6 +5326,101 @@ void Application::runEventTest() {
         check(streaks <= 1, "killstreak earned at most once per reward (count " + std::to_string(streaks) + ")");
     }
     LOG_INFO("EVENTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_SESSIONTEST (docs/handoff/ONLINE_MP_FRONTEND_TESTS.md section 4): the match side of online sessions over a scripted TDM match.
+// Remote participants are fed scripted commands (noteRemoteCommand each step; no network). 1) Remote spawn / kill / death records
+// and scoring, 2) Remote -> Bot at an agreed tick, 3) Bot -> Remote (late join), 4) the 180 s idle kick; slot continuity and serials.
+void Application::runSessionTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SESSIONTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    std::vector<int> fed;   // Remote participants that send commands
+    auto run = [&](float secs) {
+        for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { for (int p : fed) world_.noteRemoteCommand(p); world_.handleInput(idle, dt); world_.tick(dt); }
+    };
+    using T = game::GameplayEventType;
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    L.localTeam = 0;
+    auto seat = [](const char* name, int team, const char* member) {
+        game::RemoteSeat r; r.name = name; r.team = team; r.member = member; r.selected = true;
+        r.selection.type = 0; r.selection.specialty = game::Specialty::Soldier; r.selection.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        return r;
+    };
+    L.remotes = {seat("Remote1", 1, "WFC-TEST-0001"), seat("Remote2", 0, "WFC-TEST-0002"), seat("Remote3", 1, "WFC-TEST-0003")};
+    world_.launchMatch(L);
+    const int me = world_.localMatchPlayer();
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+    world_.match().selectCharacter(me, cs);
+    auto byMember = [&](const char* m) { const auto& ps = world_.match().players(); for (size_t i = 0; i < ps.size(); ++i) if (ps[i].sessionMember == m) return (int)i; return -1; };
+    const int r1 = byMember("WFC-TEST-0001"), r2 = byMember("WFC-TEST-0002"), r3 = byMember("WFC-TEST-0003");
+    check(r1 >= 0 && r2 >= 0 && r3 >= 0, "three Remote participants from MatchLaunch.remotes");
+    if (r1 < 0 || r2 < 0 || r3 < 0) { LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    fed = {r1, r2};   // r3 sends nothing (the idle check)
+    run(11.0f);
+    const auto& P = [&](int p) -> const game::MatchPlayer& { return world_.match().players()[(size_t)p]; };
+    check(P(r1).kind == game::ParticipantKind::Remote && world_.participantPawn(r1) && world_.participantPawn(r2), "Remote participants spawned (kind Remote)");
+    // 1) a kill on a Remote participant scores; a Remote participant kills and scores.
+    const int myKills0 = P(me).kills;
+    if (world_.participantPawn(r1)) world_.applyMatchDamage(r1, me, 99999.0f, false, "TransGame.TnDamageTypeAssaultRifle");
+    run(0.2f);
+    run(7.0f);
+    if (world_.participantPawn(r1) && !world_.localPlayerDead()) world_.applyMatchDamage(me, r1, 99999.0f, false, "TransGame.TnDamageTypeAssaultRifle");
+    run(7.0f);
+    int killOnRemote = 0, killByRemote = 0, remoteSpawns = 0;
+    for (const auto& e : world_.match().gameplayEvents()) {
+        if (e.type == T::Kill && e.victim == r1 && e.victimState.kind == game::ParticipantKind::Remote) ++killOnRemote;
+        if (e.type == T::Kill && e.instigator == r1 && e.instigatorState.kind == game::ParticipantKind::Remote) ++killByRemote;
+        if (e.type == T::Spawn && e.instigator == r1 && e.instigatorState.kind == game::ParticipantKind::Remote) ++remoteSpawns;
+    }
+    check(killOnRemote == 1 && P(me).kills == myKills0 + 1, "a kill on a Remote participant: a Kill record with victim kind Remote, and it scores");
+    check(killByRemote == 1 && P(r1).kills == 1 && P(r1).score > 0, "a Remote participant's kill: a Kill record with instigator kind Remote, and it scores");
+    check(remoteSpawns >= 2, "Spawn records with kind Remote (initial + respawn)");
+    // 2) Remote -> Bot at an agreed tick: the slot, score row and team stay.
+    const game::MatchPlayer before = P(r1);
+    const int64_t at = world_.simTick() + 60;
+    game::SlotSwap sw; sw.matchPlayer = -1; sw.member = "WFC-TEST-0001"; sw.toBot = true; sw.atTick = at;
+    check(world_.applySlotSwap(sw), "swap to Bot accepted (found by member)");
+    fed = {r2};   // the leaving peer sends nothing more
+    run(0.5f);
+    check(P(r1).kind == game::ParticipantKind::Remote, "not before the agreed tick");
+    run(1.0f);
+    check(P(r1).kind == game::ParticipantKind::Bot && world_.botBrain(r1) != nullptr && P(r1).sessionMember.empty(), "Remote -> Bot at the agreed tick (bot brain, member cleared)");
+    check(P(r1).team == before.team && P(r1).name == before.name && P(r1).kills >= before.kills && P(r1).deaths >= before.deaths && P(r1).score >= before.score,
+          "the score row and team stay (same index)");
+    run(8.0f);
+    // 3) Bot -> Remote (late join) at the next tick.
+    game::SlotSwap sj; sj.matchPlayer = r1; sj.toBot = false; sj.member = "WFC-TEST-0004"; sj.atTick = 0;
+    check(world_.applySlotSwap(sj), "swap to Remote accepted");
+    run(0.1f);
+    fed = {r1, r2};
+    check(P(r1).kind == game::ParticipantKind::Remote && P(r1).sessionMember == "WFC-TEST-0004" && world_.botBrain(r1) == nullptr && P(r1).team == before.team,
+          "Bot -> Remote: kind, member, no bot brain, team kept");
+    // 4) idle: r3 never sent a command -> kicked at 180 s of play, its slot a Bot; the fed ones stay Remote.
+    run(185.0f);
+    check(P(r3).kind == game::ParticipantKind::Bot && world_.botBrain(r3) != nullptr, "idle 180 s: the Remote slot becomes a Bot");
+    check(P(r1).kind == game::ParticipantKind::Remote && P(r2).kind == game::ParticipantKind::Remote, "participants that send commands stay Remote");
+    bool serialsOk = true; uint32_t prev = 0;
+    for (const auto& e : world_.match().gameplayEvents()) { if (e.serial <= prev) serialsOk = false; prev = e.serial; }
+    check(serialsOk, "event serials unique and increasing across the swaps");
+    int myKillRecords = 0;
+    for (const auto& e : world_.match().gameplayEvents()) myKillRecords += e.type == T::Kill && e.instigator == me;
+    check(myKillRecords == P(me).kills, "kill records equal the participant stats");
+    // Iconic Mode: a second claim of the same iconic character is refused, the previous selection stays.
+    {
+        game::MatchLaunch I; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?IconicMode=1", I);
+        I.localTeam = 0;
+        I.remotes = {seat("Remote1", 1, "WFC-TEST-0001")};
+        world_.launchMatch(I);
+        const int me2 = world_.localMatchPlayer(), q = byMember("WFC-TEST-0001");
+        game::CharacterSelection bee; bee.type = 1; bee.chassisId = "Car";
+        const bool first = world_.match().selectCharacter(me2, bee);
+        const bool second = q >= 0 && world_.match().selectCharacter(q, bee);
+        check(I.settings.iconicMode && first && !second && q >= 0 && world_.match().players()[(size_t)q].selection.type == 0,
+              "Iconic Mode: one holder per match (a second claim is refused, the previous selection stays)");
+    }
+    LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 // WFC_PACINGTEST: presented camera / pawn positions per rendered frame at 60 / 144 / 240 Hz with a 60 Hz fixed-step sim, strafing
