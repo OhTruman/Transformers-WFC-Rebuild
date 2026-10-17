@@ -3377,3 +3377,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:29 USER (2026-10-17 15:29): lens flares adjustable in the graphics options: Off / Subtle (DistMap first point) / Original (shipped), default
   Original -> next head (Rendering setting + WFC_LENSFLARE env + persistence; Frontend row + strings). A second PC is available:
   the two-PC online test runs on tonight's package 7 build (Systems writes PACKAGE_7_TWO_PC_TEST.md for the user).
+2026-10-17 15:30 Sweep: Frontend -26.5 GB (work\abvm 2.4 GB locked, retry after the gate); Systems -3.9 GB (pass 1); AssetTools listing: 13.2 GB
+  superseded approved by name (after the gate); out\hd\full 41 GB + the E-remake inputs 10 GB kept for errata until package 7's HD
+  window closes. Kismet batch 3 merged (96 / 176). F: ~108 GB free.
