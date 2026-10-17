@@ -3065,3 +3065,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 12:18 Gameplay's transforming-actors patch POSTED (1b894dc7: option c; BrokenHope byte-identical, Remnant Smart at base, Rust as
   authored; TRANSACTTEST 4 maps; BotNav.setBlocked + piece recompute; VehicleDying bodies diverge SIMHASH where a vehicle dies; nav
   health within noise); applies clean on 1c5de2d8; merges in the door head with Rendering's draw after x15 / x16.
+2026-10-17 12:20 RE: the Conversation sequencer and the special-spawn caller CONFIRMED from native / TransContent; the remaining campaign H items
+  ranked; RE takes SeqAct_Interp InitInterp (125 empty matinee groups) next, then PlayDialog timing, setpiece flags, buddy bars.
