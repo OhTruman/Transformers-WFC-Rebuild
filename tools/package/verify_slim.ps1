@@ -104,6 +104,17 @@ $RealisticDefaults = [ordered]@{
     whitelo = 1.5        # white-roll start (WFC_TONE_WHITELO; retuned after the Gorge recheck)
     whitehi = 6          # white-roll end (WFC_TONE_WHITEHI)
     whitemix = 0.5       # white-roll strength, keeps the warm tint (WFC_TONE_WHITEMIX)
+    x3 = 'on'            # X3 froxel volumetrics (WFC_X3=0 off; Rendering 607baafd) - global defaults, the per-map table is not on the line
+    x3density = 0.3      # medium = authored height fog x density (WFC_X3_DENSITY)
+    x3haze = 0.003       # haze floor, 1 / m (WFC_X3_HAZE)
+    x3sun = 0.6          # sun in-scatter, peak-normalised (WFC_X3_SUN)
+    x3lamp = 2           # in-view lamps (WFC_X3_LAMP)
+    x3trans = 1          # transient lights (WFC_X3_TRANS)
+    x3g = 0.5            # phase g (WFC_X3_G)
+    x3dist = 120         # froxel range, m (WFC_X3_DIST)
+    x3history = 0.9      # temporal history (WFC_X3_HISTORY)
+    x3lampcore = 2       # lamp core size (WFC_X3_LAMPCORE)
+    x3tonecontrast = 1.2 # X1 contrast on X3 frames (WFC_X3_TONECONTRAST)
 }
 
 function Norm([string]$p) {
