@@ -23,3 +23,17 @@ mode incl. Off / Faithful. Honouring the pin is the faithful translation (the pi
 proven against the shipped PS by RE). The visual change is broad (glows, glass, force fields, shafts on every map), so the
 regen needs a per-map eye check before it ships, and ideally a microcode spot check on 2-3 representative materials (one
 LightRaysV2, one ForceField, one plasma) the way DeathDecal was proven.
+
+## (B) step 1: microcode spot check against the shipped PS (2026-10-17) - PASS on all three
+Tools: tools/systems/vcspot/scmap_all.py (Rendering's scmap.py without its lightmapped-only filter: every PS of a map's
+ShaderCache exports with its shader-map friendly names; run on MP_IAC_Seed / MP_UND_Complex) and swz.py (the swizzles each
+UniformVector_N register is read with, via tools/render/xenos_dis.py). UE3 emits one UniformVector per VectorParameter.
+| representative (in the 108) | shipped PS | how the vector parameter is read |
+|---|---|---|
+| force field: ENV_AllShader_p.Special.ENV_ForceField_ALL_MAT (master of ENV_ForceField_MATINST, BarricadeShield ...) | Seed ShaderCache_12865 @ 275968, NoLightMap base pass | UniformVector_1: `.xyz` (l. 39, the tint) AND `.wwww` as a separate multiplier (l. 40, 43: the alpha intensity) |
+| energon plasma: ENV_CORE_Complex_p.Material.EnergonPlasmaAquaLight_INST ((rgb, 150).w) | Complex ShaderCache_8932 @ 299975 | UniformVector_6: `.x` / `.yz` (l. 8, 80, the tint) AND `.wwww` / scalar `.w` (l. 81, 87, the intensity) |
+| light shafts: ENV_CORE_Complex_p.Material.LightCylinder_Rays_Blue_less_MATINST (LightVolume_Base_MAT family) | Seed ShaderCache_6631 @ 89371 | UniformVector_1.w read alone as a scalar multiplier (l. 48, muls_prev), the tint vectors separately |
+**Verdict:** the shipped shaders read the parameter's alpha as its own intensity term next to the rgb tint - exactly what
+the pin-honouring translation (WFC_MATC_VECTOR_CHANNELS=1) emits, and what today's full-vector reading gets wrong (it
+multiplies by the rgb tint where the shader multiplies by the alpha). The spot check does not prove each of the 110
+individually; the per-map eye pass (step 3) is the gate for all of them.
