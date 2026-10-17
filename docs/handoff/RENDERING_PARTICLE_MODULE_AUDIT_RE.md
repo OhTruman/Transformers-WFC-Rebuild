@@ -174,3 +174,81 @@ H: which gameplay code sets the parameters (weapon team colour, character colour
 - A **second Lifetime module adds**: `1 / (1/old + L)`.
 - L ≤ 0 → OneOverMaxLifetime = 0 (immortal).
 - `RelativeTime = OneOverMaxLifetime × SpawnTime`.
+
+### Where the per-instance module values live (answer to Integration / AssetTools)
+
+The cook strips the module objects, but **every per-instance value the runners read is in the compiled LOD stream's parameter
+blob**:
+- In pstream's raw "between lists and groups" hex, after the module-order lists: `int 0, int SIZE`, then SIZE bytes, each module's
+  block **concatenated in record order**.
+- Verified byte-exact on Tracer_AssaultRifle_FX (SIZE 100): SizeMultiplyLife 3 ints; ColorByParameter name index + DefaultColor
+  A,R,G,B; ColorScaleOverLife bEmitterTime; Gravity float; LocationEmitter 24; DynamicParameter bUseEmitterTime ×4; Sphere 8 ints.
+- The per-module layouts are in the AssetTools message, mirrored below where relevant.
+- H: the Gravity value seen (−0.003) is small, so the unknown instance scalar `inst[+0x94]` is probably large (world gravity order).
+  Verify once AssetTools' decode gives the full census.
+
+### Batch 2: the eight modules with no runtime path (usage order)
+
+**Compiled modules (CONFIRMED from the runners):**
+
+**PMI_LocationPrimitiveCylinder** (spawn 0x15; 179 LODs):
+- Block (40 bytes): ±X / Y / Z flags ×6, SurfaceOnly, Velocity, RadialVelocity, HeightAxis (0 = X, 1 = Y, else Z).
+- Distributions (EmitterTime): StartRadius, StartHeight, VelocityScale; vector StartLocation.
+- Steps:
+  1. `u` = DetermineUnitDirection (as the sphere).
+  2. The two radial axes form `r2 = (u_a, u_b)`, normalised in 2D. SurfaceOnly puts the point on the radius.
+  3. Radial offset = `r2 × Radius`, clamped per axis to `±|n_i|·Radius`; height offset = `u_h × StartHeight`, clamped to
+     ±StartHeight.
+  4. `p = offset + StartLocation`; to world unless local-space; `Location += p`.
+  5. If Velocity: `v = (p_world − StartLocation)` with the height component zeroed when **RadialVelocity** is set, × VelocityScale;
+     added to Velocity and BaseVelocity.
+
+**PMI_VelocityInheritParent** (spawn 0x18; 154 LODs):
+- `Velocity += Scale(EmitterTime) ⊙ EmitterVelocity` and `BaseVelocity +=` the same.
+- EmitterVelocity is the emitter instance velocity (+0x88, `(Location − OldLocation)/dt` of the component), or **0 if the emitter
+  is local-space**. Component-wise product. No update case.
+
+**PMI_AccelerationOverLife** (update 0x1B; 33 LODs):
+- Per update: `a = AccelOverLife(RelativeTime)`; `Velocity += a·dt`; `BaseVelocity += a·dt`. No spawn case.
+
+**PMI_LocationDirect** (spawn and update 0x12; 22 LODs). Distributions: Location, LocationOffset, ScaleFactor, (Direction: read by
+neither runner).
+- **Spawn:** `Location = Location(RelativeTime)` → world unless local-space (full LocalToWorld incl. translation); `off =
+  LocationOffset(EmitterTime)` is stored in the particle payload; `Location += off`.
+- **Update:**
+  1. `target = Location(RelativeTime)` → world, `+ stored off`;
+  2. `diff = target − Location`;
+  3. `Velocity = diff × ScaleFactor(RelativeTime).X / dt` (if |dt| > ε, else ×1);
+  4. `Location += diff × (1 − ScaleFactor.X)`.
+  - ScaleFactor.X = 1 means fully velocity-driven; 0 means a snap.
+
+**PMI_Orbit** (spawn and update 0x1E; 18 LODs). Block (40): +0 (H ChainMode, unread), then {bProcessDuringSpawn,
+bProcessDuringUpdate, bUseEmitterTime} for OffsetAmount @+4, RotationAmount @+0x10, RotationRateAmount @+0x1C. Per-particle
+payload 12 floats: Offset[0..2], Rotation[3..5], RotationRate[6..8], RotationRateBase[9..11].
+- **Spawn:** if the flag is set, Offset += OffsetAmount(t), Rotation += RotationAmount(t), RotationRate[6..8] and [9..11] +=
+  RotationRateAmount(t); t = EmitterTime or RelativeTime per bUseEmitterTime.
+- **Update:** the same additions per frame for the components whose bProcessDuringUpdate is set (RotationRate into [9..11]).
+- **They accumulate every frame**: the stock "add" chaining.
+- The orbit offset is applied when the vertex is filled (sprite fill `0x8305F7D8`): H, stock UE3, offset rotated by Rotation +
+  RotationRate-integrated angle around the particle. **Fill-side math not traced.**
+
+**Object-run modules** (compiled id PMI_Unknown; executed through the module object's virtual Spawn / Update in record order; their
+tagged objects survive the cook):
+
+**PMI_AttractorPoint** (97 LODs), **PMI_AttractorParticle** (20), **PMI_KillBox** (4):
+- The native vtables were **not located**. The class registrations are found (`0x8304D708` / `0x8304D658` / `0x83047DA0`), but
+  not the constructor / vtable. **These semantics are stock UE3, HIGH-unverified.**
+- **AttractorPoint** (props: Position (vector, EmitterTime), Range, Strength, StrengthByDistance (CDO true), bAffectBaseVelocity,
+  bOverrideVelocity, bEnabled):
+  1. Position → world unless local-space.
+  2. Per particle: `d = P − Location`, `dist = |d|`; if `dist ≤ Range`: `s = Strength × (StrengthByDistance ? (Range − dist) /
+     Range : 1)`; `a = normalize(d) × s × dt`.
+  3. `bOverrideVelocity` → velocity set rather than added (H); `bAffectBaseVelocity` → also BaseVelocity.
+- **AttractorParticle** (EmitterName, SelectionMethod, bRenewSource, Range, Strength, bStrengthByDistance, bAffectBaseVelocity):
+  - spawn picks a source particle index from the named emitter (Random / Sequential, as LocationEmitter);
+  - update attracts toward that particle's location with the same falloff;
+  - a dead source: re-pick if bRenewSource, else no force.
+- **KillBox** (LowerLeftCorner / UpperRightCorner vectors at EmitterTime, bKillInside; H bAbsolute): per update, kill particles
+  inside the box (bKillInside) or outside it (default). Corners are in emitter-local space unless absolute.
+- **Note:** the attractors appear in 33 + 2 systems, KillBox in 2. A binary check of these three is a follow-up if Rendering
+  wants CONFIRMED.
