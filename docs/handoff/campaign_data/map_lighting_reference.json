@@ -1,0 +1,4715 @@
+{
+ "MP_ESC_BrokenHope": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_14211_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 3.5,
+    "color": "239/168/148",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.41999,
+     0.49682,
+     -0.75946
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_12563_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.10000000149011612,
+    "color": "64/128/128",
+    "lower_color": "0/0/0",
+    "lower_brightness": null,
+    "direction_ue": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Dynamic",
+     "Static"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_14989_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 15000.0,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     11677,
+     29,
+     8268
+    ],
+    "score": 45000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_2153_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 15000.0,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     6043,
+     -5199,
+     7715
+    ],
+    "score": 45000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_3435_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 10000.0,
+    "falloff": 2.0,
+    "color": "153/206/249",
+    "location_ue": [
+     -20347,
+     9408,
+     3180
+    ],
+    "score": 30000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_1310_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 9315.83984375,
+    "falloff": 2.0,
+    "color": "153/206/249",
+    "location_ue": [
+     -232,
+     2340,
+     3348
+    ],
+    "score": 27947.51953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_828_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 9315.83984375,
+    "falloff": 2.0,
+    "color": "153/206/249",
+    "location_ue": [
+     3622,
+     1683,
+     3348
+    ],
+    "score": 27947.51953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_15672_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 5292.0,
+    "falloff": 2.0,
+    "color": "153/206/249",
+    "location_ue": [
+     -17906,
+     4989,
+     2670
+    ],
+    "score": 15876.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_8483_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 5292.0,
+    "falloff": 2.0,
+    "color": "153/206/249",
+    "location_ue": [
+     -17908,
+     13581,
+     2670
+    ],
+    "score": 15876.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_15807_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 5077.9423828125,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     4626,
+     -1138,
+     876
+    ],
+    "score": 15233.8271484375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_2193_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     9645,
+     7515,
+     3439
+    ],
+    "score": 15000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11219.SpotLight_6393_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     5171,
+     7515,
+     3439
+    ],
+    "score": 15000.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 299,
+  "height_fogs": [
+   {
+    "component": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.HeightFog_9064.HeightFogComponent_12587",
+    "height": 12694.3974609375,
+    "density": 4.999999873689376e-06,
+    "color": "121/159/223",
+    "light_brightness": 1.2799999713897705,
+    "start": 1000.0,
+    "extinction": 9999999827968.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_ESC_BrokenHope_Base_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.PostProcessVolume_13331",
+    "priority": 1.0,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 15000.0,
+     "DOF_FocusNearFalloff": 2000.0,
+     "DOF_FocusFarFalloff": 2000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.5,
+     "DOF_FalloffExponent": 4.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.20000000298023224,
+     "Scene_HighLights": {
+      "X": 1.5,
+      "Y": 1.5,
+      "Z": 1.5
+     },
+     "Scene_MidTones": {
+      "X": 1.0,
+      "Y": 1.0,
+      "Z": 1.0
+     },
+     "Scene_Shadows": {
+      "X": -0.0010000000474974513,
+      "Y": -0.0010000000474974513,
+      "Z": -0.0010000000474974513
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.5,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.20000000298023224,
+   "Scene_HighLights": [
+    1.5,
+    1.5,
+    1.5
+   ],
+   "Scene_MidTones": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_Shadows": [
+    -0.0010000000474974513,
+    -0.0010000000474974513,
+    -0.0010000000474974513
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_ESC_BrokenHope_ART_m.TheWorld.PersistentLevel.PostProcessVolume_13331"
+  ],
+  "ours_fog": {
+   "Height": 12694.3974609375,
+   "Density": 4.999999873689376e-06,
+   "LightColor": [
+    121,
+    159,
+    223,
+    0
+   ],
+   "LightBrightness": 1.2799999713897705,
+   "StartDistance": 1000.0
+  },
+  "ours_lights": 303,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_ESC_Remnant": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_3897_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 10.0,
+    "color": "204/158/157",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.41051,
+     0.74585,
+     -0.52459
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_16342_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "180/187/205",
+    "lower_color": "250/194/27",
+    "lower_brightness": 0.009999999776482582,
+    "direction_ue": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Dynamic",
+     "Static"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_2012_LC",
+    "class": "Point",
+    "brightness": 200.0,
+    "radius": 3793.919921875,
+    "falloff": 2.0,
+    "color": "222/62/7",
+    "location_ue": [
+     36475,
+     13312,
+     6490
+    ],
+    "score": 758783.984375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.SpotLight_5566_LC",
+    "class": "Spot",
+    "brightness": 18.0,
+    "radius": 30256.0,
+    "falloff": 2.0,
+    "color": "85/205/244",
+    "location_ue": [
+     8696,
+     -3835,
+     21673
+    ],
+    "score": 544608.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.SpotLight_12145_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 50000.0,
+    "falloff": 2.0,
+    "color": "106/159/202",
+    "location_ue": [
+     18043,
+     3239,
+     18713
+    ],
+    "score": 400000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.SpotLight_1213_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 33060.0,
+    "falloff": 2.0,
+    "color": "44/140/237",
+    "location_ue": [
+     26259,
+     20942,
+     16320
+    ],
+    "score": 264480.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.SpotLight_8972_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 9584.6396484375,
+    "falloff": 2.0,
+    "color": "14/182/237",
+    "location_ue": [
+     26157,
+     25,
+     4933
+    ],
+    "score": 95846.396484375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_13570_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 6381.56982421875,
+    "falloff": 2.0,
+    "color": "244/89/45",
+    "location_ue": [
+     19984,
+     20608,
+     4450
+    ],
+    "score": 31907.84912109375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_1253_LC",
+    "class": "Point",
+    "brightness": 3.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "62/131/230",
+    "location_ue": [
+     33167,
+     1434,
+     3267
+    ],
+    "score": 15000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_10798_LC",
+    "class": "Point",
+    "brightness": 2.0,
+    "radius": 7500.0,
+    "falloff": 2.0,
+    "color": "253/216/68",
+    "location_ue": [
+     1428,
+     13377,
+     5940
+    ],
+    "score": 15000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_6952_LC",
+    "class": "Point",
+    "brightness": 1.0,
+    "radius": 10394.0,
+    "falloff": 4.0,
+    "color": "252/221/114",
+    "location_ue": [
+     -6898,
+     799,
+     3740
+    ],
+    "score": 10394.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2946.PointLight_13531_LC",
+    "class": "Point",
+    "brightness": 1.0,
+    "radius": 10000.0,
+    "falloff": 2.0,
+    "color": "80/119/152",
+    "location_ue": [
+     37971,
+     -1815,
+     2510
+    ],
+    "score": 10000.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 170,
+  "height_fogs": [],
+  "fog_volumes": [],
+  "governing_world": "MP_ESC_Remnant_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.PostProcessVolume_10624",
+    "priority": null,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 3.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 7500.0,
+     "DOF_FocusNearFalloff": 0.0,
+     "DOF_FocusFarFalloff": 3500.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.6000000238418579,
+     "DOF_FalloffExponent": 4.0,
+     "DOF_BlurKernelSize": 64.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.0,
+     "Scene_HighLights": {
+      "X": 0.949999988079071,
+      "Y": 0.949999988079071,
+      "Z": 1.350000023841858
+     },
+     "Scene_MidTones": {
+      "X": 0.75,
+      "Y": 1.0,
+      "Z": 1.100000023841858
+     },
+     "Scene_Shadows": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.004999999888241291
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.desaturation40_CLR",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 3.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 7500.0,
+   "DOF_FocusNearFalloff": 0.0,
+   "DOF_FocusFarFalloff": 3500.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.6000000238418579,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 64.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": [
+    0.949999988079071,
+    0.949999988079071,
+    1.350000023841858
+   ],
+   "Scene_MidTones": [
+    0.75,
+    1.0,
+    1.100000023841858
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.004999999888241291
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.desaturation40_CLR",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_ESC_Remnant_ART_m.TheWorld.PersistentLevel.PostProcessVolume_10624"
+  ],
+  "ours_fog": {
+   "Height": null,
+   "Density": null,
+   "LightColor": null,
+   "LightBrightness": null,
+   "StartDistance": null
+  },
+  "ours_lights": 171,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_IAC_Berth": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_2391_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 2.0,
+    "color": "234/191/191",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.57714,
+     -0.20053,
+     -0.79164
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_7556_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 8000.0,
+    "falloff": 2.0,
+    "color": "223/181/149",
+    "location_ue": [
+     12031,
+     -106,
+     4115
+    ],
+    "score": 80000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_11091_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "223/181/149",
+    "location_ue": [
+     4928,
+     2913,
+     210
+    ],
+    "score": 50000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_7397_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "223/181/149",
+    "location_ue": [
+     -7408,
+     2913,
+     210
+    ],
+    "score": 50000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_6370_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "223/181/149",
+    "location_ue": [
+     -7560,
+     -2772,
+     210
+    ],
+    "score": 50000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_6780_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "223/181/149",
+    "location_ue": [
+     3940,
+     -2834,
+     84
+    ],
+    "score": 50000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.PointLight_2973_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 7000.0,
+    "falloff": 2.0,
+    "color": "230/145/87",
+    "location_ue": [
+     -1334,
+     32,
+     -2034
+    ],
+    "score": 35000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.PointLight_11888_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "222/156/112",
+    "location_ue": [
+     3262,
+     -7096,
+     -1847
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_12080_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "220/179/165",
+    "location_ue": [
+     -28874,
+     -138,
+     2132
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_9874_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "220/179/165",
+    "location_ue": [
+     -28078,
+     -3028,
+     2150
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_5895.SpotLight_7450_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "220/179/165",
+    "location_ue": [
+     -27960,
+     2917,
+     2132
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 295,
+  "height_fogs": [
+   {
+    "component": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.HeightFog_16051.HeightFogComponent_13424",
+    "height": 11847.451171875,
+    "density": 1.9999999949504854e-06,
+    "color": "169/213/226",
+    "light_brightness": 1.0,
+    "start": 1000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.HeightFog_4411.HeightFogComponent_13424",
+    "height": 15431.1279296875,
+    "density": 3.999999989900971e-06,
+    "color": "152/215/222",
+    "light_brightness": 2.0,
+    "start": 50000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [
+   {
+    "component": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_4795.FogVolumeConstantDensityComponent_15743",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 4.999999873689376e-05,
+    "ApproxFogLightColor": {
+     "R": 0.16687199473381042,
+     "G": 0.5234429836273193,
+     "B": 0.7154650092124939,
+     "A": 1.0
+    }
+   }
+  ],
+  "governing_world": "MP_IAC_Berth_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": "PROP_EnergonSigns_p.clutshot1",
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.PostProcessVolume_3052",
+    "priority": null,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 15000.0,
+     "DOF_FocusNearFalloff": 2000.0,
+     "DOF_FocusFarFalloff": 2000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.5,
+     "DOF_FalloffExponent": 4.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.20000000298023224,
+     "Scene_HighLights": {
+      "X": 1.5,
+      "Y": 1.5,
+      "Z": 1.5
+     },
+     "Scene_MidTones": {
+      "X": 0.949999988079071,
+      "Y": 0.949999988079071,
+      "Z": 0.949999988079071
+     },
+     "Scene_Shadows": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.5,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.20000000298023224,
+   "Scene_HighLights": [
+    1.5,
+    1.5,
+    1.5
+   ],
+   "Scene_MidTones": [
+    0.949999988079071,
+    0.949999988079071,
+    0.949999988079071
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.PostProcessVolume_3052"
+  ],
+  "ours_fog": {
+   "Height": 11847.451171875,
+   "Density": 1.9999999949504854e-06,
+   "LightColor": [
+    169,
+    213,
+    226,
+    0
+   ],
+   "LightBrightness": 1.0,
+   "StartDistance": 1000.0
+  },
+  "ours_lights": 297,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": [
+   "MP_IAC_Berth_ART_m.TheWorld.PersistentLevel.BeastLightEnvironmentVolume_10099"
+  ]
+ },
+ "MP_IAC_Rust": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_7478_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 2.0,
+    "color": "242/182/164",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.50169,
+     0.29575,
+     -0.81292
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.PointLight_10513_LC",
+    "class": "Point",
+    "brightness": 0.4000000059604645,
+    "radius": 150000.0,
+    "falloff": 2.0,
+    "color": "99/160/197",
+    "location_ue": [
+     29874,
+     -17096,
+     -66360
+    ],
+    "score": 60000.00089406967,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_6927_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -12646,
+     -11769,
+     3519
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_8277_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -12678,
+     -9879,
+     3519
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_13619_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -12473,
+     -7672,
+     3519
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_3010_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -34046,
+     -1297,
+     4807
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_13326_LC",
+    "class": "Spot",
+    "brightness": 5.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "249/225/193",
+    "location_ue": [
+     -26654,
+     -15505,
+     6706
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_5231_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 2500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -9430,
+     -11193,
+     3518
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_164_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 6000.0,
+    "falloff": 2.0,
+    "color": "234/198/162",
+    "location_ue": [
+     -15986,
+     3696,
+     3248
+    ],
+    "score": 18000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_1967_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 6000.0,
+    "falloff": 2.0,
+    "color": "234/198/162",
+    "location_ue": [
+     -14133,
+     3696,
+     3248
+    ],
+    "score": 18000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_8501.SpotLight_16073_LC",
+    "class": "Spot",
+    "brightness": 3.0,
+    "radius": 6000.0,
+    "falloff": 2.0,
+    "color": "234/198/162",
+    "location_ue": [
+     -12229,
+     3696,
+     3248
+    ],
+    "score": 18000.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 346,
+  "height_fogs": [
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.HeightFog_13733.HeightFogComponent_14723",
+    "height": -18561.86328125,
+    "density": 9.999999747378752e-05,
+    "color": "217/147/43",
+    "light_brightness": 0.0,
+    "start": 20000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.HeightFog_2815.HeightFogComponent_14708",
+    "height": 23271.72265625,
+    "density": 4.999999873689376e-05,
+    "color": "135/197/220",
+    "light_brightness": 0.5,
+    "start": 10000.0,
+    "extinction": 100000000.0,
+    "enabled": false
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.HeightFog_6999.HeightFogComponent_14723",
+    "height": 18877.974609375,
+    "density": 1.9999999949504854e-06,
+    "color": "185/222/236",
+    "light_brightness": 1.0,
+    "start": null,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_11774.FogVolumeConstantDensityComponent_14701",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291,
+    "ApproxFogLightColor": {
+     "R": 0.0016870000399649143,
+     "G": 0.33445799350738525,
+     "B": 0.8671360015869141,
+     "A": 1.0
+    }
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_191.FogVolumeConstantDensityComponent_14701",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291,
+    "ApproxFogLightColor": {
+     "R": 0.0016870000399649143,
+     "G": 0.33445799350738525,
+     "B": 0.8671360015869141,
+     "A": 1.0
+    }
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_3656.FogVolumeConstantDensityComponent_6339",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_7738.FogVolumeConstantDensityComponent_6339",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_7750.FogVolumeConstantDensityComponent_14701",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291,
+    "ApproxFogLightColor": {
+     "R": 0.0016870000399649143,
+     "G": 0.33445799350738525,
+     "B": 0.8671360015869141,
+     "A": 1.0
+    }
+   },
+   {
+    "component": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.FogVolumeConstantDensityInfo_8380.FogVolumeConstantDensityComponent_14701",
+    "class": "FogVolumeConstantDensityComponent",
+    "Density": 0.004999999888241291,
+    "ApproxFogLightColor": {
+     "R": 0.0016870000399649143,
+     "G": 0.33445799350738525,
+     "B": 0.8671360015869141,
+     "A": 1.0
+    }
+   }
+  ],
+  "governing_world": "MP_IAC_Rust_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.PostProcessVolume_3052",
+    "priority": null,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 15000.0,
+     "DOF_FocusNearFalloff": 0.0,
+     "DOF_FocusFarFalloff": 2000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.4000000059604645,
+     "DOF_FalloffExponent": 1.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.0,
+     "Scene_HighLights": {
+      "X": 1.5,
+      "Y": 1.5,
+      "Z": 1.5
+     },
+     "Scene_MidTones": {
+      "X": 0.8999999761581421,
+      "Y": 0.8999999761581421,
+      "Z": 0.8999999761581421
+     },
+     "Scene_Shadows": {
+      "X": -0.0010000000474974513,
+      "Y": -0.0010000000474974513,
+      "Z": -0.0010000000474974513
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 0.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.4000000059604645,
+   "DOF_FalloffExponent": 1.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": [
+    1.5,
+    1.5,
+    1.5
+   ],
+   "Scene_MidTones": [
+    0.8999999761581421,
+    0.8999999761581421,
+    0.8999999761581421
+   ],
+   "Scene_Shadows": [
+    -0.0010000000474974513,
+    -0.0010000000474974513,
+    -0.0010000000474974513
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_IAC_Rust_Art_m.TheWorld.PersistentLevel.PostProcessVolume_3052"
+  ],
+  "ours_fog": {
+   "Height": -18561.86328125,
+   "Density": 9.999999747378752e-05,
+   "LightColor": [
+    217,
+    147,
+    43,
+    0
+   ],
+   "LightBrightness": 0.0,
+   "StartDistance": 20000.0
+  },
+  "ours_lights": 348,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_IAC_Seed": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_12837_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 2.299999952316284,
+    "color": "252/149/105",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.70372,
+     0.13773,
+     -0.697
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic",
+     "PlayerOnly"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_7798_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.05000000074505806,
+    "color": "121/165/168",
+    "lower_color": "255/255/255",
+    "lower_brightness": null,
+    "direction_ue": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Dynamic",
+     "Static"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_IAC_Global_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_11171.PointLight_1865_LC",
+    "class": "Point",
+    "brightness": 1.0,
+    "radius": 1200000.0,
+    "falloff": 2.0,
+    "color": "133/177/214",
+    "location_ue": [
+     -2519,
+     -1097,
+     20588
+    ],
+    "score": 1200000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_8585_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 28000.0,
+    "falloff": 2.0,
+    "color": "194/219/231",
+    "location_ue": [
+     -1596,
+     227,
+     5698
+    ],
+    "score": 280000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_2368_LC",
+    "class": "Spot",
+    "brightness": 15.0,
+    "radius": 5787.1396484375,
+    "falloff": 2.0,
+    "color": "247/232/213",
+    "location_ue": [
+     -5193,
+     -15405,
+     2260
+    ],
+    "score": 86807.0947265625,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_2992_LC",
+    "class": "Spot",
+    "brightness": 15.0,
+    "radius": 5787.1396484375,
+    "falloff": 2.0,
+    "color": "247/232/213",
+    "location_ue": [
+     -20462,
+     -3683,
+     1498
+    ],
+    "score": 86807.0947265625,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_16168_LC",
+    "class": "Spot",
+    "brightness": 15.0,
+    "radius": 5787.1396484375,
+    "falloff": 2.0,
+    "color": "247/232/213",
+    "location_ue": [
+     -24129,
+     -3113,
+     1778
+    ],
+    "score": 86807.0947265625,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_6015_LC",
+    "class": "Spot",
+    "brightness": 15.0,
+    "radius": 5787.1396484375,
+    "falloff": 2.0,
+    "color": "247/232/213",
+    "location_ue": [
+     -24129,
+     5971,
+     1876
+    ],
+    "score": 86807.0947265625,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_8340_LC",
+    "class": "Spot",
+    "brightness": 15.0,
+    "radius": 4000.0,
+    "falloff": 2.0,
+    "color": "247/232/213",
+    "location_ue": [
+     -4669,
+     122,
+     1959
+    ],
+    "score": 60000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_12925_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5787.14013671875,
+    "falloff": 2.0,
+    "color": "183/189/223",
+    "location_ue": [
+     5867,
+     -11216,
+     2569
+    ],
+    "score": 57871.4013671875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_11802_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5787.14013671875,
+    "falloff": 2.0,
+    "color": "183/186/223",
+    "location_ue": [
+     20602,
+     -13468,
+     1543
+    ],
+    "score": 57871.4013671875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_670.SpotLight_2179_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 5787.14013671875,
+    "falloff": 2.0,
+    "color": "183/186/223",
+    "location_ue": [
+     19996,
+     -9245,
+     2663
+    ],
+    "score": 57871.4013671875,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 309,
+  "height_fogs": [
+   {
+    "component": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.HeightFog_13271.HeightFogComponent_6298",
+    "height": 19750.751953125,
+    "density": 4.999999873689376e-06,
+    "color": "151/196/217",
+    "light_brightness": 1.5,
+    "start": 75000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_IAC_Seed_ART_m.TheWorld.PersistentLevel.HeightFog_69.HeightFogComponent_6298",
+    "height": 15222.0625,
+    "density": 9.999999747378752e-06,
+    "color": "214/230/245",
+    "light_brightness": 0.25,
+    "start": 200.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_IAC_Seed_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_IAC_Seed_BASE_m.TheWorld.PersistentLevel.PostProcessVolume_13331",
+    "priority": 1.0,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 15000.0,
+     "DOF_FocusNearFalloff": 0.0,
+     "DOF_FocusFarFalloff": 2000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.4000000059604645,
+     "DOF_FalloffExponent": 1.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.20000000298023224,
+     "Scene_HighLights": {
+      "X": 1.0,
+      "Y": 1.0,
+      "Z": 1.0
+     },
+     "Scene_MidTones": {
+      "X": 0.8999999761581421,
+      "Y": 0.8999999761581421,
+      "Z": 0.8999999761581421
+     },
+     "Scene_Shadows": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.desaturation40_CLR",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 0.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.4000000059604645,
+   "DOF_FalloffExponent": 1.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.20000000298023224,
+   "Scene_HighLights": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_MidTones": [
+    0.8999999761581421,
+    0.8999999761581421,
+    0.8999999761581421
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.desaturation40_CLR",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_IAC_Seed_BASE_m.TheWorld.PersistentLevel.PostProcessVolume_13331"
+  ],
+  "ours_fog": {
+   "Height": 19750.751953125,
+   "Density": 4.999999873689376e-06,
+   "LightColor": [
+    151,
+    196,
+    217,
+    0
+   ],
+   "LightBrightness": 1.5,
+   "StartDistance": 75000.0
+  },
+  "ours_lights": 317,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_IAC_Streets": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_11360_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 6.0,
+    "color": "117/117/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.51792,
+     -0.54232,
+     -0.66155
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_727_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "149/149/198",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.01227,
+     0.0,
+     -0.99992
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_3181_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.10000000149011612,
+    "color": "118/114/197",
+    "lower_color": "157/203/236",
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     1.0,
+     0.0
+    ],
+    "channels": [
+     "CompositeDynamic",
+     "Dynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_10647_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 9864.9658203125,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     25888,
+     -60748,
+     -66262
+    ],
+    "score": 78919.7265625,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_2700_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 8663.08984375,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     3664,
+     -33879,
+     -64912
+    ],
+    "score": 69304.71875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_10185_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 8663.0869140625,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     33584,
+     -25653,
+     -64885
+    ],
+    "score": 69304.6953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.SpotLight_15850_LC",
+    "class": "Spot",
+    "brightness": 12.0,
+    "radius": 5223.81494140625,
+    "falloff": 2.0,
+    "color": "196/224/255",
+    "location_ue": [
+     7298,
+     -42849,
+     -67322
+    ],
+    "score": 62685.779296875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.SpotLight_8117_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 6954.91162109375,
+    "falloff": 2.0,
+    "color": "139/198/241",
+    "location_ue": [
+     16775,
+     -28928,
+     -70766
+    ],
+    "score": 55639.29296875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_13357_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 6902.8212890625,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     43024,
+     -32392,
+     -68162
+    ],
+    "score": 55222.5703125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_6440_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 6902.8212890625,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     42210,
+     -29390,
+     -68162
+    ],
+    "score": 55222.5703125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_14088_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 6902.8212890625,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     41267,
+     -32392,
+     -70057
+    ],
+    "score": 55222.5703125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.SpotLight_13830_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 6878.998046875,
+    "falloff": 2.0,
+    "color": "187/189/255",
+    "location_ue": [
+     18261,
+     -27779,
+     -65558
+    ],
+    "score": 55031.984375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_2528.PointLight_4521_LC",
+    "class": "Point",
+    "brightness": 8.0,
+    "radius": 6839.56103515625,
+    "falloff": 2.0,
+    "color": "244/80/0",
+    "location_ue": [
+     37432,
+     -35884,
+     -66641
+    ],
+    "score": 54716.48828125,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 265,
+  "height_fogs": [
+   {
+    "component": "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.HeightFog_8248.HeightFogComponent_11010",
+    "height": -57273.77734375,
+    "density": 1.9999999494757503e-05,
+    "color": "116/91/234",
+    "light_brightness": 0.10000000149011612,
+    "start": 2048.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_IAC_Streets_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 40000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 0.6000000238418579,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": "ENV_MPCLUT_p.MP_Streets_CLUT",
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 40000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 0.6000000238418579,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_MidTones": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_MPCLUT_p.MP_Streets_CLUT",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "Engine.Default__WorldInfo",
+   "mp_iac_streets_base_m.theworld.persistentlevel.tnworldinfo_15559"
+  ],
+  "ours_fog": {
+   "Height": -57273.77734375,
+   "Density": 1.9999999494757503e-05,
+   "LightColor": [
+    116,
+    91,
+    234,
+    0
+   ],
+   "LightBrightness": 0.1,
+   "StartDistance": 2048.0
+  },
+  "ours_lights": 268,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_KON_Molten": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_10855_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 4.0,
+    "color": "218/218/154",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.54884,
+     -0.04218,
+     -0.83486
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_11706_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.10000000149011612,
+    "color": "141/169/163",
+    "lower_color": "255/255/255",
+    "lower_brightness": null,
+    "direction_ue": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Dynamic",
+     "Static"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.SpotLight_15541_LC",
+    "class": "Spot",
+    "brightness": 9.0,
+    "radius": 11426.2333984375,
+    "falloff": 2.0,
+    "color": "194/177/130",
+    "location_ue": [
+     37079,
+     3356,
+     1950
+    ],
+    "score": 102836.1005859375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.SpotLight_7258_LC",
+    "class": "Spot",
+    "brightness": 9.0,
+    "radius": 11426.2333984375,
+    "falloff": 2.0,
+    "color": "194/177/130",
+    "location_ue": [
+     31879,
+     9581,
+     1950
+    ],
+    "score": 102836.1005859375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.SpotLight_4334_LC",
+    "class": "Spot",
+    "brightness": 9.0,
+    "radius": 9400.0,
+    "falloff": 2.0,
+    "color": "194/177/130",
+    "location_ue": [
+     22500,
+     -14496,
+     10709
+    ],
+    "score": 84600.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.SpotLight_1178_LC",
+    "class": "Spot",
+    "brightness": 9.0,
+    "radius": 8000.0,
+    "falloff": 2.0,
+    "color": "194/177/130",
+    "location_ue": [
+     16076,
+     3675,
+     9785
+    ],
+    "score": 72000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_15962_LC",
+    "class": "Point",
+    "brightness": 1.5,
+    "radius": 35000.0,
+    "falloff": 2.0,
+    "color": "173/165/248",
+    "location_ue": [
+     36622,
+     -21059,
+     3631
+    ],
+    "score": 52500.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_1519_LC",
+    "class": "Point",
+    "brightness": 6.0,
+    "radius": 8227.28515625,
+    "falloff": 3.0,
+    "color": "248/104/5",
+    "location_ue": [
+     -13006,
+     -10567,
+     -1959
+    ],
+    "score": 49363.7109375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_6986_LC",
+    "class": "Point",
+    "brightness": 6.0,
+    "radius": 8227.28515625,
+    "falloff": 3.0,
+    "color": "248/104/5",
+    "location_ue": [
+     -11188,
+     -13042,
+     -1977
+    ],
+    "score": 49363.7109375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_9204_LC",
+    "class": "Point",
+    "brightness": 6.0,
+    "radius": 8227.28515625,
+    "falloff": 3.0,
+    "color": "248/104/5",
+    "location_ue": [
+     -13739,
+     -16134,
+     -1959
+    ],
+    "score": 49363.7109375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_2370_LC",
+    "class": "Point",
+    "brightness": 6.0,
+    "radius": 8227.28515625,
+    "falloff": 3.0,
+    "color": "248/104/5",
+    "location_ue": [
+     -11244,
+     -19508,
+     -1959
+    ],
+    "score": 49363.7109375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1914.PointLight_15081_LC",
+    "class": "Point",
+    "brightness": 6.0,
+    "radius": 8227.28515625,
+    "falloff": 3.0,
+    "color": "248/104/5",
+    "location_ue": [
+     -12669,
+     -22488,
+     -1959
+    ],
+    "score": 49363.7109375,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 299,
+  "height_fogs": [
+   {
+    "component": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.HeightFog_7568.HeightFogComponent_1882",
+    "height": 9088.0,
+    "density": 4.999999873689376e-05,
+    "color": "215/210/191",
+    "light_brightness": 0.15000000596046448,
+    "start": 8000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_KON_Molten_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.PostProcessVolume_12250",
+    "priority": null,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 0.0,
+     "DOF_FocusNearFalloff": 2000.0,
+     "DOF_FocusFarFalloff": 80000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.5,
+     "DOF_FalloffExponent": 4.0,
+     "DOF_BlurKernelSize": 16.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.10000000149011612,
+     "Scene_HighLights": {
+      "X": 1.2000000476837158,
+      "Y": 1.2000000476837158,
+      "Z": 1.2000000476837158
+     },
+     "Scene_MidTones": {
+      "X": 0.949999988079071,
+      "Y": 0.8999999761581421,
+      "Z": 0.8500000238418579
+     },
+     "Scene_Shadows": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 80000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.5,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.10000000149011612,
+   "Scene_HighLights": [
+    1.2000000476837158,
+    1.2000000476837158,
+    1.2000000476837158
+   ],
+   "Scene_MidTones": [
+    0.949999988079071,
+    0.8999999761581421,
+    0.8500000238418579
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_KON_Molten_ART_m.TheWorld.PersistentLevel.PostProcessVolume_12250"
+  ],
+  "ours_fog": {
+   "Height": 9088.0,
+   "Density": 5e-05,
+   "LightColor": [
+    215,
+    210,
+    191,
+    0
+   ],
+   "LightBrightness": 0.15000000596046448,
+   "StartDistance": 8000.0
+  },
+  "ours_lights": 302,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_ORB_Debris": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_10885_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 3.0,
+    "color": "166/166/249",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.57846,
+     0.74772,
+     -0.32604
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_14274_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.10000000149011612,
+    "color": "202/196/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_16168_LC",
+    "class": "Spot",
+    "brightness": 6.0,
+    "radius": 8870.1904296875,
+    "falloff": 2.0,
+    "color": "204/0/5",
+    "location_ue": [
+     15149,
+     -8213,
+     16887
+    ],
+    "score": 53221.142578125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_8718_LC",
+    "class": "Spot",
+    "brightness": 6.0,
+    "radius": 8870.1904296875,
+    "falloff": 2.0,
+    "color": "89/29/248",
+    "location_ue": [
+     -16459,
+     -5085,
+     16577
+    ],
+    "score": 53221.142578125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_4979_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     -4954,
+     -997,
+     13302
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_7632_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     -3743,
+     -3224,
+     13307
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_15813_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     -1915,
+     -4662,
+     13307
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_6022_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     3364,
+     -3788,
+     13307
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_4362_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     4681,
+     -1924,
+     13307
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_11884_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     4950,
+     995,
+     13307
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_8754_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.048828125,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     1148,
+     -4846,
+     12356
+    ],
+    "score": 46968.1953125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_ORB_Art_m.TheWorld.PersistentLevel.StaticLightCollectionActor_14925.SpotLight_12296_LC",
+    "class": "Spot",
+    "brightness": 4.0,
+    "radius": 11742.0,
+    "falloff": 2.0,
+    "color": "255/169/132",
+    "location_ue": [
+     -4500,
+     2283,
+     12495
+    ],
+    "score": 46968.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 119,
+  "height_fogs": [],
+  "fog_volumes": [],
+  "governing_world": "MP_ORB_Debris_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 1200.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 128000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 0.20000000298023224,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 2.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.25,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.20000000298023224,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": "ENV_MPCLUT_p.MP_OrbitalDebris_CLUT",
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 1200.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 128000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 0.20000000298023224,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 2.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.25,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.20000000298023224,
+   "Scene_HighLights": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_MidTones": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_MPCLUT_p.MP_OrbitalDebris_CLUT",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "Engine.Default__WorldInfo",
+   "mp_orb_debris_base_m.theworld.persistentlevel.tnworldinfo_14116"
+  ],
+  "ours_fog": {
+   "Height": null,
+   "Density": null,
+   "LightColor": null,
+   "LightBrightness": null,
+   "StartDistance": null
+  },
+  "ours_lights": 121,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": []
+ },
+ "MP_UND_Complex": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_2990_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 6.0,
+    "color": "183/181/151",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     -0.52219,
+     0.62448,
+     -0.58081
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_sky_light",
+    "light": "SkyLight_11533_LC",
+    "class": "SkyLightComponent",
+    "brightness": 0.10000000149011612,
+    "color": "200/224/236",
+    "lower_color": "255/255/255",
+    "lower_brightness": null,
+    "direction_ue": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Dynamic",
+     "Static"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.SpotLight_16166_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 10000.0,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     4915,
+     11287,
+     2621
+    ],
+    "score": 80000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_12410_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 15630.46875,
+    "falloff": 2.0,
+    "color": "104/185/193",
+    "location_ue": [
+     1327,
+     14560,
+     -12460
+    ],
+    "score": 78152.34375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_13184_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 15630.46875,
+    "falloff": 2.0,
+    "color": "104/185/193",
+    "location_ue": [
+     -10753,
+     21061,
+     -15853
+    ],
+    "score": 78152.34375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_9545_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 15630.46875,
+    "falloff": 2.0,
+    "color": "104/185/193",
+    "location_ue": [
+     -6621,
+     30282,
+     -15853
+    ],
+    "score": 78152.34375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_15330_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 15630.46875,
+    "falloff": 2.0,
+    "color": "104/185/193",
+    "location_ue": [
+     -22913,
+     31437,
+     -15853
+    ],
+    "score": 78152.34375,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_8618_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 11625.134765625,
+    "falloff": 2.0,
+    "color": "88/164/209",
+    "location_ue": [
+     -16594,
+     5950,
+     8163
+    ],
+    "score": 58125.673828125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_10297_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 11625.134765625,
+    "falloff": 2.0,
+    "color": "88/164/209",
+    "location_ue": [
+     -9979,
+     -7592,
+     8163
+    ],
+    "score": 58125.673828125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.PointLight_8947_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 11625.134765625,
+    "falloff": 2.0,
+    "color": "88/164/209",
+    "location_ue": [
+     1821,
+     -12620,
+     7829
+    ],
+    "score": 58125.673828125,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.SpotLight_2383_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 5291.72021484375,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     -4628,
+     2860,
+     2000
+    ],
+    "score": 42333.76171875,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_12572.SpotLight_8284_LC",
+    "class": "Spot",
+    "brightness": 8.0,
+    "radius": 5291.72021484375,
+    "falloff": 2.0,
+    "color": "248/176/124",
+    "location_ue": [
+     -886,
+     2860,
+     2128
+    ],
+    "score": 42333.76171875,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 149,
+  "height_fogs": [
+   {
+    "component": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.HeightFog_273.HeightFogComponent_12537",
+    "height": 10912.0,
+    "density": 3.5000000934815034e-05,
+    "color": "146/179/182",
+    "light_brightness": 0.10000000149011612,
+    "start": 3200.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.HeightFog_4771.HeightFogComponent_1470",
+    "height": -13711.3408203125,
+    "density": 7.999999797903001e-05,
+    "color": "102/213/255",
+    "light_brightness": 0.30000001192092896,
+    "start": null,
+    "extinction": 100000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_UND_Complex_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.PostProcessVolume_15305",
+    "priority": null,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": false,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 7500.0,
+     "DOF_FocusNearFalloff": 17500.0,
+     "DOF_FocusFarFalloff": 25000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.25,
+     "DOF_FalloffExponent": 8.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.10000000149011612,
+     "Scene_HighLights": {
+      "X": 1.2000000476837158,
+      "Y": 1.2000000476837158,
+      "Z": 1.2000000476837158
+     },
+     "Scene_MidTones": {
+      "X": 0.8700000047683716,
+      "Y": 0.8999999761581421,
+      "Z": 0.9200000166893005
+     },
+     "Scene_Shadows": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": false,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 7500.0,
+   "DOF_FocusNearFalloff": 17500.0,
+   "DOF_FocusFarFalloff": 25000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.25,
+   "DOF_FalloffExponent": 8.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.10000000149011612,
+   "Scene_HighLights": [
+    1.2000000476837158,
+    1.2000000476837158,
+    1.2000000476837158
+   ],
+   "Scene_MidTones": [
+    0.8700000047683716,
+    0.8999999761581421,
+    0.9200000166893005
+   ],
+   "Scene_Shadows": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.PostProcessVolume_15305"
+  ],
+  "ours_fog": {
+   "Height": 10912.0,
+   "Density": 3.5000000934815034e-05,
+   "LightColor": [
+    146,
+    179,
+    182,
+    0
+   ],
+   "LightBrightness": 0.1,
+   "StartDistance": 3200.0
+  },
+  "ours_lights": 152,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": [
+   "MP_UND_Complex_ART_m.TheWorld.PersistentLevel.BeastLightEnvironmentVolume_6465"
+  ]
+ },
+ "MP_UND_Gorge": {
+  "sun_sky": [
+   {
+    "role": "dominant_baked_directional",
+    "light": "DirectionalLight_12837_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 2.0,
+    "color": "234/223/208",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.29561,
+     -0.37581,
+     -0.87828
+    ],
+    "channels": [
+     "BSP",
+     "CompositeDynamic",
+     "Static"
+    ],
+    "cast_shadows": true,
+    "cast_dynamic_shadows": false
+   },
+   {
+    "role": "dynamic_fill_directional",
+    "light": "DirectionalLight_12173_LC",
+    "class": "DirectionalLightComponent",
+    "brightness": 0.20000000298023224,
+    "color": "255/255/255",
+    "lower_color": null,
+    "lower_brightness": null,
+    "direction_ue": [
+     0.0,
+     0.0,
+     -1.0
+    ],
+    "channels": [
+     "CompositeDynamic"
+    ],
+    "cast_shadows": false,
+    "cast_dynamic_shadows": false
+   }
+  ],
+  "top_lights": [
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_604_LC",
+    "class": "Point",
+    "brightness": 10.0,
+    "radius": 18000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -8626,
+     -359,
+     -15934
+    ],
+    "score": 180000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_15354_LC",
+    "class": "Point",
+    "brightness": 20.0,
+    "radius": 4000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -15582,
+     8724,
+     -6595
+    ],
+    "score": 80000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.SpotLight_8462_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 4500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -7569,
+     -20276,
+     2617
+    ],
+    "score": 45000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_11914_LC",
+    "class": "Point",
+    "brightness": 20.0,
+    "radius": 2000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -14963,
+     7647,
+     -1729
+    ],
+    "score": 40000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.SpotLight_11402_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 3500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -7576,
+     -20301,
+     2499
+    ],
+    "score": 35000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.SpotLight_1204_LC",
+    "class": "Spot",
+    "brightness": 10.0,
+    "radius": 3500.0,
+    "falloff": 2.0,
+    "color": "255/255/255",
+    "location_ue": [
+     -7649,
+     17449,
+     2369
+    ],
+    "score": 35000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_10739_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -11391,
+     -2876,
+     -10191
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_9326_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -12886,
+     -3830,
+     -9463
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_10794_LC",
+    "class": "Point",
+    "brightness": 5.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "88/135/192",
+    "location_ue": [
+     -3816,
+     5115,
+     -11531
+    ],
+    "score": 25000.0,
+    "dyn_shadow": false
+   },
+   {
+    "object": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.StaticLightCollectionActor_1343.PointLight_26_LC",
+    "class": "Point",
+    "brightness": 4.0,
+    "radius": 5000.0,
+    "falloff": 2.0,
+    "color": "124/81/255",
+    "location_ue": [
+     -7553,
+     9928,
+     5294
+    ],
+    "score": 20000.0,
+    "dyn_shadow": false
+   }
+  ],
+  "n_point_spot": 404,
+  "height_fogs": [
+   {
+    "component": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.HeightFog_12129.HeightFogComponent_546",
+    "height": -1530.4378662109375,
+    "density": 9.000000136438757e-05,
+    "color": "113/147/202",
+    "light_brightness": 0.10000000149011612,
+    "start": null,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.HeightFog_2860.HeightFogComponent_546",
+    "height": 23205.921875,
+    "density": 3.000000106112566e-06,
+    "color": "149/191/215",
+    "light_brightness": 0.6000000238418579,
+    "start": 500.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.HeightFog_4020.HeightFogComponent_546",
+    "height": 38003.22265625,
+    "density": 1.4999999621068127e-05,
+    "color": "165/187/211",
+    "light_brightness": 1.5,
+    "start": 20000.0,
+    "extinction": 100000000.0,
+    "enabled": true
+   },
+   {
+    "component": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.HeightFog_6102.HeightFogComponent_546",
+    "height": -12772.6025390625,
+    "density": 9.999999747378752e-05,
+    "color": "102/131/198",
+    "light_brightness": 10.0,
+    "start": 10000.0,
+    "extinction": 1000000.0,
+    "enabled": true
+   }
+  ],
+  "fog_volumes": [],
+  "governing_world": "MP_UND_Gorge_BASE_m",
+  "world_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 1.0,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": false,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 0.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 1.0,
+   "DOF_MaxFarBlurAmount": 1.0,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 16.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_MidTones": {
+    "X": 1.0,
+    "Y": 1.0,
+    "Z": 1.0
+   },
+   "Scene_Shadows": {
+    "X": 0.0,
+    "Y": 0.0,
+    "Z": 0.0
+   },
+   "ColorCorrectionTexture": null,
+   "bAllowAmbientOcclusion": false
+  },
+  "post_volumes": [
+   {
+    "volume": "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.PostProcessVolume_13331",
+    "priority": 1.0,
+    "unbound": false,
+    "settings": {
+     "bEnableBloom": true,
+     "Bloom_Scale": 0.10000000149011612,
+     "Bloom_Threshold": 1.0,
+     "bEnableDOF": true,
+     "DOF_FocusType": "FOCUS_Distance",
+     "DOF_FocusDistance": 15000.0,
+     "DOF_FocusNearFalloff": 2000.0,
+     "DOF_FocusFarFalloff": 2000.0,
+     "DOF_MaxNearBlurAmount": 0.0,
+     "DOF_MaxFarBlurAmount": 0.5,
+     "DOF_FalloffExponent": 4.0,
+     "DOF_BlurKernelSize": 32.0,
+     "bEnableMotionBlur": false,
+     "MotionBlur_Amount": 0.5,
+     "bEnableSceneEffect": true,
+     "Scene_Desaturation": 0.0,
+     "Scene_HighLights": {
+      "X": 1.5,
+      "Y": 1.5,
+      "Z": 1.5
+     },
+     "Scene_MidTones": {
+      "X": 0.8600000143051147,
+      "Y": 0.9700000286102295,
+      "Z": 0.9700000286102295
+     },
+     "Scene_Shadows": {
+      "X": -0.0010000000474974513,
+      "Y": -0.0010000000474974513,
+      "Z": -0.0010000000474974513
+     },
+     "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+     "bAllowAmbientOcclusion": false
+    }
+   }
+  ],
+  "ours_post": {
+   "bEnableBloom": true,
+   "Bloom_Scale": 0.10000000149011612,
+   "Bloom_Threshold": 1.0,
+   "bEnableDOF": true,
+   "DOF_FocusType": "FOCUS_Distance",
+   "DOF_FocusDistance": 15000.0,
+   "DOF_FocusNearFalloff": 2000.0,
+   "DOF_FocusFarFalloff": 2000.0,
+   "DOF_MaxNearBlurAmount": 0.0,
+   "DOF_MaxFarBlurAmount": 0.5,
+   "DOF_FalloffExponent": 4.0,
+   "DOF_BlurKernelSize": 32.0,
+   "bEnableMotionBlur": false,
+   "MotionBlur_Amount": 0.5,
+   "bEnableSceneEffect": true,
+   "Scene_Desaturation": 0.0,
+   "Scene_HighLights": [
+    1.5,
+    1.5,
+    1.5
+   ],
+   "Scene_MidTones": [
+    0.8600000143051147,
+    0.9700000286102295,
+    0.9700000286102295
+   ],
+   "Scene_Shadows": [
+    -0.0010000000474974513,
+    -0.0010000000474974513,
+    -0.0010000000474974513
+   ],
+   "ColorCorrectionTexture": "ENV_Cluts_p.clut_mp40",
+   "bAllowAmbientOcclusion": false
+  },
+  "ours_post_source": [
+   "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.PostProcessVolume_13331"
+  ],
+  "ours_fog": {
+   "Height": -1530.4378662109375,
+   "Density": 9.000000136438757e-05,
+   "LightColor": [
+    113,
+    147,
+    202,
+    0
+   ],
+   "LightBrightness": 0.1,
+   "StartDistance": 0.0
+  },
+  "ours_lights": 411,
+  "characters": {
+   "robot": {
+    "light_environment": "TransGame.Default__TnRobotForm.LightEnvironment0",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.8999999761581421
+      },
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.699999988079071,
+       "Y": -0.699999988079071,
+       "Z": -0.699999988079071
+      },
+      {
+       "X": -0.699999988079071,
+       "Y": 0.699999988079071,
+       "Z": -0.699999988079071
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "LightingChannels": {
+      "PlayerOnly": true
+     },
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "truck_vehicle": {
+    "light_environment": "TransGame.Default__TnTruckForm.MyLightEnv",
+    "props": {
+     "UpdateDistanceThreshold": 30.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.699999988079071
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": 0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": 0.800000011920929,
+       "Z": 0.0
+      },
+      {
+       "X": -0.800000011920929,
+       "Y": -0.800000011920929,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 2,
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   },
+   "weapon": {
+    "light_environment": "TransGame.Default__TnWeaponMesh.MyLightEnvironment",
+    "props": {
+     "bEnabled": true,
+     "EnvironmentTransitionTime": 0.5,
+     "UpdateDistanceThreshold": 50.0,
+     "NormalizedSampleOffsets": [
+      {
+       "X": 0.0,
+       "Y": 0.0,
+       "Z": 0.0
+      }
+     ],
+     "TotalLightCount": 1
+    },
+    "mesh_lighting": {
+     "bAcceptsLights": true,
+     "bAcceptsDynamicLights": true,
+     "CastShadow": true,
+     "bCastDynamicShadow": true
+    }
+   }
+  },
+  "beast_volumes": [
+   "MP_UND_Gorge_ART_m.TheWorld.PersistentLevel.BeastLightEnvironmentVolume_2219"
+  ]
+ }
+}
