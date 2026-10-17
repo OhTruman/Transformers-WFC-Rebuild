@@ -154,11 +154,153 @@ DrainRate is roughly cost / 4 per second, so a full purchase takes about 2–5 s
 - **Bridges:** hidden with no collision until bought; the purchase does `ToggleHidden` UnHide + `ChangeCollision` + Transform.
 - **Doors:** each purchase also turns on the NavigationCells through the doorway and turns off the TriggerVolumes /
   DynamicBlockingVolumes that sealed it. Some purchases switch on new TnSurvivalZoneVolumes (new spawn areas).
-- **Round counters ("Wall_Crashers"):** "Round Begin" counters enable four player-presence triggers after **rounds 3, 4, 4 and 6**.
-  Those triggers toggle specific TnSurvivalZoneVolumes on / off while a player stands in them. In other words, extra spawn areas
-  near the walls unlock as waves progress.
+- **Round counters ("Wall_Crashers"):** "Round Begin" counters enable four touch triggers after **rounds 3, 4, 4 and 6**.
+  Those triggers toggle specific TnSurvivalZoneVolumes on / off while a pawn is inside. In other words, extra spawn areas
+  near the walls unlock as waves progress. Details in §5a.
 - Round events also drive announcer dialog (random line per round end) and AI-dialog mute groups.
 - One "Round Begin" (first round only) transforms an object variable in the Setup sequence (target not resolved in the export, H).
+
+### 5a. BrokenHope complete (C; added 2026-10-18)
+
+**Script:**
+- `MP_ESC_BrokenHope_BASE_m`'s TransContent is decompiled to `work/script/decomp_tc/MP_ESC_BrokenHope_BASE_m.TransContent.txt`.
+- Every TnSurvival* / generator / spawn / wave / buff / respawn function is **byte-identical to Remnant's** (diffed). So
+  §1–§4 apply unchanged, and the maps differ only in data.
+- Export: `notes/data/escalation/MP_ESC_BrokenHope.json`. It now also carries `zones`, and the CDO rows are dropped: **35
+  generators per map**, not 36.
+
+**Spawn list:**
+- PreGameTime **30 s**, TimeBetweenWaves **25 s**, FillWaveReCheckTime **0.5 s** (CDO).
+- **Waves** (Budget / BudgetAlive / BudgetDeficitThreshold, 0-based):
+
+| W | Budget | Alive | Deficit | Buffs |
+|---|---|---|---|---|
+| 0 | 100 | 50 | 20 | – |
+| 1 | 150 | 80 | 40 | – |
+| 2 | 200 | 100 | 50 | – |
+| 3 | 300 | 125 | 100 | – |
+| 4 | 400 | 150 | 120 | – |
+| 5 | 500 | 200 | 170 | – |
+| 6 | 600 | 200 | 180 | – |
+| 7 | 800 | 230 | 200 | – |
+| 8 | 1000 | 230 | 200 | – |
+| 9 | 1200 | 230 | 220 | DecreaseDamageTaken L0 (×0.9) |
+| 10 | 1200 | 230 | 220 | DDT L1 (×0.8) |
+| 11 | 1200 | 230 | 220 | DDT L2 (×0.7) |
+| 12 | 1200 | 230 | 220 | DDT L3 (×0.6) |
+| 13 | 1200 | 230 | 220 | DDT L4 (×0.5) + IncreaseDamage L0 (×1.25) |
+| 14 | 1300 | 230 | 220 | DDT L4 + ID L1 (×1.5) |
+| 15 | 1300 | 230 | 220 | DDT L4 + ID L2 (×1.75) |
+| 16+ | 1300 | 230 | 220 | DDT L4 + ID L3 (×2.0); repeats (CurrentWave clamps at 16) |
+
+On BrokenHope IncreaseDamage never reaches L4 (×2.25). That level is Remnant-only.
+
+**Enemies** (13 entries; MaxWave 0 = open):
+
+| Entry | Waves | Min–Max | Cost | Type | Loot class | Power |
+|---|---|---|---|---|---|---|
+| Spider | 0–4 | 2–8 | 5 | Standard | GENERIC | 10 |
+| Soldier MG | 0+ | 0–8 | 10 | Standard | SoldierDec | 25 |
+| Soldier Rocket | 2+ | 0–4 | 20 | LongRange | SoldierDec | 30 |
+| CQC Specialist | 2–3 | 0–2 | 20 | Standard | SoldierDec | 50 |
+| CQC Specialist | 4+ | 0–6 | 20 | Standard | SoldierDec | 50 |
+| Soldier Jet | 4+ | 0–4 | 20 | **Air** | GENERIC | 75 |
+| Soldier Shotgun | 5–6 | 0–2 | 30 | Standard | SoldierDec | 75 |
+| Soldier Shotgun | 7+ | 0–6 | 30 | Standard | SoldierDec | 75 |
+| Brute | 7–8 | 0–1 | 60 | Standard | BruteDec | 100 |
+| Titan | 9–10 | 0–1 | 60 | Standard | TitanDec | 100 |
+| Titan | 10+ | 0–2 | 60 | Standard | **BruteDec** (authored as is) | 100 |
+| Brute | 11+ | 0–1 | 60 | Standard | BruteDec | 100 |
+| **Soldier Tank** | **14+** | 0–1 | 60 | **Boss** | SoldierTankDec | **300** |
+
+- **Wave-15 boss:** the Tank entry is MinWave 14 (0-based), so it appears from **displayed wave 15** (HUD = index + 1). At most
+  one is alive at a time. MinCount 0, so it isn't forced: it's in the uniform random pick whenever it's eligible and none is
+  alive.
+- It spawns only in **Boss** zones (below).
+- Wave 10 holds two Titan entries (9–10 max 1, 10+ max 2), so the effective cap there is 2 (H: each entry counts separately
+  in `GenerateListOfPossibleEnemies`; both refer to the same class).
+
+**Spawn zones** (30 TnSurvivalZoneVolumes; scores are SelfModifier by type; ±1000 effectively forbid or force a type):
+- **Boss zones (6):** 1418, 4566, 498, 5278, 8330, 9622. Boss 999, Standard / ShortRange / LongRange −1000, one spawn point each.
+  These are the Tank's spawn spots.
+- **Air zones (3):** 15079, 3762, 9331 (Air 1000, two points each), for the Jets.
+- **LongRange zones (2):** 15943, 2433 (LongRange 20, the rest −1000), for the Rocket soldiers' perches.
+- **Exclusion / neighbour-only zones:** 2761 (all −1000, 0 points), 5320, 9027, 3244, 4342, 9083, 15087, 2663. Their
+  `ZoneChanges` raise neighbours (typically +10 Standard / LongRange) while a player is inside.
+- **Standard zones:** the rest (1036 +10 Standard, plus 14392, 2647, 8579 with 0 self).
+- **Inactive at start (7):**
+  - **door-unlocked:** 3931 (gen 866), 16285 (gen 7839 only, not its pair 11282: authored asymmetry), 10523 (gen 4199 only,
+    not 13385);
+  - **Wall_Crashers-unlocked:** 7739, 7763, 15078, 6666.
+
+**Doors / bridges** (12 DoorGenerator events; all effects listed, from the export):
+
+| Generator | Cost / DrainRate | Transform | Also |
+|---|---|---|---|
+| 13243, 12789 (pair) | 2500 / 500 | doors 14299, 2661 | TriggerVolume 15411, 7789 off; 4 NavigationCells on |
+| 12564 | 1000 / 250 | doors 16265, 4577 | TV 11387 off; 4 nav cells |
+| 866 | 700 / 200 | door 5499 | DynamicBlockingVolume 3124, 3763, 7511 + TV 11595 off; 2 nav cells; **zone 3931 on** |
+| 8025 | 400 / 100 | door 1531 + **bridges 1476, 7490** | bridges: UnHide + ChangeCollision In; 4 nav cells |
+| 2813, 8540 (pair) | 400 / 100 | doors 12155, 12616 + **bridge 5091** | bridge UnHide + collision; DBV 13810, 5793 + TV 10646, 3714 off; 6 nav cells |
+| 7839, 11282 (pair) | 400 / 100 | doors 13872, 3347 | DBV 13810, 5793 + TV 11261, 915 off; 4 nav cells; **zone 16285 on (7839 only)** |
+| 13385, 4199 (pair) | 300 / 75, 100 | doors 11450, 9615 | DBV 13227, 6664 + TV 15137, 15270 off; 4 nav cells; **zone 10523 on (4199 only)** |
+| 14319 | 400 / 100 | door 11211 + **bridges 3522, 5711** | bridges UnHide + collision; 4 nav cells |
+
+Totals: 13 doors and 5 bridges.
+- A pair is two generators on opposite sides of the same doorway. The first purchase opens the doorway; buying the second one
+  replays the same actions (H: harmless; the doors are already transformed).
+- DBV 13810 / 5793 are shared by the 2813 / 8540 and 7839 / 11282 doorways. Either purchase drops them.
+- Time to buy one generator ≈ Cost / DrainRate seconds while holding X (BrokenHope doors 3.5–5 s).
+
+**Item generators (23):**
+
+| Item | Cost (DrainRate) | Count | Pickup |
+|---|---|---|---|
+| Ammo | 50 (25) | ×3 | TnAmmoCratePickupFactory |
+| FlakGrenade | 75 (25) | ×2 | weapon pickup |
+| Kmine | 75 (25) | | weapon pickup |
+| Health | 100 (50) | ×2 | TnHealthPickupFactory |
+| FlashBang | 125 (50) | | weapon pickup |
+| HeavyPistol | 200 (50) | | weapon pickup |
+| BurstRifle | 200 (50) | | weapon pickup |
+| Shotgun | 200 (CDO rate) | | weapon pickup |
+| Overshield | 250 (75) | | TnOverShieldPickupFactory |
+| Scatter | 300 (100) | | weapon pickup |
+| Sniper | 300 (100) | | weapon pickup |
+| Plasma | 300 (75) | | weapon pickup |
+| RocketLauncher | 500 (125) | | weapon pickup |
+| GrenadeLauncher | 500 (200) | | weapon pickup |
+| HeavyMG | 600 (200) | | weapon pickup |
+| HealGrenade | 800 (200) | | weapon pickup |
+| IonTurret | 1200 (300) | | weapon pickup |
+| RocketTurret | 1200 (300) | | weapon pickup |
+| Repair | 1250 (400) | | weapon pickup |
+
+- Each one: its TriggerVolume off, then UnHide the factory.
+- **Orphan event:** `TnSeqEvent_SurvivalGenerator_3551` names "TnSurvivalGenerator_3107", which doesn't exist in the map. Its
+  targets are empty object variables, so it can never fire.
+
+**Wall_Crashers sequence:**
+- **Zone gates:** `TnSeqEvent_SurvivalEvents` "Round Begin" → SeqCond_Increment (A counts rounds) → on **A == B** enables a
+  disabled SeqEvent_Touch:
+
+| Round | Trigger volume | Zone (on while touched, off on untouch) |
+|---|---|---|
+| 3 | TV 11856 | 7739 |
+| 4 | TV 14603 | 7763 |
+| 4 | TV 11067 | 15078 |
+| 6 | TV 8879 | 6666 |
+
+  - SeqEvent_Touch's default class filter is Pawn (H: any pawn, so a player or an AI standing in the volume holds the zone on).
+  - A == B fires exactly once, so each gate opens once and stays open.
+- **Crashable walls (always armed; first touch by a pawn):**
+  - TV 9486 / 11960 / 10811 / 7836 → `SeqAct_CauseDamage` **200** (TnDamageTypeAux1) on TnStaticDestructibleActor 10489 / 6870 /
+    15525 / 4868, plus an emitter on (12390 / 8889 / 6682 / 13132).
+  - TV 10811 also hides an object variable and changes its collision.
+- **Linked wall:** touch TV 8879 (the round-6 volume) arms TnToggleDestructible on wall 5491 and a disabled Touch (TV 13849 →
+  200 damage to 5491) while touched.
+- H: these are the "Wall_Crashers" set pieces, walls that break when a pawn (typically an enemy) pushes into them, opening new
+  approach routes.
 
 **Remnant** (8 door generators, each with a separate zone-activation chain):
 
