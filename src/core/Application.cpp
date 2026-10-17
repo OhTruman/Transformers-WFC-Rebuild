@@ -229,6 +229,7 @@ bool Application::init() {
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
     if (std::getenv("WFC_DECOYTEST")) { runDecoyTest(); return false; }            // Decoy Trap ability (deploy, team rule, stun, cooldown)
+    if (std::getenv("WFC_TRANSACTTEST")) { runTransformingActorsTest(); return false; }   // transforming doors / bridges (collision, nav)
     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
     if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
@@ -5862,6 +5863,97 @@ void Application::runDecoyTest() {
     run(28.5f);
     check(!liveTrap(), "the trap expires (30 s lifespan)");
     LOG_INFO("DECOYTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_TRANSACTTEST (WFC_MAP=MP_ESC_BrokenHope / MP_ESC_Remnant / MP_IAC_Rust): every transforming actor's collision. A closed door
+// blocks a segment through each box (pawn and weapon worlds); an actor that opens at level start (Rust) no longer blocks its closed
+// pose once open; retracted bridges block nothing; the nav cells under closed doors are blocked.
+void Application::runTransformingActorsTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("TRANSACTTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { world_.handleInput(idle, dt); world_.tick(dt); } };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::MatchOpponent* dvOpponent = world_.addMatchOpponent("DV", false);   // the VehicleDying check below
+    const game::TransformingActors& T = world_.transformingActors();
+    const bool hasActors = world_.mapName() == "MP_ESC_BrokenHope" || world_.mapName() == "MP_ESC_Remnant" || world_.mapName() == "MP_IAC_Rust";
+    check(T.actors().empty() != hasActors, world_.mapName() + ": transforming actors loaded (" + std::to_string(T.actors().size()) + ")");
+    // A segment along the box's thinnest axis through its centre, 1 m beyond each face.
+    auto through = [&](const game::TransformingActors::Actor& a, const game::TransformingActors::Box& b, float t, core::Vec3& p0, core::Vec3& p1) {
+        core::Vec3 lo, hi; T.boxBounds(a, b, t, lo, hi);
+        const core::Vec3 c = (lo + hi) * 0.5f, e = hi - lo;
+        core::Vec3 ax{1, 0, 0}; float h = e.x * 0.5f;
+        if (e.z < e.x && e.z <= e.y) { ax = {0, 0, 1}; h = e.z * 0.5f; } else if (e.y < e.x && e.y < e.z) { ax = {0, 1, 0}; h = e.y * 0.5f; }
+        p0 = c - ax * (h + 1.0f); p1 = c + ax * (h + 1.0f);
+    };
+    auto hitsActor = [&](const game::CollisionWorld& cw, const game::TransformingActors::Actor& a, bool weapon, const core::Vec3& p0, const core::Vec3& p1) {
+        float tt; const int s = cw.dynamicSetHit(p0, p1, tt);
+        for (const auto& bd : a.bodies) if (s >= 0 && s == (weapon ? bd.weaponSet : bd.pawnSet)) return true;
+        return false;
+    };
+    // Versus on the Escalation-only maps (BrokenHope / Remnant): every actor Transformed from the start (no animation). Doors: open,
+    // their closed pose clear; bridges: extended and solid (pawns and shots) at their pose.
+    int doorOpen = 0, doorTotal = 0, bridgeSolid = 0, bridgeTotal = 0;
+    for (const auto& a : T.actors()) {
+        if (a.startDesired != 0) continue;
+        if (a.bridge) {
+            for (const auto& b : a.boxes) {   // versus (option c): retracted, hidden, no collision
+                core::Vec3 p0, p1; through(a, b, a.t, p0, p1); ++bridgeTotal;
+                bridgeSolid += !a.collide && a.hidden && !hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1) && !hitsActor(world_.weaponCollisionWorld(), a, true, p0, p1);
+            }
+        } else {
+            ++doorTotal;
+            bool clear = a.t >= a.length - 1e-3f;
+            for (const auto& b : a.boxes) {
+                // only the moving panels: a static body (Remnant's C_Body_XB side post) stays where it is in both poses
+                core::Vec3 l0, h0, l1, h1; T.boxBounds(a, b, 0.0f, l0, h0); T.boxBounds(a, b, a.length, l1, h1);
+                if (core::length(l1 - l0) + core::length(h1 - h0) < 0.5f) continue;
+                core::Vec3 p0, p1; through(a, b, 0.0f, p0, p1); clear = clear && !hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1);
+            }
+            doorOpen += clear;
+        }
+    }
+    if (doorTotal) check(doorOpen == doorTotal, "versus: the Escalation-map doors start open, their doorways clear (" + std::to_string(doorOpen) + "/" + std::to_string(doorTotal) + ")");
+    if (bridgeTotal) check(bridgeSolid == bridgeTotal, "versus: the bridges stay retracted, hidden and without collision (" + std::to_string(bridgeSolid) + "/" + std::to_string(bridgeTotal) + " boxes)");
+    // Level-start transforms (Rust): open after the clip; the closed pose no longer blocks.
+    run(4.0f);
+    int opened = 0, openTotal = 0;
+    for (const auto& a : T.actors()) {
+        if (a.startDesired != 1) continue;
+        ++openTotal;
+        bool anyBlock = false;
+        for (const auto& b : a.boxes) { core::Vec3 p0, p1; through(a, b, 0.0f, p0, p1); anyBlock |= hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1); }
+        opened += a.t >= a.length - 1e-3f && !anyBlock;
+    }
+    if (openTotal) check(opened == openTotal, "level-start doors open and stop blocking their closed pose (" + std::to_string(opened) + "/" + std::to_string(openTotal) + ")");
+    // VehicleDying: a vehicle-form death leaves a blocking body until the gib (car / tank <= 0.75 s).
+    {
+        game::MatchOpponent* v = dvOpponent;   // added at launch (a harness opponent added mid-match may get no start)
+        for (int w = 0; w < 40 && v && !v->spawned(); ++w) run(1.0f);
+        if (v && v->spawned()) {
+            v->pawn().beginTransform();
+            run(3.0f);
+            const bool veh = v->pawn().moveForm() == game::Form::Vehicle;
+            const core::Vec3 c = v->pawn().actorLocation();
+            const float r = v->pawn().cylinderRadius(game::Form::Vehicle) + 1.0f;
+            const core::Vec3 p0 = c + core::Vec3{-r, 0, 0}, p1 = c + core::Vec3{r, 0, 0};
+            float tt; const bool before = world_.pawnCollisionWorld().dynamicSetHit(p0, p1, tt) >= 0;
+            world_.applyMatchDamage(v->matchPlayer(), world_.localMatchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeAssaultRifle");
+            run(0.1f);
+            const bool dying = world_.pawnCollisionWorld().dynamicSetHit(p0, p1, tt) >= 0 && world_.weaponCollisionWorld().dynamicSetHit(p0, p1, tt) >= 0;
+            run(1.5f);
+            const bool after = world_.pawnCollisionWorld().dynamicSetHit(p0, p1, tt) >= 0;
+            check(veh && !before && dying && !after, "a dying vehicle blocks pawns and shots until the gib, then nothing");
+        } else {
+            const auto& mp = world_.match().players()[(size_t)(v ? v->matchPlayer() : 0)];
+            LOG_INFO("TRANSACTTEST DV: state %d alive %d respawn %.1f selected %d spawnError '%s' chassis %s", (int)world_.match().state(), (int)mp.alive,
+                     mp.timeToRespawn, (int)mp.hasSelectedCharacter, mp.spawnError.c_str(), mp.chassis.c_str());
+            LOG_INFO("TRANSACTTEST SKIP the dying-vehicle check: the harness opponent got no pawn on this map (no start)");
+        }
+    }
+    LOG_INFO("TRANSACTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 // WFC_PACINGTEST: presented camera / pawn positions per rendered frame at 60 / 144 / 240 Hz with a 60 Hz fixed-step sim, strafing

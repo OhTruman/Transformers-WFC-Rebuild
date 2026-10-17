@@ -120,6 +120,7 @@ private:
     void runPreloadTest();
     void runClassChangeTest();
     void runEventTest();
+    void runTransformingActorsTest();
     void runDecoyTest();
     void runSessionTest();
     void runPacingTest();

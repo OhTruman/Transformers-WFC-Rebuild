@@ -17,6 +17,7 @@
 #include "game/Pickup.h"
 #include "game/PickupFactory.h"
 #include "game/MapState.h"
+#include "game/TransformingActors.h"
 #include "game/Match.h"
 #include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
@@ -857,6 +858,10 @@ public:
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+    // The map's transforming actors (Rendering: draw each actor's glb at matrix with its clip at t, unless hidden).
+    const TransformingActors& transformingActors() const { return transforming_; }
+    const CollisionWorld& pawnCollisionWorld() const { return collision_; }
+    const CollisionWorld& weaponCollisionWorld() const { return weaponCollision_.valid() ? weaponCollision_ : collision_; }
     // Online sessions (see RemoteSeat / SlotSwap): a Remote participant, a queued slot handover, the remote command clock.
     int addRemoteParticipant(const RemoteSeat& r, bool exactTeam = false);
     bool applySlotSwap(const SlotSwap& s);
@@ -1182,6 +1187,14 @@ public:
     void forcedDirPost(Character& c) const;
 private:
     MapState mapState_;
+    TransformingActors transforming_;   // the map's TnTransformingWorldActors (doors / bridges): state, collision, nav blocks
+    // VehicleDying bodies (see noteVehicleDeath): a pool of unit-box dynamic sets; queued at the death, applied in the map tick.
+    struct DyingBody { int pawnSet = -1, weaponSet = -1; float remain = 0.0f; };
+    struct DyingRequest { core::Vec3 pos{0, 0, 0}; float yaw = 0.0f, radius = 1.0f, halfHeight = 1.0f, time = 0.5f; };
+    std::vector<DyingBody> dyingBodies_;
+    std::vector<DyingRequest> dyingQueue_;
+    void noteVehicleDeath(const Character& pawn);
+    void tickDyingBodies(float dt);
     MatchMode matchMode_ = MatchMode::DM;
     std::string mapName_ = "MP_IAC_Streets";   // runtime directory of the loaded map (Frontend: setMapName)
     Match match_;

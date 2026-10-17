@@ -107,20 +107,7 @@ bool BotNav::load(const std::string& path) {
             for (int z = az; z <= bz; ++z) for (int x = ax; x <= bx; ++x) grid_[(size_t)z * (size_t)gw_ + (size_t)x].push_back((int)i);
         }
     }
-    // Connected pieces (portals + links, undirected).
-    piece_.assign(cells_.size(), -1);
-    std::vector<std::vector<int>> adj(cells_.size());
-    for (size_t i = 0; i < cells_.size(); ++i) for (const Portal& p : cells_[i].portals) { adj[i].push_back(p.to); adj[(size_t)p.to].push_back((int)i); }
-    for (const Link& l : links_) { adj[(size_t)l.from].push_back(l.to); adj[(size_t)l.to].push_back(l.from); }
-    int pid = 0, best = 0;
-    for (size_t i = 0; i < cells_.size(); ++i) {
-        if (piece_[i] >= 0) continue;
-        int n = 0; std::vector<int> st{(int)i}; piece_[i] = pid;
-        while (!st.empty()) { int c = st.back(); st.pop_back(); ++n; for (int q : adj[(size_t)c]) if (piece_[(size_t)q] < 0) { piece_[(size_t)q] = pid; st.push_back(q); } }
-        if (n > best) { best = n; mainPieceId_ = pid; }
-        ++pid;
-    }
-    mainPiece_ = best;
+    computePieces();
     if (std::getenv("WFC_NAVPORTALAUDIT")) {   // diagnostic: portals whose two cells' floors differ at the shared edge (a walk link over a drop)
         int bad = 0, total = 0;
         for (size_t i = 0; i < cells_.size(); ++i)
@@ -132,7 +119,7 @@ bool BotNav::load(const std::string& path) {
             }
         LOG_INFO("botnav: portal audit: %d of %d portals step more than 1 m at the shared edge", bad, total);
     }
-    LOG_INFO("botnav: %s: %zu cells, %zu links, %zu anchors, %d pieces (main %d cells)", path.c_str(), cells_.size(), links_.size(), anchors_.size(), pid, best);
+    LOG_INFO("botnav: %s: %zu cells, %zu links, %zu anchors, %d pieces (main %d cells)", path.c_str(), cells_.size(), links_.size(), anchors_.size(), [&] { int n = 0; for (int q : piece_) n = std::max(n, q + 1); return n; }(), mainPiece_);
     return valid();
 }
 
@@ -190,8 +177,28 @@ int BotNav::findCell(const core::Vec3& p, float maxDist, float maxDrop) const {
     return best;
 }
 
+// Connected pieces (portals + links, undirected); blocked cells belong to no piece and connect nothing.
+void BotNav::computePieces() {
+    const bool blk = blocked_.size() == cells_.size();
+    auto open = [&](size_t c) { return !blk || !blocked_[c]; };
+    piece_.assign(cells_.size(), -1);
+    std::vector<std::vector<int>> adj(cells_.size());
+    for (size_t i = 0; i < cells_.size(); ++i) for (const Portal& p : cells_[i].portals) { adj[i].push_back(p.to); adj[(size_t)p.to].push_back((int)i); }
+    for (const Link& l : links_) { adj[(size_t)l.from].push_back(l.to); adj[(size_t)l.to].push_back(l.from); }
+    int pid = 0, best = 0;
+    for (size_t i = 0; i < cells_.size(); ++i) {
+        if (piece_[i] >= 0 || !open(i)) continue;
+        int n = 0; std::vector<int> st{(int)i}; piece_[i] = pid;
+        while (!st.empty()) { int c = st.back(); st.pop_back(); ++n; for (int q : adj[(size_t)c]) if (piece_[(size_t)q] < 0 && open((size_t)q)) { piece_[(size_t)q] = pid; st.push_back(q); } }
+        if (n > best) { best = n; mainPieceId_ = pid; }
+        ++pid;
+    }
+    mainPiece_ = best;
+}
+
 bool BotNav::usable(int cell, const Agent& a) const {
     if (cell < 0 || (size_t)cell >= cells_.size()) return false;
+    if (blocked_.size() == cells_.size() && blocked_[(size_t)cell]) return false;   // a closed transforming door
     const Cell& c = cells_[(size_t)cell];
     if (a.vehicle) return c.vehicle;
     // Robots: every cell (the generator keeps cells with clearance >= 1 m). clearance_m is the MINIMUM over a merged cell (most

@@ -446,6 +446,22 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             loadWeaponPhysmats(mapDir, weaponColMesh);
         }
         mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
+        {   // TnTransformingWorldActors (AssetTools mp_transforming_actors.json; the frontend's manifest root)
+            const char* mr = std::getenv("WFC_FRONTEND_MANIFESTS");
+            transforming_.load(mapName_, mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests", collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+        }
+        {   // the VehicleDying body pool: unit boxes (+-1), scaled by the pose; disabled until used
+            std::vector<core::Vec3> tris;
+            static const int f[12][3] = {{0, 1, 3}, {0, 3, 2}, {4, 6, 7}, {4, 7, 5}, {0, 4, 5}, {0, 5, 1}, {2, 3, 7}, {2, 7, 6}, {0, 2, 6}, {0, 6, 4}, {1, 5, 7}, {1, 7, 3}};
+            for (const auto& t : f) for (int k = 0; k < 3; ++k) { const int i = t[k]; tris.push_back(core::Vec3{(i & 1) ? 1.0f : -1.0f, (i & 2) ? 1.0f : -1.0f, (i & 4) ? 1.0f : -1.0f}); }
+            dyingBodies_.clear(); dyingQueue_.clear();
+            for (int i = 0; i < 16; ++i) {
+                DyingBody b;
+                b.pawnSet = collision_.addDynamicSet(tris, core::Mat4::identity()); collision_.setDynamicEnabled(b.pawnSet, false);
+                if (weaponCollision_.valid()) { b.weaponSet = weaponCollision_.addDynamicSet(tris, core::Mat4::identity()); weaponCollision_.setDynamicEnabled(b.weaponSet, false); }
+                dyingBodies_.push_back(b);
+            }
+        }
         LOG_INFO("collision: movement %s, weapon %s", authored ? "collision_pawn.glb" : "collision.glb (fallback)",
                  weaponCollision_.valid() ? "collision_weapon.glb" : "movement world");
         renderer.setVisibilityQuery([this](const core::Vec3& a, const core::Vec3& b) {
@@ -2195,7 +2211,9 @@ void World::tickPrefix(float dt) {
         last = now;
         if (++n > 1 && ms > 30.0) LOG_INFO("HITCH tick %d: %.1f ms since the previous tick", n, ms);
     }
-    if (collision_.valid()) { TickTimer tt(13); mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr); }
+    if (collision_.valid()) { TickTimer tt(13); mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+                              transforming_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+                              tickDyingBodies(dt); }
     prefixMark(3);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
@@ -2693,6 +2711,9 @@ void World::resetForNewLevel() {
     // A new match is a fresh load of the map in the original (MatchOver -> ReturnToGameLobby -> ServerTravel).
     mapState_.resetForNewMatch();
     if (collision_.valid()) mapState_.tick(0.0f, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+    if (collision_.valid()) transforming_.resetForNewMatch(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);   // a fresh level
+    dyingQueue_.clear();
+    for (DyingBody& b : dyingBodies_) { b.remain = 0.0f; if (b.pawnSet >= 0) collision_.setDynamicEnabled(b.pawnSet, false); if (b.weaponSet >= 0 && weaponCollision_.valid()) weaponCollision_.setDynamicEnabled(b.weaponSet, false); }
     for (Destructible* d : destructibles_) d->resetForNewMatch();
     for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
 }
@@ -3218,6 +3239,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
                     requestCorpse(opp->pawn(), victim, 100 + victim, true, kdt);   // [Gameplay] the death body (presentation only)
                     onPawnDeath(opp->pawn().chassis().id, opp->pawn().moveForm() == Form::Vehicle, kdt, opp->pawn().actorLocation());
                 }
+                if (opp->spawned()) noteVehicleDeath(opp->pawn());   // VehicleDying: the body keeps blocking until the gib
                 opp->despawn();
             }
         }
@@ -3994,6 +4016,7 @@ void World::killLocalPlayer(int killer, bool suicide, const std::string& damageT
     if (!matchActive_ || localDead_) return;
     const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
     match_.killed(killer, localPlayer_, suicide, damageType, &kc);
+    noteVehicleDeath(player_.pawn());   // VehicleDying body
     localDead_ = true;
     // [Systems] TnPlayerController.DeathSound for the local player's own death (audio only; no sim state).
     const int deathCue = abilityAudio_.localDied(cues_);
@@ -4210,8 +4233,9 @@ void World::tickMatch(float dt) {
                                 onPawnDeath(o->pawn().chassis().id, o->pawn().moveForm() == Form::Vehicle, dt, o->pawn().actorLocation());
                             }
                 }
+                if (e.player == localPlayer_ && !localDead_) noteVehicleDeath(player_.pawn());
                 if (e.player == localPlayer_) localDead_ = true;
-                for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
+                for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) { if (o->spawned()) noteVehicleDeath(o->pawn()); o->despawn(); }
                 break;
             case MatchEvent::Type::ReturnToLobby:
                 // TnGame.ReturnToGameLobby: the host (front end / Integration) decides what follows; the local
@@ -6306,6 +6330,42 @@ void World::tickDecoyTraps(float dt) {
             for (const DecoyTrap& d : decoys_) any |= d.owner == (int)i && (d.alive || d.delay >= 0.0f);
             pc->decoyAlive_ = any;
         }
+}
+
+// ---- VehicleDying collision [CONF RE VEHICLE_DEATH_PRESENTATION_RE.md: the live rigid body and collision stay until the gib] ----
+void World::noteVehicleDeath(const Character& pawn) {
+    if (pawn.moveForm() != Form::Vehicle || dyingBodies_.empty()) return;
+    const bool jet = pawn.vehicleParams().form == VehicleFormType::Jet;
+    const core::Vec3 v = pawn.velocity();
+    const bool moving = std::sqrt(v.x * v.x + v.z * v.z) > 1.0f;   // [H] the moving / stationary threshold
+    DyingRequest r;
+    r.pos = pawn.actorLocation(); r.yaw = pawn.yaw();
+    r.radius = pawn.cylinderRadius(Form::Vehicle); r.halfHeight = pawn.cylinderHalfHeight(Form::Vehicle);
+    const float u = core::simRand01();
+    r.time = jet ? 4.0f + u : (moving ? 0.3f + 0.45f * u : 0.2f + 0.3f * u);   // TotalTime: jets U(4, 5); moving U(0.3, 0.75); still U(0.2, 0.5)
+    dyingQueue_.push_back(r);
+}
+
+void World::tickDyingBodies(float dt) {
+    CollisionWorld* weapon = weaponCollision_.valid() ? &weaponCollision_ : nullptr;
+    for (DyingBody& b : dyingBodies_) {
+        if (b.remain <= 0.0f) continue;
+        b.remain -= dt;
+        if (b.remain > 0.0f) continue;
+        b.remain = 0.0f;   // the gib: the dying actor stops blocking
+        if (b.pawnSet >= 0) collision_.setDynamicEnabled(b.pawnSet, false);
+        if (weapon && b.weaponSet >= 0) weapon->setDynamicEnabled(b.weaponSet, false);
+    }
+    for (const DyingRequest& r : dyingQueue_) {
+        DyingBody* slot = nullptr;
+        for (DyingBody& b : dyingBodies_) if (b.remain <= 0.0f) { slot = &b; break; }
+        if (!slot) { LOG_WARN("vehicle dying: body pool full (16)"); break; }
+        const core::Mat4 pose = core::Mat4::translate(r.pos) * core::Mat4::rotateY(r.yaw) * core::Mat4::scale(core::Vec3{r.radius, r.halfHeight, r.radius});
+        slot->remain = r.time;
+        if (slot->pawnSet >= 0) { collision_.setDynamicPose(slot->pawnSet, pose); collision_.setDynamicEnabled(slot->pawnSet, true); }
+        if (weapon && slot->weaponSet >= 0) { weapon->setDynamicPose(slot->weaponSet, pose); weapon->setDynamicEnabled(slot->weaponSet, true); }
+    }
+    dyingQueue_.clear();
 }
 
 void World::requestAmmoBeacon(int owner) {

@@ -42,6 +42,14 @@ public:
     // maxDrop: how far below p an off-mesh lookup may find floor (a bot on a prop / ledge: up to MaxFallHeight 34 m).
     int findCell(const core::Vec3& p, float maxDist = 4.0f, float maxDrop = 8.0f) const;
     bool usable(int cell, const Agent& a) const;
+    // A hard block (closed transforming doors): a blocked cell is not usable for anyone. Sized to the loaded mesh on first use.
+    // After setBlocked: the connected pieces again without the blocked cells (areas sealed off by closed doors leave the main
+    // piece: roaming goals stay reachable and a search across a closed door fails at once instead of exhausting the budget).
+    void recomputePieces() { computePieces(); }
+    void setBlocked(int cell, bool b) {
+        if (blocked_.size() != cells_.size()) blocked_.assign(cells_.size(), 0);
+        if (cell >= 0 && (size_t)cell < blocked_.size()) blocked_[(size_t)cell] = b ? 1 : 0;
+    }
     // A* over cells + links; then a corridor string-pulled through the portals (shrunk by the agent radius). Empty on failure.
     bool findPath(const core::Vec3& from, const core::Vec3& to, const Agent& a, std::vector<Waypoint>& out, int* expanded = nullptr) const;
     // Time-sliced search (one active search at a time): begin, step with an expansion budget per simulation step until it returns
@@ -64,6 +72,8 @@ private:
     std::vector<Link> links_;
     std::vector<Anchor> anchors_;
     std::vector<int> piece_;     // connected piece id per cell (portals + links, undirected)
+    std::vector<uint8_t> blocked_;   // setBlocked (empty / another mesh's size: none)
+    void computePieces();
     // A* scratch, reused between searches (generation-stamped instead of cleared).
     mutable std::vector<float> gs_;
     mutable std::vector<int> came_, viaLink_;

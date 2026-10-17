@@ -35,6 +35,10 @@ bool World::ensureBotNav() {
     const std::string path = navDir ? std::string(navDir) + "/" + mapName_ + "/bot_nav.json" : mapDir() + "bot_nav.json";
     if (navDir) LOG_INFO("bots: nav override %s", path.c_str());
     if (!botNav_.load(path)) LOG_WARN("bots: no nav data at %s (AssetTools bot_nav.py); bots will hold position and fight", path.c_str());
+    if (botNav_.valid()) {   // closed transforming doors: the nav cells under them are unusable
+        const int n = transforming_.applyNavBlocks(botNav_);
+        if (n > 0) LOG_INFO("bots: %d nav cells blocked by transforming actors", n);
+    }
     return botNav_.valid();
 }
 
