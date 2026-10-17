@@ -3403,3 +3403,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:46 ONLINE_LOBBY_FLOW_V2.md merged (Frontend): Private Match hosts straight into the lobby; host-only Game Settings page; member menu
   = Create a Character / Teletran I / Friends; Find Match = Quick Match (original playlist) or Browse Games. Labels: "Game
   Settings" (user's words), "Create a Character" (original). Frontend builds it against FakeSession now.
+2026-10-17 15:47 Rendering: LENSFLARE_MODES patch ready (rt2 62beef47; merge order row 0f913411 -> patch -> glue d4c8978e after the eye pass);
+  all 38 campaign materials compile in matc (rt2 f31431f5; decal projection at draw time = campaign item; Omega Ddx switch
+  question to RE); X7 ready for a 25-min slot. Card plan after the eye pass: flare sheet 6 min + X7 25 min.
