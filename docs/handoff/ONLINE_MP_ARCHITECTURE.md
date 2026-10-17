@@ -259,6 +259,18 @@ peer and dropped afterwards (the peer's address is then the key).
     brains (two launches with one seed give an equal simStateHash at step 1000, SESSIONTEST 19 / 19). The launch record's `seed`
     (10.3) feeds that field.
 
+- **Aim point (Integration + Gameplay decision: online, every human, the local one too, is simulated through the remote-seat path):**
+  - The local PlayerController keeps its camera work (smoothed camera, collision-pushed start, camera trace) and sends the RESULT: the
+    world point the camera line hit.
+  - **Proposed wire (Systems, pending Gameplay):** `aimPoint` ABSOLUTE in world space, 3 x int24 at 1 cm (+-83 km), 9 bytes.
+  - Why absolute: the command for tick N is built at N-D (input delay). An eye- or pawn-relative point would drift by the pawn's
+    movement over those D ticks (~0.3-0.6 m strafing) and miss what the crosshair covered.
+  - No hit within range: the point at weapon range along the camera ray.
+  - Sim: shots, beams and aimed abilities go from eye(N) to aimPoint. aimYaw / aimPitch stay the look direction (facing,
+    camera-relative movement, animation, vehicles). Fine aim and the hover smoothers stay camera-only.
+  - `RemoteCommand { uint32_t tick; int8_t moveForward, moveRight; uint32_t buttons, pressed; float aimYaw, aimPitch; core::Vec3 aimPoint; }`.
+    Wire size 23 bytes per human per tick. Offline keeps the direct path.
+
 ### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
   lockstep the launch must be identical on every peer.
