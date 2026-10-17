@@ -219,7 +219,7 @@ static void testFakeSession() {
           fs.count("host") == 1 && fs.last("host")->hostSettings.gameModeTag == "TDM" && fs.count("requestStart") == 1 &&
           std::string(sessionEventName(E::Kicked)) == "Kicked" && std::string(sessionEventName(E::MemberVoice)) == "MemberVoice",
           "session.fake_script_and_recorder");
-    SessionVoiceSettings vs; vs.mode = SessionVoiceMode::OpenMic; vs.audience = SessionVoiceAudience::All; vs.volume = 40;
+    SessionVoiceSettings vs; vs.mode = SessionVoiceMode::OpenMic; vs.audience = SessionVoiceAudience::AllRadio; vs.volume = 40;
     fs.setVoiceSettings(vs); fs.setPushToTalk(true); fs.setMuted(SessionMemberId{"WFC-AAAA-BBBB"}, true);
     check(fs.last("setVoiceSettings")->arg == "2,1,,40" && fs.last("setPushToTalk")->arg == "1" && fs.last("setMuted")->arg == "WFC-AAAA-BBBB,1",
           "session.fake_voice_calls");

@@ -87,10 +87,12 @@ enum class SessionJoinFailure { Full, Timeout, Version, MapMissing, Invalid };
 // Voice (decision D7; ONLINE_MP_FLOWS.md 3.12, architecture section 7). Capture / playback / Opus are Systems'; the
 // frontend hands over the player's settings and the push-to-talk key state, and shows MemberVoice as HeadsetState.
 enum class SessionVoiceMode { Off, PushToTalk, OpenMic };
-enum class SessionVoiceAudience { Team, All };
+// Who hears this player (user addition 2026-10-17: proximity voice, architecture section 7): team radio anywhere, all
+// players by radio, positional voice for everyone within range (64 m, room reverb), or team radio plus proximity.
+enum class SessionVoiceAudience { TeamRadio, AllRadio, Proximity, RadioPlusProximity };
 struct SessionVoiceSettings {
     SessionVoiceMode mode = SessionVoiceMode::PushToTalk;   // the user's default
-    SessionVoiceAudience audience = SessionVoiceAudience::Team;
+    SessionVoiceAudience audience = SessionVoiceAudience::RadioPlusProximity;   // the proposed default
     std::string device;                     // capture device name; "" = the system default
     int volume = 70;                        // playback 0-100
 };
@@ -117,7 +119,8 @@ struct SessionEvent {
         ConnectionLost,    // member side; timedOut picks ConnectionTimeout vs ConnectionFailed text
         Desync,            // value = tick
         Kicked,            // kickReason
-        MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState
+        MemberVoice,       // member, headsetState (0 no voice / 1 voice on / 2 speaking): PlayerList_GFX HeadsetState;
+                           // voiceVia: 1 radio / 2 proximity while speaking (both: radio), for the talker cue
     } type = Type::LobbyState;
     double time = 0.0;
     std::string joinCode, address;
@@ -130,7 +133,7 @@ struct SessionEvent {
     SessionLobby lobby;
     int64_t value = 0;
     bool connecting = false, timedOut = false;
-    int headsetState = 0;
+    int headsetState = 0, voiceVia = 0;
 };
 inline const char* sessionEventName(SessionEvent::Type t) {
     static const char* const k[] = {"HostOpened", "HostFailed", "JoinProgress", "Joined", "JoinFailed", "MatchInProgress",

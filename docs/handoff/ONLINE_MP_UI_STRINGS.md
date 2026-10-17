@@ -126,8 +126,9 @@ Settings > Audio rows (SettingsMenu_GFX, inserted after the original volume rows
 |---|---|---|---|---|
 | Voice Chat | row | NEW $WfcPC.Voice.VoiceChat | "Voice Chat" | values $WfcPC.Voice.VoiceOff / VoicePushToTalk / VoiceOpenMic: "Off" / "Push to Talk" / "Open Mic" |
 | Voice Chat hint | hint | NEW $WfcPC.Voice.VoiceChatDesc | "Push to Talk sends your voice only while the key is held." | 57 characters |
-| Voice Channel | row | NEW $WfcPC.Voice.VoiceChannel | "Voice Channel" | values VoiceTeam / VoiceAll: "Team" / "All" |
-| Voice Channel hint | hint | NEW $WfcPC.Voice.VoiceChannelDesc | "Team: your team only. All: every player in the game." | 52 |
+| Voice Channel | row | NEW $WfcPC.Voice.VoiceChannel | "Voice Channel" | values VoiceTeamRadio / VoiceAllRadio / VoiceProximity / VoiceRadioProximity: "Team Radio" / "All Radio" / "Proximity" / "Radio + Proximity" (17 characters, inside the value column) |
+| Voice Channel hint | hint | NEW $WfcPC.Voice.VoiceChannelDesc | "Radio: heard anywhere. Proximity: players near you." | 51 |
+| Proximity Volume | row (only if Systems' mix wants it) | NEW $WfcPC.Voice.ProximityVolume | "Proximity Volume" | 0-100 in tens; hint $WfcPC.Voice.ProximityVolumeDesc "How loud nearby players' voices are." |
 | Input Device | row | NEW $WfcPC.Voice.InputDevice | "Input Device" | first value $WfcPC.Voice.InputDeviceDefault "System Default"; then device names as the system reports them (cut to ~18 characters with "...") |
 | Input Device hint | hint | NEW $WfcPC.Voice.InputDeviceDesc | "The microphone used for voice chat." | |
 | Push-to-Talk Key | row | NEW $WfcPC.Voice.PushToTalkKey | "Push-to-Talk Key" | values are key names (V, T, B, Caps Lock, Mouse 4, Mouse 5) |
@@ -144,6 +145,7 @@ Lobby / scoreboard / HUD (all original):
 | unmute | player row action | $UIText.PlayerList.UnMute | "Unmute" |
 | talking indicator | PlayerList_GFX HeadsetState icon / speaking_mc | - | (icons) |
 | talker list | Hud_GFX sprite 573 | - | the speaking players' names |
+| proximity cue | talker list name suffix | NEW $WfcPC.Voice.VoiceNearTag | "Near" (e.g. "Name1  Near"; radio speakers show the name only) |
 
 ## 10. Count
 
@@ -156,7 +158,7 @@ Lobby / scoreboard / HUD (all original):
 | PlayerList_GFX | 0 | 2 |
 | LoadScreen_GFX | 0 | 2 |
 | Hud_GFX | 1 | 2 |
-| Voice (Settings Audio rows, player rows) | 2 | 18 |
-| total | 38 | 40 |
+| Voice (Settings Audio rows, player rows, proximity) | 2 | 23 |
+| total | 38 | 45 |
 
 No new movie; every NEW text has a key in `$WfcPC.Online` or `$WfcPC.Voice` (data/frontend/pc_strings.int).
