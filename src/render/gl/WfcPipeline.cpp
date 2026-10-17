@@ -2951,13 +2951,6 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos)
             fs.insert(at, "    if (uLit != 0) c = wfcRtGlossMix(c, o.SpecularPower, o.SpecularColor, normalize(o.Normal), normalize(m.cameraVector));\n");
     }
-    if (blend == 4) {   // BLEND_Modulate (DST_COLOR x src): the source is a multiplier in [0, 1] - unclamped in our FP16 target,
-        // DeathDecal_MAT's glow term (mix(1, (r - 1e-4) x 20, g x 20)) multiplied the floor up to x20 (opaque white) and
-        // below 0 (black blobs); modulate programs only, every other program's text unchanged
-        const std::string anchor = "    wfcTranslucentOut(c, o.Opacity);\n";
-        for (size_t at = fs.find(anchor, mainStart); at != std::string::npos; at = fs.find(anchor, at + 64 + anchor.size()))
-            fs.insert(at, "    c = clamp(c, 0.0, 1.0);   // (modulate: a multiplier)\n");
-    }
     if (rtShadowAoOn()) {   // (M7 RT, RT on only: the masked-opacity atlas pass writes 1 where the material's clip keeps a fragment)
         const size_t nl1 = fs.find('\n');
         if (nl1 != std::string::npos) fs.insert(nl1 + 1, "uniform vec4 uRtUvSpace;\nuniform int uRtUvMode;\n");
