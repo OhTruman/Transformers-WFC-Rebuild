@@ -3433,3 +3433,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:07 Rust near-floor fog: read rust_dark_off.png: the floor at the camera's feet is opaque while far walls are clear = fog decreasing
   with distance = a BUG in Set D's in-layer integration or units, not a look decision (Rendering had called it authored vs the
   thumbnail). Rendering + RE find it after the X7 slot; Rust's top layer leaves the live fogs data until fixed; no re-base.
+2026-10-17 16:08 RETRACTED my "bug" call on the Rust floor fog: Rendering's numbers explain it (+0.4 % light-blue layer x 1/ln2 = ~+20 sRGB
+  levels on a near-black floor, invisible on lit walls); authored per the native maths, the only original frame (thumbnail)
+  shows darker floors -> the user's look decision (pair sent). Views floor stays on package 6 meanwhile. Flare views synced.
