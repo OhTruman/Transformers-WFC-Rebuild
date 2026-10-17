@@ -120,5 +120,5 @@ Five rounds, each judged on side-by-side eye sheets (work/wobble/ on rt2's workt
 - An additive term adds almost nothing.
 - Lamp highlights on a floor need a lamp in the mirror direction, which the authored views and match frames rarely have.
 
-The code stays on rt2 (b6c1f8f4 ... 80a0cd4b) and out of every merge set. A future attempt would need wet geometry or
+The code stays on rt2 (66689c92, 1b12d378, 0b6b0fd2, 82d44dc2, 80a0cd4b) and out of every merge set. A future attempt would need wet geometry or
 puddle decals with authored reflections, not a shading term.
