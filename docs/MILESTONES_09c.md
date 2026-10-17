@@ -2513,3 +2513,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   tutorial messages once per profile; all behind GameFlow::campaign(), versus unchanged, wfc_frontend_tests 165 / 0.
   eee61182 CAMPAIGN_CONTENT_DELTAS_RE.md + data exports (campaign specification complete on semantics + data). RE lane ->
   package 7 support: the Faithful per-draw 3.984 saturate rule. Card: Rendering's 20-min slot in progress.
+2026-10-17 08:04 Rendering slot ~07:58-08:05: X6 round 5 (lamp-placed damp + highlights): no visible wet floor; X6 PARKED unmerged after five
+  rounds (RENDERING_PACKAGE7_POLISH.md section 5; the user is told). X7: the gutter explanation was wrong (RT / bake 0.99 at the
+  fixed gain: no energy loss); the gain shift is the calibration's conditioning (measured pages barely respond to the bounce gain);
+  decision: (b) calibrate at 1x density and reuse the gain at 2x; the Streets full-flow frontend gap is 3.97 s at 2x vs 2.02 s at 1x
+  (the readback rounds suspected; yields + 1x-mip GI read next). Card -> Experimental presenter loop (~70 min) on int_cand15.
+  Non-X6 merge set (fence fix, presenter event, X3 timer; body bit with its lossless sheet) merges on "PRESENTER DONE".
