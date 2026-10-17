@@ -57,3 +57,14 @@ pixels), Off and Faithful identical, Realistic close to them - the (B) change is
 Summary: light shafts, light volumes and smoke now read as authored (visible, not blown out) on Seed / Rust / Debris / Streets /
 Molten / Gorge. Two findings for Systems before the switch: (1) glass / liquid surfaces going milky (Debris' pool, Gorge's floor
 panels) and (2) Berth's mid-ground veil - both "washed out" by Systems' own criterion unless the original also shows them.
+
+## Resolution (Systems + Experimental, 2026-10-17 11:4x)
+
+- Milky glass = ENV_ForceField_ALL_MAT's MICs (IAC_Glass2_Dark_MATINST on Gorge, IAC_Glass_Trans_MATINST on Debris, IAC_Glass_Opaque
+  smaller): FresnelColor_Intensity alpha 3.0 is an intensity in the shipped PS (Seed ShaderCache_12865 @ 275968 l.39-43); additive /
+  unlit, so the bright fresnel sheen is authored. Experimental's check of the Debris 'reflective' pool region (lower third): the
+  change is ADDITIVE - after = 1.06 x before + 18.6 levels, detail kept (high-pass correlation 0.965, std 3.16 -> 2.77): the scene
+  behind still shows through, brightened; not an opaque sheet, so no BLEND_Additive compositing fault.
+- Berth veil = the LightVolume_Base_MAT family: alpha read alone as a scalar intensity in the shipped PS (Seed ShaderCache_6631 @
+  89371); the 2-3x brighter volumes are the authored intensity.
+- Verdict: (B) goes in whole; no entries held.

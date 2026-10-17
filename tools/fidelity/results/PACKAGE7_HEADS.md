@@ -60,3 +60,5 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
+
+(B) material translator fix (Systems): eye pass results/MATB_matB.md - closer on 6 maps; the two findings (milky glass, Berth veil) traced to authored intensities in the shipped PS; switched in whole, no entries held. Energon_Lava_Mat: on the PACKAGE7-GATE eye list (unseen in versus).
