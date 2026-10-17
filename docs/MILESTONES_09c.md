@@ -2883,3 +2883,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 10:54 MERGED 64475797 the one-time "Online Play" prompt (name / voice / settings shortcut; only with an online session; FR1-FR4) ->
   the ONLINE FRONTEND IS COMPLETE on FakeSession; Systems' transport is the one remaining phase 1 piece. Frontend gap = 5 min
   (onlinehud incl. fr_prompt + iconic) after Gameplay. Frontend next: PACKAGE_7_PLAYTEST_GUIDE.md "Menus" section.
+2026-10-17 10:55 (B) eye pass: before arm done (24 / 24 runs + views, 2560x1440), after arm on map 2 / 8; CARD FREE ~11:25. Early read, Seed: same
+  match in all 3 modes; 20 / 26 frames change in Off / Faithful (18 Realistic), changed pixels 3.5 % of the frame, ~20 levels
+  brighter: the ceiling lamps' light shafts now show as volumetric beams onto the floor and robots (the authored (rgb, 2).w
+  shafts at 2x), nothing else moves. Card chain from ~11:25: Systems 15 -> Gameplay 4 -> Frontend 5 -> Rendering 20 + 15.
