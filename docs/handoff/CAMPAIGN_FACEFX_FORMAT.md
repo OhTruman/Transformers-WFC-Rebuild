@@ -36,23 +36,35 @@ Survey (fxa_survey.py, all 22 files):
 | ~0x39f0-~0x3f40 | the node names again (the face graph's own name list) | ESTABLISHED (strings) |
 | ~0x4000-end | the Dialogue group's animations, one block each | see section 3 |
 
-## 3. One animation block (DX_TRPTCN_LK004350 at ~0x4300)
+## 3. The animation block - ESTABLISHED (3,505 of 3,579 blocks parse exactly to the next block)
+
+Each Dialogue animation is one block (all values big-endian):
 
 ```
-3E23D70A 3E6147AE           floats 0.16, 0.22                -> HYPOTHESIS: blend-in / blend-out time (s)
-00000000 00000000 0000001A  "BL_DX_SWITCHBOARD.SC004350"     -> ESTABLISHED: the SoundCue this animation lip-syncs
-00000012                    "DX_TRPTCN_LK004350"             -> ESTABLISHED: the animation name (= InterpTrackFaceFX FaceFXSeqName)
-00000000 00000000 0000004F  ...                              -> HYPOTHESIS: class / object ids
-00000019                    25                               -> HYPOTHESIS: number of curves
-25 x (u32 name index, u32 0)  0x11, 0x42, 0x46, 0x3C ...     -> HYPOTHESIS: each curve's target node (name-table index)
-BF0F3F80 40872 8C1          -0.56, 4.22                      -> HYPOTHESIS: the animation's start / end time (s)
-then per curve: key counts, then packed keys: increasing u16 (08F0 0B77 140D 1A9D 20AD 35E4 3EFB ...)
-                                                             -> HYPOTHESIS: quantised key times across [start, end], then
-                                                                quantised values (and, for Hermite keys, slopes)
+f32 blendIn, f32 blendOut, u32 0          e.g. 0.16, 0.22 (HYPOTHESIS: blend-in / blend-out seconds)
+u32 len + "BL_DX_SWITCHBOARD.SC004350"    the SoundCue the animation lip-syncs
+u32 len + "DX_TRPTCN_LK004350"            the animation name (= InterpTrackFaceFX FaceFXSeqName)
+u32 0, u32 X, u32 n                        n = number of curves (25 here); X not decoded (79 here)
+n x (u32 nameIndex, u32 0)                 each curve's face-graph node (index into the name table)
+i32 -K                                     minus the total key count of the block (-29)
+f32 start, f32 end                         time range in seconds (-0.5596, 4.224); start < 0 in 2,716 blocks (lead-in)
+u32 n, u32 0, f32 a, f32 b                 n again; a == end in all 3,505 blocks; b not decoded (median b - a = -1.1 s)
+n x u16 keyCount                           keys per curve (7, 0, 3, 3, 0, 3, ...), summing to K
+K x i16 time                               t = v * end / 32767 (32767 -> end; -4341 -> -0.5596 = start), rising per curve
+K x i8 value                               signed byte; every one of the 51,044 curves starts and ends at 0
 ```
 
-The next block starts after the packed keys with the next pair of floats and SoundCue path; that repeats 46 times in
-this file.
+The size identity 12 + 8n + 12 + 16 + 2n + 3K + 12 = the distance to the next block holds for 3,505 of 3,579 (the last
+block of each file has no successor to check). Checked with tools/systems/fxa/fxa_anim_check.py over all 22 files.
+
+Exceptions (74 blocks), not yet decoded:
+- the two KON Megatron wall / holo faces (33 bones): 19 of 20 blocks each carry 100-516 extra bytes (a further section per
+  block, or a different curve encoding for that rig);
+- the 14-bone robots: exactly one block per file mismatches (13 files) - most likely a boundary in the file (a group /
+  list break) rather than a different encoding.
+
+Open in the block: the value scale (i8 / 127 x a per-node or global range?), X, b, and the key interpolation (no slopes are
+stored, so FaceFX derives tangents - linear or Hermite with computed slopes).
 
 ## 4. How UE3 uses it (and how InterpTrackFaceFX references it)
 
@@ -82,9 +94,8 @@ this file.
 ## 6. Next RE steps (in order)
 
 1. Parse the class table and name table exactly (field widths before each name), so name indices are proven.
-2. Walk one animation block to its end: confirm the curve list (25 x 8 bytes), the time range floats, and the per-curve key
-   encoding (count, u16 time, value, slopes) by landing exactly on the next block's float pair; then all 46 blocks in
-   Trypticon, then all 3,580.
+2. DONE for 3,505 blocks (section 3). Next: the 74 exceptions (KON faces' extra section; the one boundary per robot file),
+   the value scale, X, b and the interpolation.
 3. Decode the master bone list (14 rest transforms) and the compiled face graph (node count, link table, bone-pose nodes).
 4. A visual proof: one line (e.g. DX_TRPTCN_LK004350) evaluated on Trypticon's face bones beside the voice.
 
