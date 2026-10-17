@@ -1456,8 +1456,9 @@ void FrontendRuntime::draw(int w, int h) {
 
 // DEV TOOL: session:<Event>[,args] -> an event for the FakeSession (WFC_FAKESESSION). Events and arguments:
 //   HostOpened,<code>,<address>  HostFailed[,nat]  JoinProgress  Joined[,<mode>,<mapId>]  MatchInProgress[,<mode>,<mapId>]
-//   JoinFailed,full|timeout|version|map|invalid  LobbyState,<mode>,<mapId>  MemberJoined,<fingerprint>,<name>[,web]
-//   MemberLeft,<fingerprint>  CountdownStarted  PeerLoaded,<fingerprint>  AllLoaded[,<tick>]  PeerDropped,<fingerprint>
+//   JoinFailed,full|timeout|version|map|invalid  LobbyState,<mode>,<mapId>  MemberJoined,<fingerprint>,<name>[,web][,char]
+//   MemberLeft,<fingerprint>  CountdownStarted  PeerLoaded,<fingerprint>  AllLoaded[,<tick>]
+//   PeerDropped,<fingerprint>[,left|timeout|kicked|load]
 //   HostLost  ConnectionLost[,timeout]  Desync[,<tick>]  Kicked  MemberVoice,<fingerprint>,<0|1|2>[,<via>]
 void FrontendRuntime::injectDevSession(const std::string& spec) {
     if (!devFake_) return;
@@ -1481,6 +1482,7 @@ void FrontendRuntime::injectDevSession(const std::string& spec) {
     e.info.id = e.member;
     e.info.displayName = arg(2, "Player2");
     e.info.platform = arg(3) == "web" ? SessionPlatform::Web : SessionPlatform::PC;
+    for (size_t i = 3; i < a.size(); ++i) if (a[i] == "char") { e.info.hasCharacter = true; e.info.characterSlot = "Soldier"; }
     switch (e.type) {
     case T::HostOpened: e.joinCode = arg(1, "WFC-7QK2-M9TD-4H"); e.address = arg(2, "192.168.1.20:7777"); break;
     case T::HostFailed: e.hostFailure = arg(1) == "nat" ? SessionHostFailure::StrictNat : SessionHostFailure::NoPath; break;
@@ -1491,6 +1493,12 @@ void FrontendRuntime::injectDevSession(const std::string& spec) {
         break;
     }
     case T::ConnectionLost: e.timedOut = arg(1) == "timeout"; break;
+    case T::PeerDropped: {
+        const std::string w = arg(2, "left");
+        e.leaveReason = w == "timeout" ? SessionLeaveReason::Timeout : w == "kicked" ? SessionLeaveReason::Kicked
+                      : w == "load" ? SessionLeaveReason::LoadTimeout : SessionLeaveReason::Left;
+        break;
+    }
     case T::Desync: case T::AllLoaded: e.value = std::atoll(arg(1, "0").c_str()); break;
     case T::MemberVoice: e.headsetState = std::atoi(arg(2, "0").c_str()); e.voiceVia = std::atoi(arg(3, "0").c_str()); break;
     default: break;
