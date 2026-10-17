@@ -54,6 +54,7 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | c15678e9 | Frontend dev-script parser | frontend only | identity-neutral | not needed | no run |
 | 64475797 | Frontend one-time "Online Play" prompt (party lobby, only while an online session exists) | frontend only | never offline (FR1); offline / bot matches byte-identical (Integration) | not needed | no run |
 | 7ff407aa | docs | - | - | - | no run |
+| 6c58c023 | Frontend "Kick Idle Players" host row (online-only Game Mode Option, default Off) + the one-launch record (host publishes URL / seed / roster) | online only | offline fields and URL byte-identical; RE 3.1 test unchanged; tests 229 / 0 (Integration) | not needed | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
