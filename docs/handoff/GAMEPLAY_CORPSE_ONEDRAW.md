@@ -25,6 +25,19 @@ The 5-6 draws per body are mostly **the 4 chunks** plus the body or the hull. Th
    - There are 11 RB_Gib meshes, so all chunks of all bodies need at most **11 draws** in total, instead of 4 per body.
    - Step 1: read `gStats.instRejected` / the instance counters on a gib-heavy frame (Gorge or Berth, 63 bots, `WFC_PERFSTATS`). If the chunks already batch through the renderer's internal `queueInstance` (static meshes sharing a program), this lever is already in place and the draw count comes from elsewhere.
    - If they're rejected, find why: per-draw colour, owner state, or a material outside the instancing program. Make them qualify (draw with the neutral colour and owner 0; the chunks have no team tint) or add an explicit instanced call (Rendering).
+   - **Code reading at af4d0731 (2026-10-17, no run yet):**
+     - The renderer's automatic instancing (`WfcPipeline.cpp` ~4653) takes a dynamic draw only if:
+       - `skinMode_ != 0`;
+       - the program has an instanced variant;
+       - it is opaque, non-distortion and non-decal;
+       - it has no lightmap / VLM;
+       - `dynamicMaskDraw_` is set and the fx colour is 1;
+       - `queueInstance` accepts it.
+     - The chunks are drawn via `drawMesh(gibMeshes_[k], …, {1,1,1})` with no owner or energy-death state, so they **may already
+       qualify**. Then the extra draws would be the hull and the body, not the chunks.
+     - **The run decides:** `WFC_PERFSTATS` prints instQueued / instDraws / instRejected per frame.
+     - Compare `WFC_NOCORPSE` against the head on Berth at 63 bots. If instQueued rises by about 4 × bodies while instDraws rises by
+       ≤ 11, the chunks are batched and lever 2 (the hull) and the body draw are what's left.
    - **Expected:** 9 bodies × 4 = 36 chunk draws → ≤ 11. That's about −25 draws, most of the gap.
 2. **The hull wreck on the queued path.**
    - Draw it with `drawSkinnedGpu` using a one-joint palette: the hull is rigid, so its world matrix is the palette entry, on the bind mesh from `hullMeshes_` (a stable key).
