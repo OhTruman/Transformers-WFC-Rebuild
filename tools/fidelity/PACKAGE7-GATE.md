@@ -62,6 +62,17 @@ First sim change: cfca1717 (2026-10-17).
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
+## Eye list: items installed but not yet seen
+
+- **(B) ENV_AllShader_p.Energon_River.Energon_Lava_Mat** (Systems' material translator fix): "unverified by eye, authored scalar
+  installed".
+  - It compiles only on Streets, in two placements 736 m below the playable streets, and on BrokenHope, which is Escalation-only
+    with no versus boot. No versus frame can show it.
+  - Expected look (Systems): ElectricityColor alpha 150 applied as a scalar instead of the vec4, so a much brighter orange
+    electricity term on the power-pipe core strip.
+  - Pair it at the first Escalation / BrokenHope boot.
+  - AssetTools' independent review of the (B) after root: PASS 10 / 10.
+
 ## The package 7 head: one combined gate
 
 Run:
