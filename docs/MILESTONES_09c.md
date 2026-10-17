@@ -3355,3 +3355,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:17 RE flare verdict: sizes + colours AUTHORED (VF normalises right / up; no screen constant; Rendering's px table = the original);
   missing = cull the whole flare at coverage 0 (bounds = the occlusion box) + the +XYZ box. Rendering adds the cull and re-shoots
   (x20); RE judges by 16:00; PASS -> the candidate is re-named with the flares (~16:15), else next head. Hold ~17:30 at worst.
+2026-10-17 15:19 USER (15:30): "Yes to all" (Opus OK; live mic test approved; transport now OK; Escalation after online phase 1; party defaults
+  stand; two-PC test when available) + "delete all the old builds we don't need" -> disk sweep ordered to every lane (own work/
+  only; keep head / base / package 6; stop during the hold). RE: lens flares PASS as shipped (sizes, alpha, projection C; the
+  02 / Base_SUN DistMap last-point lift is authored-heavy: PC option = first point, listed to the user). Candidate to be RE-NAMED
+  ~16:00 = 057aded3 + flares + Systems' lead-delay auto-D (rttjump stall 24.1 -> 0.68 s; five profiles exit 0) + verify_slim
+  package 7 data checks. Experimental holds the eye pass for the final head (b).
