@@ -68,8 +68,8 @@ void Application::runNetMatch() {
     if (!t) { LOG_ERROR("NET transport: %s", err.c_str()); exitCode_ = 7; return; }
 
     // The launch record (ONLINE_MP_ARCHITECTURE 10.3): the URL, the seed and the seat table, identical on every peer; its hash is the
-    // HELLO check. [PENDING Gameplay: MatchLaunch::humans + localSeat build every peer's match players in the host's seat order; until
-    // then the seats are this machine's local player plus Remote seats "SEAT<n>", whose match-player order differs per peer.]
+    // HELLO check. MatchLaunch::humans lists every human in seat order (this machine's included, at localSeat), so match player i is
+    // human i on every peer (Gameplay GAMEPLAY_SEAT_ORDER): wire seat index == match player.
     game::MatchLaunch L;
     if (!game::MatchLaunch::fromURL(url, L)) { LOG_ERROR("NET: bad WFC_MATCH_URL"); exitCode_ = 7; return; }
     L.seed = (uint32_t)env("WFC_NET_SEED", 0x5eed0001);
@@ -77,23 +77,24 @@ void Application::runNetMatch() {
     L.localTeam = self % 2;
     game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
     for (int s = 0; s < seats; ++s) {
-        if (s == self) continue;
         game::RemoteSeat r; r.name = "Seat" + std::to_string(s); r.team = s % 2; r.member = "SEAT" + std::to_string(s);
         r.selected = true; r.selection = cs;
-        L.remotes.push_back(r);
+        L.humans.push_back(r);
     }
+    L.localSeat = self;
+    L.online = true;
     uint64_t lh = 1469598103934665603ULL;
     lh = fnv(lh, url, std::strlen(url)); lh = fnv(lh, &L.seed, sizeof L.seed); lh = fnv(lh, &seats, sizeof seats);
     const char* build = __DATE__ " " __TIME__;   // the same exe on every peer (a different build = a different sim)
     lh = fnv(lh, build, std::strlen(build));
     world_.launchMatch(L);
-    world_.match().selectCharacter(world_.localMatchPlayer(), cs);
-    std::vector<int> seatMp((size_t)seats, -1);   // wire seat -> match player
-    seatMp[(size_t)self] = world_.localMatchPlayer();
-    const auto& ps = world_.match().players();
-    for (size_t i = 0; i < ps.size(); ++i)
-        for (int s = 0; s < seats; ++s)
-            if (ps[i].sessionMember == "SEAT" + std::to_string(s)) seatMp[(size_t)s] = (int)i;
+    world_.match().selectCharacter(world_.localMatchPlayer(), cs);   // [until Gameplay applies humans[localSeat].selection itself]
+    std::vector<int> seatMp((size_t)seats, -1);   // wire seat -> match player (== the seat with the seat order; checked here)
+    for (int s = 0; s < seats; ++s) seatMp[(size_t)s] = s;
+    if (world_.localMatchPlayer() != self) {
+        LOG_ERROR("NET: the local seat %d is match player %d - the launch did not apply the seat order", self, world_.localMatchPlayer());
+        exitCode_ = 6; return;
+    }
     std::vector<int> order(seats);   // apply order: ascending match player
     for (int s = 0; s < seats; ++s) order[(size_t)s] = s;
     std::sort(order.begin(), order.end(), [&](int a, int b) { return seatMp[(size_t)a] < seatMp[(size_t)b]; });
