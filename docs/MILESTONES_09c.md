@@ -2823,3 +2823,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   against it. Rendering's x13slot.sh ready (~20 min, cand30 on b22659a3: Rust 504 hazeexp views, Streets 508 corridors, Gorge
   flash pair, Set D views late in the slot after my 'fogs' copy, identity vs base13). Card: (B) running -> Systems 15 -> Gameplay 4
   -> Frontend 1 -> Rendering 20.
+2026-10-17 10:33 Decoy Trap asset manifest merged (no own mesh: the thrower's weapon pickup mesh; deploy = Skill_Barrier; stun React_DecoyTrap_In /
+  _Out on all 27 MP chassis; death_Decoy = kill-feed icon; EXPLODE one-shot with the TRAP_ELEC_LP layer; DecoyTrap_FX Color owner
+  UNKNOWN -> RE lane). AssetTools next: TRAIL2_TEMPLATES dump for Rendering's Trail2 item.
