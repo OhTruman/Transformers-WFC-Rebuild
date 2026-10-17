@@ -54,6 +54,12 @@ for bpname in ['TR_Deaths_p.SharedRobotDeaths', 'TR_Deaths_p.BruteRobotDeaths', 
             for ef in mp.get('Effects') or []:
                 if ef.get('Template'): play.append((ef['Template'], ef.get('SocketName') or '', dmax))
         rows.append((bpname.split('.')[-1], name, gbp or '', fx, chunks, cue, skel, dec, play))
+    # "Default": no entry's types match (e.g. a damage type without a DamageDeathType, sideways momentum) -> the blueprint's own
+    # DefaultGibsBlueprint / SkeletalGibs / DecalApplicator, no modifiers.
+    fx, chunks, cue = dsys(bp.get('DefaultGibsBlueprint'))
+    sg, da = bp.get('SkeletalGibs'), bp.get('DecalApplicator')
+    rows.append((bpname.split('.')[-1], 'Default', bp.get('DefaultGibsBlueprint') or '', fx, chunks, cue, bool(sg) and bool(props(sg).get('Templates')),
+                 bool(da) and bool((props(da).get('Template') or {}).get('Material')), []))
 out.append('struct DeathFxTemplate { const char* tmpl; float x, y, z; };')
 out.append('struct DeathPlayEffect { const char* tmpl; const char* socket; float delayMax; };')
 out.append('struct DeathFxEntry { const char* blueprint; const char* entry; const char* gibsBlueprint; int nGibFx; DeathFxTemplate gibFx[3];')
