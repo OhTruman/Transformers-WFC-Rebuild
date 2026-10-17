@@ -62,6 +62,80 @@ First sim change: cfca1717 (2026-10-17).
 - **Each later sim change re-baselines the same way.** Its owner records old vs new SIMHASH / NAVQ references, the commit joins
   the regress base list, and the head ledger marks it "SIM CHANGE".
 
+## Gate state (2026-10-17 midday; from results/PACKAGE7_HEADS.md)
+
+### 1. Sim-changing merges since af4d0731, and the regress base each needs
+
+The base is af4d0731 plus these sim changes only, built with gate-base.sh `BASE_REF=af4d0731`. Each one gets a same-match check
+with a negative control.
+
+| merge | sim effect | in the base |
+|---|---|---|
+| cfca1717 hover / squad / Classic re-baseline | Classic + Smart diverge at step 601-603 | **yes**: gatebase/hover_cfca1717_srcgame.patch. Verified same match, negative control at 603 (results/P7_REGRESS_BASE.md) |
+| 1f1d4e17 camera recoil / FOV kick / jet blend | none (SIMHASH identical); the player-view frames move | no (not sim). Matters only for identity / eye bases |
+| 104b31cc Decoy Trap | none in bot matches (bots never select it) | no, unless bots or the PlayerBot loadout pick it up |
+| pending: Gameplay's per-weapon recoil + melee values batch | sim (its owner records the new NAVQ references) | **yes**, as a further item when it lands |
+| pending: transforming actors + dying-vehicle collision | sim (expected) | **yes**, if merged before the head is named |
+| 8454c173 / f46bdfe4 remote-seat paths | sim only with remote seats / a host seed | no: offline identical (seed 7 48 / 48) |
+
+The base is rebuilt once the head is named. Today's fast_af4d073_hover carries cfca1717 only.
+
+### 2. Render-data switches in Rebuild/work/render today
+
+| switch | time | effect |
+|---|---|---|
+| (A) decals / gibs | 09:12 | |
+| map_fx_runtime.json regen | 10:16 | the Set C particle module's data |
+| 'fogs' | 11:18 | |
+| (B) materials | 11:29 | |
+| FX always-include regen | pending | |
+
+How the combined gate's arms pick them up:
+
+- **Both arms read the same render data.** link-render points base and head at Rebuild/work/render, so data never separates them.
+  The regress reads the head's renderer cost against the base renderer on today's data, at the same sim.
+- **Freeze the data at the hold start.** The gate takes one snapshot of Rebuild/work/render (as matb_root.ps1 -NoCandidate does:
+  map files copied, sub-folders junctioned read-only), and both arms read that snapshot. Then a mid-gate data switch can't split
+  the arms or the reps. Integration only needs to avoid the 30-60 s of the snapshot build itself.
+- **Check that the base exe reads the new files.** The base exe (the af4d0731 renderer) reads data written for the newer code:
+  the 'fogs' key, the new map_fx format and the (B) GLSL. The gate checks each base run's log for map_fx / material load warnings.
+  If the old exe can't parse the regenerated map_fx, the base arm gets the snapshot's pre-regen map_fx (the -MapFxFrom option).
+  The difference then reads as "particle data + code", and the report says so.
+
+### 3. Per-head identity rows still open
+
+| head | status | owner |
+|---|---|---|
+| 1e11edc2 death presentation patch 2 | Off + Faithful lockstep pair (base af4d0731 vs 1e11edc2, Berth 63 bots), diffs classed against the death-frame list | Experimental, about 10 min of card |
+| Systems' six-patch stack | held: body-notify key / units bug, ability FX templates missing from map_fx; re-run after the fix | Systems |
+| Rendering cand30 / x14 / x15 | in Rendering's slots now | Rendering |
+| the door head | not merged yet | owner tbd |
+| 35811523 / 4953261b HUD jam / spectate display | needs Gameplay's buff / spectate state to exercise | Gameplay, then HUD shots |
+| 3363f1d0 Iconic Mode | eye check when the row is offered (default Off) | Frontend |
+
+### 4. What the combined timed gate needs
+
+The run is `RERUN_1B=1 EYE_FROM=<the head's eye pass> GATE_BASE=work/ab/fast_af4d073_<p7 base> bash tools/fidelity/package-respin.sh
+<p7 head> af4d0731`.
+
+- **CPU before the window, about 25 min:** build the head and the base at -j 4, run the base's same-match check, and run the eye
+  pass on the head. The eye pass is untimed, about 35 min of card.
+- **Timed windows:**
+
+  | window | content | length |
+  |---|---|---|
+  | 1 | the regress (8 maps x 3 arms x 2 reps, about 35 min) + clear-card waits + any whole-map reruns | about 45 min |
+  | 2 | delta FAST in between: untimed, shared card | about 15 min |
+  | 3 | 2b bodies + 5v5 (about 10 min) + 1b Realistic with the X3=0 / NOCORPSE arms (5 maps x 3 arms, about 35 min) | about 50 min |
+  | total | | **about 1 h 50 min** of card, 1 h 35 of it under the hold |
+
+- **Announce text, sent by Integration to every session with an ack collected before the hold file is set:**
+  "PACKAGE 7 GATE HOLD from <time>, about 1 h 40, until Experimental's '2b TIMED DONE': no game exes, no compiles (cmake / ninja /
+  cl / clang / link / dxc), no interpreters of any kind (python / node / sqlite3, even read-only, even sub-second), no file-heavy
+  jobs. Editor tools and git only. AssetTools' chain stays paused. Reply 'ack' to Integration."
+- **Experimental sends:** regress TIMED DONE (between the windows, when compiles may resume until the next hold), 2b TIMED DONE,
+  any CONTAMINATED whole-map rerun with the foreign process, and the verdict with the report path.
+
 ## Eye list: items installed but not yet seen
 
 - **(B) ENV_AllShader_p.Energon_River.Energon_Lava_Mat** (Systems' material translator fix): "unverified by eye, authored scalar
