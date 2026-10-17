@@ -23,6 +23,7 @@ uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
 uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
 
 enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6 };
+constexpr uint32_t kRedundancy = 3;   // ticks per regular CMDS packet: the newest + 2 before it (covers isolated losses)
 
 }  // namespace
 
@@ -68,6 +69,7 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     peerAck_.assign((size_t)cfg_.seats, 0);
     hello_.assign((size_t)cfg_.seats, 0);
     hello_[(size_t)cfg_.self] = 1;
+    lastFullMs_.assign((size_t)cfg_.seats, 0.0);
     delay_ = cfg_.delay > 0 ? cfg_.delay : 4;   // auto starts at 4 and follows the RTT
     if (!cfg_.logPath.empty()) {
         log_ = std::fopen(cfg_.logPath.c_str(), "w");
@@ -97,9 +99,19 @@ void Lockstep::pump() {
     t_.service();
     NetPacket p;
     while (t_.poll(p)) handle(p);
-    // The unacked commands again after 30 ms without a send (a lost packet or a stalled peer must not deadlock the exchange).
-    if (localHigh_ > 0 && nowMs() - lastSendMs_ >= 30.0)
-        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) sendCommands(s);
+    // Full windows (everything the peer has not acked): after 30 ms without any send (a stalled exchange must not deadlock), or when
+    // an ack is overdue (older than 1.5 RTT + 10 ms since the last full window) - a loss the redundancy did not cover.
+    if (localHigh_ > 0) {
+        const double overdue = 1.5 * (double)std::max(srtt_, 20.0f) + 10.0;
+        const bool idle = nowMs() - lastSendMs_ >= 30.0;
+        for (int s = 0; s < cfg_.seats; ++s) {
+            if (s == cfg_.self) continue;
+            // overdue: the peer still lacks a tick I first sent more than `overdue` ago (and no full window went out since)
+            auto next = producedMs_.find(peerAck_[(size_t)s] + 1);
+            const bool lost = next != producedMs_.end() && nowMs() - next->second >= overdue && nowMs() - lastFullMs_[(size_t)s] >= overdue;
+            if (idle || lost) sendCommands(s, true);
+        }
+    }
     // RTT probes every 250 ms to every peer (the auto input delay).
     if (nowMs() - lastPingMs_ >= 250.0) {
         lastPingMs_ = nowMs();
@@ -189,12 +201,14 @@ void Lockstep::updateDelay() {
     else if (want < delay_ && nowMs() - lastDelayDropMs_ >= 1000.0) { --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms)", delay_, srtt_); }
 }
 
-void Lockstep::sendCommands(int peer) {
-    // From the tick after the peer's ack (their contiguous copy of my seat) to my latest, at most max(maxResend, 2D + 4) ticks: a peer
-    // is never more than about 2D + 2 ticks behind my latest command, so the window always covers what it still needs.
-    const uint32_t cap = (uint32_t)std::max(cfg_.maxResend, 2 * delay_ + 4);
+void Lockstep::sendCommands(int peer, bool full) {
+    // Full: from the tick after the peer's ack (their contiguous copy of my seat) to my latest, at most max(maxResend, 2D + 4) ticks: a
+    // peer is never more than about 2D + 2 ticks behind my latest command, so the window always covers what it still needs.
+    // Regular: the newest kRedundancy ticks not yet acked (the ack-overdue full send in pump() repairs anything older).
+    const uint32_t cap = full ? (uint32_t)std::max(cfg_.maxResend, 2 * delay_ + 4) : kRedundancy;
     uint32_t first = peerAck_[(size_t)peer] + 1;
     if (localHigh_ >= cap && first + cap <= localHigh_) first = localHigh_ - cap + 1;
+    if (full) lastFullMs_[(size_t)peer] = nowMs();
     if (first > localHigh_) first = localHigh_;   // nothing new: repeat the latest (keeps the ack flowing back)
     const auto& mine = cmds_[(size_t)cfg_.self];
     std::vector<uint8_t> b;
@@ -215,9 +229,15 @@ void Lockstep::sendCommands(int peer) {
 void Lockstep::submitLocal(uint32_t tick, const game::RemoteCommand& c) {
     cmds_[(size_t)cfg_.self][tick] = encodeCommand(c);
     localHigh_ = std::max(localHigh_, tick);
+    producedMs_.emplace(tick, nowMs());
+    {   // forget send times every peer has acked
+        uint32_t minAck = localHigh_;
+        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) minAck = std::min(minAck, peerAck_[(size_t)s]);
+        while (!producedMs_.empty() && producedMs_.begin()->first <= minAck) producedMs_.erase(producedMs_.begin());
+    }
     uint32_t& h = contiguous_[(size_t)cfg_.self];
     while (cmds_[(size_t)cfg_.self].count(h + 1)) ++h;
-    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) sendCommands(s);
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) sendCommands(s, false);
 }
 
 bool Lockstep::haveAll(uint32_t tick) const {

@@ -67,7 +67,9 @@ public:
 
 private:
     void handle(const NetPacket& p);
-    void sendCommands(int peer);
+    void sendCommands(int peer, bool full);   // full = from the peer's ack; else the newest kRedundancy ticks
+    std::vector<double> lastFullMs_;          // per peer: the last full-window send
+    std::map<uint32_t, double> producedMs_;   // this seat's ticks -> when first sent (ack-overdue test)
     void fail(Status s, const std::string& why);
     INetTransport& t_;
     Config cfg_;
