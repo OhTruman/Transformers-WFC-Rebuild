@@ -3216,3 +3216,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   -> Gameplay 4 -> Frontend 5 -> Experimental 10.
 2026-10-17 14:02 MERGED c1b0afb4 Gameplay's 1772 fix (player-bot reload as a press online; launch identity 35 / 35 over 2400 steps; offline identical).
   Remaining for NET.identity: the 1299 perspective damage split (Gameplay) + the 'typical' replay-vs-recorder mismatch (Systems).
+2026-10-17 14:02 MP_TRANSFORMING_ACTOR_CUES_RE.md merged (doors: anim sound notifies only; Rust's start open = DOOR_INTERIOR + DOOR_TUBE) -> Systems
+  wires the door sounds through the anim-notify path (the doors' AnimSets join the body-notify table). RE note: spawn distributions
+  use emitter time in seconds (Rendering fixing).
