@@ -3257,3 +3257,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 14:32 MERGED 0d5399f4 Frontend popup mouse-focus fix (a real PC bug: no popup button was clickable, keyboard only) + the phase 2 doc with
   RE's party answers (conflict resolved with the Frontend's version). D12 stays "promote" as a labelled PC adaptation (user's
   open question). Frontend's ~4-min gap2 (iconic wheel, options by keys, Voice Settings click, spectate) after Rendering.
+2026-10-17 14:33 gatebase/TRANSACT_sim_only_af4d.patch merged for the regress base (base + diff == 814e7cf5 on 9001 steps; bots matter). Gameplay's
+  remoteFire adaptation confirmed right. 1299 simMatrix patch in its gates (rebase on 9864b4cd), then 1723 (note: p1 shows 530 hp
+  above its 330 max where local: the local side may gain something extra rather than the remote side taking a hit).
