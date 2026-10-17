@@ -2244,3 +2244,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   medium / haze term must not accumulate over 120 m (haze ~0 outside the authored fog, cap the integrated medium
   in-scatter, shafts from the shadow-tested sun / lamp terms only); tune on match frames. Cost step + FAST continue;
   round 3 (cand12) eye-pass-only tonight if before 00:00, else tomorrow. X3 stays merged (Realistic-only, tunable).
+  2026-10-16 20:59 X3 GATE cost step did NOT run (x3-gate missed mkdir of cost/; fixed): timed cost hold granted
+  21:15-21:40 after the FAST delta on e224ebf2 (running). Rendering compiles round 3 during the untimed FAST;
+  cand12 captures + eye-pass-only after 21:40; Rendering's Faithful identity (Defrag fix f5e2d8dd) ~22:20.
