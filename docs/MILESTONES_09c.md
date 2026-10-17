@@ -3110,3 +3110,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   schedule, bad +3.3 s at D 4, outage one 2 s stall then catch-up), no deadlock / timeout, 10-25 KB/s per peer. Systems' order:
   seat-order switch + NET.identity the moment Gameplay's sha lands, then adaptive D from the measured RTT, bandwidth trim toward
   ~1.5 KB/s per human, voice capture.
+2026-10-17 12:54 OVERLAP: at 12:53 two Systems exes WITH windows (work/wire/tree, netshim peers run without WFC_NULLRENDER) ran during Rendering's
+  x14 identity row; Systems told to kill by PID; rule restated: netshim peers run with WFC_NULLRENDER=1 on both sides (no window),
+  anything with a window needs a relayed slot. Rendering to note the overlap in the x14 report and re-run a rep if a frame differs.
