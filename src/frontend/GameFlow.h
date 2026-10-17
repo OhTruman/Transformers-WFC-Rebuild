@@ -268,6 +268,10 @@ public:
     SessionRole sessionRole() const { return role_; }
     static const char* sessionRoleName(SessionRole r) { return r == SessionRole::Host ? "Host" : r == SessionRole::Member ? "Member" : "Offline"; }
     double onlineTime() const { return clock_; }   // the frontend-update time the session's timeouts count
+    const std::string& joinCode() const { return joinCode_; }        // host: shown in the lobby's join panel
+    const std::string& joinAddress() const { return joinAddress_; }
+    bool matchInProgressForMember() const { return role_ == SessionRole::Member && memberLobby_.matchRunning; }
+    static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].
@@ -339,6 +343,18 @@ private:
     LocalProfile profile_;
     std::unique_ptr<ISession> session_;
     SessionRole role_ = SessionRole::Offline;
+    enum class OnlinePending { None, Hosting, Joining } onlinePending_ = OnlinePending::None;
+    std::string joinCode_, joinAddress_;
+    double joinStartedAt_ = 0.0;
+    SessionLobby memberLobby_;                          // member: the host's lobby as last received
+    std::string publishedLobbyKey_;                     // host: the lobby last published (publish on change)
+    bool onlineHost();                                  // Create Game while online: host(), the hosting popup
+    BridgeValue onlineJoin(const std::string& target);  // Online.JoinGame (PC EXTENSION): validate, join(), the joining popup
+    void onlineJoinFailed(SessionJoinFailure why);
+    void enterMemberLobby(const SessionLobby& lobby);
+    void applyMemberLobby();
+    SessionLobby hostLobbySnapshot() const;
+    std::string txt(const char* dollarKey) const;
     void onlineTick();                                  // poll the session (GameFlow_Online.cpp)
     void onSessionEvent(const SessionEvent& e);
     SelectedCharacter selected_;

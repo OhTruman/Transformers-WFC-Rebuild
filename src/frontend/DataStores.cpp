@@ -104,9 +104,11 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:IsCountingDown>") return b(L.countingDown);
     if (markup == "<CurrentGame:CurrentCountdown>") return std::to_string(L.countdown);
     if (markup == "<CurrentGame:CanHostRequestGameStart>")
-        return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0);
+        return b(flow_.level() == LevelKind::GameLobby && L.mapSelectionMethod == 1 && !L.countdownRubicon && L.mapId >= 0 &&
+                 flow_.sessionRole() != GameFlow::SessionRole::Member);   // an online member never starts the game
     if (markup == "<CurrentGame:LobbyStatus>") {
         if (flow_.level() != LevelKind::GameLobby || L.countingDown) return "";
+        if (flow_.matchInProgressForMember()) return cat_.localizeKey("$WfcPC.Online.MatchInProgressStatus");   // D6
         const char* key = L.lobbyStatus == 3 ? "WaitingForHostToStartStatus" : L.lobbyStatus == 4 ? "WaitingForBalancedTeamsStatus" : "WaitingForPlayersStatus";
         std::string s = cat_.localize("TransGame", "TnGameReplicationInfoGameLobby", key);
         return replaceAll(s, "`p", std::to_string(std::max(0, L.numRequiredPlayers - L.numPlayers)));
@@ -385,6 +387,10 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     }
     if (fn == "WriteValue" && m.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && m.size() > 31) {
         flow_.profile().set(m.substr(30, m.size() - 31), arg(1));
+        return {};
+    }
+    if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && flow_.sessionRole() == GameFlow::SessionRole::Member) {
+        FlowTrace::emit("online.memberIgnored", {{"fn", fn}, {"markup", m}});   // the host's options (online member)
         return {};
     }
     if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17)
