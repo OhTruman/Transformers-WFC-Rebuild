@@ -1192,14 +1192,16 @@ void Pipeline::rtRoundTrip(bool bspSet, bool endOfOpaque) {
                 LOG_INFO("RT Realistic defaults (first Realistic frame): tone=%s lmspecgain=%.2f tlgain=%.2f gisat=%.2f giemissive=%.2f "
                          "charao=%.1f softparticles=%s tiled=%s charsun=%s charlampcal=%s refltl=%s sunshare=%s probefill=%s origspec=%s "
                          "refltemporal=%s sunsharemax=%.2f tonekey=%.3f toneadapt=%.2f tonegain=%.2f tonesat=%.2f tonecontrast=%.2f tonebloom=%.2f bloommax=%.1f whiteroll=%s whitelo=%.1f whitehi=%.1f whitemix=%.2f "
-                         "x3=%s x3density=%.2f x3haze=%.4f x3sun=%.2f x3lamp=%.2f x3trans=%.2f x3g=%.2f x3dist=%.0f x3history=%.2f x3lampcore=%.1f x3tonecontrast=%.2f x3cap=%.2f",
+                         "x3=%s x3density=%.2f x3haze=%.4f x3sun=%.2f x3lamp=%.2f x3trans=%.2f x3g=%.2f x3dist=%.0f x3history=%.2f x3lampcore=%.1f x3tonecontrast=%.2f x3cap=%.2f "
+                         "x6=%s x6refl=%.2f x6damp=%.2f x6scale=%.1f",
                          oo(rtdef::tone()), rtdef::lmSpec() ? rtdef::lmSpecGain() : 1.0f, rtdef::tlGain(), rtdef::giSat(), rtdef::giEmissive(),
                          rtdef::charAoRadius(), oo(rtdef::softParticles()), oo(rtdef::tiled()), oo(rtdef::charSun()), oo(rtdef::charLampCal()),
                          oo(rtdef::reflTl()), oo(rtdef::sunShare()), oo(rtdef::probeFill()), oo(rtdef::origSpec()), oo(rtdef::reflTemporal()), rtdef::sunShareMax(),
                          rtdef::toneKey(), rtdef::toneAdapt(), rtdef::toneGain(), rtdef::toneSat(), rtdef::toneContrast(), rtdef::toneBloom(),
                          rtdef::bloomMax(), oo(rtdef::whiteRoll()), rtdef::whiteLo(), rtdef::whiteHi(), rtdef::whiteMix(),
                          oo(rtdef::x3()), rtdef::x3Density(), rtdef::x3Haze(), rtdef::x3Sun(), rtdef::x3Lamp(), rtdef::x3Trans(), rtdef::x3G(),
-                         rtdef::x3Dist(), rtdef::x3History(), rtdef::x3LampCore(), rtdef::x3ToneContrast(), rtdef::x3Cap());
+                         rtdef::x3Dist(), rtdef::x3History(), rtdef::x3LampCore(), rtdef::x3ToneContrast(), rtdef::x3Cap(),
+                         oo(rtdef::x6()), rtdef::x6Refl(), rtdef::x6Damp(), rtdef::x6Scale());
             }
         }
         // X3 (Realistic): the froxel volumetric light - the map's sun, its in-view lamps and the transient lights scattered by
