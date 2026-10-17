@@ -76,6 +76,36 @@ void GameFlow::setPushToTalkHeld(bool held) {
     session_->setPushToTalk(held);
 }
 
+const GameFlow::OnlineMember* GameFlow::memberForPlayer(const MatchValues::Player& p) const {
+    for (const OnlineMember& m : onlineMembers_)
+        if (p.member.empty() ? m.info.displayName == p.name : m.info.id.fingerprint == p.member) return &m;
+    return nullptr;
+}
+
+int GameFlow::localHeadsetState() const {
+    // PC ADAPTATION: the original read the Live headset; ours is the Audio rows' mode. Open mic has no voice-activity
+    // signal from the session yet, so it shows "voice on" (1); push-to-talk shows "talking" (2) while the key is held.
+    const int mode = profile_.voice.mode;
+    return mode == 0 ? 0 : (mode == 1 && pttHeld_ ? 2 : 1);
+}
+
+void GameFlow::fillOnlineLaunch() {   // the match's participants (WFC_SESSIONTEST / Gameplay's Remote participants)
+    if (role_ == SessionRole::Host) {
+        const SessionLobby l = hostLobbySnapshot();
+        match_.onlineSlots = l.slots;
+        match_.self = SessionMemberId{};
+        for (const SessionMemberInfo& m : l.members) match_.onlineNames.push_back({m.id, m.displayName});
+    } else {
+        match_.onlineSlots = memberLobby_.slots;
+        match_.self = selfId_;
+        for (const SessionMemberInfo& m : memberLobby_.members) match_.onlineNames.push_back({m.id, m.displayName});
+    }
+    int humans = 0;
+    for (const SessionSlot& sl : match_.onlineSlots) humans += sl.kind == SessionSlot::Kind::Human;
+    FlowTrace::emit("online.launchSlots", {{"slots", std::to_string(match_.onlineSlots.size())}, {"humans", std::to_string(humans)},
+                                           {"self", match_.self.fingerprint}});
+}
+
 void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, whenever they change (and when the session starts)
     const LocalProfile::Voice& v = profile_.voice;
     const std::string key = std::to_string(v.mode) + "|" + std::to_string(v.audience) + "|" + v.device + "|" + std::to_string(v.volume);

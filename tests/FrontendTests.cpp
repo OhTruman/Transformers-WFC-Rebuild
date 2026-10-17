@@ -1424,6 +1424,74 @@ static void testCampaignObjectivesManifest() {
           std::to_string(loaded) + std::to_string(first) + std::to_string(refused) + " bank " + std::to_string(o.bank().size()));
 }
 
+static void testOnlineMatchSide() {
+    // The match side of Remote participants (ONLINE_MP_FRONTEND_TESTS.md section 4, the frontend half of WFC_SESSIONTEST)
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true));
+    r.fake->inject(memberEv("WFC-BBBB-BBBB-2", "Bravo", true));
+    r.frames(2);
+    r.f().call("Online.BeginLobbyExitCountdown");
+    const bool launched = runUntil(*r.rt, [&] { return r.f().hasPendingMatch(); }, 60 * 30);
+    // M1: the launch carries the host's slots (host first, "" id), self ("" on the host) and every member's name
+    const MatchLaunch& ml = r.f().currentMatch();
+    const bool slots = launched && ml.onlineSlots.size() == 3 && ml.onlineSlots[0].kind == SessionSlot::Kind::Human &&
+                       ml.onlineSlots[0].member.fingerprint.empty() && ml.onlineSlots[1].member.fingerprint == "WFC-AAAA-AAAA-1" &&
+                       ml.self.fingerprint.empty() && ml.onlineNames.size() == 3 && ml.onlineNames[2].second == "Bravo";
+    check(host && slots, "online.M1_launch_slots", std::to_string(ml.onlineSlots.size()) + "/" + std::to_string(ml.onlineNames.size()));
+    r.f().matchLoaded();
+    SessionEvent all = ev(T::AllLoaded); all.value = 600;
+    r.fake->inject(all);
+    r.frames(2);
+    // M2: Gameplay's roster with Remote participants -> scoreboard rows with platform tags; HeadsetState / "Near" for the
+    // HUD talker list (Hud_GFX sprite 573 lists the rows with HeadsetState 2 every 500 ms)
+    auto roster = [&](bool alphaRemote, const std::string& alphaName) {
+        MatchValues v; v.valid = true; v.myTeam = 0;
+        MatchValues::Player me; me.name = "Self"; me.team = 0; me.local = true; me.score = 3;
+        MatchValues::Player a; a.name = alphaName; a.team = 1; a.score = 7; a.kills = 2; a.remote = alphaRemote; a.bot = !alphaRemote;
+        if (alphaRemote) a.member = "WFC-AAAA-AAAA-1";
+        MatchValues::Player b; b.name = "Bravo"; b.team = 0; b.score = 1; b.remote = true;   // no sessionMember: matched by name
+        MatchValues::Player bot; bot.name = "Ratchet"; bot.team = 1; bot.bot = true;
+        v.players = {me, a, b, bot};
+        r.f().setMatchValues(v);
+    };
+    roster(true, "Alpha");
+    SessionEvent vo = ev(T::MemberVoice); vo.member.fingerprint = "WFC-AAAA-AAAA-1"; vo.headsetState = 2; vo.voiceVia = 2;
+    r.fake->inject(vo);
+    r.frames(2);
+    DataStores& ds = r.rt->dataStores();
+    ds.poll();
+    auto cell = [&](const char* col, int row) { return ds.call("ReadCollectionValue", {"<CurrentGame:Players>", col, std::to_string(row)}).s; };
+    const std::string selfName = cell("PlayerName", 0);
+    const bool rows = selfName.size() > 4 && selfName.substr(selfName.size() - 4) == "  PC" && cell("HeadsetState", 0) == "1" &&
+                      cell("PlayerName", 1) == "Alpha  PC  Near" && cell("HeadsetState", 1) == "2" && cell("Score", 1) == "7" &&
+                      cell("PlayerName", 2) == "Bravo  PC" && cell("HeadsetState", 2) == "0" && cell("PlayerName", 3) == "Ratchet";
+    r.f().setPushToTalkHeld(true);
+    ds.poll();
+    const bool selfTalking = cell("HeadsetState", 0) == "2";
+    r.f().setPushToTalkHeld(false);
+    check(rows && selfTalking, "online.M2_match_rows_talkers", selfName + " / " + cell("PlayerName", 1) + " / " + cell("PlayerName", 2));
+    // M3: Alpha leaves -> one kill-feed line and a swap by member; Gameplay keeps the slot (same index, score) as a bot, so
+    // the row stays with its score and loses the tag / voice. Bravo is idle-kicked by the host rule: the same line once.
+    SessionEvent left = ev(T::PeerDropped); left.member.fingerprint = "WFC-AAAA-AAAA-1"; left.leaveReason = SessionLeaveReason::Left;
+    r.fake->inject(left);
+    SessionEvent idle = ev(T::PeerDropped); idle.member.fingerprint = "WFC-BBBB-BBBB-2"; idle.leaveReason = SessionLeaveReason::Kicked;
+    r.fake->inject(idle);
+    r.frames(2);
+    const std::vector<std::string> lines = r.f().takeGameMessages();
+    const std::vector<SessionSlotSwap> swaps = r.f().takeSlotSwaps();
+    roster(false, "Alpha");
+    ds.poll();
+    const bool kept = cell("PlayerName", 3) == "Ratchet" && cell("PlayerName", 2) == "Bravo";   // a Remote row whose member left: the plain name
+    check(lines.size() == 2 && lines[0] == "Alpha has left the game" && lines[1] == "Bravo has left the game" && swaps.size() == 2 &&
+          swaps[0].member.fingerprint == "WFC-AAAA-AAAA-1" && swaps[1].member.fingerprint == "WFC-BBBB-BBBB-2" &&
+          swaps[0].to == SessionSlotSwap::To::Bot && kept && cell("PlayerName", 1) == "Alpha" && cell("Score", 1) == "7" &&
+          cell("HeadsetState", 1) == "0" && r.f().takeGameMessages().empty(), "online.M3_swap_rows_idle_line",
+          std::to_string(lines.size()) + " " + cell("PlayerName", 1));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1450,6 +1518,7 @@ int main() {
     testOnlineMemberCountdown();
     testOnlineSessionEnd();
     testOnlineVoice();
+    testOnlineMatchSide();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
