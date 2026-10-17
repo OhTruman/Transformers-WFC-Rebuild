@@ -3279,3 +3279,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   combined online patch (offline identical; may join the head without touching the base).
 2026-10-17 14:39 MERGED c306878a transforming-door sounds (anim sound notifies through the body-notify table; Rust's level-start DOOR_TUBE +
   DOOR_INTERIOR verified headless with the audio mix; SIMHASH identical) + PACKAGE_7_HEAD.md bc6733a5 (data switches by time).
+2026-10-17 14:42 MERGED e5bc5a22 Gameplay's sim pose + shared pickups + WFC_NET_STATEDUMP + CTF Rounds (the 1299 and 1723 splits; SESSIONTEST 37 / 37;
+  offline identical). NET.identity re-runs on e5bc5a22: Systems (lan / typical / bad / burst) + Experimental independent = the phase 1
+  milestone if exit 0 on all.
