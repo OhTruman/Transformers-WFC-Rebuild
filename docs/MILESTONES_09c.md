@@ -2865,3 +2865,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   push-to-talk key, voice settings shortcut), host / join flows, first lobby, the full first-time error table; Frontend builds the
   prompt now on FakeSession (FR1-FR4, gated on an online session). Systems' remote-command contract agreed with Gameplay (a09b4054
   section 10.2: one decoded path for the local human, absolute quantised aim, int8 move axes, idle on applied commands).
+2026-10-17 10:49 RE: the original has FIXED exposure (no adaptation, no filmic tonemap; Uber post constants only) -> Realistic's auto-exposure is
+  ours; Rendering's haze x min(1, 1/e) = compositing haze at exposure 1 for lifted frames, consistent with the authored look; the
+  cand30 slot's eye check decides. LVV callers next (~1 h).
