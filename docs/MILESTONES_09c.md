@@ -2668,3 +2668,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   appears (2-human state?) before calling 0cf760f4 verified. Systems justified the VendingMachine entries (a packed UV scale /
   offset VectorParameter read through two AppendVectors' pins; the same output-pin cause; the glyph pattern moves to the authored
   offset). Card -> Gameplay 4-min firing crops + one death crop (09:22).
+2026-10-17 09:26 Gameplay firing-crop slot done (13 runs: 12 firing base / new + the robot-death check on the switched data; sheets and verdict
+  pending in work/pass29/cam; the camera patch merges on it). Card -> Rendering x9slot ~22 min (body-bit zero-difference pair,
+  X7 Gorge views + the Streets frontend pair vs the 2.02 s bar, particle before / after on cand27), then Systems 35 min, then
+  Experimental's (B) eye pass.
