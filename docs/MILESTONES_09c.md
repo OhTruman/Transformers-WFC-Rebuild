@@ -2906,3 +2906,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Streets (placements 736 m below the streets) and BrokenHope (Escalation-only, no versus boot): unreachable in this build, so (B)
   switches whole and the lava pair is deferred to the first Escalation boot (package 7 eye list). Switch = whole-file copy of
   Systems' matB/render files (parsed-equal to live + manifest on 10 / 10; dry run OK), live backed up; applied on the verdict.
+2026-10-17 11:03 MERGED 6c58c023 Frontend: "Kick Idle Players" online-only host row (D5 revised, default Off) + the one-launch record (ARCHITECTURE
+  10.3: GameFlow::buildLaunchUrl, ISession::setLaunch(url, seed, roster) before requestStart, members start from the host's URL
+  verbatim; FakeSession without a record = the old local build); tests 229 / 0; offline byte-identical. Gameplay asked for one
+  patch: kickIdle gate, 'active' = any input, FineAim / Hover bits, and the host seed hook into World's match RNG (+ a
+  two-peer equal-SIMHASH SESSIONTEST check). Systems froze matB/render for the (B) switch.
