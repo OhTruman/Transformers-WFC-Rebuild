@@ -3013,3 +3013,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:46 FX always-include regen GATED PASS 10 / 10 (scratchpad mapfx_fx5): exactly the 5 templates added (4 on BrokenHope / Remnant),
   nothing removed, all other systems identical apart from H2H_Punch01's decoder labels; installs after Rendering's CARD FREE, then
   Systems' re-run.
+2026-10-17 11:46 Systems 10.4: AllLoaded only after every peer loaded + launch-record hash matched; all peers start at tick 0 together; no World
+  step before: ISession::simHeld() (Frontend / FakeSession) + the Application-loop check (Gameplay). Lens flares CORRECTED: 6
+  placements (one per map on BrokenHope, Remnant, Rust, Seed, Debris, Gorge), not 32 (that was the door count); AssetTools 4fdf117
+  exported the 3 templates (5-6 elements each, all distributions decoded, 4 PNGs); the curves' inputs come from RE's LENS_FLARE_RE.md.
