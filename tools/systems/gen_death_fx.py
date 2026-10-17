@@ -3,8 +3,8 @@ TnDeathBlueprint entries name, for Gameplay's patch 2 call sites (World::spawnCo
 Per entry (TnDeathType<Name> -> "<Name>", first type of each Deaths entry, blueprint order):
   gibs: the entry's gib DSYS (UseCustomGibs ? GibsBlueprint (none = no gibs) : the blueprint's DefaultGibsBlueprint), as
         its effect-state factories: particle templates (+ local offset, UU), whether it spawns RB_Gib chunks, its sound cue;
-  skeletal: UseCustomSkeletalGibs ? SkeletalGibs != None : the blueprint's SkeletalGibs != None;
-  decals:   UseCustomDecals ? DecalApplicator != None : the blueprint's DecalApplicator != None;
+  skeletal: the spawner (UseCustomSkeletalGibs ? SkeletalGibs : the blueprint's) exists AND has Templates;
+  decals:   the applicator (UseCustomDecals ? DecalApplicator : the blueprint's) exists AND its Template has a Material;
   play effects: TnDeathModifierPlayEffect templates + socket names, the modifier's Delay max (s).
 Plus TnPawn.GibbedCameraShake / GibbedShakeEffectDistance and TnPlayerController.DeathSound (the local player's death cue).
 Usage: python -I gen_death_fx.py <authored.db> <out .inc>"""
@@ -43,8 +43,10 @@ for bpname in ['TR_Deaths_p.SharedRobotDeaths', 'TR_Deaths_p.BruteRobotDeaths', 
         name = types[0].split('.')[-1].replace('TnDeathType', '')
         gbp = e.get('GibsBlueprint') if e.get('UseCustomGibs') else bp.get('DefaultGibsBlueprint')
         fx, chunks, cue = dsys(gbp)
-        skel = (e.get('SkeletalGibs') if e.get('UseCustomSkeletalGibs') else bp.get('SkeletalGibs')) is not None
-        dec = (e.get('DecalApplicator') if e.get('UseCustomDecals') else bp.get('DecalApplicator')) is not None
+        sg = e.get('SkeletalGibs') if e.get('UseCustomSkeletalGibs') else bp.get('SkeletalGibs')
+        skel = bool(sg) and bool(props(sg).get('Templates'))   # a spawner with no Templates spawns nothing (car / tank / jet)
+        da = e.get('DecalApplicator') if e.get('UseCustomDecals') else bp.get('DecalApplicator')
+        dec = bool(da) and bool(((props(da).get('Template') or {}).get('Material')))   # an applicator with no Template material spawns nothing (vehicles)
         play = []
         for m in e.get('Modifiers') or []:
             if cls(m) != 'TnDeathModifierPlayEffect': continue
@@ -63,6 +65,19 @@ for b, n, g, fx, ch, cue, sk, dc, pl in rows:
     out.append('    {%s, %s, %s, %d, {%s}, %s, %s, %s, %s, %d, {%s}},' % (q(b), q(n), q(g), min(len(fx), 3), fxs, 'true' if ch else 'false', q(cue),
                'true' if sk else 'false', 'true' if dc else 'false', min(len(pl), 3), pls))
 out.append('};')
+# The death sockets per skeletal mesh (SkeletalMeshSocket: bone + RelativeLocation UU + RelativeRotation, UE axes).
+SOCK = ('Head_FX', 'BoosterSocket_C', 'Chest_FX', 'TargetingSocket', 'VaporTrailSocket_R', 'PositionSocket')
+out.append('struct DeathSocket { const char* mesh; const char* socket; const char* bone; float x, y, z; int pitch, yaw, roll; };')
+out.append('static const DeathSocket kDeathSockets[] = {')
+ns = 0
+for o, pr in db.execute("select opath, props from objects where class='SkeletalMeshSocket' order by opath"):
+    sp = json.loads(pr or '{}'); n = sp.get('SocketName')
+    if n not in SOCK: continue
+    mesh = o.rsplit('.', 1)[0]; L = sp.get('RelativeLocation') or {}; R = sp.get('RelativeRotation') or {}
+    out.append('    {%s, %s, %s, %.2ff, %.2ff, %.2ff, %d, %d, %d},' % (q(mesh), q(n), q(sp.get('BoneName') or ''), L.get('X', 0.0), L.get('Y', 0.0), L.get('Z', 0.0),
+               R.get('Pitch', 0), R.get('Yaw', 0), R.get('Roll', 0))); ns += 1
+out.append('};')
+print('sockets', ns)
 pawn = props('TransGame.Default__TnPawn'); sh = pawn.get('GibbedCameraShake') or {}
 out.append('// TnPawn.GibbedCameraShake (a gibbing pawn within GibbedShakeEffectDistance of the local view shakes it).')
 out.append('struct GibbedShakeDef { float intensity, roll, rollFalloff, shakeFalloff, distanceUU; };')
