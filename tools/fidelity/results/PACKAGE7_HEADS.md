@@ -29,6 +29,8 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | 76da5484 | Rendering Set A: the presenter fence fix + one persistent presenter event + the X3 timer | D3D12 present path; X3 GPU timer | identity carried from int_cand15 vs base11 (Rendering, predates cfca1717) | - | verification: results/PRESENTER_VERIFY_cand15.md (64 / 64 clean, FG / resize / map switch clean) |
 | 5cb9886f | campaign objectives loader | behind the campaign flag | versus unchanged by construction | not needed | no run |
 | 186c1a84, 56d5e2dc | docs only | - | - | - | no run |
+| 1f1d4e17 | Gameplay camera recoil / FOV kick / fire shake + jet blend 1.0 s | local camera only; SIMHASH identical (Gameplay) | **not frame-identical**: the PlayerBot player camera moves while firing / in jet form - any later identity or eye pass on the player view needs a base with 1f1d4e17 (same camera), else expected-change = every frame after the first shot | Rebuild-Gameplay work/pass29/cam sheets | eye evidence by Gameplay |
+| 872c1ff4 + d03e3b40 | online match roster rows + Application glue | online only | offline unchanged (Integration); tests 211 / 0 | not needed | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
