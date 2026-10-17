@@ -2876,3 +2876,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 10:51 RE: LVV affects only light-environment owners (one caller of QueryLightsVisibility), so the Remnant light lights the world
   unculled through walls in the original -> Rendering draws it unculled on the world, LVV entry on the character path only. RE
   next: review Systems' remote-command contract (10.2) against the original's input / idle semantics; then eye-check crops.
+2026-10-17 10:53 Campaign data prep: all 10 chapters' manifests + summary merged (430 cooked levels, 3.7 GB summed; the dump lacks nothing); matc
+  dry run 97.8 % of the 1,763 untranslated campaign materials compile clean; 38 need 5 new nodes + DecalMaterial roots + ddy /
+  acos (sized for the campaign phase). AssetTools next: close our gaps (cube maps as faces, psa-only anim sets, PowerCell_Voltage_FX
+  to RE).
