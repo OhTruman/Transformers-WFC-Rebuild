@@ -3135,3 +3135,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Systems and Experimental (independent: net_profiles.ps1 lan / typical / bad, hash every tick, netlog_join on both peers'
   net.csv) run the identity row headless. Open item for Systems after it: WFC_NET_REPLAY (single process fed the host's bundles
   reproduces the simStateHash stream) = the gate's replay-equivalence half.
+2026-10-17 13:22 NET.identity (Systems, on 0df2a0fa + launch switch): seat mapping right, bundles identical every tick; two local-only differences
+  remain: launchMatch does not apply humans[localSeat].selection (300 vs 330 hp, split at tick 601) and the local pawn alone gets
+  ~0.6 m/s vertical velocity on the first InProgress step (a path outside the seat path) -> Gameplay priority 1; headless repro.
+  Systems sends the launch switch alone for the head.
