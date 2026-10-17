@@ -2472,3 +2472,13 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   calls / 17 events, FakeSession.h, GameFlow::setSession unset = offline; wfc_frontend_tests exit 0). Docs merged: ONLINE_MP_
   FLOWS / FRONTEND_TESTS / UI_STRINGS (decisions D1-D11 taken, D7 voice chat = user), NETCODE_HARNESS.md + load-stall.ps1,
   EXPERIMENTAL_HANG_DUMPS.md, GAMEPLAY_HOVER_RESULT.md, CAMPAIGN_KISMET_HANDLERS_RE.md, CAMPAIGN_MATINEE_RUNTIME_RE.md.
+2026-10-17 07:27 PACKAGE 7 MERGES (integration head f2465a80): be0cac77 Camera.h roll (rt2 e5fc6d65); 1e11edc2 Gameplay death presentation
+  patch 2 (faithful picker + momentum, ragdoll gib, death camera + roll + gibbed shake, killer cam, DeathFx at sockets, death light
+  ends with the pawn; scorch gated OFF until the DeathDecal_MAT regen; headless 48 / 48 x 12, SIMHASH identical; deathcam re-crop
+  PASS docs/handoff/corpsep2/sheet_deathcam_robot_fix.png); 72eec90c Frontend Volumetric Lighting settings row + pc_strings.int;
+  f2465a80 Rendering volumetric setter (SETTINGSTEST +1); earlier today a2ee795b, 24c6618c, 3a19b47a. Debug builds OK,
+  wfc_frontend_tests exit 0. Identity for 1e11edc2 (death-frame expected-change list) queued with Experimental.
+  RE lane: CAMPAIGN_SETPIECES_RE.md (all script, no native boss code) + CAMPAIGN_RE_INDEX.md; the campaign runtime series is
+  complete; next FMV playback + checkpoint data packaging. Netcode: netshim.py self-test PASS on 7 profiles (210ab479).
+  Card: Experimental load-stall boots -> Rendering cand20 (X6 round 4 + setter) -> Frontend 2-min row check -> Experimental
+  presenter loop.
