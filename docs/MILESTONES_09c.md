@@ -3183,3 +3183,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   with the player bot) -> Gameplay now. Systems drops its extra selectCharacter (one-line follow-up).
 2026-10-17 13:46 MERGED c069952c (the net launch drops its extra local selectCharacter). Head = c069952c: everything of online phase 1 except
   Gameplay's two late splits (1299 hp perspective, ~1772 player-bot RNG / target).
+2026-10-17 13:48 Rendering CARD FREE 13:47: x13 identity 10 / 10 PASS; flash PASS (64.9 -> 60.8 % near-white, bar 55-62); haze exposure small,
+  identity-clean (merge as harmless); Rust's grey-blue near-floor fill is the newly enabled top fog layer (in Off too) -> RE asked for
+  the native Density -> FogDistanceScale step; Remnant light PASS as authored (cyan pool, Off / Faithful identical, Realistic
+  traced); Trail2 HELD (Rust 7 / 10 frames differ; the FXTEST shows no FusionCannon chain in its window: source still open;
+  Trails_Bumblebee 19 m over 2 s wrong for a limb); doors verdict in ~15 min. FX always-include data INSTALLED 13:47 (gate PASS).
+  Card -> Gameplay 6 (13:48) -> Systems 16 -> Frontend 5 -> Experimental 10. Set E patch (flash + exposure + Remnant light)
+  requested against c069952c.
