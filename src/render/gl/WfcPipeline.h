@@ -1289,6 +1289,7 @@ private:
         float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
+        float locDirect[3] = {0, 0, 0};   // ParticleModuleLocationDirect: the stored LocationOffset (EmitterTime at spawn)
         int subImage = 0, subImage2 = 0;  // SubUV cells (row-major index) and the blend interp (RE s16)
         float subInterp = 0.0f, subLastChange = 0.0f; bool subInit = false;
         bool subDirect = false; float subPos[2] = {0, 0}, subSize[2] = {1, 1};   // SubUVDirect (cell units)

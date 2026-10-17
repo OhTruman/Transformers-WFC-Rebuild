@@ -671,7 +671,19 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.vel[c] *= s[c];
                     } else if (m.name == "PMI_SizeScale") {   // Size = BaseSize * SizeScale(RelativeTime)
                         float s[3]; evalDist(m, "SizeScale", q.relTime, in.rng, s);
-                        for (int c = 0; c < 3; ++c) q.size[c] = q.baseSize[c] * s[c];
+                        const char* en[3] = {"EnableX", "EnableY", "EnableZ"};   // (cooked per instance; default on)
+                        for (int c = 0; c < 3; ++c) if (m.field(en[c], 1) != 0) q.size[c] = q.baseSize[c] * s[c];
+                    } else if (m.name == "PMI_LocationDirect") {   // RE audit (c) batch 2, update: toward Location(RelTime)
+                        float l[3], sf[3], w[3];                   // + the stored offset; Velocity = diff x Scale.X / dt,
+                        evalDist(m, "Location", q.relTime, in.rng, l);   // Location += diff x (1 - Scale.X)
+                        evalDist(m, "ScaleFactor", q.relTime, in.rng, sf);
+                        if (!L.localSpace) for (int c = 0; c < 3; ++c) w[c] = l[0] * in.R[0][c] + l[1] * in.R[1][c] + l[2] * in.R[2][c] + in.T[c];
+                        else std::copy(l, l + 3, w);
+                        for (int c = 0; c < 3; ++c) {
+                            const float diff = w[c] + q.locDirect[c] - q.pos[c];
+                            q.vel[c] = dt > 0.0f ? diff * sf[0] / dt : 0.0f;
+                            q.pos[c] += diff * (1.0f - sf[0]);
+                        }
                     } else if (m.name == "PMI_ColorOverLife") {   // sets Color (not BaseColor) from RelativeTime
                         float cv[3], av[1];
                         auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
@@ -956,6 +968,57 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
                         if (kVelocity) {
                             toWorldDir(u3, w3);
+                            for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
+                        }
+                    } else if (m.name == "PMI_LocationDirect") {   // RE audit (c) batch 2, spawn: Location = Location(RelTime)
+                        float l[3], o[3];                          // -> world + LocationOffset(EmitterTime), the offset stored
+                        evalDist(m, "Location", 0.0f, in.rng, l);
+                        evalDist(m, "LocationOffset", efrac, in.rng, o);
+                        toWorldDir(o, q.locDirect);
+                        if (!L.localSpace) for (int c = 0; c < 3; ++c) q.pos[c] = l[0] * in.R[0][c] + l[1] * in.R[1][c] + l[2] * in.R[2][c] + in.T[c] + q.locDirect[c];
+                        else for (int c = 0; c < 3; ++c) q.pos[c] = l[c] + q.locDirect[c];
+                    } else if (m.name == "PMI_LocationPrimitiveCylinder") {
+                        // RE audit (c) batch 2 (native spawn runner, stock UE3): per-axis cube sample (the flags), the two
+                        // radial axes 2D-normalised and kept inside the radius (50 tries, then clamped), height in
+                        // [-H/2, H/2]; SurfaceOnly -> on the radius; per-axis clamp to +-|n_i| R (height +-H/2); + StartLocation.
+                        // Velocity: the offset x VelocityScale, its height component zeroed with RadialVelocity
+                        const std::string ha = m.fieldNames.count("HeightAxis") ? m.fieldNames.at("HeightAxis") : "PMLPC_HEIGHTAXIS_Z";
+                        const int hi = ha == "PMLPC_HEIGHTAXIS_X" ? 0 : ha == "PMLPC_HEIGHTAXIS_Y" ? 1 : 2;
+                        const int r0 = hi == 0 ? 1 : 0, r1 = hi == 2 ? 1 : 2;
+                        const char* posN[3] = {"Positive_X", "Positive_Y", "Positive_Z"}; const char* negN[3] = {"Negative_X", "Negative_Y", "Negative_Z"};
+                        bool kp[3], kn[3];
+                        for (int c = 0; c < 3; ++c) { kp[c] = m.field(posN[c], 1) != 0; kn[c] = m.field(negN[c], 1) != 0; }
+                        const bool surf = m.field("SurfaceOnly", 0) != 0, velOn = m.field("Velocity", 0) != 0, radial = m.field("RadialVelocity", 1) != 0;
+                        float rad[1], hgt[1], vs[1], sl[3], d[3];
+                        evalDist(m, "StartRadius", efrac, in.rng, rad);
+                        evalDist(m, "StartHeight", efrac, in.rng, hgt);
+                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
+                        evalDist(m, "StartLocation", efrac, in.rng, sl);
+                        const float R = rad[0], H = hgt[0] * 0.5f;
+                        for (int tries = 0;; ++tries) {
+                            for (int c = 0; c < 3; ++c) {
+                                in.rng = in.rng * 1664525u + 1013904223u;
+                                const float r = (float)(in.rng >> 8) / 16777216.0f;
+                                d[c] = kp[c] && kn[c] ? 2.0f * r - 1.0f : kp[c] ? r : kn[c] ? -r : 0.0f;
+                            }
+                            const float rr = d[r0] * d[r0] + d[r1] * d[r1];
+                            if (rr <= 1.0f) break;
+                            if (tries >= 49) { const float s = 1.0f / std::sqrt(rr); d[r0] *= s; d[r1] *= s; break; }
+                        }
+                        const float l2 = std::sqrt(d[r0] * d[r0] + d[r1] * d[r1]);
+                        const float n0 = l2 > 1e-6f ? d[r0] / l2 : 0.0f, n1 = l2 > 1e-6f ? d[r1] / l2 : 0.0f;
+                        float off[3];
+                        off[hi] = std::min(H, std::max(-H, d[hi] * H));
+                        off[r0] = (surf ? n0 : d[r0]) * R; off[r1] = (surf ? n1 : d[r1]) * R;
+                        off[r0] = std::min(std::fabs(n0) * R, std::max(-std::fabs(n0) * R, off[r0]));
+                        off[r1] = std::min(std::fabs(n1) * R, std::max(-std::fabs(n1) * R, off[r1]));
+                        for (int c = 0; c < 3; ++c) v3[c] = off[c] + sl[c];
+                        toWorldDir(v3, w3);
+                        for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
+                        if (velOn) {
+                            float tv[3] = {off[0], off[1], off[2]};
+                            if (radial) tv[hi] = 0.0f;
+                            toWorldDir(tv, w3);
                             for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
                         }
                     } else if (m.name == "PMI_VelocityInheritParent") {   // RE audit (c) batch 2: Velocity and BaseVelocity
