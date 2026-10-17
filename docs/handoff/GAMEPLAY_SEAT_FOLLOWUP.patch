@@ -1,0 +1,146 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index e7abc639..ac4a3b38 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -5598,7 +5598,7 @@ void Application::runSessionTest() {
+         uint64_t hs[2] = {0, 0};
+         for (int peer = 0; peer < 2; ++peer) {
+             game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=2", S);
+-            S.localTeam = 0; S.seed = 0x5eed4321u;
++            S.localTeam = 0; S.seed = 0x5eed4321u; S.online = true;
+             world_.launchMatch(S);
+             const int meL = world_.localMatchPlayer();
+             world_.match().selectCharacter(meL, cs);
+diff --git a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+index 9c7f2da7..b6fa3d3b 100644
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -119,6 +119,7 @@ void fillOnlineLaunch(game::MatchLaunch& gl, const frontend::MatchLaunch& m) {
+         gl.remotes.push_back(r);
+     }
+     gl.seed = m.seed;   // online: the host's match seed (0 offline)
++    gl.online = !m.onlineSlots.empty();   // a session launch: the wire path for every human (offline: none)
+     if (!m.onlineSlots.empty()) frontend::FlowTrace::emit("online.launchRemotes", {{"remotes", std::to_string(gl.remotes.size())}});
+ }
+ template <class W> void applySlotSwaps(W& w, frontend::GameFlow& flow) {
+diff --git a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+index 8a10ffc8..91dca33b 100644
+--- a/src/game/PlayerController.cpp
++++ b/src/game/PlayerController.cpp
+@@ -948,10 +948,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
+             w.beginReload();
+         }
+     }
+-    // Presentation-yaw reference for the frames until the next step.
+-    stepYawRate_ = std::remainder(pawn_->yaw() - stepBodyYaw_, 6.2831853f) / std::max(dt, 1e-4f);
+-    stepBodyYaw_ = pawn_->yaw(); stepFaceYaw_ = step.faceYaw; sinceStep_ = 0.0f;
+-    pawn_->setDrawYawOffset(0.0f);
++    presentationStep(step.faceYaw, dt);   // presentation-yaw reference for the frames until the next step
+     fireLatch_ = false;   // consumed by this step (a release before the refire clears PendingFire, as StopFire does)
+ }
+ 
+@@ -997,6 +994,13 @@ const WeaponCameraDef kWeaponCamera[] = {
+ };
+ } // namespace
+ 
++void PlayerController::presentationStep(float faceYaw, float dt) {
++    if (!pawn_) return;
++    stepYawRate_ = std::remainder(pawn_->yaw() - stepBodyYaw_, 6.2831853f) / std::max(dt, 1e-4f);
++    stepBodyYaw_ = pawn_->yaw(); stepFaceYaw_ = faceYaw; sinceStep_ = 0.0f;
++    pawn_->setDrawYawOffset(0.0f);
++}
++
+ void PlayerController::onLocalShot(const char* weaponId) {
+     if (!weaponId) return;
+     for (const WeaponCameraDef& d : kWeaponCamera) {
+diff --git a/src/game/PlayerController.h b/src/game/PlayerController.h
+index 1ac3c3f9..52fecf9f 100644
+--- a/src/game/PlayerController.h
++++ b/src/game/PlayerController.h
+@@ -123,6 +123,9 @@ public:
+     }
+     // A local shot of the weapon class `weaponId` (TnWeapon<id>): the camera recoil (pitch step + FOV kick) and the per-shot shake.
+     void onLocalShot(const char* weaponId);
++    // The per-step reference for the per-frame presentation yaw (draw-yaw offset until the next step): the direct path and the online
++    // local seat call it once per simulation step with the step's face yaw.
++    void presentationStep(float faceYaw, float dt);
+     // TnBuffReduceRecoil (the selection's ReduceRecoil skill): x 0.35 on the pitch step, the FOV kick and RecoilTime; 1 without.
+     void setRecoilScale(float s) { recoilScale_ = s; }
+     int takeSpectateCycle() { const int c = specCycle_; specCycle_ = 0; return c; }   // SwitchSpectatorTarget presses since the last call
+diff --git a/src/game/World.cpp b/src/game/World.cpp
+index 88f9a36f..673b5d53 100644
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -1588,6 +1588,7 @@ bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
+ }
+ 
+ bool World::participantMuzzleWorld(int player, core::Mat4& out) const {
++    if (player == localPlayer_) return !localDead_ && player_.pawn().hasWeapon() && weaponSocketWorld("MuzzleFlash", out);   // the online local seat
+     const MatchOpponent* o = player >= 0 && (size_t)player < oppByPlayer_.size() ? oppByPlayer_[(size_t)player] : nullptr;
+     if (!o || !o->spawned() || !o->pawn().hasWeapon()) return false;
+     auto it = partWeapons_.find(player);
+@@ -3041,7 +3042,7 @@ bool World::launchMatch(const MatchLaunch& l) {
+     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
+         const char* sd = std::getenv("WFC_SEED");
+         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
+-        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.seed != 0;   // online: the local seat through the wire path
++        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.online;   // online (a session launch; never from the seed)
+         localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
+         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+     }
+@@ -3530,7 +3531,26 @@ void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool cons
+     pc.exposeSelf();
+     if (consume) w.onFired();
+     pc.notifyFired();
++    if (p == localPlayer_) player_.controller().onLocalShot(w.def ? w.def->id : nullptr);   // the local seat: camera recoil + shake
+     const core::Vec3 eye = botEye(pc), d = core::normalize(aimPt - eye);   // from the eye toward the aim point
++    if (pc.moveForm() == Form::Vehicle && !pc.isTransforming() && &w == pc.vehicleWeapon()) {
++        // The vehicle weapon's CurrentSocket: WeaponSocket_Primary, alternating with _Primary2 per shot where both are authored [CONF RE
++        // pass 5 9g]; the posed bone x socket (sim state), else the actor + 1 m.
++        const bool two = w.alternatesMuzzle() && pc.chassis().vehicleWeapon2.valid;
++        if (!two) w.muzzleSocket = 0;
++        const int sock = w.muzzleSocket;
++        core::Vec3 origin = pc.actorLocation() + core::Vec3{0, 1.0f, 0};
++        const SocketDef& vs = sock == 1 ? pc.chassis().vehicleWeapon2 : pc.chassis().vehicleWeapon;
++        core::Mat4 bm;
++        if (vs.valid && pc.form() == Form::Vehicle && pc.boneWorld(vs.bone, bm)) { const core::Mat4 m = bm * vs.local; origin = core::Vec3{m.m[12], m.m[13], m.m[14]}; }
++        if (p == localPlayer_) noteVehicleShot(sock, origin);   // the local muzzle-flash presentation
++        if (two) w.muzzleSocket = (sock + 1) % 2;
++        if (w.projectile()) {   // RealStartLoc = the socket, aimed at the aim point
++            spawnProjectile(origin, core::normalize(aimPt - origin) * w.projSpeed, w, p);
++            participantShots_.push_back({p, w.def ? w.def->id : "", origin, aimPt, false, -1});
++            return;
++        }
++    }
+     if (w.beam()) { participantBeam(p, w, eye, d); return; }
+     if (w.projectile()) {
+         const core::Vec3 muzzle = eye + d * 1.5f;   // the bots' muzzle stand-in (no posed held weapon on participants)
+@@ -3554,6 +3574,7 @@ void World::runLocalSeat(float dt) {
+     pc.setAimPitch(localSeatAimPitch_);
+     pc.tickAbilities(dt); pc.tickSpreadModifier(dt); pc.tickWeaponSwitch(dt); pc.weapon().tick(dt); pc.ability().tick(dt);
+     if (pc.moveForm() == Form::Vehicle && !pc.isTransforming()) if (Weapon* vw = pc.vehicleWeapon()) vw->tick(dt);
++    player_.controller().presentationStep(localSeatIntent_.faceYaw, dt);   // the per-frame draw yaw between steps
+ }
+ 
+ RemoteCommand World::encodeLocalCommand() {
+diff --git a/src/game/World.h b/src/game/World.h
+index 9c31d47e..50ced6f6 100644
+--- a/src/game/World.h
++++ b/src/game/World.h
+@@ -80,6 +80,7 @@ struct MatchLaunch {
+     BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
+     std::vector<RemoteSeat> remotes;   // online: the other peers' humans in the host's slot order (empty offline)
+     uint32_t seed = 0;                 // online: the host's match seed (every peer alike); 0 = the local source (offline)
++    bool online = false;               // a session launch (from the launch record): every human through the wire path; offline false
+     static bool fromURL(const std::string& url, MatchLaunch& out);
+ };
+ 
+@@ -1198,7 +1199,7 @@ private:
+     bool remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
+     void remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume = true);
+     void runLocalSeat(float dt);
+-    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.seed set, or the test override)
++    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.online, or the test override)
+     int localWireOverride_ = -1;        // tests: -1 auto, 0 direct, 1 wire
+     MoveIntent localSeatIntent_; bool localSeatPickup_ = false; float localSeatAimPitch_ = 0.0f;
+     core::Vec3 seatAimPoint(const Character& pc, const RemoteCommand& c, float range) const;
