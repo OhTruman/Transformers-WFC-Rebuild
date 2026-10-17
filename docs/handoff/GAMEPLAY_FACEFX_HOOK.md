@@ -86,3 +86,21 @@ void applyFaceFx(const SkinnedModel& model, const FaceFxActor& fx, const FaceFxB
 | Binding + space probe | 1-2 h |
 | Evaluation + unit test | 2 h |
 | Eye check | one slot |
+
+## RE update 2026-10-17: the bone blend decoded (RE FACEFX_BONE_BLEND_RE.md, d38c9f4). It SUPERSEDES the steps above where they differ
+
+1. **Gate:** run the pass only while the face rendered within the last 0.33 s.
+2. **Per bone, links in stored order:**
+   - P = refPos + Σ v·Δp, unclamped.
+   - Rotation: Acc = ref; for each link, Acc = Acc ⊗ (ref⁻¹ ⊗ S), with S = slerp(ref, pose, v), or a plain lerp when
+     dot(ref, pose) > 0.55. Normalise once at the end.
+   - **An ordered product, not the nlerp sum** of the spec's hypothesis.
+   - Skip only |v| < FLT_EPSILON; negative values and values above 1 extrapolate. **No [min, max] clamp at the bone stage.**
+3. **Conversion (the "space probe" section above is now known):** FQuat = (x, −y, z, w) from FaceFX's stored (w, x, y, z); position
+   (x, −y, z). Then the usual UE → glTF bone mapping of the export (our bone frames are UE with Y / Z swapped), to be checked against
+   the .glb bind locals on the 14 bones as the test of the whole chain.
+4. **Apply ADDITIVELY to the animated local pose** (not a replacement, as written above): rot = (Q · Qref⁻¹) · animRot; trans += P −
+   Pref; scale untouched.
+
+The unit test stays (DX_OPRIME_LK002649 at t = 1.0 against AssetTools' CSV). The CSV's blend must match this rule; if AssetTools'
+proof script used the nlerp sum, ask them to regenerate the reference with the product rule first.
