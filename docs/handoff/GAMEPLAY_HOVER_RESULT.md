@@ -42,8 +42,9 @@ The RE source is `GAMEPLAY_HOVER_RE.md`; the decisions are Integration's, 2026-1
 
 - **Classic SIMHASH changes** (a deliberate fidelity change). One re-baseline, batched with the squad item. **Done 2026-10-17 on integration cccff627:**
   - **Classic:** 96 / 96 runs diverge (24 seeds × 4 maps); the first divergent step is 601-602, the first step after the countdown. The cause is bots that spawn in hover vehicle form: their first spring response (Classic AI path: no player pull, RB damping 0.1). Verified on Streets s1: p8 vel.y 0.644 → 0.646 at step 601, everything else equal.
-  - Tables: , .
-  - Smart: 96 / 96 diverge (first at 601-858; the tank force + squad slots): , .
+  - Tables: `hover/CLASSIC_SIMHASH_old_vs_new.txt`, `hover/CLASSIC_NAVQ_REFERENCE_new.txt`.
+  - Smart: 96 / 96 diverge (first at 601-858; the tank force + squad slots): `hover/SMART_SIMHASH_old_vs_new.txt`,
+    `hover/SMART_NAVQ_REFERENCE_new.txt`.
   - BOTTEST 48 / 48 × 12; VEHTEST unchanged (rest heights at the spring equilibrium, tip-over PASS).
 - Smart changes slightly too (the tank force; the shared springs).
 
