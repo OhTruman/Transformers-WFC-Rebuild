@@ -3461,3 +3461,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   points + Base_SUN alpha x 0.25, our design choice, re-shoot next gap). X7: GI 1x -> 2x Rust 180 -> 482 MB, load 0.9-1.4 s;
   the earlier ~1 GB device delta was noise; look sharper but Gorge lane shifts beyond "sharper" (1x bounce gain at 2x) -> recalibrate,
   re-shoot, RE eye; X7 stays out until then.
+2026-10-17 16:17 MERGED 66e9b275 lens-flare Subtle = first points + Base_SUN alpha x 0.25. X7: Rendering corrects itself: the 1x gain IS right at 2x
+  (a 2x fit is ill-conditioned); Gorge lane's darker plate is spatial -> RE's truer-vs-different read on x7q_sheet.png, no card.
+  Card queue: Frontend (to ~16:30) -> Experimental 15 min -> Rendering 6 min (Subtle re-shoot).
