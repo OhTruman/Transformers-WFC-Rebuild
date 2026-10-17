@@ -2281,3 +2281,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   i8 in / out slopes. Value scale hypothesis i8 / 127 x node range. Open: the tail (phoneme map?), node float
   roles, b, interpolation, a visual proof. Early cand12 read (mine, raw shots, checkpoint -> cand12 Realistic mean):
   Streets 300 49 -> 55, 1740 58 -> 62; Gorge 36 -> 36, 40 -> 46; Molten 69 -> 82, 81 -> 89 (cand10 was +60-80).
+  2026-10-16 22:37 X3 cand12 EYE PASS: NEAR PASS: match sheets Realistic 1.26 (floor 1.26, OK), + Enhanced 1.27 (floor
+  1.28, BELOW by 0.01); brightness +13.3 (checkpoint +11.6), colour +3.4, pixels 35 %; per map Streets 1.09 (was
+  1.15, the only loss), Gorge 1.35, Debris 1.16, Rust 1.28, Molten 1.42; veil gone. ROUND 4 = values only (x3trans
+  / x3cap down, Streets-led; target all-map >= 1.28 / 1.30); Rendering's Faithful identity arm on cand12 now (valid
+  for value-only changes); cand13 eye pass tonight if ready by 23:05, else tomorrow. FaceFX RE doc + parser merged.
