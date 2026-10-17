@@ -1,4 +1,5 @@
 #include "game/PlayerController.h"
+#include <cctype>
 #include <cstring>
 
 #include <set>
@@ -994,10 +995,17 @@ const WeaponCameraDef kWeaponCamera[] = {
 void PlayerController::onLocalShot(const char* weaponId) {
     if (!weaponId) return;
     for (const WeaponCameraDef& d : kWeaponCamera) {
-        if (std::strcmp(d.id, weaponId)) continue;
+        {   // class suffix vs weapon id, case-insensitively (TnWeaponEmpShotgun / EMPShotgun)
+            const char* x = d.id; const char* y = weaponId;
+            while (*x && *y && std::tolower((unsigned char)*x) == std::tolower((unsigned char)*y)) { ++x; ++y; }
+            if (*x || *y) continue;
+        }
+        // Section 5.6: the wheeled driving strategies (Car_ / Truck_) carry no TnRecoilCameraBehavior; the shake still plays.
+        const bool wheeledDrive = pawn_ && pawn_->moveForm() == Form::Vehicle && pawn_->vehicleParams().form != VehicleFormType::Jet && pawn_->vehicleState().driving;
+        if (wheeledDrive) { startShake(d.shakeInt, d.shakeRoll, d.rollFalloff, d.shakeFalloff); return; }
         // OrbitRotation.Pitch += PitchAdjustmentDeg: a permanent step (the orbit, and with it the aim, keeps it).
-        if (d.pitchDeg != 0.0f) camPitch_ = core::clampf(camPitch_ + d.pitchDeg * 0.0174533f, -75.0f * 0.0174533f, 75.0f * 0.0174533f);
-        fovKick_ = d.fovAdj; recoilTime_ = d.recoilTime; recoilDelay_ = d.recoilDelay; sinceShot_ = 0.0f;
+        if (d.pitchDeg != 0.0f) camPitch_ = core::clampf(camPitch_ + d.pitchDeg * recoilScale_ * 0.0174533f, -75.0f * 0.0174533f, 75.0f * 0.0174533f);
+        fovKick_ = d.fovAdj * recoilScale_; recoilTime_ = d.recoilTime * recoilScale_; recoilDelay_ = d.recoilDelay; sinceShot_ = 0.0f;   // ReduceRecoil x 0.35
         startShake(d.shakeInt, d.shakeRoll, d.rollFalloff, d.shakeFalloff);
         return;
     }

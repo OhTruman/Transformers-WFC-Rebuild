@@ -3948,6 +3948,11 @@ void World::tickMatch(float dt) {
                     if (renderer_) renderer_->notifyCameraCut("spectate end");
                     if (spawnProf()) LOG_INFO("SPAWNPROF local spawn: chassis apply %.1f ms, respawnReset %.1f ms, specialty+loadout %.1f ms, rest %.1f ms (%s)",
                                               tp1 - tp0, tp2 - tp1, tp3 - tp2, profNowMs() - tp3, mp.chassis.c_str());
+                    {   // TnSkillReduceRecoil -> TnBuffReduceRecoil: the local camera recoil x 0.35 (the only skill the camera reads)
+                        bool rr = false;
+                        for (const std::string& sk : mp.selection.skills) rr |= sk == "ReduceRecoil";
+                        player_.controller().setRecoilScale(rr ? 0.35f : 1.0f);
+                    }
                     recordSpawnEvent(localPlayer_);
                     LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
                              match_.players()[(size_t)localPlayer_].team);
