@@ -2,10 +2,13 @@
 
 ## Current state (update at every stable point)
 
-- **About 20:05:** both check trees are prepared from integration **1c60a8ba**, which doesn't touch World.cpp / World.h since the patch base, by  (run from work/).
-  - Full builds of  and  are running, then the headless checks (; results go to ).
-  - **After a reboot:** rerun  only if the trees are missing, then  / , then the runner with the steps from .
-- **Crops:** need a slot from Integration, after Rendering's X3 capture round and before the 00:00 GPU curfew; otherwise in the morning. Steps:  (distances 10 and -40, the look-back).
+- **About 20:20:** both check trees were prepared from integration **1c60a8ba** (no World.cpp / World.h change since the patch base) with `sh docs/handoff/corpsegpu/prep_gc_trees.sh 1c60a8ba`. **Run it from work/**: it extracts with `git -C ..`.
+- **The trees:**
+  - `work/int_gcb` (head + the stage hook): built;
+  - `work/int_gcn` (head + the patch + the hook): built after a fix. The `drawSkinnedGpu` call needed the trailing overload tag `, 0`, which is now in the patch and the edit script.
+- **Headless checks:** running. Steps from `docs/handoff/corpsegpu/mkgc.js headless` (`node mkgc.js headless` writes `steps_c45_headless.txt` next to itself); results go to `work/pass29/c46/bt_s*.log`.
+- **After a reboot:** if `work/int_gcn` / `work/int_gcb` exist, just rebuild with `powershell -File work/int_build.ps1 -Tag gcn` (and `gcb`), then rerun the headless steps; otherwise prep them first.
+- **Crops:** need a slot from Integration, after Rendering's X3 capture round and before the 00:00 GPU curfew; otherwise in the morning. Steps: `node mkgc.js crops` (distances 10 and -40, the look-back; 65 frames per arm must be byte-identical).
 
 ## In progress: GPU-skinned death bodies (moved into package 6 by the user's decision; package 6 is held 2-3 days for volumetric lighting)
 

@@ -36,7 +36,7 @@ ed('src/game/World.cpp', `        r.drawDynamicMeshPosed(c.mesh, c.world, core::
             render::MeshData& bind = bindMeshOf(*c.model);
             syncMats(bind.mats, c.model->mats);
             drawn = drawSkinnedGpu(r, bind, c.model->joints, c.model->weights, c.palette, nullptr, 1.0f, c.world, core::Vec3{1, 1, 1},
-                                   c.gpuKey.get(), c.poseSerial);
+                                   c.gpuKey.get(), c.poseSerial, 0);
             if (!drawn) c.gpuOk = false;   // refused: the next tick CPU-skins this body (nothing drawn this frame)
         }
         if (!drawn && !c.gpuOk && !c.mesh.positions.empty())
