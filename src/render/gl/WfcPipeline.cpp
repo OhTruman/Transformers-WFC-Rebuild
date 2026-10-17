@@ -8844,7 +8844,11 @@ void Pipeline::endFrame() {
     if (filmic) {
         // (the key: the maps' measured log-average luminance, 0.020 on Streets and Molten - a typical view keeps its exposure,
         // a dark interior opens up to 1.8x, a bright exterior comes down to 0.7x)
-        const float key = rtdef::toneKey(), str = rtdef::toneAdapt(), gain = rtdef::toneGain(), sat = rtdef::toneSat(), con = rtdef::toneContrast();
+        // (X3) on a frame with the volumetric light the contrast is x3ToneContrast: the in-scatter's lift is given back
+        // (WFC_TONE_CONTRAST, when set, wins)
+        const bool x3Frame = rtVolFrame_ == frameNo_ && !rtdef::envSet("WFC_TONE_CONTRAST");
+        const float key = rtdef::toneKey(), str = rtdef::toneAdapt(), gain = rtdef::toneGain(), sat = rtdef::toneSat();
+        const float con = x3Frame ? rtdef::x3ToneContrast() : rtdef::toneContrast();
         ActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
         ActiveTexture(GL_TEXTURE0);
         Uniform1i(U("uAdapt"), 4);
