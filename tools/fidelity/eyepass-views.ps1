@@ -4,7 +4,7 @@
 #   .\tools\fidelity\eyepass-views.ps1 -Exe <wfc_rebuild.exe> -OutDir <dir> [-Maps 508,510,507,504,509] [-Modes off,real,realhd] [-Size 2560x1440]
 param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$OutDir, [string[]]$Maps = @("508", "510", "507", "504", "509"),
       [string[]]$Modes = @("off", "real"), [string]$Size = "1280x720",
-      [string]$HdRoot = "F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full", [string]$RenderData = "", [string]$RtEnv = "")
+      [string]$HdRoot = "F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full", [string]$RenderData = "", [string]$RtEnv = "", [string]$ViewsDir = "")   # -ViewsDir: another views folder (<map>.txt, same format)
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 $Maps = @($Maps | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ }); $Modes = @($Modes | ForEach-Object { "$_" -split '[,;\s]+' } | Where-Object { $_ })   # (-File passes '508,510' as one string)
 $names = @{ "508" = "MP_IAC_Streets"; "510" = "MP_UND_Gorge"; "507" = "MP_ORB_Debris"; "504" = "MP_IAC_Rust"; "509" = "MP_KON_Molten" }
@@ -12,7 +12,7 @@ $Exe = (Resolve-Path $Exe).Path; $bootProfile = Select-String -Path $Exe -Patter
 if ($bootProfile) { Write-Host "exe has WFC_BOOT_PROFILE: the direct boot applies the profile's display / HD rows - full size + Enhanced views" }
 elseif ($PSBoundParameters.ContainsKey("Size") -and $Size -ne "1280x720") { Write-Host "no WFC_BOOT_PROFILE in this exe: views at 1280x720 (requested $Size)"; $Size = "1280x720" } New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 foreach ($m in $Maps) {
-    $list = Join-Path $PSScriptRoot "views\$m.txt"; if (-not (Test-Path $list)) { Write-Host "${m}: no views file"; continue }
+    $list = Join-Path $(if ($ViewsDir) { $ViewsDir } else { Join-Path $PSScriptRoot "views" }) "$m.txt"; if (-not (Test-Path $list)) { Write-Host "${m}: no views file"; continue }
     $lines = @(Get-Content $list | Where-Object { $_.Trim() }); $kept = @($lines | ForEach-Object { ($_ -split ' ')[0] } | Where-Object { $_ -notmatch '_w\d$' })
     foreach ($mode in $Modes) {
         # LIMIT (2026-10-16, verified on int_cand3): WFC_SHOTLIST needs the direct boot (its frames count from boot), and the direct

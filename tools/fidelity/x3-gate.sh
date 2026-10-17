@@ -26,6 +26,21 @@ if [ -z "$SKIP_EYE" ]; then
   EYE_EXE="$PWD/$T/build-release/bin/wfc_rebuild.exe" EYE_RENDER_DATA="$RD" bash tools/fidelity/eyepass.sh x3_$N "$MAPS" > $O/eyepass.out 2>&1
   st "1 eye pass done: $(grep -cE 'UNKNOWN|INVALID' $O/eyepass.out) UNKNOWN / INVALID; $(grep -m1 -oE 'x3=[^ ]+( [a-z0-9]+=[^ ]+){0,4}' work/eyepass/x3_$N/*-real/rt_defaults.txt 2>/dev/null | head -1)"
   grep -E "contrast floor" work/eyepass/x3_$N/EYEPASS.md | tee -a $L
+  # Rendering's light-facing views (_sun / _lamp; Integration 2026-10-16): extra rows reported per view, NOT in the floor mean.
+  # Their files have no warm-up entries, so warmed copies (two _wN holds before each kept view) go to $O/xviews_list.
+  XV=${X3VIEWS:-"F:/Transformers Rebuild/Rebuild-Rendering/work/fsr3/x3views"}
+  if [ -d "$XV" ]; then
+    mkdir -p $O/xviews_list; XM=""
+    for f in "$XV"/*.txt; do m=$(basename "$f" .txt); case " $MAPS " in *" $m "*) ;; *) continue;; esac; XM="$XM $m"
+      awk 'NF>=2 { print $1"_w1 "$2; print $1"_w2 "$2; print }' "$f" > $O/xviews_list/$m.txt; done
+    if [ -n "$XM" ]; then
+      st "1b light-facing views ($XM ) from $XV"
+      powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/eyepass-views.ps1 -Exe "$PWD/$T/build-release/bin/wfc_rebuild.exe" -OutDir work/eyepass/x3_$N/xviews -ViewsDir "$(cygpath -w $O/xviews_list)" -Maps $(echo $XM | tr ' ' ',') -Modes off,real,realhd -Size 2560x1440 -RenderData "$(cygpath -w "$RD")" >> $O/eyepass.out 2>&1
+      "$PY" tools/fidelity/eyepass_views_sheet.py work/eyepass/x3_$N/xviews "$XM" "off real realhd" "$(cygpath -w $O/xviews_list)" "Light-facing views (Rendering x3views; per view, not in the contrast floor)" > /dev/null
+      sed -n '/## Light-facing views/,$p' work/eyepass/x3_$N/xviews/EYEPASS.md >> work/eyepass/x3_$N/EYEPASS.md
+      st "1b done: work/eyepass/x3_$N/xviews/views_<map>.png"
+    fi
+  fi
 fi
 # ---- 2 X3 cost (timed: needs the hold granted by Integration)
 if [ -z "$SKIP_COST" ]; then
