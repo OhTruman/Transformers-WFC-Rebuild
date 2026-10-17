@@ -143,6 +143,7 @@ private:
     void syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow);
     void syncJoinPanel(gfx::Player& p, frontend::GameFlow& flow, const platform::InputFrame& in);
     float codeCopiedFor_ = 0.0f;
+    std::string loadingMessageSent_;   // the loading movie's SetLevelText message (re-sent when it changes: the load gate)
     // Settings > Graphics: the movie whose Graphics page got the PC rows (null when none is open); the Volumetric
     // Lighting row follows the Ray Tracing row's current choice live (Realistic: Off / On; otherwise "Realistic only").
     gfx::Player* graphicsPagePlayer_ = nullptr;

@@ -1195,6 +1195,64 @@ static void testHudJamBuffs() {
           HudController::isJamBuff("TnBuffDifficultyJamAbilitiesRevived") && !HudController::isJamBuff("TnBuffSeeEnemies"), "hud.jam_buffs_apply_unapply");
 }
 
+static void testOnlineStartLoadLeave() {
+    using T = SessionEvent::Type;
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true));
+    r.fake->inject(memberEv("WFC-BBBB-BBBB-2", "Bravo", true));
+    r.frames(2);
+    // S14: start -> countdown -> the match loads -> the load gate holds the loading screen until AllLoaded
+    r.f().call("Online.BeginLobbyExitCountdown");
+    const bool requested = r.fake->count("requestStart") == 1;
+    const bool launched = runUntil(*r.rt, [&] { return r.f().hasPendingMatch(); }, 60 * 30);
+    r.f().matchLoaded();
+    const bool gate = r.f().inLoadGate() && r.f().loading().active && r.fake->count("reportLoaded") == 1 &&
+                      r.f().loading().message == "Waiting for 2 players";
+    SessionEvent pl = ev(T::PeerLoaded); pl.member.fingerprint = "WFC-AAAA-AAAA-1";
+    r.fake->inject(pl);
+    r.frames(2);
+    const bool one = r.f().inLoadGate() && r.f().loading().message == "Waiting for 1 player";
+    check(host && requested && launched && gate && one, "online.S14_start_load_gate",
+          std::to_string(host) + std::to_string(requested) + std::to_string(launched) + std::to_string(gate) + std::to_string(one) + " " + r.f().loading().message);
+    // S15: Bravo never loads - the session drops it at its load timeout; AllLoaded starts the match
+    SessionEvent drop = ev(T::PeerDropped); drop.member.fingerprint = "WFC-BBBB-BBBB-2"; drop.leaveReason = SessionLeaveReason::LoadTimeout;
+    r.fake->inject(drop);
+    r.frames(2);
+    const std::vector<SessionSlotSwap> loadSwaps = r.f().takeSlotSwaps();
+    const bool dropped = r.f().onlineMembers().size() == 1 && r.f().loading().message == "Waiting for 0 players" && r.f().takeGameMessages().empty() &&
+                         loadSwaps.size() == 1 && loadSwaps[0].member.fingerprint == "WFC-BBBB-BBBB-2";
+    SessionEvent all = ev(T::AllLoaded); all.value = 600;
+    r.fake->inject(all);
+    r.frames(2);
+    check(dropped && !r.f().inLoadGate() && !r.f().loading().active, "online.S15_load_timeout_drop");
+    // S16: a human leaves mid-match: the original kill-feed line and a slot swap to a bot
+    SessionEvent left = ev(T::PeerDropped); left.member.fingerprint = "WFC-AAAA-AAAA-1"; left.leaveReason = SessionLeaveReason::Left;
+    r.fake->inject(left);
+    r.frames(2);
+    const std::vector<std::string> lines = r.f().takeGameMessages();
+    const std::vector<SessionSlotSwap> swaps = r.f().takeSlotSwaps();
+    check(lines.size() == 1 && lines[0] == "Alpha has left the game" && swaps.size() == 1 && swaps[0].to == SessionSlotSwap::To::Bot &&
+          swaps[0].member.fingerprint == "WFC-AAAA-AAAA-1" && r.f().onlineMembers().empty(), "online.S16_peer_leaves_bot_swap",
+          lines.empty() ? "" : lines[0]);
+}
+
+static void testOnlineMemberCountdown() {
+    // The host starts: CountdownStarted runs the same lobby exit countdown on the member.
+    using T = SessionEvent::Type;
+    SessionLobby l; l.gameModeTag = "TDM"; l.mapId = 508; l.mapSelectionMethod = 1;
+    SessionEvent j = ev(T::Joined); j.lobby = l; j.member.fingerprint = "WFC-SELF-SELF-9";
+    OnlineRig r({after("join", j)});
+    r.f().call("Online.JoinGame", {"WFC-7QK2-M9TD-4H"});
+    runUntil(*r.rt, [&] { return r.f().level() == LevelKind::GameLobby && !r.f().loading().active; });
+    r.frames(2);
+    const bool before = !r.f().lobby().countingDown;
+    r.fake->inject(ev(T::CountdownStarted));
+    r.frames(2);
+    check(r.ok && before && r.f().lobby().countingDown && r.fake->count("requestStart") == 0, "online.member_countdown_follows_host");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1217,6 +1275,8 @@ int main() {
     testOnlineLobbyGate();
     testOnlineMemberSlots();
     testHudJamBuffs();
+    testOnlineStartLoadLeave();
+    testOnlineMemberCountdown();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

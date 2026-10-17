@@ -1030,6 +1030,14 @@ void GameFlow::matchLoaded() {
     setUIController(UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
+    if (session_ && role_ != SessionRole::Offline) {   // online: the load gate holds the loading screen until all have loaded
+        loadGate_ = true;
+        loadedPeers_.clear();
+        session_->reportLoaded(simId_, loadHash_);
+        updateLoadGateText();
+        FlowTrace::emit("online.loadGate", {{"state", "waiting"}, {"humans", std::to_string(onlineMembers_.size())}});
+        return;
+    }
     closeLoadingMovie();
 }
 

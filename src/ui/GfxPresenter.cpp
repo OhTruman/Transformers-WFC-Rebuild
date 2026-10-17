@@ -723,8 +723,12 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             if (!ok) { loading_.reset(); return; }
             // EnqueueLoadingMapMovie / Enqueue*LobbyLoadingMovie: HmMoviePlayer deferred methods [CONFIRMED script].
             loading_->invoke("_global.SetLevelText", {Value(L.title), Value(L.message)});
+            loadingMessageSent_ = L.message;
             for (const std::string& t : L.engageTexts) loading_->invoke("_global.AddEngageText", {Value(t)});
             frontend::FlowTrace::emit("gfx.loadingMovie", {{"movie", L.gfxMovie}, {"title", L.title}, {"message", L.message}});
+        } else if (L.message != loadingMessageSent_) {   // online load gate: "Waiting for `n players"
+            loading_->invoke("_global.SetLevelText", {Value(L.title), Value(L.message)});
+            loadingMessageSent_ = L.message;
         }
     } else if (loading_) {
         loading_.reset();

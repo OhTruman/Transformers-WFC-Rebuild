@@ -216,10 +216,9 @@ void GameFlow::enterMemberLobby(const SessionLobby& lobby) {
     travel(url, false);
 }
 
-void GameFlow::applyMemberLobby() {   // the host's choices on the member's lobby (map, countdown, teams); options are display-only
+void GameFlow::applyMemberLobby() {   // the host's choices on the member's lobby (map, teams); options are display-only
+    // (the lobby exit countdown runs on the member itself from CountdownStarted, as on the host)
     if (memberLobby_.mapId >= 0 && memberLobby_.mapId != lobby_.mapId) setMapId(memberLobby_.mapId);
-    lobby_.countingDown = memberLobby_.countingDown;
-    lobby_.countdown = memberLobby_.countdown;
     // the other humans (the host's list minus this player) and this player's own team from its slot
     onlineMembers_.clear();
     for (size_t i = 0; i < memberLobby_.slots.size(); ++i) {
@@ -233,6 +232,16 @@ void GameFlow::applyMemberLobby() {   // the host's choices on the member's lobb
         m.connecting = sl.connecting;
         onlineMembers_.push_back(m);
     }
+}
+
+void GameFlow::updateLoadGateText() {
+    int waiting = 0;
+    for (const OnlineMember& m : onlineMembers_)
+        if (std::find(loadedPeers_.begin(), loadedPeers_.end(), m.info.id) == loadedPeers_.end()) ++waiting;
+    std::string t = txt(waiting == 1 ? "$WfcPC.Online.WaitingForOnePlayer" : "$WfcPC.Online.WaitingForPlayers");
+    const size_t at = t.find("`n");
+    if (at != std::string::npos) t.replace(at, 2, std::to_string(waiting));
+    loading_.message = t;
 }
 
 void GameFlow::onSessionEvent(const SessionEvent& e) {
@@ -293,6 +302,43 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             if (e.info.teamRequest == 0 || e.info.teamRequest == 1) it->team = e.info.teamRequest;   // Change Team (the host decides: allowed)
             else it->team = team;
         }
+        break;
+    }
+    case T::CountdownStarted:   // member: the host started the game - the same lobby exit countdown here
+        if (role_ == SessionRole::Member && level_ == LevelKind::GameLobby && !lobby_.countingDown) hostRequestsGameStart();
+        break;
+    case T::PeerLoaded:
+        if (loadGate_ && std::find(loadedPeers_.begin(), loadedPeers_.end(), e.member) == loadedPeers_.end()) {
+            loadedPeers_.push_back(e.member);
+            updateLoadGateText();
+        }
+        break;
+    case T::AllLoaded:
+        if (!loadGate_) break;
+        loadGate_ = false;
+        FlowTrace::emit("online.loadGate", {{"state", "all loaded"}, {"startTick", std::to_string(e.value)}});
+        closeLoadingMovie();   // the match countdown (MatchAutoStartCountdown, in sim ticks) follows on every peer
+        break;
+    case T::PeerDropped: {   // a human left (quit, timeout, kick, load timeout): its slot becomes a bot
+        auto it = std::find_if(onlineMembers_.begin(), onlineMembers_.end(), [&](const OnlineMember& m) { return m.info.id == e.member; });
+        const std::string name = it != onlineMembers_.end() && !it->info.displayName.empty() ? it->info.displayName : std::string("Player");
+        if (it != onlineMembers_.end()) onlineMembers_.erase(it);
+        if (loadGate_) updateLoadGateText();
+        if (level_ == LevelKind::Match) {
+            if (!loadGate_) {   // the kill-feed line once the HUD is up (a drop while loading only swaps the slot)
+                std::string line = cat_ ? cat_->localize("TransGame", "TnGameMessage", "LeftGameString") : std::string();
+                const size_t at = line.find("`k");
+                if (at != std::string::npos) line.replace(at, 2, name);
+                pendingGameMessages_.push_back(line);
+            }
+            SessionSlotSwap sw;
+            sw.to = SessionSlotSwap::To::Bot;
+            sw.member = e.member;   // Gameplay maps the member to its match player; the LockstepLayer picks the tick
+            pendingSwaps_.push_back(sw);
+        }
+        static const char* const kWhy[] = {"left", "timeout", "kicked", "load timeout"};
+        FlowTrace::emit("online.peerDropped", {{"member", e.member.fingerprint}, {"name", name}, {"why", kWhy[(int)e.leaveReason]},
+                                               {"inMatch", FlowTrace::boolean(level_ == LevelKind::Match)}});
         break;
     }
     case T::MemberLeft: {
