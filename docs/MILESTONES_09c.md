@@ -2346,3 +2346,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   removal and instanced gibs = package 7). Experimental: RERUN_1B=1 EYE_FROM=x3_cand13 package-respin.sh af4d0731 9350f19b
   with a 9.5 GB pool guard; Rendering / Gameplay / Systems frozen (no compiles, no exes) until the timed regress reports
   DONE; Systems prepares the refresh.sh / promote / PACKAGE_6_af4d0731.md pass and gets GO BUILD after DONE.
+2026-10-17 03:00 Package 6 regress af4d0731 vs 9350f19b TIMED DONE 02:56 (Experimental; 8 maps x 3 arms, RT off, 2 reps within
+  0.05 ms, same match everywhere). Head - base p90: 501 +0.92, 502 +0.93, 503 +0.78, 504 +0.83, 507 +1.84, 508 +0.70,
+  509 +0.84, 510 +2.06 ms (9350f19b was +1.03..+2.64: GPU-skinned corpses are in, every map lower). Lights cost (head -
+  lights-off) at most +0.12 on every map (bar 0.35). Bodies row stays REPORT with the attribution note. AssetTools' hold slip
+  (02:17:55-02:18:56 python + a structure-audit stage running into the hold until 02:21:59) ended 5 s before map 501's first
+  rep; watchdog clean, reps agree; Experimental reruns 501 only (~5 min) after the untimed FAST delta and the 2b / 1b hold.
+  Systems' GO BUILD = Experimental's "RERUN TIMED DONE".
