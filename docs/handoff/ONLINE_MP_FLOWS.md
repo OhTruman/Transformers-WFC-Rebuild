@@ -226,7 +226,8 @@ Party lobby menu:
   peer in the lobby state (profile doc section 4: unlock trust is decision D3).
 - **Readiness:** the original has no ready toggle (1.3). Phase 1 keeps the original gate:
   - every human has chosen a character ("Waiting for all players to choose a character");
-  - teams are balanced if Team Balancing is on ("Waiting for balanced teams");
+  - teams are balanced when Team Balancing is "Manual" ("Waiting for balanced teams"); "Autobalanced" (the default)
+    balances them itself at the final countdown;
   - then the host starts.
 
   An explicit Ready toggle would be a PC EXTENSION, decision D4.
