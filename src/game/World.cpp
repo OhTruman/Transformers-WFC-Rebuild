@@ -3303,6 +3303,12 @@ HudGameState World::hudState() const {
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
     { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
+    h.buffs.clear();
+    h.spectateTarget.clear();
+    if (localDead_ && player_.controller().spectatingTarget() && specTarget_ >= 0 && (size_t)specTarget_ < match_.players().size())
+        h.spectateTarget = match_.players()[(size_t)specTarget_].name;
+    if (!localDead_ && pc.jammedRemain_ > 0.0f) h.buffs.push_back({pc.jammedByKillstreak_ ? "TnBuffAbilityJammedKillstreak" : "TnBuffAbilityJammed", pc.jammedRemain_});
+    if (!localDead_ && pc.transformDisruptRemain_ > 0.0f) h.buffs.push_back({"TnBuffTransformDisruptor", pc.transformDisruptRemain_});
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
@@ -4755,7 +4761,7 @@ std::string World::triggerKillstreakFor(int player) {
     } else if (id == "FriendlyKillHealthBonusStreak") {
         teamPawns([](Character& p) { p.refillOnKillRemain_ = 60.0f; });   // ABT_Team TnBuffRefillHealthOnKill
     } else if (id == "TeamAbilityJammerStreak") {
-        otherTeam([](int, Character& c) { c.applyJammed(30.0f); });   // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
+        otherTeam([](int, Character& c) { c.applyJammed(30.0f, true); });   // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
     } else {
         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
     }

@@ -115,7 +115,14 @@ public:
     void endSpectateTarget() { specTarget_ = false; }
     bool spectatingTarget() const { return specTarget_; }
     // TnPawn.GibbedCameraShake (a pawn gibbed within 1000 UU of the local pawn): restarts the fades.
-    void gibbedShake() { shakeRemain_ = 0.89f; }
+    void gibbedShake() { startShake(0.55f, 0.75f, 0.89f, 0.89f); }
+    // TnCamera.StartShake (ignored at Intensity 0): restarts the yaw / pitch fade and the roll fade, replacing the intensity.
+    void startShake(float intensity, float roll, float rollFalloff, float shakeFalloff) {
+        if (intensity <= 0.0f) return;
+        shakeInt_ = intensity; shakeRoll_ = roll; shakeDur_ = shakeFalloff; rollDur_ = rollFalloff; shakeRemain_ = shakeFalloff; rollRemain_ = rollFalloff;
+    }
+    // A local shot of the weapon class `weaponId` (TnWeapon<id>): the camera recoil (pitch step + FOV kick) and the per-shot shake.
+    void onLocalShot(const char* weaponId);
     int takeSpectateCycle() { const int c = specCycle_; specCycle_ = 0; return c; }   // SwitchSpectatorTarget presses since the last call
     // Camera strategy override with pitch / FOV (TnGuidedMissileCameraStrategyType).
     void setSpectatorView(const core::Vec3& pos, float yaw, float pitch, float fov) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = pitch; specFov_ = fov; }
@@ -221,6 +228,8 @@ private:
     bool specTarget_ = false; core::Vec3 specAnchor_{0, 0, 0}, specOff_{1.5f, 0.0f, -0.35f}; int specCycle_ = 0; uint32_t specUiPrev_ = 0;
     C2Smoother specOffXS_, specOffZS_;
     void spectateView(render::Camera& cam) const;
+    float shakeInt_ = 0.55f, shakeRoll_ = 0.75f, shakeDur_ = 0.89f, rollDur_ = 0.89f, rollRemain_ = 0.0f;   // the shake in progress
+    float fovKick_ = 0.0f, recoilTime_ = 0.0f, recoilDelay_ = 0.0f, sinceShot_ = 1e9f;                   // TnRecoilCameraBehavior FOV
     float shakeRemain_ = 0.0f, shakeGenT_ = 0.0f;   // TnShakeCameraBehavior: the fade left (s); the wave generator's time
     void applyShake(render::Camera& cam) const;
     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;

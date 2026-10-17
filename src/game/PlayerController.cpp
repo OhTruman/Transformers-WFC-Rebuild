@@ -1,4 +1,5 @@
 #include "game/PlayerController.h"
+#include <cstring>
 
 #include <set>
 #include "core/Log.h"
@@ -220,7 +221,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
 // TransformToRobo), HoverTruck_Optimus for Hovering (and TransformToVehicle), Truck_Optimus for Driving.
 void PlayerController::updateCameraStrategy(const platform::InputFrame& in, float dt) {
     namespace cfg = core::config;
-    shakeGenT_ += dt; shakeRemain_ = std::max(0.0f, shakeRemain_ - dt);
+    shakeGenT_ += dt; shakeRemain_ = std::max(0.0f, shakeRemain_ - dt); rollRemain_ = std::max(0.0f, rollRemain_ - dt); sinceShot_ += dt;
     {   // SwitchSpectatorTarget input (LB / ']' = +1, RB / '[' = -1), edges of the UiKey bits and the bound keys
         const uint32_t lb = 1u << (int)platform::UiKey::LB, rb = 1u << (int)platform::UiKey::RB;
         if (((in.uiDown & lb) && !(specUiPrev_ & lb)) || in.wasPressed(platform::Button::SpectateNext)) ++specCycle_;
@@ -267,7 +268,8 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
         nitroDist_ = 0.0f;
     }
     if (want != strategy_) {
-        stratDur_ = want == 0 ? cfg::kCamTransRobot : (want == 1 ? cfg::kCamTransHover : cfg::kCamTransDrive);
+        // The entered strategy's TransitionTime: a jet's HoverPlane_* strategy is 1.0 s (RE presentation audit 2 part 3), the other hovers 1.5.
+        stratDur_ = want == 0 ? cfg::kCamTransRobot : (want == 1 ? (jet ? 1.0f : cfg::kCamTransHover) : cfg::kCamTransDrive);
         stratT_ = 0.0f;
         anchorFrom_ = anchorCur_; distFrom_ = distCur_;
         strategy_ = want;
@@ -853,6 +855,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 // the damage trace starts at the start-trace location, not the socket; only the flash / tracer alternate
                 // [CONF RE pass 5 9g + TnPlayerPawn].
                 core::Vec3 dir = core::normalize(aimPoint - origin);
+                onLocalShot(vw->def ? vw->def->id : nullptr);   // camera recoil + shake (vehicle weapons too)
                 if (vw->projectile()) world.fireWeapon(*vw, origin, dir);
                 else if (vw->simulated()) { for (int k = 0; k < std::max(1, vw->shots); ++k) { world.setPelletIndex(k); world.fireWeapon(*vw, start, camDir); } world.setPelletIndex(0); }
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
@@ -864,6 +867,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
+            onLocalShot(w.def ? w.def->id : nullptr);   // TnPlayerController.OnWeaponFired: camera recoil + shake
             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
             // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
@@ -961,23 +965,46 @@ void PlayerController::updateCamera(render::Camera& cam) const {
         cam.yaw += amp * std::sin(6.2831853f * 12.0f * wiggleT_);
         cam.pitch += amp * std::sin(6.2831853f * 12.0f * 1.37f * wiggleT_ + 1.0f);
     }
-    cam.fovXDeg = fovCur_;
-    if (strategy_ == 0) applyShake(cam);   // OverTheShoulder has TnShakeCameraBehavior [vehicle strategies: PROV, not applied]
+    // TnRecoilCameraBehavior FOV: the full offset at the shot, held for RecoilDelay, eased back (smoothstep) over RecoilTime.
+    float L = 0.0f;
+    if (recoilTime_ > 0.0f) L = 1.0f - smoothstep01(core::clampf(sinceShot_ - recoilDelay_, 0.0f, recoilTime_) / recoilTime_);
+    cam.fovXDeg = fovCur_ - fovKick_ * L;
+    applyShake(cam);   // TnShakeCameraBehavior (gibbed and per-shot shakes) [H: every live strategy carries it]
 }
 
 void PlayerController::applyShake(render::Camera& cam) const {
-    if (shakeRemain_ <= 0.0f) return;
-    const float f = shakeRemain_ / 0.89f, k = 0.55f * 0.0174533f;   // linear fades; Intensity 0.55; degrees
-    cam.yaw += k * 3.0f * std::sin(6.2831853f * 5.0f * shakeGenT_) * f;
-    cam.pitch += k * 5.0f * std::sin(6.2831853f * 4.0f * shakeGenT_) * f;
-    cam.roll += k * 0.75f * f * f;   // RollFalloff: one-sided, quadratic
+    if (shakeRemain_ <= 0.0f && rollRemain_ <= 0.0f) return;
+    const float k = shakeInt_ * 0.0174533f;   // degrees x Intensity
+    const float f = shakeDur_ > 0.0f ? shakeRemain_ / shakeDur_ : 0.0f, r = rollDur_ > 0.0f ? rollRemain_ / rollDur_ : 0.0f;   // linear fades
+    cam.yaw += k * 3.0f * std::sin(6.2831853f * 5.0f * shakeGenT_) * f;    // the strategy's YawSpectrum 5 Hz x 3
+    cam.pitch += k * 5.0f * std::sin(6.2831853f * 4.0f * shakeGenT_) * f;  // PitchSpectrum 4 Hz x 5
+    cam.roll += k * shakeRoll_ * r * r;   // RollFalloff: one-sided, quadratic
+}
+
+namespace {
+struct WeaponCameraDef { const char* id; float pitchDeg, fovAdj, recoilTime, recoilDelay, shakeInt, shakeRoll, rollFalloff, shakeFalloff; };
+const WeaponCameraDef kWeaponCamera[] = {
+#include "game/WeaponCameraTable.inc"
+};
+} // namespace
+
+void PlayerController::onLocalShot(const char* weaponId) {
+    if (!weaponId) return;
+    for (const WeaponCameraDef& d : kWeaponCamera) {
+        if (std::strcmp(d.id, weaponId)) continue;
+        // OrbitRotation.Pitch += PitchAdjustmentDeg: a permanent step (the orbit, and with it the aim, keeps it).
+        if (d.pitchDeg != 0.0f) camPitch_ = core::clampf(camPitch_ + d.pitchDeg * 0.0174533f, -75.0f * 0.0174533f, 75.0f * 0.0174533f);
+        fovKick_ = d.fovAdj; recoilTime_ = d.recoilTime; recoilDelay_ = d.recoilDelay; sinceShot_ = 0.0f;
+        startShake(d.shakeInt, d.shakeRoll, d.rollFalloff, d.shakeFalloff);
+        return;
+    }
 }
 
 void PlayerController::beginSpectateTarget(float targetYaw) {
     // StartSpectating / SwitchSpectatorTarget -> Camera.Reset(): the strategy's state starts over (a hard cut).
     deathCam_ = false;
     specTarget_ = true;
-    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
+    shakeRemain_ = 0.0f; rollRemain_ = 0.0f;   // Activate -> Shaker.Reset
     camYaw_ = targetYaw; camPitch_ = 0.0f;   // TnOrbitRotation.Reset: (0, target yaw, 0)
     specOff_ = core::Vec3{1.5f, 0.0f, -0.35f}; specOffXS_.reset(); specOffZS_.reset();
     fovCur_ = 80.0f; fovS_.reset();
@@ -1001,7 +1028,7 @@ void PlayerController::beginDeathCamera(bool vehicle, float wreckYaw) {
     if (deathCam_ || spectating_) return;
     render::Camera from; updateCamera(from);   // the live POV: the strategy blend starts from it
     deathFromPos_ = from.pos; deathFromYaw_ = from.yaw; deathFromPitch_ = from.pitch;
-    shakeRemain_ = 0.0f;   // Activate -> Shaker.Reset
+    shakeRemain_ = 0.0f; rollRemain_ = 0.0f;   // Activate -> Shaker.Reset
     deathVehicle_ = vehicle;
     // The inherited CameraState: orbit rotation and orbit location offset as the live strategy left them.
     deathYaw_ = vehicle ? wreckYaw : viewYaw_;

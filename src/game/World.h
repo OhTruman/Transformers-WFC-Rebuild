@@ -94,6 +94,10 @@ struct HudGameState {
     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
     float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
+    // Active HUD-relevant buffs on the local pawn (Hud_GFX ApplyBuff / UnapplyBuff): the buff class name and its seconds left.
+    struct HudBuff { std::string id; float remain = 0.0f; };
+    std::vector<HudBuff> buffs;
+    std::string spectateTarget;   // the killer cam's target (SetSpectateTarget); "" when following no one
     // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
     int kamikazeMines = 0;                       // live MinePooper mines (positions: World::kamikazeMines())
     float tempWeaponLeft = 0.0f;                 // P.O.K.E. 2.0 seconds left (0 otherwise)

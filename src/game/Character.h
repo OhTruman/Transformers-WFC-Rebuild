@@ -251,7 +251,9 @@ public:
     float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
     int hardLockedByTeam_ = 255;
     // TnBuffAbilityJammed.Apply: CooldownMultiplier 0; remove Cloak / Disguise / Warcry buffs; StopShield; Fall; abort Whirlwind.
-    void applyJammed(float t) {
+    bool jammedByKillstreak_ = false;     // the active jam timer came from TnBuffAbilityJammedKillstreak (HUD buff id)
+    void applyJammed(float t, bool killstreak = false) {
+        if (t >= jammedRemain_) jammedByKillstreak_ = killstreak;
         jammedRemain_ = std::max(jammedRemain_, t);
         cloakRemain_ = 0.0f; drainRemain_ = 0.0f;   // TnBuffDrainSource is in BuffsToRemoveWhenJammed
         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f;
