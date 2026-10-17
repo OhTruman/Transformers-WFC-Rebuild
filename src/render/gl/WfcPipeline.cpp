@@ -2655,6 +2655,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               "    return clamp(lin * (1.0 + sc), 0.0, 1023.0) / 1023.0;\n"
               "}\n";
     const bool rtRefl = rtReflComposite();
+    const bool x6Build = rtRefl && rtMode_ == 2 && rtdef::x6();   // (X6 text: Realistic programs only)
     if (rtRefl)   // (M7 stage 2 modern mode) the ray-traced reflection at this pixel (premultiplied by its hit share; miss = the cube)
         fs += "uniform sampler2D uRtRefl; uniform mat4 uRtReflVP; uniform int uRtReflOn; uniform float uRtReflLod;\n"
               "vec4 wfcRtRefl(vec4 cube, float bias) {\n"
@@ -2670,12 +2671,20 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               // graphs weight low): glossy lit surfaces (SpecularPower gate, weighted by the specular colour) take the ray-
               // traced reflection with Schlick Fresnel (F0 0.04), blurred by roughness over the target's mips; the diffuse
               // lighting gives way by the same weight. uRtGloss = WFC_RT_REFLSTRENGTH (Realistic only; 0 = off).
-              "uniform float uRtGloss;\n"
-              // X6 (Realistic): uRtX6 = (gate floor, damp amount, 1 / patch size m, 0); 0 = off. Value noise on the ground plane
+              "uniform float uRtGloss;\n" +
+              // X6 (Realistic programs only - Faithful compiles the original text exactly): uRtX6 = (gate floor, damp amount,
+              // 1 / patch size m, damp highlight gain); 0 = off. Damp = up-facing ground (world Y, metres) x value noise patches
+              std::string(x6Build ?
               "uniform vec4 uRtX6;\n"
               "float wfcX6Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n"
               "float wfcX6Noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n"
               "    return mix(mix(wfcX6Hash(i), wfcX6Hash(i + vec2(1.0, 0.0)), f.x), mix(wfcX6Hash(i + vec2(0.0, 1.0)), wfcX6Hash(i + vec2(1.0, 1.0)), f.x), f.y); }\n"
+              "float wfcX6Wet() {\n"
+              "    if (uRtX6.y <= 0.0) return 0.0;\n"
+              "    vec2 q = vPos.xz * uRtX6.z;\n"
+              "    float pn = wfcX6Noise(q) * 0.7 + wfcX6Noise(q * 3.7 + 17.0) * 0.3;\n"
+              "    return uRtX6.y * smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(0.42, 0.62, pn);\n"
+              "}\n" : "") +
               "vec3 wfcRtGlossMix(vec3 c, float sp, vec3 spec, vec3 n, vec3 V) {\n"
               "    if (uRtReflOn == 0 || uRtGloss <= 0.0) return c;\n"
               // (item 3) every lit surface reflects (dielectric F0 0.04, x its specular colour's strength); roughness - from
@@ -2684,24 +2693,20 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
               // (the former SpecularPower gate drew Molten's floor seam). WFC_RT_GLOSSLO / _HI still set a gate when given.
               "    float gate = " + std::string(std::getenv("WFC_RT_GLOSSLO") || std::getenv("WFC_RT_GLOSSHI")
                     ? "smoothstep(" + std::string(rtGlossLo()) + ", " + std::string(rtGlossHi()) + ", sp)" : std::string("1.0")) +
-              " * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n"
-              // X6: the floor - every lit surface reflects a little; damp patches on the ground facing up (world Y, metres):
-              // darker (before the edge returns below, so a patch never pops at the frame edge), smooth, fully reflective
-              "    float wet = 0.0;\n"
-              "    if (uRtX6.x > 0.0 || uRtX6.y > 0.0) {\n"
-              "        vec2 q = vPos.xz * uRtX6.z;\n"
-              "        float pn = wfcX6Noise(q) * 0.7 + wfcX6Noise(q * 3.7 + 17.0) * 0.3;\n"
-              "        wet = uRtX6.y * smoothstep(0.6, 0.9, normalize(vNrm).y) * smoothstep(0.42, 0.62, pn);\n"
-              "        gate = max(gate, max(uRtX6.x, wet));\n"
-              "        c *= 1.0 - 0.25 * wet;\n"
-              "    }\n"
+              " * clamp(max(spec.r, max(spec.g, spec.b)) * 2.0, 0.0, 1.0);\n" +
+              // X6: the floor - every lit surface reflects a little; damp patches: darker (before the edge returns below, so a
+              // patch never pops at the frame edge), smooth, fully gated
+              std::string(x6Build ?
+              "    float wet = wfcX6Wet();\n"
+              "    gate = max(gate, max(uRtX6.x, wet));\n"
+              "    c *= 1.0 - 0.25 * wet;\n" : "") +
               "    if (gate <= 0.0) return c;\n"
               "    vec4 p = uRtReflVP * vec4(vPos, 1.0);\n"
               "    if (p.w <= 0.0) return c;\n"
               "    vec2 uv = p.xy / p.w * 0.5 + 0.5;\n"
               "    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return c;\n"
               "    float rough = clamp(pow(2.0 / (max(sp, 0.0) + 2.0), 0.25), 0.02, 1.0);\n"   // (perceptual roughness: Blinn-Phong n -> GGX alpha, its square root)
-              "    rough = mix(rough, 0.08, wet * 0.85);\n"     // (X6: a damp film is smooth)
+              + std::string(x6Build ? "    rough = mix(rough, 0.08, wet * 0.85);\n" : "") +   // (X6: a damp film is smooth)
               "    ivec2 rs = textureSize(uRtRefl, 0);\n"
               "    vec4 r = textureLod(uRtRefl, uv, uRtReflLod + rough * log2(float(max(rs.x, rs.y))));\n"
               "    if (r.a <= 1e-3) return c;\n"
@@ -2829,7 +2834,15 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             const size_t s = mainLM.find(spec, at);
             const size_t u = mainLM.find("uniform int uVertexLM;");
             if (s != std::string::npos && u != std::string::npos) {
-                mainLM.insert(s + spec.size(), "        c += o.SpecularColor * Ls * uRtLMSpec;   // (X2: the extra over the original)\n");
+                mainLM.insert(s + spec.size(), "        c += o.SpecularColor * Ls * uRtLMSpec;   // (X2: the extra over the original)\n" +
+                    // X6: a damp patch is a smooth film whatever the material underneath: the same three directional
+                    // lightmap lobes at a sharp exponent, not tinted by the material's specular colour (water is clear)
+                    std::string(x6Build ?
+                    "        { float wt = wfcX6Wet(); if (wt > 0.0) { float SPw = max(SP, 160.0);\n"
+                    "            vec3 Lw = pow(max(clamp(dot(normalize(n + LMB0), R), 0.0, 1.0), 0.0001), SPw) * l0 * uLMScale[0]\n"
+                    "                    + pow(max(clamp(dot(normalize(n + LMB1), R), 0.0, 1.0), 0.0001), SPw) * l1 * uLMScale[1]\n"
+                    "                    + pow(max(clamp(dot(normalize(n + LMB2), R), 0.0, 1.0), 0.0001), SPw) * l2 * uLMScale[2];\n"
+                    "            c += Lw * (wt * uRtX6.w); } }\n" : ""));
                 mainLM.insert(u, "uniform float uRtLMSpec;   // (X2) the Realistic lightmap specular's extra gain\n");
             }
         }
@@ -3976,7 +3989,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                     if (!rtdef::envSet("WFC_X6_DAMP"))
                         for (const auto& mx : kMapX6) if (dataDir_.find(mx.map) != std::string::npos) x6Damp_ = mx.damp;
                 }
-                Uniform4f(ULOC(P, "uRtX6"), rtdef::x6Refl(), x6Damp_, 1.0f / rtdef::x6Scale(), 0.0f);
+                Uniform4f(ULOC(P, "uRtX6"), rtdef::x6Refl(), x6Damp_, 1.0f / rtdef::x6Scale(), rtdef::x6Spec());
             } else Uniform4f(ULOC(P, "uRtX6"), 0.0f, 0.0f, 0.0f, 0.0f);
             UniformMatrix4fv(ULOC(P, "uRtReflVP"), 1, GL_FALSE, rtReflVP_);
         }
