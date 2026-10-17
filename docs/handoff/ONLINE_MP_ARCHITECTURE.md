@@ -213,7 +213,7 @@ peer and dropped afterwards (the peer's address is then the key).
 | join timeout | Systems emits `JoinFailed{Timeout}` at 50 s; the frontend's own timer is a 55 s backstop |
 | pumping | one socket; whichever pump runs first (`ISession::poll`, every frontend update incl. the match, or the LockstepLayer's per-tick poll) drains it and dispatches by channel into two queues (lockstep / session+voice); each consumer reads only its queue |
 | slots / teams | the host's GameFlow decides (PickTeam: smaller team; humans take bot slots) and publishes `SessionLobby.slots`; SessionLayer owns membership / connectivity; in-match slot changes go through `SessionSlotSwap` at a tick the host's LockstepLayer picks |
-| idle kick | OFF by default (10.2: the original never kicks in private matches); as a host option: the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
+| idle kick | public sessions only (10.2: the original never kicks in private matches; phase 1 sessions are private); then the host's LockstepLayer detects 180 s without a non-idle command; SessionLayer kicks (`Kicked{Idle}` to that member, `PeerDropped{Kicked}` to the others); `kick()` stays for manual kicks |
 | desync text | "The game has gone out of sync and cannot continue." - the tick goes to the log / dump only |
 
 - **Addition (agents/frontend 1c2dbd11):** `SessionMemberInfo::iconicCharacter` (std::string) - in iconic mode the member's claimed
@@ -244,9 +244,10 @@ peer and dropped afterwards (the peer's address is then the key).
   stick held at the pitch clamp and very slow turns, which an aim-delta threshold misses) or it sent team chat since its last command
   (ServerTeamSay refreshes LastActiveTime). The 0.5 deg aim test is dropped. World then calls noteRemoteCommand; the transport never
   calls it.
-- **Idle kick is a host option, default OFF** (fidelity): the original never kicks in private matches (TnGame.InitGame clears
-  bKickLiveIdlers when IsPrivateMatch(); MaxIdleTime 180 / bKickLiveIdlers apply only to public Live matches, RE 4a1f8fb), and every
-  match of ours is LAN / direct / offline. When the host turns it on: 180 s, the host's own local player is never kicked [H].
+- **Idle kick only in PUBLIC sessions** (Integration decision; RE 4a1f8fb: the original never kicks in private matches - TnGame.InitGame
+  clears bKickLiveIdlers when IsPrivateMatch(); MaxIdleTime 180 / bKickLiveIdlers apply to public Live matches only). World gets an
+  isPublic flag (Gameplay). Phase 1's code-joined sessions are private, so nothing is kicked; the path (180 s, the host's own player
+  never kicked [H]) stays for a later public mode.
 - **No holes:** a missing command for N stalls the step (section 4). A dropped peer becomes a SlotSwap to Bot at an agreed simTick.
 - **Button count:** the Button enum is static_assert-ed to <= 32 bits.
 
