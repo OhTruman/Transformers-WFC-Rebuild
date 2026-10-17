@@ -42,11 +42,21 @@ NC=";;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1"   # (only if the respun exe has G
 [ $WHATIF = 1 ] || grep -q WFC_NOCORPSE work/ab/fast_$r/build-release/bin/wfc_rebuild.exe || { NC=""; st "2b: the respun exe has no WFC_NOCORPSE - nocorpse arm skipped"; }
 run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms 'base|$BASE|;;head|work/ab/fast_$r|$NC' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1"
 run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms 'base|$BASE|;;head|work/ab/fast_$r|' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1"
+# RERUN_1B=1 (a respin that changes the Realistic path, e.g. X3): the 1b Realistic perf rows are rerun on the respun head in the same
+# hold (Realistic + HD 2 on hd_dev_full, 2560x1440, 31 v 32, 1 rep, 5 user maps - X3 rides on its defaults) instead of being carried
+if [ -n "$RERUN_1B" ]; then
+  HDR=$(cygpath -w "${GATE_HD_ROOT:-F:/Transformers Rebuild/Rebuild-Systems/work/hd_dev_full}" 2>/dev/null); run "mkdir -p $O/rtperf2"
+  for m in 508 510 507 504 509; do
+    run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/rtperf2/map-$m -Map $m -Arms 'realistic|work/ab/fast_$r|WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR' -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/rtperf2/map-$m.out 2>&1"
+  done
+fi
 run "rm -f work/PERF_HOLD"; st "2b TIMED DONE (hold removed)"
 for f in map-501 map-501-5v5; do [ -f $O/bodies/$f.out ] && grep -oE "lockstep\.[a-z]+\.r[12]: [a-z]+: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+, workload parity [A-Za-z]+; frame p50 / p90 / p99 [0-9.]+ / [0-9.]+" $O/bodies/$f.out | sed -E "s/lockstep\.([a-z]+\.r[12]).*same match as 'base' ([A-Za-z]+).*p99 ([0-9.]+) \/ ([0-9.]+)/$f \1 same=\2 p50 \3 p90 \4/" | tee -a $L; done
 # ---- 3 report: carry leak / 1b / penultimate FAST / eye pass from the gated head
 for d in leak rtperf2 fast_$p; do run "[ -e $O/$d ] || cmd //c mklink //J \"\$(cygpath -w $O/$d)\" \"\$(cygpath -w $GD/$d)\" >/dev/null"; done
-run "[ -e work/eyepass/$r ] || cmd //c mklink //J \"\$(cygpath -w work/eyepass/$r)\" \"\$(cygpath -w work/eyepass/$g)\" >/dev/null"
+# EYE_FROM=<eyepass name> (e.g. x3_cand12): the eye pass to carry - the sheet of the candidate exe the respun head was built from;
+# default: the gated head's
+run "[ -e work/eyepass/$r ] || cmd //c mklink //J \"\$(cygpath -w work/eyepass/$r)\" \"\$(cygpath -w work/eyepass/${EYE_FROM:-$g})\" >/dev/null"
 st "3 report (leak, 1b, eye pass and FAST $p carried from the gated head $g)"
 run "'F:/Transformers Rebuild/AssetTools/bin/py/python.exe' tools/fidelity/package_gate_report.py $O $r $p | tee -a $L"
 run "'F:/Transformers Rebuild/AssetTools/bin/py/python.exe' -c \"import sys; p=sys.argv[1]; t=open(p,encoding='utf-8').read().split(chr(10)); t.insert(1, chr(10)+'Respin of $g: the regress and the delta FAST are new on $r; leak, the 1b Realistic perf rows, the eye pass and the penultimate FAST $p are carried from $g (the respin cannot move them).'); open(p,'w',encoding='utf-8').write(chr(10).join(t))\" $O/PACKAGE-GATE.md"
