@@ -2970,3 +2970,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (two captures lerped, no DLE) BEFORE the door head merges (deadline: end of today, else (a) PARTIAL merges with the collision).
 2026-10-17 11:31 FX runtime gap corrected to exactly 5 templates (4 FX_Multiplayer_p ability / buff on all maps + Hammer_Trail_DCPT on 8); the
   body-notify path needs no code change (test setup). Rendering adds the always-include selector; regen + Systems' re-run ~12:35.
+2026-10-17 11:31 AssetTools dry-ran build_map_fx.py on the current pstream: the only MP change is H2H_Punch01_FX's SubUVDirect confidence /
+  partial labels (RE's resolution), no runtime values; the base-index fix changes no MP LOD -> one regen later with Rendering's
+  always-include selector (gate: labels + the 5 added templates only). Door captures extraction next.
