@@ -3370,3 +3370,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   package 7 row + the weapon base diff doc). Offline SIMHASH identical through every merge. Frozen. Experimental: head build +
   eye pass (Rust dark = no flare, Rust lane / Debris = the flare) -> hold ~17:00.
 2026-10-17 15:25 Campaign Kismet batch 2 merged (64 / 176; generic On<Name> dispatcher found; kismet_native.py tool). RE continues with 65+.
+2026-10-17 15:28 MERGED ab855fe7 Frontend HUD glue fix (jam display + "currently spectating" label were never fed in real play: wrong HUD struct
+  passed; 2 lines + static_asserts). FINAL PACKAGE 7 HEAD = ab855fe7 (frontend-only over deed7f1a; SIMHASH identical; eye pass
+  on deed7f1a stands, the gate exe rebuilds at ab855fe7). AssetTools' list at deed7f1a stands (code-only change); the 6 materials
+  files shrank by formatting only (indent dropped on re-serialization; content identical by key).
