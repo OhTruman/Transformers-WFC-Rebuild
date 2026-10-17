@@ -3127,3 +3127,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   gitignored third_party/opus; BSD-3 licence shipped; VOICEFRAMETEST PASS). INTEGRATION SLIP: my first test run lacked the
   direct-boot var, WFC_NULLRENDER was refused and the exe booted the FRONTEND windowed for ~2 min (13:06-13:08) during Rendering's
   x14 / x15; Rendering told to re-run any differing rep; the var is now in the direct-boot list. No live mic run (user's question).
+2026-10-17 13:19 MERGED 0df2a0fa Gameplay's global seat order (the lockstep determinism blocker): humans + localSeat from the host's launch record,
+  match player i = seat i on every peer, sim loops by index online, simStateHash covers bot / Smart RNGs; SESSIONTEST 34 / 34 incl.
+  cross-perspective identity; offline identical. Systems switches Application_Net's launch to it and runs NET.identity (two
+  processes, hash every tick, 1000 ticks, exit 0) = the phase 1 milestone; Frontend adapts fillOnlineLaunch (self in the list).
