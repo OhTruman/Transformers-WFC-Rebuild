@@ -22,7 +22,7 @@ void put64(std::vector<uint8_t>& b, uint64_t v) { for (int i = 0; i < 8; ++i) b.
 uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
 uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
 
-enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6 };
+enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6, kVoice = 7 };
 constexpr uint32_t kRedundancy = 3;   // ticks per regular CMDS packet: the newest + 2 before it (covers isolated losses)
 
 }  // namespace
@@ -169,6 +169,9 @@ void Lockstep::handle(const NetPacket& p) {
         }
         break;
     }
+    case kVoice:
+        if (voiceSink_) voiceSink_(seat, d.data(), d.size());
+        break;
     case kPing: {
         if (d.size() < 10) return;
         std::vector<uint8_t> b(d.begin(), d.begin() + 10);
@@ -312,6 +315,10 @@ void Lockstep::stepped(uint32_t tick, uint64_t stateHash) {
 
 void Lockstep::forget(uint32_t belowTick) {
     for (auto& m : cmds_) while (!m.empty() && m.begin()->first < belowTick) m.erase(m.begin());
+}
+
+void Lockstep::sendVoice(const uint8_t* p, size_t n) {
+    for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendUnreliable(s, p, n);
 }
 
 void Lockstep::bye(uint32_t lastTick) {

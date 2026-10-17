@@ -9,6 +9,7 @@
 //   3 HASH  (reliable)   u8 type, u8 seat, u32 tick, u64 simStateHash (desync detector, every hashEvery ticks)
 //   4 BYE   (reliable)   u8 type, u8 seat, u32 last tick it simulated (0 = left mid-match). A peer that has every command up to that
 //                        tick finishes it and ends normally (the run's end point reached a tick apart); 0 from the host = host lost.
+//   7 VOICE (unreliable) u8 type, u8 seat, u16 seq, u8 flags, Opus bytes - handed to the voice sink (VoiceSession)
 //   5 PING  (unreliable) u8 type, u8 seat, u64 sender clock (us)   6 PONG (unreliable) u8 type, u8 seat, u64 the echoed clock
 // Input delay: each peer picks its OWN D (it only decides how far ahead this seat schedules its commands; every peer applies the same
 // streams to the same ticks, so the D values need not agree). Auto D (Config::delay <= 0) = ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / tick),
@@ -20,6 +21,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -61,6 +63,8 @@ public:
     void stepped(uint32_t tick, uint64_t stateHash);   // log row
     void forget(uint32_t belowTick);              // drop stored commands older than this
     void bye(uint32_t lastTick);
+    void sendVoice(const uint8_t* p, size_t n);   // a complete VOICE packet to every peer (unreliable)
+    void setVoiceSink(std::function<void(int, const uint8_t*, size_t)> f) { voiceSink_ = std::move(f); }
     uint32_t endTick() const { return endTick_; }   // a peer finished the run at this tick (0 = none)
     Status status() const { return status_; }
     const std::string& statusText() const { return statusText_; }
@@ -84,6 +88,7 @@ private:
     std::map<uint32_t, std::vector<std::pair<int, uint64_t>>> peerHash_;
     uint32_t localHigh_ = 0;
     uint32_t endTick_ = 0;
+    std::function<void(int, const uint8_t*, size_t)> voiceSink_;
     int delay_ = 4;
     float srtt_ = 0.0f, rttvar_ = 0.0f;
     double lastPingMs_ = 0.0, lastDelayDropMs_ = 0.0;

@@ -14,6 +14,9 @@
 //                             same per-tick WFC_NET_LOG CSV (replay equivalence: its simhash stream must equal the live peers')
 // Exit codes: 0 the match ended / the run's end point, 3 desync, 4 peer timeout, 5 host lost, 6 launch mismatch, 7 transport error,
 // 8 replay file error / end of the recording.
+//   WFC_NET_VOICE=tone|mic    the voice lane: tone = every seat talks a synthetic 440 Hz tone all match (TEST ONLY, no device);
+//                             mic = the default microphone, open while the match runs (only with the user's OK). Headless runs have
+//                             no audio device: frames are received, buffered and decoded, the stats logged at the end.
 #include "core/Application.h"
 #include "core/Log.h"
 #include "game/World.h"
@@ -21,6 +24,7 @@
 #include "net/NetTransport.h"
 #include "net/VoiceCodec.h"
 #include "net/VoiceFrames.h"
+#include "net/VoiceSession.h"
 
 #include <algorithm>
 #include <chrono>
@@ -165,6 +169,23 @@ void Application::runNetMatch() {
     if (const char* lp = std::getenv("WFC_NET_LOG")) cfg.logPath = lp;
     net::Lockstep ls(*t, cfg);
     const long desyncAt = env("WFC_NET_DESYNC_AT", -1);
+    std::unique_ptr<net::VoiceSession> voice;
+    if (const char* vm = std::getenv("WFC_NET_VOICE")) {
+        voice = std::make_unique<net::VoiceSession>(ls, audio_, net::VoiceSession::Config{});
+        if (std::strcmp(vm, "mic") == 0) voice->setSource(net::createVoiceCapture());
+        else voice->setSyntheticTone(440.0f);
+    }
+    auto seatPos = [this, &seatMp](int seat, core::Vec3& out) {
+        const game::Character* c = world_.participantPawn(seatMp[(size_t)seat]);
+        if (!c) return false;
+        out = c->position() + core::Vec3{0, 1.8f, 0};   // the head (approx.)
+        return true;
+    };
+    auto sameTeam = [this, &seatMp](int seat) {
+        const auto& ps = world_.match().players();
+        const int a = seatMp[(size_t)seat], b = world_.localMatchPlayer();
+        return a >= 0 && b >= 0 && (size_t)a < ps.size() && (size_t)b < ps.size() && ps[(size_t)a].team == ps[(size_t)b].team && ps[(size_t)a].team != 255;
+    };
 
     // Wait for every peer's HELLO (the load gate: no tick before everyone is here).
     const auto t0 = std::chrono::steady_clock::now();
@@ -183,6 +204,13 @@ void Application::runNetMatch() {
     const auto tRun = std::chrono::steady_clock::now();
     while (ls.status() == net::Lockstep::Status::Running) {
         ls.pump();
+        if (voice) {   // the listener: the local pawn (its right vector from the facing yaw)
+            const game::Character* me = world_.participantPawn(world_.localMatchPlayer());
+            const core::Vec3 lp = me ? me->position() + core::Vec3{0, 1.8f, 0} : core::Vec3{0, 0, 0};
+            const float yaw = me ? me->yaw() : 0.0f;
+            const core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(yaw, 0.0f), core::Vec3{0, 1, 0}));
+            voice->update(true, seatPos, sameTeam, lp, right);
+        }
         const uint32_t n = (uint32_t)world_.simTick() + 1;
         // This seat's commands up to N + D (input delay): the PlayerBot / controller input of now, encoded on the wire grid.
         while (nextLocal <= n + (uint32_t)ls.delay()) {
