@@ -1,0 +1,10 @@
+# Templates every MP map's FX library compiles whether or not its level packages cook them (build_map_fx.py library()):
+# the runtime spawns them by name from character / ability / body-notify data (Systems' body-notify + ability dispatch).
+# One template path per line; '#' comments. pstream resolves each to the package that holds it; a template it cannot find
+# is skipped silently (check the gate output).
+# (Systems' exact list: docs/handoff/SYSTEMS_FX_RUNTIME_GAP.md 9d3331e0, tools/systems/fx_runtime_gap.py)
+FX_Multiplayer_p.FX.Drain_Blast_FX
+FX_Multiplayer_p.FX.WarCry_AOE_FX
+FX_Multiplayer_p.FX.DrainRay_Beam_FX
+FX_Multiplayer_p.FX.DecoyTrap_FX
+FX_Hammer_p.FX.Hammer_Trail_DCPT_FX
