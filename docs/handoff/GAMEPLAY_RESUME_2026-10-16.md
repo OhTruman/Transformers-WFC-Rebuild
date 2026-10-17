@@ -2,6 +2,13 @@
 
 ## Current state (update at every stable point)
 
+- **2026-10-17: the package 6 gate is running on af4d0731. FREEZE** (Integration): no compiles and no exes until Integration lifts
+  it by message; code edits and docs only.
+  - **Both items below move to package 7:** the Defrag latch removal, and lever 1, the instanced gibs. They can't be measured during
+    the gate, and Systems' build follows it.
+  - **Also package 7:** the FaceFX pose hook, from AssetTools' spec `docs/handoff/CAMPAIGN_FACEFX_RE.md` (integration 181c9d27). The
+    plan is in `docs/handoff/GAMEPLAY_FACEFX_HOOK.md`: the LocalPose override before poseGlobals, a bone-space probe, and the unit test
+    on DX_OPRIME_LK002649 at t = 1.0 s.
 - **Update (late 2026-10-16):** the package 6 candidate head is **af4d0731**, with the X3 volumetrics **and Rendering's Defrag draw-list cache fix**. Base both items below on af4d0731.
   - They may run **in parallel**.
   - They join package 6 **only** if they pass before Systems' package build starts, about 1.5 h after the relaunch.
