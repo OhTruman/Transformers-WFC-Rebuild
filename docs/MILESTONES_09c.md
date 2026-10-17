@@ -3171,3 +3171,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:33 NET.identity TRANSPORT HALF PASSES (Experimental, independent, c702c93b): bundles identical on every common tick on lan / typical /
   bad, no timeouts, stalls max 129 ms; the tick-602 split = each process's own local pawn (three hashes with identical bundles) =
   Gameplay's item; negative control (pre-switch) splits at 601. Full PASS re-run (~3 min CPU) on the head with Gameplay's fix.
+2026-10-17 13:39 MERGED 3daab0b5 proximity voice as 3D emitters in the cue mix (the listener's room reverb colours it: the user's proximity + room
+  reverb ask) + the voice star relay (host fans out to the audience). The reverb-with-device check (muted) joins Systems' card
+  slot. Online phase 1 code complete except Gameplay's two local-pawn fixes.
