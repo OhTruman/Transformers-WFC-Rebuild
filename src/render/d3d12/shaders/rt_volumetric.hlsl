@@ -123,7 +123,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         const uint mask = (uint)Params.z;
         // (round 1: over a long sunlit path the in-scatter saturates toward the sun's radiance x phase - open sky went white;
         // the phase is normalised to its forward peak, so VSun is the brightness of fully lit air looking into the sun)
-        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask))
+        // (package 7: the characters and bodies (0x4) are left out, as for the lamps - a full froxel grid of sun rays
+        // through every body's BLAS is the suspect for af4d0731's ~1.8 ms; a robot's shadow in the air is not seen)
+        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask & ~0x4u))
             L += VSun.rgb * (hg(dot(dir, ToSun.xyz), VSun.w) / hg(1.0, VSun.w));
         const uint base = (uint)Extra.z;
         const uint nl = (uint)Extra2.z;                          // the in-view lamps (ring + 20 positions / + 24 colours)
