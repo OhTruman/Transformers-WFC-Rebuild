@@ -278,6 +278,13 @@ public:
     // Bots each team keeps after the humans took their slots (Game Mode Options' counts are maxima, ONLINE_MP_FLOWS.md 3.4).
     int onlineBotsFor(int team) const;
     int selfTeam() const { return lobby_.localTeam; }
+    // Group D. The load gate: online, the loaded match waits behind the loading screen until every human has loaded
+    // (AllLoaded); the application passes the sim id / load hash it reports. HUD lines (the original "`k has left the
+    // game") and slot swaps (a dropped human's slot to a bot; the host's LockstepLayer picks the tick) for the application.
+    bool inLoadGate() const { return loadGate_; }
+    void setLoadIdentity(uint64_t simId, uint64_t loadHash) { simId_ = simId; loadHash_ = loadHash; }
+    std::vector<std::string> takeGameMessages() { std::vector<std::string> v; v.swap(pendingGameMessages_); return v; }
+    std::vector<SessionSlotSwap> takeSlotSwaps() { std::vector<SessionSlotSwap> v; v.swap(pendingSwaps_); return v; }
     static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
     static constexpr double kJoinBackstop = kInitialConnectTimeout + 5.0;   // the session layer owns the 50 s timeout
     std::string stateSummary() const;
@@ -357,6 +364,12 @@ private:
     SessionLobby memberLobby_;                          // member: the host's lobby as last received
     SessionMemberId selfId_;                            // member: this player's id (from Joined)
     std::vector<OnlineMember> onlineMembers_;
+    bool loadGate_ = false;
+    std::vector<SessionMemberId> loadedPeers_;
+    uint64_t simId_ = 0, loadHash_ = 0;
+    std::vector<std::string> pendingGameMessages_;
+    std::vector<SessionSlotSwap> pendingSwaps_;
+    void updateLoadGateText();
     int pickOnlineTeam();                               // TnTeamHandlerTwoTeams.PickTeam over the humans
     int onlineGateStatus() const;                       // LobbyStatus 6 / 4 / 3 (the original start gate, D4)
     void applyBrowserCap(const char* why);              // D10: Player Limit capped to 5 v 5 while a browser peer is in

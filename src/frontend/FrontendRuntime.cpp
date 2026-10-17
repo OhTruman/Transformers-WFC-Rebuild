@@ -1353,6 +1353,8 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
             hud_.setAttackingTeamStatus(std::nullopt);
     }
     hud_.setObjective(flow_.campaign() ? flow_.objectives().activeText() : std::string());   // CAMPAIGN_HUD_PLAN.md E1
+    for (const std::string& line : flow_.takeGameMessages())   // online: "`k has left the game" (the original kill-feed line)
+        if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(line)});
     hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
     // ShowScores (Back / Tab): TnHUD.SetShowScores(!bShowScores) toggles InGameStats_GFX with input focus; it is
     // force-closed when the HUD is hidden [RE OVERNIGHT A7 / playtest section 9, CONFIRMED].
