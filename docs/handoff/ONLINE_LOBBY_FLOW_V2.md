@@ -86,6 +86,12 @@ The original Select Map row and its map vote / host choice, unchanged; members s
 ---
 
 ## 4. Public matches (Systems' central lobby service)
+The original (RE ONLINE_PUBLIC_MATCH_RE.md, fc12ceb) had **no server browser**: public play was Quick Match by playlist (TDM 1,
+the default; DM 2, CTF 3, KOTH 4, EXT 5, DOM 7). It ran a party size check, then an invisible search (mode + playlist + region,
+up to 50 results), then asked each host in order for a party reservation ("Reserving space in game `i of `n"). The first
+acceptance joins; if none accepts, it hosts ("Creating lobby..."). A strict NAT can't host: it re-searches, and shows
+"Unable to Host" after 2 failures. **Browse Games is therefore a PC addition**, asked for by the user ("a lobby list").
+
 Find Match opens a small menu:
 - **Quick Match** (`$UIText.MainMenu.QuickMatch`): choose a mode (the original playlist list), then `SearchForGameTitle` /
   `SearchingMessage` "Finding Game / Searching..."; the service returns the best open public lobby for that mode
@@ -94,12 +100,20 @@ Find Match opens a small menu:
 - **Browse Games** **[PC text]**: a list of open public lobbies - host name, mode, map, players n / max, ping, PC / Web -
   newest / best first, Refresh, Join. Joining = the member lobby (1.3). An empty list: **[PC text]** "No public games
   found." with Quick Match offered.
-- Public lobby rules (the original's): the 45 s lobby countdown starts by itself when enough players are in
-  (NumRequiredPlayers), the host may start earlier; Kick Idle Players defaults On; the playlist fixes the mode and limits.
+- Public lobby rules (the original's, RE fc12ceb): Rotate map with veto; the 45 s countdown starts by itself at 4 players;
+  teams by snake draft (sorted by score if anyone has scored, else by level; a random first team, then alternating, capped
+  per team); Kick Idle Players defaults On; the playlist fixes the mode and limits.
+- **Join in progress is allowed in public games** (bAllowJoinInProgress; answers ONLINE_MP_FLOWS R1). A reservation is
+  accepted only while the smaller team stays within the cap and the teams differ by at most 1; a party gets that team, a solo
+  joiner the smaller team on arrival. The joiner spawns at once, mid-match, with the current score and clock. Private games
+  keep D6 (joiners wait in the lobby) until the user says otherwise.
+- Without a lobby service (Systems): findGames answers from a LAN broadcast; GameList.serviceReachable = false shows
+  **[PC text]** "Public matches need the lobby service. LAN games only." and Quick Match searches LAN, then hosts a
+  public-on-LAN lobby. Entries carry `lan`. Service codes are 6 letters; the join prompt takes them too.
 
 ISession additions (for Systems' service; FakeSession scripts them now):
 - `SessionHostSettings.isPublic` + `playlist` (host a public lobby the service lists);
-- `findGames(query)` -> `GameList{entries: host, mode, map, players, maxPlayers, ping, platform, code}`;
+- `findGames(query)` -> `GameList{entries: host, mode, map, players, maxPlayers, ping, platform, code, lan; serviceReachable}`;
 - `quickMatch(playlist)` -> `SearchProgress{tried, of}` ... then `Joined` (found) or `HostOpened{public}` (none: hosting);
   `cancelSearch()`.
 
