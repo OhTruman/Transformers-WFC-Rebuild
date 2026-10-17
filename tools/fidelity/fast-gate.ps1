@@ -150,7 +150,11 @@ foreach ($run in @(@{ k = "route"; d = (Join-Path $pres "route") }, @{ k = "maps
     $gc = @(Flow-Ev $F "match.glCensus"); $samp = Join-Path $run.d "samples.csv"
     $pm = if (Test-Path $samp) { @(Import-Csv $samp | ForEach-Object { [double]$_.private_mb }) } else { @() }
     $peak = if ($pm.Count) { ($pm | Measure-Object -Maximum).Maximum } else { $null }
-    Res "resources.$($run.k)" $(if (-not $pm.Count -and -not $gc.Count) { "UNKNOWN" } elseif ($peak -and $peak -gt 6000) { "FAIL" } else { "INFO" }) ("private MB first {0:N0} / peak {1:N0} / last {2:N0} over {3} samples; GL census per match end: {4} (FAST tier: explosion check only - plateau proof is TARGETED / FULL soak)" -f $(if ($pm.Count) { $pm[0] }), $peak, $(if ($pm.Count) { $pm[-1] }), $pm.Count, (($gc | ForEach-Object { "$($_.live)" }) -join " -> ")) "Rendering/Systems"
+    # explosion check (2026-10-16, Integration): FAIL above 6,500 MB; 6,000-6,500 is INFO with the spread noted - the row's own
+    # run-to-run variation is about 400 MB (mapswitch peaks: checkpoints 7cd22027 / 4078e47b / 9350f19b 5,576-6,116; the X3 head
+    # int_cand10 5,695-6,248 vs its own base 5,713-6,116 in a 2-rep A/B; e224ebf2's 6,071 was spread, not a regression)
+    $spread = if ($peak -and $peak -gt 6000 -and $peak -le 6500) { " - within the row's measured spread (about 400 MB run to run; checkpoints 5,576-6,116 MB): INFO, not a failure" } else { "" }
+    Res "resources.$($run.k)" $(if (-not $pm.Count -and -not $gc.Count) { "UNKNOWN" } elseif ($peak -and $peak -gt 6500) { "FAIL" } else { "INFO" }) ("private MB first {0:N0} / peak {1:N0} / last {2:N0}$spread over {3} samples; GL census per match end: {4} (FAST tier: explosion check only - plateau proof is TARGETED / FULL soak)" -f $(if ($pm.Count) { $pm[0] }), $peak, $(if ($pm.Count) { $pm[-1] }), $pm.Count, (($gc | ForEach-Object { "$($_.live)" }) -join " -> ")) "Rendering/Systems"
 }
 
 # ---------- renderer error scan over every log of this gate (Rendering M45 evidence fields; audit 2026-10-05)
