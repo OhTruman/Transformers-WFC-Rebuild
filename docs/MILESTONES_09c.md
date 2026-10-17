@@ -2837,3 +2837,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   merged head 17 / 17 -> online phase 1's frontend + match side COMPLETE on FakeSession; Systems' transport is the remaining piece.
   Trail2 dump merged (no source / spawn-per-unit / taper modules exist in this build: trails = SpawnRate particles following the
   socket, tessellated 1-10) -> Rendering's item reshaped. AssetTools next: CAMPAIGN_A1_ASSETS manifest (campaign data prep).
+2026-10-17 10:41 CORRECTION (RE lane): the 4a7ca06 union was a parser misattribution (VF lists precede their label); validated against
+  bUsesDistortion (24 / 24, 29 / 29): BlastSphere_Death, BlastShell and Ring_Distort_Add all cook DistortMesh pairs; every
+  bUsesDistortion material does, so bUsesDistortion IS the rule and the allow-list item is DROPPED. BlastSphere's real PS decoded:
+  a scalar offset to x and y, chain ... x UniformScalar_2 (x20), x 4, kill s² < 0.1, clamp ±255, x 1/255 = exactly our
+  translation (e418b3f6 stands): the death swirl is authentic in form and strength. Only the apply pass is unread (RE next).
+  The revert 2e9ad1bf stands as the correct state.
