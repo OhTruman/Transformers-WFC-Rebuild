@@ -31,6 +31,7 @@ private:
     void runFrontend();
     enum class MatchExit { Quit, ReturnToFrontend };
     MatchExit runMatch();
+    void runHeadlessMatch();   // [Systems] WFC_NULLRENDER + direct match boot: the sim loop without a window
     bool loadMatch(const frontend::MatchLaunch& m);
     void unloadMatch();
     void drawFrontendFrame();

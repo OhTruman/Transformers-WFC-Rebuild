@@ -284,7 +284,11 @@ bool Application::init() {
     }
     gameMode_.begin(world_);
 
-    if (!window_) { LOG_ERROR("WFC_NULLRENDER: no harness ran; the interactive loop needs a window"); return false; }
+    if (!window_) {
+        if (world_.matchActive()) { runHeadlessMatch(); return false; }   // [Systems] WFC_NULLRENDER + a direct match boot
+        LOG_ERROR("WFC_NULLRENDER: no harness ran; the interactive loop needs a window");
+        return false;
+    }
     window_->setMouseCaptured(true);
     mouseCaptured_ = true;
 
@@ -505,6 +509,42 @@ void Application::run() {
     }
     if (frontend_) { runFrontend(); return; }
     runMatch();
+}
+
+// [Systems] Headless match (WFC_NULLRENDER + a direct match boot, no window; the netcode harness and CPU-only match rows): the
+// interactive loop's simulation order per step - player bot input -> handleInput -> World::tick -> the game mode - one fixed step per
+// iteration as WFC_LOCKSTEP runs it, with no window, draw, pacing or audio. The online load gate (ISession::simHeld) holds steps as
+// in runMatch. Ends: WFC_MATCH_SECONDS of InProgress match time, the match leaving InProgress after it started, WFC_SMOKE_FRAMES
+// iterations, or 600 s of simulated time (guard).
+void Application::runHeadlessMatch() {
+    const float step = clock_.stepSeconds();
+    const float matchSeconds = std::getenv("WFC_MATCH_SECONDS") ? (float)std::atof(std::getenv("WFC_MATCH_SECONDS")) : 0.0f;
+    const long maxIters = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 0;
+    bool started = false;
+    long iters = 0, steps = 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    LOG_INFO("HEADLESS match: step %.4f s, match seconds %.0f, iteration cap %ld", step, matchSeconds, maxIters);
+    for (;; ++iters) {
+        if (maxIters > 0 && iters >= maxIters) { LOG_INFO("HEADLESS end: %ld iterations", iters); break; }
+        if ((float)steps * step > 600.0f) { LOG_INFO("HEADLESS end: 600 s simulated (guard)"); break; }
+        const bool inProgress = world_.matchActive() && world_.match().state() == game::Match::State::InProgress;
+        if (inProgress) started = true;
+        if (started && !inProgress) { LOG_INFO("HEADLESS end: the match left InProgress"); break; }
+        if (matchSeconds > 0.0f && inProgress && world_.match().elapsedTime() >= matchSeconds) {
+            LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at step %ld (step-identical end point)", (int)world_.match().elapsedTime(), steps);
+            break;
+        }
+        platform::InputFrame input;
+        world_.playerBotInput(input, step);
+        world_.handleInput(input, step);
+        if (frontend_ && frontend_->flow().simHeld()) continue;   // online load gate (ONLINE_MP_ARCHITECTURE 10.4)
+        world_.tick(step);
+        gameMode_.tick(world_, step);
+        if (frontend_) { driveLifecycleTest(step); routeMatchToFrontend(step); }
+        ++steps;
+    }
+    const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    LOG_INFO("HEADLESS done: %ld steps (%.1f s simulated) in %.1f s wall", steps, steps * step, s);
 }
 
 Application::MatchExit Application::runMatch() {
