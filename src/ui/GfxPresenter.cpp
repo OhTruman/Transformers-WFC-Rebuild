@@ -1286,7 +1286,15 @@ void GfxPresenter::syncJoinGameRow(gfx::Player& p, frontend::GameFlow& flow) {
     gfx::avm1::Object* menu = host->parent->script;
     if (vm.get(menu, "joinGame_mc").isObject()) return;   // built for this menu instance
     gfx::avm1::Object* init = vm.newPlain();
-    vm.set(init, "_y", V(vm.toNumber(vm.get(host->script, "_y")) + 31.0));   // the menu's row pitch (findGame 0, hostGame 31)
+    const double hostY = vm.toNumber(vm.get(host->script, "_y"));
+    vm.set(init, "_y", V(hostY + 31.0));   // the menu's row pitch (findGame 0, hostGame 31)
+    // inserted, not laid over: the rows below Host Game (Create a Character, Teletran I, Friends List) move down one pitch
+    for (auto& [depth, child] : host->parent->children) {
+        auto* mc = dynamic_cast<gfx::MovieClip*>(child.get());
+        if (!mc || mc == host || !mc->script) continue;
+        const double y = vm.toNumber(vm.get(mc->script, "_y"));
+        if (y > hostY + 1.0) vm.set(mc->script, "_y", V(y + 31.0));
+    }
     gfx::MovieClip* dup = p.duplicate(host, "joinGame_mc", 950, init);
     if (!dup || !dup->script) return;
     gfx::avm1::Object* o = dup->script;

@@ -1024,6 +1024,7 @@ void GameFlow::startLevel() {
     match_.timeLimit = std::max(0, match_.url.intOption("TimeLimit", 0));
     match_.gameTeamStatus = match_.url.intOption("GameTeamStatus", 0);
     match_.teamIndex = lobby_.localTeam;
+    if (session_ && role_ != SessionRole::Offline) fillOnlineLaunch();
     FlowTrace::emit("gamelobby.startLevel", {{"url", url}});
     travel(url, true);
 }

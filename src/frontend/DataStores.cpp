@@ -188,12 +188,33 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         // participants' levels are not provided yet (0) [RE MP_PROGRESSION s4].
         const ProgressionState& pr = flow_.profile().progression;
         const std::string prime = pr.prime ? "1" : "0";
+        const bool online = flow_.sessionRole() != GameFlow::SessionRole::Offline;
+        const std::string pcTag = online ? cat_.localizeKey("$WfcPC.Online.PlatformPC") : std::string();
+        // An online human's row (D11 platform tag; HeadsetState, the original column, 3.12: a muted member shows at most
+        // "voice on"; a proximity speaker gets the "Near" tag, which Hud_GFX's talker list shows).
+        auto onlineRow = [&](const GameFlow::OnlineMember& m, std::string& headset) {
+            const std::string nm = (m.info.displayName.empty() ? std::string("Player") : m.info.displayName) + "  " +
+                                   (m.info.platform == SessionPlatform::Web ? cat_.localizeKey("$WfcPC.Online.PlatformWeb") : pcTag);
+            const GameFlow::VoiceState vs = flow_.voiceStateOf(m.info.id);
+            const int hs = flow_.isMuted(m.info.id) ? std::min(vs.headsetState, 1) : vs.headsetState;
+            headset = std::to_string(hs);
+            return hs == 2 && vs.via == 2 ? nm + "  " + cat_.localizeKey("$WfcPC.Voice.VoiceNearTag") : nm;
+        };
+        const std::string localName = online ? playerName() + "  " + pcTag : playerName();
+        const std::string localHeadset = online ? std::to_string(flow_.localHeadsetState()) : std::string("0");
         if (live && !mv.players.empty()) {
             // Gameplay's match roster (local player first as in GRI order of joining).
             for (const MatchValues::Player& p : mv.players) {
-                if (p.local)
-                    c.rows.push_back({playerName(), std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
-                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0", "0", "", "0", "0", prime, "", "",
+                const GameFlow::OnlineMember* om = online && p.remote ? flow_.memberForPlayer(p) : nullptr;
+                if (om) {   // another peer's human: its row as in the lobby, with the match's score
+                    std::string headset;
+                    const std::string nm = onlineRow(*om, headset);
+                    c.rows.push_back({nm, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score), std::to_string(p.kills),
+                                      std::to_string(p.deaths), p.dead ? "1" : "0", headset, "", "0", "0", "0", "", "", "0", "0", "0", "0",
+                                      std::to_string(p.level ? p.level : om->info.level)});
+                } else if (p.local)
+                    c.rows.push_back({localName, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
+                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0", localHeadset, "", "0", "0", prime, "", "",
             std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
@@ -212,26 +233,18 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             }
             return true;
         }
-        c.rows.push_back({playerName(), std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
+        c.rows.push_back({localName, std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
                           std::to_string(live ? mv.kills : 0), std::to_string(live ? mv.deaths : 0), live && mv.dead ? "1" : "0",
-                          "0", "", "0", "0", prime, "", "",
+                          localHeadset, "", "0", "0", prime, "", "",
             std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
         c.enabled.push_back(true);
-        if (flow_.sessionRole() != GameFlow::SessionRole::Offline) {   // online lobby: the other humans, with platform tags (D11)
-            const std::string pc = cat_.localizeKey("$WfcPC.Online.PlatformPC"), web = cat_.localizeKey("$WfcPC.Online.PlatformWeb");
-            c.rows.back()[0] += "  " + pc;
+        if (online) {   // online lobby: the other humans
             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
-                const std::string nm = (m.info.displayName.empty() ? std::string("Player") : m.info.displayName) + "  " +
-                                       (m.info.platform == SessionPlatform::Web ? web : pc);
-                // HeadsetState (the original column, 3.12): a muted member shows at most "voice on"; a proximity speaker gets
-                // the "Near" tag after its name (the HUD talker list reads these rows)
-                const GameFlow::VoiceState vs = flow_.voiceStateOf(m.info.id);
-                const bool muted = flow_.isMuted(m.info.id);
-                const int headset = muted ? std::min(vs.headsetState, 1) : vs.headsetState;
-                const std::string shown = headset == 2 && vs.via == 2 ? nm + "  " + cat_.localizeKey("$WfcPC.Voice.VoiceNearTag") : nm;
-                c.rows.push_back({shown, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", std::to_string(headset), "", "0",
+                std::string headset;
+                const std::string shown = onlineRow(m, headset);
+                c.rows.push_back({shown, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", headset, "", "0",
                                   m.connecting ? "1" : "0", "0", "", "", "0", "0", "0", "0", std::to_string(m.info.level)});
                 c.enabled.push_back(true);
             }

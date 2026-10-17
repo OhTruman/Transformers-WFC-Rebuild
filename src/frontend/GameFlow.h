@@ -71,6 +71,8 @@ struct MatchValues {
         bool bot = false;              // Gameplay ParticipantKind::Bot (PC ADAPTATION: the original lists no bots)
         int level = 0;                 // Gameplay's displayed level (bots: generated)
         std::string specialty;         // applied at the last spawn
+        bool remote = false;           // Gameplay ParticipantKind::Remote: another peer's human (online)
+        std::string member;            // its session member (Gameplay MatchPlayer::sessionMember; "" = the host / unknown)
     };
     std::vector<Player> players;
 };
@@ -85,6 +87,11 @@ struct MatchLaunch {
     int rounds = 0;             // GetIntOption("Rounds")
     int timeLimit = 0;          // GetIntOption("TimeLimit"), seconds (GameInfo.InitGame)
     int teamIndex = -1;         // 0 Autobots, 1 Decepticons (lobby FinalCountdown; survives seamless travel)
+    // Online (empty offline): the host's published slots in order, this player's id ("" on the host) and every member's
+    // display name ("" id = the host). Gameplay makes the human slots other than self ParticipantKind::Remote participants.
+    std::vector<SessionSlot> onlineSlots;
+    SessionMemberId self;
+    std::vector<std::pair<SessionMemberId, std::string>> onlineNames;
     int gameTeamStatus = 0;
 };
 
@@ -289,6 +296,8 @@ public:
     // the channel; mutes are local and kept per fingerprint in the profile; the push-to-talk key state goes to the session.
     struct VoiceState { int headsetState = 0, via = 0; };
     VoiceState voiceStateOf(const SessionMemberId& m) const;
+    const OnlineMember* memberForPlayer(const MatchValues::Player& p) const;   // a Remote roster row's member (id, else name)
+    int localHeadsetState() const;   // this player's HeadsetState: 0 voice off, 1 on, 2 transmitting (push-to-talk held)
     bool isMuted(const SessionMemberId& m) const;
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
@@ -381,6 +390,7 @@ private:
     std::string voiceSent_;                             // the voice settings last sent (send on change)
     bool pttHeld_ = false;
     void syncVoiceSettings();
+    void fillOnlineLaunch();
     // Group E: the session ends for this player (host lost, connection lost, kicked, a late version mismatch) -> the party
     // lobby with the original text; a desync -> the game lobby. The popup waits until the travel has landed.
     void endSession(const char* titleKey, const char* messageKey, const char* why);

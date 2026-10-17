@@ -1429,7 +1429,7 @@ void FrontendRuntime::draw(int w, int h) {
 //   HostOpened,<code>,<address>  HostFailed[,nat]  JoinProgress  Joined[,<mode>,<mapId>]  MatchInProgress[,<mode>,<mapId>]
 //   JoinFailed,full|timeout|version|map|invalid  LobbyState,<mode>,<mapId>  MemberJoined,<fingerprint>,<name>[,web]
 //   MemberLeft,<fingerprint>  CountdownStarted  PeerLoaded,<fingerprint>  AllLoaded[,<tick>]  PeerDropped,<fingerprint>
-//   HostLost  ConnectionLost[,timeout]  Desync[,<tick>]  Kicked  MemberVoice,<fingerprint>,<0|1|2>
+//   HostLost  ConnectionLost[,timeout]  Desync[,<tick>]  Kicked  MemberVoice,<fingerprint>,<0|1|2>[,<via>]
 void FrontendRuntime::injectDevSession(const std::string& spec) {
     if (!devFake_) return;
     std::vector<std::string> a;
@@ -1463,7 +1463,7 @@ void FrontendRuntime::injectDevSession(const std::string& spec) {
     }
     case T::ConnectionLost: e.timedOut = arg(1) == "timeout"; break;
     case T::Desync: case T::AllLoaded: e.value = std::atoll(arg(1, "0").c_str()); break;
-    case T::MemberVoice: e.headsetState = std::atoi(arg(2, "0").c_str()); break;
+    case T::MemberVoice: e.headsetState = std::atoi(arg(2, "0").c_str()); e.voiceVia = std::atoi(arg(3, "0").c_str()); break;
     default: break;
     }
     devFake_->inject(e);
