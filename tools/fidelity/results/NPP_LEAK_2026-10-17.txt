@@ -1,0 +1,76 @@
+Nonpaged-pool leak series, 2026-10-17 05:23 (Experimental; tools/fidelity/leak-arm.sh + pooltags.ps1 + leak_report.py)
+Snapshot 04:13: counter 7.16 GB, tagged 5.50 GB; top tags CORP 1287 MB, LTUF 1211, SFRF 1113, RFRF 327, DVEF 132 = FlightRecorder.sys (Malwarebytes EDR Driver 2.0.7.0, boot start).
+
+idle_0417 04:14:02-04:29:34: pool 7160 -> 7221 MB (+61); slope +205 MB/h (16 samples)
+tags 04:14:02 -> 04:29:35: tagged nonpaged +305.9 MB, of which FlightRecorder.sys +211.5 MB
+  SFRF     +81.92 MB  FlightRecorder.sys
+  LTUF     +80.26 MB  FlightRecorder.sys
+  FMsc     +67.20 MB  fltMgr.sys
+  CORP     +38.48 MB  FlightRecorder.sys
+  RFRF     +11.74 MB  FlightRecorder.sys
+  File      +9.21 MB  acpi.sys,acpiex.sys,Acx01000.sys...
+  NtxF      +6.08 MB  ntfs.sys
+  MmSd      +5.75 MB  ?
+  DVEF      +3.82 MB  FlightRecorder.sys
+  MmCa      +2.94 MB  cbfs26.sys,cbfs4.sys,exfat.sys...
+  FMsl      +1.89 MB  fltMgr.sys
+  None      +0.56 MB  arcsas.sys,athw8x.sys,cht4dx64.sys...
+  CcSc      -0.59 MB  ?  (largest drop)
+  NtxI      -1.25 MB  ntfs.sys  (largest drop)
+  eGrA      -4.97 MB  FlightRecorder.sys,mbae.sys,MbamChameleon.sys...  (largest drop)
+
+verify_0425 04:24:27-04:59:42: pool 7216 -> 7249 MB (+32); slope +47 MB/h (36 samples)
+tags 04:24:28 -> 04:59:43: tagged nonpaged +172.5 MB, of which FlightRecorder.sys +115.0 MB
+  CORP     +44.40 MB  FlightRecorder.sys
+  RFRF     +29.78 MB  FlightRecorder.sys
+  LTUF     +18.31 MB  FlightRecorder.sys
+  File     +17.65 MB  acpi.sys,acpiex.sys,Acx01000.sys...
+  SFRF     +14.81 MB  FlightRecorder.sys
+  FMsc     +14.57 MB  fltMgr.sys
+  MmCa      +8.10 MB  cbfs26.sys,cbfs4.sys,exfat.sys...
+  DVEF      +4.67 MB  FlightRecorder.sys
+  FMsl      +4.34 MB  fltMgr.sys
+  NtxF      +3.69 MB  ntfs.sys
+  NtxI      +3.64 MB  ntfs.sys
+  eGrA      +2.51 MB  FlightRecorder.sys,mbae.sys,MbamChameleon.sys...
+  Irp       -0.12 MB  AppleLowerFilter.sys,BTHUSB.SYS,ks.sys...  (largest drop)
+  Thre      -0.18 MB  1394ohci.sys,acpi.sys,Acx01000.sys...  (largest drop)
+  VoSb      -0.22 MB  volsnap.sys  (largest drop)
+
+armB_d3d12present 04:37:57-05:01:44: pool 7226 -> 7261 MB (+35); slope +63 MB/h (24 samples)
+tags 04:37:57 -> 05:01:45: tagged nonpaged +129.4 MB, of which FlightRecorder.sys +86.3 MB
+  CORP     +30.60 MB  FlightRecorder.sys
+  RFRF     +24.65 MB  FlightRecorder.sys
+  LTUF     +14.29 MB  FlightRecorder.sys
+  SFRF     +11.41 MB  FlightRecorder.sys
+  FMsc     +10.75 MB  fltMgr.sys
+  File     +10.37 MB  acpi.sys,acpiex.sys,Acx01000.sys...
+  MmCa      +4.53 MB  cbfs26.sys,cbfs4.sys,exfat.sys...
+  DVEF      +3.15 MB  FlightRecorder.sys
+  eGrA      +1.86 MB  FlightRecorder.sys,mbae.sys,MbamChameleon.sys...
+  FMsl      +1.39 MB  fltMgr.sys
+  Thre      +1.15 MB  1394ohci.sys,acpi.sys,Acx01000.sys...
+  NtxI      +1.07 MB  ntfs.sys
+  WfpH      -0.03 MB  FWPKCLNT.SYS,netio.sys,tcpip.sys  (largest drop)
+  FSro      -0.05 MB  ?  (largest drop)
+  FMic      -0.06 MB  fltMgr.sys  (largest drop)
+
+armB_d3d12present 04:37:57-05:07:57: pool 7226 -> 7284 MB (+59); slope +111 MB/h (30 samples)
+tags 04:37:57 -> 05:07:57: tagged nonpaged +148.6 MB, of which FlightRecorder.sys +99.7 MB
+  CORP     +34.98 MB  FlightRecorder.sys
+  RFRF     +27.51 MB  FlightRecorder.sys
+  LTUF     +17.20 MB  FlightRecorder.sys
+  SFRF     +13.88 MB  FlightRecorder.sys
+  FMsc     +12.91 MB  fltMgr.sys
+  File     +11.84 MB  acpi.sys,acpiex.sys,Acx01000.sys...
+  MmCa      +5.08 MB  cbfs26.sys,cbfs4.sys,exfat.sys...
+  DVEF      +3.60 MB  FlightRecorder.sys
+  eGrA      +2.06 MB  FlightRecorder.sys,mbae.sys,MbamChameleon.sys...
+  FMsl      +1.96 MB  fltMgr.sys
+  NtxF      +1.68 MB  ntfs.sys
+  NtxI      +1.41 MB  ntfs.sys
+  EtwB      -0.06 MB  ?  (largest drop)
+  WfpA      -0.12 MB  FWPKCLNT.SYS,netio.sys,tcpip.sys  (largest drop)
+  CcBc      -0.14 MB  ?  (largest drop)
+
+Arm B run 32 (pid 19880): exit hang after 'smoke test complete' (watchdog: no frame for 65.5 s after endFrame), unkillable (1 thread in kernel); minidump work/leak/armB_d3d12present/run-32/arm-r1/wfc_hang_19880_0.dmp. Presenter phase line: throttle 0.000 / 0.00 (the per-frame CreateEventW path unused).
