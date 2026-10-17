@@ -111,6 +111,17 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "BotsExtended") bots.extended = v == "1";
             else if (k == "BotsEdited") bots.editedSinceMap = v == "1";
             else if (k == "OriginalChassisLocks") originalChassisLocks = v == "1";
+        } else if (section == "[Tutorials]") {
+            if (k == "Shown") {
+                tutorialsShown.clear();
+                size_t a = 0;
+                while (a <= v.size()) {
+                    size_t b = v.find(',', a);
+                    if (b == std::string::npos) b = v.size();
+                    if (b > a) tutorialsShown.push_back(v.substr(a, b - a));
+                    a = b + 1;
+                }
+            }
         } else if (section == "[Progression]") {
             const int sp = progression::specialtyIndex(k.size() > 2 && k.rfind("Xp", 0) == 0 ? k.substr(2) : std::string());
             const int lm = progression::specialtyIndex(k.size() > 9 && k.rfind("LastMatch", 0) == 0 ? k.substr(9) : std::string());
@@ -174,6 +185,11 @@ void LocalProfile::save() const {
     }
     for (const auto& [id, t] : progression.tiers) if (t > 0) f << "Tier." << id << "=" << t << "\n";
     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
+    if (!tutorialsShown.empty()) {   // CAMPAIGN_HUD_PLAN.md E5: only when not empty (versus profiles unchanged)
+        f << "\n[Tutorials]\nShown=";
+        for (size_t i = 0; i < tutorialsShown.size(); ++i) f << (i ? "," : "") << tutorialsShown[i];
+        f << "\n";
+    }
 }
 
 } // namespace frontend

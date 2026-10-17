@@ -74,6 +74,10 @@ public:
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
     // challenge stats / tiers); offline it lives in the local profile [PC ADAPTATION storage, original values].
     ProgressionState progression;
+    // Campaign tutorial messages already shown (TnProfileSettings HasShownTutorialMessage / MarkTutorialMessageAsShown:
+    // each type once per profile; CAMPAIGN_HUD_PLAN.md E5, C4 decided: profile-scoped). [Tutorials] Shown=, only written
+    // when not empty, so versus profiles are unchanged.
+    std::vector<std::string> tutorialsShown;
     // Original chassis locks ([PCSettings] OriginalChassisLocks): the authored LockedChassis (Car5 / Jet8 via campaign
     // completion, 16 more with no known unlock path) apply only when set; default off = every chassis available
     // (PC ADAPTATION, pending the user's decision).

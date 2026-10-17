@@ -817,6 +817,48 @@ static void testCampaignObjectives() {
           std::to_string(reopened) + std::to_string(none));
 }
 
+static void testCampaignTutorials() {
+    // E5: once per profile (C4), the HUD call with the localized text, versus silent, the record survives a reload.
+    std::remove("wfc_profile.ini");
+    {
+        FrontendRuntime rt;
+        check(rt.init(), "tutorials.init");
+        RecordingPresenter p;
+        HudFrame fr; fr.valid = true;
+        rt.hud().setFrame(fr);
+        auto frame = [&]() { rt.hud().update(&p, rt.catalog(), true, true); };
+        auto count = [&]() { int n = 0; for (const auto& c : p.calls) n += c.rfind("_global.NotifyTutorialMessage(", 0) == 0; return n; };
+        frame(); p.calls.clear();
+        const bool versus = !rt.showTutorialMessage("TMT_SeeHealthTutorial");
+        frame();
+        const bool versusSilent = versus && count() == 0 && rt.flow().profile().tutorialsShown.empty();
+        rt.flow().setCampaignForTest(true);
+        const bool first = rt.showTutorialMessage("TMT_SeeHealthTutorial");
+        frame();
+        const bool sent = count() == 1 && p.has("_global.NotifyTutorialMessage(Health)");
+        p.calls.clear();
+        const bool again = !rt.showTutorialMessage("TMT_SeeHealthTutorial");
+        const bool unknown = !rt.showTutorialMessage("TMT_NoSuchTutorial");
+        const bool second = rt.showTutorialMessage("TMT_SeePickupTutorial");
+        frame();
+        check(versusSilent && first && sent && again && unknown && second && count() == 1 && p.has("_global.NotifyTutorialMessage(Pickups)"),
+              "hud.campaign_tutorial_once",
+              std::to_string(versusSilent) + std::to_string(first) + std::to_string(sent) + std::to_string(again) + std::to_string(unknown) + std::to_string(second));
+    }
+    {
+        std::ifstream in("wfc_profile.ini");
+        frontend::LocalProfile q;
+        q.loadFrom(in);
+        in.close();
+        check(q.tutorialsShown == std::vector<std::string>{"TMT_SeeHealthTutorial", "TMT_SeePickupTutorial"}, "profile.tutorials_shown_persisted");
+        FrontendRuntime rt2;
+        rt2.init();
+        rt2.flow().setCampaignForTest(true);
+        check(!rt2.showTutorialMessage("TMT_SeeHealthTutorial") && rt2.showTutorialMessage("TMT_ShootingTutorial"), "hud.campaign_tutorial_next_session");
+    }
+    std::remove("wfc_profile.ini");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -832,6 +874,7 @@ int main() {
     testFakeSession();
     testCampaignStrings();
     testCampaignObjectives();
+    testCampaignTutorials();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

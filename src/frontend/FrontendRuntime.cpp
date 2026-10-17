@@ -1397,6 +1397,27 @@ void FrontendRuntime::draw(int w, int h) {
     presenter_->draw(flow_, w, h);
 }
 
+bool FrontendRuntime::showTutorialMessage(const std::string& type) {
+    if (!flow_.campaign()) return false;
+    LocalProfile& p = flow_.profile();
+    if (std::find(p.tutorialsShown.begin(), p.tutorialsShown.end(), type) != p.tutorialsShown.end()) {
+        FlowTrace::emit("campaign.tutorial", {{"type", type}, {"shown", "false"}, {"why", "already shown for this profile"}});
+        return false;
+    }
+    const std::string raw = catalog_.localize("TransGame", "TutorialMessages", type);
+    if (raw.empty()) {
+        FlowTrace::emit("campaign.tutorial", {{"type", type}, {"shown", "false"}, {"why", "no TutorialMessages text"}});
+        return false;
+    }
+    const std::string text = prompts_.translate(raw, device_.pad());   // TranslateCommandsInString
+    hud_.tutorialMessage(text);
+    if (audio_) audio_->playUiSound("WHSH_TUTORIAL_BOX");   // BL_LVL_HUD_INTERFACE.WHSH_TUTORIAL_BOX (script side)
+    p.tutorialsShown.push_back(type);                       // MarkTutorialMessageAsShown
+    p.save();
+    FlowTrace::emit("campaign.tutorial", {{"type", type}, {"shown", "true"}, {"text", text}});
+    return true;
+}
+
 std::string FrontendRuntime::titleText() const {
     return "WFC Rebuild | " + flow_.stateSummary();
 }

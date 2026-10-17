@@ -104,6 +104,7 @@ public:
     void causedDamage() { events_.push_back({"CausedDamage", {}}); }                      // hit marker
     void contextualCommand(int action, const std::string& text) { events_.push_back({"NotifyContextualCommand", {0, action, text}}); }
     void addObjective(const std::string& text) { events_.push_back({"AddObjective", {text}}); }
+    void tutorialMessage(const std::string& text) { events_.push_back({"NotifyTutorialMessage", {text}}); }   // E5
     void ammoAdded(int amount, const std::string& weapon) { events_.push_back({"NotifyAmmoAdded", {amount, weapon}}); }
     void cantTransform() { events_.push_back({"NotifyCantTransform", {}}); }
     void transformDisrupted(bool on) { events_.push_back({"TransformDisrupted", {on}}); }
