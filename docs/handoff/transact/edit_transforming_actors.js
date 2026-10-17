@@ -154,9 +154,9 @@ ed('src/core/Application.cpp', [
      '    for (const auto& a : T.actors()) {\n' +
      '        if (a.startDesired != 0) continue;\n' +
      '        if (a.bridge) {\n' +
-     '            for (const auto& b : a.boxes) {\n' +
+     '            for (const auto& b : a.boxes) {   // versus (option c): retracted, hidden, no collision\n' +
      '                core::Vec3 p0, p1; through(a, b, a.t, p0, p1); ++bridgeTotal;\n' +
-     '                bridgeSolid += a.collide && !a.hidden && hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1) && hitsActor(world_.weaponCollisionWorld(), a, true, p0, p1);\n' +
+     '                bridgeSolid += !a.collide && a.hidden && !hitsActor(world_.pawnCollisionWorld(), a, false, p0, p1) && !hitsActor(world_.weaponCollisionWorld(), a, true, p0, p1);\n' +
      '            }\n' +
      '        } else {\n' +
      '            ++doorTotal;\n' +
@@ -171,7 +171,7 @@ ed('src/core/Application.cpp', [
      '        }\n' +
      '    }\n' +
      '    if (doorTotal) check(doorOpen == doorTotal, "versus: the Escalation-map doors start open, their doorways clear (" + std::to_string(doorOpen) + "/" + std::to_string(doorTotal) + ")");\n' +
-     '    if (bridgeTotal) check(bridgeSolid == bridgeTotal, "versus: the bridges start extended and solid (" + std::to_string(bridgeSolid) + "/" + std::to_string(bridgeTotal) + " boxes)");\n' +
+     '    if (bridgeTotal) check(bridgeSolid == bridgeTotal, "versus: the bridges stay retracted, hidden and without collision (" + std::to_string(bridgeSolid) + "/" + std::to_string(bridgeTotal) + " boxes)");\n' +
      '    // Level-start transforms (Rust): open after the clip; the closed pose no longer blocks.\n' +
      '    run(4.0f);\n' +
      '    int opened = 0, openTotal = 0;\n' +

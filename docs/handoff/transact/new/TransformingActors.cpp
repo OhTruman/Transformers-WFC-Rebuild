@@ -98,11 +98,11 @@ bool TransformingActors::load(const std::string& mapName, const std::string& man
 
 void TransformingActors::resetForNewMatch(CollisionWorld& pawn, CollisionWorld* weapon, bool escalation) {
     for (Actor& a : actors_) {
-        if (!escalation && a.startDesired == 0) {
+        if (!escalation && a.startDesired == 0 && !a.bridge) {
             // Versus on the Escalation-only maps (BrokenHope / Remnant: CompatibleGameTypes SV, RE MP_TRANSFORMING_ACTORS_RE.md section 4):
-            // no authored versus state. Integration decision 2026-10-17: the fully connected late-Escalation layout, every actor
-            // Transformed from the start (t = length, no animation; bridges extended, shown and colliding: TransformBridgeN's
-            // ChangeCollision + UnHide).
+            // no authored versus state. Integration decision 2026-10-17 (option c): the doors Transformed from the start (t = length, no
+            // animation; the late-Escalation layout). The BrokenHope bridges keep their Escalation start state (retracted, hidden, no
+            // collision) until AssetTools bakes the extended decks into BrokenHope's bot_nav; then they extend in versus too.
             a.t = a.length; a.desired = 1; a.hidden = false; a.collide = true;
             a.posedT = -1.0f;
             pose(a, pawn, weapon);

@@ -8,8 +8,9 @@
 //   - BrokenHope / Remnant are Escalation-only maps in the original (CompatibleGameTypes SV, RE section 4): there the doors start
 //     closed and open on the SurvivalGenerator's "New Power Level" for good; the bridges start retracted (PreGameplaySetup Untransform +
 //     ChangeCollision NoCollision + Hide) and TransformBridgeN extends them (ChangeCollision + UnHide; their body bone does not animate).
-//   - VERSUS on those two maps (no authored state; Integration decision 2026-10-17): every actor starts Transformed, the fully connected
-//     late-Escalation layout (doors open, bridges extended and colliding), with no animation at the start.
+//   - VERSUS on those two maps (no authored state; Integration decision 2026-10-17, option c): the doors start Transformed (open, no
+//     animation: the late-Escalation layout); the bridges keep their Escalation start state (retracted, hidden, no collision) until
+//     BrokenHope's bot_nav carries the extended decks (AssetTools, queued).
 //   - Rust doors: Transform at level start in every mode (SequenceActivated -> TransformWorldProp).
 // - Nav: the bot nav cells under a colliding actor's resting boxes are unusable (BotNav::setBlocked).
 // Gameplay owns the state; Rendering draws each actor's skeletal mesh (glb) at its matrix with the clip at time t, unless hidden.
