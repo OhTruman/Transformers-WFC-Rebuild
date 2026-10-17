@@ -1227,6 +1227,11 @@ bool addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
             row(vl, "<PCSettings:VolumetricLighting>", "$WfcPC.Settings.VolumetricLightingDesc", "$WfcPC.Settings.VolumetricLighting");
         }
     }
+    {   // PC EXTENSION (user decision, next head): the sun's lens flares (Rendering's renderer side); Original = the shipped look
+        std::vector<gfx::avm1::Value> lf;
+        add(lf, 0, "Off"); add(lf, 1, "$WfcPC.Settings.LensFlaresSubtle"); add(lf, 2, "$WfcPC.Settings.LensFlaresOriginal");
+        row(lf, "<PCSettings:LensFlares>", "$WfcPC.Settings.LensFlaresDesc", "$WfcPC.Settings.LensFlares");
+    }
     {   // PC EXTENSION (user playtest 2026-10-13): the FPS counter in the top-right corner
         std::vector<gfx::avm1::Value> fc;
         add(fc, 0, "Off"); add(fc, 1, "On");
