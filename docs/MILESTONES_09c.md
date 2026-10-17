@@ -3343,3 +3343,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   diffs ~15:45, same-match + control, eye pass on the card after the Frontend) -> hold ~17:00-19:00 with the no-interpreter
   broadcast + acks. AssetTools re-measures the slim list at 057aded3; Systems builds package 7 from it after the gate PASS.
   Next head: flares, auto-D, homing lock / mines, Frontend capture fixes.
+2026-10-17 15:16 Frontend CARD FREE 15:16 (read to follow); killer cam: no hud.spectateTarget during the whole spectate window (death 1444,
+  Spectating 1502-1552) -> Gameplay checks World's target timing, Frontend checks the glue's field detection; next head. Card ->
+  Rendering x20 (6 min: the flare box fix (authored min..max, not centred) + WFC_LFLOG coverage log) -> Experimental's eye pass.
