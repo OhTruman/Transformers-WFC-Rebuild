@@ -2433,3 +2433,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   card queue: Rendering (Streets X3 haze match run, X6 captures / identity / eye sheet) -> Gameplay (patch 2 crop slot) ->
   Systems (death cue paced run, FXINACTIVE rows) -> Experimental (presenter-fix 64-run loop, FG-on, resize; gaps). CPU work open
   on every lane; AssetTools option A; RE lane TnShake units.
+2026-10-17 06:42 Rendering card slot 06:17-06:58: Streets X3 haze step CLOSED (0.0004 vs 0.0007 within noise on the matched exe, thinner
+  shafts; row stays 0.0007; the eye-pass Streets note stays accepted). Identity PASS int_base11 (d2573ccc) vs int_cand15
+  (presenter event 9015c4e9, fence fix 8736608c, body bit 403e462a + X3 timer, Camera roll e5fc6d65, X6 round 1 66689c92):
+  Off / Faithful 5 / 5 byte-identical, SIMHASH 9601 equal. X6 FAILS the eye bar so far: rounds 1 / 2 read as darker blotches,
+  not a sheen (the highlight term does not reach those floors; X2 lightmap-specular path suspected); round 3 in code, X6 not
+  merged. Card -> Gameplay patch 2 crop slot 06:58 (+ Rust / BrokenHope transforming-actor shots), then Systems.
+  RE lane: MP_TRANSFORMING_ACTORS_RE.md (f60eccb0), CAMPAIGN_STREAMING_RE.md (24a0d4d3); Gameplay design
+  GAMEPLAY_TRANSFORMING_ACTORS.md (af3fc036): Gameplay state + collision, Rendering draws at the pose. AssetTools: verdict
+  exemption + streaming runtime revision merged (86dd5de6); matinee export started (~3-3.5 h).
