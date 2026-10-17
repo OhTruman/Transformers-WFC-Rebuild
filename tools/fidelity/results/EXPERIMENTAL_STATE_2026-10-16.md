@@ -1,3 +1,9 @@
+# 2026-10-17 15:16 state - PACKAGE 7 GATE IN PREP
+- Head candidate 057aded3 (Integration 15:1x; lens flares out). Integration frozen for code until the gate ends.
+- Steps: build head (running, work/ab/fast_057aded) -> base = af4d0731 + hover + runner + Gameplay's re-cut TRANSACT + weapon-batch sim-only diffs (~15:45, into tools/fidelity/gatebase/) via P7_BASE_ITEMS -> headless same-match + negative control (p7-gate.sh pre does it) -> the head's eye pass on Integration's card relay (~15:20+) -> hold ~17:00: broadcast to all 7 sessions (text in PACKAGE7-GATE.md section 4), collect acks, then bash tools/fidelity/p7-gate.sh 057aded3 gate (~1 h 50 card; render snapshot + CONTAMINATED reruns + pool guard inside).
+- If a reboot interrupts: remove work/PERF_HOLD if present; rerun 'gate' (SKIP_BUILD is set inside).
+- Also today: NET.identity PASS on e5bc5a22 (results/NET_IDENTITY_e5bc5a22.md); identity 1e11edc2 PASS; (B) material pass; presenter fix PASS.
+
 # 2026-10-17 07:09 state
 - DONE (CPU): HANG_DUMPS.md (577a9ae4), NETCODE_HARNESS.md (109fa919; Systems questions in section 7), package 7 head ledger results/PACKAGE7_HEADS.md (a2ee795b = frame-identical).
 - CARD QUEUE (4th, by Integration's relay): 1) powershell -File tools/fidelity/load-stall.ps1 -Exe work/ab/fast_af4d073/build-release/bin/wfc_rebuild.exe -OutDir work/loadstall/af4d073 (~10 min, untimed); 2) bash tools/fidelity/presenter-verify.sh cand15 'F:/Transformers Rebuild/Rebuild-Rendering/work/int_cand15/build/bin/wfc_rebuild.exe' 64 (~70 min; FG run re-checks the 10-12 FSR 3 crashes).
