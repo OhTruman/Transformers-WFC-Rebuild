@@ -2843,3 +2843,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   a scalar offset to x and y, chain ... x UniformScalar_2 (x20), x 4, kill s² < 0.1, clamp ±255, x 1/255 = exactly our
   translation (e418b3f6 stands): the death swirl is authentic in form and strength. Only the apply pass is unread (RE next).
   The revert 2e9ad1bf stands as the correct state.
+2026-10-17 10:43 MERGED 104b31cc Decoy Trap ability (Gameplay; RE spec + AssetTools manifest; DECOYTEST 10 / 10 headless on the merged head; SIMHASH
+  equal, bots never pick it; hooks for Rendering's pickup-mesh draw and Systems' deploy / trigger / stun-end / destroyed cues).
+  Gameplay's weapon + melee batch: RE OK + Classic re-baseline DONE (4e0aa552: 12 seeds x 4 maps x both AIs with SIMHASH; nav
+  health unchanged); only the 4-min recoil eye check remains (gap after Systems). Rendering: distortion allow-list loader stays
+  inert (bUsesDistortion is the rule); Remnant PointLightToggleable_1918 extracted by data (lighting2), world-draw question to RE.
