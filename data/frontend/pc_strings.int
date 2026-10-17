@@ -1,0 +1,23 @@
+[Online]
+JoinGameDesc=Join a friend's game with a code or an address.
+JoinPrompt=Enter a join code or an address.
+JoinExample=Code: WFC-XXXX-XXXX   Address: 192.168.1.20:7777
+JoinInvalid=That is not a join code or an address.
+HostNoPath=No connection could be opened for others to join.
+Rejoin=Rejoin
+Desync=The game has gone out of sync and cannot continue.
+HostLeaveConfirm=Leaving will end the game for everyone. Are you sure you want to leave?
+JoinCode=Join code: `c
+JoinAddress=Address: `a
+CopyCode=C: copy the join code
+IpPrivacy=Players who join can see your IP address.
+CodeCopied=Join code copied.
+HostOptionsDesc=Change the game mode settings and bots.
+MatchInProgressStatus=Match in progress
+BrowserCap=A browser player is in the game: 5 v 5 at most.
+PlatformPC=PC
+PlatformWeb=Web
+WaitingForPlayers=Waiting for `n players
+WaitingForOnePlayer=Waiting for `n player
+HostMigrated=The host left. `k is now the host.
+Resync=Resynchronising...
