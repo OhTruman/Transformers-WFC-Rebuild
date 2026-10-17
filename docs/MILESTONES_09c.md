@@ -3270,3 +3270,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   changed frames all sit on a death in view (dying robots' explosion / gib / smoke; the player's own death camera at 74-80 % of
   the frame); no change outside death moments. Experimental next: the regress base with the TRANSACT sim-only diff + the headless
   same-match check (CPU).
+2026-10-17 14:35 1723 FOUND (Gameplay): PickupFactory::tick tested only the local pawn, so placed health / overshield / ammo pickups served only the
+  local player on each peer (p1 healed 200 -> 530 where local). Fix: online every human seat is tested in match player order with
+  its own touch state; offline unchanged; bots still never take placed pickups (PARTIAL). One patch: simMatrix (1299) + pickups
+  (1723) + WFC_NET_STATEDUMP + CTF Rounds, on 9864b4cd, ETA ~15:20.
