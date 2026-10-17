@@ -2453,3 +2453,14 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (a208d3b0). Transforming actors: not drawn (working assumption from the Rust / BrokenHope shots). Card -> Systems ~06:48.
   Rendering X6 round 3 (0b6b0fd2, cand17: whole film in damp patches, roughness 0.05, sheen share >= 0.35, lobe hack removed)
   queued after Systems: Gorge + Streets first, full batch only if it reads as a sheen.
+2026-10-17 06:58 USER DIRECTION: "What else can we add to the next package? Can we add multiplayer? ... If not let's just polish the graphics
+  and gameplay and workout bugs ect. And then let's focus on multiplayer online. All gears firing, let's work nonstop all agents."
+  Integration: package 7 = polish + bugs + the fidelity items found (no online MP inside it); ONLINE MULTIPLAYER = the phase right
+  after package 7 (ahead of campaign code; campaign data prep continues in the background). Design starts now, CPU-only:
+  Frontend = ONLINE_MP_FLOWS.md (session / lobby flows); Systems (after the material job) = ONLINE_MP_ARCHITECTURE.md (input-
+  delay lockstep over UDP, desync detect / recover, relay / NAT, phases loopback -> LAN -> internet -> browser); Experimental =
+  NETCODE_HARNESS.md (two instances over loopback with latency / loss) + the old hang dumps as a bug item; RE lane =
+  ONLINE_RULES_RE.md (the original's lobby / team / JIP / host-migration / disconnect rules); AssetTools = campaign dialog manifest.
+  Merged today: a2ee795b local death sound (audio only), 24c6618c SecondsBeforeInactive map-FX freeze default ON (Systems rows
+  i-iii agree; Molten run-to-run 1-2 level noise floor documented). Debug builds OK. AssetTools matinee export merged (d2ed2698).
+  Card: Rendering X6 round 3 (Gorge + Streets first) -> Gameplay 2-min re-crop -> Experimental presenter loop.
