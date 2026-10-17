@@ -3445,3 +3445,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   explanation accepted; per-pixel A/B granted after their CARD FREE (3 min).
 2026-10-17 16:12 USER (2026-10-17 16:12): Enhanced smoke should be lit by its surroundings and shadowed / affected by nearby geometry and players ("if not
   it's okay") -> Rendering's proposal: froxel injection into X3's lit volume first, sprites as fallback.
+2026-10-17 16:13 Enhanced smoke APPROVED (Rendering): stage 1 all modes = lit (sun + shadow map + DLE ambient + local lights where available),
+  curl-noise moving soft particles, flow-blended flipbooks (~0.1-0.3 ms, ~1 day); stage 2 Realistic = froxel plumes with
+  shafts + self-shadowing for big emitters (~0.3-0.8 ms, 1-2 days). Row Smoke: Original / Enhanced (default Original).
