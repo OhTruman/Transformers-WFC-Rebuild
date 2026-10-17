@@ -3025,3 +3025,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 11:50 MERGED 041cba87 ISession::simHeld (FakeSession held from reportLoaded until AllLoaded) + 1d0ad363 the Application::runMatch
   zero-steps hold (frontend tests pass; SESSIONTEST 25 / 25). WEAPON_CAMERA_SHAKE_RE.md merged (permanent pitch climb per shot,
   transient FOV kick, single-slot view shake; per-weapon table) -> Gameplay's next weapon batch item (audit gap 1).
+2026-10-17 11:51 Correction: the weapon camera kick / shake is NOT absent: GAMEPLAY_CAMERA_RECOIL 1f1d4e17 (merged this morning) is in both eye-check
+  arms, which is why RE saw identical camera motion; it matches RE's section 5 (per-shot pitch climb, FOV kick, single-slot shake,
+  authored values). Three gaps -> a small camera-only follow-up now: ReduceRecoil x 0.35, no kick in drive / first person / guided
+  missile, the EMPShotgun row; then the wire-path local seat.
