@@ -10,7 +10,7 @@ import os, sys, json, glob
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 a = sys.argv[1:]; opt = {}
-for k in ("--ref", "--top", "--materials"):
+for k in ("--ref", "--top", "--materials", "--sub"):
     if k in a: i = a.index(k); opt[k] = a[i + 1]; del a[i:i + 2]
 BEF, AFT, OUT, MAPS, MODES = a[0], a[1], a[2], a[3].split(), a[4].split(); TOP = int(opt.get("--top", 4)); os.makedirs(OUT, exist_ok=True)
 NAMES = {"501": "Seed", "502": "Berth", "503": "Complex", "504": "Rust", "505": "BrokenHope", "506": "Remnant", "507": "Debris",
@@ -60,8 +60,8 @@ for m in MAPS:
         sa = open(os.path.join(da, "simhash.txt")).read().split() if os.path.exists(os.path.join(da, "simhash.txt")) else []
         same = "yes" if sb and sb == sa else ("no SIMHASH" if not sb or not sa else "DIFFERENT")
         stats = []
-        for fb in sorted(glob.glob(os.path.join(db, "shots", "*.bmp"))):
-            fa = os.path.join(da, "shots", os.path.basename(fb))
+        for fb in sorted(glob.glob(os.path.join(db, opt.get("--sub", "shots"), "*.bmp"))):
+            fa = os.path.join(da, opt.get("--sub", "shots"), os.path.basename(fb))
             if not os.path.exists(fa): continue
             A, B = np.asarray(Image.open(fb).convert("RGB"), np.float32), np.asarray(Image.open(fa).convert("RGB"), np.float32)
             if A.shape != B.shape: continue

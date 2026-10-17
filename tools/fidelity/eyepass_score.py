@@ -59,7 +59,7 @@ for m in maps:
                          colourful(b[scene]) - colourful(a[scene]), float((np.abs(b - a).max(-1)[scene] > THR).mean() * 100)))
         mean = [round(float(np.mean([r[i] for r in rows])), 3) for i in range(5)] if rows else None
         res[m][mo] = {"pairs": len(rows), "misaligned": mis, "dL": mean and mean[0], "dB": mean and mean[1], "C": mean and mean[2], "dM": mean and mean[3], "chg": mean and mean[4]}
-lab = {"off": "Off", "real": "Realistic", "realhd": "Realistic + Enhanced materials"}
+lab = {"off": "Off", "faithful": "Faithful (RT 1)", "real": "Realistic", "realhd": "Realistic + Enhanced materials"}
 lines += ["", f"## Difference from {lab.get(ref, ref)} (scene pixels, HUD masked; mean over same-moment pairs)", "",
           "Bigger = more visibly different from the original. Contrast 1.00 = the same contrast as Off.", "",
           "| map | mode | pairs | mean luminance change (0-255) | brighter (+) / darker (-) | contrast ratio | colourfulness change | pixels changed % | misaligned |", "|---|---|---|---|---|---|---|---|---|"]

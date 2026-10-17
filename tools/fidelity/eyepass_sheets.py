@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 out, maps, modes = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
-NAMES = {"off": "Off (original)", "real": "Realistic", "realhd": "Realistic + Enhanced materials"}
+NAMES = {"off": "Off (original)", "faithful": "Faithful (RT 1)", "real": "Realistic", "realhd": "Realistic + Enhanced materials"}
 MAPNAME = {"501": "Seed", "502": "Berth", "503": "Complex", "504": "Rust", "507": "Debris", "508": "Streets", "509": "Molten", "510": "Gorge"}
 try:
     FONT = ImageFont.truetype("arial.ttf", 28); SMALL = ImageFont.truetype("arial.ttf", 18)
