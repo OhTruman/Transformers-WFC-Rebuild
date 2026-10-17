@@ -3202,3 +3202,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   renderer at the same sim".
 2026-10-17 13:55 Gameplay CARD FREE 13:55 (gap batch done; verdicts pending). Gameplay: the ~1772 split found and fixed (an opportunistic reload
   in the player bot's brain); the 1299 damage split next. Card -> Systems' 16-min slot (13:55) -> Frontend 5 -> Experimental 10.
+2026-10-17 13:59 MERGED dd28a723 Rendering Set E (flash, haze exposure floor, Remnant light, fog in-scatter x 1.443) + the transforming-actor DRAW with
+  interpolated light maps = the DOOR HEAD complete in code (collision 814e7cf5 + draw dd28a723). Data staged + gated in the scratchpad
+  (lighting.json: Remnant +1 light + 12 interp, BrokenHope 18, Rust 2; materials_glsl: +2 door entries per map on today's live
+  files; Rendering's mat_trans_merged copies were pre-(B), so the entries were taken into the live files); install after Systems'
+  slot. Trail2 (Rendering): the Molten arc is the AUTHORED TF_Death_MED_FX streak burst the old path never drew (local-space burst on
+  a stationary socket); projectile chains physical; limb-trail length authored (19 m in 2 s), fade curves to confirm -> a close-up
+  eye check in the next slot, then merge.
