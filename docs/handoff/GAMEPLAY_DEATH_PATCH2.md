@@ -17,6 +17,12 @@ applied in this order from a tree root (new files in `corpsep2/new/`: `src/game/
 | 8 | `edit_death_fx.js` | Systems' per-entry death effects (DeathFx.inc, agents/systems 409b7f39 → `corpsep2/new/DeathFx.inc` → src/game/) |
 | 9 | `edit_death_sockets_shake.js` | The effects at the authored sockets (kDeathSockets) + TnPawn.GibbedCameraShake (RE 51cca62) |
 
+| 10 | `edit_deathfx_log.js` | DEATHFX diagnostics (WFC_CORPSETEST / WFC_DEATHFXLOG) for Systems' FX-count row |
+| 11 | `edit_default_gibs_socket.js` | The default death's gibs effect at PositionSocket |
+
+**Systems' FX-count row: PASS** on 8e4ecc6b (seeds 1 + 7): every entry matches its DeathFx row; 209 / 215 play effects at the authored
+socket, and the 6 fallbacks are deaths mid-transform. The default-death placement was fixed after it, in a208d3b0.
+
 **PROV item 2 (PokeGibs_DSYS) is CLOSED** by edit 8: TF_Death_MED_FX only, no chunks / skeletal gib / decal.
 
 Headless after all nine: BOTTEST 48 / 48 × 12, seed-7 SIMHASH identical (agents/gameplay fec7ca8a).
