@@ -60,7 +60,7 @@ Write-Host "captures base vs new:"
 $cues = Select-String -LiteralPath (Join-Path $Out 'base\wfc.log') -Pattern '\bCUE (\S+) ev' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique
 $cues | Set-Content -LiteralPath (Join-Path $Out 'cues_started.txt') -Encoding utf8
 Write-Host ("base arm distinct cues started: {0} -> {1}" -f @($cues).Count, (Join-Path $Out 'cues_started.txt'))
-$newCues = Select-String -LiteralPath $nl -Pattern 'CUE (\S+) ev' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique
+$newCues = Select-String -LiteralPath $nl -Pattern 'bCUE (\S+) ev' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique
 $only = @($newCues | Where-Object { $cues -notcontains $_ })
 Write-Host ("cues only in the new arm: {0}{1}" -f $only.Count, $(if ($only.Count) { ' (' + ($only -join ', ') + ')' } else { '' }))
 Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
