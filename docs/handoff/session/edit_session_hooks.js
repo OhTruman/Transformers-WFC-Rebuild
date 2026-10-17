@@ -42,6 +42,12 @@ ed('src/game/Match.h', [
      '                    return false;\n'],
     ['        e.text = s.type == 1 ? s.chassisId : specialtyName(s.specialty);\n    }\n',
      '        e.text = s.type == 1 ? s.chassisId : specialtyName(s.specialty);\n        return true;\n    }\n'],
+    ['        ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)\n',
+     '        ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)\n' +
+     '        RemoteIdle,           // online host rule: Remote participant `player` idle for World::kRemoteIdleKickSeconds; the session kicks that peer\n'],
+    ['    const std::vector<MatchEvent>& events() const { return events_; }',
+     '    void notifyRemoteIdle(int p) { emit(MatchEvent::Type::RemoteIdle, p); }   // the host idle rule fired for that Remote participant\n' +
+     '    const std::vector<MatchEvent>& events() const { return events_; }'],
 ]);
 ed('src/game/CharacterRoster.h', [[
     '    if (sel.type == 1) return sel.chassisId;                // iconic characters keep their own chassis\n',
@@ -65,12 +71,14 @@ ed('src/game/World.h', [
      '    bool applySlotSwap(const SlotSwap& s);\n' +
      '    void noteRemoteCommand(int matchPlayer);   // a command from that Remote participant arrived (resets the idle clock)\n' +
      '    int64_t simTick() const { return simTick_; }\n' +
+     '    int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)\n' +
      '    static constexpr float kRemoteIdleKickSeconds = 180.0f;   // host rule: no commands for this long -> the slot becomes a Bot\n'],
     ['    std::vector<BotBrain> bots_;\n',
      '    std::vector<BotBrain> bots_;\n' +
      '    std::vector<SlotSwap> pendingSwaps_;   // agreed handovers waiting for their tick\n' +
      '    std::vector<float> remoteIdle_;        // per match player: InProgress seconds since the last remote command\n' +
      '    int64_t simTick_ = 0;\n' +
+     '    int remoteIdleKicks_ = 0;\n' +
      '    void tickSlotSwaps(float dt);\n' +
      '    void swapSlotToBot(int p);\n' +
      '    void swapSlotToRemote(int p, const std::string& member);\n'],
@@ -80,7 +88,7 @@ ed('src/game/World.cpp', [
      '    if (opt.count("IconicMode")) out.settings.iconicMode = std::atoi(opt["IconicMode"].c_str()) != 0;   // GRI _bIconicMode (Frontend URL)\n' +
      '    if (opt.count("BotsFriendly")) out.bots.friendly'],
     ['    const int nb = addBots(l.bots);\n',
-     '    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear();\n' +
+     '    simTick_ = 0; pendingSwaps_.clear(); remoteIdle_.clear(); remoteIdleKicks_ = 0;\n' +
      '    for (const RemoteSeat& r : l.remotes) addRemoteParticipant(r);   // online: the other peers\' humans (before the bot fill counts them)\n' +
      '    const int nb = addBots(l.bots);\n'],
     ['{ if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }',
@@ -138,6 +146,8 @@ ed('src/game/World.cpp', [
      '            remoteIdle_[i] = -1e9f;   // queued once\n' +
      '            SlotSwap s; s.matchPlayer = (int)i; s.toBot = true; s.atTick = simTick_;\n' +
      '            pendingSwaps_.push_back(s);\n' +
+     '            match_.notifyRemoteIdle((int)i);   // MatchEvent RemoteIdle: the host\'s session glue kicks that peer ("Kicked for idling")\n' +
+     '            ++remoteIdleKicks_;\n' +
      '            LOG_INFO("session: p%zu idle %.0f s: kicked, the slot becomes a bot", i, kRemoteIdleKickSeconds);\n' +
      '        }\n' +
      '    for (size_t k = 0; k < pendingSwaps_.size();) {\n' +
@@ -274,6 +284,7 @@ ed('src/core/Application.cpp', [
      '    // 4) idle: r3 never sent a command -> kicked at 180 s of play, its slot a Bot; the fed ones stay Remote.\n' +
      '    run(185.0f);\n' +
      '    check(P(r3).kind == game::ParticipantKind::Bot && world_.botBrain(r3) != nullptr, "idle 180 s: the Remote slot becomes a Bot");\n' +
+     '    check(world_.remoteIdleKicks() == 1, "the idle rule fired once (MatchEvent RemoteIdle for the session kick)");\n' +
      '    check(P(r1).kind == game::ParticipantKind::Remote && P(r2).kind == game::ParticipantKind::Remote, "participants that send commands stay Remote");\n' +
      '    bool serialsOk = true; uint32_t prev = 0;\n' +
      '    for (const auto& e : world_.match().gameplayEvents()) { if (e.serial <= prev) serialsOk = false; prev = e.serial; }\n' +
