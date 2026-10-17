@@ -26,6 +26,17 @@
      insta-gib, the robot / vehicle death camera, the roll sign, and the killer cam at 3 s.
   5. Then generate the final patch from a clean af4d0731 archive + e5fc6d65 Camera.h + the 11 scripts + new/* (never from int_p2,
      which has the hooks), via `work/mkpatch.sh`. Byte-check with patch -p1, commit, and send Integration the hash.
+- **~09:00: PATCH 2 HANDED TO INTEGRATION FOR MERGE, agents/gameplay 9ac94924** (`docs/handoff/GAMEPLAY_DEATH_PATCH2.patch`).
+  - It goes on af4d0731 + Rendering e5fc6d65; the scorch is gated.
+  - The death-camera re-crop PASSED.
+  - Follow-ups: `edit_gib_materials.js` (after Systems' material compile); the scorch default on (after the DeathDecal_MAT data).
+- **Hover result:** `docs/handoff/GAMEPLAY_HOVER_RESULT.md` (decision (b), confirmed at 24 seeds).
+- **Squad follow reversals:** the first try, `hover/edit_squad_nobacktrack.js` (hold instead of walking back to an overtaken slot
+  within 8 m), did **not** reduce follow reversals at 24 seeds × 4 maps (Smart follow 2.26 / 1.80 / 0.99 / 2.22 → 2.45 / 1.53 / 1.09 /
+  2.08 per travel-min: noise). The mechanism is something else. Next: trace a squad member (WFC_NAVQTRACE) to see which goal flips.
+  - The edit stays applied in work/int_hv for now; drop it or replace it before the hover + squad patch.
+- **Campaign AI layer spec** from RE: `RE-Workspace/work/handoff/CAMPAIGN_AI_LAYER_RE.md` (6ce8158), for the campaign phase (buddies never
+  downed / instant respawn, tactical volumes, the downed fire penalties).
 - **2026-10-17 ~07:30, the crop slot was RUN** (shots in `work/pass29/p2/crop_*`; sheets in work/pass29/p2). The behaviour all passes.
   Three visual defects block the merge:
   1. the scorch draws opaque white: Rendering fixes the decal blend; if it slips past tonight, apply `corpsep2/edit_scorch_gate.js`;
