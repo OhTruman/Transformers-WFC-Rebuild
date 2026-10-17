@@ -1353,6 +1353,56 @@ static void testOnlineSessionEnd() {
     }
 }
 
+static void testOnlineVoice() {
+    using T = SessionEvent::Type;
+    {   // V1: voice settings / mutes persist; the defaults write nothing (offline profiles unchanged)
+        std::remove("wfc_profile.ini");
+        frontend::LocalProfile d;
+        d.save();
+        std::ifstream a("wfc_profile.ini"); std::stringstream as; as << a.rdbuf(); a.close();
+        frontend::LocalProfile c;
+        c.voice.mode = 2; c.voice.audience = 0; c.voice.pttKey = "Mouse 4"; c.voice.muted = {"WFC-AAAA-AAAA-1", "WFC-BBBB-BBBB-2"};
+        c.save();
+        std::ifstream b("wfc_profile.ini"); frontend::LocalProfile r; r.loadFrom(b); b.close();
+        check(as.str().find("[Voice]") == std::string::npos && r.voice.mode == 2 && r.voice.audience == 0 && r.voice.pttKey == "Mouse 4" &&
+              r.voice.muted.size() == 2 && r.voice.muted[1] == "WFC-BBBB-BBBB-2" && d.voice.mode == 1 && d.voice.audience == 3, "profile.voice_settings_persisted");
+        std::remove("wfc_profile.ini");
+    }
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    // V2: the settings reach the session when the session starts and on each change; push-to-talk only in that mode, on change
+    const bool first = r.fake->count("setVoiceSettings") == 1 && r.fake->last("setVoiceSettings")->arg == "1,3,,70";
+    r.f().profile().voice.mode = 2;
+    r.frames(2);
+    const bool changed = r.fake->count("setVoiceSettings") == 2 && r.fake->last("setVoiceSettings")->arg == "2,3,,70";
+    r.f().setPushToTalkHeld(true);
+    const bool openMicNoPtt = r.fake->count("setPushToTalk") == 0;
+    r.f().profile().voice.mode = 1;
+    r.frames(2);
+    r.f().setPushToTalkHeld(true); r.f().setPushToTalkHeld(true); r.f().setPushToTalkHeld(false);
+    check(host && first && changed && openMicNoPtt && r.fake->count("setPushToTalk") == 2 && r.fake->last("setPushToTalk")->arg == "0" &&
+          r.rt->catalog().localizeKey("$UIText.PlayerList.Gamercard") == "Mute / Unmute", "online.V2_voice_settings_and_ptt");
+    // V3: HeadsetState per row, the "Near" tag for a proximity speaker, mute from the row's A (local, persisted)
+    DataStores& ds = r.rt->dataStores();
+    r.fake->inject(memberEv("WFC-AAAA-AAAA-1", "Alpha", true));
+    SessionEvent v = ev(T::MemberVoice); v.member.fingerprint = "WFC-AAAA-AAAA-1"; v.headsetState = 2; v.voiceVia = 2;
+    r.fake->inject(v);
+    r.frames(2);
+    ds.poll();
+    const std::string talking = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
+    const std::string hs = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "HeadsetState", "1"}).s;
+    const bool muteCall = r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"}).b && r.fake->last("setMuted") &&
+                          r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,1" && r.f().profile().voice.muted.size() == 1;
+    ds.poll();
+    const std::string mutedName = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "PlayerName", "1"}).s;
+    const std::string mutedHs = ds.call("ReadCollectionValue", {"<CurrentGame:Players>", "HeadsetState", "1"}).s;
+    r.f().call("Online.ShowGamerCardUI", {"Alpha  PC"});
+    check(talking == "Alpha  PC  Near" && hs == "2" && muteCall && mutedName == "Alpha  PC" && mutedHs == "1" &&
+          r.fake->last("setMuted")->arg == "WFC-AAAA-AAAA-1,0" && r.f().profile().voice.muted.empty(), "online.V3_headset_near_mute",
+          talking + " / " + hs + " / " + mutedName + " / " + mutedHs);
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1378,6 +1428,7 @@ int main() {
     testOnlineStartLoadLeave();
     testOnlineMemberCountdown();
     testOnlineSessionEnd();
+    testOnlineVoice();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);

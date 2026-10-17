@@ -285,6 +285,13 @@ public:
     void setLoadIdentity(uint64_t simId, uint64_t loadHash) { simId_ = simId; loadHash_ = loadHash; }
     std::vector<std::string> takeGameMessages() { std::vector<std::string> v; v.swap(pendingGameMessages_); return v; }
     std::vector<SessionSlotSwap> takeSlotSwaps() { std::vector<SessionSlotSwap> v; v.swap(pendingSwaps_); return v; }
+    // Group F, voice UI state (D7 + proximity, ONLINE_MP_FLOWS.md 3.12). MemberVoice per member: HeadsetState (0 / 1 / 2) and
+    // the channel; mutes are local and kept per fingerprint in the profile; the push-to-talk key state goes to the session.
+    struct VoiceState { int headsetState = 0, via = 0; };
+    VoiceState voiceStateOf(const SessionMemberId& m) const;
+    bool isMuted(const SessionMemberId& m) const;
+    bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
+    void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
     static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
     static constexpr double kJoinBackstop = kInitialConnectTimeout + 5.0;   // the session layer owns the 50 s timeout
     std::string stateSummary() const;
@@ -370,6 +377,10 @@ private:
     std::vector<std::string> pendingGameMessages_;
     std::vector<SessionSlotSwap> pendingSwaps_;
     void updateLoadGateText();
+    std::map<std::string, VoiceState> voiceStates_;     // fingerprint -> the last MemberVoice
+    std::string voiceSent_;                             // the voice settings last sent (send on change)
+    bool pttHeld_ = false;
+    void syncVoiceSettings();
     // Group E: the session ends for this player (host lost, connection lost, kicked, a late version mismatch) -> the party
     // lobby with the original text; a desync -> the game lobby. The popup waits until the travel has landed.
     void endSession(const char* titleKey, const char* messageKey, const char* why);

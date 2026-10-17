@@ -289,6 +289,8 @@ private:
     std::function<bool()> rtLoadedQuery_;
     bool cinematicHudHidden_ = false, cinematicShowPending_ = false;
     void updateCinematicHud();
+    void updateOnlineVoice();
+    bool voiceUiOverride_ = false;
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu
     void updateHdPackHint();
     GraphicsPresetTable presets_;

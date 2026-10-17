@@ -111,6 +111,18 @@ bool LocalProfile::loadFrom(std::istream& f) {
             else if (k == "BotsExtended") bots.extended = v == "1";
             else if (k == "BotsEdited") bots.editedSinceMap = v == "1";
             else if (k == "OriginalChassisLocks") originalChassisLocks = v == "1";
+        } else if (section == "[Voice]") {
+            if (k == "Mode") voice.mode = std::clamp(std::atoi(v.c_str()), 0, 2);
+            else if (k == "Audience") voice.audience = std::clamp(std::atoi(v.c_str()), 0, 3);
+            else if (k == "Device") voice.device = v;
+            else if (k == "PushToTalkKey") voice.pttKey = v;
+            else if (k == "Volume") voice.volume = std::clamp(std::atoi(v.c_str()), 0, 100);
+            else if (k == "ProximityVolume") voice.proximityVolume = std::clamp(std::atoi(v.c_str()), 0, 100);
+            else if (k == "Muted") {
+                voice.muted.clear();
+                std::stringstream ss(v);
+                for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) voice.muted.push_back(item);
+            }
         } else if (section == "[Tutorials]") {
             if (k == "Shown") {
                 tutorialsShown.clear();
@@ -185,6 +197,12 @@ void LocalProfile::save() const {
     }
     for (const auto& [id, t] : progression.tiers) if (t > 0) f << "Tier." << id << "=" << t << "\n";
     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
+    if (!voice.isDefault()) {   // voice chat settings / mutes: only when changed (offline profiles unchanged)
+        f << "\n[Voice]\nMode=" << voice.mode << "\nAudience=" << voice.audience << "\nDevice=" << voice.device
+          << "\nPushToTalkKey=" << voice.pttKey << "\nVolume=" << voice.volume << "\nProximityVolume=" << voice.proximityVolume << "\nMuted=";
+        for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
+        f << "\n";
+    }
     if (!tutorialsShown.empty()) {   // CAMPAIGN_HUD_PLAN.md E5: only when not empty (versus profiles unchanged)
         f << "\n[Tutorials]\nShown=";
         for (size_t i = 0; i < tutorialsShown.size(); ++i) f << (i ? "," : "") << tutorialsShown[i];

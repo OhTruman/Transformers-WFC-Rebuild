@@ -7,6 +7,7 @@
 #include "core/Config.h"
 #include "core/Log.h"
 #include "platform/UiBindings.h"
+#include "platform/Keyboard.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1291,7 +1292,8 @@ static void hideRealPointer(platform::InputFrame& in) {
 }
 
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
-    updateCinematicHud();   // E7: UI event 13 once the cinematic ended and no full-screen movie plays (every frame, any level)
+    updateCinematicHud();
+    updateOnlineVoice();   // E7: UI event 13 once the cinematic ended and no full-screen movie plays (every frame, any level)
     platform::InputFrame in = input;
     hideRealPointer(in);
     script_.applySynthetic(in);
@@ -1315,6 +1317,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
 }
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
+    updateOnlineVoice();   // push-to-talk in the match too
     platform::InputFrame in = input;
     hideRealPointer(in);
     script_.applySynthetic(in);
@@ -1471,6 +1474,16 @@ void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {
     }
     FlowTrace::emit("campaign.cinematicMode", {{"on", FlowTrace::boolean(on)}, {"hideHud", FlowTrace::boolean(hideHud)},
                                                {"hudHidden", FlowTrace::boolean(cinematicHudHidden_)}});
+}
+
+void FrontendRuntime::updateOnlineVoice() {
+    const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
+    if (online != voiceUiOverride_) {   // the player row's A: "Mute / Unmute" (the original texts) while in an online session
+        voiceUiOverride_ = online;
+        catalog_.setKeyOverride("$UIText.PlayerList.Gamercard",
+                                online ? catalog_.localizeKey("$UIText.PlayerList.Mute") + " / " + catalog_.localizeKey("$UIText.PlayerList.UnMute") : std::string());
+    }
+    if (online) flow_.setPushToTalkHeld(platform::isKeyHeld(platform::virtualKeyForName(flow_.profile().voice.pttKey)));
 }
 
 void FrontendRuntime::updateCinematicHud() {

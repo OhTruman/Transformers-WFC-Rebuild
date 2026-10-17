@@ -77,6 +77,12 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
     if (markup == "<PCSettings:VolumetricLighting>") return flow_.profile().display.volumetricLighting ? "1" : "0";   // PC EXTENSION
+    if (markup == "<PCSettings:VoiceMode>") return std::to_string(flow_.profile().voice.mode);              // PC EXTENSION (voice, 3.12)
+    if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
+    if (markup == "<PCSettings:VoiceDevice>") return flow_.profile().voice.device;
+    if (markup == "<PCSettings:VoicePushToTalkKey>") return flow_.profile().voice.pttKey;
+    if (markup == "<PCSettings:VoiceVolume>") return std::to_string(flow_.profile().voice.volume);
+    if (markup == "<PCSettings:ProximityVolume>") return std::to_string(flow_.profile().voice.proximityVolume);
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
@@ -219,8 +225,14 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             for (const GameFlow::OnlineMember& m : flow_.onlineMembers()) {
                 const std::string nm = (m.info.displayName.empty() ? std::string("Player") : m.info.displayName) + "  " +
                                        (m.info.platform == SessionPlatform::Web ? web : pc);
-                c.rows.push_back({nm, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", "0", "", "0", m.connecting ? "1" : "0", "0", "", "",
-                                  "0", "0", "0", "0", std::to_string(m.info.level)});
+                // HeadsetState (the original column, 3.12): a muted member shows at most "voice on"; a proximity speaker gets
+                // the "Near" tag after its name (the HUD talker list reads these rows)
+                const GameFlow::VoiceState vs = flow_.voiceStateOf(m.info.id);
+                const bool muted = flow_.isMuted(m.info.id);
+                const int headset = muted ? std::min(vs.headsetState, 1) : vs.headsetState;
+                const std::string shown = headset == 2 && vs.via == 2 ? nm + "  " + cat_.localizeKey("$WfcPC.Voice.VoiceNearTag") : nm;
+                c.rows.push_back({shown, std::to_string(m.team), teamNameOf(m.team), "0", "0", "0", "0", std::to_string(headset), "", "0",
+                                  m.connecting ? "1" : "0", "0", "", "", "0", "0", "0", "0", std::to_string(m.info.level)});
                 c.enabled.push_back(true);
             }
         }
@@ -365,6 +377,18 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         flow_.profile().display.frameGeneration = arg(1) == "1" || arg(1) == "true" ? 1 : 0;
         FlowTrace::emit("settings.frameGeneration", {{"on", FlowTrace::boolean(flow_.profile().display.frameGeneration != 0)},
                                                      {"applies", "next launch"}, {"provenance", "PC EXTENSION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m.rfind("<PCSettings:Voice", 0) == 0 || (fn == "WriteValue" && m == "<PCSettings:ProximityVolume>")) {   // voice rows
+        LocalProfile::Voice& v = flow_.profile().voice;
+        const std::string a = arg(1);
+        if (m == "<PCSettings:VoiceMode>") v.mode = std::clamp(std::atoi(a.c_str()), 0, 2);
+        else if (m == "<PCSettings:VoiceAudience>") v.audience = std::clamp(std::atoi(a.c_str()), 0, 3);
+        else if (m == "<PCSettings:VoiceDevice>") v.device = a;
+        else if (m == "<PCSettings:VoicePushToTalkKey>") v.pttKey = a;
+        else if (m == "<PCSettings:VoiceVolume>") v.volume = std::clamp(std::atoi(a.c_str()), 0, 100);
+        else if (m == "<PCSettings:ProximityVolume>") v.proximityVolume = std::clamp(std::atoi(a.c_str()), 0, 100);
+        FlowTrace::emit("settings.voice", {{"markup", m}, {"value", a}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:VolumetricLighting>") {   // PC EXTENSION; applied by Game.ApplyProfileSettings
