@@ -113,7 +113,8 @@ bool Application::init() {
     if (nullRender && wantsFrontendBoot()) { LOG_ERROR("WFC_NULLRENDER: only for direct-boot harnesses (set the harness variable)"); return false; }
     if (nullRender) {
         renderer_ = render::createNullRenderer();
-        LOG_INFO("WFC_NULLRENDER: null render - no window, no GL context, no GPU upload, no audio device (sim-only harness boot)");
+        LOG_INFO("WFC_NULLRENDER: null render - no window, no GL context, no GPU upload, %s (sim-only harness boot)",
+                 std::getenv("WFC_NULLRENDER_AUDIO") ? "the audio mix running (WFC_NULLRENDER_AUDIO)" : "no audio device");
 #ifdef _WIN32
         SetConsoleTitleA("wfc_rebuild NULLRENDER sim (no window / GPU / audio)");   // other lanes' runners can tell it apart (no-op without a console)
 #endif
@@ -126,7 +127,9 @@ bool Application::init() {
         if (!renderer_) { LOG_ERROR("renderer creation failed"); return false; }
     }
 
-    audio_ = nullRender ? nullptr : audio::createAudio();   // null boot: no audio device either (silent by construction)
+    // null boot: no audio device either (silent by construction) - unless WFC_NULLRENDER_AUDIO=1 ([Systems] voice / reverb checks: the
+    // whole cue mix runs, with WFC_MUTE silent at the output, no window and no GPU)
+    audio_ = nullRender && !std::getenv("WFC_NULLRENDER_AUDIO") ? nullptr : audio::createAudio();
     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
 
     // Frontend boot: the match world is loaded later, from the frontend's match launch (Application_Frontend.cpp).
