@@ -3430,3 +3430,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   near-floor fog near opaque in Off + Realistic (Off mean 18 -> 41) from the low height layers x 1 / ln 2 -> Rendering shows
   authored (then re-base) or fixes the Rust fogs entry. No flare in any camera; flare-aimed views to be added. FREEZE LIFTED;
   card -> Rendering 16:05 (flare sheet 6 min + X7 25 min).
+2026-10-17 16:07 Rust near-floor fog: read rust_dark_off.png: the floor at the camera's feet is opaque while far walls are clear = fog decreasing
+  with distance = a BUG in Set D's in-layer integration or units, not a look decision (Rendering had called it authored vs the
+  thumbnail). Rendering + RE find it after the X7 slot; Rust's top layer leaves the live fogs data until fixed; no re-base.
