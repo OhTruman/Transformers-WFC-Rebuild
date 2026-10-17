@@ -86,3 +86,55 @@ question again (Rendering's open item: the vec2 `t11 × DistortionStr` vs scalar
   positive and negative offsets into separate channels for additive accumulation.
 - The literal constants (c254 / c255: the scale and threshold) sit in the blob's literal block, which `xenosdis.py` does not yet
   print. Reading them is the next step if Rendering needs the exact accumulate scale (vs our ×4).
+
+## CORRECTION (2026-10-18, later): validated parser. The 4a7ca06 union above is WRONG
+
+- **What was wrong:** the parser attributed each material's per-VF lists to the label before them. In the cooked layout a
+  record's VF lists come **before** its own `Material <path>` label (`[VF blocks…][FString label][GUID]…`, the last VF key carrying
+  no count).
+- **The fix:** `tools/shadermap_scan.py` now accepts only the contiguous VF chain that ends exactly at the label's length prefix.
+- **Validation (C):** over the Streets and BrokenHope caches, **0** materials without `bUsesDistortion` get a DistortMesh pair, and
+  **every** bUsesDistortion material does (Streets 24 / 24, BrokenHope 29 / 29). Over all 233 packages with a pair, **0** pairs land
+  on a material whose master lacks bUsesDistortion.
+
+**Corrected results (C):**
+- **BlastSphere_Death_MAT, BlastShell_MAT, Ring_Distort_Add_MAT, Rings_Distort_MAT, ScreenSplatter_01_MAT and Trail_Distort_MOD_MAT
+  all cook the DistortMesh accumulate pair.** All six are on all 10 MP maps, except BlastShell (BrokenHope, Debris).
+- **So whether a material distorts follows `bUsesDistortion`**, irrespective of blend mode. No allow-list is needed. The export is
+  kept for the record: `work/handoff/distortion_allowlist.json` (schema line inside; per package + per MP map, master paths) and
+  `work/handoff/distortion_allowlist/<MAP>.json`.
+
+**BlastSphere_Death_MAT's real distortion PS** (Streets, FParticleDynamicParameterVertexFactory, GUID 3a518ccd…; C, literals
+c252 = (−255, 10, 0, −2), c253 = (1/255, 4, 255, 1e-4), c254 = (2, 1.5, 0.001, −1), c255 = (3, 0.25, 1, 0.1)):
+- n = tex × 2 − 1;
+- p = ((1 − |n|) × 3)², with the × 3 / × 0.25 pattern terms;
+- × sat(1.5 × dot(cameraVector, Z));
+- × DepthBiasedAlpha (UniformScalar_1 = the depth bias scale);
+- × **UniformScalar_2** (20 in the material's uniform constants);
+- → **one scalar s**, then **s × 4**, **kill if s² − 0.1 < 0**, **clamp ±255**, **× 1/255**, **oC0 = (max(s, 0), max(s, 0), |min(s, 0)|,
+  |min(s, 0)|)**: the same value on both axes.
+- **Our translation (scalar × 20 on both axes, × 4 accumulate, 0.1, ±255 / 255) matches it.**
+- The ScreenSplatter / Trail_Distort_MOD PSs read earlier use the **same template literals** (× 4, 0.1, ±255, 1/255). Note: with
+  the old parser their owner attribution is unreliable, but the template part is the same in every DistortMesh PS.
+
+## The apply pass: FDistortionApplyScreenPixelShader (C, Engine.xxx ShaderCache record, blob 0x454D04 and an identical copy at 0x4FF41C)
+
+- **CTAB:** `SceneColorTexture` s0, `AccumulatedDistortionTexture` s1. Literals c255 = (0.25, −0.25, …).
+- **Code (complete):**
+  ```
+  acc = tex(AccumulatedDistortionTexture, uv)
+  uv' = uv + (acc.xy − acc.zw) × (0.25, −0.25)
+  oC0 = tex(SceneColorTexture, uv')
+  ```
+- **(a)** The scale is the constant **0.25 / −0.25** in texture space: no texel-size or resolution term. A saturated channel shoves by
+  a quarter of the screen.
+- **(d)** **No clamp, no depth comparison, no attenuation** in the apply. Foreground in front of a distorting surface is smeared too.
+- **(b) / (c)** The accumulate target format / size and its blend state are set natively, not in the shaders. **H (stock UE3):**
+  - full-resolution 8-bit RGBA (the light-attenuation / scratch surface);
+  - **ONE / ONE additive**, so each channel saturates at 1.0;
+  - this is consistent with the accumulate PS writing non-negative values ≤ 1 per channel (its × 1/255 after the ±255 clamp).
+
+**Verdict:** the original pipeline is accumulate s × 4 → clamp ±255 → / 255 → additive 8-bit → apply (acc.xy − acc.zw) × (0.25, −0.25).
+Rendering's model matches it end to end. BlastSphere_Death_MAT's input chain (scalar × 20, both axes) matches too. A swirl that looks
+too big therefore comes from an **input** difference: the depth-biased alpha (scene depth vs particle depth, DepthBiasScale), the
+particle vertex alpha / size, the SmokeTile texture or the view-angle term. It does not come from a missing or extra constant.
