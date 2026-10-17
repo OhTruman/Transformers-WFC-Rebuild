@@ -57,3 +57,6 @@ TR_Trypticon_ROBO_p.RB_TrypticonHead_NormSpec_Cust_E_Mat_INST
 WEP_TrypticonMouthCannon_p.WEP_TrypMouthCannon_MATINST
 WEP_TrypticonShoulderCannon_p.WEP_TrypShoulderCannon_MATINST
 WEP_TurretBase_p.WEP_TurretBase01_MATINST
+# Death gibs (Systems 2026-10-17, Integration): the skeletal / static gib materials (RB_GibExtra_CLR / MASK / NORM), compiled in no map
+TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST
+TR_Death_Gibs_p.Materials.DeathGib_Mat_INST

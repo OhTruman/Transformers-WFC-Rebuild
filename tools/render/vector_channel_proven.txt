@@ -3,3 +3,4 @@
 # the channel reading has none (matc type_violations; see FIDELITY.md M04). Other materials keep the
 # full-vector reading until proven (permutation checks cannot discriminate them).
 FX_Materials_p.Materials.ParticleBase_BW_MAT   # AppendVector(UVandOffset.B, UVandOffset.B): vec4+vec4 invalid; 2 violations -> 0
+FX_Decals_p.DeathDecal_MAT   # (Systems 2026-10-17) the shipped decal PS (RE TARGETED_PASS5 add. 31): oC0.rgb = 1 + G*A*((R + Blacks)*Color - 1): the lerp weight takes Color.A; full-vector reading gives m max 25.7 vs 2.24 (MetalDecal_02 / 03 MICs inherit)

@@ -1,0 +1,335 @@
+{
+ "generated_by": "tools/systems/matfix_handoff.py",
+ "source": "F:/Transformers Rebuild/Rebuild-Systems/work/matA/out",
+ "target_root": "F:/Transformers Rebuild/Rebuild/work/render",
+ "merge_base": "F:/Transformers Rebuild/Rebuild-Systems/work/matA/src",
+ "materials": [
+  "FX_Decals_p.DeathDecal_MAT",
+  "FX_Decals_p.MetalDecal_02_MAT_INST",
+  "FX_Decals_p.MetalDecal_03_MAT_INST",
+  "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+  "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+ ],
+ "maps": {
+  "MP_IAC_Streets": {
+   "current_entries": 605,
+   "non_named_identical": 602,
+   "non_named_total": 602,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "a569705d40bd9d8dc754fb3a5976de33bb2967a57800eb3985761f8df61cabc1",
+   "sha256_after": "d0a0e1ecab8fc109f704e65702b56d46cf9f2609478e7fe3a89645352cd8a08d",
+   "stale_path": false
+  },
+  "MP_ESC_BrokenHope": {
+   "current_entries": 625,
+   "non_named_identical": 622,
+   "non_named_total": 622,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "65bf7aab0022f8e92dca5c3840d58d82c39c7b25cf1996ba3e35a4cacbcf8246",
+   "sha256_after": "7ed3f410363bfe8ea7c0578e53bd8e09f74f8417bc0db02ae30cb2c47c5b9c8a",
+   "stale_path": false
+  },
+  "MP_ESC_Remnant": {
+   "current_entries": 640,
+   "non_named_identical": 637,
+   "non_named_total": 637,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "94ee6abb37ac4e9645e0b7b110b427777b016143af94fc29f7d26a55ba0a5e4e",
+   "sha256_after": "1238b4a3dc576cb037683c7a75d50d0637ae1ef3e250df93185864468f796fdf",
+   "stale_path": false
+  },
+  "MP_IAC_Berth": {
+   "current_entries": 586,
+   "non_named_identical": 583,
+   "non_named_total": 583,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "68de2c10a805a7e5f61adc39c53ea2a01699737aa33698e121685e48bfaf58ae",
+   "sha256_after": "a26712a17526886d0eb234c3c72b9a64f7b8c44455748b502b2eae92f99c81b1",
+   "stale_path": false
+  },
+  "MP_IAC_Rust": {
+   "current_entries": 669,
+   "non_named_identical": 666,
+   "non_named_total": 666,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "58e5fa2177d31e1fe8f23bae096723d8e2da1a301b0f17195ed01696983bcce2",
+   "sha256_after": "ba651b48604cefbae2bfbed50125007d13f8f087508fe2c8d9ecf6db3ebeb185",
+   "stale_path": false
+  },
+  "MP_IAC_Seed": {
+   "current_entries": 637,
+   "non_named_identical": 634,
+   "non_named_total": 634,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "d025c62b54cd5a04bacb10920bb8d6f9fed505cbc0c3b25b0f2fed0893446355",
+   "sha256_after": "b5e01b48a0e6ffbec12c61430526c7043a509a3e99f7c00b82a1832e5d6798ba",
+   "stale_path": false
+  },
+  "MP_KON_Molten": {
+   "current_entries": 613,
+   "non_named_identical": 610,
+   "non_named_total": 610,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "cc8d0e787f67e7d89dabef1818ba8c1919062692e35006484121833f3cc0fa35",
+   "sha256_after": "909d5a24e9f321bfdf5275761f1a74c4780eef25c29702c2b53c6d285f3b1b11",
+   "stale_path": false
+  },
+  "MP_ORB_Debris": {
+   "current_entries": 589,
+   "non_named_identical": 586,
+   "non_named_total": 586,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "8f74231f8c0e13692afce96948ed7501ae2510e6da1551f34b7ddf565b8e42ff",
+   "sha256_after": "54fb62dd731eec27c26c2950bb9f4912bb6edad983fe544db3935c2a0a850873",
+   "stale_path": false
+  },
+  "MP_UND_Complex": {
+   "current_entries": 574,
+   "non_named_identical": 571,
+   "non_named_total": 571,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "924c1c184b425fbc208b32a409df090a21c48c25ab0f0a4b34bb5b1e6fdf7e27",
+   "sha256_after": "9d7098f5290e982d3fe3341863e12a77ffbade62b4bbae614072ca45ff9268db",
+   "stale_path": false
+  },
+  "MP_UND_Gorge": {
+   "current_entries": 577,
+   "non_named_identical": 574,
+   "non_named_total": 574,
+   "replaced": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST"
+   ],
+   "named_errors": {
+    "FX_Decals_p.DeathDecal_MAT": null,
+    "FX_Decals_p.MetalDecal_02_MAT_INST": null,
+    "FX_Decals_p.MetalDecal_03_MAT_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST": null,
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST": null
+   },
+   "fresh_vs_current_differ": [
+    "FX_Decals_p.DeathDecal_MAT",
+    "FX_Decals_p.MetalDecal_02_MAT_INST",
+    "FX_Decals_p.MetalDecal_03_MAT_INST"
+   ],
+   "fresh_only": [
+    "TR_Death_Gibs_p.Materials.DeathGib_Mat_INST",
+    "TR_Death_Gibs_p.Materials.DeathSkelGib_Mat_INST"
+   ],
+   "current_only": [],
+   "sha256_before": "206da7b4c13c5e8b2e81c301c7e324bcdeaadd2858bfceee789fc9df3f331aca",
+   "sha256_after": "827cdcbc0ad144eff3a6fcaae2e2f8954bc48d5c82a9b47d03cf3788905ce693",
+   "stale_path": false
+  }
+ }
+}
