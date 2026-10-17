@@ -965,7 +965,7 @@ private:
     struct LfElement { std::string name; float ray = 0, size[2] = {1, 1}; bool normRadial = true, modSource = false, srcDist = false;
                        std::vector<std::string> mats; LfDist scaling, occl, axis, rot, color, alpha, dmScale, dmColor, dmAlpha, matIdx; };
     struct LensFlareRT { core::Vec3 pos; float srcColor[4] = {1, 1, 1, 1}; core::Vec3 boxMin{0, 0, 0}, boxMax{0, 0, 0}; LfDist spm; std::vector<LfElement> els;
-                         GLuint query = 0; bool pending = false; float area = 0, coverage = 0; };
+                         GLuint query = 0; bool pending = false, queried = false; float area = 0, coverage = 0; };
     std::vector<LensFlareRT> lensFlares_;
     GLuint lfBoxProg_ = 0, lfBoxVao_ = 0, lfBoxVbo_ = 0;
     float lensFlareU_[4] = {0, 0, 0, 1}, lensFlareI_ = 1.0f;

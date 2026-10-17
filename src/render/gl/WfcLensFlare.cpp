@@ -125,7 +125,7 @@ void Pipeline::drawLensFlares() {
                 GLint samples = 0;
                 GetQueryObjectiv(f.query, 0x8866 /*GL_QUERY_RESULT*/, &samples);
                 f.coverage = f.area > 0.0f ? std::min(1.0f, (float)samples / f.area) : 0.0f;
-                f.pending = false;
+                f.pending = false; f.queried = true;
             }
         }
         // this frame's query (issued now, read next frame)
@@ -165,6 +165,9 @@ void Pipeline::drawLensFlares() {
         }
         float s4[4]; clip(f.pos, s4);
         if (s4[3] <= 1e-3f) continue;                    // source behind the camera
+        // the proxy bounds are the same box: stock primitive occlusion culls the whole flare when its query saw nothing (RE C) -
+        // every element, Reflection_01 (OcclusionScaling 1) included
+        if (f.queried && f.coverage <= 0.0f) continue;
         const float sx = s4[0] / s4[3], sy = s4[1] / s4[3];
         float occ[1];
         lfEval(f.spm, f.coverage, occ);
