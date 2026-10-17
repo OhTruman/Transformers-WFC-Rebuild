@@ -3454,3 +3454,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:14 VPS: LOBBY_VPS_SETUP.md + deploy_lobby.sh + wfc-lobby.service merged; firewall = UDP 14010 any + TCP 22; deploy only on the
   user's go (doc sent to the user). Escalation roster (AssetTools): 16 templates, all meshes / anims / 26 FX / 243 cues present;
   gaps = runtime packaging of 14 characters (~90 MB) + 7 weapon exports -> GO into AssetTools\out\escalation_characters.
+2026-10-17 16:15 MERGED a78386dc per-pixel height fog (Rendering c2fb7eb5; the Rust near-floor sheet was per-vertex fog interpolated across the
+  big floor polygon: Rust 'dark' lower third 48 -> 16, like the thumbnail; finely tessellated views unchanged; all modes;
+  WFC_FOGPERVERTEX=1 = old path). Build OK, SIMHASH identical. Experimental's Rust rows re-base on this, not package 6.
