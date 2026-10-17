@@ -3000,3 +3000,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   its 32 LensFlareComponents (6 MP maps) with the stock path; asked Rendering whether we draw them at all (likely a missing authored
   element); RE writes LENS_FLARE_RE.md, then WEAPON_CAMERA_SHAKE_RE.md (audit gap 1) for Gameplay's next batch. Distortion
   allow-list v3 (same materials, corrected VF names); static-decal PSs add the decal tangent frame.
+2026-10-17 11:43 AssetTools 6bea9e8: the 32 door actors' interpolated light maps extracted (64 captures, 0 problems; all 192 coefficient refs
+  already in the live lightmaps/ atlases, 64 x 64 rects; RE's worked example matches exactly) -> Rendering's stage (b) has its data.
