@@ -1198,7 +1198,11 @@ public:
     int anisotropy_ = 4;
     long fxPoolSeq_ = 0;
     int statPoolPeak_ = 0, statPoolOver_ = 0, statPoolReclaimed_ = 0, statPoolFrames_ = 0;
-    float fxGravityZ_ = 0.0f;   // HmParticleModuleGravity: the instance gravity scalar (UU/s^2); 0 = UNKNOWN, gravity inactive
+    // HmParticleModuleGravity: the instance gravity scalar (UU/s^2) - the world's DefaultGravityZ (Xe-TransGame.ini
+    // [Engine.WorldInfo] DefaultGravityZ=-2940; no MP map authors an override; RE: the cached world gravity Z, HIGH).
+    // Set per map at loadMapFx (kMapGravityZ: a campaign map that authors its own)
+    static constexpr float kDefaultGravityZ = -2940.0f;
+    float fxGravityZ_ = kDefaultGravityZ;
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
@@ -1334,6 +1338,13 @@ private:
     float lastFxTime_ = -1.0f;
     core::Mat4 camView_;
     bool loadMapFx(const std::string& path);
+    // the map FX runtime file: <render data>/<map>/map_fx_runtime.json, or WFC_MAPFX_DIR/<map>/ (a regenerated copy for A/Bs)
+    std::string mapFxPath() const {
+        const char* e = std::getenv("WFC_MAPFX_DIR");
+        if (!e || !*e) return dataDir_ + "/map_fx_runtime.json";
+        const size_t s = dataDir_.find_last_of("/\\");
+        return std::string(e) + "/" + (s == std::string::npos ? dataDir_ : dataDir_.substr(s + 1)) + "/map_fx_runtime.json";
+    }
     void tickMapFx(float dt);
     int fxMeshFor(const FxLod& L);
     struct MapProp {

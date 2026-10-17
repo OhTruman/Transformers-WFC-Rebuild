@@ -158,6 +158,11 @@ Pipeline::FxDist parseDist(const assets::Json& d, int comps) {
 } // namespace
 
 bool Pipeline::loadMapFx(const std::string& path) {
+    // the particle gravity scalar: DefaultGravityZ, unless the map authors its own WorldInfo gravity (none of the MP maps
+    // does - RE; a campaign map that does joins this table)
+    fxGravityZ_ = kDefaultGravityZ;
+    static const std::pair<const char*, float> kMapGravityZ[] = {{"", 0.0f}};   // (no entries yet)
+    for (const auto& mg : kMapGravityZ) if (*mg.first && dataDir_.find(mg.first) != std::string::npos) fxGravityZ_ = mg.second;
     std::string txt = readFile(path);
     assets::Json J;
     if (txt.empty() || !assets::Json::parse(txt, J)) return false;
@@ -332,11 +337,16 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     mod.name = ms[m]["module"].asString();
                     mod.flagA = ms[m]["raw_flags"][0].asInt(1);
                     mod.flagB = ms[m]["raw_flags"][1].asInt(1);
-                    for (const auto& kv : ms[m]["fields"].obj) {   // (RE audit (c): the cooked per-instance properties)
-                        if (kv.second.isNumber()) mod.fields[kv.first] = kv.second.asFloat();
-                        else if (kv.second.type == assets::Json::Type::Bool) mod.fields[kv.first] = kv.second.asBool() ? 1.0f : 0.0f;
-                        else if (kv.second.isString()) mod.fieldNames[kv.first] = kv.second.asString();
-                    }
+                    // (RE audit (c): the cooked per-instance properties; nested values flattened - DefaultColor.R,
+                    // bUseEmitterTime[2])
+                    std::function<void(const std::string&, const assets::Json&)> addField = [&](const std::string& k, const assets::Json& v) {
+                        if (v.isNumber()) mod.fields[k] = v.asFloat();
+                        else if (v.type == assets::Json::Type::Bool) mod.fields[k] = v.asBool() ? 1.0f : 0.0f;
+                        else if (v.isString()) mod.fieldNames[k] = v.asString();
+                        else if (v.isObject()) for (const auto& kv : v.obj) addField(k + "." + kv.first, kv.second);
+                        else if (v.isArray()) for (size_t i = 0; i < v.size(); ++i) addField(k + "[" + std::to_string(i) + "]", v[i]);
+                    };
+                    for (const auto& kv : ms[m]["fields"].obj) addField(kv.first, kv.second);
                     const assets::Json& le = ms[m]["location_emitter"];
                     if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
                         mod.sourceEmitter = le["emitter"].asString();
@@ -626,9 +636,9 @@ void Pipeline::tickMapFx(float dt) {
             bool killOnHit = false;                           // ParticleModuleCollision (world-space particles)
             if (!L.localSpace) for (const FxModule& m : L.modules) killOnHit |= m.flagA != 0 && m.killOnHit;
             // HmParticleModuleGravity (RE particle audit (c) batch 1, update): Velocity.Z and BaseVelocity.Z +=
-            // GravityMultiplier x ComponentScale.Z x the instance's gravity scalar x dt. The scalar (inst +0x94) is still
-            // UNKNOWN: no stand-in is shipped - gravity acts only once both the cooked GravityMultiplier and a sourced scalar
-            // (fxGravityZ_, from the RE / AssetTools world-gravity finding) are known; unchanged until then
+            // GravityMultiplier x ComponentScale.Z x the instance's gravity scalar x dt. The scalar (inst +0x94; its setter
+            // not found) reads as the cached world gravity Z: fxGravityZ_ = DefaultGravityZ (-2940, Xe-TransGame.ini). Acts
+            // where the cooked GravityMultiplier is in the data (AssetTools' parameter-blob decode)
             float gravZ = 0.0f;
             if (fxGravityZ_ != 0.0f) {
                 for (const FxModule& m : L.modules)
@@ -988,13 +998,28 @@ void Pipeline::tickMapFx(float dt) {
                         // the FName in the compiled LOD stream), else DefaultColor (CDO white; the stream carries
                         // FFFFFFFF). Single colour parameter per Streets instance.
                         float c4[4] = {1, 1, 1, 1};
-                        // order: the component's InstanceParameter, the spawnFx caller's colour, the module's decoded
-                        // DefaultColor (M34), white
-                        auto it = in.colorParams.find("SteamColor");
-                        if (it == in.colorParams.end()) it = in.colorParams.find("Color");   // PSC 'Color' parameter
-                        if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour
-                        if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
-                        else if (L.hasDefaultColor) std::copy(L.defaultColor, L.defaultColor + 4, c4);
+                        auto pn = m.fieldNames.find("ColorParam");
+                        if (pn != m.fieldNames.end() || m.fields.count("DefaultColor.R")) {
+                            // RE particle audit (c) batch 1 (native spawn runner): the component InstanceParameter named
+                            // ColorParam (the cooked per-instance name) -> Color = its value, LINEAR, clamped; else the cooked
+                            // DefaultColor bytes through the (c / 255)^2.2 table; then BaseColor = Color (overwrite)
+                            auto it = pn != m.fieldNames.end() && pn->second != "None" ? in.colorParams.find(pn->second) : in.colorParams.end();
+                            if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour (runtime-spawned)
+                            if (it != in.colorParams.end())
+                                for (int c = 0; c < 4; ++c) c4[c] = std::min(1.0f, std::max(0.0f, it->second[(size_t)c]));
+                            else {
+                                const char* ch[4] = {"DefaultColor.R", "DefaultColor.G", "DefaultColor.B", "DefaultColor.A"};
+                                for (int c = 0; c < 4; ++c) c4[c] = std::pow(m.field(ch[c], 255.0f) / 255.0f, 2.2f);
+                            }
+                        } else {
+                            // (no cooked fields: the former lookup - the component's InstanceParameter, the spawnFx caller's
+                            // colour, the module's decoded DefaultColor (M34), white)
+                            auto it = in.colorParams.find("SteamColor");
+                            if (it == in.colorParams.end()) it = in.colorParams.find("Color");   // PSC 'Color' parameter
+                            if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour
+                            if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
+                            else if (L.hasDefaultColor) std::copy(L.defaultColor, L.defaultColor + 4, c4);
+                        }
                         std::copy(c4, c4 + 4, q.baseColor);
                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
                         for (int k = 0; k < 4; ++k) {
@@ -1205,7 +1230,7 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
     std::map<std::string, std::vector<std::string>> destructComps;
     {
         assets::Json D;
-        std::string t = readFile(dataDir_ + "/map_fx_runtime.json");
+        std::string t = readFile(mapFxPath());
         if (!t.empty() && assets::Json::parse(t, D))
             for (const auto& kv : D["destructible_mesh_components"].obj)
                 for (const auto& mv : kv.second.obj)
