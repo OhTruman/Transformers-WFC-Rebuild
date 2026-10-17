@@ -235,6 +235,7 @@ public:
     // ExternalInterface.call routing for every open movie: Game / Online -> GameFlow, DataStores -> data stores,
     // Sound -> Systems audio, Self / Debug -> movie host. movie = the calling GFx movie object.
     BridgeValue bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args);
+    std::function<uint16_t()> keyProbe;   // tests: the held key for the push-to-talk capture (default platform::firstKeyDown)
     const Catalog& catalog() const { return catalog_; }
     const InputPrompts& prompts() const { return prompts_; }
     bool padPrompts() const { return device_.pad(); }
@@ -291,6 +292,7 @@ private:
     void updateCinematicHud();
     void updateOnlineVoice();
     bool voiceUiOverride_ = false;
+    bool pttCaptureArmed_ = false;   // the capture waits for every key to be released first (the key that chose "Custom...")
     std::string spectateSent_;            // SetSpectateTarget: the name last sent to the respawn movie
     bool respawnMovieUp_ = false;
     bool hdPackHintPending_ = false;   // the one-time "HD texture pack found" message waits for the main menu

@@ -63,6 +63,8 @@ public:
         calls_.push_back(c);
     }
     void setPushToTalk(bool held) override { Call c = mk("setPushToTalk"); c.arg = held ? "1" : "0"; calls_.push_back(c); }
+    float mic = 0.0f;   // scripted Mic Test level
+    float micLevel() const override { return mic; }
     void setMuted(const SessionMemberId& m, bool muted) override { Call c = mk("setMuted"); c.arg = m.fingerprint + (muted ? ",1" : ",0"); calls_.push_back(c); }
 
     std::vector<SessionEvent> poll(double now) override {

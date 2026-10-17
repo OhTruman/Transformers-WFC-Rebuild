@@ -162,6 +162,8 @@ public:
     virtual void setVoiceSettings(const SessionVoiceSettings& v) = 0;          // on start and whenever the Audio rows change
     virtual void setPushToTalk(bool held) = 0;                                 // on each change of the key's state
     virtual void setMuted(const SessionMemberId& member, bool muted) = 0;      // local only: nobody is told
+    // The capture device's input level now, 0..1 (Settings > Audio "Mic Test" meter; Systems' capture). Default: none.
+    virtual float micLevel() const { return 0.0f; }
     // Events since the last poll, in order. `now` = the frontend's update time (seconds).
     virtual std::vector<SessionEvent> poll(double now) = 0;
 };

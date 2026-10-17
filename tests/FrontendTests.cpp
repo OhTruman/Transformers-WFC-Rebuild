@@ -3,6 +3,7 @@
 // Exit code = number of failed checks. Every check prints "PASS|FAIL <name> ..." for the Experimental harness.
 #include "assets/Json.h"
 #include "frontend/OpenPath.h"
+#include "platform/Keyboard.h"
 #include "frontend/Catalog.h"
 #include "frontend/FrontendRuntime.h"
 #include "frontend/GraphicsAutoDetect.h"
@@ -1578,6 +1579,66 @@ static void testIconicMode() {
           std::to_string(claimed) + " " + std::to_string(dup) + " " + std::to_string(ok));
 }
 
+static void testVoiceUi() {
+    using T = SessionEvent::Type;
+    // V4: the Mic Test meter - the session's level as ten marks
+    check(GameFlow::micMeterText(0.0f) == ".........." && GameFlow::micMeterText(0.5f) == "|||||....." &&
+          GameFlow::micMeterText(1.4f) == "||||||||||", "voice.V4_mic_meter_text");
+    {
+        SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+        OnlineRig r({after("host", o)});
+        r.fake->mic = 0.5f;
+        check(r.ok && r.f().micLevel() == 0.5f && r.rt->dataStores().call("ReadValue", {"<PCSettings:VoiceMicTest>"}).s == "0", "voice.V4_mic_level");
+    }
+    // V5: a remembered mute (the profile's [Voice] Muted, saved / loaded in profile.voice_settings_persisted) reaches the
+    // session again when that member is seen in a new session
+    {
+        SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+        OnlineRig r({after("host", o)});
+        r.f().profile().voice.muted = {"WFC-ZZZZ-ZZZZ-9"};
+        const bool loaded = true;
+        const bool host = r.ok && hostLobby(r);
+        r.fake->inject(memberEv("WFC-ZZZZ-ZZZZ-9", "Zed", true));
+        r.frames(2);
+        check(loaded && host && r.fake->last("setMuted") && r.fake->last("setMuted")->arg == "WFC-ZZZZ-ZZZZ-9,1", "voice.V5_mute_persists",
+              std::to_string(loaded) + std::to_string(host));
+        r.f().profile().voice.muted.clear();
+        r.f().profile().save();
+    }
+    // V6 / V7: the push-to-talk key capture ("Custom..."): the prompt; the key that chose it is ignored until released;
+    // the next key is stored by name; Esc and the Cancel button keep the key; no push-to-talk while choosing
+    SessionEvent o = ev(T::HostOpened); o.joinCode = "WFC-7QK2-M9TD-4H"; o.address = "192.168.1.20:7777";
+    OnlineRig r({after("host", o)});
+    const bool host = r.ok && hostLobby(r);
+    std::vector<uint16_t> keys;
+    r.rt->keyProbe = [&]() -> uint16_t { if (keys.empty()) return 0; const uint16_t k = keys.front(); keys.erase(keys.begin()); return k; };
+    DataStores& ds = r.rt->dataStores();
+    const std::string before = r.f().profile().voice.pttKey;
+    keys = {0x0D, 0x0D};   // Enter still held from choosing "Custom..."
+    ds.call("WriteValue", {"<PCSettings:VoicePushToTalkKey>", "__custom"});
+    const bool prompt = r.f().pttCaptureActive() && r.f().popup().open &&
+                        r.f().popup().message == r.rt->catalog().localizeKey("$WfcPC.Voice.PressKeyPrompt");
+    r.frames(2);
+    const bool waited = r.f().pttCaptureActive() && r.f().profile().voice.pttKey == before;
+    const int pttCalls = r.fake->count("setPushToTalk");
+    r.f().setPushToTalkHeld(true);
+    check(host && prompt && waited && r.fake->count("setPushToTalk") == pttCalls, "voice.V6_no_ptt_while_choosing");
+    keys = {0, 0x70};   // released, then F1
+    r.frames(3);
+    const bool set = !r.f().pttCaptureActive() && !r.f().popup().open && r.f().profile().voice.pttKey == "F1" &&
+                     platform::virtualKeyForName("F1") == 0x70 && platform::nameForVirtualKey(0x01).empty();
+    ds.call("WriteValue", {"<PCSettings:VoicePushToTalkKey>", "__custom"});
+    keys = {0, 0x1B};   // Esc
+    r.frames(3);
+    const bool esc = !r.f().pttCaptureActive() && r.f().profile().voice.pttKey == "F1";
+    ds.call("WriteValue", {"<PCSettings:VoicePushToTalkKey>", "__custom"});
+    r.f().popupButton('B');   // Cancel
+    const bool cancel = !r.f().pttCaptureActive() && !r.f().popup().open && r.f().profile().voice.pttKey == "F1";
+    r.f().profile().voice.pttKey = "V";
+    r.f().profile().save();
+    check(set && esc && cancel, "voice.V7_ptt_key_capture", std::to_string(set) + std::to_string(esc) + std::to_string(cancel));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -1606,6 +1667,7 @@ int main() {
     testOnlineVoice();
     testOnlineMatchSide();
     testIconicMode();
+    testVoiceUi();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);
