@@ -3242,3 +3242,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   eye check incl. RE's measured look, strafe wobble rerun no regression). Systems' Streets physmat pair PASS (SIMHASH equal 4201
   steps, 16 / 24 captures = force-field squibs; Drain look from the 13:56 run; Warcry needs its own pair if wanted). Card -> Frontend
   5 (14:22) -> Experimental 10 -> Rendering x17 ~40.
+2026-10-17 14:24 NET.identity (Systems, ea4ca7cd): lan 1299 / typical 2608 / burst 4313 desync, bad PASS 6001 ticks; drawYawOffset_ in
+  Character::meshMatrix PROVED as the 1299 cause (test switch: live == replay per seat on every tick); the next split at 1723 is
+  perspective-dependent damage (p1 takes a ~330 hp hit only where p1 is remote). Both with Gameplay (sim queries without the
+  presentation offset; the remote-pawn damage path). Phase 1 milestone not yet met.
