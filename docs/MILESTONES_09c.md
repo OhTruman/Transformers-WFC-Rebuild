@@ -3424,3 +3424,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:58 Escalation nav start state closed (RE §7.5: PreGameplaySetup Turn Offs); Escalation inputs COMPLETE for Gameplay's E1.
 2026-10-17 16:00 escalation_navmesh start_state regenerated (AssetTools): blocked_at_start = cooked bBlocked OR PreGameplaySetup Turn Off; both
   maps equal their generator-enabled sets (BrokenHope 32 = 2 + 30, Remnant 28); all CONFIRMED.
+2026-10-17 16:01 Escalation §8 presentation merged (HUD / prompts / downed UI / energon to the killer only / score table / end flow). The
+  Escalation spec is now complete on every side (rules, data, nav, weapons, AI, presentation).
