@@ -3165,3 +3165,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   on the same hand-over to name the system and log per-ribbon positions; CARD FREE after it (~14:00).
 2026-10-17 13:28 Slim list refresh STAGED (AssetTools): 47 byte counts differ (+26.1 MB), nothing added / removed; Systems adopts it at the
   package step; map_fx re-measured after the FX install (watcher with a 14:45 fallback).
+2026-10-17 13:31 MERGED 68b4a3e6 the voice lane (Opus voice packets over lockstep, jitter buffer + concealment, radio / proximity with the original's
+  DX curve; +2.7 KB/s per talker; proximity room reverb still PARTIAL). ONLINE PHASE 1 CODE IS COMPLETE on integration except
+  Gameplay's two local-pawn fixes (NET.identity) and the proximity reverb; then the two-PC test.
