@@ -2228,3 +2228,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   draw-list cache dynSubs_ is keyed by bind mesh only, so a live robot of the same model rebuilds the corpse's
   list without Defrag -> fix = a second cache for the defrag state (GO after SETTINGSTEST). GPU-vs-CPU skinning
   rounding = identity-equivalent (Rendering confirms).
+  2026-10-16 20:22 GPU-CORPSE ARM (Berth RT off 4K, p90 r1 / r2): head int_gcb 3.51 / 3.50; int_gcn 3.11 / 3.09;
+  + NOCORPSE 2.18 / 2.17 -> -0.41 ms, the 0.1 ms target missed (0.9 ms per 63-bot match remains; dyn draws
+  unchanged 176 vs 126 = per-body draws + casters). MERGED anyway as 51b55a09 (identity-equivalent, 0 refusals);
+  package 7 lever = one draw per settled body (merge gib chunks / parts, instanced gibs); no life / cap / shadow
+  changes (look). Integration Debug build OK on the X3 + corpse head (WFC_X3 strings in the exe).
