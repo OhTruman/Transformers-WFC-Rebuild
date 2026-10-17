@@ -405,6 +405,10 @@ def library(mapname):
     # cooked outside the level packages (AssetTools ability_assets.json via ability_assets.py)
     import ability_render_assets as ability_assets   # (AssetTools scripts/wfc has its own ability_assets module)
     work += [(t, None) for t in ability_assets.particles()]
+    # every MP map: the templates the runtime spawns by name from character / ability / body-notify data (fx_always.txt)
+    always = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fx_always.txt')
+    if os.path.exists(always):
+        work += [(l.strip(), None) for l in open(always, encoding='utf-8') if l.strip() and not l.lstrip().startswith('#')]
     # diagnostics / test data: WFC_FXLIB_EXTRA="tpl;tpl" adds named templates (e.g. effects no shipped data references yet)
     work += [(t, None) for t in (os.environ.get('WFC_FXLIB_EXTRA') or '').split(';') if t.strip()]
     repos = {}
