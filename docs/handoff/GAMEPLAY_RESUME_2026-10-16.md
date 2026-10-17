@@ -5,10 +5,10 @@
 ### QUEUE (Integration, 2026-10-17 midday)
 
 1. DONE 2026-10-17: the camera recoil crops ran (verdict sent: as authored; sheets work/pass29/cam/sheet_fire_*.png); the death follow-up confirmed on the switched data (sheet_death_old_vs_new.png). The camera patch 0c0a5665 merges on Integration's side.
-2. Weapon + melee batch: GAMEPLAY_WEAPON_MELEE.patch 12cbc5bf against 1d0bdd48 (recoil per weapon, LightMedium melee impulse / carrier lunge, DOM NodeID; PlaneRocket burst dropped: Versus data has none). 48/48; SIMHASH divergence attributed. NAVQ re-baseline rerunning in work/pass29/wb/navq2 (steps_navq2.txt, WITH WFC_SIMHASH; the first navq/ pass lacked it and is void). Tables: cd work/pass29/wb; SEEDS=12 node simhash_table_n.js navq2:classic_base navq2:classic_new ... Then the recoil eye check (card).
+2. Weapon + melee batch: GAMEPLAY_WEAPON_MELEE.patch eb08b8b1 against 8a080210 (RE verified the values; turret pickup recoil added). NAVQ re-baseline on 8a080210: work/pass29/wb/navq3 (steps_navq3.txt, base int_ssb vs new int_wb2, WITH SIMHASH). Tables: cd work/pass29/wb; SEEDS=12 node simhash_table_n.js navq3:classic_base navq3:classic_new CLASSIC_SIMHASH_old_vs_new.txt CLASSIC_NAVQ_REFERENCE_new.txt (same for smart). Eye check: work/pass29/wbeye/steps_eye.txt (12 windowed runs, ~4 min) on Integration's gap. Merges after: RE OK (done), Classic re-baseline, eye check.
 3. DONE: anim notify hook GAMEPLAY_ANIM_NOTIFY_HOOK.patch 22f9a52b (merge-ready, Systems builds on it); hit physmat GAMEPLAY_HIT_PHYSMAT.patch 7fc7437d (both against 1d0bdd48, identity-neutral).
-4. The session hooks for Frontend (MatchPlayer.sessionMember, Remote participants from MatchLaunch.onlineSlots / onlineNames, World::applySlotSwap, the WFC_SESSIONTEST checks per docs/handoff/ONLINE_MP_FRONTEND_TESTS.md section 4). Offline-safe, identity-neutral, ~3-4 h.
-   + Iconic Mode: chassisId empty -> chassisByFaction[faction] fallback; host claim check (one iconic per team, PROVISIONAL per character, refused claim keeps the previous selection) pending Frontend / RE answers.
+4. DONE: GAMEPLAY_SESSION_HOOKS.patch 178a7bef against 8a080210 (Remote participants, applySlotSwap, idle kick, Iconic one-holder-per-match), WFC_SESSIONTEST 16/16; in Frontend's review. Also done: GAMEPLAY_PHYSMAT_NODE_OVERRIDES.patch e7354355.
+4b. NEXT: Decoy Trap (Scout class-pool ability; RE spec RE-Workspace/work/handoff/MP_DECOY_TRAP_RE.md 3f0271f); bots never pick it; Systems wants deploy / trigger / explode events with the victim.
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
 7. FaceFX.
