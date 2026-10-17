@@ -1514,6 +1514,9 @@ static void testOnlineMatchSide() {
     roster(false, "Alpha");
     ds.poll();
     const bool kept = cell("PlayerName", 3) == "Ratchet" && cell("PlayerName", 2) == "Bravo";   // a Remote row whose member left: the plain name
+    r.f().onlineIdleKick("WFC-BBBB-BBBB-2");   // Gameplay's RemoteIdle on the host -> the session kicks that peer (idle)
+    const bool kicked = r.fake->last("kick") && r.fake->last("kick")->arg.find("WFC-BBBB-BBBB-2") != std::string::npos;
+    check(kicked, "online.M3b_idle_kick_to_session", r.fake->last("kick") ? r.fake->last("kick")->arg : std::string());
     check(lines.size() == 2 && lines[0] == "Alpha has left the game" && lines[1] == "Bravo has left the game" && swaps.size() == 2 &&
           swaps[0].member.fingerprint == "WFC-AAAA-AAAA-1" && swaps[1].member.fingerprint == "WFC-BBBB-BBBB-2" &&
           swaps[0].to == SessionSlotSwap::To::Bot && kept && cell("PlayerName", 1) == "Alpha" && cell("Score", 1) == "7" &&

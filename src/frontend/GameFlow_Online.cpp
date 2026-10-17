@@ -117,6 +117,14 @@ const GameFlow::OnlineMember* GameFlow::memberForPlayer(const MatchValues::Playe
     return nullptr;
 }
 
+void GameFlow::onlineIdleKick(const std::string& fingerprint) {
+    if (!session_ || role_ != SessionRole::Host || fingerprint.empty()) return;
+    SessionMemberId m;
+    m.fingerprint = fingerprint;
+    session_->kick(m, SessionKickReason::Idle);
+    FlowTrace::emit("online.idleKick", {{"member", fingerprint}});
+}
+
 int GameFlow::localHeadsetState() const {
     // PC ADAPTATION: the original read the Live headset; ours is the Audio rows' mode. Open mic has no voice-activity
     // signal from the session yet, so it shows "voice on" (1); push-to-talk shows "talking" (2) while the key is held.
