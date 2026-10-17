@@ -302,7 +302,7 @@ peer and dropped afterwards (the peer's address is then the key).
   - All peers then start together at sim tick 0: AllLoaded.value = 0, the first bundle is tick 0 + D.
   - The frontend closes the loading screen on AllLoaded.
 - **LockstepLayer:** a World step needs tick N's bundle; no bundle exists before the start tick, so lockstep holds it by construction.
-- **The Application loop** (which steps the World itself today) checks a session gate before every step: `ISession::simHeld()`
+- **The Application loop** (which steps the World itself today) checks a session gate before every step: `ISession::simHeld()` (frontend 7749fe3c; glue docs/handoff/FRONTEND_SIM_HELD_GLUE.patch; SessionLayer: true from reportLoaded until the start tick)
   (true until the start tick). The real SessionLayer and FakeSession both implement it. FakeSession holds until its AllLoaded, so
   offline / fake flows behave the same. Camera, HUD and audio keep running while held.
 
