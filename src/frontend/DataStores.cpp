@@ -85,6 +85,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:FrameGeneration>") return flow_.profile().display.frameGeneration ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:RayTracing>") return std::to_string(flow_.profile().display.rayTracing);        // PC EXTENSION
     if (markup == "<PCSettings:ShowFps>") return flow_.profile().display.showFps ? "1" : "0";                // PC EXTENSION
+    if (markup == "<PCSettings:LensFlares>") return std::to_string(flow_.profile().display.lensFlares);     // PC EXTENSION (user)
     if (markup == "<PCSettings:VolumetricLighting>") return flow_.profile().display.volumetricLighting ? "1" : "0";   // PC EXTENSION
     if (markup == "<PCSettings:VoiceMode>") return std::to_string(flow_.profile().voice.mode);              // PC EXTENSION (voice, 3.12)
     if (markup == "<PCSettings:VoiceAudience>") return std::to_string(flow_.profile().voice.audience);
@@ -427,6 +428,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         flow_.profile().display.volumetricLighting = arg(1) == "1" || arg(1) == "true";
         FlowTrace::emit("settings.volumetricLighting", {{"on", FlowTrace::boolean(flow_.profile().display.volumetricLighting)},
                                                         {"provenance", "PC ADAPTATION"}});
+        return {};
+    }
+    if (fn == "WriteValue" && m == "<PCSettings:LensFlares>") {   // PC EXTENSION (user): Off / Subtle / Original; the renderer follows
+        flow_.profile().display.lensFlares = std::clamp(std::atoi(arg(1).c_str()), 0, 2);
+        FlowTrace::emit("settings.lensFlares", {{"mode", std::to_string(flow_.profile().display.lensFlares)}, {"provenance", "PC EXTENSION"}});
         return {};
     }
     if (fn == "WriteValue" && m == "<PCSettings:ShowFps>") {   // PC EXTENSION; the corner readout follows at once

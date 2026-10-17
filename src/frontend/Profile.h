@@ -54,6 +54,7 @@ public:
         int upscaling = 0; int hdTextures = 0; int anisotropy = 4; int frameGeneration = 0; int rayTracing = 0;
         bool hdTexturesUserSet = false, hdPackHintShown = false, showFps = false;
         bool volumetricLighting = true;   // [PCSettings] VolumetricLighting: Rendering's X3 froxel volumetrics, Realistic only
+        int lensFlares = 2;               // [PCSettings] LensFlares: 0 Off, 1 Subtle, 2 Original (default, the shipped look); only when not 2
         static constexpr int kRayTracingMax = 2;   // Realistic
         static constexpr int kHdTexturesMax = 2;   // Enhanced
         static constexpr int kUpscalingMax = 6;   // FSR 3.1 Performance

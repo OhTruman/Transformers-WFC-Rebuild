@@ -1695,6 +1695,29 @@ static void testLobbyWaitingOne() {
     check(!one.empty() && one != many && one.find("`p") != std::string::npos, "lobby.waiting_one_player_text", one);
 }
 
+static void testLensFlaresSetting() {
+    // "Lens Flares: Off / Subtle / Original": default Original (2), not written while default; a change persists and the
+    // data store follows
+    std::remove("wfc_profile.ini");
+    frontend::LocalProfile d;
+    d.save();
+    std::ifstream a("wfc_profile.ini"); std::stringstream as; as << a.rdbuf(); a.close();
+    frontend::LocalProfile c;
+    c.display.lensFlares = 1;
+    c.save();
+    std::ifstream b("wfc_profile.ini"); frontend::LocalProfile r; r.loadFrom(b); b.close();
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    rt.init();
+    DataStores& ds = rt.dataStores();
+    const bool def = ds.call("ReadValue", {"<PCSettings:LensFlares>"}).s == "2";
+    ds.call("WriteValue", {"<PCSettings:LensFlares>", "0"});
+    const bool off = rt.flow().profile().display.lensFlares == 0 && ds.call("ReadValue", {"<PCSettings:LensFlares>"}).s == "0";
+    rt.flow().profile().display.lensFlares = 2;
+    check(d.display.lensFlares == 2 && as.str().find("LensFlares") == std::string::npos && r.display.lensFlares == 1 && def && off &&
+          rt.catalog().localizeKey("$WfcPC.Settings.LensFlares") == "Lens Flares", "settings.lens_flares_row");
+}
+
 static void testForfeitEnd() {
     // A team with no players left forfeits (Gameplay's 1.5 s check, Systems 10.5): the winners' end screen shows the
     // original "Enemy team forfeits"; any other end keeps Gameplay's line; the flow returns to the game lobby as usual.
@@ -1842,6 +1865,7 @@ int main() {
     testForfeitEnd();
     testMemberSeatOrder();
     testLobbyWaitingOne();
+    testLensFlaresSetting();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

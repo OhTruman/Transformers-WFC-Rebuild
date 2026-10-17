@@ -33,6 +33,10 @@ VoiceSettings=Voice Settings
 [Settings]
 VolumetricLighting=Volumetric Lighting
 VolumetricLightingDesc=Light shafts and haze. Needs Ray Tracing: Realistic.
+LensFlares=Lens Flares
+LensFlaresDesc=The sun's lens flare on outdoor maps.
+LensFlaresSubtle=Subtle
+LensFlaresOriginal=Original
 VolumetricRealisticOnly=Realistic only
 [Voice]
 VoiceChat=Voice Chat
