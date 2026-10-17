@@ -3050,3 +3050,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   start OPEN (transformed, t = 1, no animation; the late-Escalation connected layout; the Smart nav regression goes away);
   Escalation keeps closed -> open at the generator power level; Rust's doors animate open at level start as authored. Gameplay
   encodes the per-game-type initial state, re-runs the door-map NAVQ, posts the transact patch.
+2026-10-17 12:05 MERGED deeb135b Gameplay camera follow-up (ReduceRecoil x 0.35, no kick in wheeled drive, 21 weapon classes added incl. EmpShotgun;
+  camera only, identity-neutral); its 3-min firing pair joins Gameplay's wobble gap. Gameplay next: the transact patch with the
+  versus door rule + the door-map NAVQ.
