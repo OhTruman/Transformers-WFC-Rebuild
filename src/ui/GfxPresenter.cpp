@@ -51,6 +51,9 @@ bool GfxPresenter::init() {
 gfx::Player* GfxPresenter::focusPlayer() {
     if (loading_) return &loading_->player();
     if (scoreboard_ && scoreboardShown_) return &scoreboard_->player();
+    // a focused extra (the MessagePrompt / TextPrompt popups) takes the mouse as it takes the keys (deliverKeys): its
+    // panel buttons are mouse-clickable on PC (mc_buttonMenuPC)
+    for (Extra& e : extras_) if (e.focus && e.movie) return &e.movie->player();
     return movies_.empty() ? nullptr : &movies_.back().movie->player();
 }
 
