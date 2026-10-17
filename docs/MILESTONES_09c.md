@@ -3448,3 +3448,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 16:13 Enhanced smoke APPROVED (Rendering): stage 1 all modes = lit (sun + shadow map + DLE ambient + local lights where available),
   curl-noise moving soft particles, flow-blended flipbooks (~0.1-0.3 ms, ~1 day); stage 2 Realistic = froxel plumes with
   shafts + self-shadowing for big emitters (~0.3-0.8 ms, 1-2 days). Row Smoke: Original / Enhanced (default Original).
+2026-10-17 16:13 RE: shipped 4-layer fog = uniform slabs (ray fraction inside [MinH, MaxH] x max(dist - Start, 0); T = 2^(DistanceScale x L)),
+  no exponential height falloff, UU throughout; a camera in the slab looking at a 1-3 m floor gets near-zero fog, so the flat
+  sheet is the per-vertex interpolation; Rendering's per-pixel A/B decides (granted after their CARD FREE).
