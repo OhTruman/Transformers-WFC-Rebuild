@@ -2968,3 +2968,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   (Drain_Blast, WarCry_AOE, DrainRay_Beam, DecoyTrap) + ~15 body / weapon templates missing on 8-10 maps -> Rendering adds an
   always-include selector to build_map_fx.py, I regen the 10 maps with the identity gate. Doors: RE's decode complete -> stage (b)
   (two captures lerped, no DLE) BEFORE the door head merges (deadline: end of today, else (a) PARTIAL merges with the collision).
+2026-10-17 11:31 FX runtime gap corrected to exactly 5 templates (4 FX_Multiplayer_p ability / buff on all maps + Hammer_Trail_DCPT on 8); the
+  body-notify path needs no code change (test setup). Rendering adds the always-include selector; regen + Systems' re-run ~12:35.
