@@ -12,14 +12,13 @@ cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 H=${1:?head sha}; PH=${2:?pre or gate}; h=${H:0:7}
 O=work/p7gate/$h; mkdir -p $O; L=$O/p7gate.log
 st() { echo "$(date +%T) $*" | tee -a $L; }
-export WFC_MUTE=1 WFC_NOINTERACT=1 PYTHONDONTWRITEBYTECODE=1 WFC_NORECOIL=1   # (NORECOIL: see package-respin.sh; the head must carry the switch)
+export WFC_MUTE=1 WFC_NOINTERACT=1 PYTHONDONTWRITEBYTECODE=1
 ITEMS=${P7_BASE_ITEMS:-"tools/fidelity/gatebase/hover_cfca1717_srcgame.patch tools/fidelity/gatebase/headless_runner_be54be6d_af4d.patch tools/fidelity/gatebase/TRANSACT_sim_only_af4d.patch"}
 BN=p7_$h; BASE=work/ab/fast_af4d073_$BN
 if [ "$PH" = pre ]; then
   st "P7 GATE pre: head $H; base items: $ITEMS"
   [ -d work/ab/fast_$h/build-release/bin ] || { powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/m05/build-target.ps1 -Ref $H -Name fast_$h -Jobs 4 -NoDebug -ThirdParty work/ab/_third_party > $O/build_head.log 2>&1; powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/link-render.ps1 -Target work/ab/fast_$h -Alias m9c_$h >> $O/build_head.log 2>&1; }
   [ -f work/ab/fast_$h/build-release/bin/wfc_rebuild.exe ] || { st "head build failed (see $O/build_head.log)"; exit 1; }
-  grep -q WFC_NORECOIL work/ab/fast_$h/build-release/bin/wfc_rebuild.exe || { st "STOP: the head exe lacks WFC_NORECOIL"; exit 2; }
   [ -d $BASE/build-release/bin ] || BASE_REF=af4d0731 bash tools/fidelity/gate-base.sh $BN $ITEMS > $O/build_base.out 2>&1
   [ -f $BASE/build-release/bin/wfc_rebuild.exe ] || { st "base build failed (see work/gatebase_$BN.log)"; exit 1; }
   st "builds done; headless same-match + negative control"
