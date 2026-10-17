@@ -55,11 +55,11 @@ inline float x3Density() { static const float v = std::max(0.0f, envNum("WFC_X3_
 inline float x3Haze() { static const float v = std::max(0.0f, envNum("WFC_X3_HAZE", 0.0015f)); return v; }
 inline float x3Sun() { static const float v = std::max(0.0f, envNum("WFC_X3_SUN", 0.6f)); return v; }
 inline float x3Lamp() { static const float v = std::max(0.0f, envNum("WFC_X3_LAMP", 2.0f)); return v; }
-inline float x3Trans() { static const float v = std::max(0.0f, envNum("WFC_X3_TRANS", 0.3f)); return v; }
+inline float x3Trans() { static const float v = std::max(0.0f, envNum("WFC_X3_TRANS", 0.2f)); return v; }
 inline float x3G() { static const float v = std::min(0.95f, std::max(-0.95f, envNum("WFC_X3_G", 0.5f))); return v; }
 inline float x3Dist() { static const float v = std::max(10.0f, envNum("WFC_X3_DIST", 120.0f)); return v; }
 inline float x3LampCore() { static const float v = std::max(0.05f, envNum("WFC_X3_LAMPCORE", 2.0f)); return v; }
-inline float x3Cap() { static const float v = std::max(0.0f, envNum("WFC_X3_CAP", 0.25f)); return v; }   // integrated in-scatter cap
+inline float x3Cap() { static const float v = std::max(0.0f, envNum("WFC_X3_CAP", 0.2f)); return v; }   // integrated in-scatter cap
 inline float x3History() { static const float v = std::min(0.98f, std::max(0.0f, envNum("WFC_X3_HISTORY", 0.9f))); return v; }
 inline float whiteMix() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_TONE_WHITEMIX", 0.5f))); return v; }
 }  // namespace rtdef
