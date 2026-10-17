@@ -1,0 +1,183 @@
+diff -ru baseB/src/game/World.cpp setB/src/game/World.cpp
+--- baseB/src/game/World.cpp	2026-10-17 08:06:14.097634400 -0500
++++ setB/src/game/World.cpp	2026-10-17 08:06:14.467903600 -0500
+@@ -7284,6 +7284,7 @@
+         if (c.owner) r.setCharacterColors(render::CharacterColors{});
+         // Melee deaths: TnDeathModifierSetMaterial, the form's EnergyDeathMaterial with Defrag 1 -> 0 over TransitionTime 3 s.
+         if (c.defrag) r.setDrawEnergyDeath(std::max(0.0f, 1.0f - c.t / 3.0f));
++        r.setDrawBody(true);                             // (RT: the body's own TLAS bit - the X3 sun rays skip bodies)
+         bool drawn = false;
+         if (c.gpuOk) {   // the character path: queued, its shadow caster batched with live robots; the palette row is cached while the serial holds
+             render::MeshData& bind = bindMeshOf(*c.model);
+@@ -7295,6 +7296,7 @@
+         if (!drawn && !c.gpuOk && !c.mesh.positions.empty())
+             r.drawDynamicMeshPosed(c.mesh, c.world, core::Vec3{1, 1, 1}, c.poseSerial);   // CPU fallback, cached while the pose is static
+         if (c.defrag) r.setDrawEnergyDeath(-1.0f);
++        r.setDrawBody(false);
+         r.setDrawOwner(0);
+     }
+ }
+diff -ru baseB/src/render/Renderer.h setB/src/render/Renderer.h
+--- baseB/src/render/Renderer.h	2026-10-17 08:06:13.057570100 -0500
++++ setB/src/render/Renderer.h	2026-10-17 08:06:14.299325700 -0500
+@@ -215,6 +215,8 @@
+     // TnDefragger ramps it 1 -> 0 linearly over TransitionTime (car / tank hull gib: 0.5..1 s delay, 4.5 s; jet hull:
+     // 6 s; robot body + arm: melee deaths only, 3 s).
+     virtual void setDrawEnergyDeath(float defrag) { (void)defrag; }
++    // the following draws are a death body (World::drawCorpses): RT puts its instance under its own TLAS mask bit
++    virtual void setDrawBody(bool body) { (void)body; }
+ 
+     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
+     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
+diff -ru baseB/src/render/d3d12/D3D12RtDynamic.cpp setB/src/render/d3d12/D3D12RtDynamic.cpp
+--- baseB/src/render/d3d12/D3D12RtDynamic.cpp	2026-10-17 08:06:13.572835800 -0500
++++ setB/src/render/d3d12/D3D12RtDynamic.cpp	2026-10-17 08:06:14.428267700 -0500
+@@ -197,7 +197,10 @@
+             D3D12_RAYTRACING_INSTANCE_DESC d{};
+             std::memcpy(d.Transform, i.transform, sizeof d.Transform);
+             d.InstanceID = (UINT)i.slot;
+-            d.InstanceMask = mask & 0xFF;
++            // (bodies: their own bit; every pass that traces 0x4 traces 0x14. WFC_RT_BODYBIT=0: bodies stay on the
++            // characters' bit - the rays of before, for the zero-difference eye sheet)
++            static const bool bodyBit = [] { const char* e = std::getenv("WFC_RT_BODYBIT"); return !(e && e[0] == '0'); }();
++            d.InstanceMask = (i.body && bodyBit ? 0x10u : mask) & 0xFF;
+             // closed meshes, but a mirrored model matrix or a refit's degenerate triangles must not let shadow rays through
+             d.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE;
+             d.AccelerationStructure = s.blas->GetGPUVirtualAddress();
+diff -ru baseB/src/render/d3d12/D3D12RtDynamic.h setB/src/render/d3d12/D3D12RtDynamic.h
+--- baseB/src/render/d3d12/D3D12RtDynamic.h	2026-10-17 08:06:13.701778300 -0500
++++ setB/src/render/d3d12/D3D12RtDynamic.h	2026-10-17 08:06:14.313373800 -0500
+@@ -37,6 +37,7 @@
+     float transform[12];          // model -> world, row-major 3x4 (D3D12_RAYTRACING_INSTANCE_DESC::Transform)
+     bool update = false;          // the slot's positions were rewritten this frame: build (first time) or refit its BLAS
+     bool rebuild = false;         // (with update) a full build instead of a refit: a refit's quality decays over many poses
++    bool body = false;            // a death body: TLAS mask 0x10 instead of the characters' bit (the X3 sun rays skip it)
+ };
+ // this frame's characters in the TLAS (replaces the last call's list); the next record consumes the updates
+ void rtDynamicFrame(const RtDynamicInstance* inst, int n);
+diff -ru baseB/src/render/d3d12/shaders/rt_shadow_ao.hlsl setB/src/render/d3d12/shaders/rt_shadow_ao.hlsl
+--- baseB/src/render/d3d12/shaders/rt_shadow_ao.hlsl	2026-10-17 08:06:13.832225100 -0500
++++ setB/src/render/d3d12/shaders/rt_shadow_ao.hlsl	2026-10-17 08:06:14.315381300 -0500
+@@ -31,7 +31,8 @@
+     // (R3, Realistic: ToSun.w >= 2) AO everywhere - world pixels are occluded by the world too (contact shadows in corners
+     // and under props, 1 m radius), not only by the characters; Faithful keeps the characters-only contact AO. (A map
+     // without a directional sun has ToSun.w 0: characters-only AO there in both modes.)
+-    const uint traceMask = (dynamicPx || ToSun.w > 1.5) ? (uint)Params.z : 0x4u;
++    // (0x14: the characters 0x4 and the death bodies 0x10 - one class everywhere but the X3 sun rays)
++    const uint traceMask = (dynamicPx || ToSun.w > 1.5) ? (uint)Params.z : 0x14u;
+     if (inside && d < 1.0) {
+         const float3 p = worldAt(px, d);
+         // normal from depth: per axis the neighbour with the smaller step (keeps silhouettes from bending the normal)
+@@ -67,9 +68,9 @@
+             }
+             else {
+                 const bool any = occluded(o, sd, 10000.0, (uint)Params.z); ++rays;
+-                if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x4u) ? 1.0 : 0.0; ++rays; }
++                if (any) { outv.x = occluded(o, sd, 10000.0, (uint)Params.z & ~0x14u) ? 1.0 : 0.0; ++rays; }
+                 // (R2) the character's distance (only where a character is the sun's blocker)
+-                if (outv.x < 0.5) { float t; if (occludedT(o, sd, 10000.0, 0x4u, t)) blockT = t; ++rays; }
++                if (outv.x < 0.5) { float t; if (occludedT(o, sd, 10000.0, 0x14u, t)) blockT = t; ++rays; }
+             }
+         }
+         const uint nAo = (uint)Size.w;
+@@ -102,7 +103,7 @@
+             const float3 dl = L.xyz - o;
+             const float dist = length(dl);
+             if (dist >= L.w || dist < 0.05) continue;
+-            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x4u) ? 0.0 : 1.0;
++            tv[k] = occluded(o, dl / dist, dist - 0.05, (uint)Params.z | 0x14u) ? 0.0 : 1.0;
+             ++rays;
+         }
+     }
+@@ -110,7 +111,7 @@
+         const float3 p = worldAt(px, d);
+         const float3 eye = worldAt(px, 0.0);
+         const float3 o = p + n * (0.01 + Params.y * length(p - eye));
+-        const uint lmask = dynamicPx ? (uint)Params.z : 0x4u;
++        const uint lmask = dynamicPx ? (uint)Params.z : 0x14u;
+         [unroll] for (uint k = 0; k < 4; ++k) {
+             if ((float)k >= nShadow) break;
+             const float4 L = ShadowLights[(uint)Extra2.w + k];
+diff -ru baseB/src/render/d3d12/shaders/rt_volumetric.hlsl setB/src/render/d3d12/shaders/rt_volumetric.hlsl
+--- baseB/src/render/d3d12/shaders/rt_volumetric.hlsl	2026-10-17 08:06:13.961668500 -0500
++++ setB/src/render/d3d12/shaders/rt_volumetric.hlsl	2026-10-17 08:06:14.381105800 -0500
+@@ -123,7 +123,9 @@
+         const uint mask = (uint)Params.z;
+         // (round 1: over a long sunlit path the in-scatter saturates toward the sun's radiance x phase - open sky went white;
+         // the phase is normalised to its forward peak, so VSun is the brightness of fully lit air looking into the sun)
+-        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask))
++        // (package 7: the death bodies (0x10) are left out - a full froxel grid of sun rays through every body's BLAS is the
++        // suspect for af4d0731's ~1.8 ms; the live characters (0x4) keep their shadows in the air)
++        if (ToSun.w > 0.5 && !blocked(x, ToSun.xyz, 2000.0, mask & ~0x10u))
+             L += VSun.rgb * (hg(dot(dir, ToSun.xyz), VSun.w) / hg(1.0, VSun.w));
+         const uint base = (uint)Extra.z;
+         const uint nl = (uint)Extra2.z;                          // the in-view lamps (ring + 20 positions / + 24 colours)
+@@ -141,7 +143,7 @@
+             // (round 1: the UE falloff alone stays high over a lamp's whole radius - every lamp filled its room with an even
+             // glow, the grey veil on Gorge; the inverse-square core keeps the scattered light at the bulb, a halo)
+             const float r0 = max(Size.w, 0.05), core = r0 * r0 / (r0 * r0 + d2);
+-            if (!blocked(x, ldir, dlen, mask & ~0x4u)) L += Lc.rgb * att * core * hg(dot(dir, ldir), 0.3) * Extra.w;
++            if (!blocked(x, ldir, dlen, mask & ~0x14u)) L += Lc.rgb * att * core * hg(dot(dir, ldir), 0.3) * Extra.w;
+         }
+         const uint nt = (uint)VCtl.w;                            // transient lights (ring + 4 positions / + 12 colours)
+         [loop] for (uint t = 0; t < 4; ++t) {
+diff -ru baseB/src/render/gl/GLRenderer.cpp setB/src/render/gl/GLRenderer.cpp
+--- baseB/src/render/gl/GLRenderer.cpp	2026-10-17 08:06:13.184505100 -0500
++++ setB/src/render/gl/GLRenderer.cpp	2026-10-17 08:06:14.321903200 -0500
+@@ -1595,6 +1595,7 @@
+     void setDrawMaterialParam(const std::string& n, const float v[4]) override { wfc_.setDrawMaterialParam(n, v); }
+     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
+     void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
++    void setDrawBody(bool b) override { wfc_.setDrawBody(b); }
+     void releaseMeshCaches(const MeshData& m) override { wfc_.releaseMeshCaches(&m); }
+     void setUpscaling(float renderScale, float sharpness) override { wfc_.setUpscaling(renderScale, sharpness); }
+     void setUpscaling(int mode) override {
+diff -ru baseB/src/render/gl/WfcPipeline.h setB/src/render/gl/WfcPipeline.h
+--- baseB/src/render/gl/WfcPipeline.h	2026-10-17 08:06:13.313948500 -0500
++++ setB/src/render/gl/WfcPipeline.h	2026-10-17 08:06:24.319668600 -0500
+@@ -212,6 +212,7 @@
+         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
+     }
+     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
++    void setDrawBody(bool b) { drawBody_ = b; }
+     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
+     bool volumetricLighting() const { return volUser_; }
+     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
+@@ -665,7 +666,7 @@
+     // with D3D12 (D3D12RtDynamic.h), whose job refits their BLAS. afterCharacters false: last frame's instances / palettes
+     // (the round trip runs before this frame's characters), true: this frame's (after the opaque characters)
+     struct RtSkinRec { const void* key = nullptr; const void* bindKey = nullptr; int row = 0, mode = 1, bones = 0; float alpha = 1.0f;
+-                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; };
++                       uint64_t serial = 0; core::Mat4 model; core::Vec3 mn, mx; bool body = false; };
+     std::vector<RtSkinRec> rtSkinCur_, rtSkinPrev_;
+     std::map<const void*, size_t> rtSkinIdx_;
+     int rtSkinFrame_ = -1, rtSkinPrevFrame_ = -1;
+@@ -884,6 +885,7 @@
+     std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
+     bool volUser_ = true;                            // X3 Settings row (kept by release())
+     int drawOwner_ = 0;                              // character instance of the current dynamic draws
++    bool drawBody_ = false;                          // ... and they are a death body (RT: TLAS mask 0x10, not 0x4)
+     // Pawn occlusion (WFC: stock UE3 hardware occlusion queries apply to pawns, RE 8ec2c46 HIGH). Per draw owner, the
+     // union of its character / weapon parts' world boxes (+0.5 m) is tested against the scene depth after the opaque
+     // pass (GL_ANY_SAMPLES_PASSED, colour / depth writes off); the result of the query issued two frames earlier
+diff -ru baseB/src/render/gl/WfcRtSkin.cpp setB/src/render/gl/WfcRtSkin.cpp
+--- baseB/src/render/gl/WfcRtSkin.cpp	2026-10-17 08:06:13.443392300 -0500
++++ setB/src/render/gl/WfcRtSkin.cpp	2026-10-17 08:06:14.328927600 -0500
+@@ -170,7 +170,7 @@
+     }
+     RtSkinRec r;
+     r.key = key; r.bindKey = &bind; r.row = row; r.mode = mode; r.bones = bones; r.alpha = alpha;
+-    r.serial = serial; r.model = model; r.mn = mn; r.mx = mx;
++    r.serial = serial; r.model = model; r.mn = mn; r.mx = mx; r.body = drawBody_;
+     auto it = rtSkinIdx_.find(key);                       // (an instance drawn again this frame: the last call wins; a second
+     if (it != rtSkinIdx_.end()) {                         //  draw elsewhere - another matrix - is counted in the log)
+         if (std::memcmp(rtSkinCur_[it->second].model.m, model.m, sizeof model.m) != 0) ++S.renoted;
+@@ -249,7 +249,7 @@
+             if (changed && gi.updated && dist > farD && ((frameNo_ + gi.slot) & 1)) { update = false; ++S.farSkipped; }
+             if (!changed) ++S.unchanged;
+             RtDynamicInstance di;
+-            di.slot = gi.slot; di.update = update;
++            di.slot = gi.slot; di.update = update; di.body = r.body;
+             if (update) {                                 // refit, or rebuild: after many refits / when the box outgrew the build's
+                 static const int maxRefits = [] { const char* e = std::getenv("WFC_RT_CHARREBUILD"); return e ? std::max(1, std::atoi(e)) : 120; }();
+                 bool rebuild = false;
