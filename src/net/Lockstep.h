@@ -8,6 +8,10 @@
 //   2 HELLO (reliable)   u8 type, u8 seat, u64 launch hash (the launch record + sim build: a mismatch refuses the match)
 //   3 HASH  (reliable)   u8 type, u8 seat, u32 tick, u64 simStateHash (desync detector, every hashEvery ticks)
 //   4 BYE   (reliable)   u8 type, u8 seat
+//   5 PING  (unreliable) u8 type, u8 seat, u64 sender clock (us)   6 PONG (unreliable) u8 type, u8 seat, u64 the echoed clock
+// Input delay: each peer picks its OWN D (it only decides how far ahead this seat schedules its commands; every peer applies the same
+// streams to the same ticks, so the D values need not agree). Auto D (Config::delay <= 0) = ceil((SRTT / 2 + 4 x RTTVAR + 5 ms) / tick),
+// clamped 2..15, from PING / PONG every 250 ms to each peer (the worst peer counts); it rises at once and falls at most 1 tick a second.
 // Wire command (23 bytes): i8 forward, i8 right, u32 buttons, u32 pressed, u16 yaw, i16 pitch (rotator units, 65536 = 360 deg),
 //   i24 x / y / z aim point (cm; valid with kRemoteBitAimPoint).
 #include "net/NetTransport.h"
@@ -33,8 +37,8 @@ public:
     struct Config {
         int seats = 2;              // humans (seat 0 = host)
         int self = 0;
-        int delay = 4;              // D (ticks)
-        int maxResend = 32;         // ticks of commands per CMDS packet at most (from the peer's ack)
+        int delay = 4;              // D (ticks); <= 0 = auto from the measured RTT
+        int maxResend = 32;         // ticks of commands per CMDS packet at most (from the peer's ack); >= 2 x D + 4 is enough
         int hashEvery = 60;         // desync-detector period (ticks)
         double peerTimeoutS = 10.0; // a stall this long = the peer is lost
         uint64_t launchHash = 0;
@@ -58,6 +62,8 @@ public:
     Status status() const { return status_; }
     const std::string& statusText() const { return statusText_; }
     uint32_t localHigh() const { return localHigh_; }
+    int delay() const { return delay_; }          // the current D (fixed, or auto)
+    float rttMs() const { return srtt_; }
 
 private:
     void handle(const NetPacket& p);
@@ -72,6 +78,10 @@ private:
     std::map<uint32_t, uint64_t> ownHash_;
     std::map<uint32_t, std::vector<std::pair<int, uint64_t>>> peerHash_;
     uint32_t localHigh_ = 0;
+    int delay_ = 4;
+    float srtt_ = 0.0f, rttvar_ = 0.0f;
+    double lastPingMs_ = 0.0, lastDelayDropMs_ = 0.0;
+    void updateDelay();
     double lastSendMs_ = 0.0, stallMs_ = 0.0, stallTotalMs_ = 0.0;
     Status status_ = Status::Running;
     std::string statusText_;

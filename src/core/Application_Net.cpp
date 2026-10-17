@@ -4,7 +4,7 @@
 //   WFC_NET_SLOT=n            this process's seat (0 = host)          WFC_NET_SEATS=N     humans (default 2)
 //   WFC_NET_BIND=host:port    this process's UDP socket              WFC_NET_PEERS=s=host:port[,...] where each seat's packets go
 //                                                                    (a plain list host:port,... = the other seats in ascending order)
-//   WFC_NET_DELAY=D (4)       WFC_NET_HASH_EVERY=k (60)              WFC_NET_LOG=path (per-tick CSV)
+//   WFC_NET_DELAY=D (auto)    WFC_NET_HASH_EVERY=k (60)              WFC_NET_LOG=path (per-tick CSV)
 //   WFC_NET_SEED=s            the match seed (the launch record's; default 0x5eed0001)
 //   WFC_NET_TIMEOUT_S=t (10)  WFC_NET_DESYNC_AT=tick (TEST ONLY: this seat reports a flipped state hash at that tick)
 //   WFC_NET_PACE=1            real-time pacing: tick N steps no earlier than N x 1/60 s after the start (a real match's rhythm;
@@ -95,7 +95,7 @@ void Application::runNetMatch() {
     for (int s = 0; s < seats; ++s) LOG_INFO("NET seat %d -> match player %d%s", s, seatMp[(size_t)s], s == self ? " (local)" : "");
 
     net::Lockstep::Config cfg;
-    cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 4); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);
+    cfg.seats = seats; cfg.self = self; cfg.delay = (int)env("WFC_NET_DELAY", 0); cfg.hashEvery = (int)env("WFC_NET_HASH_EVERY", 60);   // delay 0 = auto from the RTT
     cfg.peerTimeoutS = (double)env("WFC_NET_TIMEOUT_S", 10); cfg.launchHash = lh;
     if (const char* lp = std::getenv("WFC_NET_LOG")) cfg.logPath = lp;
     net::Lockstep ls(*t, cfg);
@@ -122,7 +122,7 @@ void Application::runNetMatch() {
         ls.pump();
         const uint32_t n = (uint32_t)world_.simTick() + 1;
         // This seat's commands up to N + D (input delay): the PlayerBot / controller input of now, encoded on the wire grid.
-        while (nextLocal <= n + (uint32_t)cfg.delay) {
+        while (nextLocal <= n + (uint32_t)ls.delay()) {
             platform::InputFrame input;
             world_.playerBotInput(input, step);
             world_.handleInput(input, step);

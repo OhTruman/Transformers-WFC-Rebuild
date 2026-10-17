@@ -22,7 +22,7 @@ void put64(std::vector<uint8_t>& b, uint64_t v) { for (int i = 0; i < 8; ++i) b.
 uint32_t get32(const uint8_t* p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
 uint64_t get64(const uint8_t* p) { return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32); }
 
-enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4 };
+enum : uint8_t { kCmds = 1, kHello = 2, kHash = 3, kBye = 4, kPing = 5, kPong = 6 };
 
 }  // namespace
 
@@ -68,13 +68,15 @@ Lockstep::Lockstep(INetTransport& t, const Config& c) : t_(t), cfg_(c) {
     peerAck_.assign((size_t)cfg_.seats, 0);
     hello_.assign((size_t)cfg_.seats, 0);
     hello_[(size_t)cfg_.self] = 1;
+    delay_ = cfg_.delay > 0 ? cfg_.delay : 4;   // auto starts at 4 and follows the RTT
     if (!cfg_.logPath.empty()) {
         log_ = std::fopen(cfg_.logPath.c_str(), "w");
         if (log_) std::fprintf(log_, "tick,simhash,bundlehash,stall_ms,bytes_in,bytes_out,rtt_ms\n");
     }
     std::vector<uint8_t> b; put8(b, kHello); put8(b, (uint8_t)cfg_.self); put64(b, cfg_.launchHash);
     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
-    LOG_INFO("NET lockstep: seat %d of %d, D %d, hash every %d, launch hash %016llx", cfg_.self, cfg_.seats, cfg_.delay, cfg_.hashEvery,
+    LOG_INFO("NET lockstep: seat %d of %d, D %s%d, hash every %d, launch hash %016llx", cfg_.self, cfg_.seats, cfg_.delay > 0 ? "" : "auto from ",
+             delay_, cfg_.hashEvery,
              (unsigned long long)cfg_.launchHash);
 }
 
@@ -95,9 +97,15 @@ void Lockstep::pump() {
     t_.service();
     NetPacket p;
     while (t_.poll(p)) handle(p);
-    // The last commands again every 15 ms (a lost packet or a stalled peer must not deadlock the exchange).
-    if (localHigh_ > 0 && nowMs() - lastSendMs_ >= 15.0)
+    // The unacked commands again after 30 ms without a send (a lost packet or a stalled peer must not deadlock the exchange).
+    if (localHigh_ > 0 && nowMs() - lastSendMs_ >= 30.0)
         for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) sendCommands(s);
+    // RTT probes every 250 ms to every peer (the auto input delay).
+    if (nowMs() - lastPingMs_ >= 250.0) {
+        lastPingMs_ = nowMs();
+        std::vector<uint8_t> b; put8(b, kPing); put8(b, (uint8_t)cfg_.self); put64(b, (uint64_t)(nowMs() * 1000.0));
+        for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendUnreliable(s, b.data(), b.size());
+    }
 }
 
 void Lockstep::handle(const NetPacket& p) {
@@ -149,6 +157,22 @@ void Lockstep::handle(const NetPacket& p) {
         }
         break;
     }
+    case kPing: {
+        if (d.size() < 10) return;
+        std::vector<uint8_t> b(d.begin(), d.begin() + 10);
+        b[0] = kPong; b[1] = (uint8_t)cfg_.self;
+        t_.sendUnreliable(seat, b.data(), b.size());
+        break;
+    }
+    case kPong: {
+        if (d.size() < 10) return;
+        const float r = (float)(nowMs() - (double)get64(&d[2]) / 1000.0);
+        if (r < 0.0f || r > 5000.0f) return;
+        if (srtt_ <= 0.0f) { srtt_ = r; rttvar_ = r * 0.5f; }   // RFC 6298 smoothing
+        else { rttvar_ = 0.75f * rttvar_ + 0.25f * std::fabs(srtt_ - r); srtt_ = 0.875f * srtt_ + 0.125f * r; }
+        updateDelay();
+        break;
+    }
     case kBye:
         LOG_INFO("NET seat %d left", seat);
         if (seat == 0) fail(Status::HostLost, "the host left");
@@ -157,10 +181,20 @@ void Lockstep::handle(const NetPacket& p) {
     }
 }
 
+void Lockstep::updateDelay() {
+    if (cfg_.delay > 0) return;
+    const float tickMs = 1000.0f / 60.0f;
+    const int want = std::max(2, std::min(15, (int)std::ceil((srtt_ * 0.5f + 4.0f * rttvar_ + 5.0f) / tickMs)));
+    if (want > delay_) { LOG_INFO("NET input delay %d -> %d (rtt %.1f ms, var %.1f)", delay_, want, srtt_, rttvar_); delay_ = want; lastDelayDropMs_ = nowMs(); }
+    else if (want < delay_ && nowMs() - lastDelayDropMs_ >= 1000.0) { --delay_; lastDelayDropMs_ = nowMs(); LOG_INFO("NET input delay -> %d (rtt %.1f ms)", delay_, srtt_); }
+}
+
 void Lockstep::sendCommands(int peer) {
-    // From the tick after the peer's ack (their contiguous copy of my seat) to my latest, at most maxResend ticks.
+    // From the tick after the peer's ack (their contiguous copy of my seat) to my latest, at most max(maxResend, 2D + 4) ticks: a peer
+    // is never more than about 2D + 2 ticks behind my latest command, so the window always covers what it still needs.
+    const uint32_t cap = (uint32_t)std::max(cfg_.maxResend, 2 * delay_ + 4);
     uint32_t first = peerAck_[(size_t)peer] + 1;
-    if (localHigh_ >= (uint32_t)cfg_.maxResend && first + (uint32_t)cfg_.maxResend <= localHigh_) first = localHigh_ - (uint32_t)cfg_.maxResend + 1;
+    if (localHigh_ >= cap && first + cap <= localHigh_) first = localHigh_ - cap + 1;
     if (first > localHigh_) first = localHigh_;   // nothing new: repeat the latest (keeps the ack flowing back)
     const auto& mine = cmds_[(size_t)cfg_.self];
     std::vector<uint8_t> b;
@@ -254,9 +288,9 @@ void Lockstep::bye() {
     for (int s = 0; s < cfg_.seats; ++s) if (s != cfg_.self) t_.sendReliable(s, b.data(), b.size());
     for (int i = 0; i < 20; ++i) t_.service();   // flush best-effort (the peers' acks may not come back before exit)
     const NetStats st = t_.stats();
-    LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total",
+    LOG_INFO("NET bye: sent %llu B / %llu pkts, received %llu B / %llu pkts, resends %llu, rtt %.1f ms, stalled %.0f ms total, D %d",
              (unsigned long long)st.bytesSent, (unsigned long long)st.packetsSent, (unsigned long long)st.bytesReceived,
-             (unsigned long long)st.packetsReceived, (unsigned long long)st.resends, st.rttMs, stallTotalMs_);
+             (unsigned long long)st.packetsReceived, (unsigned long long)st.resends, srtt_ > 0.0f ? srtt_ : st.rttMs, stallTotalMs_, delay_);
 }
 
 }  // namespace net
