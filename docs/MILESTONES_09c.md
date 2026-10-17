@@ -3153,3 +3153,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:24 16de8601 MP_GUIDED_MISSILE_RE.md merged (one per player, owner-steered at 2000 uu/s, camera rides it, 30 s fuse, detonate on
   press / impact / owner death; 45 s cooldown after) -> Gameplay's per-seat missile; campaign item (c) closed. RE next: identify
   the Molten electric-arc ribbon template for Rendering's Trail2 verdict.
+2026-10-17 13:26 MERGED c702c93b net record / replay (WFC_NET_RECORD / WFC_NET_REPLAY; BYE carries the last tick: both peers exit 0 at the end).
+  Finding: replay-as-seat-0 vs live seat 0 splits at tick 602 too -> the local controller path (playerBotInput / handleInput)
+  reaches the pawn directly online (Gameplay's fix). Ladder: live == replay per seat -> s0 == s1 (NET.identity) -> burst with hash
+  -> two-PC test.
