@@ -3338,3 +3338,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   mid-frame away from the visible sun (street view): not mergeable. Rendering applies per-element OcclusionScaling(coverage) x
   ScreenPercentageMap on the CPU (intensity 1), re-cuts, one 8-min pass after the Frontend; RE's reference comparison on the
   corrected sheet; 16:15 deadline for the candidate.
+2026-10-17 15:15 PACKAGE 7 HEAD CANDIDATE = 057aded3 (lens flares OUT: every element draws screen-sized or larger, a scale factor is missing;
+  RE pins it, next head). Integration frozen for code until the gate ends. Experimental: pre (head build, base on Gameplay's
+  diffs ~15:45, same-match + control, eye pass on the card after the Frontend) -> hold ~17:00-19:00 with the no-interpreter
+  broadcast + acks. AssetTools re-measures the slim list at 057aded3; Systems builds package 7 from it after the gate PASS.
+  Next head: flares, auto-D, homing lock / mines, Frontend capture fixes.
