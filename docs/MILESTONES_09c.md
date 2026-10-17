@@ -2607,3 +2607,9 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   integration; F (voice UI state) next, then the audit-3 HUD item and the objectives loader. Systems correction: projectile flight
   loops already play (WeaponAudio::projectileSpawned, data-driven), dropped from the gap list pending the CUELOG. Presenter loop
   56 / 64 at 08:53, clean.
+2026-10-17 08:55 RE lane particle module gap list (5ce1f71d): 266 MP particle systems; 25 modules present, 4 PARTIAL (Gravity, ColorByParameter,
+  DynamicParameter, LocationPrimitiveSphere: the heaviest by usage), 8 missing (LocationPrimitiveCylinder 179 LODs,
+  VelocityInheritParent 154, AttractorPoint 97, AccelerationOverLife 33, LocationDirect 22, AttractorParticle 20, Orbit 18,
+  KillBox 4); semantics follow in usage order; Rendering's package 7 effects item = make the 12 faithful with crops.
+  AssetTools MP collision physmat export merged (0f3d9b89; 10 sibling JSONs, GLBs byte-identical); campaign chapters next;
+  movies 27 / 54 encoded.
