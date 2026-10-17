@@ -262,7 +262,13 @@ peer and dropped afterwards (the peer's address is then the key).
 - **Aim point (Integration + Gameplay decision: online, every human, the local one too, is simulated through the remote-seat path):**
   - The local PlayerController keeps its camera work (smoothed camera, collision-pushed start, camera trace) and sends the RESULT: the
     world point the camera line hit.
-  - **Proposed wire (Systems, pending Gameplay):** `aimPoint` ABSOLUTE in world space, 3 x int24 at 1 cm (+-83 km), 9 bytes.
+  - **Wire (AGREED with Gameplay):** `aimPoint` ABSOLUTE in world space, 3 x int24 at 1 cm (+-83 km), 9 bytes, decoded to metres in
+    RemoteCommand.aimPoint.
+  - Presence is `kRemoteBitAimPoint = 1u << 31` in `buttons`, held = "aimPoint is valid this tick" ((0,0,0) is a valid point). A human
+    with a camera always sets it. Without it (a remote seat with no camera, tests) World uses eye + dir(aimYaw, aimPitch) x weapon range.
+  - The bit is NOT activity: the idle test ignores bits 30 (Active is judged on its own meaning) and 31 (AimPoint, always set for
+    humans), so it counts only Button bits 0..29 + the axes + the Active bit's meaning.
+  - Bits: 0..28 Button, 29 Hover, 30 Active, 31 AimPoint.
   - Why absolute: the command for tick N is built at N-D (input delay). An eye- or pawn-relative point would drift by the pawn's
     movement over those D ticks (~0.3-0.6 m strafing) and miss what the crosshair covered.
   - No hit within range: the point at weapon range along the camera ray.
