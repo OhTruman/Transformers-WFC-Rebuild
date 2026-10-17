@@ -1,0 +1,21 @@
+17:27:02 hold set (granted by Integration)
+base.r1 same=True p50 1.73 p90 2.14
+final.r1 same=True p50 2.61 p90 4.07
+tltiled0.r1 same=True p50 2.62 p90 4.05
+matdata.r1 same=True p50 2.62 p90 4.06
+cand9.r1 same=True p50 2.59 p90 4
+soft0.r1 same=True p50 2.62 p90 4.03
+tone0.r1 same=True p50 2.63 p90 4.04
+base.r2 same=True p50 1.75 p90 2.14
+final.r2 same=True p50 2.63 p90 4.08
+tltiled0.r2 same=True p50 2.61 p90 4.08
+matdata.r2 same=True p50 2.62 p90 4.1
+cand9.r2 same=True p50 2.6 p90 4.04
+soft0.r2 same=True p50 2.61 p90 4.04
+tone0.r2 same=True p50 2.61 p90 4.03
+1b 508: p50 / p90 / p99 9.26 / 10.33; HD on: 3505 textures (F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full)
+1b 510: p50 / p90 / p99 9.48 / 11.63; HD on: 3505 textures (F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full)
+1b 507: p50 / p90 / p99 7.32 / 8.56; HD on: 3505 textures (F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full)
+1b 504: p50 / p90 / p99 8.18 / 10.35; HD on: 3505 textures (F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full)
+1b 509: p50 / p90 / p99 9.3 / 10.35; HD on: 3505 textures (F:\Transformers Rebuild\Rebuild-Systems\work\hd_dev_full)
+17:48:17 hold cleared
