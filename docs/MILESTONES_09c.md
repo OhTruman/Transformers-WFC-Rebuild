@@ -2303,3 +2303,15 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   af4d0731 (code). Optional tomorrow: one Streets-only value step within 40 min of the relaunch, else as is.
   Tomorrow after the user's reboot: package-respin.sh af4d0731 9350f19b (RERUN_1B, EYE_FROM=x3_cand13) ->
   Systems' runbook -> verify -> promote -> doc / tag / hand-over.
+
+2026-10-17 01:02 AssetTools: campaign diagnostics DONE on all 10 chapters (assettools/checkpoint 66a27fa, 2494487,
+  17c94d9; docs copied by file: CAMPAIGN_PIPELINE_SUMMARY.md section 1b, the 10 CAMPAIGN_PILOT_<chapter>.md,
+  CAMPAIGN_FACEFX_RE.md; fxa tools already current). m05 over ALL BSP levels per chapter (tiled; MP path unchanged):
+  16,337 default-material faces across 114 levels, 1,029 visible in play; largest D1 10,048 / 614 visible, A4 2,362,
+  A3 1,308; every chapter under the 10 GB cap; D1's m05 ran 82 min / 4.8 GB (the only stage over an hour).
+  Structure audit (2 m cell): 9 PASS, A2_KON ATTENTION (one unexplained collision gap, StaticMeshCollectionActor_10261).
+  FaceFX: bone links = face-graph node indices (5,281 / 5,281), timing confirmed against the voice envelope (lag ~0),
+  three bone-blend variants tie at 0.30 (visual check on a skinned face decides; nlerp recommended).
+  Still open: bsp_alignment (D2), cinematic slope scale, phonemeId table, bone-blend visual check (needs Gameplay's
+  pose hook, after package 6). AssetTools' next queue sent (CPU-only): campaign pickup factories (0 / 377 exported,
+  D5_OME first), D2 bsp_alignment, the A2 collision gap, FaceFX desk items; bone-blend visual after package 6.
