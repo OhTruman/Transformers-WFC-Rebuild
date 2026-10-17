@@ -3150,3 +3150,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   layer itself, not exposure (report pending); Remnant light present in Off / Faithful as an authored cyan pool; Trail2: body trails
   fired out of view (inconclusive), Molten Off shows a NEW blue electric-arc ribbon on a robot that base14 never drew -> template
   to identify before calling it authored.
+2026-10-17 13:24 16de8601 MP_GUIDED_MISSILE_RE.md merged (one per player, owner-steered at 2000 uu/s, camera rides it, 30 s fuse, detonate on
+  press / impact / owner death; 45 s cooldown after) -> Gameplay's per-seat missile; campaign item (c) closed. RE next: identify
+  the Molten electric-arc ribbon template for Rendering's Trail2 verdict.
