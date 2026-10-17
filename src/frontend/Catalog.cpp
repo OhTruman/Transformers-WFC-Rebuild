@@ -481,7 +481,13 @@ std::string Catalog::localizeKey(const std::string& dollarKey) const {
     if (auto o = keyOverrides_.find(k); o != keyOverrides_.end()) return o->second;
     if (consoleStrings_) if (auto c = loc360_.find(k); c != loc360_.end()) return c->second;
     auto it = loc_.find(k);
-    return it == loc_.end() ? std::string() : it->second;
+    if (it != loc_.end()) return it->second;
+    // Unreal's localization keys are case-insensitive: a movie may upper-case a "$Key" before it is shown
+    // (CharacterSelect_GFX: FriendlyName '$UIText.CharacterSelect.Weapon2' -> toUpperCase -> the label).
+    auto lower = [](std::string v) { for (char& c : v) c = (char)std::tolower((unsigned char)c); return v; };
+    if (locLower_.empty()) for (const auto& [key, text] : loc_) locLower_.emplace(lower(key), text);
+    auto lt = locLower_.find(lower(k));
+    return lt == locLower_.end() ? std::string() : lt->second;
 }
 
 std::string Catalog::modeFriendlyName(const std::string& tag) const {

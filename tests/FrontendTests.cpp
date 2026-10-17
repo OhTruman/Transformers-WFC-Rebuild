@@ -1637,6 +1637,14 @@ struct FirstRunRig : OnlineRig {
     }
 };
 
+static void testLocalizeCaseInsensitive() {
+    FrontendRuntime rt;
+    rt.init();
+    check(rt.catalog().localizeKey("$UITEXT.CHARACTERSELECT.WEAPON2") == rt.catalog().localizeKey("$UIText.CharacterSelect.Weapon2") &&
+          !rt.catalog().localizeKey("$UIText.CharacterSelect.Weapon2").empty() && rt.catalog().localizeKey("$UITEXT.NO.SUCHKEY").empty(),
+          "catalog.localize_key_case_insensitive");
+}
+
 static void testOnlineFirstRun() {
     const std::string title = [] { FrontendRuntime t; t.init(); return t.catalog().localizeKey("$WfcPC.FirstRun.Title"); }();
     {   // FR1: online, a fresh profile -> the prompt (no account: "Choose the name..."); offline -> never
@@ -1753,6 +1761,7 @@ int main() {
     testVoiceUi();
     testOnlineFirstRun();
     testLaunchRecordAndIdleKick();
+    testLocalizeCaseInsensitive();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

@@ -150,6 +150,7 @@ private:
     std::map<std::string, GameSettings> settings_;
     int defaultQuickmatchPlaylist_ = 1;
     std::map<std::string, std::string> loc_;   // "UIText.Section.Key" -> INT text
+    mutable std::map<std::string, std::string> locLower_;   // the same, keys lower-cased (built on the first miss)
     // The shipped console overrides (UIText_360.int, TransGame_360.int, ...): the pad's button-token strings ({x} Reload)
     // where the base files carry the PC SKU's key text (<font color='#FF9333'>R</font> Reload) [CONFIRMED data].
     std::map<std::string, std::string> loc360_;
