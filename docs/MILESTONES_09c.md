@@ -3365,3 +3365,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   c71ff133 gatebase/WEAPON_sim_only_af4d.patch. Regress base COMPLETE: base + transact + weapon == 057aded3 on all 9001 steps at the
   gate's exact settings (control differs at 1558); the recoil explanation withdrawn (gate doc: "verified against 057aded3").
   Offline SIMHASH identical. Waiting on Rendering's flare patch for the final candidate.
+2026-10-17 15:24 MERGED deed7f1a lens flares (6 maps; RE PASS as shipped) + data installed (lens_flares.json x6, 4 material entries x6; backups in
+  the scratchpad lf_backup_live). PACKAGE 7 HEAD CANDIDATE RE-NAMED = deed7f1a (= 057aded3 + flares + lead-based auto-D + verify
+  package 7 row + the weapon base diff doc). Offline SIMHASH identical through every merge. Frozen. Experimental: head build +
+  eye pass (Rust dark = no flare, Rust lane / Debris = the flare) -> hold ~17:00.
