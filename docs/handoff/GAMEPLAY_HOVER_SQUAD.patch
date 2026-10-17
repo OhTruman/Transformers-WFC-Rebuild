@@ -1,0 +1,217 @@
+diff --git a/src/core/Application.cpp b/src/core/Application.cpp
+index 06a6787c..f5a9bd19 100644
+--- a/src/core/Application.cpp
++++ b/src/core/Application.cpp
+@@ -4761,7 +4761,8 @@ void Application::runNavQualityTest() {
+     if (!world_.launchMatch(L)) { LOG_INFO("NAVQ launch failed"); return; }
+     game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier;
+     world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+-    struct Acc { double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, fidget = 0, follow = 0; core::Vec3 last{}, sample{}; bool have = false;
++    struct Acc { double hoverT = 0, tipT = 0, tipRun = 0, tipMax = 0; int tipEp = 0; bool tipped = false;   // NAVQ TIP
++                 double travelT = 0, slowT = 0, offT = 0, aliveT = 0, dist = 0; int rev = 0, idle5 = 0, fidget = 0, follow = 0; core::Vec3 last{}, sample{}; bool have = false;
+                  float sampleT = 0, stillT = 0; core::Vec3 stillAt{}; core::Vec3 prevDir{}; bool havePrev = false; };
+     std::map<int, Acc> acc;
+     platform::InputFrame idle;
+@@ -4777,6 +4778,15 @@ void Application::runNavQualityTest() {
+             const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+             const core::Vec3 p = pc.position();
+             a.aliveT += dt;
++            {   // NAVQ TIP: a hover vehicle (not Driving, not a jet) past the 30 deg IsUnstable gate
++                const bool hover = pc.moveForm() == game::Form::Vehicle && !pc.vehicleState().driving && pc.vehicleParams().form != game::VehicleFormType::Jet;
++                const float lim = 30.0f * 0.0174533f;
++                const bool tip = hover && (std::fabs(pc.vehicleState().pitch) > lim || std::fabs(pc.vehicleState().roll) > lim);
++                if (hover) a.hoverT += dt;
++                if (tip) { a.tipT += dt; a.tipRun += dt; a.tipMax = std::max(a.tipMax, a.tipRun); if (!a.tipped) ++a.tipEp; }
++                else a.tipRun = 0.0;
++                a.tipped = tip;
++            }
+             const bool travel = b && !pc.isTransforming() && b->target < 0 && b->wp < b->path.size() && !world_.botHoldingStill(o->matchPlayer());
+             static const int traceP = std::getenv("WFC_NAVQTRACE") ? std::atoi(std::getenv("WFC_NAVQTRACE")) : -1;   // one bot's state every 0.5 s
+             if (b && o->matchPlayer() == traceP && i % 30 == 0) {
+@@ -4847,6 +4857,13 @@ void Application::runNavQualityTest() {
+     if (farR[0] > 0)
+         LOG_INFO("NAVQ squad far (> 25 m, settled): %ld samples - leader moving %.0f%%, member pathless %.0f%%, vehicle form %.0f%%, leader fighting %.0f%%",
+                  farR[0], 100.0 * farR[1] / farR[0], 100.0 * farR[2] / farR[0], 100.0 * farR[3] / farR[0], 100.0 * farR[4] / farR[0]);
++    {
++        double hT = 0, tT = 0, tMax = 0; int ep = 0;
++        for (const auto& kv : acc) { hT += kv.second.hoverT; tT += kv.second.tipT; ep += kv.second.tipEp; tMax = std::max(tMax, kv.second.tipMax); }
++        LOG_INFO("NAVQ TIP map %s ai %s: hover bot-min %.2f, tipped %.2f%% of hover time, episodes %d (%.2f / hover bot-min), longest %.2f s",
++                 world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", hT / 60.0, 100.0 * tT / std::max(1e-6, hT), ep,
++                 ep / std::max(1e-6, hT / 60.0), tMax);
++    }
+     LOG_INFO("NAVQ SUMMARY map %s ai %s bots %d, %.1f s simulated: bot-min alive %.1f, travelling %.1f (%.0f%%), speed %.2f m/s; slow %.1f%%, "
+              "reversals %.2f / travel-min, off-mesh %.2f%%, idle5 %.2f / bot-min, stucks %.2f / bot-min, repaths %.2f / bot-min, failed searches %.2f / bot-min, dither escapes %d, squad member-leader settled mean %.1f m (%.0f%% within 15 m), in-fight mean %.1f m (%.0f%% within 20 m)",
+              world_.mapName().c_str(), smart == nb ? "Smart" : smart == 0 ? "Classic" : "mixed", nb, i * dt, botMin, travMin, 100.0 * travelT / std::max(1e-6, aliveT),
+diff --git a/src/game/BotSmart.h b/src/game/BotSmart.h
+index f79eb0ca..e6e8afb5 100644
+--- a/src/game/BotSmart.h
++++ b/src/game/BotSmart.h
+@@ -116,6 +116,7 @@ struct SmartBot {
+     int squadId = -1;                    // squadDynamic: the squad joined at the last respawn (-1: the fixed squad by player order)
+     core::Vec3 moveHeading{0, 0, 0};
+     std::vector<core::Vec3> trail;       // squadTrail: positions this bot walked (newest last, a point every 1.5 m, up to 24) - members follow it
++    float wedgeAt = -1e9f; core::Vec3 lastSlot{0, 0, 0}; bool haveLastSlot = false;   // the wedge's hysteresis and last usable slot
+     bool formWedge = false; int formLeader = -1; core::Vec3 formOffset{0, 0, 0}; bool formHold = false;
+     float leaderStillSince = -1.0f; core::Vec3 frozenSlot{0, 0, 0}; bool slotFrozen = false;   // squadSlotFreeze   // squadStationKeep: this think's wedge slot (offset from the leader)     // the last horizontal move direction above 1 m/s (squad wedge heading while the leader stands / looks around)
+     double fightCohSum = 0.0; long fightCohN = 0, fightCohNear20 = 0;   // member-to-leader distance while the leader is engaged (diagnostics)
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index 7dba0723..d0b3bf7e 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -413,7 +413,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+             float F = ms * ((vpred - vel) / dt - gs);
+             if (!hit) continue;
+             if (core::dot(n, B.z) < 0.0f) n = n * -1.0f;
+-            float Fa = std::max(0.0f, core::dot(B.z, n) * F);   // ApplyForce(up * FMax(0, Dot(up,N)*Force), mount)
++            // ApplyForce(up * FMax(0, Dot(up,N)*Force), mount); TnHoverTankSimulation: FMax(0, Force), no normal factor [CONF RE hover 2.2]
++            float Fa = tank ? std::max(0.0f, F) : std::max(0.0f, core::dot(B.z, n) * F);
+             accel = accel + B.z * (Fa / VP.mass);
+             angAx += ry * Fa / VP.inertiaX;                   // body torque r x F (F along body z)
+             angAy += -rx * Fa / VP.inertiaY;
+@@ -504,7 +505,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+         if (!tank) accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
+ 
+         // ---- UpdateRoll: ApplyLocalAngularAcceleration(RightLeftInput - LocalAngularVelocity.Z, 0, 0) ----
+-        angAx += core::clampf(in.moveRight, -1.0f, 1.0f) - vs.angVel.z;
++        if (tipMode < 0 || !in.aiFaithful) angAx += core::clampf(in.moveRight, -1.0f, 1.0f) - vs.angVel.z;   // player path (Smart keeps it); not in the AI path
+ 
+         // ---- UpdateTurn: yaw matches the view yaw each tick; pitch/roll are corrected only when there is
+         // no contact or the body is upside down (ShouldUpright), by 5% of the error per tick. ----
+@@ -524,9 +525,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+         // k = 1 - 0.95^(dt x 30) (0.0253 at 60 Hz).
+         const float k30 = 1.0f - std::pow(0.95f, dt * 30.0f);
+         if (tank) {
+-            if (!(!unstable && vs.onTheGround)) { vs.angVel.x = k30 * vs.roll / dt; vs.angVel.y = k30 * vs.pitch / dt; }
++            // (player path only: an AI tank rights itself through RotateToTargetOrientation below [CONF RE hover 2.4])
++            if ((tipMode < 0 || !in.aiFaithful) && !(!unstable && vs.onTheGround)) { vs.angVel.x = k30 * vs.roll / dt; vs.angVel.y = k30 * vs.pitch / dt; }
+         } else {
+-            if (contacts == 0 || B.z.y < 0.01f) {          // ShouldUpright
++            if ((tipMode < 0 || !in.aiFaithful) && (contacts == 0 || B.z.y < 0.01f)) {   // ShouldUpright (player path; Smart keeps it)
+                 vs.angVel.x = k30 * vs.roll / dt;
+                 vs.angVel.y = k30 * vs.pitch / dt;
+             }
+@@ -662,6 +664,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
+     // Rigid-body integration (semi-implicit Euler).
+     vs.angVel.x += angAx * dt;
+     vs.angVel.y += angAy * dt;
++    if (tipMode >= 0 && in.aiFaithful && !vs.driving) {   // the AI path: RB angular damping 0.1 (the player path sets 0) [CONF RE hover 2.4]
++        const float kd = 1.0f / (1.0f + 0.1f * dt);
++        vs.angVel.x *= kd; vs.angVel.y *= kd;
++    }
+     vs.roll -= vs.angVel.x * dt;                       // + angular velocity about x lifts the right side
+     vs.pitch -= vs.angVel.y * dt;                      // + angular velocity about y drops the nose
+     if (vs.rollRemain > 0.0f && vs.driving) vs.roll = std::remainder(vs.roll, 6.2831853f);   // barrel roll: full turn
+diff --git a/src/game/CharacterMovement.h b/src/game/CharacterMovement.h
+index 63d21f30..c8c28cd3 100644
+--- a/src/game/CharacterMovement.h
++++ b/src/game/CharacterMovement.h
+@@ -27,6 +27,7 @@ struct MoveIntent {
+     // 2 + translation toward aiTarget after 1 s tipped. aiTipRel: "tipped" relative to the spring contact normal [PROV].
+     int aiTip = -1;
+     bool aiTipRel = false;
++    bool aiFaithful = false;   // the original AI hover path (Classic); false keeps the player-path righting (Smart, Integration (b))
+     bool hasAiTarget = false;  // bot: aiTarget = its next path waypoint (on the nav mesh) - the AI path's MoveToTargetLocation target
+     core::Vec3 aiTarget{0, 0, 0};
+ };
+diff --git a/src/game/VehicleTests.cpp b/src/game/VehicleTests.cpp
+index cd62a0ca..d58a1b7b 100644
+--- a/src/game/VehicleTests.cpp
++++ b/src/game/VehicleTests.cpp
+@@ -376,22 +376,24 @@ void runVehicleTests() {
+     {
+         const char* root = std::getenv("WFC_ASSETS");
+         const std::string vs = root ? root : core::config::kAssetRootDefault;
+-        static ChassisDef car, tank, jet;
+-        bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet);
++        static ChassisDef car, tank, jet, truck;
++        bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet) &&
++                  loadChassisDef(vs, "Truck", truck);
+         LOG_INFO("VEHTEST forms: chassis definitions %s", ok ? "loaded" : "MISSING (skipped)");
+         if (ok) {
+             CollisionWorld w = makeWorld(0, 0, 0);
+-            auto rest = [&](const ChassisDef& d, const char* name) {
++            auto rest = [&](const ChassisDef& d, const char* name, float reOriginUU) {   // reOriginUU: RE hover 1.4 (0: not derived)
+                 Sim s(&w, 2.0f); s.c.setChassis(&d);
+                 s.step(MoveIntent{}, 240);
+                 const VehicleParams& V = d.vehicle;
+                 float leq = V.suspRest - core::config::kVehicleGravity * (V.mass * 0.25f) / V.suspStiffness;
+-                LOG_INFO("VEHTEST %s rest: root %.3f m above the floor, COM %.3f (spring L_eq %.3f m), contacts %d, pitch %.1f roll %.1f deg",
++                LOG_INFO("VEHTEST %s rest: root %.3f m above the floor, COM %.3f (spring L_eq %.3f m), contacts %d, pitch %.1f roll %.1f deg; RE origin %.2f m",
+                          name, s.c.position().y, s.c.position().y + V.comUp, leq, s.c.vehicleState().contacts,
+-                         s.c.vehicleState().pitch * 57.2958f, s.c.vehicleState().roll * 57.2958f);
++                         s.c.vehicleState().pitch * 57.2958f, s.c.vehicleState().roll * 57.2958f, reOriginUU * 0.01f);
+             };
+-            rest(car, "car  ");
+-            rest(tank, "tank ");
++            rest(car, "car  ", 125.0f);
++            rest(truck, "truck", 109.0f);
++            rest(tank, "tank ", 0.0f);
+             // Car boost continuity: every Driving probe sits at or above the 0.45 m wheel clearance (the car hulls ride 0.32-0.48 m
+             // above the ground on their wheels in the original), so sub-clearance lips do not stop a boosting car. Head-on steps,
+             // then a 0.35 m riser met at 36 deg (forward . face normal 0.81, under the 0.866 frontal threshold: the Debris lip).
+diff --git a/src/game/WorldBots.cpp b/src/game/WorldBots.cpp
+index 57e3f377..311c8e6f 100644
+--- a/src/game/WorldBots.cpp
++++ b/src/game/WorldBots.cpp
+@@ -1906,7 +1906,8 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+                             else squadGoal(BotGoalKind::Roam, L, 8.0f, -1);   // no firing spot: hold close to the leader
+                             return;
+                         }
+-                    } else if (hdist(L, pos) <= smartTune().squadRegroupM) {
++                    } else if (hdist(L, pos) <= smartTune().squadRegroupM + (now - s.wedgeAt < 1.5f ? 5.0f : 0.0f)) {   // hysteresis (fix B)
++                        s.wedgeAt = now;
+                         // Wedge behind the leader along its move direction (else its facing): back squadSlotBackM, to the side squadSlotSideM
+                         // (slot 0 left, 1 right, 2+ trailing at twice the depth).
+                         core::Vec3 hd{lp->velocity().x, 0.0f, lp->velocity().z};
+@@ -1919,7 +1920,16 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+                         const float back = smartTune().squadSlotBackM * (slot >= 2 ? 1.7f : 1.0f);
+                         const float sideOff = slot == 0 ? -smartTune().squadSlotSideM : slot == 1 ? smartTune().squadSlotSideM : 0.0f;
+                         const core::Vec3 q = L - hd * back + perp * sideOff;
+-                        core::Vec3 slotP = usableSlot(q) ? q : L;
++                        // Fix A: an unwalkable slot tries the mirror side, half depth, straight behind, then the last usable slot, before the leader.
++                        core::Vec3 slotP = q; bool slotOk = usableSlot(q);
++                        if (!slotOk)
++                            for (const core::Vec3& alt : {L - hd * back - perp * sideOff, L - hd * (0.5f * back) + perp * (0.5f * sideOff),
++                                                         L - hd * (0.5f * back) - perp * (0.5f * sideOff), L - hd * back})
++                                if (usableSlot(alt)) { slotP = alt; slotOk = true; break; }
++                        if (!slotOk && s.haveLastSlot && hdist(s.lastSlot, L) < smartTune().squadRegroupM && botNav_.findCell(s.lastSlot, 0.0f) >= 0) {
++                            slotP = s.lastSlot; slotOk = true;
++                        }
++                        if (slotOk) { s.lastSlot = slotP; s.haveLastSlot = true; } else slotP = L;
+                         if (smartTune().squadTrail > 0.0f) {   // follow the leader's walked trail: 5 m back + 4 m per slot along it
+                             const std::vector<core::Vec3>& tr = smart_[(size_t)leader].trail;
+                             const float want = 5.0f + 4.0f * (float)slot;
+@@ -1941,7 +1951,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+                             }
+                         }
+                         s.formWedge = true; s.formLeader = leader; s.formOffset = slotP - L;
+-                        squadGoal(BotGoalKind::Roam, slotP, 2.5f, -1);
++                        squadGoal(BotGoalKind::Roam, slotP, slotOk ? 2.5f : 5.0f, -1);   // at the leader: a wider radius (no walking into it)
+                         return;
+                     }
+                 }
+@@ -1951,7 +1961,7 @@ void World::smartDecide(BotBody o, BotBrain& b, SmartBot& s) {
+                     squadGoal(BotGoalKind::Attack, tp, 4.0f, ltgt);
+                     return;
+                 }
+-                if (hdist(lp->position(), pos) > smartTune().squadRegroupM) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
++                if (hdist(lp->position(), pos) > smartTune().squadRegroupM + (now - s.wedgeAt < 1.5f ? 5.0f : 0.0f)) {   // regroup on the leader (WFC_AIDUEL: members drifted ~60 m off)
+                     s.regroupFar = hdist(lp->position(), pos) > smartTune().squadVehicleRegroupM;
+                     // Where the leader is going (a Roam trip), not where it is: chasing its position at the same speed kept a constant
+                     // gap, and a chase under the 45 m vehicle-travel range walked while the leader drove to its far goal
+@@ -2483,8 +2493,14 @@ void World::tickBots(float dt) {
+             // gate [PROV]; Classic stays on the player path. WFC_BOTTIP=<-1|0|1|2> (+ WFC_TIPREL=0/1) overrides for every bot (measurement).
+             static const char* bt = std::getenv("WFC_BOTTIP");
+             static const char* tr = std::getenv("WFC_TIPREL");
++            // Every bot (Smart and Classic: the original AI path; Integration 2026-10-17) rights itself with the absolute IsUnstable gate
++            // [CONF RE hover 3]; WFC_TIPREL=1 opts into the 2026-10-14 contact-relative variant (measurement only).
++            // Classic: the original AI path (absolute gate, aiFaithful). Smart: the steadier righting, contact-relative gate unless WFC_TIPREL=0
++            // (Integration (b): a deliberate Smart improvement).
++            const bool smartBot = botIsSmart(b.player);
++            in.aiFaithful = !smartBot;
+             if (bt) { in.aiTip = std::atoi(bt); in.aiTipRel = tr && std::atoi(tr) != 0; }
+-            else if (botIsSmart(b.player)) { in.aiTip = 0; in.aiTipRel = !tr || std::atoi(tr) != 0; }
++            else { in.aiTip = 0; in.aiTipRel = smartBot ? (!tr || std::atoi(tr) != 0) : (tr && std::atoi(tr) != 0); }
+             if (b.wp < b.path.size()) { in.hasAiTarget = true; in.aiTarget = b.path[b.wp].pos; }   // the AI path's target (on the mesh)
+         }
+         o->setIntent(in);
