@@ -633,3 +633,167 @@ listed inherit the SequenceAction defaults (In → Out).
 
 **Next (65+), by instances:** SeqAct_SetActorMatInstScalarParam 92, SeqCond_CompareFloat 92, SeqAct_AddInt 83, SeqAct_GetDistance
 81, …
+
+
+---
+
+# Batch 3: classes 65–96 by campaign instance count (RE, 2026-10-18)
+
+**Progress: 96 / 176 classes decoded.** Same method and labels as batch 2 (vtable slot +0x170 = Activated, +0x16C = Update;
+"handler" = the generic dispatcher 0x82F4C7B8 calling `On<Name>` on each target).
+
+## 65. SeqAct_SetActorMatInstScalarParam (92, script) · 70. SeqAct_SetActorMatInstVectorParam (62, script)
+- Props: Target (Actor), ParamName, ScalarValue / VectorValue (default (0, 0, 0, 1)).
+- Activated (C): if Target and ParamName are set → `Target.SetMaterialInstanceScalarParameter / VectorParameter(ParamName, value)`.
+- **Ours:** set the parameter on the actor's material instance (per actor; the instance is created on first use).
+
+## 66. SeqCond_CompareFloat (92)
+- **OUT** A<=B, A>B, A==B, A<B, A>=B. **VAR** A → ValueA, B → ValueB. Prop: **Epsilon 0.0001** (the == tolerance).
+- Activated 0x82F57F38 (H, stock): fire every output whose relation holds; == is |A − B| ≤ Epsilon.
+
+## 67. SeqAct_AddInt (83) · 79. SeqAct_SubtractInt (29)
+- **VAR** A, B, IntResult, FloatResult.
+- **Activated 0x82F5BD78 / 0x82F5BEC8** (C for Add): FloatResult = A + B (A − B); IntResult = round(FloatResult); fire Out.
+
+## 68. SeqAct_GetDistance (81)
+- **VAR** A, B (Object), Distance (Float).
+- **Activated 0x82F33F88** (C): the **centroid of all A actors** vs the **centroid of all B actors** (a Controller counts as its
+  Pawn) → Distance = |cA − cB|. Unset if either side is empty.
+
+## 69. SeqAct_MutualExclusion (67, HM_Engine)
+- **IN** Enter, Exit. **OUT** Entered, Exited. **VAR** OwnerID → Targets (Int).
+- **Activated 0x8276EF28, Update 0x8274DD48** (C). A global lock table (0x8374FCC0) keyed per mutex (0x8276A048 = this op's
+  shared key):
+  - **Enter:** free → take it with OwnerID and fire **Entered**. Held by another ID → queue as waiting; Update re-runs Activated
+    every tick until it gets the lock, then fires Entered. Held by the same ID → no-op.
+  - **Exit:** this ID holds it → release and fire **Exited**; else drop it from the wait queue.
+- **Ours:** named locks with a FIFO wait list, used to serialise set pieces / dialog among sequences.
+
+## 71. SeqAct_ModifyObjectList (56)
+- **IN** Add To List, Remove From List, Empty List. **VAR** ObjectRef, ObjectListVar, ListEntriesCount.
+- **Activated 0x82F3E128** (C): perform the input's op (0x82F327E8: add each ObjectRef / remove it / empty) on the linked lists,
+  then ListEntriesCount = the resulting length.
+
+## 72. SeqAct_SetMaterial (52)
+- Props: NewMaterial, MaterialIndex. Generic dispatch → handlers (C):
+  - `DynamicSMActor.OnSetMaterial`: StaticMeshComponent.SetMaterial + replicate;
+  - `SkeletalMeshActor.OnSetMaterial`: same on the SkeletalMeshComponent (authority replicates);
+  - `Pawn.OnSetMaterial`: Mesh.SetMaterial.
+
+## 73. SeqAct_ObjectListLength (49, HM, script)
+- **VAR** List, List Length. Activated (C): ListSize = List.Length.
+
+## 74. SeqCond_CompareString (45, script)
+- **OUT** True, False. **VAR** String1, String2. Activated (C): String1 == String2 (UnrealScript `==`, case-insensitive) → True,
+  else False.
+
+## 75. SeqAct_ScalarValueRamp (43, HM_Engine, latent)
+- **IN** Start, Stop, Toggle Pause. **OUT** Value Changed, Finished, Aborted. **VAR** ScalarOutputValue.
+- Props: TransitionTime, StartValue, FinalValue, CurveExponent (default 4).
+- **Update 0x82778350** (C control flow):
+  - **Start:** elapsed = 0, running.
+  - **Stop:** abort → **Aborted** (0x8276A128).
+  - **Toggle Pause:** flip paused (only while running).
+  - **Each tick while running and not paused** (0x8276F900): advance elapsed, write ScalarOutputValue, fire **Value Changed**.
+    **Finished** when the value reaches FinalValue.
+- H: value = Start + (Final − Start)·shape(t / TransitionTime), where the shape uses CurveExponent (a power ease). The exact
+  shape function at 0x8276F900 wasn't read.
+
+## 76. SeqAct_CauseDamageRadial (43)
+- **VAR** Target, Amount → DamageAmount, Instigator. Props: DamageRadius (200), DamageType, Momentum, bDamageFalloff.
+- **Activated 0x82F356E0** (C), for each Target actor:
+  - query the collision hash for actors within DamageRadius of its location;
+  - for each one at distance d (0 < d ≤ R): damage = **int(DamageAmount)**, × (1 − d/R) when bDamageFalloff, **truncated to an
+    integer**;
+  - momentum = Momentum along the unit direction from the centre → TakeDamage (0x82C79CD0) with the instigator.
+- **Ours:** a radial hurt centred on each target; integer damage with truncation.
+
+## 77. SeqAct_ForceMatineeMipsResident (42) · 78. SeqAct_ForceActorMipsResident (31)
+- ForceDuration 5 s. Activated **0x82FDADE8 / 0x82FDAB88**, Update 0x82FC3520 / 0x82FC3300 (C):
+  - collects the mesh components of the linked Matinee's actors (Matinee variant; its output 0 is a reference link that never
+    fires; Pass-Through fires) or of the Targets;
+  - sets their force-streaming flag (+0x7C bit 29) for ForceDuration.
+- **Ours:** texture-streaming hint. Prefetch those actors' textures at full mip, or ignore if everything is resident.
+
+## 80. SeqAct_RandomObject (25, HM, script)
+- **VAR** Objects → Targets, Target. Activated (C), for each Target var:
+  - pick a random Objects entry; if that entry is an ObjectList, pick a random element of it;
+  - set the Target var to it.
+
+## 81. SeqAct_SetPhysics (23)
+- Prop: NewPhysics. Handler `Actor.OnSetPhysics` (C): ForceNetRelevant; SetPhysics(NewPhysics); replicate Physics.
+
+## 82. SeqAct_ToggleTargetableComponent (23, HM)
+- **IN** None, Prop, Friendly, Enemy. bCallComponentHandler = the handler runs on the target's component.
+- `HmTargetableComponent.OnToggleTargetableComponent` (C): TargetType = 0 / 1 / 2 / 3 for the input.
+- **Ours:** set the aim-assist / targeting class of that actor (None, Prop, Friendly, Enemy).
+
+## 83. SeqAct_AttachComponent (23, HM, script)
+- Props: ComponentToAttach (template) or ComponentClass.
+- Activated (C), for each Target actor that doesn't already have a component of that class:
+  - create one (a clone of the template, or a new instance of the class) named `<actor path><class>_FromKismet_`;
+  - AttachComponent.
+
+## 84. SeqAct_SetObject (20)
+- **VAR** Target, Value. **Activated 0x82F18768** (C, asm): v = the Value var (or the DefaultValue prop if empty); write v into
+  every Target object var.
+
+## 85. SeqVar_RandomInt (16, data)
+- Props: Min, Max (100). **GetIntRef 0x82F50810** (C): a **new uniform integer in [Min, Max] (inclusive) on every read**.
+
+## 86. SeqAct_PlayFaceFXAnim (16)
+- **IN** Play. Props: FaceFXAnimSetRef, FaceFXGroupName, FaceFXAnimName.
+- Handler `SkeletalMeshActor.OnPlayFaceFXAnim` (C): play it on the mesh, and ClientPlayActorFaceFXAnim on every remote player.
+- **Ours:** play the facial animation (FaceFX) on that skeletal mesh actor.
+
+## 87. SeqAct_SetObservableByVolume (15, script)
+- **VAR** Observed Actors → Targets, Volumes.
+- Activated (C): fire Out immediately. Every listed volume must have bProcessObservableActorsOnly, else it stops. Then each target
+  is appended to every volume's ObservableActors, and the target calls SetVolumes().
+- **Ours:** restrict those volumes' touch processing to the listed actors.
+
+## 88. SeqAct_DelaySwitch (14, latent)
+- **OUT** Link 1…N, Aborted. **VAR** Delay (Float), Active Link (Int).
+- **Activated 0x82F59E20, Update 0x82F59ED0** (C):
+  - on start: index = 0; period = the sum of the Delay vars; timer = period;
+  - each tick: timer −= dt; at ≤ 0 → fire output[index] (if not disabled), Active Link = index + 1, index++, timer = period;
+  - done when index ≥ #outputs. So it fires the links one after another, every Delay seconds.
+
+## 89. SeqAct_AiTriggerStimulus (13, script)
+- **IN** Trigger. **VAR** Target → Targets, StimulusSource. Prop: StimulusType (default PointOfInterest).
+- Activated (C), on Trigger, with a StimulusSource:
+  - no Targets → `StimulusSource.TriggerStimulus(type, its location)` (broadcast);
+  - else for each target AIController (or a pawn's AIController) → `ReactToStimulus(source, type, location)`.
+
+## 90. SeqAct_TogglePseudoGodMode (10) · 93. SeqAct_ToggleGodMode (8)
+- **IN** Enable, Disable, Toggle. Handlers `Controller.OnTogglePseudoGodMode / OnToggleGodMode` (C): set / clear / flip
+  bPseudoGodMode / bGodMode.
+- `Pawn` reads bPseudoGodMode through its Controller: stock = takes damage but can't die. bGodMode = no damage.
+
+## 91. SeqAct_HealDamage (9)
+- **VAR** Target, Amount → HealAmount (Int), Instigator. Prop: DamageType.
+- Handler `Actor.OnHealDamage` (C): instigator controller as for CauseDamage → `HealDamage(HealAmount, InstigatorController,
+  DamageType)`.
+
+## 92. SeqAct_SetMatInstVectorParam (9)
+- Props: MatInst (a MaterialInstanceConstant asset), ParamName, VectorValue. Activated 0x82F09C48 (H, stock): MatInst.Set
+  VectorParameterValue(ParamName, VectorValue).
+- This changes the shared asset (all users), unlike §70.
+
+## 94. SeqVar_ObjectVolume (8, data)
+- Props: ObjValue (the volume), ExcludeClassList (Trigger, Volume), bCollidingOnly (true).
+- Stock: reading it returns the actors currently touching / inside the volume, minus the excluded classes; colliding actors only
+  when flagged.
+
+## 95. SeqAct_Bus (5, HM_Engine)
+- **IN** Input 1–4. **OUT** Output 1–4. **Activated 0x82763FD8** (C, asm): each input that has an impulse fires the output with the
+  same index (unless disabled). A routing / relay node.
+
+## 96. SeqAct_GetProperty (5)
+- Prop: PropertyName. **VAR** Target, Object, Int, Float, String, Bool.
+- **Activated 0x82F34560** (C): look up PropertyName on each target's class. By type: Object → the value; Int / Byte → summed into
+  Int; Float → summed into Float (a Vector property of that struct type contributes its length); String / Bool likewise. The
+  results are written to the linked vars.
+
+**Remaining (97+), by instances:** SeqAct_IsInObjectList 5, SeqEvent_Destroyed 5, … (17 classes left in (c), all ≤ 5 instances;
+plus the (a) / (b) classes already referenced or decoded elsewhere).
