@@ -2270,3 +2270,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   shafts kept; Streets shot 1500 at 0.79 = local sky-lit air at the frame edge. Experimental eye-pass-only GO;
   Systems re-pairs the table (x3cap=0.25). Identity base int_base10 = 43366aec (Off arm beside the eye pass,
   Faithful in the RT slot after). AssetTools: deletions done (60 GB freed, F: 166 GB free; in_cn / _hdpng kept).
+  2026-10-16 22:02 MAPSWITCH MEMORY A/B (RT off, 2 reps interleaved): int_base8 6,116 / 5,713 MB vs int_cand10 6,248 /
+  5,695: both swing ~400 MB over the same range -> the FAST 6,071 row was spread, not an X3 regression. Rule change
+  approved: FAIL > 6,500, INFO 6,000-6,500 with the spread noted. cand12 eye pass started 22:02.
