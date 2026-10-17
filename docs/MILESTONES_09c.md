@@ -3017,3 +3017,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   step before: ISession::simHeld() (Frontend / FakeSession) + the Application-loop check (Gameplay). Lens flares CORRECTED: 6
   placements (one per map on BrokenHope, Remnant, Rust, Seed, Debris, Gorge), not 32 (that was the door count); AssetTools 4fdf117
   exported the 3 templates (5-6 elements each, all distributions decoded, 4 PNGs); the curves' inputs come from RE's LENS_FLARE_RE.md.
+2026-10-17 11:46 LENS_FLARE_RE.md merged: the lens-flare item is fully specified (6 MP suns; templates, vertex stream, placement / occlusion logic)
+  with AssetTools' data; Rendering builds it after the doors. RE next: WEAPON_CAMERA_SHAKE_RE.md.
