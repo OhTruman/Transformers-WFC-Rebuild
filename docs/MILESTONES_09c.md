@@ -3120,3 +3120,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   trim, voice capture; NET.identity + the burst-with-hash row after Gameplay's seat fix.
 2026-10-17 13:03 MERGED aec21e7a net bandwidth trim (~5.5 KB/s per peer, ~92 B per tick; all six profiles exit 0; stalls unchanged or lower). Systems
   next: voice capture; seat switch + NET.identity first when Gameplay's sha lands.
+2026-10-17 13:04 Voice: Opus approved as a pinned-fetch third-party dependency (libopus 1.5.2, BSD-3, static, gitignored third_party/opus, build
+  degrades to "voice unavailable" without it; licence text to the credits) -> listed to the user; microphone capture built on
+  WASAPI but NOT run live without the user's OK (synthetic input checks only) -> open question to the user.
