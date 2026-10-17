@@ -49,9 +49,13 @@ std::string ScriptDriver::autoplayScript(const std::string& tagAndMap) {
     // Online.BeginLobbyExitCountdown (TnGameLobbyGame.HostRequestsGameStart). Bridge names CONFIRMED (RE 1.5, 2.1,
     // 2.4, binding decomp); the EditGameMode / PlayPrivateGame argument string is PARTIAL (mode SettingsConfigName).
     std::string gts = tag == "DM" ? "GTS_FreeForAllGame" : "GTS_TeamGame";
+    // The map request waits 2 s in the game lobby: GameLobby_GFX's Select Map selector sends its own first
+    // SetSelectedMapID when its list fills (GameFlow treats that first call as the selector's init). A scripted request
+    // before it was taken as the init and then overridden by the selector's default (501, Seed of Corruption) as if the
+    // player had chosen it (Experimental, 2026-10-17 07:33). Application_Frontend's own scripts wait the same way.
     return "wait:frontend;wait:ui=FrontEnd;snapshot:mainmenu;call:Online.OpenPartyLobby," + gts +
            ";wait:level=PartyLobby;wait:ui=InLobby;snapshot:partylobby;call:Online.EditGameMode," + tag +
-           ";call:Online.PlayPrivateGame," + tag + ";wait:level=GameLobby;wait:ui=InLobby;call:Online.SetSelectedMapID," + map +
+           ";call:Online.PlayPrivateGame," + tag + ";wait:level=GameLobby;wait:ui=InLobby;wait:t=2;call:Online.SetSelectedMapID," + map +
            ";snapshot:gamelobby;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;snapshot:ingame";
 }
 
