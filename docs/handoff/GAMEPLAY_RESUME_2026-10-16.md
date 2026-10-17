@@ -2,7 +2,8 @@
 
 ## Current state (update at every stable point)
 
-- **About 20:45**, at agents/gameplay c0938c76: the GPU-corpse patch builds.
+- **About 21:05**, at agents/gameplay 252e6426: the GPU-corpse crops **PASS** under Integration's decisions (Defrag CPU latch; GPU/CPU rounding accepted; f920 for Rendering's eye). The exes have gone to Experimental for the corpse arm. Waiting for the timing result and the merge.
+- **About 20:45**, at c0938c76: the GPU-corpse patch builds.
   - Headless checks pass: BOTTEST 48/48 on 12 seeds; seed-7 SIMHASH identical (null render never draws, so these are sim only).
   - First windowed crops **FAILED** on the Defrag (melee) body: the queued GPU draw ignores setDrawEnergyDeath (`docs/handoff/corpsegpu/defrag_cmp.png`).
   - Fixed: Defrag bodies stay on the CPU path (`edit_gpu_defrag.js`). `work/int_gcn` is rebuilt with the fix; the crops are **not yet re-run**.
