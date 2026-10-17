@@ -3033,3 +3033,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   1 cm, presence bit 31 in buttons (excluded from the idle test); without it eye + look direction x weapon range; aimYaw / aimPitch
   stay the look direction; 23 bytes per human per tick. Rationale: eye + direction x distance drifts by the pawn's movement over the
   input delay (~0.3-0.6 m strafing). Gameplay implements both ends now.
+2026-10-17 11:57 MP_REVERB_ROOMS_RE.md merged: reverb = Kismet mixer presets switched by trigger volumes (230 MP actions resolved); the
+  authored.db preset-name gap (860 empty) explains AssetTools' missing presets on 3 maps -> Systems checks our match reverb
+  against the per-map json and designs the proximity-voice reverb on the same rooms.
