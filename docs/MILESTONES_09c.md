@@ -3380,3 +3380,8 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:30 Sweep: Frontend -26.5 GB (work\abvm 2.4 GB locked, retry after the gate); Systems -3.9 GB (pass 1); AssetTools listing: 13.2 GB
   superseded approved by name (after the gate); out\hd\full 41 GB + the E-remake inputs 10 GB kept for errata until package 7's HD
   window closes. Kismet batch 3 merged (96 / 176). F: ~108 GB free.
+2026-10-17 15:30 CORRECTION (Systems' read of ab855fe7): the menus' Host / Join run only on FakeSession (dev tools, never packaged); the only
+  real online path is the headless runNetMatch harness. So package 7 has NO playable menu-driven online match; "online phase 1"
+  = lockstep identity + transport + voice proven headless. Tonight's two-PC test = headless LAN run via Play_NetTest_Host /
+  _Join.bat (Systems' doc). The playable online match (UdpSession over ISession + Frontend wiring + rendered net match with the
+  human seat) = item 1 of the next head; Systems posts the split + estimates by 19:00.
