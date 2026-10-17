@@ -2925,3 +2925,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   channels), 6 door materials added to materials_glsl (regen gate), DLE-lit PARTIAL until the original's two interpolated baked
   light maps (closed / open) are decoded (RE / AssetTools asked), RT BLAS refit. Rules: collision and draw merge in ONE head (no
   invisible walls); the item outranks Trail2 once Gameplay's gate is posted.
+2026-10-17 11:18 Experimental CARD FREE 11:18: (B) captures complete (24 + 24 runs + views, no INVALID); sheets + MATB.md in ~15 min, then the
+  (B) switch. Set D 'fogs' lighting.json data copied LIVE into Rebuild/work/render at 11:18 (gate PASS 10 / 10; backup in the
+  scratchpad). Card -> Systems' combined 15-min slot (full_bin) 11:18.
