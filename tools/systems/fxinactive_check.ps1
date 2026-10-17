@@ -8,6 +8,14 @@ param([Parameter(Mandatory)] [string]$BaseBin, [Parameter(Mandatory)] [string]$N
       [string]$MapList = 'MP_IAC_Streets,MP_KON_Molten', [int]$Seconds = 70)
 $hold = 'F:\Transformers Rebuild\Rebuild-Experimental\work\PERF_HOLD'
 $py = 'F:\Transformers Rebuild\AssetTools\bin\py\python.exe'
+function SimHash([string]$a, [string]$b) {   # WFC_SIMHASH=0: one FNV hash per sim step; the sim side is proven even when pixels wobble
+    $ha = @{}; Select-String -LiteralPath $a -Pattern 'SIMHASH (\d+) ([0-9a-f]{16})' | ForEach-Object { $ha[[long]$_.Matches[0].Groups[1].Value] = $_.Matches[0].Groups[2].Value }
+    $hb = @{}; Select-String -LiteralPath $b -Pattern 'SIMHASH (\d+) ([0-9a-f]{16})' | ForEach-Object { $hb[[long]$_.Matches[0].Groups[1].Value] = $_.Matches[0].Groups[2].Value }
+    $common = @($ha.Keys | Where-Object { $hb.ContainsKey($_) } | Sort-Object)
+    if (-not $common.Count) { return 'SIMHASH: no common steps (missing lines)' }
+    foreach ($s in $common) { if ($ha[$s] -ne $hb[$s]) { return "SIMHASH DIVERGES at step $s of $($common.Count) common" } }
+    return "SIMHASH equal over $($common.Count) common steps (through $($common[-1]))"
+}
 function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -15,7 +23,7 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     while (Test-Path $hold) { Start-Sleep 2 }
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     $base = @{ WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_NOMOUSE = '1'; WFC_AUTODETECT = '0'; WFC_SEED = '7'; WFC_FLOWSEED = '7';
-               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0'; WFC_NOTIFYFX = '0'; WFC_MUZZLEENERGON = '0' }   # isolate from SYSTEMS_NOTIFY_FX / SYSTEMS_MUZZLE_ENERGON
+               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0'; WFC_SIMHASH = '0'; WFC_NOTIFYFX = '0'; WFC_MUZZLEENERGON = '0' }   # isolate from SYSTEMS_NOTIFY_FX / SYSTEMS_MUZZLE_ENERGON
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
     foreach ($k in $envs.Keys) { if ($envs[$k] -ne '') { Set-Item "env:$k" $envs[$k] } }
     $p = Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru   # windowed (draws frames)
@@ -40,6 +48,7 @@ foreach ($map in ($MapList -split ',')) {
                 $(if ($total) { $frozen / $total } else { 0 }), $res.Count, (Build (Join-Path $Out "$map`_off\wfc.log")), (Build $on))
     $res | Select-Object -First 5 | ForEach-Object { Write-Host "    $($_.Line -replace '^.*FXINACTIVE', 'FXINACTIVE')" }
     Write-Host "(ii) $map base vs off (must be identical):"
+    Write-Host "    base vs off $(SimHash (Join-Path $Out "$map`_base\wfc.log") (Join-Path $Out "$map`_off\wfc.log")); off vs on $(SimHash (Join-Path $Out "$map`_off\wfc.log") $on)"
     & $py -I (Join-Path $PSScriptRoot 'shot_diff_crops.py') (Join-Path $Out "$map`_base\shots") (Join-Path $Out "$map`_off\shots") (Join-Path $Out "crops_base_off_$map") | Select-Object -Last 1 | ForEach-Object { Write-Host "    $_" }
     Write-Host "(ii) $map off vs on (expected: differences only after resumes; crops for the eye review):"
     & $py -I (Join-Path $PSScriptRoot 'shot_diff_crops.py') (Join-Path $Out "$map`_off\shots") (Join-Path $Out "$map`_on\shots") (Join-Path $Out "crops_off_on_$map") | ForEach-Object { Write-Host "    $_" }
