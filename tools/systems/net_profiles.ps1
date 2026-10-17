@@ -28,7 +28,7 @@ foreach ($prof in ($Profiles -split ',')) {
                 WFC_SKIPINTRO = '1'; WFC_PLAYERBOT = '1'; WFC_BOOT = 'match'; WFC_MATCH_SECONDS = "$Seconds"; WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render';
                 WFC_MATCH_URL = "$($Map)?GameModeTag=TDM?BotsFriendly=2?BotsEnemy=2?PointsToWin=1000"; WFC_NET_SLOT = "$slot"; WFC_NET_SEATS = '2';
                 WFC_NET_BIND = "127.0.0.1:$(5201 + $slot)"; WFC_NET_PEERS = "$(1 - $slot)=127.0.0.1:$to"; WFC_NET_HASH_EVERY = "$HashEvery";
-                WFC_NET_DELAY = "$Delay"; WFC_NET_PACE = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv'); WFC_NET_TIMEOUT_S = '10'; WFC_SIMHASH = $env:NETPROF_SIMHASH; WFC_NET_VOICE = $env:NETPROF_VOICE; WFC_NET_RECORD = $(if ($slot -eq 0 -and $env:NETPROF_RECORD) { Join-Path $dir 'record.bin' } else { '' }) }
+                WFC_NET_DELAY = "$Delay"; WFC_NET_PACE = '1'; WFC_NET_LOG = (Join-Path $dir 'net.csv'); WFC_NET_TIMEOUT_S = '10'; WFC_SIMHASH = $env:NETPROF_SIMHASH; WFC_NET_VOICE = $env:NETPROF_VOICE; WFC_VOICELOG = $env:NETPROF_VOICELOG; WFC_VOICE_MAXDIST = $env:NETPROF_VOICEMAX; WFC_NET_RECORD = $(if ($slot -eq 0 -and $env:NETPROF_RECORD) { Join-Path $dir 'record.bin' } else { '' }) }
         foreach ($k in $e.Keys) { if ($e[$k]) { Set-Item "env:$k" $e[$k] } }
         $p = Start-Process -FilePath (Join-Path $Bin "wfc_rebuild.exe") -WorkingDirectory $dir -WindowStyle Hidden -PassThru; $null = $p.Handle; $procs += $p   # null render + no console window: no hwnd at all
     }
