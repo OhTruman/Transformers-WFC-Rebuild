@@ -255,6 +255,9 @@ peer and dropped afterwards (the peer's address is then the key).
   - `kRemoteBitHover = 1u << 29` (held) and `kRemoteBitActive = 1u << 30` (look axis non-zero, or team chat since the last command).
   - The aim floats are absolute radians decoded from the u16 / i16 rotator units.
   - The encoder (LockstepLayer, Systems) writes exactly these bits.
+  - Merged on integration as 8454c173. The host seed arrives through `game::MatchLaunch.seed` and seeds the sim RNG and the bot
+    brains (two launches with one seed give an equal simStateHash at step 1000, SESSIONTEST 19 / 19). The launch record's `seed`
+    (10.3) feeds that field.
 
 ### 10.3 Identical launch on every peer (REQUIREMENT, confirmed by Integration; with the Frontend, 2026-10-17)
 - **The problem:** today each member builds its own match URL from its local profile, with only the map and mode from the host. For
