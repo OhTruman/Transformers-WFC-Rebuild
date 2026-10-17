@@ -62,6 +62,9 @@ void replaceAll(std::string& s, const std::string& a, const std::string& b) {
 }
 
 float srgbToLinear(float c) { return std::pow(c, 2.2f); }   // UE3 FLinearColor(FColor) table
+// Height fog in-scattering (RE GORGE_RUST_HEIGHTFOG_RE s4, native InitFogConstants / FHeightFogSceneInfo): FogInScattering =
+// LightColor (the 2.2 table) x LightBrightness x (1 / ln 0.5), and the VS multiplies it by (s - 1): LightColor x Brightness x (1 - s) / ln 2
+constexpr float kFogInScale = 1.4426950409f;
 
 #if __has_include("core/LoadYield.h")
 #include "core/LoadYield.h"
@@ -116,16 +119,19 @@ uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, 
 uniform vec4 uShadowZ;       // world -> shadow-space z row
 uniform vec3 uCamPos;
 uniform vec4 uLMCoord;
+uniform vec4 uLMCoordB;   // (transforming world actors) capture B's light-map UV transform (uLMInterp draws)
 uniform int uFogOn;
 uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
 uniform int uFogN;                           // authored height fog layers (1 = the first only)
+uniform float uHazeK;                        // (Realistic) the fog in-scattering's share of auto-exposure: min(1, 1 / e); 1 elsewhere
 uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
 uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
 uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
 uniform int uVLMBase;
 uniform sampler2D uVLM;
 out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
+out vec2 vUV1B;
 out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
 out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
 
@@ -191,6 +197,7 @@ void main() {
     vUV0 = aUV0;
     vSubUV2 = aSubUV2;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
+    vUV1B = aUV1 * uLMCoordB.xy + uLMCoordB.zw;
     vUV1Mat = aUV1;
     vColor = aColor;
     if (uVertexLM != 0) {
@@ -202,6 +209,7 @@ void main() {
         vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
     }
     vFog = heightFog(wp.xyz);
+    vFog.rgb *= uHazeK > 0.0 ? uHazeK : 1.0;   // (Realistic: haze not lifted by auto-exposure; unset / Off / Faithful: x 1.0)
     gl_Position = uViewProj * wp;
     if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
         float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
@@ -212,6 +220,7 @@ void main() {
 
 const char* kFSHead = R"(#version 330 compatibility
 in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor; in vec3 vSubUV2;
+in vec2 vUV1B;
 in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
@@ -360,6 +369,7 @@ void main() {
 const char* kFSMainLM = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
 uniform int uVertexLM;
 in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
@@ -379,6 +389,11 @@ void main() {
         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
+            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
+            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
+            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
+        }
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
@@ -462,6 +477,7 @@ float wfcPbrRoughness(float sp) {
 const char* kFSMainLMModern = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uLMInterp; uniform vec3 uLMScaleA[3]; uniform vec3 uLMScaleB[3]; uniform float uLMLerp;   // (transforming world actors)
 uniform int uVertexLM;
 in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
@@ -504,6 +520,11 @@ void main() {
         vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
         vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
         vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        if (uLMInterp != 0) {   // transforming world actor (RE): per coefficient A + lerp (B - A), texel x its capture's scale
+            l0 = mix(l0 * uLMScaleA[0], texture(uLM0, vUV1B).rgb * uLMScaleB[0], uLMLerp);
+            l1 = mix(l1 * uLMScaleA[1], texture(uLM1, vUV1B).rgb * uLMScaleB[1], uLMLerp);
+            l2 = mix(l2 * uLMScaleA[2], texture(uLM2, vUV1B).rgb * uLMScaleB[2], uLMLerp);
+        }
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         float metal = clamp(wfcPbrMetallic, 0.0, 1.0);
         vec3 F0 = mix(vec3(0.04), clamp(wfcPbrF0, 0.0, 1.0), metal);   // (dielectric 0.04; metals tint; a bad row cannot gain energy)
@@ -798,6 +819,7 @@ uniform float uInvGamma;
 uniform int uFilmic;
 uniform sampler2D uAdapt;
 uniform vec4 uExpo;      // key, adaptation strength, min, max
+uniform vec4 uFlash;     // (flash term) exposure factor at full flash, F0, F1, on
 uniform vec3 uToneGrade; // pre-gain, saturation, contrast
 uniform float uBloomMix;
 uniform vec3 uWhiteRoll;   // (X1 white roll) brightest-channel range lo..hi, warm-white mix; hi <= lo = off
@@ -840,7 +862,9 @@ void main() {
     if (uFilmic != 0) {
         float avg = exp(texture(uAdapt, vec2(0.5)).r);
         float e = uToneGrade.x * clamp(pow(uExpo.x / max(avg, 1e-4), uExpo.y), uExpo.z, uExpo.w);
-        c = ((1.0 - a) * scene * e + blur.rgb * uBloomMix) / max((1.0 - a) + blur.a, 0.0001);
+        float fl = uFlash.w > 0.0 ? smoothstep(uFlash.y, uFlash.z, texture(uAdapt, vec2(0.5)).g) : 0.0;   // (flash term)
+        e *= mix(1.0, uFlash.x, fl);
+        c = ((1.0 - a) * scene * e + blur.rgb * (uBloomMix * mix(1.0, 0.5, fl))) / max((1.0 - a) + blur.a, 0.0001);
         c = 0.18 * pow(max(c, vec3(1e-6)) / 0.18, vec3(uToneGrade.z));   // (contrast around 18 % grey: lit and shadowed sides part)
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
         c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
@@ -862,6 +886,7 @@ void main() {
 const char* kVolApplyFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uVol, uDepth;
+uniform float uHazeK;    // (haze exposure) min(1, 1 / e); 0 = unset (x 1)
 uniform vec2 uNearFar, uRender;
 uniform vec4 uGrid;      // tiles x, tiles y, tile size (px), max distance (m)
 layout(location=0) out vec4 oColor;
@@ -883,39 +908,52 @@ void main() {
     vec4 v;
     if (u < 0.0) v = mix(vec4(0.0, 0.0, 0.0, 1.0), sliceAt(tp, 0), clamp(u + 1.0, 0.0, 1.0));
     else { int k = int(floor(u)); v = mix(sliceAt(tp, k), sliceAt(tp, k + 1), u - float(k)); }
-    oColor = vec4(max(v.rgb, 0.0), clamp(v.a, 0.0, 1.0));
+    oColor = vec4(max(v.rgb, 0.0) * (uHazeK > 0.0 ? uHazeK : 1.0), clamp(v.a, 0.0, 1.0));   // (haze exposure: the in-scatter keeps its authored brightness)
 }
 )";
 // (X1) the scene's log luminance at 128 x 128 (mipmapped to its mean), and its temporal adaptation into a 1 x 1 target
 const char* kToneLumFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uScene;
+uniform sampler2D uPrevAdapt;   // (flash term) the adapted log mean so far
 uniform vec2 uTexel;
+uniform vec4 uFlashExpo;        // key, adaptation strength, gain, threshold (after exposure); threshold 0 = off
 layout(location=0) out vec4 oColor;
 void main() {
-    float s = 0.0;
+    float s = 0.0, f = 0.0;
+    float e = 1.0;
+    if (uFlashExpo.w > 0.0) {   // the previous frame's exposure (as the tone pass, before the flash factor)
+        float avg = exp(texture(uPrevAdapt, vec2(0.5)).r);
+        e = uFlashExpo.z * clamp(pow(uFlashExpo.x / max(avg, 1e-4), uFlashExpo.y), 0.7, 1.8);
+    }
     for (int i = 0; i < 4; ++i) {
         vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0) * uTexel;
         vec3 c = texture(uScene, vUV + o).rgb;
-        s += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        s += log(max(l, 1e-3));
+        f += uFlashExpo.w > 0.0 && l * e > uFlashExpo.w ? 1.0 : 0.0;
     }
     // (centre-weighted: the middle of the view counts double, the HUD-free corners half)
     vec2 d = vUV - 0.5;
     float w = mix(2.0, 0.5, clamp(dot(d, d) * 4.0, 0.0, 1.0));
-    oColor = vec4(s * 0.25 * w, w, 0.0, 1.0);
+    oColor = vec4(s * 0.25 * w, w, f * 0.25 * w, 1.0);   // (b: the weighted share of super-bright samples - the flash)
 }
 )";
 const char* kToneAdaptFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uLum, uPrev;
 uniform float uLevel, uRate;
+uniform vec2 uFlashRate;        // the flash share: attack, release blend (per frame)
 uniform int uReset;
 layout(location=0) out vec4 oColor;
 void main() {
-    vec2 m = textureLod(uLum, vec2(0.5), uLevel).rg;
+    vec3 m = textureLod(uLum, vec2(0.5), uLevel).rgb;
     float cur = m.x / max(m.y, 1e-4);
-    float prev = texture(uPrev, vec2(0.5)).r;
-    oColor = vec4(uReset != 0 ? cur : prev + (cur - prev) * uRate, 0.0, 0.0, 1.0);
+    vec2 prev = texture(uPrev, vec2(0.5)).rg;
+    // (flash term) the frame's flash share F: a fast attack, a slow release - its own channel, the mean untouched
+    float f = m.z / max(m.y, 1e-4);
+    float fr = f > prev.y ? uFlashRate.x : uFlashRate.y;
+    oColor = vec4(uReset != 0 ? cur : prev.x + (cur - prev.x) * uRate, uReset != 0 ? 0.0 : prev.y + (f - prev.y) * fr, 0.0, 1.0);
 }
 )";
 
@@ -1218,7 +1256,7 @@ void Pipeline::release() {
     refMask_ = MaskSet{};
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
-    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
+    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_, &hazePbo_[0], &hazePbo_[1], &hazePbo_[2]}) buf(*b);
     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &volApplyProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
         prog(*p);
@@ -1431,6 +1469,20 @@ bool Pipeline::load(const std::string& mapName) {
         if (!sj.empty() && assets::Json::parse(sj, S))
             for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
     }
+    interpLM_.clear(); drawInterp_ = nullptr;
+    for (const auto& kv : L["interpolated_lightmaps"].obj) {   // transforming world actors: {actor: [capture 0, capture 1]}
+        if (kv.second.size() < 2) continue;
+        InterpLM& r = interpLM_[kv.first];
+        for (int k = 0; k < 2; ++k) {
+            const assets::Json& c = kv.second[(size_t)k];
+            for (int i = 0; i < 3; ++i) {
+                r.cap[k].coeff[i] = c["coeffs"][(size_t)i].asString();
+                for (int ch = 0; ch < 3; ++ch) r.cap[k].scale[i][ch] = c["scales"][(size_t)i][(size_t)ch].asFloat(1.0f);
+            }
+            r.cap[k].cs[0] = c["coordScale"][0].asFloat(1); r.cap[k].cs[1] = c["coordScale"][1].asFloat(1);
+            r.cap[k].cb[0] = c["coordBias"][0].asFloat(0); r.cap[k].cb[1] = c["coordBias"][1].asFloat(0);
+        }
+    }
     const assets::Json& lp = L["lightmaps"]["props"];
     for (const auto& kv : lp.obj) {
         LMRec r;
@@ -1531,6 +1583,7 @@ bool Pipeline::load(const std::string& mapName) {
         l.name = e["name"].asString();
         l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
         l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
+        l.worldDynamic = e["force_dynamic"].asBool(false) && !e["built_into_lightmap"].asBool(true);
         l.castStaticShadows = e["cast_static_shadows"].asBool(true);
         l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
         {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
@@ -1603,7 +1656,7 @@ bool Pipeline::load(const std::string& mapName) {
         l[2] = Fk["StartDistance"].asFloat(0.0f); l[3] = Fk["ExtinctionDistance"].asFloat(1e8f);
         const assets::Json& ck = Fk["LightColor"];
         const float bk = Fk["LightBrightness"].asFloat(0.1f);
-        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk;
+        for (int c = 0; c < 3; ++c) cc[c] = srgbToLinear(ck[(size_t)c].asFloat(255) / 255.0f) * bk * kFogInScale;
     }
     if (F.isObject() && F["bEnabled"].asBool(true)) {
         fogOn_ = !std::getenv("WFC_NOFOG");
@@ -1641,8 +1694,8 @@ bool Pipeline::load(const std::string& mapName) {
         fogExt_ = F["ExtinctionDistance"].asFloat(1e8f);
         const assets::Json& c = F["LightColor"];
         float br = F["LightBrightness"].asFloat(0.1f);
-        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br, srgbToLinear(c[1].asFloat(255) / 255.0f) * br,
-                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br};
+        fogIn_ = {srgbToLinear(c[0].asFloat(255) / 255.0f) * br * kFogInScale, srgbToLinear(c[1].asFloat(255) / 255.0f) * br * kFogInScale,
+                  srgbToLinear(c[2].asFloat(255) / 255.0f) * br * kFogInScale};
     }
 
     {
@@ -2322,6 +2375,77 @@ static bool uploadDds(const std::string& file, bool srgb, unsigned long long& by
     return true;
 }
 
+// (transforming world actors) per coefficient: capture A's atlas rect and capture B's side by side (an 8-texel gutter of
+// replicated edges between them, a 1-texel margin around each rect) in one texture; each capture's lightmap UV transform
+// re-expressed in it. The texels are the atlases' own (the decoded PNG exports).
+void Pipeline::buildInterpLM(InterpLM& r) {
+    r.built = true;
+    std::map<std::string, ImageData> atl;
+    auto atlas = [&](const std::string& name) -> const ImageData* {
+        auto it = atl.find(name);
+        if (it == atl.end()) {
+            ImageData img;
+            if (!platform::decodeImage(dataDir_ + "/lightmaps/" + name + ".png", img) || !img.valid()) return nullptr;
+            it = atl.emplace(name, std::move(img)).first;
+        }
+        return &it->second;
+    };
+    constexpr int kGutter = 8;
+    for (int i = 0; i < 3; ++i) {
+        const ImageData* src[2] = {atlas(r.cap[0].coeff[i]), atlas(r.cap[1].coeff[i])};
+        if (!src[0] || !src[1]) { LOG_WARN("wfc: interpolated light map: atlas %s / %s missing", r.cap[0].coeff[i].c_str(), r.cap[1].coeff[i].c_str()); return; }
+        int x0[2], y0[2], w[2], h[2];
+        for (int k = 0; k < 2; ++k) {
+            const int W = src[k]->w, H = src[k]->h;
+            x0[k] = std::max(0, (int)std::floor(r.cap[k].cb[0] * (float)W) - 1);
+            y0[k] = std::max(0, (int)std::floor(r.cap[k].cb[1] * (float)H) - 1);
+            const int x1 = std::min(W, (int)std::ceil((r.cap[k].cb[0] + r.cap[k].cs[0]) * (float)W) + 1);
+            const int y1 = std::min(H, (int)std::ceil((r.cap[k].cb[1] + r.cap[k].cs[1]) * (float)H) + 1);
+            w[k] = std::max(1, x1 - x0[k]); h[k] = std::max(1, y1 - y0[k]);
+        }
+        ImageData c;
+        c.w = w[0] + kGutter + w[1]; c.h = std::max(h[0], h[1]);
+        c.rgba.assign((size_t)c.w * (size_t)c.h * 4, 0);
+        const int ox[2] = {0, w[0] + kGutter};
+        for (int k = 0; k < 2; ++k)
+            for (int y = 0; y < c.h; ++y)
+                for (int x = (k == 0 ? 0 : w[0] + kGutter / 2); x < (k == 0 ? w[0] + kGutter / 2 : c.w); ++x) {
+                    const int sx = x0[k] + std::min(std::max(x - ox[k], 0), w[k] - 1), sy = y0[k] + std::min(y, h[k] - 1);
+                    std::memcpy(&c.rgba[((size_t)y * (size_t)c.w + (size_t)x) * 4], &src[k]->rgba[((size_t)sy * (size_t)src[k]->w + (size_t)sx) * 4], 4);
+                }
+        GLuint id = 0;
+        glGenTextures(1, &id);
+        glBindTexture(GL_TEXTURE_2D, id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        uploadTex(GL_TEXTURE_2D, c, true);
+        GenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        lmTextures_.push_back(id);
+        r.tex[i] = (int)lmTextures_.size() - 1;
+        if (i == 0)
+            for (int k = 0; k < 2; ++k) {   // uv' = (uv cs + cb) (W, H) - (x0, y0) + (ox, 0), over the composite size
+                const float W = (float)src[k]->w, H = (float)src[k]->h;
+                r.coord[k][0] = r.cap[k].cs[0] * W / (float)c.w; r.coord[k][1] = r.cap[k].cs[1] * H / (float)c.h;
+                r.coord[k][2] = (r.cap[k].cb[0] * W - (float)x0[k] + (float)ox[k]) / (float)c.w;
+                r.coord[k][3] = (r.cap[k].cb[1] * H - (float)y0[k]) / (float)c.h;
+            }
+    }
+    r.ok = true;
+}
+
+void Pipeline::setDrawInterpolatedLightmap(const char* actor, float lerp) {
+    drawInterp_ = nullptr;
+    if (!actor) return;
+    auto it = interpLM_.find(actor);
+    if (it == interpLM_.end()) return;
+    if (!it->second.built) buildInterpLM(it->second);
+    if (it->second.ok) { drawInterp_ = &it->second; drawInterpLerp_ = std::min(std::max(lerp, 0.0f), 1.0f); }
+}
+
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
@@ -2905,6 +3029,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         if (at != std::string::npos && ma != std::string::npos && at > ma) {
             fs.insert(at, "    if (uLit != 0 && (uTLN > 0 || uTLAllN > 0)) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
+                          "uniform int uTLSkip;   // (world-only lights skipped on characters: they light them through the DLE)\n"
                           "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
                           "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
                           "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
@@ -2937,7 +3062,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
                           "    }\n"
                           "    for (int k = 0; k < 8; ++k) {\n"
                           "        if (k >= uTLN) break;\n"
-                          "        if (((uTLMask >> k) & 1) == 0) continue;\n"
+                          "        if (((uTLMask >> k) & 1) == 0 || ((uTLSkip >> k) & 1) != 0) continue;\n"
                           "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
                           "        float x2 = dot(dn, dn);\n"
                           "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
@@ -3912,7 +4037,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
                            dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
                            maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
                            P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
-                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, 0, 0};   // (fogN_: the layer uniforms ride in the same block)
+                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, hazeUniform(), 0};   // (fogN_: the layer uniforms ride in the same block; the haze factor too)
     if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
     CommonKey& ck = commonKeyById_[P.id];
     const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
@@ -3940,6 +4065,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
         Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
+        Uniform1f(ULOC(P, "uHazeK"), hazeUniform());       // (Realistic haze exposure; exactly 1 in Off / Faithful)
         if (fogN_ > 1) {
             Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
             Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
@@ -3948,6 +4074,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(ULOC(P, "uVertexLM"), 0);
     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     Uniform1i(ULOC(P, "uSkin"), skinMode_);
+    Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
     if (skinMode_) {
         Uniform1i(ULOC(P, "uSkinRow"), skinRow_);
         Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
@@ -4584,10 +4711,31 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 Uniform1i(ULOC(P, "uVertexLM"), 1);
+                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {
+                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
                 Uniform1i(ULOC(P, "uVLMBase"), s.vlmBase);
                 ActiveTexture(GL_TEXTURE0 + 11);
                 glBindTexture(GL_TEXTURE_2D, s.vlmTex);
+            } else if (s.interpLM && drawInterp_) {      // transforming world actor: its two captures, lerped (RE)
+                const InterpLM& r = *drawInterp_;
+                static const float kOne[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+                Uniform4f(P.uLMCoord, r.coord[0][0], r.coord[0][1], r.coord[0][2], r.coord[0][3]);
+                Uniform3fv(P.uLMScale, 3, kOne);           // (the shader applies each capture's own scale before the lerp)
+                Uniform1i(ULOC(P, "uLMInterp"), 1);
+                if ((size_t)s.prog >= interpSetProg_.size()) interpSetProg_.resize((size_t)s.prog + 1, 0);
+                interpSetProg_[(size_t)s.prog] = 1;
+                Uniform4f(ULOC(P, "uLMCoordB"), r.coord[1][0], r.coord[1][1], r.coord[1][2], r.coord[1][3]);
+                Uniform3fv(ULOC(P, "uLMScaleA"), 3, &r.cap[0].scale[0][0]);
+                Uniform3fv(ULOC(P, "uLMScaleB"), 3, &r.cap[1].scale[0][0]);
+                Uniform1f(ULOC(P, "uLMLerp"), drawInterpLerp_);
+                Uniform1i(ULOC(P, "uVertexLM"), 0);
+                for (int i = 0; i < 3; ++i) {
+                    ActiveTexture(GL_TEXTURE0 + 13 + i);
+                    glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)r.tex[i]] ? lmTextures_[(size_t)r.tex[i]] : blackTex_);
+                }
             } else if (s.lmTex[0] >= 0) {
+                if ((size_t)s.prog < interpSetProg_.size() && interpSetProg_[(size_t)s.prog]) {   // (a program a door drew with)
+                    Uniform1i(ULOC(P, "uLMInterp"), 0); interpSetProg_[(size_t)s.prog] = 0; }
                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 if (r1Map_) r1BindDraw(s.prog, s.lmTex[0], -1);
@@ -7202,7 +7350,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         static thread_local std::vector<uint64_t> sig;
         sig.clear();
         sig.push_back((uint64_t)m.subs.size() << 32 | (uint64_t)m.mats.size());
-        sig.push_back((uint64_t)m.indices.size() << 1 | (defrag ? 1u : 0u));
+        sig.push_back((uint64_t)m.indices.size() << 2 | (drawInterp_ ? 2u : 0u) | (defrag ? 1u : 0u));   // (+ interpolated light maps)
         for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
         for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
         if (noDynCache || ds.sig != sig) {
@@ -7231,6 +7379,10 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
                 d.first = s.indexOffset; d.count = s.indexCount;
                 d.prog = dynamicProgram(mat);
                 d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
+                if (drawInterp_ && mat) {   // (transforming world actor) its material's light-mapped program
+                    const int p = programFor(d.matName, mat, true);
+                    if (p >= 0 && progs_[(size_t)p].original) { d.prog = p; d.interpLM = true; }
+                }
                 if (defrag && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
                     if (const std::string* ed = energyDeathFor(mat->wfcName)) {
                         Material dm; dm.wfcName = *ed;
@@ -8164,10 +8316,21 @@ void Pipeline::selectTransientLights() {
             }
         }
     }
+    // the map's forced-dynamic lights never built into a lightmap (Remnant's PointLightToggleable_1918, RE: on at load, never
+    // toggled; bForceDynamicLight lights the lightmapped world per pixel, no static shadowing): through the same per-pixel
+    // path in Off / Faithful, unshadowed; Realistic's RT lightmap traces it with the authored lights (WfcRtGi)
+    if (rtMode_ != 2)
+        for (const Light& l : lights_)
+            if (l.worldDynamic && l.enabled && (l.type == 0 || l.type == 1)) {
+                const core::Vec3 d = l.dir;
+                const size_t n0 = tlights_.size();
+                addTransientLight(l.pos, l.color, l.radius, l.falloff, l.type == 1 ? &d : nullptr, l.spotCosI, l.spotCosO);
+                if (tlights_.size() > n0) tlights_.back().worldOnly = true;   // (characters: the DLE / LVV, not this path)
+            }
     tlightsDraw_.swap(tlights_);
     tlights_.clear();
     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
-    tlN_ = 0; tlAllN_ = 0;
+    tlN_ = 0; tlAllN_ = 0; tlWorldOnly_ = 0;
     if (off || tlightsDraw_.empty()) return;
     std::vector<std::pair<float, size_t>> rank;
     for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
@@ -8211,6 +8374,7 @@ void Pipeline::selectTransientLights() {
         tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
         tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
         tlCosI_[tlN_] = L.cosI;
+        if (L.worldOnly) tlWorldOnly_ |= 1 << tlN_;
         ++tlN_;
     }
     if (tlTiledOn()) tlBuildTiles();
@@ -8913,12 +9077,12 @@ void Pipeline::endFrame() {
         Uniform1i(U("uAdapt"), 4);
         // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
         // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
-        float mapKey = key;
-        if (!rtdef::toneKeySet()) {
-            static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
-            for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) mapKey = mk.second;
-        }
+        (void)key;
+        const float mapKey = toneMapKey();
         Uniform4f(U("uExpo"), mapKey, str, 0.7f, 1.8f);
+        // flash term (package 7 item 1): exposure x mix(1, flashMin, smoothstep(F0, F1, F)), the bloom mix x mix(1, 0.5, ..)
+        // - F the tracked share of super-bright samples; below F0 the factors are exactly 1 (ordinary frames unchanged)
+        Uniform4f(U("uFlash"), rtdef::flash() ? rtdef::flashMin() : 1.0f, rtdef::flashF0(), rtdef::flashF1(), rtdef::flash() ? 1.0f : 0.0f);
         Uniform3f(U("uToneGrade"), gain, sat, con);
         Uniform1f(U("uBloomMix"), 1.0f);
         Uniform3f(U("uWhiteRoll"), rtdef::whiteRoll() ? rtdef::whiteLo() : 0.0f, rtdef::whiteRoll() ? rtdef::whiteHi() : 0.0f, rtdef::whiteMix());
@@ -8965,6 +9129,7 @@ void Pipeline::volApply() {
     Uniform2f(cachedUniformLocation(volApplyProg_, "uNearFar"), znear_, zfar_);
     Uniform2f(cachedUniformLocation(volApplyProg_, "uRender"), (float)vpW_, (float)vpH_);
     Uniform4f(cachedUniformLocation(volApplyProg_, "uGrid"), (float)((vpW_ + 15) / 16), (float)((vpH_ + 15) / 16), 16.0f, rtdef::x3Dist());
+    Uniform1f(cachedUniformLocation(volApplyProg_, "uHazeK"), hazeUniform());
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
@@ -8973,17 +9138,28 @@ void Pipeline::volApply() {
     glx::textureCacheInvalidate();
 }
 
+float Pipeline::hazeUniform() const { return rtMode_ == 2 && rtdef::hazeExposure() ? hazeK_ : 1.0f; }
+
+float Pipeline::toneMapKey() const {   // (per-map exposure target, Molten plan b; WFC_TONE_KEY overrides every map)
+    float k = rtdef::toneKey();
+    if (!rtdef::toneKeySet()) {
+        static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
+        for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) k = mk.second;
+    }
+    return k;
+}
+
 bool Pipeline::toneFilmicOn() const {
     const bool off = !rtdef::tone();
     return !off && rtMode_ == 2 && toneLumProg_ && toneAdaptProg_;
 }
 
 void Pipeline::toneAdapt() {
-    constexpr GLenum kR16F = 0x822D, kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
+    constexpr GLenum kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
     if (!toneLumTex_) {
         glGenTextures(1, &toneLumTex_); GenFramebuffers(1, &toneLumFbo_);
         glBindTexture(GL_TEXTURE_2D, toneLumTex_);
-        glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 128, 128, 0, kRG, kHalf, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, 0x881A /*GL_RGBA16F*/, 128, 128, 0, GL_RGBA, kHalf, nullptr);   // (b: the flash share)
         GenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -8992,7 +9168,7 @@ void Pipeline::toneAdapt() {
         for (int i = 0; i < 2; ++i) {
             glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
             glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
-            glTexImage2D(GL_TEXTURE_2D, 0, kR16F, 1, 1, 0, kRed, kHalf, nullptr);
+            glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 1, 1, 0, kRG, kHalf, nullptr);   // (g: the tracked flash share)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[i]);
@@ -9009,9 +9185,14 @@ void Pipeline::toneAdapt() {
     BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
     glViewport(0, 0, 128, 128);
     UseProgram(toneLumProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
     Uniform1i(cachedUniformLocation(toneLumProg_, "uScene"), 0);
+    Uniform1i(cachedUniformLocation(toneLumProg_, "uPrevAdapt"), 1);
     Uniform2f(cachedUniformLocation(toneLumProg_, "uTexel"), 0.25f / 128.0f, 0.25f / 128.0f);
+    // (flash term: samples brighter than flashThresh after the previous frame's exposure count toward F)
+    Uniform4f(cachedUniformLocation(toneLumProg_, "uFlashExpo"), toneMapKey(), rtdef::toneAdapt(), rtdef::toneGain(),
+              rtdef::flash() ? rtdef::flashThresh() : 0.0f);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glBindTexture(GL_TEXTURE_2D, toneLumTex_);
     GenerateMipmap(GL_TEXTURE_2D);
@@ -9025,16 +9206,41 @@ void Pipeline::toneAdapt() {
     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uPrev"), 1);
     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uLevel"), 7.0f);
     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uRate"), 1.0f - std::exp(-dt * 1.5f));
+    Uniform2f(cachedUniformLocation(toneAdaptProg_, "uFlashRate"), 1.0f - std::exp(-dt / 0.08f), 1.0f - std::exp(-dt / 0.5f));   // (attack ~0.08 s, release ~0.5 s)
     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uReset"), toneReset_ || warmup_ ? 1 : 0);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+    // (haze exposure) the adapted mean + flash share read back without a stall: a ring of 3 pack buffers, the one written two
+    // frames ago read now -> this frame's exposure e (as the tone pass) -> hazeK_ = min(1, 1 / e): the additive haze terms
+    // (height fog in-scattering, X3) keep their authored brightness while auto-exposure lifts a dark room's surfaces
+    if (rtdef::hazeExposure()) {
+        if (!hazePbo_[0]) { GenBuffers(3, hazePbo_); for (GLuint b : hazePbo_) { BindBuffer(0x88EB, b); BufferData(0x88EB, 16, nullptr, 0x88E1 /*GL_STREAM_READ*/); } }
+        BindBuffer(0x88EB /*GL_PIXEL_PACK_BUFFER*/, hazePbo_[hazeIdx_ % 3]);
+        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, nullptr);   // (toneAdaptFbo_[next] is bound)
+        if (hazeIdx_ >= 2) {
+            float rg[2] = {0.0f, 0.0f};
+            BindBuffer(0x88EB, hazePbo_[(hazeIdx_ + 1) % 3]);
+            GetBufferSubData(0x88EB, 0, 8, rg);
+            const float avg = std::exp(rg[0]);
+            float e = rtdef::toneGain() * std::min(1.8f, std::max(0.7f, std::pow(toneMapKey() / std::max(avg, 1e-4f), rtdef::toneAdapt())));
+            if (rtdef::flash()) {
+                const float t = std::min(1.0f, std::max(0.0f, (rg[1] - rtdef::flashF0()) / (rtdef::flashF1() - rtdef::flashF0())));
+                e *= 1.0f + (rtdef::flashMin() - 1.0f) * t * t * (3.0f - 2.0f * t);
+            }
+            hazeK_ = std::min(1.0f, 1.0f / std::max(e, 1e-3f));
+        }
+        BindBuffer(0x88EB, 0);
+        ++hazeIdx_;
+    } else hazeK_ = 1.0f;
     toneIdx_ = next; toneReset_ = false;
     static const bool diag = std::getenv("WFC_TONEDIAG") != nullptr;
-    if (diag && frameNo_ % 300 == 0) {
+    if (diag) {                                       // (every 300 frames, and every frame with a flash F > 0.05)
         float v = 0.0f;
-        glReadPixels(0, 0, 1, 1, kRed, GL_FLOAT, &v);
-        LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f)", frameNo_, std::exp(v), v);
+        float rg[2] = {0.0f, 0.0f};
+        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, rg); v = rg[0];
+        if (frameNo_ % 300 == 0 || rg[1] > 0.05f)
+            LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f), flash share F %.3f", frameNo_, std::exp(v), v, rg[1]);
     }
 }
 

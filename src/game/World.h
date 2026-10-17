@@ -18,6 +18,7 @@
 #include "game/PickupFactory.h"
 #include "game/MapState.h"
 #include "game/TransformingActors.h"
+#include "game/TransformingActorsDraw.h"
 #include "game/Match.h"
 #include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
@@ -1188,6 +1189,7 @@ public:
 private:
     MapState mapState_;
     TransformingActors transforming_;   // the map's TnTransformingWorldActors (doors / bridges): state, collision, nav blocks
+    TransformingActorsDraw transformingDraw_;   // (Rendering) their skeletal meshes posed at t, drawn each frame
     // VehicleDying bodies (see noteVehicleDeath): a pool of unit-box dynamic sets; queued at the death, applied in the map tick.
     struct DyingBody { int pawnSet = -1, weaponSet = -1; float remain = 0.0f; };
     struct DyingRequest { core::Vec3 pos{0, 0, 0}; float yaw = 0.0f, radius = 1.0f, halfHeight = 1.0f, time = 0.5f; };

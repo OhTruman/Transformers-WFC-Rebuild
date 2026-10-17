@@ -4325,6 +4325,7 @@ void World::syncMapPresentation(render::IRenderer& r) const {
 
 void World::draw(render::IRenderer& r) const {
     syncMapPresentation(r);
+    transformingDraw_.draw(transforming_, r);   // the map's transforming doors / bridges (posed at t; nothing on maps without them)
     if (mapMesh_ != render::kInvalidMesh) {
         r.drawMesh(mapMesh_, core::Mat4::identity(), mapColor_);
     } else {

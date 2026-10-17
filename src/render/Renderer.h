@@ -229,6 +229,10 @@ public:
     // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
     // *_VEH_p, WEP_*), never from character names.
     virtual void setDrawOwner(int ownerId) { (void)ownerId; }
+    // Transforming world actors (doors / bridges): the next skinned draws are lit by this actor's two baked light-map captures
+    // (lighting.json 'interpolated_lightmaps', RE INTERPOLATED_LIGHTMAP_RE.md) blended by lerp = the transform's normalized
+    // position, instead of a light environment; nullptr ends it.
+    virtual void setDrawInterpolatedLightmap(const char* actor, float lerp) { (void)actor; (void)lerp; }
     // UE3 Client DisplayGamma (default 2.2): the scene resolve and Canvas material tiles apply pow(1 / DisplayGamma).
     // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
     //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)

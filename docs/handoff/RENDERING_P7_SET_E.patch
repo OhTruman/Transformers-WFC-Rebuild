@@ -1,0 +1,538 @@
+diff -ru base/src/render/gl/WfcPipeline.cpp sete/src/render/gl/WfcPipeline.cpp
+--- base/src/render/gl/WfcPipeline.cpp	2026-10-17 13:51:53.105838000 -0500
++++ sete/src/render/gl/WfcPipeline.cpp	2026-10-17 13:51:53.122896100 -0500
+@@ -120,6 +120,7 @@
+ uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
+ uniform vec3 uFogIn;
+ uniform int uFogN;                           // authored height fog layers (1 = the first only)
++uniform float uHazeK;                        // (Realistic) the fog in-scattering's share of auto-exposure: min(1, 1 / e); 1 elsewhere
+ uniform vec4 uFogL[3]; uniform vec3 uFogC[3];   // layers 2-4: (max height UU, scale, start, extinction); in-scattering
+ uniform vec4 uFogMinH;                       // the 4 layers' min heights (the next layer's height; the last -HALF_WORLD_MAX)
+ uniform int uVertexLM;      // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
+@@ -202,6 +203,7 @@
+         vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
+     }
+     vFog = heightFog(wp.xyz);
++    vFog.rgb *= uHazeK > 0.0 ? uHazeK : 1.0;   // (Realistic: haze not lifted by auto-exposure; unset / Off / Faithful: x 1.0)
+     gl_Position = uViewProj * wp;
+     if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
+         float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
+@@ -798,6 +800,7 @@
+ uniform int uFilmic;
+ uniform sampler2D uAdapt;
+ uniform vec4 uExpo;      // key, adaptation strength, min, max
++uniform vec4 uFlash;     // (flash term) exposure factor at full flash, F0, F1, on
+ uniform vec3 uToneGrade; // pre-gain, saturation, contrast
+ uniform float uBloomMix;
+ uniform vec3 uWhiteRoll;   // (X1 white roll) brightest-channel range lo..hi, warm-white mix; hi <= lo = off
+@@ -840,7 +843,9 @@
+     if (uFilmic != 0) {
+         float avg = exp(texture(uAdapt, vec2(0.5)).r);
+         float e = uToneGrade.x * clamp(pow(uExpo.x / max(avg, 1e-4), uExpo.y), uExpo.z, uExpo.w);
+-        c = ((1.0 - a) * scene * e + blur.rgb * uBloomMix) / max((1.0 - a) + blur.a, 0.0001);
++        float fl = uFlash.w > 0.0 ? smoothstep(uFlash.y, uFlash.z, texture(uAdapt, vec2(0.5)).g) : 0.0;   // (flash term)
++        e *= mix(1.0, uFlash.x, fl);
++        c = ((1.0 - a) * scene * e + blur.rgb * (uBloomMix * mix(1.0, 0.5, fl))) / max((1.0 - a) + blur.a, 0.0001);
+         c = 0.18 * pow(max(c, vec3(1e-6)) / 0.18, vec3(uToneGrade.z));   // (contrast around 18 % grey: lit and shadowed sides part)
+         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+         c = max(mix(vec3(l), c, uToneGrade.y), 0.0);
+@@ -862,6 +867,7 @@
+ const char* kVolApplyFS = R"(#version 330 compatibility
+ in vec2 vUV;
+ uniform sampler2D uVol, uDepth;
++uniform float uHazeK;    // (haze exposure) min(1, 1 / e); 0 = unset (x 1)
+ uniform vec2 uNearFar, uRender;
+ uniform vec4 uGrid;      // tiles x, tiles y, tile size (px), max distance (m)
+ layout(location=0) out vec4 oColor;
+@@ -883,39 +889,52 @@
+     vec4 v;
+     if (u < 0.0) v = mix(vec4(0.0, 0.0, 0.0, 1.0), sliceAt(tp, 0), clamp(u + 1.0, 0.0, 1.0));
+     else { int k = int(floor(u)); v = mix(sliceAt(tp, k), sliceAt(tp, k + 1), u - float(k)); }
+-    oColor = vec4(max(v.rgb, 0.0), clamp(v.a, 0.0, 1.0));
++    oColor = vec4(max(v.rgb, 0.0) * (uHazeK > 0.0 ? uHazeK : 1.0), clamp(v.a, 0.0, 1.0));   // (haze exposure: the in-scatter keeps its authored brightness)
+ }
+ )";
+ // (X1) the scene's log luminance at 128 x 128 (mipmapped to its mean), and its temporal adaptation into a 1 x 1 target
+ const char* kToneLumFS = R"(#version 330 compatibility
+ in vec2 vUV;
+ uniform sampler2D uScene;
++uniform sampler2D uPrevAdapt;   // (flash term) the adapted log mean so far
+ uniform vec2 uTexel;
++uniform vec4 uFlashExpo;        // key, adaptation strength, gain, threshold (after exposure); threshold 0 = off
+ layout(location=0) out vec4 oColor;
+ void main() {
+-    float s = 0.0;
++    float s = 0.0, f = 0.0;
++    float e = 1.0;
++    if (uFlashExpo.w > 0.0) {   // the previous frame's exposure (as the tone pass, before the flash factor)
++        float avg = exp(texture(uPrevAdapt, vec2(0.5)).r);
++        e = uFlashExpo.z * clamp(pow(uFlashExpo.x / max(avg, 1e-4), uFlashExpo.y), 0.7, 1.8);
++    }
+     for (int i = 0; i < 4; ++i) {
+         vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0) * uTexel;
+         vec3 c = texture(uScene, vUV + o).rgb;
+-        s += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-3));
++        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
++        s += log(max(l, 1e-3));
++        f += uFlashExpo.w > 0.0 && l * e > uFlashExpo.w ? 1.0 : 0.0;
+     }
+     // (centre-weighted: the middle of the view counts double, the HUD-free corners half)
+     vec2 d = vUV - 0.5;
+     float w = mix(2.0, 0.5, clamp(dot(d, d) * 4.0, 0.0, 1.0));
+-    oColor = vec4(s * 0.25 * w, w, 0.0, 1.0);
++    oColor = vec4(s * 0.25 * w, w, f * 0.25 * w, 1.0);   // (b: the weighted share of super-bright samples - the flash)
+ }
+ )";
+ const char* kToneAdaptFS = R"(#version 330 compatibility
+ in vec2 vUV;
+ uniform sampler2D uLum, uPrev;
+ uniform float uLevel, uRate;
++uniform vec2 uFlashRate;        // the flash share: attack, release blend (per frame)
+ uniform int uReset;
+ layout(location=0) out vec4 oColor;
+ void main() {
+-    vec2 m = textureLod(uLum, vec2(0.5), uLevel).rg;
++    vec3 m = textureLod(uLum, vec2(0.5), uLevel).rgb;
+     float cur = m.x / max(m.y, 1e-4);
+-    float prev = texture(uPrev, vec2(0.5)).r;
+-    oColor = vec4(uReset != 0 ? cur : prev + (cur - prev) * uRate, 0.0, 0.0, 1.0);
++    vec2 prev = texture(uPrev, vec2(0.5)).rg;
++    // (flash term) the frame's flash share F: a fast attack, a slow release - its own channel, the mean untouched
++    float f = m.z / max(m.y, 1e-4);
++    float fr = f > prev.y ? uFlashRate.x : uFlashRate.y;
++    oColor = vec4(uReset != 0 ? cur : prev.x + (cur - prev.x) * uRate, uReset != 0 ? 0.0 : prev.y + (f - prev.y) * fr, 0.0, 1.0);
+ }
+ )";
+ 
+@@ -1218,7 +1237,7 @@
+     refMask_ = MaskSet{};
+     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_, &screenFxVao_}) vao(*v);
+     for (GLuint* b : {&screenFxVbo_, &screenFxIbo_}) buf(*b);
+-    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
++    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_, &hazePbo_[0], &hazePbo_[1], &hazePbo_[2]}) buf(*b);
+     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &toneLumProg_, &toneAdaptProg_, &volApplyProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
+                       &constProg_, &maskBlurProg_, &distApplyCutProg_, &distRectProg_, &distCopyProg_})
+         prog(*p);
+@@ -1531,6 +1550,7 @@
+         l.name = e["name"].asString();
+         l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
+         l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
++        l.worldDynamic = e["force_dynamic"].asBool(false) && !e["built_into_lightmap"].asBool(true);
+         l.castStaticShadows = e["cast_static_shadows"].asBool(true);
+         l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
+         {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
+@@ -2905,6 +2925,7 @@
+         if (at != std::string::npos && ma != std::string::npos && at > ma) {
+             fs.insert(at, "    if (uLit != 0 && (uTLN > 0 || uTLAllN > 0)) c += wfcTransientLights(normalize(tbn * normalize(o.Normal)), o);\n");
+             fs.insert(ma, "uniform int uTLN; uniform vec4 uTLPos[8]; uniform vec4 uTLCol[8];   // xyz, 1 / radius; rgb, falloff exponent\n"
++                          "uniform int uTLSkip;   // (world-only lights skipped on characters: they light them through the DLE)\n"
+                           "uniform int uTLMask;   // the lights that reach this draw's bounds (bit k)\n"
+                           "uniform vec4 uTLCut[2];   // per light: (d / radius)^2 past which its falloff < 1/512\n"
+                           "uniform vec4 uTLDir[8]; uniform vec4 uTLCosI[2];   // spot axis, cos(outer) (-2 = point); cos(inner)\n"
+@@ -2937,7 +2958,7 @@
+                           "    }\n"
+                           "    for (int k = 0; k < 8; ++k) {\n"
+                           "        if (k >= uTLN) break;\n"
+-                          "        if (((uTLMask >> k) & 1) == 0) continue;\n"
++                          "        if (((uTLMask >> k) & 1) == 0 || ((uTLSkip >> k) & 1) != 0) continue;\n"
+                           "        vec3 d = uTLPos[k].xyz - vPos, dn = d * uTLPos[k].w;\n"
+                           "        float x2 = dot(dn, dn);\n"
+                           "        if (x2 > uTLCut[k >> 2][k & 3]) continue;\n"
+@@ -3912,7 +3933,7 @@
+                            dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
+                            maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
+                            P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
+-                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, 0, 0};   // (fogN_: the layer uniforms ride in the same block)
++                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, (float)fogN_, hazeUniform(), 0};   // (fogN_: the layer uniforms ride in the same block; the haze factor too)
+     if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
+     CommonKey& ck = commonKeyById_[P.id];
+     const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
+@@ -3940,6 +3961,7 @@
+         Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
+         Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
+         Uniform1i(ULOC(P, "uFogN"), fogOn_ ? fogN_ : 0);   // (height fog layers 2-4 after the first, RE lighting reference)
++        Uniform1f(ULOC(P, "uHazeK"), hazeUniform());       // (Realistic haze exposure; exactly 1 in Off / Faithful)
+         if (fogN_ > 1) {
+             Uniform4fv(ULOC(P, "uFogL"), 3, &fogL_[0][0]); Uniform3fv(ULOC(P, "uFogC"), 3, &fogC_[0][0]);
+             Uniform4f(ULOC(P, "uFogMinH"), fogMinH_[0], fogMinH_[1], fogMinH_[2], fogMinH_[3]);
+@@ -3948,6 +3970,7 @@
+     Uniform1i(ULOC(P, "uVertexLM"), 0);
+     Uniform4f(ULOC(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+     Uniform1i(ULOC(P, "uSkin"), skinMode_);
++    Uniform1i(ULOC(P, "uTLSkip"), skinMode_ != 0 || inDynamicDraw_ ? tlWorldOnly_ : 0);   // (forced-dynamic world lights: not on characters)
+     if (skinMode_) {
+         Uniform1i(ULOC(P, "uSkinRow"), skinRow_);
+         Uniform1i(ULOC(P, "uSkinBones"), skinBones_);
+@@ -8164,10 +8187,21 @@
+             }
+         }
+     }
++    // the map's forced-dynamic lights never built into a lightmap (Remnant's PointLightToggleable_1918, RE: on at load, never
++    // toggled; bForceDynamicLight lights the lightmapped world per pixel, no static shadowing): through the same per-pixel
++    // path in Off / Faithful, unshadowed; Realistic's RT lightmap traces it with the authored lights (WfcRtGi)
++    if (rtMode_ != 2)
++        for (const Light& l : lights_)
++            if (l.worldDynamic && l.enabled && (l.type == 0 || l.type == 1)) {
++                const core::Vec3 d = l.dir;
++                const size_t n0 = tlights_.size();
++                addTransientLight(l.pos, l.color, l.radius, l.falloff, l.type == 1 ? &d : nullptr, l.spotCosI, l.spotCosO);
++                if (tlights_.size() > n0) tlights_.back().worldOnly = true;   // (characters: the DLE / LVV, not this path)
++            }
+     tlightsDraw_.swap(tlights_);
+     tlights_.clear();
+     static const bool off = std::getenv("WFC_NOTRANSIENTLIGHTS") != nullptr;   // A/B
+-    tlN_ = 0; tlAllN_ = 0;
++    tlN_ = 0; tlAllN_ = 0; tlWorldOnly_ = 0;
+     if (off || tlightsDraw_.empty()) return;
+     std::vector<std::pair<float, size_t>> rank;
+     for (size_t i = 0; i < tlightsDraw_.size(); ++i) {
+@@ -8211,6 +8245,7 @@
+         tlCut_[tlN_] = L.falloff > 1e-3f ? 1.0f - std::pow(1.0f / 512.0f, 1.0f / L.falloff) : 1.0f;
+         tlDir_[tlN_][0] = L.dir.x; tlDir_[tlN_][1] = L.dir.y; tlDir_[tlN_][2] = L.dir.z; tlDir_[tlN_][3] = L.cosO;
+         tlCosI_[tlN_] = L.cosI;
++        if (L.worldOnly) tlWorldOnly_ |= 1 << tlN_;
+         ++tlN_;
+     }
+     if (tlTiledOn()) tlBuildTiles();
+@@ -8913,12 +8948,12 @@
+         Uniform1i(U("uAdapt"), 4);
+         // (per-map exposure target, Molten plan b: its halls are lit by the lava alone and sit at the same log-average as
+         // Streets' exterior - a higher key opens them up; WFC_TONE_KEY overrides every map)
+-        float mapKey = key;
+-        if (!rtdef::toneKeySet()) {
+-            static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
+-            for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) mapKey = mk.second;
+-        }
++        (void)key;
++        const float mapKey = toneMapKey();
+         Uniform4f(U("uExpo"), mapKey, str, 0.7f, 1.8f);
++        // flash term (package 7 item 1): exposure x mix(1, flashMin, smoothstep(F0, F1, F)), the bloom mix x mix(1, 0.5, ..)
++        // - F the tracked share of super-bright samples; below F0 the factors are exactly 1 (ordinary frames unchanged)
++        Uniform4f(U("uFlash"), rtdef::flash() ? rtdef::flashMin() : 1.0f, rtdef::flashF0(), rtdef::flashF1(), rtdef::flash() ? 1.0f : 0.0f);
+         Uniform3f(U("uToneGrade"), gain, sat, con);
+         Uniform1f(U("uBloomMix"), 1.0f);
+         Uniform3f(U("uWhiteRoll"), rtdef::whiteRoll() ? rtdef::whiteLo() : 0.0f, rtdef::whiteRoll() ? rtdef::whiteHi() : 0.0f, rtdef::whiteMix());
+@@ -8965,6 +9000,7 @@
+     Uniform2f(cachedUniformLocation(volApplyProg_, "uNearFar"), znear_, zfar_);
+     Uniform2f(cachedUniformLocation(volApplyProg_, "uRender"), (float)vpW_, (float)vpH_);
+     Uniform4f(cachedUniformLocation(volApplyProg_, "uGrid"), (float)((vpW_ + 15) / 16), (float)((vpH_ + 15) / 16), 16.0f, rtdef::x3Dist());
++    Uniform1f(cachedUniformLocation(volApplyProg_, "uHazeK"), hazeUniform());
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
+     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
+@@ -8973,17 +9009,28 @@
+     glx::textureCacheInvalidate();
+ }
+ 
++float Pipeline::hazeUniform() const { return rtMode_ == 2 && rtdef::hazeExposure() ? hazeK_ : 1.0f; }
++
++float Pipeline::toneMapKey() const {   // (per-map exposure target, Molten plan b; WFC_TONE_KEY overrides every map)
++    float k = rtdef::toneKey();
++    if (!rtdef::toneKeySet()) {
++        static const std::pair<const char*, float> kMapKeys[] = {{"MP_KON_Molten", 0.03f}};
++        for (const auto& mk : kMapKeys) if (dataDir_.find(mk.first) != std::string::npos) k = mk.second;
++    }
++    return k;
++}
++
+ bool Pipeline::toneFilmicOn() const {
+     const bool off = !rtdef::tone();
+     return !off && rtMode_ == 2 && toneLumProg_ && toneAdaptProg_;
+ }
+ 
+ void Pipeline::toneAdapt() {
+-    constexpr GLenum kR16F = 0x822D, kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
++    constexpr GLenum kRG16F = 0x822F, kRed = 0x1903, kRG = 0x8227, kHalf = 0x140B;
+     if (!toneLumTex_) {
+         glGenTextures(1, &toneLumTex_); GenFramebuffers(1, &toneLumFbo_);
+         glBindTexture(GL_TEXTURE_2D, toneLumTex_);
+-        glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 128, 128, 0, kRG, kHalf, nullptr);
++        glTexImage2D(GL_TEXTURE_2D, 0, 0x881A /*GL_RGBA16F*/, 128, 128, 0, GL_RGBA, kHalf, nullptr);   // (b: the flash share)
+         GenerateMipmap(GL_TEXTURE_2D);
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+@@ -8992,7 +9039,7 @@
+         for (int i = 0; i < 2; ++i) {
+             glGenTextures(1, &toneAdaptTex_[i]); GenFramebuffers(1, &toneAdaptFbo_[i]);
+             glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[i]);
+-            glTexImage2D(GL_TEXTURE_2D, 0, kR16F, 1, 1, 0, kRed, kHalf, nullptr);
++            glTexImage2D(GL_TEXTURE_2D, 0, kRG16F, 1, 1, 0, kRG, kHalf, nullptr);   // (g: the tracked flash share)
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+             BindFramebuffer(GL_FRAMEBUFFER, toneAdaptFbo_[i]);
+@@ -9009,9 +9056,14 @@
+     BindFramebuffer(GL_FRAMEBUFFER, toneLumFbo_);
+     glViewport(0, 0, 128, 128);
+     UseProgram(toneLumProg_);
++    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, toneAdaptTex_[toneIdx_]);
+     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
+     Uniform1i(cachedUniformLocation(toneLumProg_, "uScene"), 0);
++    Uniform1i(cachedUniformLocation(toneLumProg_, "uPrevAdapt"), 1);
+     Uniform2f(cachedUniformLocation(toneLumProg_, "uTexel"), 0.25f / 128.0f, 0.25f / 128.0f);
++    // (flash term: samples brighter than flashThresh after the previous frame's exposure count toward F)
++    Uniform4f(cachedUniformLocation(toneLumProg_, "uFlashExpo"), toneMapKey(), rtdef::toneAdapt(), rtdef::toneGain(),
++              rtdef::flash() ? rtdef::flashThresh() : 0.0f);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+     glBindTexture(GL_TEXTURE_2D, toneLumTex_);
+     GenerateMipmap(GL_TEXTURE_2D);
+@@ -9025,16 +9077,41 @@
+     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uPrev"), 1);
+     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uLevel"), 7.0f);
+     Uniform1f(cachedUniformLocation(toneAdaptProg_, "uRate"), 1.0f - std::exp(-dt * 1.5f));
++    Uniform2f(cachedUniformLocation(toneAdaptProg_, "uFlashRate"), 1.0f - std::exp(-dt / 0.08f), 1.0f - std::exp(-dt / 0.5f));   // (attack ~0.08 s, release ~0.5 s)
+     Uniform1i(cachedUniformLocation(toneAdaptProg_, "uReset"), toneReset_ || warmup_ ? 1 : 0);
+     glDrawArrays(GL_TRIANGLES, 0, 3);
+     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
+     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
++    // (haze exposure) the adapted mean + flash share read back without a stall: a ring of 3 pack buffers, the one written two
++    // frames ago read now -> this frame's exposure e (as the tone pass) -> hazeK_ = min(1, 1 / e): the additive haze terms
++    // (height fog in-scattering, X3) keep their authored brightness while auto-exposure lifts a dark room's surfaces
++    if (rtdef::hazeExposure()) {
++        if (!hazePbo_[0]) { GenBuffers(3, hazePbo_); for (GLuint b : hazePbo_) { BindBuffer(0x88EB, b); BufferData(0x88EB, 16, nullptr, 0x88E1 /*GL_STREAM_READ*/); } }
++        BindBuffer(0x88EB /*GL_PIXEL_PACK_BUFFER*/, hazePbo_[hazeIdx_ % 3]);
++        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, nullptr);   // (toneAdaptFbo_[next] is bound)
++        if (hazeIdx_ >= 2) {
++            float rg[2] = {0.0f, 0.0f};
++            BindBuffer(0x88EB, hazePbo_[(hazeIdx_ + 1) % 3]);
++            GetBufferSubData(0x88EB, 0, 8, rg);
++            const float avg = std::exp(rg[0]);
++            float e = rtdef::toneGain() * std::min(1.8f, std::max(0.7f, std::pow(toneMapKey() / std::max(avg, 1e-4f), rtdef::toneAdapt())));
++            if (rtdef::flash()) {
++                const float t = std::min(1.0f, std::max(0.0f, (rg[1] - rtdef::flashF0()) / (rtdef::flashF1() - rtdef::flashF0())));
++                e *= 1.0f + (rtdef::flashMin() - 1.0f) * t * t * (3.0f - 2.0f * t);
++            }
++            hazeK_ = std::min(1.0f, 1.0f / std::max(e, 1e-3f));
++        }
++        BindBuffer(0x88EB, 0);
++        ++hazeIdx_;
++    } else hazeK_ = 1.0f;
+     toneIdx_ = next; toneReset_ = false;
+     static const bool diag = std::getenv("WFC_TONEDIAG") != nullptr;
+-    if (diag && frameNo_ % 300 == 0) {
++    if (diag) {                                       // (every 300 frames, and every frame with a flash F > 0.05)
+         float v = 0.0f;
+-        glReadPixels(0, 0, 1, 1, kRed, GL_FLOAT, &v);
+-        LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f)", frameNo_, std::exp(v), v);
++        float rg[2] = {0.0f, 0.0f};
++        glReadPixels(0, 0, 1, 1, kRG, GL_FLOAT, rg); v = rg[0];
++        if (frameNo_ % 300 == 0 || rg[1] > 0.05f)
++            LOG_INFO("TONEDIAG frame %d: adapted mean luminance %.4f (log %.3f), flash share F %.3f", frameNo_, std::exp(v), v, rg[1]);
+     }
+ }
+ 
+diff -ru base/src/render/gl/WfcPipeline.h sete/src/render/gl/WfcPipeline.h
+--- base/src/render/gl/WfcPipeline.h	2026-10-17 13:51:53.192133600 -0500
++++ sete/src/render/gl/WfcPipeline.h	2026-10-17 13:51:53.208690100 -0500
+@@ -48,6 +48,7 @@
+     bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
+     std::string name;             // source light component (frame report)
+     bool castDynamicShadows = true, castCompositeShadow = false, hasLightFunction = false;
++    bool worldDynamic = false;   // bForceDynamicLight + never built into a lightmap: a per-pixel light on the lightmapped world
+     float brightness = 1.0f;
+     core::Vec3 colorByte{1, 1, 1};   // LightColor / 255 (DirectLightEnv ranking colour)
+     uint32_t chMask = 0;             // LightingChannels (MSB-first bits)
+@@ -371,7 +372,8 @@
+     // kind 2: a material-less particle batch (queueFallbackSprites)
+     struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
+     std::vector<FallbackBatch> fallbackPool_;
+-    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; };
++    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; bool worldOnly = false; };
++    int tlWorldOnly_ = 0;   // bits of the applied 8: world-only lights (forced-dynamic map lights; characters get them via the DLE)
+     std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
+     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
+     float tlCut_[8] = {};
+@@ -1454,6 +1456,9 @@
+     GLuint volApplyProg_ = 0;             // (X3) composites RtTargets::vol over the scene: scene x a + rgb
+     void volApply();
+     bool toneFilmicOn() const;
++    float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
++    float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
++    GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
+     void toneAdapt();
+     int bloomW_ = 1, bloomH_ = 1;
+     int fbW_ = 0, fbH_ = 0;
+diff -ru base/src/render/gl/WfcRtDefaults.h sete/src/render/gl/WfcRtDefaults.h
+--- base/src/render/gl/WfcRtDefaults.h	2026-10-17 13:51:53.271906800 -0500
++++ sete/src/render/gl/WfcRtDefaults.h	2026-10-17 13:51:53.287461000 -0500
+@@ -62,6 +62,16 @@
+ inline float x3Cap() { static const float v = std::max(0.0f, envNum("WFC_X3_CAP", 0.2f)); return v; }   // integrated in-scatter cap
+ inline float x3History() { static const float v = std::min(0.98f, std::max(0.0f, envNum("WFC_X3_HISTORY", 0.9f))); return v; }
+ inline float whiteMix() { static const float v = std::min(1.0f, std::max(0.0f, envNum("WFC_TONE_WHITEMIX", 0.5f))); return v; }
++// package 7 item 1, the flash term (Realistic tone): exposure x mix(1, flashMin, smoothstep(F0, F1, F)), F = the tracked
++// share of samples brighter than flashThresh after exposure (fast attack, slow release); WFC_TONE_FLASH=0 off
++// (Realistic) haze exposure: the additive haze terms (height fog in-scattering, X3) x min(1, 1 / auto-exposure) - a dark room's
++// authored haze is not lifted into a grey veil (Rust dark room, the X3 corridors); WFC_TONE_HAZEEXP=0 off
++inline bool hazeExposure() { static const bool v = envOn("WFC_TONE_HAZEEXP"); return v; }
++inline bool flash() { static const bool v = envOn("WFC_TONE_FLASH"); return v; }
++inline float flashMin() { static const float v = std::min(1.0f, std::max(0.1f, envNum("WFC_TONE_FLASHMIN", 0.55f))); return v; }
++inline float flashF0() { static const float v = std::max(0.0f, envNum("WFC_TONE_FLASHF0", 0.15f)); return v; }
++inline float flashF1() { static const float v = std::max(flashF0() + 0.01f, envNum("WFC_TONE_FLASHF1", 0.6f)); return v; }
++inline float flashThresh() { static const float v = std::max(0.5f, envNum("WFC_TONE_FLASHTHRESH", 1.5f)); return v; }
+ }  // namespace rtdef
+ }  // namespace wfc
+ }  // namespace render
+diff -ru base/tools/render/build_lighting.py sete/tools/render/build_lighting.py
+--- base/tools/render/build_lighting.py	2026-10-17 13:51:53.356696700 -0500
++++ sete/tools/render/build_lighting.py	2026-10-17 13:51:53.373254500 -0500
+@@ -156,6 +156,51 @@
+     return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
+ 
+ 
++def light_record(repo, cref, M):
++    # one LightComponent (class defaults, its tags, LightingChannels) at the UE matrix M -> the lighting.json record
++    cls = repo.cls(cref)
++    c = dict(LIGHT_DEFAULTS)
++    if cls == 'PointLightComponent': c.update(POINT_DEFAULTS)
++    if cls == 'SpotLightComponent': c.update(POINT_DEFAULTS); c.update(SPOT_DEFAULTS)
++    c.update({k2: v for k2, v in (repo.obj(cref) or {}).items()})
++    ch = dict(CHANNEL_DEFAULTS)
++    for t in c.get('LightingChannels') or []:
++        if isinstance(t, dict) and 'name' in t: ch[t['name']] = bool(t['value'])
++    pos = M[3, :3]; xaxis = M[0, :3]
++    col = fcolor_rgb(c.get('LightColor'))
++    return {
++        'name': cref.split('.')[-1], 'class': cls,
++        'position': ue_to_gltf_pos(pos), 'direction': ue_to_gltf_dir(xaxis),
++        'color_srgb8': col[:3], 'brightness': c.get('Brightness'),
++        'radius_m': (c.get('Radius') or 0) * 0.01, 'falloff_exponent': c.get('FalloffExponent'),
++        'inner_cone_deg': c.get('InnerConeAngle'), 'outer_cone_deg': c.get('OuterConeAngle'),
++        'enabled': bool(c.get('bEnabled', True)), 'cast_shadows': bool(c.get('CastShadows', True)),
++        'cast_static_shadows': bool(c.get('CastStaticShadows', True)),
++        'built_into_lightmap': bool(c.get('bHasLightEverBeenBuiltIntoLightMap', False)),
++        'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
++        'lower_color_srgb8': fcolor_rgb(c.get('LowerColor'))[:3],
++        'lower_brightness': c.get('LowerBrightness', 0.0),
++        # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
++        # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
++        # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
++        'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
++        # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
++        'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
++        'use_volumes': bool(c.get('bUseVolumes', False)),
++        'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
++        'has_light_function': c.get('Function') is not None,
++        'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
++        'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
++        'force_dynamic': bool(c.get('bForceDynamicLight', False)),
++        'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
++        'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
++        # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
++        'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
++        'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
++        'ue_matrix': M.tolist(),
++    }
++
++
+ def lights(repo, pkg_index):
+     p = repo.pkgs[pkg_index]; pr = repo.readers[pkg_index]
+     res = []
+@@ -168,47 +213,37 @@
+         mats = np.frombuffer(raw[:64 * len(comps)], '>f4').reshape(-1, 4, 4).astype('f8')
+         for k, cref in enumerate(comps):
+             if not cref: continue
+-            cls = repo.cls(cref)
+-            c = dict(LIGHT_DEFAULTS)
+-            if cls == 'PointLightComponent': c.update(POINT_DEFAULTS)
+-            if cls == 'SpotLightComponent': c.update(POINT_DEFAULTS); c.update(SPOT_DEFAULTS)
+-            c.update({k2: v for k2, v in (repo.obj(cref) or {}).items()})
+-            ch = dict(CHANNEL_DEFAULTS)
+-            for t in c.get('LightingChannels') or []:
+-                if isinstance(t, dict) and 'name' in t: ch[t['name']] = bool(t['value'])
+-            M = mats[k]
+-            pos = M[3, :3]; xaxis = M[0, :3]
+-            col = fcolor_rgb(c.get('LightColor'))
+-            res.append({
+-                'name': cref.split('.')[-1], 'class': cls,
+-                'position': ue_to_gltf_pos(pos), 'direction': ue_to_gltf_dir(xaxis),
+-                'color_srgb8': col[:3], 'brightness': c.get('Brightness'),
+-                'radius_m': (c.get('Radius') or 0) * 0.01, 'falloff_exponent': c.get('FalloffExponent'),
+-                'inner_cone_deg': c.get('InnerConeAngle'), 'outer_cone_deg': c.get('OuterConeAngle'),
+-                'enabled': bool(c.get('bEnabled', True)), 'cast_shadows': bool(c.get('CastShadows', True)),
+-                'cast_static_shadows': bool(c.get('CastStaticShadows', True)),
+-                'built_into_lightmap': bool(c.get('bHasLightEverBeenBuiltIntoLightMap', False)),
+-                'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
+-                'lower_color_srgb8': fcolor_rgb(c.get('LowerColor'))[:3],
+-                'lower_brightness': c.get('LowerBrightness', 0.0),
+-                # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
+-                # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
+-                # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
+-                'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
+-                # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
+-                'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
+-                'use_volumes': bool(c.get('bUseVolumes', False)),
+-                'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
+-                'has_light_function': c.get('Function') is not None,
+-                'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
+-                'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
+-                'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
+-                'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
+-                # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
+-                'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
+-                'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
+-                'ue_matrix': M.tolist(),
+-            })
++            res.append(light_record(repo, cref, mats[k]))
++    return res
++
++
++# placed light ACTORS outside the cooked StaticLightCollectionActors (e.g. Remnant's PointLightToggleable_1918: bToggleable,
++# bForceDynamicLight, never built into a lightmap - RE): the actor's LightComponent at its Location / Rotation
++STANDALONE_LIGHT_CLASSES = ('PointLightToggleable', 'PointLightMovable', 'SpotLightToggleable', 'SpotLightMovable',
++                            'PointLight', 'SpotLight')
++
++
++def standalone_lights(repo, pkg_index):
++    p = repo.pkgs[pkg_index]; pr = repo.readers[pkg_index]
++    res = []
++    for i, e in enumerate(p.exports):
++        if p.class_name(e) not in STANDALONE_LIGHT_CLASSES: continue
++        if '.TheWorld.PersistentLevel.' not in p.object_path(i + 1): continue   # (prefab archetypes are templates)
++        tags, _ = pr.read_object(i + 1)
++        d = tags_to_dict(tags)
++        lc = d.get('LightComponent')
++        cref = lc.get('ref') if isinstance(lc, dict) else None
++        if not cref: continue
++        loc = d.get('Location') or [0.0, 0.0, 0.0]
++        rot = d.get('Rotation') or [0, 0, 0]
++        if isinstance(rot, dict): rot = [rot.get('Pitch', 0), rot.get('Yaw', 0), rot.get('Roll', 0)]
++        pitch, yaw = rot[0] * np.pi / 32768.0, rot[1] * np.pi / 32768.0
++        M = np.eye(4)
++        M[0, :3] = [np.cos(pitch) * np.cos(yaw), np.cos(pitch) * np.sin(yaw), np.sin(pitch)]
++        M[3, :3] = loc[:3]
++        r = light_record(repo, cref, M)
++        r['standalone_actor'] = p.object_path(i + 1).split('.')[-1]
++        res.append(r)
+     return res
+ 
+ 
+@@ -808,6 +843,20 @@
+         json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
+         print(mapname, len(d['fogs']), 'enabled height fog layers:', [(f['object'].split('.')[-1], f['Height'], f['Density']) for f in d['fogs']])
+         return
++    if len(sys.argv) > 3 and sys.argv[1] == '--standalone-only':
++        # <map> <src lighting.json> <out dir>: the same file + the placed light actors its 'lights' lack (by LightGuid)
++        from ue3obj import map_packages
++        mapname, src, out = sys.argv[2], sys.argv[3], sys.argv[4]
++        pkgs, _persistent = map_packages(mapname)
++        repo = Repo(pkgs)
++        d = json.load(open(src, encoding='utf-8'))
++        have = {tuple(l['light_guid']) for l in d['lights']}
++        add = [l for pi in range(len(pkgs)) for l in standalone_lights(repo, pi) if tuple(l['light_guid']) not in have]
++        d['lights'] += add
++        os.makedirs(out, exist_ok=True)
++        json.dump(d, open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
++        print(mapname, len(add), 'standalone lights added:', [(l['standalone_actor'], l['class'], l['brightness'], l['radius_m']) for l in add])
++        return
+     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
+     from ue3obj import map_packages
+@@ -830,6 +879,9 @@
+     for pi in range(len(pkgs)):
+         L += lights(repo, pi)
+         F = F or fog(repo, pi)
++    have = {tuple(l['light_guid']) for l in L}
++    for pi in range(len(pkgs)):
++        L += [l for l in standalone_lights(repo, pi) if tuple(l['light_guid']) not in have]
+     PP = postprocess(mapname, out)
+     decals(repo, out, mapname, lm_keys=set(props))   # (texture-lightmap keys: decals sample their receiver's)
+     atl = sorted({a for r in props.values() for a in r['coeffs']})

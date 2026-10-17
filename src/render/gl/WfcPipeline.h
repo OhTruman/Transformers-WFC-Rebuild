@@ -48,6 +48,7 @@ struct Light {
     bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
     std::string name;             // source light component (frame report)
     bool castDynamicShadows = true, castCompositeShadow = false, hasLightFunction = false;
+    bool worldDynamic = false;   // bForceDynamicLight + never built into a lightmap: a per-pixel light on the lightmapped world
     float brightness = 1.0f;
     core::Vec3 colorByte{1, 1, 1};   // LightColor / 255 (DirectLightEnv ranking colour)
     uint32_t chMask = 0;             // LightingChannels (MSB-first bits)
@@ -212,6 +213,8 @@ public:
         L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
     }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    // (transforming world actors) the next skinned draws use this actor's interpolated light maps (nullptr: off)
+    void setDrawInterpolatedLightmap(const char* actor, float lerp);
     void setVolumetricLighting(bool on) { volUser_ = on; }   // (X3: the Settings row)
     bool volumetricLighting() const { return volUser_; }
     // draws queued for order-preserving replay (skinned weapons), replayed now: before GL work outside the Pipeline
@@ -302,6 +305,7 @@ private:
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
+        bool interpLM = false;    // (transforming world actors) drawn with the lightmapped program and drawInterp_'s captures
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
         bool noShadow = false;    // authored: CastShadow false (left out of the RT scene)
@@ -371,7 +375,8 @@ private:
     // kind 2: a material-less particle batch (queueFallbackSprites)
     struct FallbackBatch { unsigned tex = 0; bool additive = false; float scale = 1.0f; std::vector<Sprite> sprites; };
     std::vector<FallbackBatch> fallbackPool_;
-    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; };
+    struct TransientLight { core::Vec3 pos, color; float radius = 0.0f, falloff = 1.0f; core::Vec3 dir{0, 0, 0}; float cosI = 1.0f, cosO = -2.0f; bool worldOnly = false; };
+    int tlWorldOnly_ = 0;   // bits of the applied 8: world-only lights (forced-dynamic map lights; characters get them via the DLE)
     std::vector<TransientLight> tlights_, tlightsDraw_;   // (item 4) collected / applied this frame
     float tlPos_[8][4] = {}, tlCol_[8][4] = {}; int tlN_ = 0;
     float tlCut_[8] = {};
@@ -943,6 +948,14 @@ private:
     std::map<std::string, MatSrc> mats_;
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
+    // transforming world actors' two light-map captures (RE INTERPOLATED_LIGHTMAP_RE.md): per coefficient, capture A's and B's
+    // atlas rects side by side in one composite texture (no extra samplers: the lightmap units 13-15), each capture's UV
+    // transform into it, its scale vectors; the base pass lerps the decoded coefficients by the transform's position
+    struct InterpLM { LMRec cap[2]; bool built = false, ok = false; int tex[3] = {-1, -1, -1}; float coord[2][4] = {}; };
+    std::map<std::string, InterpLM> interpLM_;
+    const InterpLM* drawInterp_ = nullptr; float drawInterpLerp_ = 0.0f;
+    void buildInterpLM(InterpLM& r);
+    std::vector<char> interpSetProg_;   // programs whose uLMInterp a door draw left at 1 (reset on their next normal draw)
     std::map<std::string, LMRec> lightmaps_;
     std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
@@ -1454,6 +1467,9 @@ private:
     GLuint volApplyProg_ = 0;             // (X3) composites RtTargets::vol over the scene: scene x a + rgb
     void volApply();
     bool toneFilmicOn() const;
+    float toneMapKey() const;                         // the exposure key (per map; WFC_TONE_KEY wins)
+    float hazeUniform() const;                        // (the shaders' uHazeK: hazeK_ in Realistic with haze exposure, else 1)
+    GLuint hazePbo_[3] = {0, 0, 0}; int hazeIdx_ = 0; float hazeK_ = 1.0f;   // (haze exposure: async adapt readback)
     void toneAdapt();
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;
