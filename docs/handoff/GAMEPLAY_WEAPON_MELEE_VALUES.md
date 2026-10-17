@@ -70,3 +70,12 @@ Weapons without authored recoil (vehicle weapons, grenades, melee) use the arche
 | LightSmallMeleeSet | Car, Car2, Car3, Car4, Car6, Car7 | Stomp | Any | 150 | TnDamageTypeMelee | 70000 | 0 for 0 s (end x1) | 1 | no (not reachable in Versus) |
 | LightSmallMeleeSet | Car, Car2, Car3, Car4, Car6, Car7 | WeaponAttack | Bomb | 9999 | TnDamageTypeMelee | 80000 | 0 for 0 s (end x1) | 0.75 | yes |
 | LightSmallMeleeSet | Car, Car2, Car3, Car4, Car6, Car7 | Combo | Any | 15 | TnDamageTypeWeakMelee | 20000 | 0 for 0 s (end x0) | 0.75 | no (not reachable in Versus) |
+
+## RE verification (re-workspace-0c, against authored.db / the CDOs)
+
+- Recoil: all 28 rows OK; RotSinOffset / RotOffset / LocSinOffset / LocOffset resolve to 0 on all 14. Overlay rule CONFIRMED.
+- Correction applied: two Versus pickups (TnWeaponPickupFactory) author their own recoil, now rows of the table:
+  - HeavyRocketTurret (WEP_TurretRocket_p.Turret_Rocket_WEPMESH): Spine 0.4 s, Rot (4000, 150, 0) x (5, 10, 0); RightHand 0.3 s, Rot (1000, 150, 1000) x (10, 10, 10), Loc (-8, 0, 0) x (10, 0, 0) [arch].
+  - GatlingGun (WEP_TurretIonGun_p.TurretIonGun_WEPMESH): TimeDuration 0 and zero amplitudes on both: inert (the archetype fallback would have given it recoil).
+- Melee: all 32 rows OK. The Speed > 0 / Time 0 reading CONFIRMED (TnFlier.StartFlight returns at FP.Time == 0: no dash, no EndVelocityScaler). The dash starts only with a melee target and Attack.AllowFlight (every Versus WeaponAttack row has it): ours lunges only through the assist target, as before.
+- PlaneRocket: the burst drop CONFIRMED for Versus (MultiplayerData has no ShotsPerBurst); the SP and SV data have it (Escalation, if TnSurvivalGame selects SurvivalData).

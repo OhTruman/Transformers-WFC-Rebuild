@@ -39,6 +39,13 @@ def main(audit, db, out):
         s, h = e.get('spine_recoil'), e.get('hand_recoil')
         if not s and not h: continue
         L.append('    {"%s", %s, %s},' % (e['id'], emit(resolve(archS, s)), emit(resolve(archH, h))))
+    # Versus pickup weapons (TnWeaponPickupFactory) the audit does not list: their meshes' authored members straight from authored.db
+    # (RE verification of f678bcf6). GatlingGun authors TimeDuration 0 / zero amplitudes: its controls are inert.
+    for wid, mesh in (('HeavyRocketTurret', 'WEP_TurretRocket_p.Turret_Rocket_WEPMESH'), ('GatlingGun', 'WEP_TurretIonGun_p.TurretIonGun_WEPMESH')):
+        r = c.execute('select props from objects where opath = ?', (mesh,)).fetchone()
+        if not r: raise SystemExit('missing ' + mesh)
+        p = json.loads(r[0] or '{}')
+        L.append('    {"%s", %s, %s},' % (wid, emit(resolve(archS, p.get('SpineRecoil'))), emit(resolve(archH, p.get('RightHandRecoil')))))
     open(out, 'w', newline='\n').write('\n'.join(L) + '\n')
     print(len(L) - 3, 'rows ->', out)
 

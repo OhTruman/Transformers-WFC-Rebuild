@@ -59,7 +59,7 @@ WeaponAttack 150 dmg / impulse 30000 / GroundSpeedMultiplier 0.75 for every chas
 
 Edit scripts in docs/handoff/weaponbatch/, applied in order: edit_dom_nodeid.js, edit_weapon_recoil.js (with WeaponRecoilTable.inc from gen_weapon_recoil.py), edit_melee_sets.js.
 
-- **Per-weapon recoil:** each shot restarts the spine / hand recoil with the firing weapon's resolved SpineRecoil / RightHandRecoil (14 authored weapons; the others use the TnWeaponMesh archetype). The generated IonBlaster row equals the old hand-written values.
+- **Per-weapon recoil:** each shot restarts the spine / hand recoil with the firing weapon's resolved SpineRecoil / RightHandRecoil (14 audit weapons + the HeavyRocketTurret and GatlingGun pickups (RE correction; GatlingGun inert); the others use the TnWeaponMesh archetype). The generated IonBlaster row equals the old hand-written values.
 - **Melee sets:** the chassis' player TnMeleeSet. LightMedium WeaponAttack impulse 20000 (was 30000); LightMedium flag / bomb attacks lunge 3000 UU/s for 1 s (end x0.3) through the assist lunge. Other sets unchanged (their values equal the old generic ones).
 - **Dropped: the PlaneRocket bursts.** Versus uses MultiplayerData (Rocket_Plane_WEPDATA: interval 0.5, BurstDelay 0.1, ShotsPerBurst not authored = no burst), which ours already does. The 4-shot 0.15 s burst with 0.75 s delay is PlayerData / SV data (single player).
 - **Not reachable in Versus (no change):** Stomp, Combo, HeavySmall Stampede, the Axe / Mace / Club / Hammer melee weapons, Turret melee (WT_Heavy turret is tossed on melee).
