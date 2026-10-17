@@ -52,6 +52,8 @@ Checkpoint: af4d0731 (package 6). Per head: identity + eye sheet; one combined t
 | (docs) | TRAIL2_TEMPLATES, DECOY_TRAP_ASSETS, MODULATE_DISTORTION_CACHE (resolved), REFERENCE_FRAMES | - | - | - | no run |
 | 104b31cc | Gameplay Decoy Trap ability (new MP Scout ability) | sim only when a human equips it | seed 7 48 / 48, SIMHASH equal to the base (bots never select it) (Integration) | Gameplay's ability sheets | **latent sim change**: if bots ever select it, or a PlayerBot loadout does, the regress base must take it (PACKAGE7-GATE sim rule) |
 | c15678e9 | Frontend dev-script parser | frontend only | identity-neutral | not needed | no run |
+| 64475797 | Frontend one-time "Online Play" prompt (party lobby, only while an online session exists) | frontend only | never offline (FR1); offline / bot matches byte-identical (Integration) | not needed | no run |
+| 7ff407aa | docs | - | - | - | no run |
 | f2465a80 | Volumetric Lighting setter | Realistic-only gate | Off / Faithful unaffected by construction (Integration); Realistic: X3 on by default as af4d0731 | - | SETTINGSTEST count update and release() keep-list check due with the setter (memory settings-survive-map-change) |
 
 Note (Integration 2026-10-17): 24c6618c's SecondsBeforeInactive rule (a freeze) is to be replaced by SYSTEMS_FX_THROTTLE.patch (128b4846): the original throttles inactive FX (10 Hz / 1 Hz + catch-up); that merge carries its own expected-change list.
