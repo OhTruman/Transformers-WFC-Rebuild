@@ -1,8 +1,9 @@
-# Package 6: integration <HEAD> (<DATE>)
+# Package 6: integration af4d0731 (built 2026-10-17)
 
-<!-- SKELETON (Systems; refreshed 2026-10-16 13:05 from docs/MILESTONES_09c.md up to the 12:58 entry). Integration fills
-     <HEAD>, <DATE>, sizes, the Rendering rows marked [PLACEHOLDER] and the gate table at build time; rename the file to
-     PACKAGE_6_<head>.md. Items marked (verify) were read from the log, not re-checked on the final head. -->
+**Internal checkpoint: the hand-over build is package 7 (user 2026-10-17: more reflective surfaces + damp sheen, 2x RT lightmap, Streets haze, mine saturation, hover + squad polish, death bodies in full).**
+
+<!-- Systems, 2026-10-17: filled from the af4d0731 build (work/refresh_af4d0731), its verify (work/verify_af4d0731) and
+     the package gate (tools/fidelity/results/PACKAGE-GATE_af4d0731.md). Items marked (verify) were read from the log. -->
 
 ## How to play this build
 
@@ -27,9 +28,10 @@ reverse direction around a walking leader. Anything else is news.
 
 Launch with Play.bat (maps the package to W: on the dev PC). Package: work/playtest_slim (27.53 GB: 46,744 files kept +
 7,161 .xpr twins; HD pack D b0-31 3,506 files + M6 roughness 498 maps = 4,005 files / 21.70 GB; glTF overlay
-push_gltf_wfcmat_20261016, 85 files; promoted <DATE>). This is the
-hand-over build the user playtests. Fallbacks: work/playtest_slim_398b27ef (package 5, internal checkpoint),
-work/playtest_slim_30b2fa74 (package 4). Tag: playtest/09c-package6-<HEAD>.
+push_gltf_wfcmat_20261016, 85 files; promoted 2026-10-17 04:47). The checkpoint the user may play until package 7.
+
+Package: work/playtest_slim; fallback work/playtest_slim_9350f19b; tag playtest/09c-package6-af4d0731. Older fallbacks
+stay: work/playtest_slim_398b27ef (package 5), work/playtest_slim_30b2fa74 (package 4).
 
 Reboot before a long session: the AMD driver's nonpaged pool grows with GPU load and only a reboot clears it.
 
@@ -83,8 +85,9 @@ sheet): Streets 1.15 | 1.17, Gorge 1.32 | 1.28, Debris 1.14 | 1.14, Rust 1.27 | 
   lights, calibrated to the RT lightmap (impacts colour x0.6 / 0.15 s, explosions x0.7; 3ff0852b). No separate Rendering
   commit or switch.
 - **Tiled transient lights** (1c94d62e, WFC_TLTILED=0 off): up to 64 dynamic lights per frame in Realistic in 32-px
-  tiles (was 8); the first 4 keep RT shadows. Effect lights no longer push muzzle lights out of the cap
-  [PLACEHOLDER: confirm the package 5 "transient lights cost at RT off" on the final regress].
+  tiles (was 8); the first 4 keep RT shadows. Effect lights no longer push muzzle lights out of the cap.
+  Cost at RT off on the final regress (head minus the lights-off arm): at most +0.12 ms p90 on every map (bar 0.35);
+  package 5's +0.03..+0.23 ms is closed.
 - **Tiled lights gated to Realistic** (b0f5ac45): the tiled path's switch ignored the render mode,
   so in Off / Faithful any burning muzzle / impact / death light sent the original's 8 lights through the tiled path
   (tile masks, extra binds, per-pixel fetches) with identical output. Off / Faithful are back on the original 8-light
@@ -247,13 +250,14 @@ Off / Faithful stay byte-identical to the original (identity rows).
   exposure adaptation on extreme frames).
 - **Vehicle muzzle lights saturate nearby walls** (authored brightness 25 / 5 m, as the original) - carried from
   package 5; WFC_TLIGHTSCALE is the lever.
-- **Off-path cost in extended (> 10-player) matches - reduced in the respin, the rest is package 7**: at 63 bots RT off,
-  the death bodies are the whole regression vs package 5 (about 0.2 ms per live body; the mines cost nothing): 1.87 ms
-  p90 [PLACEHOLDER: confirm on the respun regress]. The respin's static-pose fix (Gameplay 9350f19b: a body
-  whose pose went static is no longer re-skinned on the CPU and re-uploaded every frame) recovers 0.39 ms of it; after it the body cost
-  is +1.3 ms p90 on Berth at 63 bots - the faithful body presentation at that player count. GPU-skinned corpses with the shadow pass are package 7 item 1. 5 v 5 (the
-  original's player count): +0.06 ms p90 on Berth (1.57 -> 1.63 ms). The gib trails' particle load is the original's own LOD authoring (see the
-  particle LOD note).
+- **Off-path cost in extended (> 10-player) matches - reduced, the rest is package 7 item 1**: at 63 bots RT off (4K,
+  same match, 2 reps within 0.05 ms) the head reads +0.67 to +1.94 ms p90 over the gate base (9350f19b read +1.03..+2.64;
+  the GPU-skinned corpses recovered about 0.4 ms). The death bodies are the whole delta: Berth with WFC_NOCORPSE reads
+  2.18 ms against the base's 2.16 / 2.17 (the mines cost nothing). This is the faithful body presentation at that player
+  count; 5 v 5 (the original's player count) is +0.06 ms p90 on Berth (1.57 -> 1.63 ms). At RT on the bodies add
+  +0.17..+0.49 ms p50 (they enter the TLAS: Streets 36.3 -> 38.1 instances, BLAS rebuilds 161 -> 192). Package 7 item 1:
+  one draw per settled body, and TLAS / BLAS per body. The gib trails' particle load is the original's own LOD authoring
+  (see the particle LOD note).
 - **Smart ride height / hover**: on top of package 5's tip-over self-righting, package 6 carries the S5 / S6
   vehicle-movement fixes, all with Classic re-baselines: bot hover vehicles turn at the authored AiMaxAngularSpeed /
   Acceleration (GAMEPLAY_VEHICLE_YAW); Driving hull probes stay above the 0.45 m wheel clearance, so the seven cars no
@@ -265,7 +269,12 @@ Off / Faithful stay byte-identical to the original (identity rows).
   package 7.
 - **Squad follow reversals** (Smart) - carried from package 5.
 - **Driver nonpaged pool** grows with GPU load (AMD); reboot before a long session.
-- [PLACEHOLDER: anything the final gate or eye pass adds]
+- **Realistic cost in real play (gate step 1b, the true numbers)**: p50 ms (fps) at 2560 x 1440, Realistic + HD Enhanced,
+  31 v 32, X3 on: Streets 9.91 (101), Gorge 10.08 (99), Debris 8.05 (124), Rust 8.83 (113), Molten 9.91 (101). Against the
+  pre-volumetric 4078e47b that is +0.60..+0.73 ms p50: X3 +0.40..+0.60 plus the bodies +0.17..+0.49 (attribution arms X3
+  off / no corpses); X3 rounds 3 / 4 added nothing measurable.
+- One step-1b run inside another hold (03:15-03:26) read about +1.7 ms high on 4 of 5 maps (same exe, settings and match);
+  it did not reproduce 20 min later. Kept on disk (rtperf2/) as an outlier and named in the gate report.
 
 ## Runbook: build and verify package 6 (Systems; mechanical once Integration names <HEAD>)
 
@@ -318,13 +327,17 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
    doc's <HEAD>, <SIZE>, <N>, <OVERLAY>, <DATE> from build_slim.json / build_slim.log.
 4. **Promote only on Integration's word after the gate PASS** (the hand-over is the user's), Git Bash, in work/:
 
-       [ -e playtest_slim_398b27ef ] && echo "playtest_slim_398b27ef exists: stop" || mv playtest_slim playtest_slim_398b27ef
+       grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json      # must print 9350f19b (the internal checkpoint)
+       [ -e playtest_slim_9350f19b ] && echo "playtest_slim_9350f19b exists: stop" || mv playtest_slim playtest_slim_9350f19b
        mv playtest_slim_<HEAD> playtest_slim && grep -o '"head": *"[^"]*"' playtest_slim/build_slim.json
+
+   Fallbacks after it: playtest_slim_9350f19b (the 9350f19b checkpoint), playtest_slim_398b27ef (package 5) and
+   playtest_slim_30b2fa74 (package 4) stay as they are.
 
    Play.bat inside the package starts its own exe (verify checks it). Integration copies / announces; never rebuild a package exe
    or touch build/release while the user plays.
 
-## Gates (final head <HEAD>)
+## Gates (final head af4d0731)
 
 <!-- package-gate.sh table (rules final 08:37, Experimental 101b3970 / 78854ddd / d3a6e1e1). Base = 398b27ef + yaw 022e5e34 +
      drive-probe 56a9beca + the one-line steer + walkable f19e0052 + rise snap 63368d05 (all five sim lines; gate-base.sh). Regress bars are report rows at
@@ -333,12 +346,12 @@ builds. Exes run only through verify_slim (one at a time, WFC_MUTE / NOINTERACT 
 
 | gate | result | notes |
 |---|---|---|
-| regress-8map (3 arms x 8 maps, RT off, Classic, lockstep) vs the gate base | [PLACEHOLDER] | report rows +0.35 ms p90 per map |
+| regress-8map (3 arms x 8 maps, RT off, Classic, lockstep) vs the gate base | REPORT (no blocking row) | 9350f19b vs af4d0731, 4K, same match, 2 reps within 0.05 ms: head minus base p90 +0.67..+1.94 ms, attributed to the death bodies (Berth NOCORPSE = base); lights-off arm within +0.12 of the head on every map (bar 0.35); map 501 and the Berth bodies row rerun once after a CPU job overlapped their first seconds, identical results. Report: tools/fidelity/results/PACKAGE-GATE_af4d0731.md (Experimental 7da22d7b) |
 | Off / Faithful identity (Rust, Classic): SIMHASH + frames | PASS | respin vs 4078e47b: Off 5 / 5 + Faithful 5 / 5 byte-identical, SIMHASH 088bd3b99da5768e x 4 |
 | Realistic + HD Enhanced perf, 1440p 31 v 32, 5 maps (step 1b) | PASS | p50 Streets 9.26 / Gorge 9.48 / Debris 7.32 / Rust 8.18 / Molten 9.30 ms; p90 10.33 / 11.63 / 8.56 / 10.35 / 10.35 (105-137 fps); Realistic alone p50 7.2-9.4 / p90 8.4-11.4 |
 | R4 leak rows (GPU dedicated over 5 map changes) | PASS | lobby GPU 2180 / 2841 / 2980 / 2974 MB, plateau spread 138 MB |
 | Eye pass: same-frame Off / Realistic / Realistic+HD sheets, 5 user maps + authored views | PASS (0 UNKNOWN) | all maps contrast 1.28 / 1.30 (Realistic / + Enhanced); per map 1.14-1.48; authored views 1.25-1.88 |
-| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | PASS | 9350f19b (work/verify_9350f19b/REPORT.md): HD 3,505 + 498 M6 rows, 4,005 files, 0 problems; bin 20 / 20 + M5; overlay barrier + frozen 85 / 85; Streets / Gorge / Debris PASS (0 [error], 0 outside reads, 0 failing opens); Settings 7 / 7; RT gate build / context / runtime / r4 / rtlights / defaults 27 / 27; HD runtime at level 2: 3505 textures, 498 modern maps, Modern on for MP_IAC_Streets |
-| FAST gate | PASS 59 / KNOWN 1 (ribbon / beam FX) / PRODUCT FAIL 0 / HARNESS FAIL 0 | on 7cd22027 and the 4078e47b delta; [PLACEHOLDER: the respun 9350f19b delta] |
+| verify_slim -SubstDrive X: (maps, HD static incl. M6 rows + HD runtime at level 2, bin vs build_slim.json, overlay, Settings, RT gate incl. rtcheck.rtlights / rtcheck.defaults) | PASS | af4d0731 (work/verify_af4d0731/REPORT.md): HD 3,505 + 498 M6 rows, 4,005 files, 21.7 GB, 0 problems; bin 20 / 20 + M5; overlay barrier + frozen 85 / 85; Streets / Gorge / Debris PASS; Settings 7 / 7; RT gate build / context / runtime / r4 / rtlights / defaults 39 / 39; HD runtime row at level 2 PASS (HD texture pack available: 3505 textures, HD modern material maps: 498, Modern materials on for MP_IAC_Streets) |
+| FAST gate | PASS 59 / KNOWN 1 (ribbon / beam FX) / PRODUCT FAIL 0 / HARNESS FAIL 0 | on af4d0731 (delta): PASS, 59 pass, 0 product, 1 known (ribbon / beam), the same 2 unknown / partial rows as 9350f19b; the penultimate head 7cd2202 PASS |
 | BOTTEST / NAVQ / SIMHASH (both AIs) | PASS | BOTTEST 48 / 48 on 12 seeds (Gameplay int_csn); | 48 / 48 incl. DRIVE rows; idle 20 s row at seeds 1 / 5; the "AI cost per step" row moves to average + p99 (wall-clock flake; Gameplay, pending) |
 | Settings survive map change (WFC_SETTINGSTEST) | PASS 7 / 7 | 9350f19b verify (and the 4078e47b rehearsal) |

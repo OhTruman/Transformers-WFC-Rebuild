@@ -2411,3 +2411,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Faithful explosion clip is the original's (7e3 ceiling 3.984, gather 4.0, uber sat at 1); Realistic treatment = Rendering
   RENDERING_PACKAGE7_POLISH.md section 4 (4-5 h). AssetTools backlog 5 merged (d842464f); next: no_floor_below starts,
   mover initial-pose collision in the walk graph. RE lane next: FaceFX native bone-pose blending.
+2026-10-17 04:47 PACKAGE 6 PROMOTED (internal checkpoint; the hand-over build is package 7). work/playtest_slim = af4d0731 (Systems 04:47);
+  fallback work/playtest_slim_9350f19b; packages 5 / 4 stay. Doc docs/handoff/PACKAGE_6_af4d0731.md (Systems d734f81b, merged
+  by file; PACKAGE_6_HEAD.md removed). Tag playtest/09c-package6-af4d0731. Verify PASS (work/verify_af4d0731). Gate: no
+  blocking row (PACKAGE-GATE_af4d0731.md). Play.bat launches it; Realistic row = whole-map RT + X3 volumetrics (WFC_X3=0 off).
