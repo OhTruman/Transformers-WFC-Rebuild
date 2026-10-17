@@ -3229,3 +3229,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   spawn-time close-up) granted after Experimental (~14:40). NEW all-mode particle fix (23d3c36c): spawn-time distributions are
   evaluated at the emitter time in SECONDS (RE native), not normalized; rides the Trail2 arm; "particles" set = Trail2 + this,
   merged together on the eye check.
+2026-10-17 14:12 MERGED ea4ca7cd per-seat guided missiles for remote and online local seats (SESSIONTEST 36 / 36; offline identical). Gameplay next: the
+  TRANSACT sim-only diff for the regress base, then homing lock / MinePooper / repair beam for the online local seat.
