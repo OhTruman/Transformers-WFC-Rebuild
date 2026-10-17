@@ -847,6 +847,42 @@ static void testCampaignTutorials() {
     std::remove("wfc_profile.ini");
 }
 
+static void testCampaignCinematicHud() {
+    // E7: cinematic mode hides the HUD (UI event 12) and empties the prompt stack; leaving it shows both again (13).
+    // Versus: no change.
+    std::remove("wfc_profile.ini");
+    FrontendRuntime rt;
+    check(rt.init(), "cinematic.init");
+    platform::InputFrame none;
+    rt.setCinematicMode(true);
+    const bool versusUntouched = !rt.flow().ui().hudHiddenByEvent() && !rt.cinematicHudHidden();
+    rt.flow().setCampaignForTest(true);
+    rt.setCinematicMode(true);
+    const bool hidden = rt.flow().ui().hudHiddenByEvent() && rt.cinematicHudHidden();
+    rt.setCinematicMode(false);
+    const bool pendingUntilUpdate = rt.flow().ui().hudHiddenByEvent();
+    rt.update(none, 1.0f / 60.0f);
+    const bool shown = !rt.flow().ui().hudHiddenByEvent() && !rt.cinematicHudHidden();
+    rt.flow().setCampaignForTest(false);
+    // the prompt stack on the movie: removed while suppressed, re-added after
+    RecordingPresenter p;
+    HudController hud;
+    HudFrame fr; fr.valid = true; fr.contextualPrompts = std::vector<std::string>{"Use Turret", "Hack Terminal"};
+    hud.setFrame(fr); hud.update(&p, rt.catalog(), true, true);
+    p.calls.clear();
+    hud.setPromptsSuppressed(true); hud.setFrame(fr); hud.update(&p, rt.catalog(), true, true);
+    const bool removed = p.has("_global.NotifyContextualCommand(0,1,Use Turret)") && p.has("_global.NotifyContextualCommand(0,1,Hack Terminal)");
+    p.calls.clear();
+    hud.setFrame(fr); hud.update(&p, rt.catalog(), true, true);
+    const bool quiet = p.calls.empty();
+    hud.setPromptsSuppressed(false); hud.setFrame(fr); hud.update(&p, rt.catalog(), true, true);
+    const bool readded = p.has("_global.NotifyContextualCommand(0,0,Use Turret)") && p.has("_global.NotifyContextualCommand(0,0,Hack Terminal)");
+    check(versusUntouched && hidden && pendingUntilUpdate && shown && removed && quiet && readded, "ui.cinematic_hide_show",
+          std::to_string(versusUntouched) + std::to_string(hidden) + std::to_string(pendingUntilUpdate) + std::to_string(shown) +
+          std::to_string(removed) + std::to_string(quiet) + std::to_string(readded));
+    std::remove("wfc_profile.ini");
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -863,6 +899,7 @@ int main() {
     testCampaignStrings();
     testCampaignObjectives();
     testCampaignTutorials();
+    testCampaignCinematicHud();
     testVolumetricSetting();
     if (ok) testCatalog(c);
     if (ok) testHudObservers(c);
