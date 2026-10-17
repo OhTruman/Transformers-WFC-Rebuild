@@ -19,7 +19,13 @@
     - Audit: bot mate checks, objective pawns / drops, HurtRadius, radiusDamage, Shockwave, grenade bounces, projectile hits (one test for every pawn), sentry target, SIMHASH order, fineAim from the seat command. simStateHash now includes the bots' rng / target / yaw and the Smart rngs.
     - Gates: SESSIONTEST 34/34 (cross-perspective: local at seat 0 vs seat 1, same seat streams with transforms / abilities / grenade / vehicle fire, equal at step 1600); BOTTEST 48/48; offline SIMHASH identical to d22fb45a (18007 lines). Trees: work/int_of (new), work/int_ofb (base).
     - Remaining online-local-only paths (not reachable from the seat path, so not a desync today): tickHomingLock, pickHomingTarget, guided missile, MinePooper, the direct-path repair beam. Ties in nearest-hit loops still go opponents-first (exact float ties only).
-4h. NEXT: the guided missile for Remote / online-local seats (per-seat state); then 5 (lossless perf), 7 (FaceFX), 8 (dithering).
+4h. NET.identity follow-ups (2026-10-17 afternoon), all posted, the first two merged:
+    - GAMEPLAY_NET_IDENTITY 0961ff39 (merged): humans[localSeat].selection at launch; online the Transform press / tank quick turn go only through the command (shared PlayerController::tryBeginTransformOn for seats); the player bot is input-only online (pbSandbox_ / pbPress_); SESSIONTEST "launch identity" (WFC_PLAYERBOT: A records its player-bot seat's encodeLocalCommand, B replays it).
+    - GAMEPLAY_PB_RELOAD 0ddef6f0 (vs dd28a723): the player bot's opportunistic reload (the 1772 split).
+    - GAMEPLAY_SEAT_ANIM 5cf28ea2 (vs dd28a723): online the local seat animates only in the pool while spawned (Systems' 1299 split: a tank shell spawned 0.2 mm apart).
+    - Replay workflow for Systems' records: work/netrep (r0 / r1, env as in tools/systems/net_profiles.ps1 + WFC_NET_REPLAY / WFC_NET_SLOT; run with env "VAR=..." quoting).
+    - Card gap 13:48: the wobble was INVALID (no WFC_RENDER_DATA, legacy renderer); rerun = work/pass29/wobble/run_gap2.ps1 on the next "gap: Gameplay". Firing pair: no regression (EMP id already matched; data-side evidence stands).
+4i. NEXT: the guided missile per seat (docs/handoff/session/edit_seat_missile.js, written, not yet built: rebase on dd28a723 + PB_RELOAD + SEAT_ANIM); Integration's queued sim-only transact diff vs Experimental's af4d0731 base (docs/handoff/gatebase/TRANSACT_sim_only_af4d.patch, same-match SIMHASH check); then the online-local-only paths (homing lock, MinePooper, repair beam); robot fine aim on the seat path (missing for every seat). RE delivered Escalation (RE-Workspace/work/handoff/MP_ESCALATION_RE.md 401a49e, notes/data/escalation/*.json) for later.
 5. The perf levers (lossless only).
 6. Transforming actors + dying-vehicle collision (one identity change).
 7. FaceFX.
