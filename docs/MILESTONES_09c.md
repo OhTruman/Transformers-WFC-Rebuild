@@ -2786,3 +2786,7 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   +10 physmat rows; next: PACKAGE7_SLIM_AUDIT. Systems: ability trigger FX patch (f701e438) rides their next pair; Decoy Trap
   ability has NO implementation -> Gameplay checks the authored MP class lists. Gameplay weapon + melee batch rebased
   (f678bcf6), value table with the RE lane, 4-min recoil eye check queued after (B) + Systems.
+2026-10-17 10:19 RE lane verified Gameplay's weapon + melee value table (f678bcf6): recoil 28 / 28 OK, melee 32 / 32 OK, overlay rule CONFIRMED,
+  dash Time 0 = none, PlaneRocket no burst in Versus (SV keeps 4). Two MISSING recoil rows: TnWeaponHeavyRocketTurret (authored
+  spine + hand recoil) and TnWeaponGatlingGun (zero recoil, must not fall back to the archetype). Gameplay adds them before the
+  Classic re-baseline. RE lane next: Rendering's Remnant toggleable shadows + Exp_Death distortion PS questions.
