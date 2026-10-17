@@ -2694,3 +2694,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   fogs / post volumes / light environments classified D / A / X1 / -; gaps -> Rendering: only the first HeightFogComponent per
   map loaded (six maps author 2-4 layers; Gorge loses a dense low layer), DOF kernel 32 rendered at 16, light-env transition
   unused. RE lane next: close the PROVISIONAL readings in the campaign data index. Card: Rendering slot (cand26) still running.
+2026-10-17 09:40 Rendering slot 09:23-09:39 verdicts: Set B body bit DROPPED (not zero-difference: a global ~3 % exposure shift from more haze
+  in-scatter; and the X3 timer reads identical with / without it, so bodies do not cost X3 time: their RT cost is the shadow / AO
+  TLAS side, Gameplay's item 1); X7 still misses both bars at the pinned gain (Gorge +15 %, Streets no-frame gap 3.71 s vs 2.01)
+  -> PARKED behind the height-fog layers and the particle modules, offline diagnosis; flash term too weak (Gorge 1080 near-white
+  83.9 -> 82.3 %, bar 55-62): threshold ~1.5 + TONEDIAG next; particle pair void (sphere / cylinder field order was swapped until
+  AssetTools' fix), re-run on a candidate cut at / after 1f1d4e17. Card -> Frontend 4-min re-slot (09:40) -> Systems 40 ->
+  Rendering 10 if ready -> (B) eye pass.
