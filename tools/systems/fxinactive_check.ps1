@@ -1,6 +1,6 @@
 # SecondsBeforeInactive card rows (Systems, SYSTEMS_FX_INACTIVE): per map three windowed lockstep TDM 4 v 5 + playerbot runs, RT off,
 # muted, NOINTERACT, captures every 150 steps: base (af4d0731), new with WFC_FXINACTIVE=0, new with WFC_FXINACTIVE=1 + the resume log.
-# (i) counters: frozen share of SecondsBeforeInactive instance-ticks, resumes, MAPFXPROF particle build ms (off vs on);
+# (i) counters: throttled share of instance-ticks (UE3 PSC tick throttle: 10 Hz unrendered > 0.3 s, 1 Hz past SBI), slow ticks, MAPFXPROF particle build ms (off vs on);
 # (ii) identity: base vs off byte-identical (required); off vs on: differing frames with crops (work/.../crops_<map>) for the eye
 #      review, and none before the first logged resume; (iii) the crops are the eye check (turning away and back happens in play).
 # One exe at a time, killed by PID on timeout, waits for PERF_HOLD.
@@ -15,7 +15,7 @@ function Run([string]$bin, [string]$dir, [hashtable]$envs) {
     while (Test-Path $hold) { Start-Sleep 2 }
     Get-ChildItem env: | Where-Object { $_.Name -like 'WFC_*' } | ForEach-Object { Remove-Item -LiteralPath "env:$($_.Name)" }
     $base = @{ WFC_MUTE = '1'; WFC_NOINTERACT = '1'; WFC_NOMOUSE = '1'; WFC_AUTODETECT = '0'; WFC_SEED = '7'; WFC_FLOWSEED = '7';
-               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0' }
+               WFC_RENDER_DATA = 'F:/Transformers Rebuild/Rebuild/work/render'; WFC_GPULOST_DIALOG_S = '0'; WFC_NOTIFYFX = '0' }   # isolate from SYSTEMS_NOTIFY_FX
     foreach ($k in $base.Keys) { Set-Item "env:$k" $base[$k] }
     foreach ($k in $envs.Keys) { if ($envs[$k] -ne '') { Set-Item "env:$k" $envs[$k] } }
     $p = Start-Process -FilePath (Join-Path $bin 'wfc_rebuild.exe') -WorkingDirectory $dir -PassThru   # windowed (draws frames)
@@ -34,9 +34,9 @@ foreach ($map in ($MapList -split ',')) {
     $on = Join-Path $Out "$map`_on\wfc.log"
     $fz = @(Select-String -LiteralPath $on -Pattern 'wfc fx inactive: (\d+) of (\d+)' | ForEach-Object { $_.Matches[0] })
     $frozen = ($fz | ForEach-Object { [long]$_.Groups[1].Value } | Measure-Object -Sum).Sum; $total = ($fz | ForEach-Object { [long]$_.Groups[2].Value } | Measure-Object -Sum).Sum
-    $res = @(Select-String -LiteralPath $on -Pattern 'FXINACTIVE resume ')
+    $res = @(Select-String -LiteralPath $on -Pattern 'FXINACTIVE (resume|slow tick) ')
     function Build([string]$log) { $v = @(Select-String -LiteralPath $log -Pattern 'particle build ([\d.]+)' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }); if ($v.Count) { ($v | Measure-Object -Average).Average } else { -1 } }
-    Write-Host ("(i) {0}: frozen {1} of {2} SBI instance-ticks ({3:P1}); resumes {4}; MAPFXPROF particle build ms/frame off {5:N3} on {6:N3}" -f $map, $frozen, $total,
+    Write-Host ("(i) {0}: throttled {1} of {2} instance-ticks ({3:P1}); slow (1 Hz) ticks {4}; MAPFXPROF particle build ms/frame off {5:N3} on {6:N3}" -f $map, $frozen, $total,
                 $(if ($total) { $frozen / $total } else { 0 }), $res.Count, (Build (Join-Path $Out "$map`_off\wfc.log")), (Build $on))
     $res | Select-Object -First 5 | ForEach-Object { Write-Host "    $($_.Line -replace '^.*FXINACTIVE', 'FXINACTIVE')" }
     Write-Host "(ii) $map base vs off (must be identical):"
