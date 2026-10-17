@@ -83,6 +83,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<PCSettings:VoicePushToTalkKey>") return flow_.profile().voice.pttKey;
     if (markup == "<PCSettings:VoiceVolume>") return std::to_string(flow_.profile().voice.volume);
     if (markup == "<PCSettings:ProximityVolume>") return std::to_string(flow_.profile().voice.proximityVolume);
+    if (markup == "<PCSettings:VoiceMicTest>") return "0";   // the meter row (its value text is the live level)
     if (markup == "<PCSettings:Anisotropy>") return std::to_string(flow_.profile().display.anisotropy);  // PC EXTENSION
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
@@ -397,13 +398,14 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
                                                      {"applies", "next launch"}, {"provenance", "PC EXTENSION"}});
         return {};
     }
+    if (fn == "WriteValue" && m == "<PCSettings:VoiceMicTest>") return {};   // read-only meter
     if (fn == "WriteValue" && m.rfind("<PCSettings:Voice", 0) == 0 || (fn == "WriteValue" && m == "<PCSettings:ProximityVolume>")) {   // voice rows
         LocalProfile::Voice& v = flow_.profile().voice;
         const std::string a = arg(1);
         if (m == "<PCSettings:VoiceMode>") v.mode = std::clamp(std::atoi(a.c_str()), 0, 2);
         else if (m == "<PCSettings:VoiceAudience>") v.audience = std::clamp(std::atoi(a.c_str()), 0, 3);
         else if (m == "<PCSettings:VoiceDevice>") v.device = a;
-        else if (m == "<PCSettings:VoicePushToTalkKey>") v.pttKey = a;
+        else if (m == "<PCSettings:VoicePushToTalkKey>") { if (a == "__custom") flow_.beginPttCapture(); else v.pttKey = a; }
         else if (m == "<PCSettings:VoiceVolume>") v.volume = std::clamp(std::atoi(a.c_str()), 0, 100);
         else if (m == "<PCSettings:ProximityVolume>") v.proximityVolume = std::clamp(std::atoi(a.c_str()), 0, 100);
         FlowTrace::emit("settings.voice", {{"markup", m}, {"value", a}, {"provenance", "PC EXTENSION"}});

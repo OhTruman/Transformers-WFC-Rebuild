@@ -312,6 +312,12 @@ public:
     bool isMuted(const SessionMemberId& m) const;
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
     void setPushToTalkHeld(bool held);                 // the runtime samples the key; sent on change
+    float micLevel() const { return session_ ? session_->micLevel() : 0.0f; }
+    static std::string micMeterText(float level);      // the Mic Test row's value: ten marks, "|||||....." at 0.5
+    // Push-to-Talk Key "Custom..." (PC EXTENSION): a prompt; the runtime captures the next key (Esc / Cancel: unchanged).
+    void beginPttCapture();
+    void endPttCapture(const std::string& keyName);    // "" = cancelled
+    bool pttCaptureActive() const { return pttCapture_; }
     static constexpr double kInitialConnectTimeout = 50.0;   // [IpDrv.TcpNetDriver] InitialConnectTimeout (original)
     static constexpr double kJoinBackstop = kInitialConnectTimeout + 5.0;   // the session layer owns the 50 s timeout
     std::string stateSummary() const;
@@ -400,6 +406,7 @@ private:
     std::map<std::string, VoiceState> voiceStates_;     // fingerprint -> the last MemberVoice
     std::string voiceSent_;                             // the voice settings last sent (send on change)
     bool pttHeld_ = false;
+    bool pttCapture_ = false;
     void syncVoiceSettings();
     void fillOnlineLaunch();
     // Group E: the session ends for this player (host lost, connection lost, kicked, a late version mismatch) -> the party

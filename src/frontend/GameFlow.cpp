@@ -840,6 +840,7 @@ void GameFlow::popupButton(char which) {
         session_->cancelJoin();
         FlowTrace::emit("online.join", {{"result", "cancelled"}});
     }
+    if (btn.action == "pttCancel") endPttCapture("");
     if (btn.action == "quit") quitPending_ = true;
     else if (btn.action == "exit") { quit_ = true; FlowTrace::emit("exit", {}); }
 }

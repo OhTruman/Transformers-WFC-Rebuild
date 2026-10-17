@@ -705,6 +705,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
             rt_.dataStores().forgetMovie(movies_[i].object);
             if (&movies_[i].movie->player() == graphicsPagePlayer_) { graphicsPagePlayer_ = nullptr; volumetricGateShown_ = -1; }
+            if (&movies_[i].movie->player() == audioPagePlayer_) { audioPagePlayer_ = nullptr; micMeterShown_.clear(); }
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
             shapesStale_ = true;
@@ -1058,9 +1059,24 @@ void volumetricChoices(gfx::avm1::VM& vm, std::vector<gfx::avm1::Value>& out, bo
     else add(stored ? 1 : 0, "$WfcPC.Settings.VolumetricRealisticOnly");
 }
 
+// Push-to-Talk Key choices: the six presets, the player's own key when it is none of them, then "Custom..." (the capture).
+void pttChoices(gfx::avm1::VM& vm, std::vector<gfx::avm1::Value>& out, const std::string& pttKey) {
+    using V = gfx::avm1::Value;
+    auto choice = [&](const std::string& value, const std::string& label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", V(value));
+        vm.set(c, "FriendlyName", V(label));
+        out.push_back(V(c));
+    };
+    bool preset = false;
+    for (const char* k : {"V", "T", "B", "Caps Lock", "Mouse 4", "Mouse 5"}) { choice(k, k); preset = preset || pttKey == k; }
+    if (!preset && !pttKey.empty()) choice(pttKey, pttKey);
+    choice("__custom", "$WfcPC.Voice.PttCustom");
+}
+
 // Settings > Audio voice rows (PC EXTENSION, online only; ONLINE_MP_FLOWS.md 3.12, ONLINE_MP_UI_STRINGS.md 9b): appended to
 // the original audio page (identified by its FX Volume row), in the page's own lateral-selector item form.
-bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init) {
+bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, const std::string& pttKey) {
     if (linkage != "mc_subMenu" || !init) return false;
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Value a = vm.get(init, "buildArray");
@@ -1083,12 +1099,13 @@ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object*
         vm.set(item, "text", V(std::string(label)));
         a.o->elems.push_back(V(item));
     };
-    std::vector<V> mode, aud, dev, ptt, vol, pvol;
+    std::vector<V> mode, aud, dev, ptt, vol, pvol, mic;
     choice(mode, V(0.0), "$WfcPC.Voice.VoiceOff"); choice(mode, V(1.0), "$WfcPC.Voice.VoicePushToTalk"); choice(mode, V(2.0), "$WfcPC.Voice.VoiceOpenMic");
     choice(aud, V(0.0), "$WfcPC.Voice.VoiceTeamRadio"); choice(aud, V(1.0), "$WfcPC.Voice.VoiceAllRadio");
     choice(aud, V(2.0), "$WfcPC.Voice.VoiceProximity"); choice(aud, V(3.0), "$WfcPC.Voice.VoiceRadioProximity");
     choice(dev, V(std::string()), "$WfcPC.Voice.InputDeviceDefault");   // the capture devices by name come from Systems' audio layer
-    for (const char* k : {"V", "T", "B", "Caps Lock", "Mouse 4", "Mouse 5"}) choice(ptt, V(std::string(k)), k);
+    pttChoices(vm, ptt, pttKey);
+    choice(mic, V(0.0), frontend::GameFlow::micMeterText(0.0f));
     for (int t = 0; t <= 100; t += 10) { choice(vol, V((double)t), std::to_string(t)); choice(pvol, V((double)t), std::to_string(t)); }
     row(mode, "<PCSettings:VoiceMode>", "$WfcPC.Voice.VoiceChatDesc", "$WfcPC.Voice.VoiceChat");
     row(aud, "<PCSettings:VoiceAudience>", "$WfcPC.Voice.VoiceChannelDesc", "$WfcPC.Voice.VoiceChannel");
@@ -1096,7 +1113,8 @@ bool addVoiceRows(gfx::Player& p, const std::string& linkage, gfx::avm1::Object*
     row(ptt, "<PCSettings:VoicePushToTalkKey>", "$WfcPC.Voice.PushToTalkKeyDesc", "$WfcPC.Voice.PushToTalkKey");
     row(vol, "<PCSettings:VoiceVolume>", "$WfcPC.Voice.VoiceVolumeDesc", "$WfcPC.Voice.VoiceVolume");
     row(pvol, "<PCSettings:ProximityVolume>", "$WfcPC.Voice.ProximityVolumeDesc", "$WfcPC.Voice.ProximityVolume");
-    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "6"}, {"provenance", "PC EXTENSION"}});
+    row(mic, "<PCSettings:VoiceMicTest>", "$WfcPC.Voice.MicTestDesc", "$WfcPC.Voice.MicTest");
+    frontend::FlowTrace::emit("settings.voiceRows", {{"rows", "7"}, {"provenance", "PC EXTENSION"}});
     return true;
 }
 
@@ -1260,6 +1278,37 @@ gfx::avm1::Object* findRowByStore(gfx::avm1::VM& vm, gfx::MovieClip* c, const st
     }
     return nullptr;
 }
+}
+
+// The Audio page's live rows: the Mic Test meter (the session's input level) and the Push-to-Talk Key row after a capture
+// (the new key selected) or a cancel (the old key back).
+void GfxPresenter::syncAudioPage(gfx::Player& p, frontend::GameFlow& flow) {
+    gfx::avm1::VM& vm = p.vm();
+    using V = gfx::avm1::Value;
+    if (gfx::avm1::Object* mic = findRowByStore(vm, p.root(), "<PCSettings:VoiceMicTest>")) {
+        const std::string bars = frontend::GameFlow::micMeterText(flow.micLevel());
+        if (bars != micMeterShown_) {
+            gfx::avm1::Object* c = vm.newPlain();
+            vm.set(c, "Value", V(0.0));
+            vm.set(c, "FriendlyName", V(bars));
+            vm.callMethod(V(mic), "createSelectionData", {V(vm.newArray({V(c)}))});
+            vm.set(mic, "currentSelectionIndex", V(0.0));
+            micMeterShown_ = bars;
+        }
+    }
+    if (flow.pttCaptureActive()) return;
+    gfx::avm1::Object* ptt = findRowByStore(vm, p.root(), "<PCSettings:VoicePushToTalkKey>");
+    if (!ptt) return;
+    const V cur = vm.get(ptt, "currentSelectionData");
+    const std::string& key = flow.profile().voice.pttKey;
+    if (cur.isObject() && vm.toString(vm.get(cur.o, "Value")) == key) return;
+    std::vector<V> ch;
+    pttChoices(vm, ch, key);
+    double index = 0;
+    for (size_t i = 0; i < ch.size(); ++i) if (vm.toString(vm.get(ch[i].o, "Value")) == key) index = (double)i;
+    vm.callMethod(V(ptt), "createSelectionData", {V(vm.newArray(ch))});
+    vm.set(ptt, "currentSelectionIndex", V(index));
+    frontend::FlowTrace::emit("settings.pttRow", {{"key", key}});
 }
 
 void GfxPresenter::syncVolumetricRow(gfx::Player& p) {
@@ -1547,6 +1596,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     frameLimitShown_ = flow.profile().display.frameLimit;
     if (graphicsPagePlayer_) syncVolumetricRow(*graphicsPagePlayer_);
+    if (audioPagePlayer_) syncAudioPage(*audioPagePlayer_, flow);
     for (Open& op : movies_) {
         if (flow.online() && op.object.find("PartyLobby_GFX") != std::string::npos) syncJoinGameRow(op.movie->player(), flow);
         if (flow.iconicMode() && flow.lobby().gameTeamStatus != 2 && op.object.find("GameLobby_GFX") != std::string::npos &&
@@ -1572,7 +1622,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                                       rt_.rayTracingOnAppliesNextMap(), rt_.flow().profile().display.rayTracing,
                                       rt_.flow().profile().display.volumetricLighting, rt_.volumetricLightingAvailable()))
                     graphicsPagePlayer_ = &p;
-                else if (rt_.flow().online()) addVoiceRows(p, linkage, init);   // online only: offline Audio page unchanged
+                else if (rt_.flow().online() && addVoiceRows(p, linkage, init, rt_.flow().profile().voice.pttKey))   // online only
+                    audioPagePlayer_ = &p;
             };
     }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).

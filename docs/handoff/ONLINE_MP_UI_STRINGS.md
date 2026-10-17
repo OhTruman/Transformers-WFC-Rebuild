@@ -208,6 +208,6 @@ Original texts first; NEW keys go in `$WfcPC.Party`, `$WfcPC.Friends` and `$WfcP
 | cannot host | popup message (title: D2's "Unable to Host") | NEW $WfcPC.Web.HostNeedsPC | "Hosting needs the PC version." | B3 |
 | host refuses browsers | join failure | NEW $WfcPC.Web.NoBrowserPlayers | "This game does not accept browser players." | B2: a code without a relay room |
 | Player Limit cap reason | hint | NEW $WfcPC.Web.PlayerLimitCapped | "Limited to 5 v 5 while a browser player is in the lobby." | 56 characters (D10) |
-| microphone refused | Voice Chat row hint | NEW $WfcPC.Web.MicDenied | "Microphone access was not allowed." | B5 |
+| microphone refused | Voice Chat row hint | $WfcPC.Voice.MicBlocked (phase 1 key) | "The browser has not allowed the microphone." | B5 |
 
-Phase 2 count: 17 reused original, 11 NEW.
+Phase 2 count: 17 reused original, 10 NEW (+1 phase 1 key).

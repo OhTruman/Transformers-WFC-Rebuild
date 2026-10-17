@@ -149,6 +149,9 @@ private:
     // Settings > Graphics: the movie whose Graphics page got the PC rows (null when none is open); the Volumetric
     // Lighting row follows the Ray Tracing row's current choice live (Realistic: Off / On; otherwise "Realistic only").
     gfx::Player* graphicsPagePlayer_ = nullptr;
+    gfx::Player* audioPagePlayer_ = nullptr;   // Settings > Audio with the voice rows (online)
+    std::string micMeterShown_;
+    void syncAudioPage(gfx::Player& p, frontend::GameFlow& flow);
     int volumetricGateShown_ = -1;   // 1 = Off / On offered, 0 = "Realistic only", -1 unknown
     void syncVolumetricRow(gfx::Player& p);
     bool prevMouseLeft_ = false;

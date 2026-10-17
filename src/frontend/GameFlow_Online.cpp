@@ -72,7 +72,33 @@ bool GameFlow::toggleMute(const std::string& displayNameIn) {
     return false;
 }
 
+std::string GameFlow::micMeterText(float level) {
+    const int n = (int)(std::clamp(level, 0.0f, 1.0f) * 10.0f + 0.5f);
+    return std::string((size_t)n, '|') + std::string((size_t)(10 - n), '.');
+}
+
+void GameFlow::beginPttCapture() {
+    if (pttCapture_) return;
+    pttCapture_ = true;
+    Popup p;
+    p.title = txt("$WfcPC.Voice.PushToTalkKey");
+    p.message = txt("$WfcPC.Voice.PressKeyPrompt");
+    p.b = PopupButton{txt("$UIText.MessagePrompts.GenericCancelButton"), "pttCancel", true};
+    p.showDefaultButtons = false;
+    showPopup(p);
+    FlowTrace::emit("settings.pttCapture", {{"state", "waiting"}, {"provenance", "PC EXTENSION"}});
+}
+
+void GameFlow::endPttCapture(const std::string& keyName) {
+    if (!pttCapture_) return;
+    pttCapture_ = false;
+    if (popup_.open && popup_.b.action == "pttCancel") closePopup();
+    if (!keyName.empty()) { profile_.voice.pttKey = keyName; profile_.save(); }
+    FlowTrace::emit("settings.pttCapture", {{"state", keyName.empty() ? "cancelled" : "set"}, {"key", profile_.voice.pttKey}});
+}
+
 void GameFlow::setPushToTalkHeld(bool held) {
+    if (pttCapture_) held = false;   // the key being chosen does not talk
     if (!session_ || role_ == SessionRole::Offline || profile_.voice.mode != 1 || held == pttHeld_) return;
     pttHeld_ = held;
     session_->setPushToTalk(held);
@@ -494,7 +520,8 @@ void GameFlow::onSessionEvent(const SessionEvent& e) {
             }
             SessionSlotSwap sw;
             sw.to = SessionSlotSwap::To::Bot;
-            sw.member = e.member;   // Gameplay maps the member to its match player; the LockstepLayer picks the tick
+            sw.member = e.member;   // Gameplay maps the member to its match player (World::applySlotSwap)
+            sw.atTick = e.value;    // the session's agreed tick in World::simTick units (0 = the next tick)
             pendingSwaps_.push_back(sw);
         }
         static const char* const kWhy[] = {"left", "timeout", "kicked", "load timeout"};

@@ -1516,6 +1516,15 @@ void FrontendRuntime::setCinematicMode(bool on, bool hideHud) {
 }
 
 void FrontendRuntime::updateOnlineVoice() {
+    if (flow_.pttCaptureActive()) {
+        const uint16_t vk = keyProbe ? keyProbe() : platform::firstKeyDown();
+        if (!pttCaptureArmed_) pttCaptureArmed_ = vk == 0;
+        else if (vk == 0x1B) flow_.endPttCapture("");   // Esc
+        else if (vk) {
+            const std::string name = platform::nameForVirtualKey(vk);
+            if (!name.empty()) flow_.endPttCapture(name);
+        }
+    } else pttCaptureArmed_ = false;
     const bool online = flow_.online() && flow_.sessionRole() != GameFlow::SessionRole::Offline;
     if (online != voiceUiOverride_) {   // the player row's A: "Mute / Unmute" (the original texts) while in an online session
         voiceUiOverride_ = online;
