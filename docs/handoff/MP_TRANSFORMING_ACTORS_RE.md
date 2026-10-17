@@ -58,3 +58,31 @@ Sources:
 - **So collision follows the animated bones during and after a transform, not the reference pose.**
 - **Rebuild:** build the PhysicsAsset bodies per bone and drive them from the anim at the actor's current normalized position: 0
   Untransformed, 1 Transformed, animated in between.
+
+## 4. Versus vs Escalation (2026-10-18, for Gameplay's door collision / bot nav)
+
+**Answer: Remnant and BrokenHope are Escalation-only maps, so their doors are never in a versus match (CONFIRMED).**
+
+- `Coalesced_ini` `TnDataProvider_MapInfo`, `CompatibleGameTypes`:
+  - `MP_ESC_Remnant_BASE_m` (MapId 506) = **["SV"]** only;
+  - `MP_ESC_BrokenHope_BASE_m` (505) = **["SV"]** only;
+  - `MP_IAC_Rust_BASE_m` (504) = DM, TDM, CTF, KOTH, EXT, DOM (Complex, Streets etc. the same).
+  - SV = Escalation (survival). The original never loads Remnant or BrokenHope for TDM / CTF / Conquest / Power Struggle /
+    Countdown, so "sealed corridors in versus" never occurs.
+- **Within Escalation** (§2): the 12 Remnant doors and 13 BrokenHope doors start closed and open only on
+  `TnSeqEvent_SurvivalGenerator` "New Power Level". That's generator power-ups bought between / during waves, not round start, a
+  timer or player Touch. BrokenHope's 5 bridges are retracted at PreGameplaySetup and extend on the same generator events via
+  RemoteEvents `TransformBridge1–3`. **Nothing ever closes them again** (the `UntransformBridgeN` events have no activator; no
+  door Untransform is wired).
+- **Rust (the only versus map with transforming actors):** both doors (IAC_TubeDoor, IAC_InteriorDoor) get Transform (open) from
+  `SeqEvent_SequenceActivated` at level start, **in every mode**. They animate open once and stay open. The three GameRuleActive
+  conditions linked to them are dead nodes (no inputs).
+- **Timings:** each transition is one play of the actor's AnimNodeSequence at rate 1 (open; reverse = rate −1). Sequences:
+  IAC_InteriorDoor_TransOut, NEU_BridgeStraight_TransOut, ORB_A4InteriorDoor_FastTransOpen, IAC_TubeDoor_TransOut. Their
+  SequenceLength was not extracted here (the AnimSequence exports are not in the MP packages' export tables; AssetTools' animset
+  export has them). There is no hold / auto-close timer: the state persists until another SetDesiredTransformState.
+
+**For Gameplay:**
+- If Remnant / BrokenHope are offered in versus, that's a rebuild extension. The original has no versus door state for them.
+- Escalation-faithful: closed until the matching generator power level, then open for the rest of the match.
+- Rust: open from match start in every mode, so nav should treat both Rust doors as open after the opening animation.
