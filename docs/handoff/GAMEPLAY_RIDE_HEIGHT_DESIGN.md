@@ -101,3 +101,15 @@ all axes : yaw.
    world pitch / roll > 30°, ignoring contacts.
    - The `aiTipped` rate-limited correction itself (~543) already matches (the authored AiMaxAngular* values).
 - Both are Classic-visible: they go in the shared Classic SIMHASH re-baseline with the squad item.
+
+**Integration decision 2026-10-17:**
+- **The deliverable is the faithful model:** four implicit spring probes with the authored HoverCar / HoverTruck / HoverTank values
+  (Optimus HoverTruck_Physics 185 / 10000 / 4000 / 250), zero-extent traces along body-down, force max(0, (−dir·N)·F) along
+  body-up, no clamp / tilt limit. Not the controller above.
+  - If our hover already runs these probes, the item is a check of the values, the placement on the COM diagonals and the force
+    direction, with the equilibrium heights (car origin ≈ 125 UU, truck ≈ 109) as the test.
+- **Smart's righting becomes the faithful AI rule:** world pitch / roll > 30° (RE-confirmed: IsUnstable reads the rotator; the contact
+  normal only feeds IsOnTheGround and the car probe force), and no player ShouldUpright pull for AI vehicles. Re-measure tipped time
+  / stucks / off-mesh.
+- **Classic** (af4d0731) does not run the AI righting path at all: aiTip −1, player rule only. That's a Classic fidelity gap,
+  **raised to Integration, not fixed** (Classic byte-identity is a user rule).
