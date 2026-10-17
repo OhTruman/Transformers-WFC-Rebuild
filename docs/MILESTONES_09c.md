@@ -3168,3 +3168,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:31 MERGED 68b4a3e6 the voice lane (Opus voice packets over lockstep, jitter buffer + concealment, radio / proximity with the original's
   DX curve; +2.7 KB/s per talker; proximity room reverb still PARTIAL). ONLINE PHASE 1 CODE IS COMPLETE on integration except
   Gameplay's two local-pawn fixes (NET.identity) and the proximity reverb; then the two-PC test.
+2026-10-17 13:33 NET.identity TRANSPORT HALF PASSES (Experimental, independent, c702c93b): bundles identical on every common tick on lan / typical /
+  bad, no timeouts, stalls max 129 ms; the tick-602 split = each process's own local pawn (three hashes with identical bundles) =
+  Gameplay's item; negative control (pre-switch) splits at 601. Full PASS re-run (~3 min CPU) on the head with Gameplay's fix.
