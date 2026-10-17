@@ -11,7 +11,7 @@ Method: `tools/shadermap_scan.py` (per-material shader maps; now also parses `De
 - AGreaterThanB = Constant 1.0, AEqualsB = ALessThanB = Constant 0 (R unset);
 - **no EqualsThreshold property exists in WFC's If** (only A, B and the three result inputs).
 
-**Compiled** (Splash_Big_Clip_MAT base-pass PS, A5_TRY_BASE_m, HmParticleCloud_NoSubUV, GUID 26b4ae39…):
+**Compiled** (Splash_Big_Clip_MAT base-pass PS, A5_TRY_BASE_m, FParticleDynamicParameterVertexFactory, GUID 26b4ae39…):
 ```
 SETGTv  t1 = (A >  B)            ; r8.w
 SETGTEv t2 = (A >= B)            ; r7.w
@@ -28,7 +28,7 @@ CNDGTEv r  = (-|t2| >= 0) ? Less : t1      ; t2 == 0 (A < B) → Less (literal 0
 
 **Cooked:** **no** derivative instruction in any of their pixel shaders. Checked:
 - TR_OmegaSupreme_Mat: base pass in A3_COR_OmegaSupreme_m;
-- CHR_Vignette_Mat: base + directional / spot / one-light-uber light passes in A1 / A2 / A3, on the Foliage and GPU-skin-decal VFs.
+- CHR_Vignette_Mat: base + directional / spot / one-light-uber light passes in A1 / A2 / A3, on the Local, GPU-skin and GPU-skin-morph VFs (VF names corrected 2026-10-18, see §6).
 
 On Xenos a derivative needs a `getGradients` fetch; none occurs (only `tfetch`, one explicit `setTextureLod` in Omega's). So the Ddx /
 Ddy chains are unreachable in the cooked permutations (static switches / unconnected outputs).
@@ -48,17 +48,22 @@ emitting `0.0` is also faithful for these materials.
 ## 4. LensFlareIntensity / LensFlareOcclusion (C for the plumbing; H for the values)
 
 **Plumbing:**
-- The flare-node values are **not shader constants**. In flare_sun_Mat's PS (D3A_IAC_City1_ART_m, GUID e468bbcf…) the CTAB is only
-  Texture2D_0, UniformScalar_0, UniformVector_0 and SceneColorBiasFactor.
-- The intensity / occlusion / radial-distance terms come from **interpolators** written by the vertex factory (r0.zw, r2.y in the
-  PS: `sat(…)`, `1 − x` …).
-- The material's vertex shader for the cooked VF passes vertex-fetched streams straight to those interpolators.
+- The flare-node values are **not shader constants**. flare_sun_Mat's PS on **FLensFlareVertexFactory** (D3A_IAC_City1_ART_m, GUID
+  e468bbcf…) has a CTAB of only Texture2D_0, UniformScalar_0, UniformVector_0 and SceneColorBiasFactor.
+- The intensity / occlusion / radial-distance terms come from **interpolators** (r0.zw, r2.y in the PS: `sat(…)`, `1 − x` …).
+- The flare VS (GUID dabef980…, constants CameraRight / CameraUp / LocalToWorld / ViewProjection) vertex-fetches 7 streams and
+  passes them straight to oC0–oC3. So the values are **per-vertex attributes filled on the CPU** by the flare renderer.
 
 **Usage:**
 - 32 LensFlareComponents / 31 LensFlareSources / 10 LensFlare assets exist; elements reference these materials (`LFMaterials`, e.g.
   IAC_A1_Far_LF → ORB_LensFlare_BASE).
-- The cooked maps for the 14 flare materials list only **FParticleBeamTrailVertexFactory** and **FFoliageVertexFactory** shaders. **No
-  `FLensFlareVertexFactory` shaders were found** for them in any package (scan over all 460).
+- **Placement:** 6 MP maps (BrokenHope, Remnant, Rust, Seed, ORB, Gorge: one each), UI_FrontEnd (3), and the campaign.
+- **Correction (2026-10-18):** the flare materials (`bUsedWithLensFlare`) **do cook FLensFlareVertexFactory shaders** (5 per material:
+  4 base-pass VS density variants + the base PS) plus FLocalVertexFactory ones. The earlier "no lens-flare shaders /
+  BeamTrail + Foliage only" reading came from the scanner's VF labels being shifted by one block (§6). So the original draws its
+  flares through the stock lens-flare VF, and the UNKNOWN is withdrawn.
+- The lens-flare VF's ShouldCache (0x82FB6F88) is `Material->vfunc 0x50 || Material->vfunc 0x34` (H: IsUsedWithLensFlare ||
+  IsSpecialEngineMaterial).
 
 **Values (H, stock UE3 lens flares):**
 - **LensFlareIntensity** = the element's per-frame intensity: the element's Intensity distribution at its radial / ray position × the
@@ -67,8 +72,6 @@ emitting `0.0` is also faithful for these materials.
 - **RadialDistance / RayDistance** = the element's normalised screen-space distances.
 - On a non-flare VF the generic vertex factories feed defaults: intensity 1, occlusion 1, distances 0 (H).
 
-**Open (UNKNOWN):** with no FLensFlareVertexFactory shaders cooked, how the shipped game draws these flares (through the beam-trail
-VF, or not at all) is not settled. A runtime check of a campaign scene with a LensFlareSource in view is the next step.
 - **Translator:** expose the four values as per-draw uniforms, defaulting to Intensity 1, Occlusion 1, distances 0. A flare renderer
   sets them per element.
 
@@ -78,18 +81,32 @@ VF, or not at all) is not settled. A runtime check of a campaign scene with a Le
 True**, **bCastShadows = False**. Otherwise a DecalMaterial is authored like a Material: its BlendMode / LightingModel / outputs decide
 the pass. E.g. DarkEnergon_Spread_MAT is BLEND_Masked, MLM_Unlit, clip 0.05.
 
-**Compiled:**
-- **The pixel shader is an ordinary base-pass PS.** DarkEnergon_Spread_MAT under FLocalDecalVertexFactory (A1_IAC_HalfPipe_Vig_m,
-  GUID 03b6a6b9…) has the same kind of CTAB as any masked material: OpacityMaskClipValue, textures, uniforms, WorldCameraPosition,
-  SceneColorBiasFactor. There are no decal clip or projection constants in the PS.
+**Compiled** (DarkEnergon_Spread_MAT, A1_IAC_HalfPipe_Vig_m; VF labels corrected 2026-10-18, §6):
+- **Static decals** (FLocalDecalVertexFactory, base PS ed761550…): the material's normal masked PS **plus two decal constants,
+  `DecalWorldTangent` (c20) and `DecalWorldBitangent` (c21)**. They supply the decal's tangent basis, which the PS multiplies into
+  the tangent-space normal (`r0.z · c20.yxz`, `r0.z · c21.yxz`) in place of the mesh's tangents.
+  - Otherwise the CTAB is identical to the FLocalVertexFactory PS (903020c1…): OpacityMaskClipValue, textures, uniforms,
+    WorldCameraPosition, SceneColorBiasFactor. No clip or projection constants.
+  - Decal UVs come from the decal geometry (H: stock UE3 builds the clipped decal mesh on the CPU).
+- **Skinned decals** (FGPUSkinDecal / FGPUSkinMorphDecalVertexFactory): the base PS (03b6a6b9…) is **the same shader as the plain
+  GPU-skin VFs'**, with no decal constants. The VS (a0265807…) adds **`BoneToDecalRow0`, `BoneToDecalRow1`, `DecalRefPoseLocation`**
+  to BoneMatrices: the decal UV is projected from the bone-space position relative to the decal's reference pose (C: CTAB).
 - The decal lit passes use the normal TLightPixelShader policies.
-- **The decal difference is in the vertex factory:**
-  - **static decals** (FLocalDecalVertexFactory): the decal geometry carries its own decal UVs (H: stock UE3 builds the clipped
-    decal mesh on the CPU);
-  - **skinned decals** (FGPUSkinDecal / FGPUSkinMorphDecalVertexFactory, VS GUID a0265807…): **`BoneToDecalRow0`, `BoneToDecalRow1`,
-    `DecalRefPoseLocation`** + BoneMatrices. The decal UV is projected from the bone-space position relative to the decal's
-    reference pose (C: CTAB).
 - **Blend:** from the material's own BlendMode (masked here). Modulate decals elsewhere (FX_Decals_p DeathDecal / MetalDecal) blend
   `dest × src` with no SceneColorBias (TARGETED_PASS5 §12 add. 29–32).
-- **Translator:** treat a DecalMaterial root exactly as a Material root (same outputs and blend). Supply decal UVs from the decal
-  geometry (static) or from the bone-to-decal projection (skinned).
+- **Translator:** treat a DecalMaterial root as a Material root (same outputs and blend). Supply decal UVs from the decal
+  geometry (static) or from the bone-to-decal projection (skinned). For static decals, take the normal-map tangent frame from
+  the decal's DecalWorldTangent / Bitangent.
+
+## 6. Correction: shader-map VF labels (2026-10-18)
+
+- **What was wrong:** `tools/shadermap_scan.py` read each vertex-factory block as (VF name, count, entries). The cooked layout is
+  **u32 N, then N × (u32 count, count × 32-byte entries, VF FName)**: the entries come before the VF they belong to. Every VF label
+  was therefore shifted by one block, and the first block's entries were dropped.
+- **What was not wrong:** material attribution (each map precedes its label), which was validated against bUsesDistortion. It is
+  re-validated with the fixed parser: all 221 MP_IAC_Streets maps parse (168 before), and the only (distortion shaders,
+  flag False) cases are 7 MaterialInstanceConstants whose parents use distortion.
+- **Effect:**
+  - the VF names quoted in this doc's first version: fixed above;
+  - the distortion allow-list: regenerated as v3 by `tools/distortion_allowlist.py`. The material set per MP map is unchanged;
+    VF names are corrected, e.g. "Foliage / GPUSkinDecal / GPUSkinMorph" → "Local / GPUSkin / GPUSkinMorph".

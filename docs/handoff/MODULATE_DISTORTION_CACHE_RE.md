@@ -138,3 +138,23 @@ c252 = (−255, 10, 0, −2), c253 = (1/255, 4, 255, 1e-4), c254 = (2, 1.5, 0.00
 Rendering's model matches it end to end. BlastSphere_Death_MAT's input chain (scalar × 20, both axes) matches too. A swirl that looks
 too big therefore comes from an **input** difference: the depth-biased alpha (scene depth vs particle depth, DepthBiasScale), the
 particle vertex alpha / size, the SmokeTile texture or the view-angle term. It does not come from a missing or extra constant.
+
+## Correction 2 (2026-10-18): vertex-factory names in this doc are shifted by one block
+
+`shadermap_scan.py` read VF blocks as (VF, count, entries). The cooked layout is (count, entries, VF), with the entries before
+their VF. Every **VF name** above is the previous block's, and the first block of each map was dropped.
+
+**Unaffected:** material attribution and the which-material / which-package findings (re-validated with the fixed parser).
+The allow-list's material set per MP map is unchanged.
+
+**Corrected VF sets with the DistortMesh pair** (union over all packages, regenerated v3 allow-list via tools/distortion_allowlist.py):
+
+| Material | VFs |
+|---|---|
+| ScreenSplatter_01_MAT | ParticleDynamicParameter, ParticleSubUVDynamicParameter, ParticleBeamTrailDynamicParameter |
+| Trail_Distort_MOD_MAT | Particle, ParticleSubUV, ParticleBeamTrail |
+| Rings_Distort_MAT | Particle, ParticleSubUV, ParticleBeamTrail |
+| BlastSphere_Death_MAT / BlastShell_MAT | Local, Particle |
+| World glass / force fields (e.g. ENV_ForceField_Fac_MAT) | Local, GPUSkin, GPUSkinMorph (was "Foliage, GPUSkinDecal, GPUSkinMorph") |
+
+Use the v3 `distortion_allowlist.json` / `distortion_allowlist/<MAP>.json` for any per-VF gating.

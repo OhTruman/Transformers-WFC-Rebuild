@@ -53,7 +53,10 @@ u32 m, m × GUID16      static lights that do NOT affect this mesh (H: the "irre
 
 Material usage flag 8 (`bUsedWithStaticInterpolatedLighting`, enforced by CheckForErrors) cooks this policy, with its VS
 `TBasePassVertexShaderFDirectionalInterpolatedTextureLightMapPolicyFNoDensityPolicy`. Disassembly checked:
-ENV_PhongMain_NS_Mat in MP_ESC_BrokenHope_Base_m, PS 7daec599…, VS 37fa21ae….
+ENV_PhongMain_NS_Mat in MP_ESC_BrokenHope_Base_m on FLocalVertexFactory, PS 7daec599…, VS 37fa21ae…. The same policy is cooked on
+**FGPUSkinVertexFactory** (the skeletal path these actors use), e.g. COR_RoboArmClaw_MATINST PS fc93526e… / VS 8293e7a3…:
+identical structure with the registers moved (LightMapTextures s5–s10, LightMapScale c37–c42, LightMapLerpAmount c43; VS c13 / c14
++ BoneMatrices). Register numbers below are from the Local-VF variant.
 
 **VS:**
 - Two light-map UV sets from the mesh's light-map UV: `oC2.xy = uv·c13.xy + c13.wz`, `oC2.zw = uv·c14.xy + c14.wz`.
