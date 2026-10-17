@@ -826,9 +826,12 @@ void Pipeline::tickMapFx(float dt) {
                     rt.burstFired.clear();
                 } else { rt.done = true; continue; }
             }
-            float efrac = rt.time / L.duration;
+            float efrac = rt.time / L.duration;   // (BurstList.Time: a fraction of the duration)
+            // spawn-time distributions: the emitter time in SECONDS within the loop (RE, native spawn runner 0x8303E288 passes
+            // EmitterTime = fmod(SecondsSinceCreation, EmitterDuration); the emitter tick 0x83044E10) - not normalized
+            const float etime = rt.time;
             int spawn = 0;
-            float rate[1]; L.spawnRate.eval(efrac, in.rng, rate);
+            float rate[1]; L.spawnRate.eval(etime, in.rng, rate);
             rt.spawnFrac += std::max(rate[0], 0.0f) * dt;
             spawn += (int)std::floor(rt.spawnFrac);
             rt.spawnFrac -= std::floor(rt.spawnFrac);
@@ -872,20 +875,20 @@ void Pipeline::tickMapFx(float dt) {
                     // flagA = 0: a spawn-class module contributes nothing under either flag reading
                     if (m.flagA == 0) continue;
                     if (m.name == "PMI_Lifetime") {
-                        evalDist(m, "Lifetime", efrac, in.rng, v1);
+                        evalDist(m, "Lifetime", etime, in.rng, v1);
                         // (RE particle audit (c) batch 1: a second Lifetime module stacks, 1 / (1 / old + L); the first sets)
                         if (q.oneOverLife > 0.0f && v1[0] > 0.0f) q.oneOverLife = 1.0f / (1.0f / q.oneOverLife + v1[0]);
                         else q.oneOverLife = v1[0] > 0.0f ? 1.0f / v1[0] : 0.0f;   // 0 = lives until killed
                     } else if (m.name == "PMI_Size") {
-                        evalDist(m, "StartSize", efrac, in.rng, v3);
+                        evalDist(m, "StartSize", etime, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.baseSize[c] += v3[c];
                     } else if (m.name == "PMI_Color") {
-                        evalDist(m, "StartColor", efrac, in.rng, v3);
-                        evalDist(m, "StartAlpha", efrac, in.rng, v1);
+                        evalDist(m, "StartColor", etime, in.rng, v3);
+                        evalDist(m, "StartAlpha", etime, in.rng, v1);
                         for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c];
                         q.baseColor[3] = v1[0];
                     } else if (m.name == "PMI_Location") {
-                        evalDist(m, "StartLocation", efrac, in.rng, v3);
+                        evalDist(m, "StartLocation", etime, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
                     } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
@@ -951,9 +954,9 @@ void Pipeline::tickMapFx(float dt) {
                         const bool kNeg[3] = {m.field("Negative_X", 1) != 0, m.field("Negative_Y", 1) != 0, m.field("Negative_Z", 1) != 0};
                         const bool kSurface = m.field("SurfaceOnly", 0) != 0, kVelocity = m.field("Velocity", 0) != 0;
                         float rad[1], vs[1], off[3], d[3], n[3];
-                        evalDist(m, "StartRadius", efrac, in.rng, rad);
-                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
-                        evalDist(m, "StartLocation", efrac, in.rng, off);
+                        evalDist(m, "StartRadius", etime, in.rng, rad);
+                        evalDist(m, "VelocityScale", etime, in.rng, vs);
+                        evalDist(m, "StartLocation", etime, in.rng, off);
                         for (int c = 0; c < 3; ++c) {
                             in.rng = in.rng * 1664525u + 1013904223u;
                             const float r = (float)(in.rng >> 8) / 16777216.0f;
@@ -976,7 +979,7 @@ void Pipeline::tickMapFx(float dt) {
                     } else if (m.name == "PMI_LocationDirect") {   // RE audit (c) batch 2, spawn: Location = Location(RelTime)
                         float l[3], o[3];                          // -> world + LocationOffset(EmitterTime), the offset stored
                         evalDist(m, "Location", 0.0f, in.rng, l);
-                        evalDist(m, "LocationOffset", efrac, in.rng, o);
+                        evalDist(m, "LocationOffset", etime, in.rng, o);
                         toWorldDir(o, q.locDirect);
                         if (!L.localSpace) for (int c = 0; c < 3; ++c) q.pos[c] = l[0] * in.R[0][c] + l[1] * in.R[1][c] + l[2] * in.R[2][c] + in.T[c] + q.locDirect[c];
                         else for (int c = 0; c < 3; ++c) q.pos[c] = l[c] + q.locDirect[c];
@@ -993,10 +996,10 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) { kp[c] = m.field(posN[c], 1) != 0; kn[c] = m.field(negN[c], 1) != 0; }
                         const bool surf = m.field("SurfaceOnly", 0) != 0, velOn = m.field("Velocity", 0) != 0, radial = m.field("RadialVelocity", 1) != 0;
                         float rad[1], hgt[1], vs[1], sl[3], d[3];
-                        evalDist(m, "StartRadius", efrac, in.rng, rad);
-                        evalDist(m, "StartHeight", efrac, in.rng, hgt);
-                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
-                        evalDist(m, "StartLocation", efrac, in.rng, sl);
+                        evalDist(m, "StartRadius", etime, in.rng, rad);
+                        evalDist(m, "StartHeight", etime, in.rng, hgt);
+                        evalDist(m, "VelocityScale", etime, in.rng, vs);
+                        evalDist(m, "StartLocation", etime, in.rng, sl);
                         const float R = rad[0], H = hgt[0] * 0.5f;
                         for (int tries = 0;; ++tries) {
                             for (int c = 0; c < 3; ++c) {
@@ -1026,30 +1029,30 @@ void Pipeline::tickMapFx(float dt) {
                         }
                     } else if (m.name == "PMI_VelocityInheritParent") {   // RE audit (c) batch 2: Velocity and BaseVelocity
                         if (!L.localSpace) {                              // += Scale(EmitterTime) x the emitter's velocity (0 local)
-                            evalDist(m, "Scale", efrac, in.rng, v3);
+                            evalDist(m, "Scale", etime, in.rng, v3);
                             for (int c = 0; c < 3; ++c) q.baseVel[c] += v3[c] * in.vel[c];
                         }
                     } else if (m.name == "PMI_Velocity") {
-                        evalDist(m, "StartVelocity", efrac, in.rng, v3);
+                        evalDist(m, "StartVelocity", etime, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c];
-                        evalDist(m, "StartVelocityRadial", efrac, in.rng, v1);
+                        evalDist(m, "StartVelocityRadial", etime, in.rng, v1);
                         radial += v1[0];
                     } else if (m.name == "PMI_Rotation") {
-                        evalDist(m, "StartRotation", efrac, in.rng, v1);
+                        evalDist(m, "StartRotation", etime, in.rng, v1);
                         q.rot += v1[0] * 6.2831853f;                     // turns -> radians
                     } else if (m.name == "PMI_MeshRotation") {
-                        evalDist(m, "StartRotation", efrac, in.rng, v3);
+                        evalDist(m, "StartRotation", etime, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRot[c] += v3[c] * 360.0f;   // turns -> degrees
                     } else if (m.name == "PMI_RotationRate") {   // turns / s -> radians / s
-                        evalDist(m, "StartRotationRate", efrac, in.rng, v1);
+                        evalDist(m, "StartRotationRate", etime, in.rng, v1);
                         q.rotRate += v1[0] * 6.2831853f;
                     } else if (m.name == "PMI_ColorOverLife") {  // spawn: Color = BaseColor = value at RelativeTime 0
                         auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(0.0f, in.rng, v3); for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, v1); q.baseColor[3] = v1[0]; }
                     } else if (m.name == "PMI_Acceleration") {
-                        evalDist(m, "Acceleration", efrac, in.rng, v3);
+                        evalDist(m, "Acceleration", etime, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
                     } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // spawn = the first update (M67)
@@ -1057,7 +1060,7 @@ void Pipeline::tickMapFx(float dt) {
                     } else if (m.name == "PMI_SubUVDirect" && L.subMethod != 0) {   // spawn = the first update (M71)
                         subuvDirect(m, q, in.rng);
                     } else if (m.name == "PMI_MeshRotationRate") {
-                        evalDist(m, "StartRotationRate", efrac, in.rng, v3);
+                        evalDist(m, "StartRotationRate", etime, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
                     } else if (m.name == "PMI_ColorByParameter") {
                         // Color = BaseColor = the component's colour InstanceParameter (Steam_Sm_FX: 'SteamColor',
@@ -1090,7 +1093,7 @@ void Pipeline::tickMapFx(float dt) {
                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
                         for (int k = 0; k < 4; ++k) {
                             auto it = m.dists.find("DynamicParams[" + std::to_string(k) + "].ParamValue");
-                            if (it != m.dists.end()) { it->second.eval(efrac, in.rng, v1); rt.dynParam[k] = v1[0]; }
+                            if (it != m.dists.end()) { it->second.eval(etime, in.rng, v1); rt.dynParam[k] = v1[0]; }
                         }
                         rt.hasDyn = true;
                     }
