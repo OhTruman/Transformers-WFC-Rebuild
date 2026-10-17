@@ -417,3 +417,81 @@ The Escalation buffs (§2) are layered on top at spawn: damage taken × 0.9 → 
   13225 + 8719, 6269 + 9351, 3237 + 9411. TransformBridgeN is fired by the bridge generators (13439 / 15252, 11466, 637). The
   Untransform events have no in-match sender (the bridges never close).
 - **Rule for the export:** start state = cooked bBlocked **OR turned off by a PreGameplaySetup chain**.
+
+## 8. Presentation: HUD, prompts, texts, economy, score, end screens (C unless marked)
+
+Sources:
+- TransContent / TransGame script: GRI / PRI survival, TnContextualCommandSurvivalGenerator, TnSurvivalGeneratorMessage,
+  TnSurvivalGameOverMessage, TnGameRules_CompetitiveScoring;
+- authored `TR_Escalation_m.ScoreDefinition`;
+- INT strings (UIText / TransGame / TransContent);
+- the HUD movie exports (AssetTools frontend_hud.json).
+
+### 8.1 HUD
+- **Wave indicator:**
+  - `TnGameReplicationInfoSurvival._CurrentWave` (= DisplayWave + 1, set at each wave start) refreshes the game data store.
+  - The HUD's **mc_waveIndicator** (number_mc + "Wave" label `$UIText.Hud.Wave`) plays its **"newWave"** label when it changes.
+- **Next-wave timer:**
+  - `_NextWaveTime` (BetweenWaves: TimeBetweenWaves − elapsed, whole seconds; −1 otherwise) drives **mc_nextWaveTimer** (newWave_mc
+    "**New Wave In**" + time_mc countdown).
+  - "**Wave Complete**" (`$UIText.Hud.WaveComplete`) is the between-waves label.
+  - The PreGame wait is also a countdown (PreGameTime: BrokenHope 30 s / Remnant 10 s).
+- **Energon (power) readout:** per player `_CurrentPower` (0–9999), replicated on the PRI. The HUD has the **PowerIcon** image and
+  the survival score panels **mc_scoreSurvival / mc_scoreSurvivalPlayerPanel** (the per-player panels show the co-op players; H:
+  their score / power).
+- **Generator prompt** (contextual command, shown while standing in a generator's ActivationVolume):
+  `AddToGenerator = "Hold ^ADD_TO_GENERATOR `g  <font color='#8AF0FF'>[power]`n</font>"`.
+  - `g = the SurvivalGeneratorNames entry: "to open Door", "for Health", "for Ammo", "for Overshield", "for Flak Grenades", "for EMP
+    Grenades" (FlashBang), "for Heal Grenades", "for Energon Repair Ray", "for Photon Burst Rifle", "for Energon Battle Pistol",
+    "for EMP Shotgun", "for Plasma Cannon", "for Scatter Blaster", "for X12 Scrapmaker" (HeavyMG), "for Null Ray" (Sniper), "for Magma
+    Frag Launcher", "for Thermo Rocket Launcher", "for Thermo Mine", "for Ion Displacer" (Ion turret), "for Nucleon Shock Cannon"
+    (Rocket turret).
+  - `n = **the power still needed** (`Generator.NeededPower`: the remaining cost, shrinking while players feed it). ^ADD_TO_GENERATOR
+    is the bound button icon (X / interact).
+  - Holding sends ServerSendGeneratorCommand(true); releasing sends false.
+- **Generator announcements** (TnSurvivalGeneratorMessage → HUD LocalizedGameAnnouncement): "`g: at power level `n" /
+  "`g: at full power" (switch 100). H: no sender found in the MP script, so it may be unused; the generator itself plays the
+  FILLED sound.
+- **Downed:**
+  - the downed-health bar = Health / DownedHealth (TnHudDataObserverNormalizedDownedHealth; bleeds from 540 at 18 /s);
+  - downed screen text block `[Downed]` (EMERGENCY / CRITICAL / T-MINUS / DISTRESS BEACON ACTIVATED / STABILIZED …);
+  - "**Self Destruct** Hold G" (DownedSuicide);
+  - teammates get "**Hold ^REVIVE to Revive**" and a revive-buddy marker ("Revive", DownedEnemyLabel / TnHudDataObserverReviveBuddy);
+  - the reviver's progress = RevivePercentDone over the Revive_Heal animation;
+  - sounds BL_HUD_INTERFACE.DOWNED_PULSE (downed loop) / DOWNED_REVIVE.
+- **Dead:** the respawn screen shows "**Waiting for Next Wave to Respawn**" (`$UIText.Respawn.RespawnNextWave`; TnRespawnHelperRoundEnd).
+- **Wave start / end audio:** the map Kismet on the "Round Begin" / "Round End" events (§5): a random announcer line
+  (SeqAct_PlayDialog on HmDialogEmitter) plus dialog-group mute switching. Remnant also plays taunt conversations after N rounds.
+  "Begin Wave `n" (TnSurvivalWaveStartMessage.NewWave) exists in the INT, but its class isn't in the cooked script (H: unused; the
+  HUD's newWave animation does the job).
+- **Kill feed:** kills are announced except sentry kills (`ShouldAnnounceKill`).
+
+### 8.2 Energon economy (recap of §3, C)
+- **Earned only by the killer:** PowerReward per enemy type (Spider 10 … Tank 300), added to the **killer's own** pool
+  (`KillerPRI.AddPower`).
+  - **No assist share, no wave bonus, no team pool.**
+  - Pickups (AbilityResource shards) give ability resource, not power.
+- **Spent per player:** hold at a generator to drain your own pool into it (`max(1, dt × DrainRate)` per tick). Several players
+  can pour into the same generator.
+- **Per-10-spent achievement counter:** id 44.
+- **Power resets** with the PRI (Reset).
+
+### 8.3 Score and XP
+- **XP: none.** TnGameReplicationInfoSurvival `CanGainXp` = false and `ShowXpEvents` = false.
+- **Score = competitive scoring** (rules CompetitiveScoring + TrackKills; `TR_Escalation_m.ScoreDefinition`):
+  - **per-kill score by enemy type:** Spider 10, MG 25, Rocket / Sniper / Car 30, CQC 50, Jet 75, Shotgun 75, Brute / Titan 100,
+    HoloBrute 25, Kamikaze 30, **Tank 300**;
+  - kill events: Kill / HeadShot / MeleeKill by type;
+  - **assists score 0** (KillAssist multiplier 0.0); **MaxMultiplier 1.0** (no combo multiplier, unlike competitive co-op's 7.1);
+  - picking up shards scores a PickupShard event.
+- Each player has their own score (the PRI score tracker).
+- **Leaderboard** (TnStatsWriteSV / StatsReadSVAllTime): Rank, Score, Games, Time Played, Kills, Deaths, **Revives**, **Downed**.
+- Achievements: wave 16 displayed (index 15) → id 45; power spent → id 44.
+
+### 8.4 End of match
+- **The loss** (all players dead at once):
+  - `TnSurvivalGameOverMessage` with switch = DisplayWave + 1 → the GRI game-over message "**You survived until wave `r**";
+  - MatchOver → every player gets **OnCampaignGameOver** (the co-op / campaign game-over flow, not the versus EndGameStats).
+- Quitting mid-game: title LeaveLobby, message "**Your leaderboard progress will be lost. Do you want to proceed?**"
+  (LeaveSurvivalConfirm).
+- Stats shown / written: score, kills, deaths, revives, downed (§8.3). The highest wave reached is the headline number.
