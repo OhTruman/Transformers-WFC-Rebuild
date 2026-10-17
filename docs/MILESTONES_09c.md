@@ -3246,3 +3246,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   Character::meshMatrix PROVED as the 1299 cause (test switch: live == replay per seat on every tick); the next split at 1723 is
   perspective-dependent damage (p1 takes a ~330 hp hit only where p1 is remote). Both with Gameplay (sim queries without the
   presentation offset; the remote-pawn damage path). Phase 1 milestone not yet met.
+2026-10-17 14:24 Lens flares code complete as WIP (Rendering 87941774, on RE's native math: screen-space elements, curves, occlusion-query
+  visibility, no depth test; matc reads the LensFlare* nodes); x18slot (~10 min first look, Rust / Debris) granted after x17 on the
+  same relay; merges as its own set on the eye check.
