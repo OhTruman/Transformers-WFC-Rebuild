@@ -2433,16 +2433,16 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   card queue: Rendering (Streets X3 haze match run, X6 captures / identity / eye sheet) -> Gameplay (patch 2 crop slot) ->
   Systems (death cue paced run, FXINACTIVE rows) -> Experimental (presenter-fix 64-run loop, FG-on, resize; gaps). CPU work open
   on every lane; AssetTools option A; RE lane TnShake units.
-2026-10-17 06:42 Rendering card slot 06:17-06:58: Streets X3 haze step CLOSED (0.0004 vs 0.0007 within noise on the matched exe, thinner
+2026-10-17 06:42 Rendering card slot 06:17-~06:33 (lane-reported 06:58 was ahead of the clock): Streets X3 haze step CLOSED (0.0004 vs 0.0007 within noise on the matched exe, thinner
   shafts; row stays 0.0007; the eye-pass Streets note stays accepted). Identity PASS int_base11 (d2573ccc) vs int_cand15
   (presenter event 9015c4e9, fence fix 8736608c, body bit 403e462a + X3 timer, Camera roll e5fc6d65, X6 round 1 66689c92):
   Off / Faithful 5 / 5 byte-identical, SIMHASH 9601 equal. X6 FAILS the eye bar so far: rounds 1 / 2 read as darker blotches,
   not a sheen (the highlight term does not reach those floors; X2 lightmap-specular path suspected); round 3 in code, X6 not
-  merged. Card -> Gameplay patch 2 crop slot 06:58 (+ Rust / BrokenHope transforming-actor shots), then Systems.
+  merged. Card -> Gameplay patch 2 crop slot ~06:35 (+ Rust / BrokenHope transforming-actor shots), then Systems.
   RE lane: MP_TRANSFORMING_ACTORS_RE.md (f60eccb0), CAMPAIGN_STREAMING_RE.md (24a0d4d3); Gameplay design
   GAMEPLAY_TRANSFORMING_ACTORS.md (af3fc036): Gameplay state + collision, Rendering draws at the pose. AssetTools: verdict
   exemption + streaming runtime revision merged (86dd5de6); matinee export started (~3-3.5 h).
-2026-10-17 06:49 Gameplay patch 2 crop slot 06:58-07:12 (8 runs, shots Rebuild-Gameplay work/pass29/p2/crop_*/shots, sheets sheet_corpse_10.png,
+2026-10-17 06:49 Gameplay patch 2 crop slot ~06:35-06:48 (8 runs; times from my clock, lane-reported ones ran ahead, shots Rebuild-Gameplay work/pass29/p2/crop_*/shots, sheets sheet_corpse_10.png,
   sheet_deathcam_*.png, seq_deathcam_robot.png, gib_zoom.png, transform_check.png): PASS as designed: melee kill without
   explosion / chunks / gib (base wrongly exploded), per-entry effects at the authored sockets, vehicle death FX, KillZ insta-gib,
   killer cam cut after 3 s, respawn cut, vehicle death camera. NO MERGE YET, three defects: (1) the death scorch renders opaque
@@ -2450,6 +2450,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   DeathGib_Mat_INST absent from every materials_glsl.json; chunks grey in base too) -> Systems compiles both into the 10 MP
   material sets; (3) robot death camera starts inside the corpse (trace from the lumbar bone, not the anchor) -> Gameplay fix +
   2-min re-crop. Integration viewed sheet_corpse_10.png and seq_deathcam_robot.png: agrees. SIMHASH zero-diff holds
-  (a208d3b0). Transforming actors: not drawn (working assumption from the Rust / BrokenHope shots). Card -> Systems 07:12.
+  (a208d3b0). Transforming actors: not drawn (working assumption from the Rust / BrokenHope shots). Card -> Systems ~06:48.
   Rendering X6 round 3 (0b6b0fd2, cand17: whole film in damp patches, roughness 0.05, sheen share >= 0.35, lobe hack removed)
   queued after Systems: Gorge + Streets first, full batch only if it reads as a sheen.
