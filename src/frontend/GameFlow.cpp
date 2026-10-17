@@ -403,6 +403,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         }
         return {};
     }
+    if (fn == "Online.HostPrivateNow") { hostPrivateNow(); return {}; }   // lobby flow v2: Private Match
     if (fn == "Online.JoinGame") return onlineJoin(arg(0));   // PC EXTENSION: the Join Game prompt's code / address
     // The player row's A (the original "View Gamercard": the Live gamercard, where muting lived): online, Mute / Unmute
     if (fn == "Online.ShowGamerCardUI" && session_ && role_ != SessionRole::Offline) return toggleMute(arg(0));
@@ -468,6 +469,66 @@ void GameFlow::editPlaylist(int playlistId) {
     lobby_.gameModeTag = gs->tag;
     lobby_.playlistId = playlistId;
     FlowTrace::emit("lobby.publishGameInfo", {{"tag", gs->tag}, {"settings", gs->className}, {"playlist", std::to_string(playlistId)}});
+}
+
+const std::vector<std::string>& GameFlow::lobbyModes() {
+    // the versus modes + Escalation (SV, co-op; user decision: a selectable mode, Remnant / BrokenHope - CompatibleGameTypes)
+    static const std::vector<std::string> k = {"TDM", "DM", "CTF", "KOTH", "DOM", "EXT", "SV"};
+    return k;
+}
+
+std::vector<GameFlow::LobbySettingRow> GameFlow::lobbySettingRows() const {
+    std::vector<LobbySettingRow> out;
+    if (const GameSettings* gs = lobby_.settings)
+        for (const SettingField& f : gs->fields)
+            if (!f.header.empty() && !f.values.empty()) out.push_back({"<TnGameSettings:" + f.name + ">", f.header, f.values});
+    for (const BotOption& o : botOptions()) {
+        LobbySettingRow r{"<TnGameSettings:" + std::string(o.name) + ">", o.header, {}};
+        for (int v = 0; v <= std::max(0, botMax(o.field)); ++v) r.values.push_back(botChoiceLabel(o.field, v));
+        out.push_back(r);
+    }
+    return out;
+}
+
+void GameFlow::setLobbyService(const std::string& address) {
+    profile_.lobbyService = address;
+    profile_.save();
+    if (session_) session_->setLobbyService(address);
+    FlowTrace::emit("online.lobbyService", {{"address", address}});
+}
+
+void GameFlow::hostPrivateNow() {
+    // ONLINE_LOBBY_FLOW_V2 2.1: straight into the game lobby with the last-used mode (a new profile: Team Deathmatch);
+    // the settings live in the lobby's Game Settings (no mode list / options pre-screens).
+    std::string tag = profile_.lobbyLastMode;
+    if (std::find(lobbyModes().begin(), lobbyModes().end(), tag) == lobbyModes().end()) tag = "TDM";
+    FlowTrace::emit("lobby.hostNow", {{"mode", tag}, {"online", FlowTrace::boolean(session_ != nullptr)}});
+    editGameMode(tag);
+    playPrivateGame(tag);
+}
+
+bool GameFlow::changeLobbyMode(const std::string& tag) {
+    if (role_ == SessionRole::Member || level_ != LevelKind::GameLobby || lobby_.countingDown || lobby_.playlistId >= 0) return false;
+    if (std::find(lobbyModes().begin(), lobbyModes().end(), tag) == lobbyModes().end() || tag == lobby_.gameModeTag) return false;
+    const GameSettings* gs = settingsByConfigName(tag, true);
+    if (!gs) return false;
+    const bool sameLobby = lobby_.settings && lobby_.settings->lobbyGameClass == gs->lobbyGameClass;
+    currentSettings_ = gs;
+    editGameMode(tag);
+    profile_.lobbyLastMode = tag;
+    profile_.save();
+    FlowTrace::emit("lobby.modeChange", {{"mode", tag}, {"how", sameLobby ? "in place" : "lobby re-created"}});
+    if (sameLobby) {
+        // the map must suit the mode (CompatibleGameTypes): else that mode's first map
+        const MapInfo* mi = cat_->mapById(lobby_.mapId);
+        if (!mi || !mi->compatibleWith(tag)) {
+            const std::vector<const MapInfo*> maps = cat_->compatibleMaps(tag, true);
+            if (!maps.empty()) setMapId(maps.front()->mapId);
+        }
+        return true;
+    }
+    hostOnlineGame(gs);   // team <-> free-for-all: another lobby class - the lobby is re-created (members follow the host)
+    return true;
 }
 
 void GameFlow::playPrivateGame(const std::string& settingsName) {

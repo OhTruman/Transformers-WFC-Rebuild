@@ -1476,7 +1476,7 @@ void FrontendRuntime::injectDevSession(const std::string& spec) {
     auto arg = [&](size_t i, const char* d = "") { return i < a.size() && !a[i].empty() ? a[i] : std::string(d); };
     SessionEvent e;
     bool known = false;
-    for (int t = 0; t <= (int)SessionEvent::Type::MemberVoice; ++t)
+    for (int t = 0; t <= (int)SessionEvent::Type::MemberVoice; ++t)   // MemberVoice is the last type
         if (a[0] == sessionEventName((SessionEvent::Type)t)) { e.type = (SessionEvent::Type)t; known = true; }
     if (!known) { FlowTrace::emit("dev.session", {{"spec", spec}, {"error", "unknown event"}}); return; }
     using T = SessionEvent::Type;

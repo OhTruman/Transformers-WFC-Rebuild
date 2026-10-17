@@ -320,6 +320,17 @@ public:
     enum class FirstRunUi { None, NamePrompt, VoiceSettings };
     FirstRunUi takeFirstRunUi() { const FirstRunUi v = firstRunUi_; firstRunUi_ = FirstRunUi::None; return v; }
     void firstRunNameEntered();   // the account prompt's callback ran (Account.CreateAccount shows its own result first)
+    // Lobby flow v2 (ONLINE_LOBBY_FLOW_V2.md): Private Match hosts at once with the last-used mode; the host's Game Settings
+    // change the mode inside the lobby (in place between team modes, a re-created lobby to / from Deathmatch).
+    void hostPrivateNow();
+    bool changeLobbyMode(const std::string& tag);
+    void setLobbyService(const std::string& address);   // the Browse screen's Lobby Service entry (saved; sent to the session)
+    static const std::vector<std::string>& lobbyModes();   // the versus modes the Game Settings page offers
+    // The Game Settings page's rows after Game Mode: the mode's own host options (fields with a header), then the PC rows
+    // (Player Limit, the bot rows, Bot Difficulty, Iconic Characters, Kick Idle Players). Values are the labels the
+    // <TnGameSettings:Field> store reads and writes.
+    struct LobbySettingRow { std::string store, label; std::vector<std::string> values; };
+    std::vector<LobbySettingRow> lobbySettingRows() const;
     int localHeadsetState() const;   // this player's HeadsetState: 0 voice off, 1 on, 2 transmitting (push-to-talk held)
     bool isMuted(const SessionMemberId& m) const;
     bool toggleMute(const std::string& displayName);   // the player row's action (the original Gamercard button)
@@ -424,6 +435,7 @@ private:
     std::string voiceSent_;                             // the voice settings last sent (send on change)
     bool pttHeld_ = false;
     bool pttCapture_ = false;
+    bool lobbyServiceSent_ = false;
     FirstRunUi firstRunUi_ = FirstRunUi::None;
     bool firstRunAsked_ = false, firstRunReshow_ = false;
     void showFirstRunPrompt();

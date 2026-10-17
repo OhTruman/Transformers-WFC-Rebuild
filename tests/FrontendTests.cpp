@@ -1053,9 +1053,17 @@ static void testOnlineHostJoin() {
         r.frames(5);
         const bool decodeFail = r.popupIs("$UIText.MessagePrompts.GenericErrorTitle", "$WfcPC.Online.JoinInvalid");
         r.f().call("MessageBox.OnA");
+        // Systems' formats (decodeTarget parses): a LAN code (2 groups of 5), dashes optional, an internet code (4 groups),
+        // the lobby service's 6 letters, a plain IPv4
+        for (const char* ok : {"7QK2M-9TDAB", "7qk2m9tdab", "7QK2M-9TDAB-XXXXX-YYYYY", "ABCDEF", "192.168.1.20"}) {
+            r.f().call("Online.JoinGame", {ok});
+            r.f().call("MessageBox.OnA");
+            r.frames(2);
+        }
         const bool rejects = !r.f().call("Online.JoinGame", {"WFC--AB"}).b && !r.f().call("Online.JoinGame", {"WFC-"}).b &&
+                             !r.f().call("Online.JoinGame", {"7QK2M-9TDAB-XXXXX-YYYYY-ZZZZZ"}).b &&
                              !r.f().call("Online.JoinGame", {"host:0"}).b && !r.f().call("Online.JoinGame", {"host:70000"}).b;
-        check(r.ok && shapes && decodeFail && rejects && r.fake->count("join") == 1, "online.join_code_shapes");
+        check(r.ok && shapes && decodeFail && rejects && r.fake->count("join") == 6, "online.join_code_shapes", std::to_string(r.fake->count("join")));
     }
     {   // cancel while joining
         OnlineRig r;
@@ -1703,6 +1711,58 @@ static void testLensFlaresSetting() {
           rt.catalog().localizeKey("$WfcPC.Settings.LensFlares") == "Lens Flares", "settings.lens_flares_row");
 }
 
+static void testLobbyFlowV2() {
+    // LV1: Private Match hosts at once (offline: the same lobby with bots), with the profile's last mode (new profile: TDM)
+    {
+        FrontendRuntime rt;
+        rt.init();
+        GameFlow& f = rt.flow();
+        bool ok = runUntil(rt, [&] { return f.frontEndStarted(); });
+        f.call("Online.OpenPartyLobby", {"GTS_TeamGame"});
+        ok = ok && runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && !f.loading().active; });
+        f.profile().lobbyLastMode.clear();
+        f.call("Online.HostPrivateNow");
+        ok = ok && runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; });
+        const bool tdm = f.lobby().gameModeTag == "TDM";
+        // LV2 rows: the mode's host options then the PC rows
+        const auto rows = f.lobbySettingRows();
+        bool hasTime = false, hasBots = false;
+        for (const auto& r : rows) { hasTime = hasTime || r.store == "<TnGameSettings:TimeLimit>"; hasBots = hasBots || r.store == "<TnGameSettings:WfcBotsAutobot>"; }
+        // LV3: team -> team in place (no travel), via the Game Settings mode row
+        DataStores& ds = rt.dataStores();
+        ds.call("WriteValue", {"<WfcLobby:GameMode>", "CTF"});
+        const bool inPlace = f.lobby().gameModeTag == "CTF" && f.level() == LevelKind::GameLobby && !f.loading().active &&
+                             f.profile().lobbyLastMode == "CTF" && ds.call("ReadValue", {"<WfcLobby:GameMode>"}).s == "CTF";
+        // team -> Deathmatch re-creates the lobby (another lobby class)
+        ds.call("WriteValue", {"<WfcLobby:GameMode>", "DM"});
+        const bool recreated = runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active && f.lobby().gameModeTag == "DM"; });
+        f.profile().lobbyLastMode.clear();
+        f.profile().save();
+        check(ok && tdm && hasTime && hasBots && inPlace && recreated, "lobby.LV1_LV3_host_now_and_mode_change",
+              std::to_string(ok) + std::to_string(tdm) + std::to_string(hasTime) + std::to_string(hasBots) + std::to_string(inPlace) + std::to_string(recreated));
+    }
+    // LV7: Escalation is a Game Settings mode; the lobby service address reaches the session and the profile
+    {
+        OnlineRig r;
+        r.frames(2);
+        const bool sent = r.fake->count("setLobbyService") == 1;
+        r.f().setLobbyService("lobby.example.net:27900");
+        check(r.ok && sent && r.fake->last("setLobbyService")->arg == "lobby.example.net:27900" &&
+              r.f().profile().lobbyService == "lobby.example.net:27900" &&
+              std::find(GameFlow::lobbyModes().begin(), GameFlow::lobbyModes().end(), "SV") != GameFlow::lobbyModes().end(),
+              "lobby.LV7_escalation_mode_and_service");
+        r.f().profile().lobbyService.clear();
+        r.f().profile().save();
+    }
+    // LV4: a member cannot change the mode
+    {
+        OnlineRig r;
+        const bool in = r.ok && memberIn(r, false);
+        r.rt->dataStores().call("WriteValue", {"<WfcLobby:GameMode>", "CTF"});
+        check(in && r.f().lobby().gameModeTag == "TDM" && !r.f().changeLobbyMode("CTF"), "lobby.LV4_member_no_settings");
+    }
+}
+
 static void testForfeitEnd() {
     // A team with no players left forfeits (Gameplay's 1.5 s check, Systems 10.5): the winners' end screen shows the
     // original "Enemy team forfeits"; any other end keeps Gameplay's line; the flow returns to the game lobby as usual.
@@ -1851,6 +1911,7 @@ int main() {
     testMemberSeatOrder();
     testLobbyWaitingOne();
     testLensFlaresSetting();
+    testLobbyFlowV2();
     testCampaignObjectivesManifest();
     testVolumetricSetting();
     if (ok) testCatalog(c);

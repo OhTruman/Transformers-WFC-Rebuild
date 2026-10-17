@@ -153,6 +153,15 @@ private:
     std::string micMeterShown_;
     void syncAudioPage(gfx::Player& p, frontend::GameFlow& flow);
     void runFirstRunUi(gfx::Player& p, frontend::GameFlow& flow, const std::string& movie);
+    // Lobby flow v2 (ONLINE_LOBBY_FLOW_V2.md): Private Match hosts at once; the host's Game Settings row and page.
+    void syncHostNowRow(gfx::Player& p, frontend::GameFlow& flow);
+    void syncGameSettings(gfx::Player& p, frontend::GameFlow& flow);
+    void attachGameSettingsPage(gfx::Player& p, frontend::GameFlow& flow);
+    gfx::Player* gsPlayer_ = nullptr;   // the game lobby whose Game Settings page is open / loading
+    int gsState_ = 0, gsFrames_ = 0;    // 0 closed, 1 loading the settings movie, 2 the page is up
+    bool gsOpenRequested_ = false;
+    std::string gsMode_;                // the mode the page's rows were built for
+    gfx::avm1::Object* gsMenu_ = nullptr;   // the settings movie's top menu (the page's _backMenuRef)
     gfx::Player* firstRunAudioPending_ = nullptr;   // Voice Settings: open the Audio page once the settings movie is in
     int firstRunAudioFrames_ = 0;
     gfx::Player* firstRunFooterHidden_ = nullptr;   // the lobby footer hidden under the settings menu (restored on close)

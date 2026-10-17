@@ -84,6 +84,9 @@ public:
     // [Online] FirstRunShown: the one-time "Online Play" prompt was answered (ONLINE_MP_FIRST_RUN.md step 2); written only
     // when set, so offline profiles are unchanged.
     bool onlineFirstRunShown = false;
+    // [Lobby] LastMode: the Game Settings mode last used (Private Match hosts with it at once; ONLINE_LOBBY_FLOW_V2 2.1).
+    std::string lobbyLastMode;
+    std::string lobbyService;   // [Online] LobbyService: the lobby service address ("" = none: LAN only); written only when set
     // Voice chat (PC EXTENSION, decision D7 + proximity; ONLINE_MP_FLOWS.md 3.12): the Settings > Audio voice rows and the
     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
     struct Voice {
