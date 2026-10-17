@@ -3349,3 +3349,6 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:16 Frontend read: killer cam = Gameplay item (camera follows the killer, HUD target condition at World.cpp ~4050 stays false);
   options help line + lobby footer under Voice Settings still not fixed by 39b0169f (needs a clip dump, ~1 min gap after the
   gate); Voice Settings page + every PC options row verified on screen. All next head. Frontend acked the freeze.
+2026-10-17 15:16 AssetTools re-measured slim_files.refresh.tsv at 057aded3 (report SLIM_REFRESH.md): rows 101,031 unchanged, 6 byte counts moved
+  (+81 KB: the door / light data); vs the live tsv 47 rows, keep / xpr +31.8 MB. bin/licenses/opus ships via build_slim's bin
+  walk from the package build's own bin (Systems to confirm in the dry run), not a tsv row.
