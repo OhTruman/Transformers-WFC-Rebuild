@@ -1,0 +1,565 @@
+diff -ruN a/.gitignore b/.gitignore
+--- a/.gitignore	2026-10-17 13:09:06.391433600 -0500
++++ b/.gitignore	2026-10-17 13:09:06.432072800 -0500
+@@ -38,3 +38,4 @@
+ third_party/d3d12_agility/
+ third_party/dxc/
+ third_party/ffx_denoiser/
++third_party/opus/
+diff -ruN a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt	2026-10-17 13:10:39.497538900 -0500
++++ b/CMakeLists.txt	2026-10-17 13:10:39.518611500 -0500
+@@ -170,6 +170,25 @@
+     target_link_libraries(wfc_rebuild PRIVATE wfc_mimalloc)
+     target_compile_definitions(wfc_rebuild PRIVATE WFC_MIMALLOC=1)
+ endif()
++# [Systems] Opus (voice chat, ONLINE_MP_ARCHITECTURE.md section 7; BSD-3-Clause, third_party/opus/COPYING in the credits):
++# tools/net/fetch_opus.py puts the official 1.5.2 source in third_party/opus (gitignored). Present: built static, WFC_OPUS=1;
++# absent: the build continues and voice send / receive reports "voice unavailable".
++if(EXISTS "${CMAKE_SOURCE_DIR}/third_party/opus/CMakeLists.txt")
++    set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
++    set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
++    set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
++    set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
++    set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
++    add_subdirectory("${CMAKE_SOURCE_DIR}/third_party/opus" "${CMAKE_BINARY_DIR}/opus" EXCLUDE_FROM_ALL)
++    target_link_libraries(wfc_rebuild PRIVATE opus)
++    target_compile_definitions(wfc_rebuild PRIVATE WFC_OPUS=1)
++    # BSD-3-Clause: the copyright notice + licence ship with the binary, next to the exe (as vgmstream's licences).
++    add_custom_command(TARGET wfc_rebuild POST_BUILD
++        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/opus"
++        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/third_party/opus/COPYING" "$<TARGET_FILE_DIR:wfc_rebuild>/licenses/opus")
++else()
++    message(STATUS "Opus not fetched (tools/net/fetch_opus.py): voice chat unavailable in this build")
++endif()
+ 
+ # [Systems] The original FMOD sound banks (content/**/X.fsb, XMA2) decoded in-process by libvgmstream r2117 with its FFmpeg DLLs
+ # (third_party/vgmstream/README.WFC.txt: source, versions, licences). The WAV beside a bank stays the fallback; at run time
+diff -ruN a/src/core/Application.cpp b/src/core/Application.cpp
+--- a/src/core/Application.cpp	2026-10-17 13:09:06.405983600 -0500
++++ b/src/core/Application.cpp	2026-10-17 13:09:24.854211400 -0500
+@@ -227,6 +227,7 @@
+     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
+     if (std::getenv("WFC_DECOYTEST")) { runDecoyTest(); return false; }            // Decoy Trap ability (deploy, team rule, stun, cooldown)
+     if (std::getenv("WFC_SESSIONTEST")) { runSessionTest(); return false; }          // online session match side (Remote / swaps)
++    if (std::getenv("WFC_VOICEFRAMETEST")) { runVoiceFrameTest(); return false; }   // [Systems] voice framer + codec, synthetic, no device
+     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+diff -ruN a/src/core/Application.h b/src/core/Application.h
+--- a/src/core/Application.h	2026-10-17 13:09:06.417021200 -0500
++++ b/src/core/Application.h	2026-10-17 13:09:06.451137700 -0500
+@@ -34,6 +34,7 @@
+     void runHeadlessMatch();   // [Systems] WFC_NULLRENDER + direct match boot: the sim loop without a window
+     void runNetMatch();        // [Systems] WFC_NET_SLOT: the headless match over the lockstep layer (Application_Net.cpp)
+     static bool netMatchRequested();
++    void runVoiceFrameTest();   // [Systems] WFC_VOICEFRAMETEST: the voice framer on synthetic input (no device)
+     int exitCode_ = -1;        // [Systems] set by the headless / net runs (main returns it when init stops); -1 = the default
+ public:
+     int exitCode() const { return exitCode_; }
+diff -ruN a/src/core/Application_Net.cpp b/src/core/Application_Net.cpp
+--- a/src/core/Application_Net.cpp	2026-10-17 13:09:06.427055400 -0500
++++ b/src/core/Application_Net.cpp	2026-10-17 13:09:06.453145400 -0500
+@@ -15,11 +15,16 @@
+ #include "game/World.h"
+ #include "net/Lockstep.h"
+ #include "net/NetTransport.h"
++#include "net/VoiceCodec.h"
++#include "net/VoiceFrames.h"
+ 
++#include <algorithm>
+ #include <chrono>
++#include <cmath>
+ #include <cstdlib>
+ #include <cstring>
+ #include <thread>
++#include <vector>
+ 
+ namespace {
+ std::vector<std::pair<int, std::string>> parsePeers(const char* s, int self, int seats) {
+@@ -167,4 +172,64 @@
+     exitCode_ = st;
+ }
+ 
++// WFC_VOICEFRAMETEST (synthetic, no device): 2 s of a 440 Hz tone at amplitude 0.5 through net::VoiceFramer from 48 kHz stereo and 44.1 kHz
++// mono, pushed in odd-sized device chunks. Expected per case: 100 frames of 320 samples, RMS level 0.354 (0.5 / sqrt 2), 440 Hz by zero
++// crossings, and the frame count / level the Settings > Audio meter and the voice-activity gate read.
++void Application::runVoiceFrameTest() {
++    int fails = 0;
++    struct Case { int rate, channels; };
++    for (const Case cs : {Case{48000, 2}, Case{44100, 1}, Case{16000, 1}}) {
++        net::VoiceFramer f;
++        f.configure(cs.rate, cs.channels);
++        const int total = cs.rate * 2;
++        std::vector<float> buf;
++        int frames = 0, crossings = 0; int16_t prev = 0; bool first = true;
++        for (int at = 0; at < total;) {
++            const int chunk = std::min(total - at, 441 + (at % 7) * 13);   // irregular device packets
++            buf.assign((size_t)chunk * (size_t)cs.channels, 0.0f);
++            for (int i = 0; i < chunk; ++i)
++                for (int c = 0; c < cs.channels; ++c) buf[(size_t)i * (size_t)cs.channels + (size_t)c] = 0.5f * std::sin(6.2831853f * 440.0f * (float)(at + i) / (float)cs.rate);
++            f.push(buf.data(), (size_t)chunk);
++            at += chunk;
++            net::VoiceFrame fr;
++            while (f.pop(fr)) {
++                ++frames;
++                for (int16_t v : fr) { if (!first && ((prev < 0) != (v < 0))) ++crossings; prev = v; first = false; }
++            }
++        }
++        const float hz = (float)crossings / 2.0f / 2.0f;   // 2 crossings per cycle, over 2 s
++        const bool ok = frames == 100 && std::fabs(f.level() - 0.3536f) < 0.01f && std::fabs(hz - 440.0f) < 3.0f;
++        if (!ok) ++fails;
++        LOG_INFO("VOICEFRAMETEST %s %d Hz x %d ch: %d frames (want 100), level %.4f (want 0.354), tone %.1f Hz (want 440)", ok ? "PASS" : "FAIL",
++                 cs.rate, cs.channels, frames, f.level(), hz);
++    }
++    // The codec round trip (WFC_OPUS builds): 1 s of the 440 Hz tone, frame sizes, decoded level, one concealed (lost) frame.
++    if (net::voiceCodecAvailable()) {
++        net::VoiceEncoder enc; net::VoiceDecoder dec;
++        size_t bytes = 0; int frames = 0, decoded = 0; double sq = 0.0; long n = 0;
++        for (int k = 0; k < 50; ++k) {
++            net::VoiceFrame pcm;
++            for (int i = 0; i < net::kVoiceFrameSamples; ++i)
++                pcm[(size_t)i] = (int16_t)std::lround(0.5f * 32767.0f * std::sin(6.2831853f * 440.0f * (float)(k * net::kVoiceFrameSamples + i) / 16000.0f));
++            std::vector<uint8_t> pkt;
++            if (!enc.encode(pcm, pkt)) continue;
++            ++frames; bytes += pkt.size();
++            net::VoiceFrame out;
++            const bool ok = k == 30 ? dec.decode(nullptr, 0, out) : dec.decode(pkt.data(), pkt.size(), out);   // frame 30: "lost"
++            if (!ok) continue;
++            ++decoded;
++            if (k >= 10) for (int16_t v : out) { sq += ((double)v / 32768.0) * ((double)v / 32768.0); ++n; }
++        }
++        const double rms = n ? std::sqrt(sq / (double)n) : 0.0;
++        const bool ok = frames == 50 && decoded == 50 && bytes / 50 <= 48 && rms > 0.25 && rms < 0.45;
++        if (!ok) ++fails;
++        LOG_INFO("VOICEFRAMETEST %s opus: %d frames, %.1f bytes / frame (16 kbit/s = 40), %d decoded incl. 1 concealed, decoded level %.3f (want ~0.354)",
++                 ok ? "PASS" : "FAIL", frames, frames ? (double)bytes / frames : 0.0, decoded, rms);
++    } else {
++        LOG_INFO("VOICEFRAMETEST opus: not in this build (voice unavailable)");
++    }
++    LOG_INFO("VOICEFRAMETEST SUMMARY: %s", fails ? "FAIL" : "PASS");
++    exitCode_ = fails ? 1 : 0;
++}
++
+ }  // namespace core
+diff -ruN a/src/net/VoiceCodec.cpp b/src/net/VoiceCodec.cpp
+--- a/src/net/VoiceCodec.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/VoiceCodec.cpp	2026-10-17 13:09:06.459667500 -0500
+@@ -0,0 +1,54 @@
++// [Systems] Voice codec - see VoiceCodec.h.
++#include "net/VoiceCodec.h"
++
++#ifdef WFC_OPUS
++#include <opus.h>
++#endif
++
++namespace net {
++
++#ifdef WFC_OPUS
++bool voiceCodecAvailable() { return true; }
++
++VoiceEncoder::VoiceEncoder() {
++    int err = 0;
++    OpusEncoder* e = opus_encoder_create(kVoiceRate, 1, OPUS_APPLICATION_VOIP, &err);
++    if (err != OPUS_OK || !e) return;
++    opus_encoder_ctl(e, OPUS_SET_BITRATE(16000));
++    opus_encoder_ctl(e, OPUS_SET_VBR(0));                 // constant size: a predictable voice lane
++    opus_encoder_ctl(e, OPUS_SET_INBAND_FEC(1));          // some resilience to a lost frame
++    opus_encoder_ctl(e, OPUS_SET_PACKET_LOSS_PERC(5));
++    enc_ = e;
++}
++VoiceEncoder::~VoiceEncoder() { if (enc_) opus_encoder_destroy((OpusEncoder*)enc_); }
++bool VoiceEncoder::encode(const VoiceFrame& pcm, std::vector<uint8_t>& out) {
++    if (!enc_) return false;
++    out.resize(256);
++    const opus_int32 n = opus_encode((OpusEncoder*)enc_, pcm.data(), kVoiceFrameSamples, out.data(), (opus_int32)out.size());
++    if (n < 0) { out.clear(); return false; }
++    out.resize((size_t)n);
++    return true;
++}
++
++VoiceDecoder::VoiceDecoder() {
++    int err = 0;
++    OpusDecoder* d = opus_decoder_create(kVoiceRate, 1, &err);
++    if (err == OPUS_OK) dec_ = d;
++}
++VoiceDecoder::~VoiceDecoder() { if (dec_) opus_decoder_destroy((OpusDecoder*)dec_); }
++bool VoiceDecoder::decode(const uint8_t* data, size_t n, VoiceFrame& pcm) {
++    if (!dec_) return false;
++    const int got = opus_decode((OpusDecoder*)dec_, data, data ? (opus_int32)n : 0, pcm.data(), kVoiceFrameSamples, 0);
++    return got == kVoiceFrameSamples;
++}
++#else
++bool voiceCodecAvailable() { return false; }
++VoiceEncoder::VoiceEncoder() {}
++VoiceEncoder::~VoiceEncoder() {}
++bool VoiceEncoder::encode(const VoiceFrame&, std::vector<uint8_t>& out) { out.clear(); return false; }
++VoiceDecoder::VoiceDecoder() {}
++VoiceDecoder::~VoiceDecoder() {}
++bool VoiceDecoder::decode(const uint8_t*, size_t, VoiceFrame&) { return false; }
++#endif
++
++}  // namespace net
+diff -ruN a/src/net/VoiceCodec.h b/src/net/VoiceCodec.h
+--- a/src/net/VoiceCodec.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/VoiceCodec.h	2026-10-17 13:09:06.461172200 -0500
+@@ -0,0 +1,37 @@
++#pragma once
++// [Systems] Voice codec (ONLINE_MP_ARCHITECTURE.md section 7): Opus, mono 16 kHz, 20 ms frames, VOIP application, a fixed 16 kbit/s
++// (~40 bytes a frame). One VoiceEncoder per local talker, one VoiceDecoder per remote talker (Opus decoders keep state: packet-loss
++// concealment fills a lost frame). Built only with WFC_OPUS (tools/net/fetch_opus.py); without it available() is false and the session
++// reports "voice unavailable".
++#include "net/VoiceFrames.h"
++
++#include <cstdint>
++#include <vector>
++
++namespace net {
++
++bool voiceCodecAvailable();
++
++class VoiceEncoder {
++public:
++    VoiceEncoder();
++    ~VoiceEncoder();
++    VoiceEncoder(const VoiceEncoder&) = delete;
++    VoiceEncoder& operator=(const VoiceEncoder&) = delete;
++    bool encode(const VoiceFrame& pcm, std::vector<uint8_t>& out);   // false = unavailable / error
++private:
++    void* enc_ = nullptr;
++};
++
++class VoiceDecoder {
++public:
++    VoiceDecoder();
++    ~VoiceDecoder();
++    VoiceDecoder(const VoiceDecoder&) = delete;
++    VoiceDecoder& operator=(const VoiceDecoder&) = delete;
++    bool decode(const uint8_t* data, size_t n, VoiceFrame& pcm);   // data == nullptr: conceal one lost frame
++private:
++    void* dec_ = nullptr;
++};
++
++}  // namespace net
+diff -ruN a/src/net/VoiceFrames.cpp b/src/net/VoiceFrames.cpp
+--- a/src/net/VoiceFrames.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/VoiceFrames.cpp	2026-10-17 13:09:06.462677800 -0500
+@@ -0,0 +1,73 @@
++// [Systems] Voice capture framing - see VoiceFrames.h.
++#include "net/VoiceFrames.h"
++
++#include <algorithm>
++#include <cmath>
++
++namespace net {
++
++void VoiceFramer::configure(int inputRate, int channels) {
++    std::lock_guard<std::mutex> lk(m_);
++    rate_ = std::max(8000, inputRate);
++    channels_ = std::max(1, channels);
++    step_ = (double)rate_ / (double)kVoiceRate;
++    acc_ = 0.0; need_ = step_; sum_ = 0.0; curN_ = 0; frameSq_ = 0.0;
++    out_.clear();
++}
++
++void VoiceFramer::push(const float* in, size_t frames) {
++    for (size_t f = 0; f < frames; ++f) {
++        float mono = 0.0f;
++        for (int c = 0; c < channels_; ++c) mono += in[f * (size_t)channels_ + (size_t)c];
++        mono /= (float)channels_;
++        // Box filter: each output sample is the mean of the `step_` input samples it covers (an input sample can be split between two
++        // outputs, or - below 16 kHz input - feed several).
++        double remaining = 1.0;
++        while (remaining > 1e-9) {
++            const double take = std::min(remaining, need_ - acc_);
++            sum_ += mono * take; acc_ += take; remaining -= take;
++            if (acc_ >= need_ - 1e-9) {
++                const float c = std::max(-1.0f, std::min(1.0f, (float)(sum_ / step_)));
++                cur_[(size_t)curN_++] = (int16_t)std::lround(c * 32767.0f);
++                frameSq_ += (double)c * c;
++                if (curN_ == kVoiceFrameSamples) {
++                    level_.store((float)std::sqrt(frameSq_ / kVoiceFrameSamples));
++                    std::lock_guard<std::mutex> lk(m_);
++                    out_.push_back(cur_);
++                    while (out_.size() > 50) out_.pop_front();   // 1 s backlog at most (a stalled consumer drops the oldest)
++                    curN_ = 0; frameSq_ = 0.0;
++                }
++                sum_ = 0.0; acc_ = 0.0;
++            }
++        }
++    }
++}
++
++bool VoiceFramer::pop(VoiceFrame& out) {
++    std::lock_guard<std::mutex> lk(m_);
++    if (out_.empty()) return false;
++    out = out_.front();
++    out_.pop_front();
++    return true;
++}
++
++size_t VoiceFramer::queued() const {
++    std::lock_guard<std::mutex> lk(m_);
++    return out_.size();
++}
++
++#ifndef _WIN32
++namespace {
++class NullVoiceCapture final : public IVoiceCapture {
++public:
++    bool start() override { return false; }
++    void stop() override {}
++    bool running() const override { return false; }
++    bool pop(VoiceFrame&) override { return false; }
++    float level() const override { return 0.0f; }
++};
++}  // namespace
++std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<NullVoiceCapture>(); }
++#endif
++
++}  // namespace net
+diff -ruN a/src/net/VoiceFrames.h b/src/net/VoiceFrames.h
+--- a/src/net/VoiceFrames.h	1969-12-31 18:00:00.000000000 -0600
++++ b/src/net/VoiceFrames.h	2026-10-17 13:09:06.467695000 -0500
+@@ -0,0 +1,53 @@
++#pragma once
++// [Systems] Voice capture framing (ONLINE_MP_ARCHITECTURE.md section 7): the capture device's samples (float, any rate / channel count)
++// -> mono 16 kHz, 20 ms frames of 320 int16 samples - the codec's input. Box-filtered resampling (each output sample = the mean of the
++// input samples it covers; enough for voice at 16 kHz), a per-frame RMS level (0..1, the Settings > Audio mic-test meter and the
++// voice-activity gate). Platform neutral; the device side is IVoiceCapture (Win32VoiceCapture.cpp: WASAPI shared-mode capture).
++#include <array>
++#include <atomic>
++#include <cstddef>
++#include <cstdint>
++#include <deque>
++#include <memory>
++#include <mutex>
++
++namespace net {
++
++constexpr int kVoiceRate = 16000;
++constexpr int kVoiceFrameSamples = 320;   // 20 ms at 16 kHz
++using VoiceFrame = std::array<int16_t, kVoiceFrameSamples>;
++
++class VoiceFramer {
++public:
++    void configure(int inputRate, int channels);
++    void push(const float* interleaved, size_t frames);   // device frames (channels samples each)
++    bool pop(VoiceFrame& out);                            // the next complete 20 ms frame
++    float level() const { return level_.load(); }         // RMS of the last completed frame, 0..1 (pre-gate)
++    size_t queued() const;
++
++private:
++    int rate_ = 48000, channels_ = 1;
++    double step_ = 3.0;          // input samples per output sample
++    double acc_ = 0.0, need_ = 3.0;
++    double sum_ = 0.0;
++    VoiceFrame cur_{};
++    int curN_ = 0;
++    double frameSq_ = 0.0;
++    std::atomic<float> level_{0.0f};
++    mutable std::mutex m_;
++    std::deque<VoiceFrame> out_;
++};
++
++// The device side (WASAPI on Windows; null elsewhere). start() opens the default capture endpoint; frames are pulled with pop().
++class IVoiceCapture {
++public:
++    virtual ~IVoiceCapture() = default;
++    virtual bool start() = 0;
++    virtual void stop() = 0;
++    virtual bool running() const = 0;
++    virtual bool pop(VoiceFrame& out) = 0;
++    virtual float level() const = 0;
++};
++std::unique_ptr<IVoiceCapture> createVoiceCapture();
++
++}  // namespace net
+diff -ruN a/src/platform/win32/Win32VoiceCapture.cpp b/src/platform/win32/Win32VoiceCapture.cpp
+--- a/src/platform/win32/Win32VoiceCapture.cpp	1969-12-31 18:00:00.000000000 -0600
++++ b/src/platform/win32/Win32VoiceCapture.cpp	2026-10-17 13:09:06.469200100 -0500
+@@ -0,0 +1,112 @@
++// [Systems] Voice capture on Windows (ONLINE_MP_ARCHITECTURE.md section 7): WASAPI shared-mode capture of the default communications
++// microphone (eCommunications, falling back to eConsole), event driven on its own thread, the device's mix format (float or 16-bit
++// PCM, any rate / channels) handed to net::VoiceFramer -> mono 16 kHz 20 ms frames. Opened only while the session wants voice
++// (push-to-talk held / open mic on) and the user enabled it; nothing is recorded to disk.
++#include "net/VoiceFrames.h"
++
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <mmreg.h>
++#include <audioclient.h>
++#include <mmdeviceapi.h>
++
++#include <atomic>
++#include <thread>
++#include <vector>
++
++#include "core/Log.h"
++
++namespace net {
++namespace {
++
++template <class T> void release(T*& p) { if (p) { p->Release(); p = nullptr; } }
++
++class Win32VoiceCapture final : public IVoiceCapture {
++public:
++    ~Win32VoiceCapture() override { stop(); }
++    bool start() override {
++        if (running_) return true;
++        stopFlag_ = false;
++        ready_ = 0;
++        thread_ = std::thread([this] { run(); });
++        while (ready_ == 0) Sleep(1);   // the thread reports whether the device opened
++        if (ready_ < 0) { if (thread_.joinable()) thread_.join(); return false; }
++        running_ = true;
++        return true;
++    }
++    void stop() override {
++        stopFlag_ = true;
++        if (thread_.joinable()) thread_.join();
++        running_ = false;
++    }
++    bool running() const override { return running_; }
++    bool pop(VoiceFrame& out) override { return framer_.pop(out); }
++    float level() const override { return framer_.level(); }
++
++private:
++    void run() {
++        const bool com = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
++        IMMDeviceEnumerator* en = nullptr; IMMDevice* dev = nullptr; IAudioClient* ac = nullptr; IAudioCaptureClient* cc = nullptr;
++        WAVEFORMATEX* wf = nullptr;
++        HANDLE ev = CreateEventW(nullptr, FALSE, FALSE, nullptr);
++        bool ok = SUCCEEDED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&en));
++        if (ok && FAILED(en->GetDefaultAudioEndpoint(eCapture, eCommunications, &dev))) ok = SUCCEEDED(en->GetDefaultAudioEndpoint(eCapture, eConsole, &dev));
++        ok = ok && dev && SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&ac));
++        ok = ok && SUCCEEDED(ac->GetMixFormat(&wf));
++        ok = ok && SUCCEEDED(ac->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 200000 /* 20 ms */, 0, wf, nullptr));
++        ok = ok && SUCCEEDED(ac->SetEventHandle(ev));
++        ok = ok && SUCCEEDED(ac->GetService(__uuidof(IAudioCaptureClient), (void**)&cc));
++        bool isFloat = false;
++        if (ok) {
++            isFloat = wf->wFormatTag == WAVE_FORMAT_IEEE_FLOAT;
++            if (wf->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
++                const WAVEFORMATEXTENSIBLE* x = (const WAVEFORMATEXTENSIBLE*)wf;
++                isFloat = x->SubFormat.Data1 == WAVE_FORMAT_IEEE_FLOAT;   // the KSDATAFORMAT subtype GUID's Data1 is the format tag
++            }
++            ok = isFloat ? wf->wBitsPerSample == 32 : wf->wBitsPerSample == 16;
++            if (!ok) LOG_WARN("voice capture: unsupported mix format (%d bits, float %d)", wf->wBitsPerSample, (int)isFloat);
++        }
++        ok = ok && SUCCEEDED(ac->Start());
++        if (ok) {
++            framer_.configure((int)wf->nSamplesPerSec, (int)wf->nChannels);
++            LOG_INFO("voice capture: started (%u Hz, %u ch, %s)", (unsigned)wf->nSamplesPerSec, (unsigned)wf->nChannels, isFloat ? "float" : "pcm16");
++        } else {
++            LOG_WARN("voice capture: no capture device could be opened (voice send unavailable)");
++        }
++        ready_ = ok ? 1 : -1;
++        std::vector<float> conv;
++        while (ok && !stopFlag_) {
++            if (WaitForSingleObject(ev, 100) != WAIT_OBJECT_0) continue;
++            UINT32 n = 0;
++            while (SUCCEEDED(cc->GetNextPacketSize(&n)) && n > 0) {
++                BYTE* data = nullptr; UINT32 frames = 0; DWORD flags = 0;
++                if (FAILED(cc->GetBuffer(&data, &frames, &flags, nullptr, nullptr))) break;
++                const size_t samples = (size_t)frames * wf->nChannels;
++                conv.assign(samples, 0.0f);
++                if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
++                    if (isFloat) { const float* f = (const float*)data; for (size_t i = 0; i < samples; ++i) conv[i] = f[i]; }
++                    else { const int16_t* s = (const int16_t*)data; for (size_t i = 0; i < samples; ++i) conv[i] = (float)s[i] / 32768.0f; }
++                }
++                framer_.push(conv.data(), frames);
++                cc->ReleaseBuffer(frames);
++            }
++        }
++        if (ac) ac->Stop();
++        if (wf) CoTaskMemFree(wf);
++        release(cc); release(ac); release(dev); release(en);
++        if (ev) CloseHandle(ev);
++        if (com) CoUninitialize();
++        if (ok) LOG_INFO("voice capture: stopped");
++    }
++    VoiceFramer framer_;
++    std::thread thread_;
++    std::atomic<bool> stopFlag_{false};
++    std::atomic<int> ready_{0};
++    bool running_ = false;
++};
++
++}  // namespace
++
++std::unique_ptr<IVoiceCapture> createVoiceCapture() { return std::make_unique<Win32VoiceCapture>(); }
++
++}  // namespace net
+diff -ruN a/tools/net/fetch_opus.py b/tools/net/fetch_opus.py
+--- a/tools/net/fetch_opus.py	1969-12-31 18:00:00.000000000 -0600
++++ b/tools/net/fetch_opus.py	2026-10-17 13:09:06.474719000 -0500
+@@ -0,0 +1,49 @@
++"""Fetch the Opus codec source (voice chat, ONLINE_MP_ARCHITECTURE.md section 7) into third_party/opus (gitignored), the dxc / ffx way.
++Official release tarball from downloads.xiph.org, sha256-pinned; BSD-3-Clause (third_party/opus/COPYING goes to the credits list).
++The build uses it when present (CMake add_subdirectory, static, no DLL) and degrades to "voice unavailable" when absent.
++Run with AssetTools/bin/py/python.exe:  python -I tools/net/fetch_opus.py [--check]"""
++import hashlib, io, os, sys, tarfile, urllib.request
++
++VERSION = '1.5.2'
++URL = 'https://downloads.xiph.org/releases/opus/opus-%s.tar.gz' % VERSION
++SHA256 = '65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1'
++ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
++DEST = os.path.join(ROOT, 'third_party', 'opus')
++
++
++def main():
++    marker = os.path.join(DEST, '.fetched')
++    if os.path.isfile(marker) and open(marker).read().strip() == SHA256:
++        print('opus %s already in %s' % (VERSION, DEST))
++        return 0
++    if '--check' in sys.argv:
++        print('opus missing (run tools/net/fetch_opus.py)')
++        return 1
++    print('downloading', URL)
++    data = urllib.request.urlopen(URL, timeout=120).read()
++    got = hashlib.sha256(data).hexdigest()
++    if got != SHA256:
++        print('SHA256 MISMATCH: got %s, pinned %s - not extracted' % (got, SHA256))
++        return 2
++    prefix = 'opus-%s/' % VERSION
++    with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as t:
++        for m in t.getmembers():
++            if not m.name.startswith(prefix) or '..' in m.name or m.issym() or m.islnk():
++                continue   # only the release's own tree, no links, no path escapes
++            rel = m.name[len(prefix):]
++            if not rel:
++                continue
++            out = os.path.join(DEST, rel)
++            if m.isdir():
++                os.makedirs(out, exist_ok=True)
++            elif m.isfile():
++                os.makedirs(os.path.dirname(out), exist_ok=True)
++                with t.extractfile(m) as src, open(out, 'wb') as dst:
++                    dst.write(src.read())
++    open(marker, 'w').write(SHA256)
++    print('opus %s -> %s (sha256 ok)' % (VERSION, DEST))
++    return 0
++
++
++if __name__ == '__main__':
++    sys.exit(main())
+diff -ruN a/tools/package/build_slim.py b/tools/package/build_slim.py
+--- a/tools/package/build_slim.py	2026-10-17 13:10:39.606411600 -0500
++++ b/tools/package/build_slim.py	2026-10-17 13:10:39.635511800 -0500
+@@ -155,6 +155,15 @@
+             problems.append('--bin lacks %s (the previous package shipped it)' % rel)
+         else:
+             bin_rows.append((src, BIN_DEST + '/' + rel))
++    # Third-party licence texts the build copies next to the exe (bin/licenses/<lib>/...: vgmstream, opus, ...) always ship, even when
++    # the previous package had none for that library (BSD / LGPL notices must accompany the binary). [Systems]
++    shipped = {d for _, d in bin_rows}
++    lic_root = os.path.join(bin_dir, 'licenses')
++    for dp, _, fns in os.walk(lic_root):
++        for fn in fns:
++            rel = os.path.relpath(os.path.join(dp, fn), bin_dir).replace(os.sep, '/')
++            if BIN_DEST + '/' + rel not in shipped:
++                bin_rows.append((os.path.join(dp, fn), BIN_DEST + '/' + rel))
+     # ---- the exe's build: RT shaders compiled in (Experimental 2026-10-13: a tree without third_party/dxc and
+     # third_party/ffx_denoiser builds with no RT shaders - CMake defines WFC_RT_SHADERS / WFC_RT_DENOISER only when they
+     # exist - and the Ray Tracing row then silently does nothing). DXC is build-time only (the DXIL is embedded as headers in
