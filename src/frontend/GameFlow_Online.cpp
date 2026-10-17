@@ -163,8 +163,54 @@ void GameFlow::syncVoiceSettings() {   // the Audio rows to the session, wheneve
     FlowTrace::emit("online.voiceSettings", {{"mode", std::to_string(v.mode)}, {"audience", std::to_string(v.audience)}});
 }
 
+void GameFlow::showFirstRunPrompt() {
+    firstRunAsked_ = true;
+    Popup p;
+    p.title = txt("$WfcPC.FirstRun.Title");
+    p.showDefaultButtons = false;
+    if (profile_.loggedInAccount.empty()) {
+        p.message = txt("$WfcPC.FirstRun.ChooseName");
+        p.a = PopupButton{txt("$WfcPC.FirstRun.ChooseNameButton"), "frName", true};
+        p.b = PopupButton{txt("$UIText.ButtonHints.Back"), "frBack", true};
+    } else {
+        const LocalProfile::Voice& v = profile_.voice;
+        const std::string voice = v.mode == 0 ? txt("$WfcPC.Voice.VoiceOff")
+                                : v.mode == 2 ? txt("$WfcPC.Voice.VoiceOpenMic") : txt("$WfcPC.Voice.VoicePushToTalk") + " (" + v.pttKey + ")";
+        std::string m = txt("$WfcPC.FirstRun.Message");
+        size_t at = m.find("`p");
+        if (at != std::string::npos) m.replace(at, 2, profile_.playerName());
+        at = m.find("`v");
+        if (at != std::string::npos) m.replace(at, 2, voice);
+        p.message = m;
+        p.a = PopupButton{txt("$WfcPC.FirstRun.Continue"), "frContinue", true};
+        p.x = PopupButton{txt("$WfcPC.FirstRun.ChangeName"), "frName", true};
+        p.y = PopupButton{txt("$WfcPC.FirstRun.VoiceSettings"), "frVoice", true};
+    }
+    showPopup(p);
+    FlowTrace::emit("online.firstRun", {{"state", "shown"}, {"account", FlowTrace::boolean(!profile_.loggedInAccount.empty())}});
+}
+
+void GameFlow::answerFirstRun(const std::string& action) {
+    if (action == "frName") firstRunUi_ = FirstRunUi::NamePrompt;
+    if (action == "frVoice") firstRunUi_ = FirstRunUi::VoiceSettings;
+    if (action == "frContinue" || action == "frVoice") {   // answered: never again for this profile
+        profile_.onlineFirstRunShown = true;
+        profile_.save();
+    }
+    FlowTrace::emit("online.firstRun", {{"state", action}});
+}
+
+void GameFlow::firstRunNameEntered() { firstRunReshow_ = true; }
+
 void GameFlow::onlineTick() {
     for (const SessionEvent& e : session_->poll(clock_)) onSessionEvent(e);
+    // The one-time "Online Play" prompt: an online session exists (never offline), the party lobby is up and quiet
+    if (level_ != LevelKind::PartyLobby || loading_.active) firstRunAsked_ = false;   // a new visit asks again (until answered)
+    else if (!travelPending_ && !loading_.active && !popup_.open && ui_.state() == UIState::InLobby && !profile_.onlineFirstRunShown &&
+             (!firstRunAsked_ || firstRunReshow_)) {
+        firstRunReshow_ = false;
+        showFirstRunPrompt();
+    }
     if (role_ != SessionRole::Offline) syncVoiceSettings();
     else voiceSent_.clear();
     if (!pendingEndTitle_.empty() && !travelPending_ && !loading_.active) {   // the session-end message, after the travel

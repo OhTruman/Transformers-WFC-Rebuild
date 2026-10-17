@@ -79,6 +79,9 @@ public:
     // each type once per profile; CAMPAIGN_HUD_PLAN.md E5, C4 decided: profile-scoped). [Tutorials] Shown=, only written
     // when not empty, so versus profiles are unchanged.
     std::vector<std::string> tutorialsShown;
+    // [Online] FirstRunShown: the one-time "Online Play" prompt was answered (ONLINE_MP_FIRST_RUN.md step 2); written only
+    // when set, so offline profiles are unchanged.
+    bool onlineFirstRunShown = false;
     // Voice chat (PC EXTENSION, decision D7 + proximity; ONLINE_MP_FLOWS.md 3.12): the Settings > Audio voice rows and the
     // per-player mutes (fingerprints, local only). [Voice], written only when something differs from the defaults.
     struct Voice {

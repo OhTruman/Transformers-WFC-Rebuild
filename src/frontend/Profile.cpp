@@ -124,6 +124,8 @@ bool LocalProfile::loadFrom(std::istream& f) {
                 std::stringstream ss(v);
                 for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) voice.muted.push_back(item);
             }
+        } else if (section == "[Online]") {
+            if (k == "FirstRunShown") onlineFirstRunShown = v == "1";
         } else if (section == "[Tutorials]") {
             if (k == "Shown") {
                 tutorialsShown.clear();
@@ -205,6 +207,7 @@ void LocalProfile::save() const {
         for (size_t i = 0; i < voice.muted.size(); ++i) f << (i ? "," : "") << voice.muted[i];
         f << "\n";
     }
+    if (onlineFirstRunShown) f << "\n[Online]\nFirstRunShown=1\n";   // only when set (offline profiles unchanged)
     if (!tutorialsShown.empty()) {   // CAMPAIGN_HUD_PLAN.md E5: only when not empty (versus profiles unchanged)
         f << "\n[Tutorials]\nShown=";
         for (size_t i = 0; i < tutorialsShown.size(); ++i) f << (i ? "," : "") << tutorialsShown[i];
