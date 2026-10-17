@@ -857,6 +857,11 @@ public:
     int64_t simTick() const { return simTick_; }
     // Inside the lockstep step for tick N = simTick() + 1, after all of N's commands arrived, before tick(); ascending match player.
     bool applyRemoteCommand(int matchPlayer, const RemoteCommand& c);
+    // Online: this machine's command for tick simTick() + 1 from the local controller (the wire encoding; see the contract).
+    RemoteCommand encodeLocalCommand();
+    bool onlineSeats() const { return onlineSeats_; }
+    void setLocalWireOverride(int v) { localWireOverride_ = v; }   // tests: -1 auto (seed), 0 direct, 1 wire; applies at the next launch
+    core::Vec3 seatEye(int matchPlayer) const;                      // the seat path's shot origin (eye) of a participant
     void setParticipantPosition(int matchPlayer, const core::Vec3& pos);   // tests: place a participant pawn (velocity zeroed)
     uint64_t simStateHash() const;   // every pawn's position / velocity / health / yaw + the sim RNG (peer comparisons, tests)
     int remoteIdleKicks() const { return remoteIdleKicks_; }   // idle-rule kicks this match (tests)
@@ -1185,10 +1190,17 @@ private:
     std::vector<std::pair<int, RemoteCommand>> remoteQueue_;   // commands for the step about to run (applied after joinStep)
     struct RemoteGrenade { int player = -1; float delay = -1.0f; core::Vec3 target{0, 0, 0}; };
     std::vector<RemoteGrenade> remoteGrenades_;
+    // One seat's pawn for the seat path (a Remote participant's MatchOpponent, or the local pawn online): its intent / pickup press out.
+    struct SeatRef { Character* pc = nullptr; int player = -1; bool spawned = false; MoveIntent intent; bool pressesPickup = false; };
     void applyQueuedRemoteCommands(float dt);
     void applyRemoteNow(MatchOpponent& o, const RemoteCommand& c, float dt);
-    bool remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
-    void remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& aimPt, bool consume = true);
+    void applySeat(SeatRef& s, const RemoteCommand& c, float dt);
+    bool remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in);
+    void remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume = true);
+    void runLocalSeat(float dt);
+    bool onlineSeats_ = false;          // online: the local seat through the wire path (MatchLaunch.seed set, or the test override)
+    int localWireOverride_ = -1;        // tests: -1 auto, 0 direct, 1 wire
+    MoveIntent localSeatIntent_; bool localSeatPickup_ = false; float localSeatAimPitch_ = 0.0f;
     core::Vec3 seatAimPoint(const Character& pc, const RemoteCommand& c, float range) const;
     void participantBeam(int shooter, const Weapon& w, const core::Vec3& eye, const core::Vec3& dir);
     int pickTargetFrom(int self, const core::Vec3& eye, const core::Vec3& fwd, bool allowRobots, float range) const;

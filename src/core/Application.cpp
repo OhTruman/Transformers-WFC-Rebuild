@@ -5593,6 +5593,60 @@ void Application::runSessionTest() {
             const game::Character* tp = world_.participantPawn(T->matchPlayer());
             return tp && tp->jammedRemain_ > 0.0f;
         });
+    // The online local seat through the wire path: two peers with the same seed and the same local command stream reach an equal state.
+    {
+        uint64_t hs[2] = {0, 0};
+        for (int peer = 0; peer < 2; ++peer) {
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=1?BotsEnemy=2", S);
+            S.localTeam = 0; S.seed = 0x5eed4321u;
+            world_.launchMatch(S);
+            const int meL = world_.localMatchPlayer();
+            world_.match().selectCharacter(meL, cs);
+            for (int i = 0; i < 1000; ++i) {
+                game::RemoteCommand c; c.tick = (uint32_t)(world_.simTick() + 1);
+                c.moveForward = ((i / 120) % 2) ? 127 : 0; c.moveRight = ((i / 200) % 2) ? -64 : 0;
+                c.aimYaw = std::remainder((float)(i % 4096) * (6.2831853f / 4096.0f), 6.2831853f); c.aimPitch = 0.0f;
+                if (i >= 600 && i < 700) c.buttons = 1u << (int)platform::Button::Fire;
+                if (i == 650) c.pressed = 1u << (int)platform::Button::Jump;
+                world_.applyRemoteCommand(meL, c);
+                world_.handleInput(idle, dt); world_.tick(dt);
+            }
+            hs[peer] = world_.simStateHash();
+        }
+        LOG_INFO("SESSIONTEST local-seat hashes %016llx %016llx", (unsigned long long)hs[0], (unsigned long long)hs[1]);
+        check(world_.onlineSeats() && hs[0] == hs[1] && hs[0] != 0, "online local seat: two peers with the same local command stream reach an equal state at step 1000");
+    }
+    // Direct vs wire for the same local input frames (same seed): the measured difference, documented in the log.
+    {
+        core::Vec3 pos[2]; float yawv[2] = {0, 0}; float originGap = -1.0f;
+        platform::InputFrame f; f.down[(int)platform::Button::Forward] = true;
+        for (int arm = 0; arm < 2; ++arm) {
+            world_.setLocalWireOverride(arm);   // 0 direct, 1 wire
+            game::MatchLaunch S; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", S);
+            S.localTeam = 0; S.seed = 0x5eed9999u;
+            world_.launchMatch(S);
+            const int meL = world_.localMatchPlayer();
+            world_.match().selectCharacter(meL, cs);
+            for (int i = 0; i < 900; ++i) {
+                platform::InputFrame fi = (i >= 660) ? f : idle;
+                fi.mouseDX = (i >= 660 && i < 760) ? 2.0f : 0.0f;
+                world_.handleInput(fi, dt);
+                if (arm == 1) { game::RemoteCommand c = world_.encodeLocalCommand(); world_.applyRemoteCommand(meL, c); }
+                world_.tick(dt);
+                if (arm == 1 && i == 800 && !world_.localPlayerDead()) {   // the seat's eye vs the direct path's camera-line start
+                    const auto& ctl = world_.player().controller();
+                    const core::Vec3 camPos = ctl.cameraPos(), dir = core::forwardFromYawPitch(ctl.camYaw(), ctl.camPitch());
+                    const core::Vec3 start = camPos + dir * core::dot(world_.player().pawn().actorLocation() - camPos, dir);
+                    originGap = core::length(world_.seatEye(meL) - start);
+                }
+            }
+            pos[arm] = world_.player().pawn().actorLocation(); yawv[arm] = world_.player().pawn().yaw();
+        }
+        world_.setLocalWireOverride(-1);
+        LOG_INFO("SESSIONTEST direct vs wire: final position gap %.3f m, yaw gap %.3f deg, shot origin eye vs camera line %.3f m",
+                 core::length(pos[0] - pos[1]), std::fabs(std::remainder(yawv[0] - yawv[1], 6.2831853f)) * 57.29578f, originGap);
+        check(originGap >= 0.0f && core::length(pos[0] - pos[1]) < 2.0f, "direct vs wire: both paths move the local pawn alike (gaps logged)");
+    }
     LOG_INFO("SESSIONTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

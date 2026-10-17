@@ -2200,9 +2200,14 @@ void World::tickPrefix(float dt) {
             lp.ammoLockRemain_ = std::max(0.0f, lp.ammoLockRemain_ - dt);
             lp.weapon().ammo = std::max(lp.weapon().ammo, lockedClip_);
         } else lockedClip_ = 0;
-        if (matchActive_ && player_.controller().consumeKillstreakRequest()) triggerLocalKillstreak();
-        if (player_.controller().consumeMeleeRequest()) startLocalMelee(false);
-        if (player_.controller().consumeGrenadeRequest()) startLocalGrenadeToss();
+        {   // online the seat command carries these (consumed here so nothing accumulates)
+            const bool ks = player_.controller().consumeKillstreakRequest(), ml = player_.controller().consumeMeleeRequest(), gr = player_.controller().consumeGrenadeRequest();
+            if (!onlineSeats_) {
+                if (matchActive_ && ks) triggerLocalKillstreak();
+                if (ml) startLocalMelee(false);
+                if (gr) startLocalGrenadeToss();
+            }
+        }
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
     prefixMark(5);
@@ -2282,7 +2287,8 @@ void World::tickPrefix(float dt) {
         const std::vector<int> walkOut = barrierIgnoreFor(localPlayer_);   // a barrier that spawned around the player: walk out
         CollisionWorld::IgnoreDynamicScope walk(walkOut.empty() ? nullptr : &walkOut);
         forcedDirPre(player_.pawn(), dt, true);       // TnForcedDirVolume touches / pushes, then HardBlock (forcedDirPost)
-        player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+        if (onlineSeats_) runLocalSeat(dt);           // online: the local seat through the wire path (the decoded command)
+        else player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
         forcedDirPost(player_.pawn());
     }
     prefixMark(10);
@@ -3035,6 +3041,8 @@ bool World::launchMatch(const MatchLaunch& l) {
     {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
         const char* sd = std::getenv("WFC_SEED");
         hostSeed_ = l.seed;   // online: the host's seed replaces the local source on every peer
+        onlineSeats_ = localWireOverride_ >= 0 ? localWireOverride_ == 1 : l.seed != 0;   // online: the local seat through the wire path
+        localSeatIntent_ = MoveIntent{}; localSeatPickup_ = false;
         core::simRandSeed(l.seed ? l.seed * 2654435761u + 1u : sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
     }
     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
@@ -3312,7 +3320,7 @@ bool World::applySlotSwap(const SlotSwap& s) {
 
 bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
     static_assert((int)platform::Button::Count <= 29, "Button bits must stay below kRemoteBitHover");
-    if (p < 0 || (size_t)p >= match_.players().size() || match_.players()[(size_t)p].kind != ParticipantKind::Remote) return false;
+    if (p < 0 || (size_t)p >= match_.players().size() || (match_.players()[(size_t)p].kind != ParticipantKind::Remote && !(onlineSeats_ && p == localPlayer_))) return false;
     if ((int64_t)c.tick != simTick_ + 1) return false;   // the step about to run
     // The original's "active": any held / pressed button (the sender's active bit = look axis / team chat) or a non-zero move axis.
     if ((c.buttons & ~kRemoteBitAimPoint) || c.pressed || c.moveForward || c.moveRight) noteRemoteCommand(p);   // bit 31: not an input
@@ -3322,39 +3330,51 @@ bool World::applyRemoteCommand(int p, const RemoteCommand& c) {
 
 void World::applyQueuedRemoteCommands(float dt) {
     std::stable_sort(remoteQueue_.begin(), remoteQueue_.end(), [](const auto& a, const auto& b) { return a.first < b.first; });   // ascending match player
-    for (const auto& q : remoteQueue_)
+    for (const auto& q : remoteQueue_) {
+        if (onlineSeats_ && q.first == localPlayer_) {   // the local seat (online): the decoded command, as every peer applies it
+            SeatRef s; s.pc = &player_.pawn(); s.player = localPlayer_; s.spawned = !localDead_;
+            applySeat(s, q.second, dt);
+            localSeatIntent_ = s.intent; localSeatPickup_ = s.pressesPickup; localSeatAimPitch_ = q.second.aimPitch;
+            continue;
+        }
         for (MatchOpponent* o : opponents_)
             if (o->matchPlayer() == q.first && (size_t)q.first < match_.players().size() && match_.players()[(size_t)q.first].kind == ParticipantKind::Remote) applyRemoteNow(*o, q.second, dt);
+    }
     remoteQueue_.clear();
 }
 
-void World::applyRemoteNow(MatchOpponent& oRef, const RemoteCommand& c, float dt) {
-    MatchOpponent* o = &oRef;
-    const int p = o->matchPlayer();
+void World::applyRemoteNow(MatchOpponent& o, const RemoteCommand& c, float dt) {
+    SeatRef s; s.pc = &o.pawn(); s.player = o.matchPlayer(); s.spawned = o.spawned();
+    applySeat(s, c, dt);
+    o.setIntent(s.intent); o.pressesPickup = s.pressesPickup;
+}
+
+void World::applySeat(SeatRef& s, const RemoteCommand& c, float dt) {
+    const int p = s.player;
     auto held = [&](platform::Button b) { return ((c.buttons >> (int)b) & 1u) != 0; };
     auto down = [&](platform::Button b) { return ((c.pressed >> (int)b) & 1u) != 0; };
-    o->pressesPickup = held(platform::Button::Interact) || down(platform::Button::Interact);   // TryPickup
+    s.pressesPickup = held(platform::Button::Interact) || down(platform::Button::Interact);   // TryPickup
     {
         MoveIntent in;
         in.moveForward = c.moveForward / 127.0f; in.moveRight = c.moveRight / 127.0f;
         in.faceYaw = c.aimYaw; in.viewPitch = c.aimPitch;
-        in.wantJump = held(platform::Button::Jump);
+        in.wantJump = down(platform::Button::Jump);   // an edge, as the direct path's wantJumpLatched_
         in.wantBoost = held(platform::Button::FineAim);          // RightMouseButton = "ToggleFineAim | Boost" (the original's move flag 512)
         in.wantDash = down(platform::Button::Dash);
         in.ascend = held(platform::Button::Ascend); in.descend = held(platform::Button::Descend);
         in.hoverRequest = (c.buttons & kRemoteBitHover) != 0;     // the original's move flag 1024
-        if (!o->spawned()) { o->setIntent(MoveIntent{}); return; }
-        Character& pc = o->pawn();
-        if (pc.inputLocked()) { o->setIntent(MoveIntent{}); return; }   // TnBuffDecoyTrap: no movement / buttons
+        if (!s.spawned) { s.intent = MoveIntent{}; return; }
+        Character& pc = *s.pc;
+        if (pc.inputLocked()) { s.intent = MoveIntent{}; return; }   // TnBuffDecoyTrap: no movement / buttons
         const bool robot = pc.moveForm() == Form::Robot && !pc.isTransforming();
         if (pc.moveForm() == Form::Robot) in.wantDash = false;   // robot form: Dash = Ability0 (the vehicle special move only in vehicle form)
         // Abilities: Ability0 = Dash in robot form (Shift), Ability1 (Ctrl) [CONF Controls card]; Dodge / Hover go into this step's intent.
         const core::Vec3 aimPt = seatAimPoint(pc, c, 300.0f);   // abilities: the homing / buff-shot reach
-        if (robot && down(platform::Button::Dash)) remoteTriggerAbility(*o, 0, c.aimYaw, aimPt, in);
-        if (robot && down(platform::Button::Ability1)) remoteTriggerAbility(*o, 1, c.aimYaw, aimPt, in);
+        if (robot && down(platform::Button::Dash)) remoteTriggerAbility(s, 0, c.aimYaw, aimPt, in);
+        if (robot && down(platform::Button::Ability1)) remoteTriggerAbility(s, 1, c.aimYaw, aimPt, in);
         // Killstreak (TriggerKillstreak, B): the newest earned reward, robot form [the same entry the bots use].
         if (robot && down(platform::Button::Killstreak) && !match_.players()[(size_t)p].acquiredKillstreaks.empty()) triggerKillstreakFor(p);
-        o->setIntent(in);
+        s.intent = in;
         if (down(platform::Button::Transform) && !pc.isTransforming()) pc.beginTransform();
         if (robot && down(platform::Button::Melee) && !pc.isMeleeing()) startMeleeFor(pc, p, false, c.aimYaw);
         if (robot && down(platform::Button::NextWeapon)) pc.requestWeaponSwitch(1);
@@ -3392,7 +3412,7 @@ void World::applyRemoteNow(MatchOpponent& oRef, const RemoteCommand& c, float dt
                         shot.projSpeed = L.speed; shot.projDamage = L.damage; shot.projRadiusM = L.radiusM; shot.projClass = mode;
                         w->onFired();
                         w->ammo = std::max(0, w->ammo - (L.shotCost - 1));
-                        remoteFire(*o, shot, fireAt, false);
+                        remoteFire(s, shot, fireAt, false);
                     } else ++w->chargeFizzle;
                     w->setChargeState(0); w->sinceCharge = 0.0f;
                     if (w->ammo == 0 && w->canReload()) w->beginReload();
@@ -3400,7 +3420,7 @@ void World::applyRemoteNow(MatchOpponent& oRef, const RemoteCommand& c, float dt
             }
         } else {
             const bool wantFire = w && !pc.isMeleeing() && (w->autoFire ? held(platform::Button::Fire) : down(platform::Button::Fire));
-            if (wantFire && w->canFire()) remoteFire(*o, *w, fireAt);
+            if (wantFire && w->canFire()) remoteFire(s, *w, fireAt);
             else if (wantFire && w->ammo == 0 && w->canReload()) w->beginReload();
         }
         // Grenade: TossGrenade along the aim (the throw anim, released 0.4 s later, as the bots').
@@ -3419,12 +3439,12 @@ void World::applyRemoteNow(MatchOpponent& oRef, const RemoteCommand& c, float dt
     }
 }
 
-bool World::remoteTriggerAbility(MatchOpponent& o, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in) {
-    Character& pc = o.pawn();
+bool World::remoteTriggerAbility(SeatRef& s, int slot, float aimYaw, const core::Vec3& aimPt, MoveIntent& in) {
+    Character& pc = *s.pc;
     if (slot < 0 || slot > 1 || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
     Character::AbilitySlot& a = pc.abilities_[slot];
     if (!a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) return false;
-    const int p = o.matchPlayer();
+    const int p = s.player;
     if (a.id == "Whirlwind") { if (pc.isMeleeing()) return false; startMeleeFor(pc, p, true, aimYaw); if (!pc.isMeleeing()) return false; }
     else if (a.id == "Dodge") {   // TnPlayerInput.Dodge: |Up| >= |Right| ? (Up < 0 back : forward) : (Right < 0 left : right)
         in.dodgeDir = std::fabs(in.moveForward) >= std::fabs(in.moveRight) ? (in.moveForward < 0.0f ? 4 : 3) : (in.moveRight < 0.0f ? 1 : 2);
@@ -3504,9 +3524,9 @@ void World::participantBeam(int shooter, const Weapon& w, const core::Vec3& eye,
     else applyMatchDamage(hit, shooter, 60.0f * tickSecs, false, "TransGame.TnDamageTypeRepairEnemy");
 }
 
-void World::remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& aimPt, bool consume) {
-    Character& pc = o.pawn();
-    const int p = o.matchPlayer();
+void World::remoteFire(SeatRef& s, Weapon& w, const core::Vec3& aimPt, bool consume) {
+    Character& pc = *s.pc;
+    const int p = s.player;
     pc.exposeSelf();
     if (consume) w.onFired();
     pc.notifyFired();
@@ -3524,6 +3544,49 @@ void World::remoteFire(MatchOpponent& o, Weapon& w, const core::Vec3& aimPt, boo
 
 void World::setParticipantPosition(int p, const core::Vec3& pos) {
     for (MatchOpponent* o : opponents_) if (o->matchPlayer() == p && o->spawned()) o->setPosition(pos);
+}
+
+void World::runLocalSeat(float dt) {
+    // The direct path's per-step pawn work, from the decoded command (movement intent, aim pitch) instead of the controller.
+    Character& pc = player_.pawn();
+    CharacterMovement::update(pc, localSeatIntent_, dt, collision());
+    localSeatIntent_.wantJump = false; localSeatIntent_.wantDash = false; localSeatIntent_.dodgeDir = 0; localSeatIntent_.hoverRequest = false;   // edges consumed
+    pc.setAimPitch(localSeatAimPitch_);
+    pc.tickAbilities(dt); pc.tickSpreadModifier(dt); pc.tickWeaponSwitch(dt); pc.weapon().tick(dt); pc.ability().tick(dt);
+    if (pc.moveForm() == Form::Vehicle && !pc.isTransforming()) if (Weapon* vw = pc.vehicleWeapon()) vw->tick(dt);
+}
+
+RemoteCommand World::encodeLocalCommand() {
+    PlayerController& ctl = player_.controller();
+    RemoteCommand c; c.tick = (uint32_t)(simTick_ + 1);
+    const MoveIntent& mi = ctl.moveIntent();
+    auto q8 = [](float v) { return (int8_t)std::lround(core::clampf(v, -1.0f, 1.0f) * 127.0f); };
+    c.moveForward = q8(mi.moveForward); c.moveRight = q8(mi.moveRight);
+    const bool veh = !localDead_ && player_.pawn().moveForm() == Form::Vehicle;
+    const float yaw = veh ? mi.faceYaw : ctl.camYaw(), pitch = veh ? mi.viewPitch : ctl.camPitch();   // the aim the direct path uses
+    const float kR = 65536.0f / 6.2831853f;   // rotator units
+    const uint16_t qy = (uint16_t)(std::lround(yaw * kR) & 0xffff);
+    const int16_t qp = (int16_t)std::lround(core::clampf(pitch, -1.5707963f, 1.5707963f) * kR);
+    c.aimYaw = std::remainder((float)qy / kR, 6.2831853f); c.aimPitch = (float)qp / kR;
+    c.buttons = ctl.heldBits(); c.pressed = ctl.takePressedBits();
+    if (ctl.takeLookActive()) c.buttons |= kRemoteBitActive;
+    if (!localDead_) {   // the crosshair ray's hit, from the direct path's start (the camera line's point nearest the pawn), absolute, 1 cm
+        const core::Vec3 camPos = ctl.cameraPos(), dir = core::forwardFromYawPitch(yaw, pitch);
+        const core::Vec3 start = camPos + dir * core::dot(player_.pawn().actorLocation() - camPos, dir);
+        const Weapon* w = veh ? player_.pawn().vehicleWeapon() : &player_.pawn().weapon();
+        const float range = w && w->rangeM > 0.0f ? w->rangeM : 300.0f;
+        core::Vec3 end = start + dir * range; float t;
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        if (line && line->segmentHit(start, end, t)) end = start + dir * (range * t);
+        c.aimPoint = core::Vec3{std::round(end.x * 100.0f) / 100.0f, std::round(end.y * 100.0f) / 100.0f, std::round(end.z * 100.0f) / 100.0f};
+        c.buttons |= kRemoteBitAimPoint;
+    }
+    return c;
+}
+
+core::Vec3 World::seatEye(int p) const {
+    const Character* c = participantPawn(p);
+    return c ? botEye(*c) : core::Vec3{0, 0, 0};
 }
 
 void World::tickRemoteSeats(float dt) {
@@ -3832,7 +3895,8 @@ void World::tickMatch(float dt) {
         for (MatchOpponent* o : opponents_)
             if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
         auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming() && !c.isMeleeing(); };
-        const bool localPickup = player_.controller().consumePickupRequest();
+        const bool localPickupCtl = player_.controller().consumePickupRequest();
+        const bool localPickup = onlineSeats_ ? localSeatPickup_ : localPickupCtl;   // online: the seat command's press
         localPickupLatch_ = localPickup;   // the decoy trap's pickup path reads it (next ability-actor tick)
         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc), localPickup});
         for (MatchOpponent* o : opponents_)

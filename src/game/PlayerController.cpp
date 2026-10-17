@@ -51,6 +51,11 @@ void PlayerController::handleInput(const platform::InputFrame& inRaw, float dt) 
     // TnBuffDecoyTrap: SetCinematicMode (movement, turning, buttons; not the HUD): the frame is ignored while stunned [CONF RE].
     static const platform::InputFrame kNoInput{};
     const platform::InputFrame& in = (pawn_ && pawn_->inputLocked()) ? kNoInput : inRaw;
+    {   // online wire path: held buttons (this frame) and presses since the last step, the look-axis activity
+        heldBits_ = 0;
+        for (int b = 0; b < (int)platform::Button::Count && b < 29; ++b) { if (in.down[b]) heldBits_ |= 1u << b; if (in.pressed[b]) pressedBits_ |= 1u << b; }
+        if (in.mouseDX != 0.0f || in.mouseDY != 0.0f || (in.padConnected && (std::fabs(in.padRX) > 0.25f || std::fabs(in.padRY) > 0.25f))) lookActive_ = true;
+    }
     sinceStep_ += dt;   // render time since the last simulation step (presentation yaw)
     using platform::Button;
     namespace cfg = core::config;

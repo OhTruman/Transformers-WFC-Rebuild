@@ -199,6 +199,13 @@ private:
     int simMode_ = -1;
     // Mouse deltas accumulated over the render frames of a step; the steering / look-up rate smoothing runs once per step on them.
     float accMouseDX_ = 0.0f, accMouseDY_ = 0.0f;
+    uint32_t heldBits_ = 0, pressedBits_ = 0;   // online wire path: the last frame's held buttons / presses since the last step
+    bool lookActive_ = false;                    // a look axis moved since the last step (the command's Active bit)
+public:
+    uint32_t heldBits() const { return heldBits_; }
+    uint32_t takePressedBits() { const uint32_t b = pressedBits_; pressedBits_ = 0; return b; }
+    bool takeLookActive() { const bool a = lookActive_; lookActive_ = false; return a; }
+private:
     // Look accumulators in double: per-frame mouse deltas summed in float round differently by frame partition, which vehicle
     // contact physics amplifies; resynced whenever camYaw_ / camPitch_ are set elsewhere.
     double camYawD_ = 0.0, camPitchD_ = 0.0;
