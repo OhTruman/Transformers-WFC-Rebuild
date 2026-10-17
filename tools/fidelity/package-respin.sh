@@ -6,7 +6,21 @@
 #   3 report   PACKAGE-GATE.md for the respun head: the regress + delta FAST are new; leak, eye pass, 1b Realistic perf and the
 #              penultimate FAST are carried from the gated head's gate dir (named as carried in the report header)
 #   bash tools/fidelity/package-respin.sh <respun sha> <gated sha> [--whatif]     (env: GATE_REGRESS_NOTE = the regress attribution)
-cd "F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
+#
+# PACKAGE 7 GATE (Integration 2026-10-17; design: tools/fidelity/PACKAGE7-GATE.md) - per merged head: identity + eye sheet only;
+# one combined timed regress / 1b / FAST on the package 7 head with this script (RERUN_1B=1, EYE_FROM=<the head's eye pass>).
+# HOLD RULES (learned on the package 6 gate, 2026-10-17 - every one of them cost a rerun):
+#   - Integration grants the window and tells EVERY session: no interpreters of any kind (python / node / sqlite3, even read-only,
+#     even sub-second), no compiles (cmake / ninja / cl / clang / link / dxc), no game exes - and collects an ack from each before
+#     the hold is set; AssetTools' chain checks work/PERF_HOLD before each stage (its watchdog) and pauses
+#   - the clear-card wait (busy) counts every interpreter / compiler / game exe outside this worktree, so a stage still running when
+#     the hold is set delays the first rep instead of overlapping it
+#   - the busy watchdog (lib/Run.ps1) marks any rep a foreign process touched CONTAMINATED: a map with a CONTAMINATED rep is rerun
+#     whole (all arms, same hold) once at the end of its step; the first run is kept as map-<m>_contam
+#   - the nonpaged-pool guard stops at every step boundary above GATE_POOL_MAX_GB (9.5; TDR zone ~10.6); hold removed, results on disk
+#   - one windowed exe on the machine at a time; WFC_MUTE=1 WFC_NOINTERACT=1 on every exe; never edit this script while it runs
+#   - compare only inside one hold: an out-of-hold row (e.g. a carried 1b) can read 1.7 ms off (package 6: a 2b-hold 1b outlier)
+cd"F:/Transformers Rebuild/Rebuild-Experimental" || exit 1
 R=${1:?respun sha}; G=${2:?gated sha}; WHATIF=0; [ "$3" = "--whatif" ] && WHATIF=1
 r=${R:0:7}; g=${G:0:7}; GD=work/package-gate/$g; O=work/package-gate/$r; mkdir -p $O/regress $O/bodies; L=$O/gate.log
 BASE=${GATE_BASE:-work/ab/fast_398b27e_rise}; export GATE_BASE_NAME=${GATE_BASE_NAME:-"398b27ef + yaw + drive-probe + steer + walkable + rise-snap 63368d05"}
@@ -20,7 +34,12 @@ st() { echo "$(date +%T) $*" | tee -a $L; pool_guard; }
 pool_guard() { [ $WHATIF = 1 ] && return; local gb; gb=$(powershell -NoProfile -Command "[math]::Round((Get-Counter '\Memory\Pool Nonpaged Bytes').CounterSamples[0].CookedValue/1GB,2)" | tr -d '\r')
   echo "  (pool $gb GB)" >> $L; if awk "BEGIN{exit !($gb > ${GATE_POOL_MAX_GB:-9.5})}"; then rm -f work/PERF_HOLD; echo "$(date +%T) POOL GUARD: nonpaged pool $gb GB > ${GATE_POOL_MAX_GB:-9.5} - stopped at the step boundary (hold removed)" | tee -a $L; exit 3; fi; }
 run() { if [ $WHATIF = 1 ]; then echo "WHATIF: $*" | tee -a $L; else eval "$@"; fi; }
-busy() { powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | ? { (\$_.Name -eq 'python.exe' -and \"\$(\$_.ExecutablePath) \$(\$_.CommandLine)\" -like '*Transformers Rebuild*' -and \"\$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '\r'; }
+busy() { powershell -NoProfile -Command "\$n = 'python.exe','node.exe','sqlite3.exe','cmake.exe','ninja.exe','cl.exe','clang.exe','clang++.exe','clang-cl.exe','link.exe','lld-link.exe','dxc.exe','msbuild.exe'; @(Get-CimInstance Win32_Process | ? { ((\$n -contains \$_.Name.ToLower()) -and \"\$(\$_.ExecutablePath) \$(\$_.CommandLine)\" -notlike '*Rebuild-Experimental*') -or (\$_.Name -like 'wfc_rebuild*' -and \"\$(\$_.ExecutablePath)\" -notlike '*Rebuild-Experimental*') }).Count" | tr -d '\r'; }
+# a map with a CONTAMINATED rep (busy watchdog) is rerun whole once, in the same hold: recontam <dir> <map> <command for that map>
+recontam() { [ $WHATIF = 1 ] && return; ls $1/map-$2/*/CONTAMINATED.txt >/dev/null 2>&1 || return 0
+  st "  map $2 in $(basename $1): CONTAMINATED rep ($(head -c 120 $(ls $1/map-$2/*/CONTAMINATED.txt | head -1) | tr -d '\r\n')) - rerun whole"
+  rm -rf $1/map-$2_contam; mv $1/map-$2 $1/map-$2_contam; mv $1/map-$2.out $1/map-$2_contam.out.txt 2>/dev/null; eval "$3"
+  ls $1/map-$2/*/CONTAMINATED.txt >/dev/null 2>&1 && st "  map $2: still CONTAMINATED after the rerun - report row UNKNOWN"; return 0; }
 st "PACKAGE RESPIN $R (gated $G, penultimate $P), base $GATE_BASE_NAME$( [ $WHATIF = 1 ] && echo ' (WHATIF)')"
 for d in "$BASE/build-release/bin" "$GD/leak" "$GD/rtperf2" "$GD/fast_$p" "$GD/fast_$g"; do [ -e "$d" ] || { st "missing $d"; [ $WHATIF = 1 ] || exit 1; }; done
 # ---- 0 build (CPU)
@@ -33,9 +52,9 @@ fi
 # ---- 1 regress (timed)
 st "1 regress: hold set; waiting for a clear card"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
 st "1 regress START"
-for m in 501 502 503 504 507 508 509 510; do st "1 regress map $m"
-  run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/regress/map-$m -Map $m -Arms 'base|$BASE|;;head|work/ab/fast_$r|;;nolights|work/ab/fast_$r|WFC_NOTRANSIENTLIGHTS=1' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/regress/map-$m.out 2>&1"
-done
+REG='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/regress/map-$m -Map $m -Arms "base|$BASE|;;head|work/ab/fast_$r|;;nolights|work/ab/fast_$r|WFC_NOTRANSIENTLIGHTS=1" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/regress/map-$m.out 2>&1'
+for m in 501 502 503 504 507 508 509 510; do st "1 regress map $m"; run "$REG"; done
+for m in 501 502 503 504 507 508 509 510; do recontam $O/regress $m "$REG"; done
 run "rm -f work/PERF_HOLD"; st "1 regress TIMED DONE (hold removed)"
 # ---- 2 delta FAST vs the gated head
 DS=$(powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/delta-steps.ps1 -Base $G -Head $R | tail -1 | tr -d '\r')
@@ -46,15 +65,19 @@ run "WFC_GATE_GPU_POLICY=shared WFC_GATE_GPU_MAX_OTHERS=1 powershell -NoProfile 
 st "2b per-body + 5v5: hold set"; run "touch work/PERF_HOLD; sleep 60; until [ \"\$(busy)\" = 0 ]; do sleep 15; done"
 NC=";;nocorpse|work/ab/fast_$r|WFC_NOCORPSE=1"   # (only if the respun exe has Gameplay's switch - else the arm would silently equal the head)
 [ $WHATIF = 1 ] || grep -q WFC_NOCORPSE work/ab/fast_$r/build-release/bin/wfc_rebuild.exe || { NC=""; st "2b: the respun exe has no WFC_NOCORPSE - nocorpse arm skipped"; }
-run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms 'base|$BASE|;;head|work/ab/fast_$r|$NC' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1"
-run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms 'base|$BASE|;;head|work/ab/fast_$r|' -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1"
+B63='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501 -Map 501 -Arms "base|$BASE|;;head|work/ab/fast_$r|$NC" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501.out 2>&1'
+B5='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/bodies/map-501-5v5 -Map 501 -Bots 5 -Arms "base|$BASE|;;head|work/ab/fast_$r|" -Steps 9600 -From 600 -RenderSize 3840x2160 -PlayerBot 1 -Reps 2 -Seed 1234 > $O/bodies/map-501-5v5.out 2>&1'
+st "2b bodies 63"; run "$B63"; st "2b 5v5"; run "$B5"; recontam $O/bodies 501 "$B63"; recontam $O/bodies 501-5v5 "$B5"
 # RERUN_1B=1 (a respin that changes the Realistic path, e.g. X3): the 1b Realistic perf rows are rerun on the respun head in the same
 # hold (Realistic + HD 2 on hd_dev_full, 2560x1440, 31 v 32, 1 rep, 5 user maps - X3 rides on its defaults) instead of being carried
 if [ -n "$RERUN_1B" ]; then
   HDR=$(cygpath -w "${GATE_HD_ROOT:-F:/Transformers Rebuild/Rebuild-Systems/work/hd_dev_full}" 2>/dev/null); run "mkdir -p $O/rtperf2"
-  for m in 508 510 507 504 509; do
-    run "powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/rtperf2/map-$m -Map $m -Arms 'realistic|work/ab/fast_$r|WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR' -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/rtperf2/map-$m.out 2>&1"
-  done
+  # (package 7: the X3-off / NOCORPSE arms ride in the same run, so the X3 cost and the bodies' RT-on share are in-hold numbers)
+  RT="WFC_RT_MODE=2;WFC_HDTEXTURES=2;WFC_HD_ROOT=$HDR"
+  R1B='powershell -NoProfile -ExecutionPolicy Bypass -File tools/fidelity/lockstep-ab.ps1 -OutDir $O/rtperf2/map-$m -Map $m -Arms "realistic|work/ab/fast_$r|$RT;;x3off|work/ab/fast_$r|$RT;WFC_X3=0$NC1B" -Steps 6000 -From 2400 -Width 2560 -Height 1440 -RenderSize 2560x1440 -PlayerBot 1 -Reps 1 -Seed 1234 > $O/rtperf2/map-$m.out 2>&1'
+  NC1B=""; [ -n "$NC" ] && NC1B=";;nocorpse|work/ab/fast_$r|$RT;WFC_NOCORPSE=1"
+  for m in 508 510 507 504 509; do st "1b Realistic map $m"; run "$R1B"; done
+  for m in 508 510 507 504 509; do recontam $O/rtperf2 $m "$R1B"; done
 fi
 run "rm -f work/PERF_HOLD"; st "2b TIMED DONE (hold removed)"
 for f in map-501 map-501-5v5; do [ -f $O/bodies/$f.out ] && grep -oE "lockstep\.[a-z]+\.r[12]: [a-z]+: steps [0-9]+ \([0-9-]+\), same match as 'base' [A-Za-z]+, workload parity [A-Za-z]+; frame p50 / p90 / p99 [0-9.]+ / [0-9.]+" $O/bodies/$f.out | sed -E "s/lockstep\.([a-z]+\.r[12]).*same match as 'base' ([A-Za-z]+).*p99 ([0-9.]+) \/ ([0-9.]+)/$f \1 same=\2 p50 \3 p90 \4/" | tee -a $L; done
