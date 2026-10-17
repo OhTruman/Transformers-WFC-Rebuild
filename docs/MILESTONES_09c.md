@@ -3163,3 +3163,5 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 13:27 Rendering: Trail2 suspect = the projectile FX instance spawns its first particles before its first transform update, then the
   ribbon chains them to the flying projectile (a 3 m arc across the firer for 0.35 s); a ~4-min Molten Off FXTEST granted after x16
   on the same hand-over to name the system and log per-ribbon positions; CARD FREE after it (~14:00).
+2026-10-17 13:28 Slim list refresh STAGED (AssetTools): 47 byte counts differ (+26.1 MB), nothing added / removed; Systems adopts it at the
+  package step; map_fx re-measured after the FX install (watcher with a 14:45 fallback).
