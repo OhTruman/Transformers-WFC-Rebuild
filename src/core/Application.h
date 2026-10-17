@@ -77,6 +77,7 @@ private:
     int appliedAnisotropy_ = -1;
     int appliedRayTracing_ = -1;   // PC EXTENSION [PCSettings] RayTracing last handed to the renderer
     int appliedVolumetric_ = -1;   // PC ADAPTATION [PCSettings] VolumetricLighting last handed to the renderer
+    int appliedLensFlare_ = -1;     // the Lens Flares row last applied to the renderer
     void qaTick(const platform::InputFrame& in);
     void playtestOverlayTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;

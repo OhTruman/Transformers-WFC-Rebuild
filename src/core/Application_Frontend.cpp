@@ -269,6 +269,25 @@ template <class R> const char* applyVolumetric(R* r, bool on) {
     (void)r; (void)on;
     return "stored (no renderer API yet)";
 }
+// Rendering (agreed 2026-10-17): void setLensFlareMode(int) (0 Off, 1 Subtle, 2 Original) / int lensFlareMode() const -
+// the Graphics row "Lens Flares" (user decision); restart-free, kept by release(); WFC_LENSFLARE overrides it. Detected.
+template <class R, class = void> struct HasRendererLensFlare : std::false_type {};
+template <class R> struct HasRendererLensFlare<R, std::void_t<decltype(std::declval<R&>().setLensFlareMode(2)),
+                                                              decltype(int(std::declval<const R&>().lensFlareMode()))>> : std::true_type {};
+template <class R> const char* applyLensFlare(R* r, int mode) {
+    if constexpr (HasRendererLensFlare<R>::value) {
+        if (!r) return "no renderer";
+        r->setLensFlareMode(mode);
+        if (std::getenv("WFC_LENSFLARE")) return "renderer (WFC_LENSFLARE overrides)";
+        return "renderer";
+    }
+    (void)r; (void)mode;
+    return "stored (no renderer API yet)";
+}
+template <class R, class = void> struct DeclaresLensFlareNames : std::false_type {};
+template <class R> struct DeclaresLensFlareNames<R, std::void_t<decltype(&R::setLensFlareMode)>> : std::true_type {};
+static_assert(!DeclaresLensFlareNames<render::IRenderer>::value || HasRendererLensFlare<render::IRenderer>::value,
+              "IRenderer declares setLensFlareMode but HasRendererLensFlare does not match its signatures");
 template <class R, class = void> struct DeclaresVolumetricNames : std::false_type {};
 template <class R> struct DeclaresVolumetricNames<R, std::void_t<decltype(&R::setVolumetricLighting)>> : std::true_type {};
 static_assert(!DeclaresVolumetricNames<render::IRenderer>::value || HasRendererVolumetric<render::IRenderer>::value,
@@ -627,6 +646,9 @@ void Application::attachPresenter() {
         frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(d.volumetricLighting)},
                                                                  {"by", applyVolumetric(renderer_, d.volumetricLighting)}, {"when", "boot"},
                                                                  {"provenance", "PC ADAPTATION"}});
+        appliedLensFlare_ = d.lensFlares;
+        frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(d.lensFlares)}, {"by", applyLensFlare(renderer_, d.lensFlares)},
+                                                         {"when", "boot"}, {"provenance", "PC EXTENSION"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -683,6 +705,11 @@ void Application::attachPresenter() {
             frontend::FlowTrace::emit("display.volumetricLighting", {{"on", frontend::FlowTrace::boolean(p.display.volumetricLighting)},
                                                                      {"by", applyVolumetric(renderer_, p.display.volumetricLighting)},
                                                                      {"when", "apply"}, {"provenance", "PC ADAPTATION"}});
+        }
+        if (p.display.lensFlares != appliedLensFlare_) {   // restart-free (Rendering): next frame
+            appliedLensFlare_ = p.display.lensFlares;
+            frontend::FlowTrace::emit("display.lensFlares", {{"mode", std::to_string(appliedLensFlare_)}, {"by", applyLensFlare(renderer_, appliedLensFlare_)},
+                                                             {"when", "apply"}, {"provenance", "PC EXTENSION"}});
         }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
