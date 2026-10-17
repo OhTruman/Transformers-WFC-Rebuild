@@ -2296,3 +2296,10 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
   frame edges). Rendering's self-check: Streets 1.013 vs X3 off (shot 1500 0.83, dark lift -0.1). cand12's Off /
   Faithful identity (5/5 + 5/5 vs int_base10 = 43366aec) stands for value-only changes. Eye-pass-only GO at ~23:00
   (ends ~23:40); Systems re-pairs the table; merge set on PASS = f5e2d8dd + 1bfced9a + b9d1f3ad + the table.
+  2026-10-16 23:20 X3 cand13 EYE PASS: match Realistic 1.27 (OK) / + Enhanced 1.27 (1.2748 vs floor 1.28: 0.005 under,
+  Streets 1.135 vs 1.179), views 1.47 / 1.50 = the checkpoint; no veil; brightness +13.2. DECISION: merged as the
+  package 6 volumetrics: 8db29dab (Defrag draw-list cache fix), c0a901d2 (X3 round 3), 32fa75eb (round 4 values),
+  af4d0731 (paired table, 39 / 39). Integration Debug build OK (WFC_X3_CAP in the exe). PACKAGE 6 CANDIDATE HEAD =
+  af4d0731 (code). Optional tomorrow: one Streets-only value step within 40 min of the relaunch, else as is.
+  Tomorrow after the user's reboot: package-respin.sh af4d0731 9350f19b (RERUN_1B, EYE_FROM=x3_cand13) ->
+  Systems' runbook -> verify -> promote -> doc / tag / hand-over.
