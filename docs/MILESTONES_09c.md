@@ -3390,3 +3390,12 @@ gate fails; HD-on uses Rendering's compressed sRGB S3TC/BC7 upload with a post-f
 2026-10-17 15:32 Playable online match split: the Frontend's ISession contract (Session.h) is complete and consumed; UdpSession implements it;
   policy: the Application creates the UdpSession at boot in the playable build (listen after host()); Frontend adds a two-runtime
   loopback test; lens-flare row done on the Frontend branch (0f913411) pending Rendering's setter. Systems' estimates by 19:00.
+2026-10-17 15:44 USER (15:40): "get all my multiplayer working before any new build"; two match paths (private game code; public via a central
+  server or P2P); a NEW LOBBY FLOW (straight into the lobby: Create a Class, Change Map, host-only Game Settings holding all the
+  old pre-match options; joiners get Create a Class only); keep cleaning space in the background; "one more build that has
+  everything we need and then pause"; asks whether Escalation and the campaign are finished (answer: specified, not built).
+  -> Package 7 cut HELD (ab855fe7 = internal checkpoint); no hold / gate tonight; the eye pass finishes as the checkpoint read;
+  the freeze lifts at its verdict. Assigned: Systems UdpSession + NetMatchDriver + ONLINE_MATCHMAKING_DESIGN.md; Frontend
+  ONLINE_LOBBY_FLOW_V2.md + build vs FakeSession; Gameplay human seat / HUD / Choose Character, then Escalation E1; Rendering
+  flare mode + X7 slot + campaign materials; AssetTools sweep now + Escalation data; RE Escalation asks + original public-match
+  rules. Sweep so far: Integration -94 GB, Rendering -165 GB, Gameplay -80 GB, Frontend -26.5 GB, Systems -3.9 GB; F: 267 GB.
